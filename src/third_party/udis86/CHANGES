@@ -1,0 +1,47 @@
+v1.7.2
+
+    * Clean up input handling, removing unnecessary caching
+      of input, which should speed up things.
+    * Add the missing ud_insn_mnemonic api function.
+    * Rename ud_opr_isgpr to ud_opr_is_gpr.
+    * Fix decoding of relative jumps.
+    * Fix build with automake-1.14
+    * Minor fix to AT&T syntax (missing "$" prefix for immedaites)
+    * Add a new api checker (tests/libcheck.c).
+    * Add a standalone script for diff-testing (tests/difftest.sh)
+    * Refinements to the documentation.
+
+    Acknowledgements:
+
+    Brendan Long (https://github.com/brendanlong)
+    radare (https://github.com/radare)
+    Sergey Basalaev (https://github.com/SBasalaev)
+    ebfe (https://github.com/ebfe)
+
+v1.7.1
+
+    * Full support for SSSE3, SSE4.1, SSE4.2, SMX, AES.
+    * New Sphinx-doc/RST based documentation.
+    * New api for client size symbol resolver.
+    * Visual Studio 2010 Build Support.
+    * Added an operand tester.
+    * Python 3.0 compatibility changes.
+    * Minor fixes to AT&T syntax.
+    * Fix install directory for data files.
+    * Many bug fixes, and optable updates.
+    * Add Texinfo document (make install-info).
+
+    Acknowledgements:
+
+    L Peter Deutsch (https://github.com/ghghost)
+    Bjoern Doebel (https://github.com/bjoernd)
+    Justin Stenning (http://github.com/spazzarama)
+    Jamie Iles (https://github.com/jamieiles)
+    Stephen Fewer (https://github.com/stephenfewer)
+    Piotr Gaczkowski (https://github.com/DoomHammer)
+    Evan Pheonix
+    mbarbu (https://github.com/mbarbu)
+
+    
+
+Please see the commit logs for change information for older releases

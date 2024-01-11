@@ -1,0 +1,118 @@
+version(2);
+project_name = "The RAD Debugger";
+
+indent_width = "2";
+default_tab_width = "2";
+
+patterns =
+{
+  "*.c",
+  "*.cpp",
+  "*.h",
+  "*.inc",
+  "*.hpp",
+  "*.bat",
+  "*.sh",
+  "*.4coder",
+  "*.glsl",
+  "*.bfs",
+  "*.html",
+  "*.txt",
+  "*.ds",
+  "*.md",
+  "*.mc",
+  "*.asm",
+};
+
+blacklist_patterns =
+{
+  ".*",
+  "metagen_base_*",
+  "metagen_os_*",
+};
+
+paths =
+{
+  { .path = ".",     .recursive = false, .relative = true, },
+  { .path = "src",   .recursive = true , .relative = true, },
+  { .path = "local", .recursive = true , .relative = true, },
+};
+
+load_paths =
+{
+  .win = paths,
+  .linux = paths,
+};
+
+commands =
+{
+  .rjf_f1 =
+  {
+    .win = "build raddbg telemetry",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .rjf_f3 =
+  {
+    .win = "pushd build && raddbg.exe && popd",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .build_raddbg =
+  {
+    .win = "build raddbg",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .build_raddbg_from_pdb =
+  {
+    .win = "build raddbg_from_pdb",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .build_mule_main =
+  {
+    .win = "build mule_main",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .run_raddbg =
+  {
+    .win = "pushd build && raddbg.exe && popd",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+};
+
+fkey_command =
+{
+  .F1 = "build_raddbg",
+  .F3 = "run_raddbg",
+};
+
+fkey_command_override =
+{
+  .rjf =
+  {
+    .F1 = "rjf_f1",
+    .F3 = "rjf_f3",
+  },
+};

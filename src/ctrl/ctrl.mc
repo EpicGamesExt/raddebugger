@@ -1,0 +1,84 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+////////////////////////////////
+//~ rjf: Tables
+
+@table(name lower_name code default display_string)
+CTRL_ExceptionCodeKindTable:
+{
+  {Win32CtrlC                          win32_ctrl_c                                0x40010005  1  "(Win32) Control-C"                                              }
+  {Win32CtrlBreak                      win32_ctrl_break                            0x40010008  1  "(Win32) Control-Break"                                          }
+  {Win32WinRTOriginateError            win32_win_rt_originate_error                0x40080201  0  "(Win32) WinRT Originate Error"                                  }
+  {Win32WinRTTransformError            win32_win_rt_transform_error                0x40080202  0  "(Win32) WinRT Transform Error"                                  }
+  {Win32RPCCallCancelled               win32_rpc_call_cancelled                    0x0000071a  0  "(Win32) RPC Call Cancelled"                                     }
+  {Win32DatatypeMisalignment           win32_datatype_misalignment                 0x80000002  0  "(Win32) Data Type Misalignment"                                 }
+  {Win32AccessViolation                win32_access_violation                      0xc0000005  1  "(Win32) Access Violation"                                       }
+  {Win32InPageError                    win32_in_page_error                         0xc0000006  0  "(Win32) In Page Error"                                          }
+  {Win32InvalidHandle                  win32_invalid_handle                        0xc0000008  1  "(Win32) Invalid Handle Specified"                               }
+  {Win32NotEnoughQuota                 win32_not_enough_quota                      0xc0000017  0  "(Win32) Not Enough Quota"                                       }
+  {Win32IllegalInstruction             win32_illegal_instruction                   0xc000001d  0  "(Win32) Illegal Instruction"                                    }
+  {Win32CannotContinueException        win32_cannot_continue_exception             0xc0000025  0  "(Win32) Cannot Continue From Exception"                         }
+  {Win32InvalidExceptionDisposition    win32_invalid_exception_disposition         0xc0000026  0  "(Win32) Invalid Exception Disposition Returned By Handler"      }
+  {Win32ArrayBoundsExceeded            win32_array_bounds_exceeded                 0xc000008c  0  "(Win32) Array Bounds Exceeded"                                  }
+  {Win32FloatingPointDenormalOperand   win32_floating_point_denormal_operand       0xc000008d  0  "(Win32) Floating-Point Denormal Operand"                        }
+  {Win32FloatingPointDivisionByZero    win32_floating_point_division_by_zero       0xc000008e  0  "(Win32) Floating-Point Division By Zero"                        }
+  {Win32FloatingPointInexactResult     win32_floating_point_inexact_result         0xc000008f  0  "(Win32) Floating-Point Inexact Result"                          }
+  {Win32FloatingPointInvalidOperation  win32_floating_point_invalid_operation      0xc0000090  0  "(Win32) Floating-Point Invalid Operation"                       }
+  {Win32FloatingPointOverflow          win32_floating_point_overflow               0xc0000091  0  "(Win32) Floating-Point Overflow"                                }
+  {Win32FloatingPointStackCheck        win32_floating_point_stack_check            0xc0000092  0  "(Win32) Floating-Point Stack Check"                             }
+  {Win32FloatingPointUnderflow         win32_floating_point_underflow              0xc0000093  0  "(Win32) Floating-Point Underflow"                               }
+  {Win32IntegerDivisionByZero          win32_integer_division_by_zero              0xc0000094  0  "(Win32) Integer Division By Zero"                               }
+  {Win32IntegerOverflow                win32_integer_overflow                      0xc0000095  0  "(Win32) Integer Overflow"                                       }
+  {Win32PrivilegedInstruction          win32_privileged_instruction                0xc0000096  0  "(Win32) Privileged Instruction"                                 }
+  {Win32StackOverflow                  win32_stack_overflow                        0xc00000fd  0  "(Win32) Stack Overflow"                                         }
+  {Win32UnableToLocateDLL              win32_unable_to_locate_dll                  0xc0000135  0  "(Win32) Unable To Locate DLL"                                   }
+  {Win32OrdinalNotFound                win32_ordinal_not_found                     0xc0000138  0  "(Win32) Ordinal Not Found"                                      }
+  {Win32EntryPointNotFound             win32_entry_point_not_found                 0xc0000139  0  "(Win32) Entry Point Not Found"                                  }
+  {Win32DLLInitializationFailed        win32_dll_initialization_failed             0xc0000142  0  "(Win32) DLL Initialization Failed"                              }
+  {Win32FloatingPointSSEMultipleFaults win32_floating_point_sse_multiple_faults    0xc00002b4  0  "(Win32) Floating Point SSE Multiple Faults"                     }
+  {Win32FloatingPointSSEMultipleTraps  win32_floating_point_sse_multiple_traps     0xc00002b5  0  "(Win32) Floating Point SSE Multiple Traps"                      }
+  {Win32AssertionFailed                win32_assertion_failed                      0xc0000420  1  "(Win32) Assertion Failed"                                       }
+  {Win32ModuleNotFound                 win32_module_not_found                      0xc06d007e  0  "(Win32) Module Not Found"                                       }
+  {Win32ProcedureNotFound              win32_procedure_not_found                   0xc06d007f  0  "(Win32) Procedure Not Found"                                    }
+  {Win32SanitizerErrorDetected         win32_sanitizer_error_detected              0xe073616e  1  "(Win32) Sanitizer Error Detected"                               }
+  {Win32SanitizerRawAccessViolation    win32_sanitizer_raw_access_violation        0xe0736171  0  "(Win32) Sanitizer Raw Access Violation"                         }
+}
+
+////////////////////////////////
+//~ rjf: Generators
+
+@table_gen_enum CTRL_ExceptionCodeKind:
+{
+  `CTRL_ExceptionCodeKind_Null,`;
+  @expand(CTRL_ExceptionCodeKindTable a) `CTRL_ExceptionCodeKind_$(a.name),`;
+  `CTRL_ExceptionCodeKind_COUNT`;
+}
+
+@table_gen_data(type:U32, fallback:0)
+ctrl_exception_code_kind_code_table:
+{
+  `0,`;
+  @expand(CTRL_ExceptionCodeKindTable a) `$(a.code),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+ctrl_exception_code_kind_display_string_table:
+{
+  `{0},`;
+  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+ctrl_exception_code_kind_lowercase_code_string_table:
+{
+  `{0},`;
+  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.lower_name)"),`;
+}
+
+@table_gen_data(type:B8, fallback:0)
+ctrl_exception_code_kind_default_enable_table:
+{
+  `0,`;
+  @expand(CTRL_ExceptionCodeKindTable a) `$(a.default),`;
+}

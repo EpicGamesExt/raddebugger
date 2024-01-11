@@ -1,0 +1,24 @@
+udis86 Version 1.7.2
+Disassembler library written in C, by vivek.mt@gmail.com
+2-clause BSD license (see LICENSE)
+
+Documentation: http://udis86.sourceforge.net/
+
+Checked out from https://github.com/vmt/udis86
+commit b24baf1e32bdd9ea12cc9f6dc4882b6ba04de0d7
+Date:   Thu Nov 14 12:28:33 2013 -0800
+
+Various unnecessary parts, like unittests, bootstrapping scripts and a
+command-line utility have been stripped out. This is just the bare
+library.
+
+In a normal build, libudis86/itab.h libudis86/itab.c are actually
+generated from XML tables and a python script, but I've simply checked
+in the generated results to keep things smaller and avoid that
+bootstrapping step.
+
+I did something similar with config.h, which would normally be
+generated through automake/configure. This is probably less OK, but
+will do for now.
+
+-Won (wonc@radgametools.com)

@@ -1,0 +1,556 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+////////////////////////////////
+//~ rjf: X64 Tables
+
+@table(name size usage)
+REGS_RegTableX64:
+{
+  {rax                            64   Normal}
+  {rcx                            64   Normal}
+  {rdx                            64   Normal}
+  {rbx                            64   Normal}
+  {rsp                            64   Normal}
+  {rbp                            64   Normal}
+  {rsi                            64   Normal}
+  {rdi                            64   Normal}
+  {r8                             64   Normal}
+  {r9                             64   Normal}
+  {r10                            64   Normal}
+  {r11                            64   Normal}
+  {r12                            64   Normal}
+  {r13                            64   Normal}
+  {r14                            64   Normal}
+  {r15                            64   Normal}
+  {fsbase                         64   Normal}
+  {gsbase                         64   Normal}
+  {rip                            64   Normal}
+  {rflags                         64   Normal}
+  {dr0                            32   Normal}
+  {dr1                            32   Normal}
+  {dr2                            32   Normal}
+  {dr3                            32   Normal}
+  {dr4                            32   Normal}
+  {dr5                            32   Normal}
+  {dr6                            32   Normal}
+  {dr7                            32   Normal}
+  {fpr0                           80   Normal}
+  {fpr1                           80   Normal}
+  {fpr2                           80   Normal}
+  {fpr3                           80   Normal}
+  {fpr4                           80   Normal}
+  {fpr5                           80   Normal}
+  {fpr6                           80   Normal}
+  {fpr7                           80   Normal}
+  {st0                            80   Normal}
+  {st1                            80   Normal}
+  {st2                            80   Normal}
+  {st3                            80   Normal}
+  {st4                            80   Normal}
+  {st5                            80   Normal}
+  {st6                            80   Normal}
+  {st7                            80   Normal}
+  {fcw                            16   Normal}
+  {fsw                            16   Normal}
+  {ftw                            16   Normal}
+  {fop                            16   Normal}
+  {fcs                            16   Normal}
+  {fds                            16   Normal}
+  {fip                            32   Normal}
+  {fdp                            32   Normal}
+  {mxcsr                          32   Normal}
+  {mxcsr_mask                     32   Normal}
+  {ss                             16   Normal}
+  {cs                             16   Normal}
+  {ds                             16   Normal}
+  {es                             16   Normal}
+  {fs                             16   Normal}
+  {gs                             16   Normal}
+  {ymm0                           256  Normal}
+  {ymm1                           256  Normal}
+  {ymm2                           256  Normal}
+  {ymm3                           256  Normal}
+  {ymm4                           256  Normal}
+  {ymm5                           256  Normal}
+  {ymm6                           256  Normal}
+  {ymm7                           256  Normal}
+  {ymm8                           256  Normal}
+  {ymm9                           256  Normal}
+  {ymm10                          256  Normal}
+  {ymm11                          256  Normal}
+  {ymm12                          256  Normal}
+  {ymm13                          256  Normal}
+  {ymm14                          256  Normal}
+  {ymm15                          256  Normal}
+}
+
+@table(name base off size usage)
+REGS_AliasTableX64:
+{
+  {eax             rax    0      32     Normal}
+  {ecx             rcx    0      32     Normal}
+  {edx             rdx    0      32     Normal}
+  {ebx             rbx    0      32     Normal}
+  {esp             rsp    0      32     Normal}
+  {ebp             rbp    0      32     Normal}
+  {esi             rsi    0      32     Normal}
+  {edi             rdi    0      32     Normal}
+  {r8d             r8     0      32     Normal}
+  {r9d             r9     0      32     Normal}
+  {r10d            r10    0      32     Normal}
+  {r11d            r11    0      32     Normal}
+  {r12d            r12    0      32     Normal}
+  {r13d            r13    0      32     Normal}
+  {r14d            r14    0      32     Normal}
+  {r15d            r15    0      32     Normal}
+  
+  // TODO(allen): figure this one out; visual studio disagrees
+  {eip             rip    0      32     Normal}
+  
+  {eflags          rflags 0      32     Normal}
+  {ax              rax    0      16     Normal}
+  {cx              rcx    0      16     Normal}
+  {dx              rdx    0      16     Normal}
+  {bx              rbx    0      16     Normal}
+  {si              rsi    0      16     Normal}
+  {di              rdi    0      16     Normal}
+  {sp              rsp    0      16     Normal}
+  {bp              rbp    0      16     Normal}
+  {ip              rip    0      16     Normal}
+  {r8w             r8     0      16     Normal}
+  {r9w             r9     0      16     Normal}
+  {r10w            r10    0      16     Normal}
+  {r11w            r11    0      16     Normal}
+  {r12w            r12    0      16     Normal}
+  {r13w            r13    0      16     Normal}
+  {r14w            r14    0      16     Normal}
+  {r15w            r15    0      16     Normal}
+  {al              rax    0      8      Normal}
+  {cl              rcx    0      8      Normal}
+  {dl              rdx    0      8      Normal}
+  {bl              rbx    0      8      Normal}
+  {sil             rsi    0      8      Normal}
+  {dil             rdi    0      8      Normal}
+  {bpl             rbp    0      8      Normal}
+  {spl             rsp    0      8      Normal}
+  {r8b             r8     0      8      Normal}
+  {r9b             r9     0      8      Normal}
+  {r10b            r10    0      8      Normal}
+  {r11b            r11    0      8      Normal}
+  {r12b            r12    0      8      Normal}
+  {r13b            r13    0      8      Normal}
+  {r14b            r14    0      8      Normal}
+  {r15b            r15    0      8      Normal}
+  {ah              rax    8      8      Normal}
+  {ch              rcx    8      8      Normal}
+  {dh              rdx    8      8      Normal}
+  {bh              rbx    8      8      Normal}
+  {xmm0            ymm0   0      128    Normal}
+  {xmm1            ymm1   0      128    Normal}
+  {xmm2            ymm2   0      128    Normal}
+  {xmm3            ymm3   0      128    Normal}
+  {xmm4            ymm4   0      128    Normal}
+  {xmm5            ymm5   0      128    Normal}
+  {xmm6            ymm6   0      128    Normal}
+  {xmm7            ymm7   0      128    Normal}
+  {xmm8            ymm8   0      128    Normal}
+  {xmm9            ymm9   0      128    Normal}
+  {xmm10           ymm10  0      128    Normal}
+  {xmm11           ymm11  0      128    Normal}
+  {xmm12           ymm12  0      128    Normal}
+  {xmm13           ymm13  0      128    Normal}
+  {xmm14           ymm14  0      128    Normal}
+  {xmm15           ymm15  0      128    Normal}
+  {mm0             fpr0   0      64     Normal}
+  {mm1             fpr1   0      64     Normal}
+  {mm2             fpr2   0      64     Normal}
+  {mm3             fpr3   0      64     Normal}
+  {mm4             fpr4   0      64     Normal}
+  {mm5             fpr5   0      64     Normal}
+  {mm6             fpr6   0      64     Normal}
+  {mm7             fpr7   0      64     Normal}
+}
+
+////////////////////////////////
+//~ rjf: X86 Tables
+
+@table(name size usage)
+REGS_RegTableX86:
+{
+  {eax                       32  Normal}
+  {ecx                       32  Normal}
+  {edx                       32  Normal}
+  {ebx                       32  Normal}
+  {esp                       32  Normal}
+  {ebp                       32  Normal}
+  {esi                       32  Normal}
+  {edi                       32  Normal}
+  {fsbase                    32  Normal}
+  {gsbase                    32  Normal}
+  {eflags                    32  Normal}
+  {eip                       32  Normal}
+  {dr0                       32  Normal}
+  {dr1                       32  Normal}
+  {dr2                       32  Normal}
+  {dr3                       32  Normal}
+  {dr4                       32  Normal}
+  {dr5                       32  Normal}
+  {dr6                       32  Normal}
+  {dr7                       32  Normal}
+  // FSave registers
+  // TODO(allen): I am suspicious of this stuff here.
+  // Are fpr0-7 and st0-7 actually different things? Visual studio doesn't show
+  // frp0-7. Not sure if the mm0-7 aliases are setup the right way either.
+  {fpr0                      80  Normal}
+  {fpr1                      80  Normal}
+  {fpr2                      80  Normal}
+  {fpr3                      80  Normal}
+  {fpr4                      80  Normal}
+  {fpr5                      80  Normal}
+  {fpr6                      80  Normal}
+  {fpr7                      80  Normal}
+  {st0                       80  Normal}
+  {st1                       80  Normal}
+  {st2                       80  Normal}
+  {st3                       80  Normal}
+  {st4                       80  Normal}
+  {st5                       80  Normal}
+  {st6                       80  Normal}
+  {st7                       80  Normal}
+  {fcw                       16  Normal}
+  {fsw                       16  Normal}
+  {ftw                       16  Normal}
+  {fop                       16  Normal}
+  {fcs                       16  Normal}
+  {fds                       16  Normal}
+  {fip                       32  Normal}
+  {fdp                       32  Normal}
+  {mxcsr                     32  Normal}
+  // TODO(allen): I don't think this is really a "register" - think about this...
+  {mxcsr_mask                32  Normal}
+  {ss                        16  Normal}
+  {cs                        16  Normal}
+  {ds                        16  Normal}
+  {es                        16  Normal}
+  {fs                        16  Normal}
+  {gs                        16  Normal}
+  // SIMD REGISTERS
+  {ymm0                      256 Normal}
+  {ymm1                      256 Normal}
+  {ymm2                      256 Normal}
+  {ymm3                      256 Normal}
+  {ymm4                      256 Normal}
+  {ymm5                      256 Normal}
+  {ymm6                      256 Normal}
+  {ymm7                      256 Normal}
+}
+
+@table(name base off size usage)
+REGS_AliasTableX86:
+{
+  {ax     eax    0      16    Normal}
+  {cx     ecx    0      16    Normal}
+  {bx     ebx    0      16    Normal}
+  {dx     edx    0      16    Normal}
+  {sp     esp    0      16    Normal}
+  {bp     ebp    0      16    Normal}
+  {si     esi    0      16    Normal}
+  {di     edi    0      16    Normal}
+  {ip     eip    0      16    Normal}
+  {ah     eax    8      8     Normal}
+  {ch     ecx    8      8     Normal}
+  {dh     edx    8      8     Normal}
+  {bh     ebx    8      8     Normal}
+  {al     eax    0      8     Normal}
+  {cl     ecx    0      8     Normal}
+  {dl     edx    0      8     Normal}
+  {bl     ebx    0      8     Normal}
+  {bpl    ebp    0      8     Normal}
+  {spl    esp    0      8     Normal}
+  {xmm0   ymm0   0      128   Normal}
+  {xmm1   ymm1   0      128   Normal}
+  {xmm2   ymm2   0      128   Normal}
+  {xmm3   ymm3   0      128   Normal}
+  {xmm4   ymm4   0      128   Normal}
+  {xmm5   ymm5   0      128   Normal}
+  {xmm6   ymm6   0      128   Normal}
+  {xmm7   ymm7   0      128   Normal}
+  {mm0    fpr0   0      64    Normal}
+  {mm1    fpr1   0      64    Normal}
+  {mm2    fpr2   0      64    Normal}
+  {mm3    fpr3   0      64    Normal}
+  {mm4    fpr4   0      64    Normal}
+  {mm5    fpr5   0      64    Normal}
+  {mm6    fpr6   0      64    Normal}
+  {mm7    fpr7   0      64    Normal}
+}
+
+////////////////////////////////
+//~ rjf: Architecture Tables
+
+@table(name, name_lower)
+REGS_ArchTable:
+{
+  {X64 x64}
+  {X86 x86}
+}
+
+////////////////////////////////
+//~ rjf: X64 Generators
+
+@table_gen_enum REGS_RegCodeX64:
+{
+  `REGS_RegCodeX64_NULL,`;
+  @expand(REGS_RegTableX64 a) `REGS_RegCodeX64_$(a.name),`;
+  `REGS_RegCodeX64_COUNT`;
+}
+
+@table_gen_enum REGS_AliasCodeX64:
+{
+  `REGS_AliasCodeX64_NULL,`;
+  @expand(REGS_AliasTableX64 a) `REGS_AliasCodeX64_$(a.name),`;
+  `REGS_AliasCodeX64_COUNT`;
+}
+
+@table_gen_struct
+REGS_RegBlockX64:
+{
+  @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name);`;
+}
+
+@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+regs_g_reg_code_x64_usage_kind_table:
+{
+  `REGS_UsageKind_Normal,`;
+  @expand(REGS_RegTableX64 a) `REGS_UsageKind_$(a.usage),`;
+}
+
+@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+regs_g_alias_code_x64_usage_kind_table:
+{
+  `REGS_UsageKind_Normal,`;
+  @expand(REGS_AliasTableX64 a) `REGS_UsageKind_$(a.usage),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+regs_g_reg_code_x64_string_table:
+{
+  `str8_lit_comp(""),`;
+  @expand(REGS_RegTableX64 a) `str8_lit_comp("$(a.name)"),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+regs_g_alias_code_x64_string_table:
+{
+  `str8_lit_comp(""),`;
+  @expand(REGS_AliasTableX64 a) `str8_lit_comp("$(a.name)"),`;
+}
+
+@table_gen_data(type: REGS_Rng, fallback: `{0}`)
+regs_g_reg_code_x64_rng_table:
+{
+  `{0},`;
+  @expand(REGS_RegTableX64 a) `{(U16)OffsetOf(REGS_RegBlockX64, $(a.name)), $(a.size/8)},`,
+}
+
+@table_gen_data(type: REGS_Slice, fallback: `{0}`)
+regs_g_alias_code_x64_slice_table:
+{
+  `{0},`;
+  @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)},`,
+}
+
+////////////////////////////////
+//~ rjf: X86 Generators
+
+@table_gen_enum REGS_RegCodeX86:
+{
+  `REGS_RegCodeX86_NULL,`;
+  @expand(REGS_RegTableX86 a) `REGS_RegCodeX86_$(a.name),`;
+  `REGS_RegCodeX86_COUNT`;
+}
+
+@table_gen_enum REGS_AliasCodeX86:
+{
+  `REGS_AliasCodeX86_NULL,`;
+  @expand(REGS_AliasTableX86 a) `REGS_AliasCodeX86_$(a.name),`;
+  `REGS_AliasCodeX86_COUNT`;
+}
+
+@table_gen_struct
+REGS_RegBlockX86:
+{
+  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name);`;
+}
+
+@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+regs_g_reg_code_x86_usage_kind_table:
+{
+  `REGS_UsageKind_Normal,`;
+  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage),`;
+}
+
+@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+regs_g_alias_code_x86_usage_kind_table:
+{
+  `REGS_UsageKind_Normal,`;
+  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+regs_g_reg_code_x86_string_table:
+{
+  `str8_lit_comp(""),`;
+  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)"),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+regs_g_alias_code_x86_string_table:
+{
+  `str8_lit_comp(""),`;
+  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)"),`;
+}
+
+@table_gen_data(type: REGS_Rng, fallback: `{0}`)
+regs_g_reg_code_x86_rng_table:
+{
+  `{0},`;
+  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)},`,
+}
+
+@table_gen_data(type: REGS_Slice, fallback: `{0}`)
+regs_g_alias_code_x86_slice_table:
+{
+  `{0},`;
+  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)},`,
+}
+
+////////////////////////////////
+//~ rjf: Architecture-Dynamic Helper Implementation Generators
+
+@c_file @table_gen
+{
+  `internal U64 regs_block_size_from_architecture(Architecture arch)`;
+  `{`;
+    `U64 result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = sizeof(REGS_RegBlock$(a.name));}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal U64 regs_reg_code_count_from_architecture(Architecture arch)`;
+  `{`;
+    `U64 result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = REGS_RegCode$(a.name)_COUNT;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal U64 regs_alias_code_count_from_architecture(Architecture arch)`;
+  `{`;
+    `U64 result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = REGS_AliasCode$(a.name)_COUNT;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal String8 *regs_reg_code_string_table_from_architecture(Architecture arch)`;
+  `{`;
+    `String8 *result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = regs_g_reg_code_$(a.name_lower)_string_table;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal String8 *regs_alias_code_string_table_from_architecture(Architecture arch)`;
+  `{`;
+    `String8 *result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = regs_g_alias_code_$(a.name_lower)_string_table;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal REGS_Rng *regs_reg_code_rng_table_from_architecture(Architecture arch)`;
+  `{`;
+    `REGS_Rng *result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = regs_g_reg_code_$(a.name_lower)_rng_table;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal REGS_Slice *regs_alias_code_slice_table_from_architecture(Architecture arch)`;
+  `{`;
+    `REGS_Slice *result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = regs_g_alias_code_$(a.name_lower)_slice_table;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal REGS_UsageKind *regs_reg_code_usage_kind_table_from_architecture(Architecture arch)`;
+  `{`;
+    `REGS_UsageKind *result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = regs_g_reg_code_$(a.name_lower)_usage_kind_table;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+@c_file @table_gen
+{
+  `internal REGS_UsageKind *regs_alias_code_usage_kind_table_from_architecture(Architecture arch)`;
+  `{`;
+    `REGS_UsageKind *result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(REGS_ArchTable a) `case Architecture_$(a.name_lower):{result = regs_g_alias_code_$(a.name_lower)_usage_kind_table;}break;`;
+      `}`;
+    `return result;`;
+    `}`;
+}

@@ -1,0 +1,97 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+////////////////////////////////
+//~ rjf: Tables
+
+@table(name                 basic_string          basic_byte_size)
+// NOTE(rjf): basic_byte_size == 0xFF? => address sized
+TG_KindTable:
+{
+  {Null                      ""                    0    }
+  {Void                      "void"                0    }
+  {Handle                    "HANDLE"              0xFF }
+  {Char8                     "char8"               1    }
+  {Char16                    "char16"              2    }
+  {Char32                    "char32"              4    }
+  {UChar8                    "uchar8"              1    }
+  {UChar16                   "uchar16"             2    }
+  {UChar32                   "uchar32"             4    }
+  {U8                        "U8"                  1    }
+  {U16                       "U16"                 2    }
+  {U32                       "U32"                 4    }
+  {U64                       "U64"                 8    }
+  {U128                      "U128"                16   }
+  {U256                      "U256"                32   }
+  {U512                      "U512"                64   }
+  {S8                        "S8"                  1    }
+  {S16                       "S16"                 2    }
+  {S32                       "S32"                 4    }
+  {S64                       "S64"                 8    }
+  {S128                      "S128"                16   }
+  {S256                      "S256"                32   }
+  {S512                      "S512"                64   }
+  {Bool                      "bool"                1    }
+  {F16                       "F16"                 2    }
+  {F32                       "F32"                 4    }
+  {F32PP                     "F32PP"               4    }
+  {F48                       "F48"                 6    }
+  {F64                       "F64"                 8    }
+  {F80                       "F80"                 10   }
+  {F128                      "F128"                16   }
+  {ComplexF32                "ComplexF32"          8    }
+  {ComplexF64                "ComplexF64"          16   }
+  {ComplexF80                "ComplexF80"          20   }
+  {ComplexF128               "ComplexF128"         32   }
+  {Modifier                  ""                    0    }
+  {Ptr                       ""                    0    }
+  {LRef                      ""                    0    }
+  {RRef                      ""                    0    }
+  {Array                     ""                    0    }
+  {Function                  ""                    0    }
+  {Method                    ""                    0    }
+  {MemberPtr                 ""                    0    }
+  {Struct                    ""                    0    }
+  {Class                     ""                    0    }
+  {Union                     ""                    0    }
+  {Enum                      ""                    0    }
+  {Alias                     ""                    0    }
+  {IncompleteStruct          ""                    0    }
+  {IncompleteUnion           ""                    0    }
+  {IncompleteClass           ""                    0    }
+  {IncompleteEnum            ""                    0    }
+  {Bitfield                  ""                    0    }
+  {Variadic                  ""                    0    }
+}
+
+////////////////////////////////
+//~ rjf: Generators
+
+@table_gen_enum
+TG_Kind:
+{
+  @expand(TG_KindTable a) `TG_Kind_$(a.name),`;
+  `TG_Kind_COUNT,`;
+  `TG_Kind_FirstBasic = TG_Kind_Void,`;
+  `TG_Kind_LastBasic  = TG_Kind_ComplexF128,`;
+  `TG_Kind_FirstInteger = TG_Kind_Char8,`;
+  `TG_Kind_LastInteger  = TG_Kind_S512,`;
+  `TG_Kind_FirstSigned1 = TG_Kind_Char8,`;
+  `TG_Kind_LastSigned1  = TG_Kind_Char32,`;
+  `TG_Kind_FirstSigned2 = TG_Kind_S8,`;
+  `TG_Kind_LastSigned2  = TG_Kind_S512,`;
+  `TG_Kind_FirstIncomplete = TG_Kind_IncompleteStruct,`;
+  `TG_Kind_LastIncomplete  = TG_Kind_IncompleteEnum,`;
+}
+
+@table_gen_data(type:U8, fallback:0)
+tg_kind_basic_byte_size_table:
+{
+  @expand(TG_KindTable a) `$(a.basic_byte_size),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+tg_kind_basic_string_table:
+{
+  @expand(TG_KindTable a) `str8_lit_comp("$(a.basic_string)"),`;
+}
