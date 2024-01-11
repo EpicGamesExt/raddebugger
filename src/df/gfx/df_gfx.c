@@ -1076,7 +1076,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->cfg_src = cfg_src;
   window->arena = arena_alloc();
   {
-    String8 title = str8_lit_comp("The RAD Debugger (ALPHA) - " __DATE__);
+    String8 title = str8_lit_comp(RADDBG_TITLE_STRING_LITERAL);
     window->os = os_window_open(size, title);
   }
   window->r = r_window_equip(window->os);
@@ -4452,9 +4452,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           
           // rjf: help menu
           UI_Key help_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_help_menu_key_"));
-          UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(30.f, 1.f))
+          UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(40.f, 1.f))
           {
-            ui_labelf("The RAD Debugger (ALPHA) - %s", __DATE__);
+            ui_label(str8_lit_comp(RADDBG_TITLE_STRING_LITERAL));
             ui_spacer(ui_em(0.75f, 1.f));
             ui_label_multiline(ui_top_font_size()*30.f, str8_lit("If you run into issues, please send an email describing them to:"));
             UI_TextAlignment(UI_TextAlign_Center)

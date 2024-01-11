@@ -4,6 +4,16 @@
 ////////////////////////////////
 //~ rjf: Settings
 
+#define RADDBG_VERSION_MAJOR 0
+#define RADDBG_VERSION_MINOR 9
+#define RADDBG_VERSION_PATCH 0
+#define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
+#if defined(NDEBUG)
+# define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""
+#else
+# define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ " [Debug]"
+#endif
+
 #define ENABLE_DEV 1
 #define DE2CTRL 1
 
