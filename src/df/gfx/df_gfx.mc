@@ -601,7 +601,7 @@ df_g_theme_color_cfg_string_table:
 raddbg_readme:
 {
   @title "The RAD Debugger (ALPHA)";
-  @p "The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It currently only supports local-machine Windows x64 debugging, with plans to expand and port in the future.";
+  @p "The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It currently only supports local-machine Windows x64 debugging with PDBs, with plans to expand and port in the future.";
   
   @subtitle "Getting Started";
   @p "To launch the RAD Debugger with your executable and command line arguments, run `raddbg` from the command line like so:";

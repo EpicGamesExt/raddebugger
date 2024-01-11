@@ -1,6 +1,29 @@
 # The RAD Debugger Project
 
----
+The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It
+currently only supports local-machine Windows x64 debugging with PDBs, with
+plans to expand and port in the future. In the future we'll expand to also
+support native Linux debugging and DWARF debug info.
+
+You can download pre-built binaries for the debugger
+[here](https://github.com/EpicGames/raddebugger/releases).
+
+The RAD Debugger project aims to simplify the debugger by simplifying and
+unifying the underlying debug info format. In that pursuit we've built
+the RADDBG debug info format, which is what the debugger parses and uses. To
+work with existing toolchains, we convert PDB (and eventually PE/ELF files
+with embedded DWARF) into the RADDBG format on-demand. This conversion process
+is currently unoptimized but quite fast for smaller PDB files (in many cases
+faster than many other programs simply deserialize the PDBs).
+
+The RADDBG format is currently specified in code, in the files within the
+`src/raddbg_format` folder. The other relevant folders for working with the
+format are:
+
+- `raddbg_cons`: The RADDBG construction layer, for constructing RADDBG files.
+- `raddbg_convert`: Our implementation of PDB-to-RADDBG (and an in-progress
+implementation of a DWARF-to-RADDBG) conversion.
+- `raddbg_dump`: Code for textually dumping information from RADDBG files.
 
 ## Development Setup Instructions
 
@@ -66,8 +89,6 @@ raddbg.cpp
 If everything worked correctly, there will be a `build` folder in the root
 level of the codebase, and it will contain a freshly-built `raddbg.exe`.
 
----
-
 ## Top-Level Directory Descriptions
 
 - `data`: Small binary files which are used when building, either to embed
@@ -79,8 +100,6 @@ also exist:
 
 - `build`: All build artifacts. Not checked in to version control.
 - `local`: Local files, used for local build configuration input files.
-
----
 
 ## Codebase Introduction
 
