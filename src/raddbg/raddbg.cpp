@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Settings
+//~ rjf: Build Settings
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
@@ -21,56 +21,150 @@
 //~ rjf: 2024/1 tasks
 //
 // [ ] @bug bug notes from casey
-//  [ ] ** If you put a full path to a TTF font into the code_font/main_font variables of the config file,
-//      it continually rewrites it each time you launch. The first time you launch, with your hand-edited
-//      font path, it works correctly and the font loads, but it rewrites it from an absolute path to a
-//      relative path. The second time you launch, with the relative path, it doesn't work (you get no text
-//      at all), and it rewrites it from relative back to absolute, but to the wrong path (prepending
-//      C:/users/casey/AppData/ to the previous path, even though that was not at all where the font ever
-//      was) The font path will now remain "stable" in the sense that it won't rewrite it anymore. But you
-//      cannot use the debugger because it's the wrong font path, so you get no text.
-//  [ ] When I click in the theme window on something like "Code (Meta)", it opens up a tiny window, which
-//      only shows a tiny bit of what I imagine is the entire color picker? It makes the picker unusable
-//      because more of the UI for it is clipped and cannot be accessed.
-//  [ ] Clicking anywhere in the color picker that isn't a button closes the color picker for some reason?
-//  [ ] In a "hover watch" (where you hover over a variable and it shows a pop-up watch window), if you expand
-//      an item near the bottom of the listing, it will be clipped to the bottom of the listing instead of
-//      showing the actual items (ie., it doesn't resize the listing based on what's actually visible)
+//  [ ] ** If you put a full path to a TTF font into the code_font/main_font
+//      variables of the config file, it continually rewrites it each time you
+//      launch. The first time you launch, with your hand-edited font path, it
+//      works correctly and the font loads, but it rewrites it from an absolute
+//      path to a relative path. The second time you launch, with the relative
+//      path, it doesn't work (you get no text at all), and it rewrites it from
+//      relative back to absolute, but to the wrong path (prepending
+//      C:/users/casey/AppData/ to the previous path, even though that was not
+//      at all where the font ever was) The font path will now remain "stable"
+//      in the sense that it won't rewrite it anymore. But you cannot use the
+//      debugger because it's the wrong font path, so you get no text.
+//  [x] When I click in the theme window on something like "Code (Meta)", it
+//      opens up a tiny window, which only shows a tiny bit of what I imagine
+//      is the entire color picker? It makes the picker unusable because more
+//      of the UI for it is clipped and cannot be accessed.
+//  [x] Clicking anywhere in the color picker that isn't a button closes the
+//      color picker for some reason?
+//  [ ] In a "hover watch" (where you hover over a variable and it shows a pop-
+//      up watch window), if you expand an item near the bottom of the listing,
+//      it will be clipped to the bottom of the listing instead of showing the
+//      actual items (ie., it doesn't resize the listing based on what's
+//      actually visible)
 //
 // [ ] @bug @feature @cleanup general feedback from casey
-//  [ ] ** I don't like how panels get dimmer when they are not active, because it makes them harder for me to read. Is there a way to turn this off?
-//  [ ] ** I couldn't figure out how to really view threads in the debugger. The only place I found a thread list was in "The Scheduler", but it only lists threads by ID, which is hard to use. I can hover over them to get the stack, which helps, but it would be much nicer if the top function was displayed in the window by default next to the thread.
-//  [ ] ** It would be nice if thread listings displayed the name of the thread, instead of just the ID.
-//  [ ] ** Scrollbars are barely visible for me, for some reason. I could not find anything in the theme that would fill them with a solid, bright color. Instead they are just a thin outline and the same color as the scroll bar background.
-//  [ ] It seems like the code is compiled as a console app for some reason, so when you run it, it locks up your console. I worked around this by making a bat file that does a "start" of it, but, it seems like this would not be what people would expect (at least on Windows?)
-//  [ ] Dragging a window tab (like Locals or Registers or whatnot) and canceling with ESC should revert the window tab to where it was. Currently, it leaves the window tab reordered if you dragged over its window and shuffled its position.
-//  [ ] Many of the UI elements, like the menus, would like better if they had a little bit of margin. Having the text right next to the edges, and with no line spacing, makes it harder to read things quickly.
-//  [ ] Menus take too long to show up. I would prefer it if they were instant. The animation doesn't really provide any useful cues, since I know where the menu came from.
-//  [ ] Theme window should include font scaling. I was able to find the comm-and for increasing the font scale, but I imagine most people wouldn't think to look there.
-//  [ ] The way the "commands" view worked was idiosyncratic. All the other views stay up, but that one goes away whenever I select a command for some reason.
-//  [ ] Also, I could not move the commands window anywhere AFAICT. It seems to just pop up over whatever window I currently have selected. This would make sense for a hotkey (which I assume is the way it was designed), but it seems like it should be permanent if you can select it from the View menu.
-//  [ ] If the command window is not wide enough, you cannot read the description of a command because it doesn't word-wrap, nor can you hover over it to get the description in a tooltip (AFAICT).
-//  [ ] It'd be nice to have a "goto byte" option for source views, for jumping to error messages that are byte-based instead of line-based.
-//  [ ] Pressing the left mouse button on the menu bar and dragging does not move through the menus as expected - instead, it opens the one you clicked down on, then does nothing until you release, at which point it opens the menu you released on.
-//  [ ] Similarly, pressing the left mouse button on a menu and dragging to an item, then releasing, does not trigger that item as expected. Instead, it is a nop, and it waits for you to click again on the item.
-//  [ ] I was a little confused about what a profile file was. I understood what the user file was, but the profile file sounded like it should perhaps be per-project, yet it sounded like it was meant to be somewhat global? I don't have any feedback here because it probably will make sense once I use the debugger more, but I just thought I'd make a note to say that I was confused about it after reading the manual, so perhaps you could elaborate a little more on it in there.
-//  [ ] I found the "non-windowness" of the source view area confusing. Since everything else is a tab, it was weird that it was a "phantom non-tab window" that gets replaced by an automatically opened tab once you step.
-//  [ ] Working with panels felt cumbersome. I couldn't figure out any way to quickly arrange the display without manually selecting "split panel" and "close panel" and stuff from the menu, which took a long time.
-//  [ ] I found the "context menu" convention to be confusing. For example, if I left-click on a tab, it selects the tab. If I right-click on a tab, it opens the context menu. However, if I left-click on a module, it opens the context window. It seems like maybe menus should be right, and left should do the default action, more consistently?
-//  [ ] I found the "drill down" convention to be confusing, too. For example, if I click on a target, it opens a new tab with that target in it. By contrast, if I click on "browse" in the module window, it replaces that window temporarily with a browsing window.
-//  [ ] More tooltips would be helpful. For example, I don't know what the "rotation arrow" icon next to executables means in the "This PC" window
-//  [ ] Hovering over disassembly highlights blocks of instructions, which I assume correspond to source lines. But perhaps it should also highlight the source lines? The inverse hover works (you hover over source, and it highlights ASM), but ASM->source doesn't.
-//  [ ] It seems like clicking on a breakpoint red circle should perhaps disable the breakpoint, rather than delete it? Since breakpoints can have a fair bit of state, it seems like it might be annoying to have it all be deleted if you accidentally click. Unless you are planning on adding undo? Actually, that's probably something you should do: keep a breakpoint history that is in the breakpoint window that you can open up when you want, and it just has a stack of all your recently deleted breakpoints? That solves the problem better.
-//  [ ] I had to go into the user file to change the font. That should probably be in the theme window?
-//  [ ] Launching the debugger with an invalid code_font/main_font name doesn't have any fallback, so you just get no text at all. Probably should use a fallback font when font loading fails
-//  [ ] Setting the code_font/main_font values to a font name doesn't work. Should probably make note that you have to set it to a path to a TTF, since that's not normally how Windows fonts work.
-//  [ ] Having inactive tabs use smaller fonts doesn't work very well for readability. I feel like just normal->bold is a better choice than small font->large font.
-//  [ ] The hex format for color values in the config file was a real mindbender. It's prefixed with "0x", so I was assuming it was either Windows Big Endian (0xAARRGGBB) or Mac Little Endian (0xAABBGGRR). To my surprise, it was neither - it was actually web format (RRGGBBAA), which I was not expecting because that is normally written with a number sign (#AARRGGBB) not an 0x.
-//  [ ] Clicking on either side of a scroll bar is idiosyncratic. Normally, that is "page up" / "page down", but here it is "smooth scroll upward" / "smooth scroll downward" for some reason?
-//  [ ] Hitting ESC during a color picker drag should abort the color picking and revert to the previous color. Currently, it just accepts the last drag result as the new color.
-//  [ ] It was not clear to me why a small "tab picker" appeared when I got to a certain number of tabs. It seemed to appear even if the tabs were quite large, and there was no need to a drop-down menu to pick them. It feels like either it should always be there, or it should only show up if at least one tab gets small enough to have its name cut off?
-//  [ ] It feels like "expansion" icons should only show next to things that can actually be expanded.
-//  [ ] It wasn't clear to me how you save a user or profile file. I can see how to load them, but not how you save them. Obviously I can just copy the files myself in the shell, but it seemed weird that there was no "save" option in the menus.
+//  [x] ** I don't like how panels get dimmer when they are not active, because
+//      it makes them harder for me to read. Is there a way to turn this off?
+//  [ ] ** I couldn't figure out how to really view threads in the debugger.
+//      The only place I found a thread list was in "The Scheduler", but it
+//      only lists threads by ID, which is hard to use. I can hover over them
+//      to get the stack, which helps, but it would be much nicer if the top
+//      function was displayed in the window by default next to the thread.
+//  [ ] ** It would be nice if thread listings displayed the name of the
+//      thread, instead of just the ID.
+//  [ ] ** Scrollbars are barely visible for me, for some reason. I could not
+//      find anything in the theme that would fill them with a solid, bright
+//      color. Instead they are just a thin outline and the same color as the
+//      scroll bar background.
+//  [x] It seems like the code is compiled as a console app for some reason, so
+//      when you run it, it locks up your console. I worked around this by
+//      making a bat file that does a "start" of it, but, it seems like this
+//      would not be what people would expect (at least on Windows?)
+//  [ ] Dragging a window tab (like Locals or Registers or whatnot) and
+//      canceling with ESC should revert the window tab to where it was.
+//      Currently, it leaves the window tab reordered if you dragged over its
+//      window and shuffled its position.
+//  [ ] Many of the UI elements, like the menus, would like better if they had
+//      a little bit of margin. Having the text right next to the edges, and
+//      with no line spacing, makes it harder to read things quickly.
+//  [ ] Menus take too long to show up. I would prefer it if they were instant.
+//      The animation doesn't really provide any useful cues, since I know
+//      where the menu came from.
+//  [ ] Theme window should include font scaling. I was able to find the
+//      command for increasing the font scale, but I imagine most people
+//      wouldn't think to look there.
+//  [ ] The way the "commands" view worked was idiosyncratic. All the other
+//      views stay up, but that one goes away whenever I select a command for
+//      some reason.
+//  [ ] Also, I could not move the commands window anywhere AFAICT. It seems
+//      to just pop up over whatever window I currently have selected. This
+//      would make sense for a hotkey (which I assume is the way it was
+//      designed), but it seems like it should be permanent if you can select
+//      it from the View menu.
+//  [ ] If the command window is not wide enough, you cannot read the
+//      description of a command because it doesn't word-wrap, nor can you
+//      hover over it to get the description in a tooltip (AFAICT).
+//  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
+//      to error messages that are byte-based instead of line-based.
+//  [ ] Pressing the left mouse button on the menu bar and dragging does not
+//      move through the menus as expected - instead, it opens the one you
+//      clicked down on, then does nothing until you release, at which point it
+//      opens the menu you released on.
+//  [ ] Similarly, pressing the left mouse button on a menu and dragging to an
+//      item, then releasing, does not trigger that item as expected. Instead,
+//      it is a nop, and it waits for you to click again on the item.
+//  [ ] I was a little confused about what a profile file was. I understood
+//      what the user file was, but the profile file sounded like it should
+//      perhaps be per-project, yet it sounded like it was meant to be somewhat
+//      global? I don't have any feedback here because it probably will make
+//      sense once I use the debugger more, but I just thought I'd make a note
+//      to say that I was confused about it after reading the manual, so
+//      perhaps you could elaborate a little more on it in there.
+//  [ ] I found the "non-windowness" of the source view area confusing. Since
+//      everything else is a tab, it was weird that it was a "phantom non-tab
+//      window" that gets replaced by an automatically opened tab once you step.
+//  [ ] Working with panels felt cumbersome. I couldn't figure out any way to
+//      quickly arrange the display without manually selecting "split panel"
+//      and "close panel" and stuff from the menu, which took a long time.
+//  [ ] I found the "context menu" convention to be confusing. For example, if
+//      I left-click on a tab, it selects the tab. If I right-click on a tab,
+//      it opens the context menu. However, if I left-click on a module, it
+//      opens the context window. It seems like maybe menus should be right,
+//      and left should do the default action, more consistently?
+//  [ ] I found the "drill down" convention to be confusing, too. For example,
+//      if I click on a target, it opens a new tab with that target in it. By
+//      contrast, if I click on "browse" in the module window, it replaces that
+//      window temporarily with a browsing window.
+//  [ ] More tooltips would be helpful. For example, I don't know what the
+//      "rotation arrow" icon next to executables means in the "This PC" window
+//  [ ] Hovering over disassembly highlights blocks of instructions, which I
+//      assume correspond to source lines. But perhaps it should also highlight
+//      the source lines? The inverse hover works (you hover over source, and
+//      it highlights ASM), but ASM->source doesn't.
+//  [ ] It seems like clicking on a breakpoint red circle should perhaps
+//      disable the breakpoint, rather than delete it? Since breakpoints can
+//      have a fair bit of state, it seems like it might be annoying to have it
+//      all be deleted if you accidentally click. Unless you are planning on
+//      adding undo? Actually, that's probably something you should do: keep a
+//      breakpoint history that is in the breakpoint window that you can open
+//      up when you want, and it just has a stack of all your recently deleted
+//      breakpoints? That solves the problem better.
+//  [ ] I had to go into the user file to change the font. That should probably
+//      be in the theme window?
+//  [ ] Launching the debugger with an invalid code_font/main_font name doesn't
+//      have any fallback, so you just get no text at all. Probably should use
+//      a fallback font when font loading fails
+//  [ ] Setting the code_font/main_font values to a font name doesn't work.
+//      Should probably make note that you have to set it to a path to a TTF,
+//      since that's not normally how Windows fonts work.
+//  [ ] Having inactive tabs use smaller fonts doesn't work very well for
+//      readability. I feel like just normal->bold is a better choice than
+//      small font->large font.
+//  [ ] The hex format for color values in the config file was a real
+//      mindbender. It's prefixed with "0x", so I was assuming it was either
+//      Windows Big Endian (0xAARRGGBB) or Mac Little Endian (0xAABBGGRR). To
+//      my surprise, it was neither - it was actually web format (RRGGBBAA),
+//      which I was not expecting because that is normally written with a
+//      number sign (#AARRGGBB) not an 0x.
+//  [ ] Clicking on either side of a scroll bar is idiosyncratic. Normally,
+//      that is "page up" / "page down", but here it is "smooth scroll upward"
+//      / "smooth scroll downward" for some reason?
+//  [ ] Hitting ESC during a color picker drag should abort the color picking
+//      and revert to the previous color. Currently, it just accepts the last
+//      drag result as the new color.
+//  [ ] It was not clear to me why a small "tab picker" appeared when I got to
+//      a certain number of tabs. It seemed to appear even if the tabs were
+//      quite large, and there was no need to a drop-down menu to pick them. It
+//      feels like either it should always be there, or it should only show up
+//      if at least one tab gets small enough to have its name cut off?
+//  [ ] It feels like "expansion" icons should only show next to things that
+//      can actually be expanded.
+//  [ ] It wasn't clear to me how you save a user or profile file. I can see
+//      how to load them, but not how you save them. Obviously I can just copy
+//      the files myself in the shell, but it seemed weird that there was no
+//      "save" option in the menus.
 //
 //*[ ] @cleanup @feature double & triple click select in source views
 //*[ ] @bug disasm animation & go-to-address
@@ -1066,6 +1160,7 @@ entry_point(int argc, char **argv)
 ////////////////////////////////
 //~ rjf: Low-Level Entry Points
 
+//- rjf: windows
 #if OS_WINDOWS
 
 global DWORD g_saved_exception_code = 0;
@@ -1137,7 +1232,10 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
   }
   return 0;
 }
+
+//- rjf: linux
 #elif OS_LINUX
+
 int main(int argument_count, char **arguments)
 {
   static TCTX main_thread_tctx = {0};
@@ -1145,4 +1243,5 @@ int main(int argument_count, char **arguments)
   entry_point(argument_count, arguments);
   return 0;
 }
+
 #endif
