@@ -47,8 +47,8 @@ set cl_debug=      cl /Od /D_DEBUG %cl_common%
 set cl_release=    cl /O2 /DNDEBUG %cl_common%
 set clang_debug=   clang -g -O0 /D_DEBUG %clang_common%
 set clang_release= clang -g -O3 /DNDEBUG %clang_common% 
-set cl_link=       /link /natvis:%~dp0\src\natvis\base.natvis
-set clang_link=    -Xlinker /natvis:%~dp0\src\natvis\base.natvis
+set cl_link=       /link /natvis:"%~dp0\src\natvis\base.natvis"
+set clang_link=    -Xlinker /natvis:"%~dp0\src\natvis\base.natvis"
 set cl_out=        /out:
 set clang_out=     -o
 
