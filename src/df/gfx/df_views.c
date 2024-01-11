@@ -8596,7 +8596,8 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
       color < DF_ThemeColor_COUNT;
       color = (DF_ThemeColor)(color+1))
   {
-    UI_PrefWidth(ui_em(28.5f, 1)) UI_PrefHeight(ui_children_sum(1.f)) UI_CtxMenu(color_ctx_menu_keys[color]) UI_Padding(ui_em(1.5f, 1.f))
+    UI_CtxMenu(color_ctx_menu_keys[color]) UI_Padding(ui_em(1.5f, 1.f))
+      UI_PrefWidth(ui_em(28.5f, 1)) UI_PrefHeight(ui_children_sum(1.f))
     {
       // rjf: build title
       UI_Row

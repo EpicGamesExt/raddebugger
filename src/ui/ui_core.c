@@ -903,7 +903,7 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     UI_FixedX(anchor.x) UI_FixedY(anchor.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f)) UI_Focus(ui_state->ctx_menu_open)
     {
       ui_set_next_child_layout_axis(Axis2_Y);
-      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_DrawDropShadow|(ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY), "###ctx_menu_%I64x", window.u64[0]);
+      ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawDropShadow|(ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY), "###ctx_menu_%I64x", window.u64[0]);
     }
   }
   
@@ -1013,16 +1013,6 @@ ui_end_build(void)
   if(!ui_state->ctx_menu_touched_this_frame)
   {
     ui_ctx_menu_close();
-  }
-  
-  //- rjf: close ctx menu if unconsumed clicks
-  for(OS_Event *event = ui_events()->first; event != 0; event = event->next)
-  {
-    if(event->kind == OS_EventKind_Press && os_handle_match(event->window, ui_window()) &&
-       (event->key == OS_Key_LeftMouseButton || event->key == OS_Key_RightMouseButton))
-    {
-      ui_ctx_menu_close();
-    }
   }
   
   //- rjf: stick ctx menu to anchor
@@ -1212,6 +1202,22 @@ ui_end_build(void)
     UI_Box *root = ui_state->ctx_menu_root;
     Rng2F32 rect = root->rect;
     root->rect.y1 = root->rect.y0 + dim_2f32(rect).y * ui_state->ctx_menu_open_t;
+  }
+  
+  //- rjf: fall-through interact with context menu
+  if(ui_state->ctx_menu_open)
+  {
+    ui_signal_from_box(ui_state->ctx_menu_root);
+  }
+  
+  //- rjf: close ctx menu if unconsumed clicks
+  for(OS_Event *event = ui_events()->first; event != 0; event = event->next)
+  {
+    if(event->kind == OS_EventKind_Press && os_handle_match(event->window, ui_window()) &&
+       (event->key == OS_Key_LeftMouseButton || event->key == OS_Key_RightMouseButton))
+    {
+      ui_ctx_menu_close();
+    }
   }
   
   //- rjf: hover cursor
@@ -2304,7 +2310,7 @@ ui_signal_from_box(UI_Box *box)
   B32 ctx_menu_is_ancestor = 0;
   ProfScope("check context menu ancestor")
   {
-    for(UI_Box *parent = box->parent; !ui_box_is_nil(parent); parent = parent->parent)
+    for(UI_Box *parent = box; !ui_box_is_nil(parent); parent = parent->parent)
     {
       if(parent == ui_state->ctx_menu_root)
       {
