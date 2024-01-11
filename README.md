@@ -78,9 +78,12 @@ build
 You should see the following output:
 
 ```
+[debug mode]
+[msvc compile]
+[default mode, assuming `raddbg` build]
 metagen_main.c
-searching path/to/codebase/src... 591 files found
-parsing metadesk... 25 metadesk files parsed
+searching C:\devel\raddebugger/src... 299 files found
+parsing metadesk... 12 metadesk files parsed
 gathering tables... 37 tables found
 generating layer code...
 raddbg.cpp
