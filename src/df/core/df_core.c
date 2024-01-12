@@ -7130,57 +7130,91 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             load_cfg[src] = (core_cmd_kind == df_g_cfg_src_load_cmd_kind_table[src]);
           }
           
-          //- rjf: set new config paths
-          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+          //- rjf: normalize path
+          String8 new_path = path_normalized_from_string(scratch.arena, params.file_path);
+          
+          //- rjf: path -> data
+          FileProperties props = {0};
+          String8 data = {0};
           {
-            if(load_cfg[src])
+            OS_Handle file = os_file_open(OS_AccessFlag_Shared|OS_AccessFlag_Read, new_path);
+            props = os_properties_from_file(file);
+            data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
+            os_file_close(file);
+          }
+          
+          //- rjf: investigate file path/data
+          B32 file_is_okay = 1;
+          if(props.modified != 0 && data.size != 0 && !str8_match(str8_prefix(data, 9), str8_lit("// raddbg"), 0))
+          {
+            file_is_okay = 0;
+          }
+          
+          //- rjf: set new config paths
+          if(file_is_okay)
+          {
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
-              arena_clear(df_state->cfg_path_arenas[src]);
-              String8 new_path = path_normalized_from_string(df_state->cfg_path_arenas[src], params.file_path);
-              df_state->cfg_paths[src] = new_path;
+              if(load_cfg[src])
+              {
+                arena_clear(df_state->cfg_path_arenas[src]);
+                df_state->cfg_paths[src] = push_str8_copy(df_state->cfg_path_arenas[src], new_path);
+              }
             }
           }
           
           //- rjf: get config files
           DF_Entity *cfg_files[DF_CfgSrc_COUNT] = {0};
-          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+          if(file_is_okay)
           {
-            String8 path = df_cfg_path_from_src(src);
-            cfg_files[src] = df_entity_from_path(path, DF_EntityFromPathFlag_OpenMissing|DF_EntityFromPathFlag_OpenAsNeeded);
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+            {
+              String8 path = df_cfg_path_from_src(src);
+              cfg_files[src] = df_entity_from_path(path, DF_EntityFromPathFlag_OpenMissing|DF_EntityFromPathFlag_OpenAsNeeded);
+            }
           }
           
           //- rjf: load files
           String8 cfg_data[DF_CfgSrc_COUNT] = {0};
           U64 cfg_timestamps[DF_CfgSrc_COUNT] = {0};
-          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+          if(file_is_okay)
           {
-            DF_Entity *file_entity = cfg_files[src];
-            String8 path = df_full_path_from_entity(scratch.arena, file_entity);
-            OS_Handle file = os_file_open(OS_AccessFlag_Shared|OS_AccessFlag_Read, path);
-            FileProperties props = os_properties_from_file(file);
-            String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
-            if(data.size != 0)
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
-              cfg_data[src] = data;
-              cfg_timestamps[src] = props.modified;
+              DF_Entity *file_entity = cfg_files[src];
+              String8 path = df_full_path_from_entity(scratch.arena, file_entity);
+              OS_Handle file = os_file_open(OS_AccessFlag_Shared|OS_AccessFlag_Read, path);
+              FileProperties props = os_properties_from_file(file);
+              String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
+              if(data.size != 0)
+              {
+                cfg_data[src] = data;
+                cfg_timestamps[src] = props.modified;
+              }
+              os_file_close(file);
             }
-            os_file_close(file);
           }
           
           //- rjf: determine if we need to save config
           B32 cfg_save[DF_CfgSrc_COUNT] = {0};
-          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+          if(file_is_okay)
           {
-            cfg_save[src] = (load_cfg[src] && cfg_files[src]->flags & DF_EntityFlag_IsMissing);
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+            {
+              cfg_save[src] = (load_cfg[src] && cfg_files[src]->flags & DF_EntityFlag_IsMissing);
+            }
           }
           
           //- rjf: determine if we need to reload config
           B32 cfg_load[DF_CfgSrc_COUNT] = {0};
           B32 cfg_load_any = 0;
-          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+          if(file_is_okay)
           {
-            cfg_load[src] = (load_cfg[src] && cfg_timestamps[src] != 0 && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_files[src]->timestamp == 0));
-            cfg_load_any = cfg_load_any || cfg_load[src];
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+            {
+              cfg_load[src] = (load_cfg[src] && cfg_timestamps[src] != 0 && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_files[src]->timestamp == 0));
+              cfg_load_any = cfg_load_any || cfg_load[src];
+            }
           }
           
           //- rjf: load => build new config table
@@ -7199,26 +7233,41 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           // NOTE(rjf): must happen before `save`. we need to create a default before saving, which
           // occurs in the 'apply' path.
           //
-          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+          if(file_is_okay)
           {
-            if(cfg_load[src])
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
-              DF_CoreCmdKind cmd_kind = df_g_cfg_src_apply_cmd_kind_table[src];
-              DF_CmdParams params = df_cmd_params_zero();
-              df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(cmd_kind));
-              df_state->cfg_cached_timestamp[src] = cfg_timestamps[src];
+              if(cfg_load[src])
+              {
+                DF_CoreCmdKind cmd_kind = df_g_cfg_src_apply_cmd_kind_table[src];
+                DF_CmdParams params = df_cmd_params_zero();
+                df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(cmd_kind));
+                df_state->cfg_cached_timestamp[src] = cfg_timestamps[src];
+              }
             }
           }
           
           //- rjf: save => dispatch write
-          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
+          if(file_is_okay)
           {
-            if(cfg_save[src])
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
-              DF_CoreCmdKind cmd_kind = df_g_cfg_src_write_cmd_kind_table[src];
-              DF_CmdParams params = df_cmd_params_zero();
-              df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(cmd_kind));
+              if(cfg_save[src])
+              {
+                DF_CoreCmdKind cmd_kind = df_g_cfg_src_write_cmd_kind_table[src];
+                DF_CmdParams params = df_cmd_params_zero();
+                df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(cmd_kind));
+              }
             }
+          }
+          
+          //- rjf: bad file -> alert user
+          if(!file_is_okay)
+          {
+            DF_CmdParams p = params;
+            p.string = push_str8f(scratch.arena, "\"%S\" appears to refer to an existing file which is not a RADDBG config file. This would overwrite the file.", new_path);
+            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
           }
         }break;
         
