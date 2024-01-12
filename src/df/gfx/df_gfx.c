@@ -11205,13 +11205,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               f_tag_from_static_data_string(&df_g_default_code_font_bytes),
               f_tag_from_static_data_string(&df_g_icon_font_bytes),
             };
-            for(DF_FontSlot slot = (DF_FontSlot)0; slot < DF_FontSlot_COUNT; slot = (DF_FontSlot)(slot+1))
-            {
-              if(f_tag_match(f_tag_zero(), df_gfx_state->cfg_font_tags[slot]))
-              {
-                df_gfx_state->cfg_font_tags[slot] = defaults[slot];
-              }
-            }
+            MemoryZeroArray(df_gfx_state->cfg_font_tags);
             {
               DF_CfgVal *code_font_val = df_cfg_val_from_string(table, str8_lit("code_font"));
               DF_CfgVal *main_font_val = df_cfg_val_from_string(table, str8_lit("main_font"));
@@ -11221,13 +11215,20 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               String8 main_font_relative_path = main_font_cfg->first->string;
               String8 code_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, code_font_relative_path, cfg_folder);
               String8 main_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, main_font_relative_path, cfg_folder);
-              if(code_font_cfg != &df_g_nil_cfg_node && code_font_relative_path.size != 0)
+              if(os_file_path_exists(code_font_path) && code_font_cfg != &df_g_nil_cfg_node && code_font_relative_path.size != 0)
               {
                 df_gfx_state->cfg_font_tags[DF_FontSlot_Code] = f_tag_from_path(code_font_path);
               }
-              if(main_font_cfg != &df_g_nil_cfg_node && main_font_relative_path.size != 0)
+              if(os_file_path_exists(main_font_path) && main_font_cfg != &df_g_nil_cfg_node && main_font_relative_path.size != 0)
               {
                 df_gfx_state->cfg_font_tags[DF_FontSlot_Main] = f_tag_from_path(main_font_path);
+              }
+            }
+            for(DF_FontSlot slot = (DF_FontSlot)0; slot < DF_FontSlot_COUNT; slot = (DF_FontSlot)(slot+1))
+            {
+              if(f_tag_match(f_tag_zero(), df_gfx_state->cfg_font_tags[slot]))
+              {
+                df_gfx_state->cfg_font_tags[slot] = defaults[slot];
               }
             }
           }

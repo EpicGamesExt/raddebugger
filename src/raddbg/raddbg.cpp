@@ -63,10 +63,6 @@
 //      Should probably make note that you have to set it to a path to a TTF,
 //      since that's not normally how Windows fonts work.
 //
-// [ ] Launching the debugger with an invalid code_font/main_font name doesn't
-//     have any fallback, so you just get no text at all. Probably should use
-//     a fallback font when font loading fails
-//
 // [ ] disasm animation & go-to-address
 //
 // [ ] visualize mismatched source code and debug info
