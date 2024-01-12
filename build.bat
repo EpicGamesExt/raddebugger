@@ -91,7 +91,7 @@ if "%raddbg_from_dwarf%"=="1"  %compile%             ..\src\raddbg_convert\dwarf
 if "%raddbg_dump%"=="1"        %compile%             ..\src\raddbg_dump\raddbg_dump.c                             %compile_link% %out%raddbg_dump.exe
 if "%ryan_scratch%"=="1"       %compile%             ..\src\scratch\ryan_scratch.c                                %compile_link% %out%ryan_scratch.exe
 if "%look_at_raddbg%"=="1"     %compile%             ..\src\scratch\look_at_raddbg.c                              %compile_link% %out%look_at_raddbg.exe
-if "%mule_main%"=="1"          del vc*.pdb mule*.pdb && %cl_release% /c ..\src\mule\mule_inline.cpp && %cl_release% /c ..\src\mule\mule_o2.cpp && %cl_debug% /EHsc ..\src\mule\mule_main.cpp mule\mule_c.c mule_inline.obj mule_o2.obj
+if "%mule_main%"=="1"          del vc*.pdb mule*.pdb && %cl_release% /c ..\src\mule\mule_inline.cpp && %cl_release% /c ..\src\mule\mule_o2.cpp && %cl_debug% /EHsc ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj
 if "%mule_module%"=="1"        %compile%             ..\src\mule\mule_module.cpp                                  %compile_link% %link_dll% %out%mule_module.dll
 popd
 
