@@ -25,6 +25,7 @@
 // [ ] ** high refresh rate, but consistently missing tight frame deadline,
 //     animation
 // [ ] ** ASAN targets
+// [ ] ** prevent overwriting non-config files when choosing config paths
 //
 // [ ] ** I can't seem to get the .raddbg files to update consistently, or
 //     something. I can't seem to reproduce it reliably, but sometimes when I
