@@ -5,6 +5,11 @@ currently only supports local-machine Windows x64 debugging with PDBs, with
 plans to expand and port in the future. In the future we'll expand to also
 support native Linux debugging and DWARF debug info.
 
+The RAD Debugger is currently in *ALPHA*. In order to get the debugger bullet-
+proof, it'd greatly help out if you submitted the issues you find here, along
+with any information you can gather, like dump files (along with the build you
+used), instructions to reproduce, test executables, and so on.
+
 You can download pre-built binaries for the debugger
 [here](https://github.com/EpicGames/raddebugger/releases).
 
@@ -13,8 +18,10 @@ unifying the underlying debug info format. In that pursuit we've built
 the RADDBG debug info format, which is what the debugger parses and uses. To
 work with existing toolchains, we convert PDB (and eventually PE/ELF files
 with embedded DWARF) into the RADDBG format on-demand. This conversion process
-is currently unoptimized but quite fast for smaller PDB files (in many cases
-faster than many other programs simply deserialize the PDBs).
+is currently an unoptimized reference version. Nevertheless it's still quite
+fast for smaller PDB files (in many cases faster than many other programs
+simply deserialize the PDBs). It is much slower for much larger projects at the
+moment, but we expect this will vastly improve overtime.
 
 The RADDBG format is currently specified in code, in the files within the
 `src/raddbg_format` folder. The other relevant folders for working with the

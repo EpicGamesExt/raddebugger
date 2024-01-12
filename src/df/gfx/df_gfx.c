@@ -4456,17 +4456,17 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             ui_label(str8_lit_comp(RADDBG_TITLE_STRING_LITERAL));
             ui_spacer(ui_em(0.75f, 1.f));
-            ui_label_multiline(ui_top_font_size()*30.f, str8_lit("If you run into issues, please send an email describing them to:"));
+            ui_label_multiline(ui_top_font_size()*40.f, str8_lit("If you run into issues, please submit them to the GitHub at:"));
             UI_TextAlignment(UI_TextAlign_Center)
             {
-              UI_Signal email_sig = ui_buttonf("ryan.fleury@epicgames.com");
-              if(email_sig.hovering) UI_Tooltip
+              UI_Signal url_sig = ui_buttonf("github.com/EpicGames/raddebugger");
+              if(url_sig.hovering) UI_Tooltip
               {
                 ui_labelf("Copy To Clipboard");
               }
-              if(email_sig.clicked)
+              if(url_sig.clicked)
               {
-                os_set_clipboard_text(str8_lit("ryan.fleury@epicgames.com"));
+                os_set_clipboard_text(str8_lit("https://github.com/EpicGames/raddebugger"));
               }
             }
           }
