@@ -269,7 +269,7 @@ internal R_Pass *r_pass_from_kind(Arena *arena, R_PassList *list, R_PassKind kin
 //~ rjf: Backend Hooks
 
 //- rjf: top-level layer initialization
-r_hook void              r_init(void);
+r_hook void              r_init(CmdLine *cmdln);
 
 //- rjf: window setup/teardown
 r_hook R_Handle          r_window_equip(OS_Handle window);

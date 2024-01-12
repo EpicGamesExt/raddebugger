@@ -946,7 +946,7 @@ entry_point(int argc, char **argv)
         dasm_init();
         os_graphical_init();
         fp_init();
-        r_init();
+        r_init(&cmdln);
         tex_init();
         geo_init();
         f_init();

@@ -131,7 +131,7 @@ r_d3d11_instance_buffer_from_size(U64 size)
 //- rjf: top-level layer initialization
 
 r_hook void
-r_init(void)
+r_init(CmdLine *cmdln)
 {
   ProfBeginFunction();
   HRESULT error = 0;
@@ -143,11 +143,19 @@ r_init(void)
   //- rjf: create base device
   UINT creation_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #if !defined(NDEBUG)
-  creation_flags |= D3D11_CREATE_DEVICE_DEBUG;
+  if(!cmd_line_has_flag(cmdln, str8_lit("disable_d3d11_debug")))
+  {
+    creation_flags |= D3D11_CREATE_DEVICE_DEBUG;
+  }
 #endif
   D3D_FEATURE_LEVEL feature_levels[] = { D3D_FEATURE_LEVEL_11_0 };
+  D3D_DRIVER_TYPE driver_type = D3D_DRIVER_TYPE_HARDWARE;
+  if(cmd_line_has_flag(cmdln, str8_lit("force_d3d11_software")))
+  {
+    driver_type = D3D_DRIVER_TYPE_WARP;
+  }
   error = D3D11CreateDevice(0,
-                            D3D_DRIVER_TYPE_HARDWARE,
+                            driver_type,
                             0,
                             creation_flags,
                             feature_levels, ArrayCount(feature_levels),
@@ -156,11 +164,14 @@ r_init(void)
   
   //- rjf: enable break-on-error
 #if !defined(NDEBUG)
-  ID3D11InfoQueue *info = 0;
-  error = r_d3d11_state->base_device->QueryInterface(__uuidof(ID3D11InfoQueue), (void **)(&info));
-  error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-  error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
-  info->Release();
+  if(!cmd_line_has_flag(cmdln, str8_lit("disable_d3d11_debug")))
+  {
+    ID3D11InfoQueue *info = 0;
+    error = r_d3d11_state->base_device->QueryInterface(__uuidof(ID3D11InfoQueue), (void **)(&info));
+    error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+    error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
+    info->Release();
+  }
 #endif
   
   //- rjf: get main device
