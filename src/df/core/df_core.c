@@ -7212,7 +7212,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           {
             for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
-              cfg_load[src] = (load_cfg[src] && cfg_timestamps[src] != 0 && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_files[src]->timestamp == 0));
+              cfg_load[src] = (load_cfg[src] && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_files[src]->timestamp == 0));
               cfg_load_any = cfg_load_any || cfg_load[src];
             }
           }

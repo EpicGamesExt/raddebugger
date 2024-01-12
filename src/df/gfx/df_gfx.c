@@ -11530,7 +11530,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           }
           
           //- rjf: if config opened 0 windows, we need to do some sensible default
-          if(df_gfx_state->first_window == 0)
+          if(windows->first == &df_g_nil_cfg_node)
           {
             OS_Handle preferred_monitor = os_primary_monitor();
             Vec2F32 monitor_dim = os_dim_from_monitor(preferred_monitor);

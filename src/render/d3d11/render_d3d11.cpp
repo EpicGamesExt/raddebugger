@@ -161,6 +161,11 @@ r_init(CmdLine *cmdln)
                             feature_levels, ArrayCount(feature_levels),
                             D3D11_SDK_VERSION,
                             &r_d3d11_state->base_device, 0, &r_d3d11_state->base_device_ctx);
+  if(!SUCCEEDED(error))
+  {
+    os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("D3D11 device creation failure. The process is terminating."));
+    os_exit_process(1);
+  }
   
   //- rjf: enable break-on-error
 #if !defined(NDEBUG)
@@ -168,9 +173,12 @@ r_init(CmdLine *cmdln)
   {
     ID3D11InfoQueue *info = 0;
     error = r_d3d11_state->base_device->QueryInterface(__uuidof(ID3D11InfoQueue), (void **)(&info));
-    error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-    error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
-    info->Release();
+    if(SUCCEEDED(error))
+    {
+      error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+      error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
+      info->Release();
+    }
   }
 #endif
   
