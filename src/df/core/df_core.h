@@ -1355,6 +1355,7 @@ internal DF_CoreCmdKind df_core_cmd_kind_from_string(String8 string);
 
 //- rjf: nil
 internal B32 df_entity_is_nil(DF_Entity *entity);
+#define df_require_entity_nonnil(entity, if_nil_stmts) do{if(df_entity_is_nil(entity)){if_nil_stmts;}}while(0)
 
 //- rjf: handle <-> entity conversions
 internal U64 df_index_from_entity(DF_Entity *entity);

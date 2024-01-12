@@ -4,6 +4,8 @@
 ////////////////////////////////
 //~ rjf: Globals
 
+global GetThreadDescriptionFunctionType *demon_w32_GetThreadDescription = 0;
+
 global B32   demon_w32_resume_needed = 0;
 global DWORD demon_w32_resume_pid = 0;
 global DWORD demon_w32_resume_tid = 0;
@@ -25,6 +27,17 @@ global String8List demon_w32_environment = {0};
 
 ////////////////////////////////
 //~ rjf: Helpers
+
+internal U64
+demon_w32_hash_from_string(String8 string)
+{
+  U64 result = 5381;
+  for(U64 i = 0; i < string.size; i += 1)
+  {
+    result = ((result << 5) + result) + string.str[i];
+  }
+  return result;
+}
 
 internal DEMON_W32_Ext*
 demon_w32_ext_alloc(void){
@@ -350,6 +363,11 @@ internal void
 demon_os_init(void){
   demon_w32_ext_arena = arena_alloc();
   demon_w32_detach_proc_arena = arena_alloc();
+  
+  // rjf: load Windows 10+ GetThreadDescription API
+  {
+    demon_w32_GetThreadDescription = (GetThreadDescriptionFunctionType *)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "GetThreadDescription");
+  }
   
   // rjf: setup environment variables
   {
@@ -771,6 +789,19 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
             DWORD sus_result = SuspendThread(thread_ext->thread.handle);
             (void)sus_result;
             
+            // rjf: unpack thread name
+            String8 thread_name = {0};
+            if(demon_w32_GetThreadDescription != 0)
+            {
+              WCHAR *thread_name_w = 0;
+              HRESULT hr = demon_w32_GetThreadDescription(evt.u.CreateThread.hThread, &thread_name_w);
+              if(SUCCEEDED(hr))
+              {
+                thread_name = str8_from_16(arena, str16_cstring((U16 *)thread_name_w));
+                LocalFree(thread_name_w);
+              }
+            }
+            
             // rjf: determine if this is the halter thread
             B32 is_halter = (evt.dwThreadId == demon_w32_halter_thread_id);
             
@@ -780,6 +811,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
               e->process = demon_ent_handle_from_ptr(process);
               e->thread = demon_ent_handle_from_ptr(thread);
               e->code = evt.dwThreadId;
+              e->string = thread_name;
             }
           }
         }break;
@@ -1137,6 +1169,48 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
         {
           got_new_event = 0;
         }break;
+      }
+    }
+    
+    //- rjf: gather new thread-names
+    if(demon_w32_GetThreadDescription != 0)
+    {
+      for(DEMON_Entity *process = demon_ent_root->first;
+          process != 0;
+          process = process->next)
+      {
+        if(process->kind != DEMON_EntityKind_Process) { continue; }
+        for(DEMON_Entity *thread = process->first;
+            thread != 0;
+            thread = thread->next)
+        {
+          if(thread->kind != DEMON_EntityKind_Thread) { continue; }
+          DEMON_W32_Ext *thread_ext = demon_w32_ext(thread);
+          if(thread_ext->thread.last_name_hash == 0 ||
+             thread_ext->thread.name_gather_time_us+1000000 <= os_now_microseconds())
+          {
+            String8 name = {0};
+            {
+              WCHAR *thread_name_w = 0;
+              HRESULT hr = demon_w32_GetThreadDescription(thread_ext->thread.handle, &thread_name_w);
+              if(SUCCEEDED(hr))
+              {
+                name = str8_from_16(scratch.arena, str16_cstring((U16 *)thread_name_w));
+                LocalFree(thread_name_w);
+              }
+            }
+            U64 name_hash = demon_w32_hash_from_string(name);
+            if(name.size != 0 && name_hash != thread_ext->thread.last_name_hash)
+            {
+              DEMON_Event *e = demon_push_event(arena, &result, DEMON_EventKind_SetThreadName);
+              e->process = demon_ent_handle_from_ptr(process);
+              e->thread = demon_ent_handle_from_ptr(thread);
+              e->string = push_str8_copy(arena, name);
+            }
+            thread_ext->thread.name_gather_time_us = os_now_microseconds();
+            thread_ext->thread.last_name_hash = name_hash;
+          }
+        }
       }
     }
     

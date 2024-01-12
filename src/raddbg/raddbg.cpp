@@ -32,12 +32,6 @@
 //      at all where the font ever was) The font path will now remain "stable"
 //      in the sense that it won't rewrite it anymore. But you cannot use the
 //      debugger because it's the wrong font path, so you get no text.
-//  [x] When I click in the theme window on something like "Code (Meta)", it
-//      opens up a tiny window, which only shows a tiny bit of what I imagine
-//      is the entire color picker? It makes the picker unusable because more
-//      of the UI for it is clipped and cannot be accessed.
-//  [x] Clicking anywhere in the color picker that isn't a button closes the
-//      color picker for some reason?
 //  [ ] In a "hover watch" (where you hover over a variable and it shows a pop-
 //      up watch window), if you expand an item near the bottom of the listing,
 //      it will be clipped to the bottom of the listing instead of showing the
@@ -45,8 +39,6 @@
 //      actually visible)
 //
 // [ ] @bug @feature @cleanup general feedback from casey
-//  [x] ** I don't like how panels get dimmer when they are not active, because
-//      it makes them harder for me to read. Is there a way to turn this off?
 //  [ ] ** I couldn't figure out how to really view threads in the debugger.
 //      The only place I found a thread list was in "The Scheduler", but it
 //      only lists threads by ID, which is hard to use. I can hover over them
@@ -211,6 +203,8 @@
 // [ ] @feature search-in-all-files
 // [ ] @feature memory view mutation controls
 // [ ] @feature memory view user-made annotations
+//
+// [ ] @feature auto-scroll output window
 
 ////////////////////////////////
 //~ rjf: 2024/2 tasks
@@ -316,140 +310,14 @@
 ////////////////////////////////
 //~ rjf: Completed Tasks
 //
-// [x] adding watches to source locations
-// [x] tab overflow buttons
-// [x] "working set" of targets, just used 'enabled' slot on target entities
-// [x] convert hover-eval ui to a frontend-wide global ui concept, so that we can have watch-hover trees from anywhere
-// [x] annotate code slices with relevant watches
-// [x] ability to duplicate targets easily
-// [x] ability to label targets separately from their EXE
-//
-// [x] txti layer needs lexing
-// [x] dbgi autoconversion layer needs to work reliably
-// [x] new dbgi system on frontend
-// [x] new bini system on frontend
-// [x] new dbgi system needs in-parallel typegraph builders
-// [x] eval is busted
-// [x] fail or debug non-text
-// [x] clean loading
-// [x] watch pins
-// [x] snapping should still work if a file is loading while the snap first occurs
-// [x] keyboard usage (set-next-statement, run-to-line, etc.)
-// [x] go-to-name (both file & symbol)
-//
-// [x] in-memory disassembly view
-// [x] visualize conversion tasks as they occur
-// [x] raddbg.exe self-sufficiency => built-in converter execution mode
-// [x] move path-mapping fallback from pending-entity into code view
-// [x] per-target entry point overrides
-// [x] logic on when double click on callstack entry goes to source or disassembly is very confusing,
-//     because it seems it matters whether disassembly tab is in same panel as source, or is placed in
-//     different panel in VS double clicking on stack stays in disassembly if disassembly tab is currently
-//     active. Otherwise if source is active, it goes to source code (regardless if disasm is open/visible
-//     or not)
-// [x] global variable (just regular C++ bool in the same file) does not show value when hovering over source
-//     code, or when put into watch window.
-//
-// [x] debugger ui thread needs wakeup when a debug event is hit
-// [x] ctrl thread needs to re-resolve breakpoints as modules/threads come in during a run
-// [x] automatically pull in members from containing struct in member functions
-//     when looking up locals
-// [x] iron out weird state machine bugs with hover-eval
-//
-// [x] thread-local eval
-// [x] tabs in source code render as squares
-//
-// [x] breakpoint stop-conditions
-// [x] first-chance exception hitting (d3d11 as an example offender)
-// [x] soft-halt refresh
-//
-// [x] conditional breakpoints cannot be submitted if they don't compile
-//     need to (a) visualize and (b) equip the ctrl thread with a 'halt on
-//     new debug info feature', which can be done repeatedly until something
-//     compiles (?)
-//
-// [x] outputdebugstring logs
-//
-// [x] memory view
-//
-// [x]  when application starts then the focus is on cmd.exe window of application not
-//      debugger. This means if I press F11 to step into main(), the application cmd.exe will go fullscreen
-//      hiding debugger (F11 key for ConEmu I use makes it go fullscreen)
-// [x]  I'd prefer if ctrl+click on word would go to function definition, not double click
-//      double clicking in source code should select word - which easy way to double click and ctrl+c to copy
-//      it, pretty much standard thing in any text editorr/viewer and triple click for selecting whole line
-//  [x] command line DF_CfgSrc -> explicitly visualize as temporary, provide UI
-//      path to make permanent (in either user or profile?)
-//
-// [x] memory view annotations: bytes in a range of memory actually have a
-//     *stack* of possible interpretations, for any particular low-level
-//     representation (assuming 1 is fine for this case). a U32 member in
-//     a local struct on the stack has 3 layers: U32 -> local -> stack.
-//     each of these are useful information about that U32's range of bytes.
-//     so, the memory view annotation system ought to be expanded to support-
-//     ing stacks of annotations, and gracefully visualizing multiple nested
-//     ones. after that is supported, we can use the type info to derive the
-//     lowest level representation of some bytes. each stack can only have
-//     one low-level type. that low-level type, then, can be used to directly
-//     interpret the bytes - the others can be used to show the "conceptual
-//     stack".
-//
-// [x] entity tree ui replacement (scheduler, modules, breakpoints, pins)
-// [x] theme menu
-// [x] complete transition to UI_ScrollPt coordinate space scrolling - eliminate
-//     old scrolls & scroll regions
-// [x] settings menu
-// [x] exception filter settings & controls in ctrl layer
-//
-// [x] @polish @cleanup convert eval/watch to scroll list
-// [x] @feature memory view keyboard navigation
-// [x] @bug fix general ui line edit editing rules - conflicting with navigation, etc.
-// [x] @polish have expander space even if not used in watch window
-// [x] @bug references do not expand properly
-// [x] @bug panel deletion improper size bug
-// [x] @bug panel serialization/deserialization bug?
-// [x] unfinished char/string literal lexing
-//
-//  [x] C++ problems in watch window: evaluating "this" shows no members. The type seems correct reference
-//      to struct (which is local variable) does not show any members, like I have "tm_mem_zone_rt& z = ..."
-//      in source code, and doing "z" produces no children, nor does "&z" but then at least it shows correct
-//      address as value. if I ask for member of this when currently inside of member function (like "m_zone_stack")
-//      it shows "unknown identifier m_zone_stack" but "this->m_zone_stack" works fine!
-//  [x]  if I write x'z in watch window and press enter, it only shows x and loses 'z - it does not show it, but when I edit cell then 'z comes back. It pretends I entered just x and shows x value.
-//  [x]  it seems the glyph advance for default font size is kind of wrong, as characters are a blitted a bit over top of each other
-//
-// [x] @bug deleting a watch tree while it is expanded causes cursor to go back to first row - cannot simply increment cursor. maybe keep in same spot, but rebuild viz blocks?
-// [x] @bug do not squish partially-cut-off view rule block uis
-// [x] @feature "solo step", or "solo mode" freeze-all-unselected-threads-on-step-commands
-// [x] @feature typing autocomplete lister
-// [x] @feature directional navigation of panel focus
-// [x] @cleanup @feature cache eviction in texture cache & hash store
-//
-//- 2023/12/7
-//
-// [x] @bug hash store cache eviction can only work if user never blindly tries to go from hash -> data, because
-//          they must be able to retry... hmm...
-// [x] txt cell revamp. keyboard focus in both default & non w/ multiple options, helper lister, etc.
-// [x] `bitmap:(w:width, h:height, [fmt:fmt])` - interpret memory as raw bitmap data
-// [x] `geo:n[ topology stride]` - interpret memory as geometry
-//  [x] cursor helper -> upgraded txt cell. classify inputs & show dropdowns (locals, globals, types, view rules, etc.)
-// [x] @bug page-up and page-down in src view, when near the end of file
-//
-//- 2023/12/8
-//
-// [x] @bug parse `unsigned int` correctly in eval parser
-// [x] @bug ., + operators should work on registers
-// [x] @bug straighten out register eval problems
-// [x] @cleanup finish ui_em transition
-//
-//- 2023/12/22
-//
-// [x] @bug set-bp-while-running seems to not resume after soft-halt, might be a soft-halt bug
-// [x] @bug weird view snapping in watch scrolling down
-//
-//- 2024/01/10
-//
-// [x] @feature allow `,count`, `,x`, `,b` style watch window expression extensions, which add to view rule, for VS-like behavior fastpaths
+// [x] ** I don't like how panels get dimmer when they are not active, because
+//     it makes them harder for me to read. Is there a way to turn this off?
+// [x] When I click in the theme window on something like "Code (Meta)", it
+//     opens up a tiny window, which only shows a tiny bit of what I imagine
+//     is the entire color picker? It makes the picker unusable because more
+//     of the UI for it is clipped and cannot be accessed.
+// [x] Clicking anywhere in the color picker that isn't a button closes the
+//     color picker for some reason?
 
 ////////////////////////////////
 //~ rjf: Includes

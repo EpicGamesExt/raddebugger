@@ -35,6 +35,8 @@ union DEMON_W32_Ext
   struct{
     HANDLE handle;
     U64 thread_local_base;
+    U64 last_name_hash;
+    U64 name_gather_time_us;
   } thread;
   struct{
     HANDLE handle;
@@ -68,6 +70,7 @@ struct DEMON_W32_EntityNode
   DEMON_Entity *entity;
 };
 
+typedef HRESULT GetThreadDescriptionFunctionType(HANDLE hThread, WCHAR **ppszThreadDescription);
 
 ////////////////////////////////
 //~ NOTE(allen): Win32 Demon Exceptions
@@ -352,6 +355,7 @@ struct DEMON_PeOptionalHeader32Plus
 ////////////////////////////////
 //~ rjf: Helpers
 
+internal U64 demon_w32_hash_from_string(String8 string);
 internal DEMON_W32_Ext* demon_w32_ext_alloc(void);
 internal DEMON_W32_Ext* demon_w32_ext(DEMON_Entity *entity);
 

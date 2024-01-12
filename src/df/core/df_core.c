@@ -1852,6 +1852,7 @@ df_entity_change_parent(DF_StateDeltaHistory *hist, DF_Entity *entity, DF_Entity
 internal void
 df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point)
 {
+  df_require_entity_nonnil(entity, return);
   entity->text_point = point;
   entity->flags |= DF_EntityFlag_HasTextPoint;
   df_entity_notify_mutation(entity);
@@ -1860,6 +1861,7 @@ df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point)
 internal void
 df_entity_equip_txt_pt_alt(DF_Entity *entity, TxtPt point)
 {
+  df_require_entity_nonnil(entity, return);
   entity->text_point_alt = point;
   entity->flags |= DF_EntityFlag_HasTextPointAlt;
   df_entity_notify_mutation(entity);
@@ -1868,6 +1870,7 @@ df_entity_equip_txt_pt_alt(DF_Entity *entity, TxtPt point)
 internal void
 df_entity_equip_entity_handle(DF_Entity *entity, DF_Handle handle)
 {
+  df_require_entity_nonnil(entity, return);
   entity->entity_handle = handle;
   entity->flags |= DF_EntityFlag_HasEntityHandle;
   df_entity_notify_mutation(entity);
@@ -1876,6 +1879,7 @@ df_entity_equip_entity_handle(DF_Entity *entity, DF_Handle handle)
 internal void
 df_entity_equip_b32(DF_Entity *entity, B32 b32)
 {
+  df_require_entity_nonnil(entity, return);
   entity->b32 = b32;
   entity->flags |= DF_EntityFlag_HasB32;
   df_entity_notify_mutation(entity);
@@ -1884,6 +1888,7 @@ df_entity_equip_b32(DF_Entity *entity, B32 b32)
 internal void
 df_entity_equip_u64(DF_Entity *entity, U64 u64)
 {
+  df_require_entity_nonnil(entity, return);
   entity->u64 = u64;
   entity->flags |= DF_EntityFlag_HasU64;
   df_entity_notify_mutation(entity);
@@ -1892,6 +1897,7 @@ df_entity_equip_u64(DF_Entity *entity, U64 u64)
 internal void
 df_entity_equip_rng1u64(DF_Entity *entity, Rng1U64 range)
 {
+  df_require_entity_nonnil(entity, return);
   entity->rng1u64 = range;
   entity->flags |= DF_EntityFlag_HasRng1U64;
   df_entity_notify_mutation(entity);
@@ -1900,6 +1906,7 @@ df_entity_equip_rng1u64(DF_Entity *entity, Rng1U64 range)
 internal void
 df_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba)
 {
+  df_require_entity_nonnil(entity, return);
   Vec3F32 rgb = v3f32(rgba.x, rgba.y, rgba.z);
   Vec3F32 hsv = hsv_from_rgb(rgb);
   Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
@@ -1909,6 +1916,7 @@ df_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba)
 internal void
 df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva)
 {
+  df_require_entity_nonnil(entity, return);
   entity->color_hsva = hsva;
   entity->flags |= DF_EntityFlag_HasColor;
   df_entity_notify_mutation(entity);
@@ -1917,6 +1925,7 @@ df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva)
 internal void
 df_entity_equip_death_timer(DF_Entity *entity, F32 seconds_til_death)
 {
+  df_require_entity_nonnil(entity, return);
   entity->flags |= DF_EntityFlag_DiesWithTime;
   entity->life_left = seconds_til_death;
   df_entity_notify_mutation(entity);
@@ -1925,6 +1934,7 @@ df_entity_equip_death_timer(DF_Entity *entity, F32 seconds_til_death)
 internal void
 df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src)
 {
+  df_require_entity_nonnil(entity, return);
   entity->cfg_src = cfg_src;
   df_entity_notify_mutation(entity);
 }
@@ -1934,6 +1944,7 @@ df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src)
 internal void
 df_entity_equip_ctrl_machine_id(DF_Entity *entity, CTRL_MachineID machine_id)
 {
+  df_require_entity_nonnil(entity, return);
   entity->ctrl_machine_id = machine_id;
   entity->flags |= DF_EntityFlag_HasCtrlMachineID;
   df_entity_notify_mutation(entity);
@@ -1942,6 +1953,7 @@ df_entity_equip_ctrl_machine_id(DF_Entity *entity, CTRL_MachineID machine_id)
 internal void
 df_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle)
 {
+  df_require_entity_nonnil(entity, return);
   entity->ctrl_handle = handle;
   entity->flags |= DF_EntityFlag_HasCtrlHandle;
   df_entity_notify_mutation(entity);
@@ -1950,6 +1962,7 @@ df_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle)
 internal void
 df_entity_equip_arch(DF_Entity *entity, Architecture arch)
 {
+  df_require_entity_nonnil(entity, return);
   entity->arch = arch;
   entity->flags |= DF_EntityFlag_HasArch;
   df_entity_notify_mutation(entity);
@@ -1958,6 +1971,7 @@ df_entity_equip_arch(DF_Entity *entity, Architecture arch)
 internal void
 df_entity_equip_ctrl_id(DF_Entity *entity, U32 id)
 {
+  df_require_entity_nonnil(entity, return);
   entity->ctrl_id = id;
   entity->flags |= DF_EntityFlag_HasCtrlID;
   df_entity_notify_mutation(entity);
@@ -1966,6 +1980,7 @@ df_entity_equip_ctrl_id(DF_Entity *entity, U32 id)
 internal void
 df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base)
 {
+  df_require_entity_nonnil(entity, return);
   entity->stack_base = stack_base;
   entity->flags |= DF_EntityFlag_HasStackBase;
   df_entity_notify_mutation(entity);
@@ -1974,6 +1989,7 @@ df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base)
 internal void
 df_entity_equip_tls_root(DF_Entity *entity, U64 tls_root)
 {
+  df_require_entity_nonnil(entity, return);
   entity->tls_root = tls_root;
   entity->flags |= DF_EntityFlag_HasTLSRoot;
   df_entity_notify_mutation(entity);
@@ -1982,6 +1998,7 @@ df_entity_equip_tls_root(DF_Entity *entity, U64 tls_root)
 internal void
 df_entity_equip_vaddr_rng(DF_Entity *entity, Rng1U64 range)
 {
+  df_require_entity_nonnil(entity, return);
   entity->vaddr_rng = range;
   entity->flags |= DF_EntityFlag_HasVAddrRng;
   df_entity_notify_mutation(entity);
@@ -1990,6 +2007,7 @@ df_entity_equip_vaddr_rng(DF_Entity *entity, Rng1U64 range)
 internal void
 df_entity_equip_vaddr(DF_Entity *entity, U64 vaddr)
 {
+  df_require_entity_nonnil(entity, return);
   entity->vaddr = vaddr;
   entity->flags |= DF_EntityFlag_HasVAddr;
   df_entity_notify_mutation(entity);
@@ -2000,7 +2018,19 @@ df_entity_equip_vaddr(DF_Entity *entity, U64 vaddr)
 internal void
 df_entity_equip_name(DF_StateDeltaHistory *hist, DF_Entity *entity, String8 name)
 {
-  entity->name = df_name_alloc(hist, name);
+  df_require_entity_nonnil(entity, return);
+  if(entity->name.size != 0)
+  {
+    df_name_release(hist, entity->name);
+  }
+  if(name.size != 0)
+  {
+    entity->name = df_name_alloc(hist, name);
+  }
+  else
+  {
+    entity->name = str8_zero();
+  }
   entity->name_generation += 1;
   df_entity_notify_mutation(entity);
 }

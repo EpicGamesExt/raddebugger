@@ -1516,6 +1516,7 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
       out_evt->stack_base = demon_stack_base_vaddr_from_thread(event->thread);
       out_evt->tls_root   = demon_tls_root_vaddr_from_thread(event->thread);
       out_evt->rip_vaddr  = event->instruction_pointer;
+      out_evt->string     = event->string;
     }break;
     case DEMON_EventKind_LoadModule:
     {
