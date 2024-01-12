@@ -726,16 +726,11 @@ struct DF_GfxState
   // rjf: running theme state
   DF_Theme cfg_theme_target;
   DF_Theme cfg_theme;
+  Arena *cfg_main_font_path_arena;
+  Arena *cfg_code_font_path_arena;
+  String8 cfg_main_font_path;
+  String8 cfg_code_font_path;
   F_Tag cfg_font_tags[DF_FontSlot_COUNT];
-  
-  // rjf: text search state
-  U64 tsrch_slot_count;
-  U64 tsrch_stripe_count;
-  DF_TextSearchCacheSlot *tsrch_slots;
-  OS_Handle *tsrch_stripe_rw_mutexes;
-  OS_Handle tsrch_wakeup_mutex;
-  OS_Handle tsrch_wakeup_cv;
-  OS_Handle tsrch_thread;
 };
 
 ////////////////////////////////
@@ -960,14 +955,12 @@ internal void df_set_search_string(String8 string);
 internal String8 df_push_search_string(Arena *arena);
 
 ////////////////////////////////
-//~ rjf: Background Text Searching Thread
+//~ rjf: Text Searching
 
 internal void df_text_search_match_chunk_list_push(Arena *arena, DF_TextSearchMatchChunkList *list, U64 cap, DF_TextSearchMatch *match);
 internal DF_TextSearchMatchArray df_text_search_match_array_from_chunk_list(Arena *arena, DF_TextSearchMatchChunkList *chunks);
 internal U64 df_text_search_little_hash_from_hash(U128 hash);
 internal void df_text_search_thread_entry_point(void *p);
-internal DF_TextSearchMatchArray df_text_search_match_array_from_hash_needle(Arena *arena, U128 hash, String8 needle, DF_TextSliceFlags text_slice_flags, TxtPt start_pt);
-internal DF_TextSearchMatchArray df_text_search_match_array_from_entity_needle(Arena *arena, DF_Entity *entity, String8 needle, DF_TextSliceFlags flags, TxtPt start_pt);
 internal int df_text_search_match_array_qsort_compare(TxtPt *a, TxtPt *b);
 internal void df_text_search_match_array_sort_in_place(DF_TextSearchMatchArray *array);
 internal DF_TextSearchMatch df_text_search_match_array_find_nearest__linear_scan(DF_TextSearchMatchArray *array, TxtPt pt, Side side);

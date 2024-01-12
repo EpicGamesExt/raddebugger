@@ -7736,84 +7736,6 @@ df_text_search_thread_entry_point(void *p)
 #endif
 }
 
-internal DF_TextSearchMatchArray
-df_text_search_match_array_from_hash_needle(Arena *arena, U128 hash, String8 needle, DF_TextSliceFlags text_slice_flags, TxtPt start_pt)
-{
-  // TODO(rjf): [ ] @de2ctrl text searching lookup -- wound up with DE_Hash
-  DF_TextSearchMatchArray result = {0};
-  {
-    //- rjf: hash -> slot/stripe info
-    U64 little_hash              = df_text_search_little_hash_from_hash(hash);
-    U64 slot_idx                 = little_hash%df_gfx_state->tsrch_slot_count;
-    DF_TextSearchCacheSlot *slot = &df_gfx_state->tsrch_slots[slot_idx];
-    U64 stripe_idx               = slot_idx%df_gfx_state->tsrch_stripe_count;
-    OS_Handle stripe_rw_mutex    = df_gfx_state->tsrch_stripe_rw_mutexes[stripe_idx];
-    
-    //- rjf: find matches from existing node
-    B32 found_node = 0;
-    {
-      os_rw_mutex_take_r(stripe_rw_mutex);
-      for(DF_TextSearchCacheNode *node = slot->first; node != 0; node = node->next)
-      {
-        if(MemoryMatchStruct(&node->hash, &hash) &&
-           str8_match(node->needle, needle, StringMatchFlag_CaseInsensitive) &&
-           node->flags == text_slice_flags)
-        {
-          found_node = 1;
-          result = df_text_search_match_array_from_chunk_list(arena, &node->search_matches);
-          U64 time_current_us = os_now_microseconds();
-          ins_atomic_u64_eval_assign(&node->last_time_touched_us, time_current_us);
-          break;
-        }
-      }
-      os_rw_mutex_drop_r(stripe_rw_mutex);
-    }
-    
-    //- rjf: no existing node -> allocate new
-    if(found_node == 0)
-    {
-      os_rw_mutex_take_w(stripe_rw_mutex);
-      {
-        Arena *node_arena = arena_alloc();
-        DF_TextSearchCacheNode *node = push_array(node_arena, DF_TextSearchCacheNode, 1);
-        node->arena = node_arena;
-        node->hash = hash;
-        node->needle = push_str8_copy(node_arena, needle);
-        node->flags = text_slice_flags;
-        node->start_pt = start_pt;
-        DLLPushBack(slot->first, slot->last, node);
-      }
-      os_rw_mutex_drop_w(stripe_rw_mutex);
-      os_condition_variable_signal(df_gfx_state->tsrch_wakeup_cv);
-    }
-  }
-  return result;
-}
-
-internal DF_TextSearchMatchArray
-df_text_search_match_array_from_entity_needle(Arena *arena, DF_Entity *entity, String8 needle, DF_TextSliceFlags flags, TxtPt start_pt)
-{
-  // TODO(rjf): [ ] @de2ctrl text search lookup
-  DF_TextSearchMatchArray matches = {0};
-#if !DE2CTRL
-  if(entity->kind == DF_EntityKind_File && needle.size != 0)
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    String8 path = df_full_path_from_entity(scratch.arena, entity);
-    DE_PipelineHint hint = zero_struct;
-    DE_Key path2hash_key = de_key_path(DE_KeyFunc_HashFromPath, path, entity->timestamp);
-    DE_Val *path2hash_val = de_user_peek_lookup(de_user, de_shared, &hint, &path2hash_key);
-    DE_Hash hash = path2hash_val->hash;
-    if(!de_hash_is_empty(&hash))
-    {
-      matches = df_text_search_match_array_from_hash_needle(arena, hash, needle, flags, start_pt);
-    }
-    scratch_end(scratch);
-  }
-#endif
-  return matches;
-}
-
 internal int
 df_text_search_match_array_qsort_compare(TxtPt *a, TxtPt *b)
 {
@@ -8304,17 +8226,11 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
   //- rjf: serialize fonts
   if(source == DF_CfgSrc_User)
   {
-    String8 code_font_path_absolute = f_path_from_tag(df_gfx_state->cfg_font_tags[DF_FontSlot_Code]);
-    String8 main_font_path_absolute = f_path_from_tag(df_gfx_state->cfg_font_tags[DF_FontSlot_Main]);
-    String8 code_font_path_relative = path_relative_dst_from_absolute_dst_src(arena, code_font_path_absolute, root_path);
-    String8 main_font_path_relative = path_relative_dst_from_absolute_dst_src(arena, main_font_path_absolute, root_path);
-    {
-      str8_list_push(arena, &strs, str8_lit("/// fonts /////////////////////////////////////////////////////////////////////\n"));
-      str8_list_push(arena, &strs, str8_lit("\n"));
-      str8_list_pushf(arena, &strs, "code_font: \"%S\"\n", code_font_path_relative);
-      str8_list_pushf(arena, &strs, "main_font: \"%S\"\n", main_font_path_relative);
-      str8_list_push(arena, &strs, str8_lit("\n"));
-    }
+    str8_list_push(arena, &strs, str8_lit("/// fonts /////////////////////////////////////////////////////////////////////\n"));
+    str8_list_push(arena, &strs, str8_lit("\n"));
+    str8_list_pushf(arena, &strs, "code_font: \"%S\"\n", df_gfx_state->cfg_code_font_path);
+    str8_list_pushf(arena, &strs, "main_font: \"%S\"\n", df_gfx_state->cfg_main_font_path);
+    str8_list_push(arena, &strs, str8_lit("\n"));
   }
   
   ProfEnd();
@@ -10979,6 +10895,8 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   df_gfx_state->cmd2view_slots = push_array(arena, DF_String2ViewSlot, df_gfx_state->cmd2view_slot_count);
   df_gfx_state->string_search_arena = arena_alloc();
   df_gfx_state->repaint_hook = window_repaint_entry_point;
+  df_gfx_state->cfg_main_font_path_arena = arena_alloc();
+  df_gfx_state->cfg_code_font_path_arena = arena_alloc();
   df_clear_bindings();
   
   // rjf: register gfx layer views
@@ -11001,20 +10919,6 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
     }
   }
   
-  // rjf: set up background text searching thread
-  {
-    df_gfx_state->tsrch_slot_count = 64;
-    df_gfx_state->tsrch_stripe_count = df_gfx_state->tsrch_slot_count/8;
-    df_gfx_state->tsrch_slots = push_array(df_gfx_state->arena, DF_TextSearchCacheSlot, df_gfx_state->tsrch_slot_count);
-    df_gfx_state->tsrch_stripe_rw_mutexes = push_array(df_gfx_state->arena, OS_Handle, df_gfx_state->tsrch_stripe_count);
-    for(U64 stripe_idx = 0; stripe_idx < df_gfx_state->tsrch_stripe_count; stripe_idx += 1)
-    {
-      df_gfx_state->tsrch_stripe_rw_mutexes[stripe_idx] = os_rw_mutex_alloc();
-    }
-    df_gfx_state->tsrch_wakeup_mutex = os_mutex_alloc();
-    df_gfx_state->tsrch_wakeup_cv = os_condition_variable_alloc();
-    //df_gfx_state->tsrch_thread = os_launch_thread(df_text_search_thread_entry_point, 0, 0);
-  }
   ProfEnd();
 }
 
@@ -11213,6 +11117,16 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               DF_CfgNode *main_font_cfg = main_font_val->last;
               String8 code_font_relative_path = code_font_cfg->first->string;
               String8 main_font_relative_path = main_font_cfg->first->string;
+              if(code_font_cfg != &df_g_nil_cfg_node)
+              {
+                arena_clear(df_gfx_state->cfg_code_font_path_arena);
+                df_gfx_state->cfg_code_font_path = push_str8_copy(df_gfx_state->cfg_code_font_path_arena, code_font_relative_path);
+              }
+              if(main_font_cfg != &df_g_nil_cfg_node)
+              {
+                arena_clear(df_gfx_state->cfg_main_font_path_arena);
+                df_gfx_state->cfg_main_font_path = push_str8_copy(df_gfx_state->cfg_main_font_path_arena, main_font_relative_path);
+              }
               String8 code_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, code_font_relative_path, cfg_folder);
               String8 main_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, main_font_relative_path, cfg_folder);
               if(os_file_path_exists(code_font_path) && code_font_cfg != &df_g_nil_cfg_node && code_font_relative_path.size != 0)
