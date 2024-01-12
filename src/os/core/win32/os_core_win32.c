@@ -101,10 +101,12 @@ w32_system_time_from_date_time(SYSTEMTIME *out, DateTime *in){
 
 internal void
 w32_dense_time_from_file_time(DenseTime *out, FILETIME *in){
-  SYSTEMTIME systime = {0};
-  FileTimeToSystemTime(in, &systime);
+  SYSTEMTIME systime_utc = {0};
+  FileTimeToSystemTime(in, &systime_utc);
+  SYSTEMTIME systime_local = {0};
+  SystemTimeToTzSpecificLocalTime(NULL, &systime_utc, &systime_local);
   DateTime date_time = {0};
-  w32_date_time_from_system_time(&date_time, &systime);
+  w32_date_time_from_system_time(&date_time, &systime_local);
   *out = dense_time_from_date_time(date_time);
 }
 
