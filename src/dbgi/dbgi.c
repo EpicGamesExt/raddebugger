@@ -653,7 +653,7 @@ dbgi_parse_thread_entry_point(void *p)
               }
               if(os_now_microseconds()-start_wait_t > 10000000 && og_dbg_props.size < MB(64))
               {
-                os_graphical_message(1, str8_lit("RADDBG INTERNAL DEVELOPMENT MESSAGE"), str8_lit("this is taking a while... indicative of something that seemed like a bug that Jeff hit before. attach with debugger now & see where the callstack is?"));
+                // os_graphical_message(1, str8_lit("RADDBG INTERNAL DEVELOPMENT MESSAGE"), str8_lit("this is taking a while... indicative of something that seemed like a bug that Jeff hit before. attach with debugger now & see where the callstack is?"));
               }
             }
           }

@@ -4334,7 +4334,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             DF_CoreCmdKind cmds[] =
             {
-              DF_CoreCmdKind_Commands,
               DF_CoreCmdKind_Targets,
               DF_CoreCmdKind_Scheduler,
               DF_CoreCmdKind_CallStack,
@@ -4353,7 +4352,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             };
             U32 codepoints[] =
             {
-              'c',
               't',
               's',
               'k',
@@ -4455,9 +4453,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_Key help_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_help_menu_key_"));
           UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(40.f, 1.f))
           {
-            ui_label(str8_lit_comp(RADDBG_TITLE_STRING_LITERAL));
-            ui_spacer(ui_em(0.75f, 1.f));
-            ui_label_multiline(ui_top_font_size()*40.f, str8_lit("If you run into issues, please submit them to the GitHub at:"));
+            UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_label(str8_lit_comp(RADDBG_TITLE_STRING_LITERAL));
+            ui_spacer(ui_em(0.25f, 1.f));
+            UI_Row
+              UI_PrefWidth(ui_text_dim(10, 1))
+              UI_TextAlignment(UI_TextAlign_Center)
+              UI_Padding(ui_pct(1, 0))
+            {
+              ui_labelf("Search for commands by pressing ");
+              DF_CmdSpec *spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Commands);
+              UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText))
+                UI_Flags(UI_BoxFlag_DrawBorder)
+                UI_TextAlignment(UI_TextAlign_Center)
+                df_cmd_binding_button(spec);
+            }
+            ui_spacer(ui_em(0.25f, 1.f));
+            UI_Row UI_TextAlignment(UI_TextAlign_Center) ui_label(str8_lit("Submit issues to the GitHub at:"));
             UI_TextAlignment(UI_TextAlign_Center)
             {
               UI_Signal url_sig = ui_buttonf("github.com/EpicGames/raddebugger");

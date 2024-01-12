@@ -7124,7 +7124,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_LoadUser:
         case DF_CoreCmdKind_LoadProfile:
         {
-          String8 new_path = params.file_path;
           B32 load_cfg[DF_CfgSrc_COUNT] = {0};
           for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
           {
@@ -7137,7 +7136,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             if(load_cfg[src])
             {
               arena_clear(df_state->cfg_path_arenas[src]);
-              df_state->cfg_paths[src] = path_normalized_from_string(df_state->cfg_path_arenas[src], params.file_path);
+              String8 new_path = path_normalized_from_string(df_state->cfg_path_arenas[src], params.file_path);
+              df_state->cfg_paths[src] = new_path;
             }
           }
           
@@ -7179,7 +7179,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           B32 cfg_load_any = 0;
           for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
           {
-            cfg_load[src] = (load_cfg[src] && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_files[src]->timestamp == 0));
+            cfg_load[src] = (load_cfg[src] && cfg_timestamps[src] != 0 && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_files[src]->timestamp == 0));
             cfg_load_any = cfg_load_any || cfg_load[src];
           }
           

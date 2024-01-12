@@ -21,9 +21,6 @@
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
-// [ ] ** Converter performance & heuristics for asynchronously doing it early
-// [ ] ** high refresh rate, but consistently missing tight frame deadline,
-//     animation
 // [ ] ** ASAN targets
 // [ ] ** prevent overwriting non-config files when choosing config paths
 // [ ] ** while typing, "Alt" Windows menu things should not happen
@@ -53,6 +50,8 @@
 //  [ ] Setting the code_font/main_font values to a font name doesn't work.
 //      Should probably make note that you have to set it to a path to a TTF,
 //      since that's not normally how Windows fonts work.
+
+// [ ] ** Converter performance & heuristics for asynchronously doing it early
 //
 // [ ] disasm animation & go-to-address
 //
@@ -214,6 +213,8 @@
 // [ ] run-to-line needs to work if no processes are running
 //     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
+//
+// [ ] C++ single & multi inheritance member visualization in watch window
 
 ////////////////////////////////
 //~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
