@@ -43,10 +43,10 @@ if "%asan%"=="1"      set auto_compile_flags=%auto_compile_flags% -fsanitize=add
 :: --- Compile/Link Line Definitions ------------------------------------------
 set cl_common=     /I..\src\ /I..\local\ /nologo /FC /Z7 /MP
 set clang_common=  -I..\src\ -I..\local\ -maes -mssse3 -msse4 -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf
-set cl_debug=      cl /Od /D_DEBUG %cl_common%
-set cl_release=    cl /O2 /DNDEBUG %cl_common%
-set clang_debug=   clang -g -O0 /D_DEBUG %clang_common%
-set clang_release= clang -g -O3 /DNDEBUG %clang_common% 
+set cl_debug=      call cl /Od /D_DEBUG %cl_common%
+set cl_release=    call cl /O2 /DNDEBUG %cl_common%
+set clang_debug=   call clang -g -O0 /D_DEBUG %clang_common%
+set clang_release= call clang -g -O3 /DNDEBUG %clang_common% 
 set cl_link=       /link /natvis:"%~dp0\src\natvis\base.natvis"
 set clang_link=    -Xlinker /natvis:"%~dp0\src\natvis\base.natvis"
 set cl_out=        /out:
