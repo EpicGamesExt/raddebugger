@@ -32,7 +32,7 @@ struct DF_TxtTopologyInfo
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal Vec4F32 df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed *raddbg);
+internal Vec4F32 df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed *raddbg, DF_Entity *process);
 internal void df_view_rule_hooks__eval_commit_rgba(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed *raddbg, DF_CtrlCtx *ctrl_ctx, Vec4F32 rgba);
 internal DF_BitmapTopologyInfo df_view_rule_hooks__bitmap_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CfgNode *cfg);
 internal DF_GeoTopologyInfo df_view_rule_hooks__geo_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CfgNode *cfg);

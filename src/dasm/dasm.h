@@ -33,7 +33,7 @@ struct DASM_InstChunkNode
   U64 count;
 };
 
-typedef struct DASM_InstChunkNode DASM_InstChunkNode;
+typedef struct DASM_InstChunkList DASM_InstChunkList;
 struct DASM_InstChunkList
 {
   DASM_InstChunkNode *first;
