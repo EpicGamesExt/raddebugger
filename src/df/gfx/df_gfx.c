@@ -3222,6 +3222,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
+          ui_labelf("Target Hz: %.2f", 1.f/df_dt());
           ui_labelf("Ctrl Run Index: %I64u", ctrl_run_idx());
           ui_labelf("Window %p", window);
           ui_set_next_pref_width(ui_children_sum(1));

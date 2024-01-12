@@ -6,7 +6,7 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 0
+#define RADDBG_VERSION_PATCH 1
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""
@@ -26,6 +26,7 @@
 //     animation
 // [ ] ** ASAN targets
 // [ ] ** prevent overwriting non-config files when choosing config paths
+// [ ] ** while typing, "Alt" Windows menu things should not happen
 //
 // [ ] ** I can't seem to get the .raddbg files to update consistently, or
 //     something. I can't seem to reproduce it reliably, but sometimes when I
@@ -49,17 +50,6 @@
 //     progress bar in the disassembly window. I had to close and restart. Is
 //     console app debugging not working yet, perhaps?
 //
-// [ ] ** If you put a full path to a TTF font into the code_font/main_font
-//     variables of the config file, it continually rewrites it each time you
-//     launch. The first time you launch, with your hand-edited font path, it
-//     works correctly and the font loads, but it rewrites it from an absolute
-//     path to a relative path. The second time you launch, with the relative
-//     path, it doesn't work (you get no text at all), and it rewrites it from
-//     relative back to absolute, but to the wrong path (prepending
-//     C:/users/casey/AppData/ to the previous path, even though that was not
-//     at all where the font ever was) The font path will now remain "stable"
-//     in the sense that it won't rewrite it anymore. But you cannot use the
-//     debugger because it's the wrong font path, so you get no text.
 //  [ ] Setting the code_font/main_font values to a font name doesn't work.
 //      Should probably make note that you have to set it to a path to a TTF,
 //      since that's not normally how Windows fonts work.
@@ -545,12 +535,14 @@ struct IPCInfo
 };
 
 ////////////////////////////////
-//~ rjf: Top-Level Execution Globals
+//~ rjf: Globals
 
 #define IPC_SHARED_MEMORY_BUFFER_SIZE MB(16)
 StaticAssert(IPC_SHARED_MEMORY_BUFFER_SIZE > sizeof(IPCInfo), ipc_buffer_size_requirement);
 read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_shared_memory_");
 read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
+global U64 frame_time_us_history[64] = {0};
+global U64 frame_time_us_history_idx = 0;
 
 ////////////////////////////////
 //~ rjf: Frontend Entry Points
@@ -567,10 +559,44 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   geo_user_clock_tick();
   tex_user_clock_tick();
   
-  //- rjf: pick delta-time
-  // TODO(rjf): maximize, given all windows and their monitors
-  // TODO(rjf): also don't be too overly-optimistic, if someone has a 240 Hz display and are consistently missing, don't keep trying at that rate
-  F32 dt = 1.f/os_default_refresh_rate();
+  //- rjf: pick target hz
+  // TODO(rjf): maximize target, given all windows and their monitors
+  F32 target_hz = os_default_refresh_rate();
+  if(frame_time_us_history_idx > 32)
+  {
+    // rjf: calculate average frame time out of the last N
+    U64 num_frames_in_history = Min(ArrayCount(frame_time_us_history), frame_time_us_history_idx);
+    U64 frame_time_history_sum_us = 0;
+    for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
+    {
+      frame_time_history_sum_us += frame_time_us_history[idx];
+    }
+    U64 frame_time_history_avg_us = frame_time_history_sum_us/num_frames_in_history;
+    
+    // rjf: pick among a number of sensible targets to snap to, given how well
+    // we've been performing
+    F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 120.f, 144.f, 240.f};
+    F32 best_target_hz = target_hz;
+    S64 best_target_hz_frame_time_us_diff = max_S64;
+    for(U64 idx = 0; idx < ArrayCount(possible_alternate_hz_targets); idx += 1)
+    {
+      F32 candidate = possible_alternate_hz_targets[idx];
+      if(candidate <= target_hz)
+      {
+        U64 candidate_frame_time_us = 1000000/(U64)candidate;
+        S64 frame_time_us_diff = (S64)frame_time_history_avg_us - (S64)candidate_frame_time_us;
+        if(abs_s64(frame_time_us_diff) < best_target_hz_frame_time_us_diff)
+        {
+          best_target_hz = candidate;
+          best_target_hz_frame_time_us_diff = frame_time_us_diff;
+        }
+      }
+    }
+    target_hz = best_target_hz;
+  }
+  
+  //- rjf: target Hz -> delta time
+  F32 dt = 1.f/target_hz;
   
   //- rjf: get events from the OS
   OS_EventList events = {0};
@@ -578,6 +604,9 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   {
     events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
   }
+  
+  //- rjf: begin measuring actual per-frame work
+  U64 begin_time_us = os_now_microseconds();
   
   //- rjf: bind change
   if(df_gfx_state->bind_change_active)
@@ -796,6 +825,12 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       }
     }
   }
+  
+  //- rjf: determine frame time, record into history
+  U64 end_time_us = os_now_microseconds();
+  U64 frame_time_us = end_time_us-begin_time_us;
+  frame_time_us_history[frame_time_us_history_idx%ArrayCount(frame_time_us_history)] = frame_time_us;
+  frame_time_us_history_idx += 1;
   
   scratch_end(scratch);
   ProfEnd();
