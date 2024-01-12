@@ -21,6 +21,33 @@
 //~ rjf: 2024/1 tasks
 //
 // [ ] @bug bug notes from casey
+//  [ ] ** "Find Name" may not be working as advertised. In the description, it
+//      says you can jump to a file, but if I type in the complete filename of
+//      a file in the project and hit return, it just turns red and says it
+//      couldn't find it. This happens even if the file is already open in a
+//      tab.
+//  [ ] ** I can't seem to get the .raddbg files to update consistently, or
+//      something. I can't seem to reproduce it reliably, but sometimes when I
+//      rebuild, for example, it seems to keep using the old PDB data
+//      effectively - like it doesn't think it needs to update the raddbg file,
+//      or something? But if I manually delete the raddbg file and relaunch,
+//      then it will have the new debug info. It would be nice if there was
+//      some kind of way to interrogate this in the debugger so I can send a
+//      more constructive report, like some way to get a hash of the PDB that
+//      is thinks it has converted to the RAD format, and then a way I can hash
+//      the PDB on the drive, or something, so I can figure out if they are
+//      mismatching for sure?
+//  [ ] Right-clicking on a thread in the Scheduler window pops up a context
+//      menu, but you can't actually see it because the tooltip for the thread
+//      draws on top of it, so you can't see the menu.
+//  [ ] ** In solo-stepping mode, if I step over something like CreateFileA, it
+//      pseudo-hangs the debugger. I can't seem to do anything else, including
+//      "Kill All". I have to close the debugger and restart it, AFAICT?
+//  [ ] ** I tried to debug a console program, and "step into" didn't seem to
+//      work. Instead, it just started running the program, but the program
+//      seemed to hang, and then the debugger pseudo-hung with a continual
+//      progress bar in the disassembly window. I had to close and restart. Is
+//      console app debugging not working yet, perhaps?
 //  [ ] ** If you put a full path to a TTF font into the code_font/main_font
 //      variables of the config file, it continually rewrites it each time you
 //      launch. The first time you launch, with your hand-edited font path, it
@@ -39,6 +66,98 @@
 //      actually visible)
 //
 // [ ] @bug @feature @cleanup general feedback from casey
+//  [ ] ** In the call stack, I would like to be able to click quickly and move
+//      around the stack. Right now, you can do that with the first and third
+//      column, but the second column drops down a context menu. Since right
+//      click is already for context menus, can it not just be that double-
+//      clicking any column jumps to that stack frame?
+//  [ ] ** Function breakpoints should show up in the source listing. Without
+//      them being visible, it is confusing when you run and you stop there,
+//      because you're like "wait why did it stop" and then you later remember
+//      that's because there was a function breakpoint there.
+//  [ ] ** One very nice feature of RemedyBG that I use all the time is the
+//      ability to put "$err, hr" into the watch window, which will just show
+//      the value of GetLastError() as a string. This is super useful for
+//      debugging, so you don't have to litter your own code with it.
+//  [ ] ** I find it really hard to read the code with the heavyweight lines
+//      running through it for breakpoints and stepping and things. Is there a
+//      way to turn the lines off? AFAICT they are based on thread and
+//      breakpoint color, so you can't really control the line drawing? I might
+//      be fine with them, but they would have to be much more light (like
+//      alpha 0.1 or something)
+//  [ ] ** I don't really understand how the multi-target stuff is supposed to
+//      work, or more specifically, how I'm supposed to debug multiple projects.
+//      My assumption was that you create multiple targets - like for us,
+//      there'd be one for our game, and one for our build utility, and so on.
+//      And then I would pick which one of those I was using somehow. But, it
+//      seems like _all_ targets run when I run? Or something? So is the
+//      intended workflow something else?
+//  [ ] It's confusing that ENTER is the way you expand and collapse things in
+//      the watch window, but then also how you edit them if they are not
+//      expandable? It seems like this should be consistent (one way to edit,
+//      one way to expand/collapse, that are distinct)
+//  [ ] It seems like the "lock" icon on the Scheduler should have a hover
+//      tooltip?
+//  [ ] It confused me that command-line-specified EXEs are not saved in the
+//      profile unless you manually force it to. Since there's not really a
+//      cost to saving these, why not just save them? I imagine you would want
+//      things like "folders" in the Targets window eventually, so maybe just
+//      have a folder where command-line stuff gets saved, and then the user
+//      drags it into another folder if they want, or not, etc.
+//  [ ] "Find Name" would be a lot more useful if you could type partial
+//      things, and it displayed a list, more like what happens in a
+//      traditional text editor. Typing the entire name of a function to jump
+//      to it is too laborious.
+//  [ ] Using the word "symbol" in "Code (Symbol)" seems like a bad idea, since
+//      you're referring to non-identifier characters, but in a debugger
+//      "symbol" usually means something defined in the debug information.
+//  [ ] It might be nice if the syntax highlighting actually did have a
+//      separate theme color for debug info symbols, just so you can see what
+//      things you might jump to, etc.
+//  [ ] I didn't understand the terminology "Equip With Color". Does that just
+//      mean specify the color used to display it? Is "Apply Color" perhaps a
+//      bit more user-friendly?
+//  [ ] The cursor feels a bit too huge vertically.
+//  [ ] You may want to remove Ryan's email address from the Help window and
+//      instead just direct people to the github for creating an issue, so they
+//      don't flood your inbox with bug reports?
+//  [ ] I LOVE ALT-W to add watch under cursor, but I would prefer to have it
+//      add what's under the MOUSE cursor instead of the keyboard cursor. Can
+//      we get a command for that so I can bind ALT-W to that instead?
+//  [ ] For theme editing, when you hove the mouse over a theme color entry and
+//      it highlights that entry, it might help to temporarily change that
+//      color to white (or the inverse of the background color, or whatever) so
+//      that the user can see what things on the screen use that theme color.
+//  [ ] I couldn't figure out how to affect the "dim" color in constants that
+//      have alternating bright/dim letters to show sections of a number. Is
+//      this in the theme colors somewhere?
+//  [ ] For the Scheduler window, it would be nice if you could dim or
+//      folderize threads that are not your threads - eg., if a thread doesn't
+//      have any resolved stack pointers in your executable code, then you can
+//      ignore it when you are focusing on your own code. I don't know what the
+//      best way to detect this is, other than by walking the call stack... one
+//      way might be to just have a way to separate threads you've named from
+//      threads you haven't? Or, there could even be a debugger-specific API
+//      that you use to tag them. Just some way that would make it easier to
+//      focus on your own threads.
+//  [ ] For the Scheduler window, I have a hard time understanding what is
+//      running and what isn't. It might be nice if there was a color or
+//      indicator or something that showed when a thread was running vs. when
+//      it was halted? Everything seems to be a green lock icon, whether it is
+//      running or halted.
+//  [ ] For breakpoint-on-function, it would be great if it showed a list of
+//      (partial) matches as you type, so you can stop typing once it gets the
+//      right function instead of having to type the entire function name.
+//  [ ] I'm not sure I understand the idea behind thread colors. There aren't
+//      enough of these to actually make them useful (my machine has 32 logical
+//      processors, for example, so 8 is not enough). What was the idea here,
+//      exactly? Maybe I can try to come up with an alternative that works with
+//      large thread counts.
+//  [ ] F2 should probably "edit watch window item", and in general any other
+//      item you have highlighted, since F2 on Windows is "rename" in general.
+//  [ ] Hovering over a source tab that is clipped should probably display the
+//      full thing that was in that tab (like the whole filename, etc.). Right
+//      now, hovering does nothing AFAICT.
 //  [ ] ** I couldn't figure out how to really view threads in the debugger.
 //      The only place I found a thread list was in "The Scheduler", but it
 //      only lists threads by ID, which is hard to use. I can hover over them
@@ -154,45 +273,63 @@
 //      the files myself in the shell, but it seemed weird that there was no
 //      "save" option in the menus.
 //
-//*[ ] @cleanup @feature double & triple click select in source views
-//*[ ] @bug disasm animation & go-to-address
+// [ ] high refresh rate, but consistently missing tight frame deadline,
+//     animation
 //
-//*[ ] @bug table column boundaries should be checked against *AFTER* table contents, not before
-//*[ ] @cleanup @feature autocomplete lister should respect position in edited expression, tabbing through should autocomplete but not exit, etc.
-//*[ ] @cleanup @feature figure out 'watch window state' question, and how watch windows relate to targets, entities, & so on
-//*[ ] @feature undo/redo
-//*[ ] @feature proper "go back" + "go forward" history navigations
+// [ ] @cleanup @feature double & triple click select in source views
+// [ ] @bug disasm animation & go-to-address
 //
-// [ ] @bug view-snapping in scroll-lists, accounting for mapping between visual positions & logical positions (variably sized rows in watch, table headers, etc.)
-// [ ] @bug selected frame should be keyed by run_idx or something so that it can gracefully reset to the top frame when running
+// [ ] @bug table column boundaries should be checked against *AFTER* table
+//     contents, not before
+// [ ] @cleanup @feature autocomplete lister should respect position in edited
+//     expression, tabbing through should autocomplete but not exit, etc.
+// [ ] @cleanup @feature figure out 'watch window state' question, and how
+//     watch windows relate to targets, entities, & so on
+// [ ] @feature undo/redo
+// [ ] @feature proper "go back" + "go forward" history navigations
 //
-// [ ] @cleanup collapse DF_CfgNodes into just being MD trees, find another way to encode config source - don't need it at every node
+// [ ] @bug view-snapping in scroll-lists, accounting for mapping between
+//     visual positions & logical positions (variably sized rows in watch,
+//     table headers, etc.)
+// [ ] @bug selected frame should be keyed by run_idx or something so that it
+//     can gracefully reset to the top frame when running
+//
+// [ ] @cleanup collapse DF_CfgNodes into just being MD trees, find another way
+//     to encode config source - don't need it at every node
 //
 // [ ] @feature fancy "escape hatch" view rules
 //  [ ] `text[:lang]` - interpret memory as text, in lang `lang`
 //  [ ] `disasm:arch` - interpret memory as machine code for isa `arch`
 //  [ ] `memory` - view memory in usual memory hex-editor view
-//  NOTE(rjf): When the visualization system is solid, layers like dasm, txti, and so on
-//  can be dispensed with, as things like the source view, disasm view, or memory view will
-//  simply be specializations of the general purpose viz system.
+//  NOTE(rjf): When the visualization system is solid, layers like dasm, txti,
+//  and so on can be dispensed with, as things like the source view, disasm
+//  view, or memory view will simply be specializations of the general purpose
+//  viz system.
 //
-// [ ] @feature view rule hook for standalone visualization ui, granted its own tab
-// [ ] @feature hovering truncated text in UI for some amount of time -> show tooltip with full text
+// [ ] @feature view rule hook for standalone visualization ui, granted its own
+//     tab
+// [ ] @feature hovering truncated text in UI for some amount of time -> show
+//     tooltip with full text
 //
-// [ ] @cleanup straighten out index/number space & types & terminology for scroll lists
-// [ ] @cleanup simplification pass over eval visualization pipeline & types, including view rule hooks
-// [ ] @cleanup naming pass over eval visualization part of the frontend, "blocks" vs. "canvas" vs. "expansion" - etc.
+// [ ] @cleanup straighten out index/number space & types & terminology for
+//     scroll lists
+// [ ] @cleanup simplification pass over eval visualization pipeline & types,
+//     including view rule hooks
+// [ ] @cleanup naming pass over eval visualization part of the frontend,
+//     "blocks" vs. "canvas" vs. "expansion" - etc.
 //
 // [ ] @feature disasm keyboard navigation & copy/paste
 // [ ] @feature debug info overrides (both path-based AND module-based)
 //
-// [ ] @polish globally disable/configure default view rule-like things (string viz for u8s in particular)
+// [ ] @polish globally disable/configure default view rule-like things (string
+//     viz for u8s in particular)
 // [ ] @polish configure tab size
 //
 // [ ] @polish @feature ui for dragging tab -> bundling panel split options
 // [ ] @polish @feature visualize mismatched source code and debug info
 // [ ] @polish @feature visualize remapped files (via path map)
-// [ ] @polish @feature run-to-line needs to work if no processes are running - place temp bp, attach "die on hit" flag or something like that?
+// [ ] @polish @feature run-to-line needs to work if no processes are running
+//     - place temp bp, attach "die on hit" flag or something like that?
 //
 // [ ] @feature processor/data breakpoints
 // [ ] @feature automatically snap to search matches when searching source files
@@ -213,8 +350,11 @@
 // [ ] @perf converter perf
 // [ ] @perf frontend perf
 //
-// [ ] @feature types -> auto view rules (don't statefully fill view rules given types, just query if no other view rule is present, & autofill when editing)
-// [ ] @feature eval system -> somehow evaluate breakpoint hit counts? "meta" variables?
+// [ ] @feature types -> auto view rules (don't statefully fill view rules
+//     given types, just query if no other view rule is present, & autofill
+//     when editing)
+// [ ] @feature eval system -> somehow evaluate breakpoint hit counts? "meta"
+//     variables?
 // [ ] @feature watch window labels
 // [ ] @feature scheduler -> thread grid view?
 // [ ] @feature global entry point overrides (settings)
@@ -227,7 +367,9 @@
 //  [ ] serializing eval view maps
 //  [ ] view rule editors in hover-eval
 //  [ ] view rule hook coverage
-//   [ ] `each:(expr addition)` - apply some additional expression to all elements in an array/linked list would be useful to look at only a subset of an array of complex structs
+//   [ ] `each:(expr addition)` - apply some additional expression to all
+//        elements in an array/linked list would be useful to look at only a
+//        subset of an array of complex structs
 //   [ ] `slider:(min max)` view rule
 //   [ ] `v2f32` view rule
 //   [ ] `v3` view rule
@@ -237,7 +379,8 @@
 //  [ ] smart scopes - expression operators for "grab me the first type X"
 //  [ ] "pinning" watch expressions, to attach it to a particular ctrl_ctx
 //
-// [ ] @feature header file for target -> debugger communication; printf, log, etc.
+// [ ] @feature header file for target -> debugger communication; printf, log,
+//     etc.
 // [ ] @feature just-in-time debugging
 // [ ] @feature step-out-of-loop
 
@@ -250,35 +393,50 @@
 //
 //-[ ] notes from allen
 //  [ ] 'browse' in modules debug info map editor
-//  [ ] debug info map revisit... ctrl thread needs to know string -> string, not just handle -> string
+//  [ ] debug info map revisit... ctrl thread needs to know string -> string,
+//      not just handle -> string
 //  [ ] panel-split options in right-click menu. maybe just do the full
 //      'contextual ctx menu stack' thing here? then ctx menus buried deep in
 //      the callstack still gather all the right stuff...
-//  [ ] ui color pallette inspector/editor - function which takes ui_box -> theme_color
+//  [ ] ui color pallette inspector/editor - function which takes ui_box ->
+//      theme_color
 //  [ ] watch-window-wide view rule
-//
-//-[ ] short-term major issues from martins
-//  [ ] F10/F5 is not stepping over line, if line invokes macro with bunch of code (if checks, functions
-//      calls) then debugger thinks there is a breakpoint on every condition? or every function call? so
-//      I hits my breakpoint multiple times when I just want to get over it
 //
 //-[ ] short-term minor issues from martins
 //  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
-//  [ ]  mouse back button should make view to go back after I double clicked on function to open it
+//  [ ]  mouse back button should make view to go back after I double clicked
+//       on function to open it
 //  [ ]  middle mouse button on tab should close it
-//  [ ]  pressing random keyboard keys in source code advances text cursor like you were inputting text, very strange.
-//  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which panel was previous, don't want to use ctrl+, multiple times)
-//       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use in VS
-//  [ ]  what's up with decimal number coloring where every group of 3 are in different color? can I turn it off? And why sometimes digits in number start with brighter color, but sometimes with darker - shouldn't it always have the same color ordering?
-//  [ ]  it would be nice to have "show in explorer" for right click on source file tab (opens explorer & selects the file)
-//  [ ]  it would be nice if Alt+o in source file would switch between .h and .c/cpp file (just look for same name in same folder)
-//  [ ]  in watch window when I enter some new expression and then click mouse away from cell, then it should behave the same as if I pressed enter. Currently it does the same as if I have pressed esc and I have lost my expression
-//  [ ]  navigation in watch window cells (not text editing, but which cell is selected) is bad - home/end/pgup/pgdown buttons navigate not where I expect (and with ctrl combination too)
-//  [ ]  for big source files the scrollbar element for active position is a bit to small - maybe have min size it never goes below (like 50px or maybe exactly 1 line of source code in height)
-//  [ ]  default font size is too small for me - not only source code, but menus/tab/watch names (which don't resize). Maybe you could query Windows for initial font size?
-//  [ ]  zooming behaves very strangely - sometimes it zooms source code, sometimes both source code and menu/tab/watch font size, sometimes just menu/tab/watch font size not source size.
-//  [ ]  icon fonts glyphs sometimes disappear for specific font size, but they reappear if you go +1 higher or -1 lower. Mostly red triangle in watch values for "unknown identifier". But also yellow arrow in call stack disappears if font size gets too large.
-//  [ ]  undo close tab would be nice. If not for everything, then at least just for source files
+//  [ ]  pressing random keyboard keys in source code advances text cursor like
+//       you were inputting text, very strange.
+//  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which
+//       panel was previous, don't want to use ctrl+, multiple times)
+//       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use
+//       in VS
+//  [ ]  what's up with decimal number coloring where every group of 3 are in
+//       different color? can I turn it off? And why sometimes digits in number
+//       start with brighter color, but sometimes with darker - shouldn't it
+//       always have the same color ordering?
+//  [ ]  it would be nice to have "show in explorer" for right click on source
+//       file tab (opens explorer & selects the file)
+//  [ ]  it would be nice if Alt+o in source file would switch between .h and
+//       .c/cpp file (just look for same name in same folder)
+//  [ ]  in watch window when I enter some new expression and then click mouse
+//       away from cell, then it should behave the same as if I pressed enter.
+//       Currently it does the same as if I have pressed esc and I have lost my
+//       expression
+//  [ ]  default font size is too small for me - not only source code, but
+//       menus/tab/watch names (which don't resize). Maybe you could query
+//       Windows for initial font size?
+//  [ ]  zooming behaves very strangely - sometimes it zooms source code,
+//       sometimes both source code and menu/tab/watch font size, sometimes
+//       just menu/tab/watch font size not source size.
+//  [ ]  icon fonts glyphs sometimes disappear for specific font size, but they
+//       reappear if you go +1 higher or -1 lower. Mostly red triangle in watch
+//       values for "unknown identifier". But also yellow arrow in call stack
+//       disappears if font size gets too large.
+//  [ ]  undo close tab would be nice. If not for everything, then at least
+//       just for source files
 //
 //-[ ] long-term future notes from martins
 //  [ ] core dump saving/loading
@@ -292,32 +450,27 @@
 ////////////////////////////////
 //~ rjf: Long-Term Deferred Polish & Improvements
 //
-// [ ] fancy string runs can include "weakness" information for text truncation... can prioritize certain parts of strings to be truncated before others. would be good for e.g. the middle of a path
+// [ ] fancy string runs can include "weakness" information for text truncation
+//     ... can prioritize certain parts of strings to be truncated before
+//     others. would be good for e.g. the middle of a path
 // [ ] ui code maintenance, simplification, design, & robustness pass
 //  [ ] page-up & page-down correct handling in keyboard nav
-//  [ ] collapse context menus & command lister into same codepaths. filter by context. parameterize by context.
+//  [ ] collapse context menus & command lister into same codepaths. filter by
+//      context. parameterize by context.
 //  [ ] collapse text cells & command lister & etc. into same codepath (?)
 //  [ ] nested context menus
 //  [ ] unified top-level cursor/typing/lister helper
 //  [ ] font selection lister
-// [ ] font cache eviction (both for font tags, closing fp handles, and rasterizations)
+// [ ] font cache eviction (both for font tags, closing fp handles, and
+//     rasterizations)
 // [ ] frontend speedup opportunities
-//  [ ] tables in UI -> currently building per-row, could probably cut down on # of boxes and # of draws by doing per-column in some cases?
-//  [ ] font cache layer -> can probably cache (string*font*size) -> (run) too (not just rasterization)... would save a *lot*, there is a ton of work just in looking up & stitching stuff repeatedly
+//  [ ] tables in UI -> currently building per-row, could probably cut down on
+//      # of boxes and # of draws by doing per-column in some cases?
+//  [ ] font cache layer -> can probably cache (string*font*size) -> (run) too
+//      (not just rasterization)... would save a *lot*, there is a ton of work
+//      just in looking up & stitching stuff repeatedly
 //  [ ] convert UI layout pass to not be naive recursive version
 //  [ ] (big change) parallelize window ui build codepaths per-panel
-
-////////////////////////////////
-//~ rjf: Completed Tasks
-//
-// [x] ** I don't like how panels get dimmer when they are not active, because
-//     it makes them harder for me to read. Is there a way to turn this off?
-// [x] When I click in the theme window on something like "Code (Meta)", it
-//     opens up a tiny window, which only shows a tiny bit of what I imagine
-//     is the entire color picker? It makes the picker unusable because more
-//     of the UI for it is clipped and cannot be accessed.
-// [x] Clicking anywhere in the color picker that isn't a button closes the
-//     color picker for some reason?
 
 ////////////////////////////////
 //~ rjf: Includes
@@ -448,6 +601,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   
   //- rjf: pick delta-time
   // TODO(rjf): maximize, given all windows and their monitors
+  // TODO(rjf): also don't be too overly-optimistic, if someone has a 240 Hz display and are consistently missing, don't keep trying at that rate
   F32 dt = 1.f/os_default_refresh_rate();
   
   //- rjf: get events from the OS
