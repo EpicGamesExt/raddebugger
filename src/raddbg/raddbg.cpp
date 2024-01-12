@@ -58,10 +58,6 @@
 //      find anything in the theme that would fill them with a solid, bright
 //      color. Instead they are just a thin outline and the same color as the
 //      scroll bar background.
-//  [x] It seems like the code is compiled as a console app for some reason, so
-//      when you run it, it locks up your console. I worked around this by
-//      making a bat file that does a "start" of it, but, it seems like this
-//      would not be what people would expect (at least on Windows?)
 //  [ ] Dragging a window tab (like Locals or Registers or whatnot) and
 //      canceling with ESC should revert the window tab to where it was.
 //      Currently, it leaves the window tab reordered if you dragged over its

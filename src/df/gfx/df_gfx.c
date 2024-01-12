@@ -5632,7 +5632,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 }
                 UI_TextColor(df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText))
                   UI_PrefWidth(ui_pct(1, 0))
-                  UI_FontSize(ui_top_font_size()*(view_is_selected ? 1.f : 0.75f))
                   ui_label(label);
                 UI_PrefWidth(ui_em(2.35f, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
                   UI_Font(df_font_from_slot(DF_FontSlot_Icons))

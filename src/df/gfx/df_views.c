@@ -8818,8 +8818,10 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
                                                       "###color_%I64x", (U64)color);
         UI_Parent(color_row)
         {
-          Vec4F32 text_rgba = rgba;
-          text_rgba.w = ClampBot(text_rgba.w, 0.2f);
+          Vec4F32 bg_color = ui_top_background_color();
+          Vec4F32 default_text_color = ui_top_text_color();
+          F32 default_fallback_factor = clamp_1f32(r1f32(0.3f, 1), dot_4f32(normalize_4f32(rgba), normalize_4f32(bg_color))) - 0.3f;
+          Vec4F32 text_rgba = mix_4f32(rgba, default_text_color, default_fallback_factor);
           UI_WidthFill UI_TextColor(text_rgba) ui_label(df_g_theme_color_display_string_table[color]);
           ui_set_next_pref_width(ui_top_pref_height());
           UI_HeightFill UI_Column UI_Padding(ui_em(0.3f, 1))
@@ -8846,6 +8848,10 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
           sv->color_ctx_menu_color_hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
           DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+        }
+        if(color_row_sig.hovering) UI_Tooltip
+        {
+          ui_label(df_g_theme_color_display_string_table[color]);
         }
       }
     }
