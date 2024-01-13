@@ -158,5 +158,6 @@ internal B32            os_granular_sleep_enabled(void);
 //~ rjf: @os_hooks Native Messages & Panics (Implemented Per-OS)
 
 internal void           os_graphical_message(B32 error, String8 title, String8 message);
+internal U32            os_graphical_message_confirm(String8 title, String8 message);
 
 #endif // OS_GRAPHICAL_H
