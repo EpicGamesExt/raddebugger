@@ -163,7 +163,9 @@ r_init(CmdLine *cmdln)
                             &r_d3d11_state->base_device, 0, &r_d3d11_state->base_device_ctx);
   if(!SUCCEEDED(error))
   {
-    os_graphical_message(1, str8_lit("Fatal Error"), str8_lit("D3D11 device creation failure. The process is terminating."));
+    char buffer[256] = {0};
+    raddbg_snprintf(buffer, sizeof(buffer), "D3D11 device creation failure (%x). The process is terminating.", error);
+    os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     os_exit_process(1);
   }
   
