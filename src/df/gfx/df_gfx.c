@@ -1842,8 +1842,18 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               keep_child->size_pct_of_parent.v[split_axis] *= size_pct_of_parent.v[split_axis];
               keep_child->size_pct_of_parent.v[axis2_flip(split_axis)] *= size_pct_of_parent.v[axis2_flip(split_axis)];
               
+              // rjf: reset focus, if needed
+              if(ws->focused_panel == discard_child)
+              {
+                ws->focused_panel = keep_child;
+                for(DF_Panel *grandchild = ws->focused_panel; !df_panel_is_nil(grandchild); grandchild = grandchild->first)
+                {
+                  ws->focused_panel = grandchild;
+                }
+              }
+              
               // rjf: keep-child split-axis == grandparent split-axis? bubble keep-child up into grandparent's children
-              if(grandparent->split_axis == keep_child->split_axis && !df_panel_is_nil(keep_child->first))
+              if(!df_panel_is_nil(grandparent) && grandparent->split_axis == keep_child->split_axis && !df_panel_is_nil(keep_child->first))
               {
                 df_panel_remove(grandparent, keep_child);
                 DF_Panel *prev = parent_prev;
@@ -1857,16 +1867,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   child->size_pct_of_parent.v[keep_child->split_axis]        *= keep_child->size_pct_of_parent_target.v[grandparent->split_axis];
                 }
                 df_panel_release(ws, keep_child);
-              }
-              
-              // rjf: reset focus, if needed
-              if(ws->focused_panel == discard_child)
-              {
-                ws->focused_panel = keep_child;
-                for(DF_Panel *grandchild = ws->focused_panel; !df_panel_is_nil(grandchild); grandchild = grandchild->first)
-                {
-                  ws->focused_panel = grandchild;
-                }
               }
             }
             // NOTE(rjf): Otherwise we can just remove this child.
