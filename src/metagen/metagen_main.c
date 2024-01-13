@@ -86,7 +86,7 @@ int main(int argument_count, char **arguments)
     {
       String8 file_path = n->string;
       String8 file_ext = str8_skip_last_dot(file_path);
-      if(str8_match(file_ext, str8_lit("mc"), 0))
+      if(str8_match(file_ext, str8_lit("mdesk"), 0))
       {
         String8 data = os_data_from_file_path(mg_arena, file_path);
         MD_TokenizeResult tokenize = md_tokenize_from_text(mg_arena, data);

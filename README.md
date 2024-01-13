@@ -187,7 +187,7 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `hash_store` (`HS_`): Implements a cache for general data blobs, keyed by a
   128-bit hash of the data. Used as a general data store by other layers.
 - `metagen` (`MG_`): A metaprogram which is used to generate primarily code and
-  data tables. Consumes Metadesk files, stored with the extension `.mc`, and
+  data tables. Consumes Metadesk files, stored with the extension `.mdesk`, and
   generates C code which is then included by hand-written C code. Currently, it
   does not analyze the codebase's hand-written C code, but in principle this is
   possible. This allows easier & less-error-prone management of large data

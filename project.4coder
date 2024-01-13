@@ -18,9 +18,8 @@ patterns =
   "*.bfs",
   "*.html",
   "*.txt",
-  "*.ds",
   "*.md",
-  "*.mc",
+  "*.mdesk",
   "*.asm",
 };
 
