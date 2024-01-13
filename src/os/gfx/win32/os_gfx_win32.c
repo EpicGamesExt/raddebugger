@@ -1099,3 +1099,14 @@ os_graphical_message(B32 error, String8 title, String8 message)
   MessageBoxW(0, (WCHAR *)message16.str, (WCHAR *)title16.str, MB_OK|(!!error*MB_ICONERROR));
   scratch_end(scratch);
 }
+
+internal U32
+os_graphical_message_confirm(String8 title, String8 message)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String16 title16 = str16_from_8(scratch.arena, title);
+  String16 message16 = str16_from_8(scratch.arena, message);
+  U32 ret = MessageBoxW(0, (WCHAR *)message16.str, (WCHAR *)title16.str, MB_YESNO | MB_ICONQUESTION);
+  scratch_end(scratch);
+  return ret == IDYES;
+}
