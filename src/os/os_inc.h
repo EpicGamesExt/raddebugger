@@ -12,6 +12,10 @@
 # define OS_FEATURE_GRAPHICAL 0
 #endif
 
+#if !defined(OS_GFX_STUB)
+# define OS_GFX_STUB 0
+#endif
+
 #include "core/os_core.h"
 
 #if OS_FEATURE_SOCKET
@@ -27,13 +31,17 @@
 # if OS_FEATURE_SOCKET
 #  include "socket/win32/os_socket_win32.h"
 # endif
-# if OS_FEATURE_GRAPHICAL
+# if OS_FEATURE_GRAPHICAL && !OS_GFX_STUB
 #  include "gfx/win32/os_gfx_win32.h"
 # endif
 #elif OS_LINUX
 # include "core/linux/os_core_linux.h"
 #else
 # error no OS layer setup
+#endif
+
+#if OS_GFX_STUB
+#include "gfx/stub/os_gfx_stub.h"
 #endif
 
 #endif //OS_SWITCH_H

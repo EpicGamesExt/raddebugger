@@ -5,7 +5,7 @@
 
 #if LANG_CPP
 # if R_BACKEND == R_BACKEND_STUB
-#  include "stub/render_stub.cpp"
+#  include "stub/render_stub.c"
 # elif R_BACKEND == R_BACKEND_D3D11
 #  include "d3d11/render_d3d11.cpp"
 # else
