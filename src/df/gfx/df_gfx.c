@@ -11007,6 +11007,21 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
             // commands. after doing so, we can retry.
             if(ws == df_gfx_state->first_window && ws == df_gfx_state->last_window && df_gfx_state->last_window_queued_save == 0)
             {
+              // ask for confirmation if there's an attached process.
+              DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+              U32 need_confirm = processes.count;
+              if(need_confirm != 0)
+              {
+                need_confirm = os_graphical_message_confirm(
+                  str8_lit("The RAD Debugger"),
+                  str8_lit("One of attached processes is still active.\n\nClosing debugger will shutdown that process. Continue?")
+                );
+                if(need_confirm == 0)
+                {
+                  break;
+                }
+              }
+              
               df_gfx_state->last_window_queued_save = 1;
               {
                 DF_CmdParams params = df_cmd_params_zero();
