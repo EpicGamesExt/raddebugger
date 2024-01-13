@@ -2568,8 +2568,10 @@ ui_signal_from_box(UI_Box *box)
   }
   
   //- rjf: set hovering status
-  result.hovering = mouse_is_over && (ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) ||
-                                      ui_key_match(ui_state->active_box_key[Side_Min], box->key));
+  result.hovering = mouse_is_over && ((ui_key_match(ui_state->hot_box_key, ui_key_zero()) ||
+                                       ui_key_match(ui_state->hot_box_key, box->key)) &&
+                                      (ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) ||
+                                       ui_key_match(ui_state->active_box_key[Side_Min], box->key)));
   result.mouse_over = mouse_is_over;
   
   //- rjf: clicking in default nav -> set navigation state to this box

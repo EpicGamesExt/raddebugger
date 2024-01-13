@@ -104,6 +104,8 @@ DF_CoreCmdKind_DecCodeFontScale,
 DF_CoreCmdKind_OpenWindow,
 DF_CoreCmdKind_CloseWindow,
 DF_CoreCmdKind_ToggleFullscreen,
+DF_CoreCmdKind_ConfirmAccept,
+DF_CoreCmdKind_ConfirmCancel,
 DF_CoreCmdKind_ResetToDefaultPanels,
 DF_CoreCmdKind_NewPanelRight,
 DF_CoreCmdKind_NewPanelDown,
@@ -368,6 +370,7 @@ DF_CmdParamSlot_VirtualOff,
 DF_CmdParamSlot_Index,
 DF_CmdParamSlot_ID,
 DF_CmdParamSlot_PreferDisassembly,
+DF_CmdParamSlot_ForceConfirm,
 DF_CmdParamSlot_COUNT
 } DF_CmdParamSlot;
 
@@ -407,6 +410,7 @@ U64 voff;
 U64 index;
 U64 id;
 B32 prefer_dasm;
+B32 force_confirm;
 };
 
 DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array);

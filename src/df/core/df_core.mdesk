@@ -80,22 +80,23 @@ DF_EntityKindTable:
 @table(name, name_lower, c_type)
 DF_CmdParamSlotTable:
 {
-  {Window,            window,      `DF_Handle`}
-  {Panel,             panel,       `DF_Handle`}
-  {DestPanel,         dest_panel,  `DF_Handle`}
-  {PrevView,          prev_view,   `DF_Handle`}
-  {View,              view,        `DF_Handle`}
-  {Entity,            entity,      `DF_Handle`}
-  {EntityList,        entity_list, `DF_HandleList`}
-  {String,            string,      `String8`}
-  {FilePath,          file_path,   `String8`}
-  {TextPoint,         text_point,  `TxtPt`}
-  {CmdSpec,           cmd_spec,    `struct DF_CmdSpec *`}
-  {VirtualAddr,       vaddr,       `U64`}
-  {VirtualOff,        voff,        `U64`}
-  {Index,             index,       `U64`}
-  {ID,                id,          `U64`}
-  {PreferDisassembly, prefer_dasm, `B32`}
+  {Window,            window,       `DF_Handle`}
+  {Panel,             panel,        `DF_Handle`}
+  {DestPanel,         dest_panel,   `DF_Handle`}
+  {PrevView,          prev_view,    `DF_Handle`}
+  {View,              view,         `DF_Handle`}
+  {Entity,            entity,       `DF_Handle`}
+  {EntityList,        entity_list,  `DF_HandleList`}
+  {String,            string,       `String8`}
+  {FilePath,          file_path,    `String8`}
+  {TextPoint,         text_point,   `TxtPt`}
+  {CmdSpec,           cmd_spec,     `struct DF_CmdSpec *`}
+  {VirtualAddr,       vaddr,        `U64`}
+  {VirtualOff,        voff,         `U64`}
+  {Index,             index,        `U64`}
+  {ID,                id,           `U64`}
+  {PreferDisassembly, prefer_dasm,  `B32`}
+  {ForceConfirm,      force_confirm,`B32`}
 }
 
 @table(name, display_string, args_desc)
@@ -184,6 +185,10 @@ DF_CoreCmdTable:
   {OpenWindow                     0            0            0           0               0                 Null               Null               Null                     Null                        Null                 0                                    0                                                Window                "open_window"                 "Open New Window"                             "Opens a new window."                                                                                              ""                               }
   {CloseWindow                    0            0            0           0               0                 Window             Null               Null                     Null                        Null                 0                                    0                                                Window                "close_window"                "Close Window"                                "Closes an opened window."                                                                                         ""                               }
   {ToggleFullscreen               0            0            0           0               0                 Window             Null               Null                     Null                        Null                 0                                    0                                                Window                "toggle_fullscreen"           "Toggle Fullscreen"                           "Toggles fullscreen view on the active window."                                                                    ""                               }
+  
+  //- rjf: confirmations
+  {ConfirmAccept                  1            0            0           0               0                 Null               Null               Null                     Null                        Null                 0                                    0                                                Null                  "confirm_accept"              "Confirm Accept"                              "Accepts the active confirmation prompt."                                                                          ""                               }
+  {ConfirmCancel                  1            0            0           0               0                 Null               Null               Null                     Null                        Null                 0                                    0                                                Null                  "confirm_cancel"              "Confirm Cancel"                              "Cancels the active confirmation prompt."                                                                          ""                               }
   
   //- rjf: panel splitting
   {ResetToDefaultPanels           0            0            0           0               0                 Window             Null               Null                     Null                        Null                 0                                    0                                                Window                "reset_to_default_panels"     "Reset To Default Panel Layout"               "Resets the window to the default panel layout."                                                                   "panel"                          }

@@ -1145,6 +1145,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
 {
   ProfBeginFunction();
   B32 window_is_focused = os_window_is_focused(ws->os);
+  B32 confirm_open = df_gfx_state->confirm_active;
   B32 hover_eval_is_open = (ws->hover_eval_string.size != 0 && ws->hover_eval_first_frame_idx+20 < ws->hover_eval_last_frame_idx && df_frame_index()-ws->hover_eval_last_frame_idx < 20);
   B32 any_query_is_focused = !df_panel_is_nil(ws->focused_panel) && !df_view_is_nil(df_query_view_from_panel(ws->focused_panel));
   if(!window_is_focused)
@@ -3859,6 +3860,55 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       }
       
       scratch_end(scratch);
+    }
+    
+    //- rjf: confirmation popup
+    {
+      if(df_gfx_state->confirm_t > 0.005f) UI_Focus(1) UI_TextAlignment(UI_TextAlign_Center)
+      {
+        Vec2F32 window_dim = dim_2f32(window_rect);
+        UI_Box *bg_box = &ui_g_nil_box;
+        UI_Rect(window_rect) UI_ChildLayoutAxis(Axis2_X)
+        {
+          Vec4F32 bg_color = ui_top_background_color();
+          bg_color.w *= df_gfx_state->confirm_t;
+          ui_set_next_blur_size(10*df_gfx_state->confirm_t);
+          ui_set_next_background_color(bg_color);
+          bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|UI_BoxFlag_Floating|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll|UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawBackground, "###confirm_popup_%p", ws);
+        }
+        if(df_gfx_state->confirm_active) UI_Parent(bg_box)
+        {
+          ui_ctx_menu_close();
+          UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
+          {
+            UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(df_gfx_state->confirm_title);
+            UI_PrefHeight(ui_em(3.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_label(df_gfx_state->confirm_msg);
+            ui_spacer(ui_em(1.5f, 1.f));
+            UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_WidthFill UI_PrefHeight(ui_em(5.f, 1.f))
+            {
+              UI_CornerRadius00(ui_top_font_size()*0.25f)
+                UI_CornerRadius01(ui_top_font_size()*0.25f)
+                if(ui_buttonf("Cancel").clicked || os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+              {
+                DF_CmdParams p = df_cmd_params_zero();
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmCancel));
+              }
+              UI_CornerRadius10(ui_top_font_size()*0.25f)
+                UI_CornerRadius11(ui_top_font_size()*0.25f)
+                UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
+                UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
+                UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
+                if(ui_buttonf("OK").clicked)
+              {
+                DF_CmdParams p = df_cmd_params_zero();
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmAccept));
+              }
+            }
+            ui_spacer(ui_em(3.f, 1.f));
+          }
+        }
+        ui_signal_from_box(bg_box);
+      }
     }
     
     //- rjf: build auto-complete lister
@@ -10898,6 +10948,7 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   df_gfx_state->num_frames_requested = 2;
   df_gfx_state->hist = hist;
   df_gfx_state->key_map_arena = arena_alloc();
+  df_gfx_state->confirm_arena = arena_alloc();
   df_gfx_state->view_spec_table_size = 256;
   df_gfx_state->view_spec_table = push_array(arena, DF_ViewSpec *, df_gfx_state->view_spec_table_size);
   df_gfx_state->view_rule_spec_table_size = 1024;
@@ -10941,6 +10992,17 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
   ProfBeginFunction();
   arena_clear(df_gfx_state->frame_arena);
   df_gfx_state->hover_line_set_this_frame = 0;
+  
+  //- rjf: animate confirmation
+  {
+    F32 rate = 1 - pow_f32(2, (-10.f * df_dt()));
+    B32 confirm_open = df_gfx_state->confirm_active;
+    df_gfx_state->confirm_t += rate * ((F32)!!confirm_open-df_gfx_state->confirm_t);
+    if(abs_f32(df_gfx_state->confirm_t - (F32)!!confirm_open) > 0.005f)
+    {
+      df_gfx_request_frame();
+    }
+  }
   
   //- rjf: capture is active? -> keep rendering
   if(ProfIsCapturing())
@@ -11002,10 +11064,32 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           DF_Window *ws = df_window_from_handle(params.window);
           if(ws != 0)
           {
+            DF_EntityList running_processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+            
+            // NOTE(rjf): if this is the last window, and targets are running, but
+            // this command is not force-confirmed, then we should query the user
+            // to ensure they want to close the debugger before exiting
+            UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
+            if(!ui_key_match(key, df_gfx_state->confirm_key) && running_processes.count != 0 && ws == df_gfx_state->first_window && ws == df_gfx_state->last_window && !params.force_confirm)
+            {
+              df_gfx_state->confirm_key = key;
+              df_gfx_state->confirm_active = 1;
+              arena_clear(df_gfx_state->confirm_arena);
+              MemoryZeroStruct(&df_gfx_state->confirm_cmds);
+              df_gfx_state->confirm_title = push_str8f(df_gfx_state->confirm_arena, "Are you sure you want to exit?");
+              df_gfx_state->confirm_msg = push_str8f(df_gfx_state->confirm_arena, "The debugger is still attached to %slive process%s.",
+                                                     running_processes.count == 1 ? "a " : "",
+                                                     running_processes.count == 1 ? ""   : "es");
+              DF_CmdParams p = df_cmd_params_from_window(ws);
+              p.force_confirm = 1;
+              df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ForceConfirm);
+              df_cmd_list_push(df_gfx_state->confirm_arena, &df_gfx_state->confirm_cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseWindow));
+            }
+            
             // NOTE(rjf): if this is the last window, and it is being closed, then
             // we need to auto-save, and provide one last chance to process saving
             // commands. after doing so, we can retry.
-            if(ws == df_gfx_state->first_window && ws == df_gfx_state->last_window && df_gfx_state->last_window_queued_save == 0)
+            else if(ws == df_gfx_state->first_window && ws == df_gfx_state->last_window && df_gfx_state->last_window_queued_save == 0)
             {
               df_gfx_state->last_window_queued_save = 1;
               {
@@ -11045,6 +11129,22 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           {
             os_window_set_fullscreen(window->os, !os_window_is_fullscreen(window->os));
           }
+        }break;
+        
+        //- rjf: confirmations
+        case DF_CoreCmdKind_ConfirmAccept:
+        {
+          df_gfx_state->confirm_active = 0;
+          df_gfx_state->confirm_key = ui_key_zero();
+          for(DF_CmdNode *n = df_gfx_state->confirm_cmds.first; n != 0; n = n->next)
+          {
+            df_push_cmd__root(&n->cmd.params, n->cmd.spec);
+          }
+        }break;
+        case DF_CoreCmdKind_ConfirmCancel:
+        {
+          df_gfx_state->confirm_active = 0;
+          df_gfx_state->confirm_key = ui_key_zero();
         }break;
         
         //- rjf: commands with implications for graphical systems, but generated

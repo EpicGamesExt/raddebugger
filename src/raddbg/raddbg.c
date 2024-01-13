@@ -66,7 +66,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   U64 begin_time_us = os_now_microseconds();
   
   //- rjf: bind change
-  if(df_gfx_state->bind_change_active)
+  if(!df_gfx_state->confirm_active && df_gfx_state->bind_change_active)
   {
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
     {

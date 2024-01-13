@@ -681,6 +681,15 @@ struct DF_GfxState
   DF_CmdSpec *bind_change_cmd_spec;
   DF_Binding bind_change_binding;
   
+  // rjf: confirmation popup state
+  UI_Key confirm_key;
+  B32 confirm_active;
+  F32 confirm_t;
+  Arena *confirm_arena;
+  DF_CmdList confirm_cmds;
+  String8 confirm_title;
+  String8 confirm_msg;
+  
   // rjf: string search state
   Arena *string_search_arena;
   String8 string_search_string;
