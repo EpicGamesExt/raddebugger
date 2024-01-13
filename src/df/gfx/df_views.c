@@ -4989,7 +4989,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: search query -> matches
   //
   DF_TextSearchMatchArray search_query_matches = {0};
-#if !DE2CTRL
+#if 0
   {
     search_query_matches = df_text_search_match_array_from_entity_needle(scratch.arena, entity, search_query, entity_line_string_flags, tv->cursor);
     df_text_search_match_array_sort_in_place(&search_query_matches);
@@ -5359,7 +5359,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(search_query.size != 0 && next_match.line != 0)
     {
       // TODO(rjf): [ ] @de2ctrl
-#if !DE2CTRL
+#if 0
       DF_TextSlice match_line_slice = df_text_slice_from_entity(scratch.arena, entity, r1s64(next_match.line, next_match.line), entity_line_string_flags);
       String8 match_line = match_line_slice.visible_range_text;
       F32 match_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(match_line, next_match.column-1)).x;
@@ -6803,7 +6803,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //- rjf: search query -> matches
   //
   DF_TextSearchMatchArray search_query_matches = {0};
-#if !DE2CTRL
+#if 0
   {
     search_query_matches = df_text_search_match_array_from_entity_needle(scratch.arena, entity, search_query, entity_line_string_flags, tv->cursor);
     df_text_search_match_array_sort_in_place(&search_query_matches);
@@ -7030,7 +7030,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     if(search_query.size != 0 && next_match.line != 0)
     {
       // TODO(rjf): [ ] @de2ctrl
-#if !DE2CTRL
+#if 0
       DF_TextSlice match_line_slice = df_text_slice_from_entity(scratch.arena, entity, r1s64(next_match.line, next_match.line), entity_line_string_flags);
       String8 match_line = match_line_slice.visible_range_text;
       F32 match_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(match_line, next_match.column-1)).x;

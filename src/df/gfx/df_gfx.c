@@ -7554,7 +7554,7 @@ df_text_search_thread_entry_point(void *p)
 {
   TCTX tctx_;
   tctx_init_and_equip(&tctx_);
-#if !DE2CTRL
+#if 0
   // TODO(rjf): [ ] @de2ctrl text searcher -- wound up in DE_Hash
   
   //- rjf: types
