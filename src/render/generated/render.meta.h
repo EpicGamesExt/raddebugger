@@ -9,8 +9,14 @@
 typedef enum R_Tex2DFormat
 {
 R_Tex2DFormat_R8,
+R_Tex2DFormat_RG8,
 R_Tex2DFormat_RGBA8,
 R_Tex2DFormat_BGRA8,
+R_Tex2DFormat_R16,
+R_Tex2DFormat_RGBA16,
+R_Tex2DFormat_R32,
+R_Tex2DFormat_RG32,
+R_Tex2DFormat_RGBA32,
 R_Tex2DFormat_COUNT
 } R_Tex2DFormat;
 
@@ -55,15 +61,27 @@ R_PassKind_COUNT
 String8 r_tex2d_format_display_string_table[] =
 {
 str8_lit_comp("R8"),
+str8_lit_comp("RG8"),
 str8_lit_comp("RGBA8"),
 str8_lit_comp("BGRA8"),
+str8_lit_comp("R16"),
+str8_lit_comp("RGBA16"),
+str8_lit_comp("R32"),
+str8_lit_comp("RG32"),
+str8_lit_comp("RGBA32"),
 };
 
 U8 r_tex2d_format_bytes_per_pixel_table[] =
 {
 1,
+2,
 4,
 4,
+2,
+8,
+4,
+8,
+16,
 };
 
 String8 r_tex2d_kind_display_string_table[] =

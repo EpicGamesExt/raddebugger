@@ -8,8 +8,14 @@
 R_Tex2DFormatTable:
 {
   {R8       "R8"       1}
+  {RG8      "RG8"      2}
   {RGBA8    "RGBA8"    4}
   {BGRA8    "BGRA8"    4}
+  {R16      "R16"      2}
+  {RGBA16   "RGBA16"   8}
+  {R32      "R32"      4}
+  {RG32     "RG32"     8}
+  {RGBA32   "RGBA32"  16}
 }
 
 @table(name, display_string)

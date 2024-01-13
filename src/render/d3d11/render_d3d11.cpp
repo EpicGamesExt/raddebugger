@@ -550,9 +550,15 @@ r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
     switch(format)
     {
       default:{}break;
-      case R_Tex2DFormat_R8:{dxgi_format = DXGI_FORMAT_R8_UNORM;}break;
-      case R_Tex2DFormat_RGBA8:{}break;
-      case R_Tex2DFormat_BGRA8:{dxgi_format = DXGI_FORMAT_B8G8R8A8_UNORM;}break;
+      case R_Tex2DFormat_R8:    {dxgi_format = DXGI_FORMAT_R8_UNORM;}break;
+      case R_Tex2DFormat_RG8:   {dxgi_format = DXGI_FORMAT_R8G8_UNORM;}break;
+      case R_Tex2DFormat_RGBA8: {dxgi_format = DXGI_FORMAT_R8G8B8A8_UNORM;}break;
+      case R_Tex2DFormat_BGRA8: {dxgi_format = DXGI_FORMAT_B8G8R8A8_UNORM;}break;
+      case R_Tex2DFormat_R16:   {dxgi_format = DXGI_FORMAT_R16_UNORM;}break;
+      case R_Tex2DFormat_RGBA16:{dxgi_format = DXGI_FORMAT_R16G16B16A16_UNORM;}break;
+      case R_Tex2DFormat_R32:   {dxgi_format = DXGI_FORMAT_R32_FLOAT;}break;
+      case R_Tex2DFormat_RG32:  {dxgi_format = DXGI_FORMAT_R32G32_FLOAT;}break;
+      case R_Tex2DFormat_RGBA32:{dxgi_format = DXGI_FORMAT_R32G32B32A32_FLOAT;}break;
     }
   }
   
