@@ -3898,7 +3898,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
                 UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-                if(ui_buttonf("OK").clicked)
+                if(ui_buttonf("OK").clicked || os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmAccept));
