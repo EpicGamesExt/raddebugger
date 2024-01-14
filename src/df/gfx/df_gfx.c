@@ -11629,6 +11629,25 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
             }
           }
           
+          //- rjf: if theme colors are all zeroes, then set to default - config appears busted
+          {
+            B32 all_colors_are_zero = 1;
+            Vec4F32 zero_color = {0};
+            for(DF_ThemeColor c = (DF_ThemeColor)(DF_ThemeColor_Null+1); c < DF_ThemeColor_COUNT; c = (DF_ThemeColor)(c+1))
+            {
+              if(!MemoryMatchStruct(&df_gfx_state->cfg_theme_target.colors[c], &zero_color))
+              {
+                all_colors_are_zero = 0;
+                break;
+              }
+            }
+            if(all_colors_are_zero)
+            {
+              MemoryCopy(df_gfx_state->cfg_theme_target.colors, df_g_theme_preset_colors__default_dark, sizeof(df_g_theme_preset_colors__default_dark));
+              MemoryCopy(df_gfx_state->cfg_theme.colors, df_g_theme_preset_colors__default_dark, sizeof(df_g_theme_preset_colors__default_dark));
+            }
+          }
+          
           //- rjf: if config opened 0 windows, we need to do some sensible default
           if(windows->first == &df_g_nil_cfg_node)
           {
