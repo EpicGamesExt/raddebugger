@@ -2869,6 +2869,23 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
       {
         trap_addr = point->jump_dest_vaddr;
         flags &= ~CTRL_TrapFlag_SingleStepAfterHit;
+        
+        // rjf: read instruction one layer deep after a jump and determine if
+        // it is just jumping to an unconditional jump (e.g. a function
+        // dispatch table) - if so, then just follow one more layer
+        String8 dst_machine_code = {0};
+        dst_machine_code.str = push_array_no_zero(scratch.arena, U8, max_instruction_size_from_arch(arch));
+        dst_machine_code.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(trap_addr, trap_addr+max_instruction_size_from_arch(arch)), dst_machine_code.str);
+        if(dst_machine_code.size != 0)
+        {
+          DF_Inst inst = df_single_inst_from_machine_code(scratch.arena, arch, 0, dst_machine_code);
+          if((inst.flags & DF_InstFlag_UnconditionalJump ||
+              inst.flags & DF_InstFlag_Call) &&
+             inst.rel_voff != 0)
+          {
+            trap_addr = (U64)(trap_addr + (S64)((S32)inst.rel_voff));
+          }
+        }
       }
     }
     
