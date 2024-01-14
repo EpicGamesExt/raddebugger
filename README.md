@@ -110,12 +110,24 @@ loading, process control, stepping, evaluation (correct usage of both location
 info and type info), and a robust frontend which ensures the lower level parts
 are usable.
 
-We feel that the debugger has already come a long way in this respect, but
-given the massive set of possible combinations of languages, build settings,
-toolchains, used language features, and patterns of generated code, there are
-still cases where the debugger has not been tested, and so there are still
-issues. So, we feel that the top priority is eliminating these issues, such
-that the debugging experience is rock solid.
+We feel that the debugger has already come a long way in all of these respects,
+but given the massive set of possible combinations of languages, build
+settings, toolchains, used language features, and patterns of generated code,
+there are still cases where the debugger has not been tested, and so there are
+still issues. So, we feel that the top priority is eliminating these issues,
+such that the debugging experience is rock solid.
+
+Additionally, the debug info conversion process is not fast (nor wide) enough
+to support extremely large projects. This is for two reasons: (a) the
+PDB-to-RADDBG converter is an unoptimized reference implementation, and (b) the
+debugger learns of new modules (and thus which PDBs to load) in a
+serially-dependent way (this is necessarily the case for correct debugging
+results). We expect that the conversion process' performance can be massively
+improved, and also that some heuristics can be used to begin converting PDBs
+to RADDBGs before the debugger knows those PDBs are needed, thus ensuring the
+associated RADDBG files are ready instantaneously when the associated modules
+are finally loaded by the debugger. Improving this situation is a major part of
+this phase, as it will make the debugger much more usable for large projects.
 
 ### Local x64 Linux Debugging Phase
 
