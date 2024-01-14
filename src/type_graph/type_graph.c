@@ -318,7 +318,7 @@ tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg
                 RADDBG_UDT *udt = &rdbg->udts[udt_idx];
                 members_count = udt->member_count;
                 members = push_array(arena, TG_Member, members_count);
-                if(0 <= udt->member_first && udt->member_first+udt->member_count < rdbg->member_count)
+                if(members_count != 0 && 0 <= udt->member_first && udt->member_first+udt->member_count <= rdbg->member_count)
                 {
                   for(U32 member_idx = udt->member_first;
                       member_idx < udt->member_first+udt->member_count;
