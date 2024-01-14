@@ -11534,7 +11534,10 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           }
           
           //- rjf: apply keybindings
-          df_clear_bindings();
+          if(src == DF_CfgSrc_User)
+          {
+            df_clear_bindings();
+          }
           DF_CfgVal *keybindings = df_cfg_val_from_string(table, str8_lit("keybindings"));
           for(DF_CfgNode *keybinding_set = keybindings->first;
               keybinding_set != &df_g_nil_cfg_node;
@@ -11649,7 +11652,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           }
           
           //- rjf: if config opened 0 windows, we need to do some sensible default
-          if(windows->first == &df_g_nil_cfg_node)
+          if(src == DF_CfgSrc_User && windows->first == &df_g_nil_cfg_node)
           {
             OS_Handle preferred_monitor = os_primary_monitor();
             Vec2F32 monitor_dim = os_dim_from_monitor(preferred_monitor);
@@ -11660,7 +11663,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           }
           
           //- rjf: if config bound 0 keys, we need to do some sensible default
-          if(df_gfx_state->key_map_total_count == 0)
+          if(src == DF_CfgSrc_User && df_gfx_state->key_map_total_count == 0)
           {
             for(U64 idx = 0; idx < ArrayCount(df_g_default_binding_table); idx += 1)
             {
