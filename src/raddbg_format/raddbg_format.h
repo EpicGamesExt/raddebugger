@@ -571,7 +571,7 @@ typedef enum RADDBG_MemberKindEnum{
 } RADDBG_MemberKindEnum;
 
 // TODO(allen): need a way to equip methods and some virtual methods
-// with procedure symbol information. I'm thinking a seperate data
+// with procedure symbol information. I'm thinking a separate data
 // array of (MemberIdx,ProcSymbolIdx) sorted by MemberIdx. Or just a
 // parallel array. Putting them right into this struct looks like it
 // would complicate the converters because we tend to want an API
