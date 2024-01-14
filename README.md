@@ -99,6 +99,64 @@ raddbg.cpp
 If everything worked correctly, there will be a `build` folder in the root
 level of the codebase, and it will contain a freshly-built `raddbg.exe`.
 
+## Short-To-Medium-Term Roadmap
+
+### The Initial Alpha Battle-Testing Phase
+
+The first priority for the project is to ensure that the most crucial debugger
+components are functioning extremely reliably for local, x64, Windows
+debugging. This would include parts like debug info conversion, debug info
+loading, process control, stepping, evaluation (correct usage of both location
+info and type info), and a robust frontend which ensures the lower level parts
+are usable.
+
+We feel that the debugger has already come a long way in this respect, but
+given the massive set of possible combinations of languages, build settings,
+toolchains, used language features, and patterns of generated code, there are
+still cases where the debugger has not been tested, and so there are still
+issues. So, we feel that the top priority is eliminating these issues, such
+that the debugging experience is rock solid.
+
+### Local x64 Linux Debugging Phase
+
+The next priority for the project is to take the rock solid x64 Windows
+debugging experience, and port all of the relevant pieces to support local x64
+Linux debugging also.
+
+The debugger has been written to abstract over the parts that need to differ on
+either Linux or Windows, and this is mainly going to be a task in building out
+different backends for those abstraction layers.
+
+The major parts of this phase are:
+
+- Porting the `src/demon` layer to implement the Demon local process control
+abstraction API.
+- Porting the `src/unwind` layer to support x64 ELF unwinding (currently, there
+is only an x64 PE unwinding implementation).
+- Creating a DWARF-to-RADDBG converter (in the same way that we've built a PDB-
+to-RADDBG converter). A partial implementation of this is in
+`src/raddbg_convert/dwarf`.
+- Porting the `src/render` layer to implement all of the rendering features the
+frontend needs on a Linux-compatible API (the backend used on Windows is D3D11).
+- Porting the `src/font_provider` layer to a Linux-compatible font
+rasterization backend, like FreeType (the backend used on Windows is
+DirectWrite).
+- Porting the `src/os` layers to Linux. This includes core operating system
+abstraction (virtual memory allocation, threading and synchronization
+primitives, and so on), and graphical operating system abstraction (windows,
+input events, and so on).
+
+Once the above list is complete, and once every part is rock solid, the Windows
+debugging experience we'll have worked diligently to create will also be
+available natively on Linux machines.
+
+### And Beyond!
+
+There are several directions we might take after these two major phases,
+like remote debugging, porting to different architectures, further improving
+the debugger's features (like improving the visualization engine), and so on.
+But for now, we're mostly focused on those first two phases.
+
 ## Top-Level Directory Descriptions
 
 - `data`: Small binary files which are used when building, either to embed
