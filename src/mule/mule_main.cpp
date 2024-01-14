@@ -371,6 +371,9 @@ type_coverage_eval_tests(void){
   stks *stks_first = &stks_test[0];
   stks *stks_ptr = stks_first + 8;
   
+  TestFunction *function = mule_get_module_function("dll_type_eval_tests");
+  function();
+  
   int x = (int)(Anonymous_D);
 }
 

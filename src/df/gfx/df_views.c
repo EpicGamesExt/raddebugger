@@ -7316,6 +7316,10 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     viz_range_rows.max = clamp_1s64(scroll_idx_rng, viz_range_rows.max);
     viz_range_bytes.min = viz_range_rows.min*mv->num_columns;
     viz_range_bytes.max = (viz_range_rows.max+1)*mv->num_columns+1;
+    if(viz_range_bytes.min > viz_range_bytes.max)
+    {
+      Swap(U64, viz_range_bytes.min, viz_range_bytes.max);
+    }
   }
   
   //////////////////////////////
