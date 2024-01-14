@@ -5153,7 +5153,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   if(txti_buffer_is_ready) UI_Parent(container_box)
   {
     //- rjf: build fractional space
-    container_box->view_off.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
     container_box->view_off.y = container_box->view_off_target.y = code_line_height*mod_f32(view->scroll_pos.y.off, 1.f) + code_line_height*(view->scroll_pos.y.off < 0) - code_line_height*(view->scroll_pos.y.off == -1.f && view->scroll_pos.y.idx == 1);
     
     //- rjf: build code slice
@@ -6033,7 +6033,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   if(has_disasm) UI_Parent(container_box)
   {
     //- rjf: build fractional space
-    container_box->view_off.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
     container_box->view_off.y = container_box->view_off_target.y = code_line_height*mod_f32(view->scroll_pos.y.off, 1.f) + code_line_height*(view->scroll_pos.y.off < 0) - code_line_height*(view->scroll_pos.y.off == -1.f && view->scroll_pos.y.idx == 1);
     
     //- rjf: build code slice
@@ -6967,7 +6967,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   if(txti_buffer_is_ready) UI_Parent(container_box)
   {
     //- rjf: build fractional space
-    container_box->view_off.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
     container_box->view_off.y = container_box->view_off_target.y = code_line_height*mod_f32(view->scroll_pos.y.off, 1.f) + code_line_height*(view->scroll_pos.y.off < 0) - code_line_height*(view->scroll_pos.y.off == -1.f && view->scroll_pos.y.idx == 1);
     
     //- rjf: build code slice
@@ -7723,7 +7723,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
                                                UI_BoxFlag_AllowOverflowX|
                                                UI_BoxFlag_AllowOverflowY,
                                                "scrollable_box");
-    scrollable_box->view_off.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
     scrollable_box->view_off.y = scrollable_box->view_off_target.y = floor_f32(row_height_px*mod_f32(view->scroll_pos.y.off, 1.f) + row_height_px*(view->scroll_pos.y.off < 0));
   }
   

@@ -118,7 +118,7 @@ ui_nav_eat_action_node(UI_NavActionList *list, UI_NavActionNode *node)
 internal B32
 ui_nav_char_is_code_symbol(U8 c)
 {
-    return (char_is_alpha(c) || char_is_digit(c, 10) || c == '_');
+  return (char_is_alpha(c) || char_is_digit(c, 10) || c == '_');
 }
 
 internal S64
@@ -134,7 +134,7 @@ ui_nav_scanned_column_from_column(String8 string, S64 start_column, Side side)
     U8 byte = (col <= string.size) ? string.str[col-1] : 0;
     B32 is_non_space = !char_is_space(byte);
     B32 is_name = ui_nav_char_is_code_symbol(byte);
-
+    
     if (((side == Side_Min) && (col == 1)) || 
         ((side == Side_Max) && (col == string.size+1)) ||
         (found_non_space && !is_non_space) || 
@@ -143,9 +143,9 @@ ui_nav_scanned_column_from_column(String8 string, S64 start_column, Side side)
       new_column = col + (!side && col != 1);  
       break;
     } else if (!found_text && is_name) {
-        found_text = 1;
+      found_text = 1;
     } else if (!found_non_space && is_non_space ) {
-        found_non_space = 1;
+      found_non_space = 1;
     }
   }
   return new_column;
