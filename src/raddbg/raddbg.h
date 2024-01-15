@@ -4,21 +4,15 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
+// [ ] ** Module unloading needs to be synchronous with target execution, just
+//     like module loading. If we hold a handle for too long, but let the child
+//     process keep running, then e.g. HMH-style hot reloading will fail. This
+//     will require a pass over the DBGI layer, such that whoever releases a
+//     binary last can be guaranteed that the module in question is not being
+//     locked by the debugger.
+//
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
 // [ ] ** ASAN targets
-// [ ] ** while typing, "Alt" Windows menu things should not happen
-//
-// [ ] ** I can't seem to get the .raddbg files to update consistently, or
-//     something. I can't seem to reproduce it reliably, but sometimes when I
-//     rebuild, for example, it seems to keep using the old PDB data
-//     effectively - like it doesn't think it needs to update the raddbg file,
-//     or something? But if I manually delete the raddbg file and relaunch,
-//     then it will have the new debug info. It would be nice if there was
-//     some kind of way to interrogate this in the debugger so I can send a
-//     more constructive report, like some way to get a hash of the PDB that
-//     is thinks it has converted to the RAD format, and then a way I can hash
-//     the PDB on the drive, or something, so I can figure out if they are
-//     mismatching for sure?
 //
 // [ ] ** In solo-stepping mode, if I step over something like CreateFileA, it
 //     pseudo-hangs the debugger. I can't seem to do anything else, including
@@ -30,10 +24,13 @@
 //     progress bar in the disassembly window. I had to close and restart. Is
 //     console app debugging not working yet, perhaps?
 //
-//  [ ] Setting the code_font/main_font values to a font name doesn't work.
-//      Should probably make note that you have to set it to a path to a TTF,
-//      since that's not normally how Windows fonts work.
-
+// [ ] cannot see base class members
+// [ ] register value committing in watch
+//
+// [ ] Setting the code_font/main_font values to a font name doesn't work.
+//     Should probably make note that you have to set it to a path to a TTF,
+//     since that's not normally how Windows fonts work.
+//
 // [ ] ** Converter performance & heuristics for asynchronously doing it early
 //
 // [ ] disasm animation & go-to-address
@@ -43,6 +40,8 @@
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
+//
+// [ ] ** while typing, "Alt" Windows menu things should not happen
 //
 //  [ ] I was a little confused about what a profile file was. I understood
 //      what the user file was, but the profile file sounded like it should
