@@ -1317,7 +1317,53 @@ extended_type_coverage_eval_tests(void){
 }
 
 ////////////////////////////////
-// NOTE(allen): C Type Coverage
+//~ rjf: Templated Function Eval Tests
+
+typedef struct TemplateArg TemplateArg;
+struct TemplateArg
+{
+  int x;
+  int y;
+  int z;
+  float a;
+  float b;
+  float c;
+  char *name;
+};
+
+template<typename T> static T
+templated_factorial(T t)
+{
+  T result = t;
+  if(t > 1)
+  {
+    result *= templated_factorial<T>(t-1);
+  }
+  return result;
+}
+
+template<typename T> static T
+compute_template_arg_info(T t)
+{
+  int sum = t.x + t.y + t.z;
+  int size = sizeof(t);
+  float sum_f = t.a + t.b + t.c;
+  OutputDebugStringA(t.name);
+  return t;
+}
+
+static void
+templated_function_eval_tests(void)
+{
+  int int_factorial = templated_factorial<int>(10);
+  float float_factorial = templated_factorial<float>(10);
+  TemplateArg arg = {1, 2, 3, 4.f, 5.f, 6.f, "my template arg"};
+  compute_template_arg_info(arg);
+  int x = 0;
+}
+
+////////////////////////////////
+//~ NOTE(allen): C Type Coverage
 
 extern "C"{
 #include "mule_c.h"
@@ -2342,6 +2388,8 @@ mule_main(int argc, char** argv){
   complicated_type_coverage_tests();
   
   extended_type_coverage_eval_tests();
+  
+  templated_function_eval_tests();
   
   c_type_coverage_eval_tests();
   
