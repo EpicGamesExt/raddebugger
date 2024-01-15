@@ -2935,7 +2935,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
   if (tpi != 0) ProfScope("parse tpi hash"){
     String8 hash_data = msf_data_from_stream(msf, tpi->hash_sn);
     String8 aux_data = msf_data_from_stream(msf, tpi->hash_sn_aux);
-    tpi_hash = pdb_tpi_hash_from_data(arena, tpi, hash_data, aux_data);
+    tpi_hash = pdb_tpi_hash_from_data(arena, strtbl, tpi, hash_data, aux_data);
     
     PARSE_CHECK_ERROR(tpi_hash, "TPI hash table");
   }
@@ -2954,7 +2954,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
   if (ipi != 0) ProfScope("parse ipi hash"){
     String8 hash_data = msf_data_from_stream(msf, ipi->hash_sn);
     String8 aux_data = msf_data_from_stream(msf, ipi->hash_sn_aux);
-    ipi_hash = pdb_tpi_hash_from_data(arena, ipi, hash_data, aux_data);
+    ipi_hash = pdb_tpi_hash_from_data(arena, strtbl, ipi, hash_data, aux_data);
     
     PARSE_CHECK_ERROR(tpi_hash, "IPI hash table");
   }

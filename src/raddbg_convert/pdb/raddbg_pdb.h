@@ -407,6 +407,7 @@ static PDB_Strtbl*          pdb_strtbl_from_data(Arena *arena, String8 strtbl_da
 static PDB_DbiParsed*       pdb_dbi_from_data(Arena *arena, String8 dbi_data);
 static PDB_TpiParsed*       pdb_tpi_from_data(Arena *arena, String8 tpi_data);
 static PDB_TpiHashParsed*   pdb_tpi_hash_from_data(Arena *arena,
+                                                   PDB_Strtbl *strtbl,
                                                    PDB_TpiParsed *tpi,
                                                    String8 tpi_hash_data,
                                                    String8 tpi_hash_aux_data);

@@ -303,7 +303,7 @@ pdb_tpi_from_data(Arena *arena, String8 data){
 }
 
 static PDB_TpiHashParsed*
-pdb_tpi_hash_from_data(Arena *arena, PDB_TpiParsed *tpi, String8 data, String8 aux_data){
+pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, String8 data, String8 aux_data){
   ProfBegin("pdb_tpi_hash_from_data");
   
   PDB_TpiHashParsed *result = 0;
@@ -343,6 +343,47 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_TpiParsed *tpi, String8 data, String8 a
       hash_cursor += stride;
       itype += 1;
     }
+    
+    //- rjf: apply hash adjustments, to pull correct type IDs to the front of
+    // the chains
+#if 0
+    if(tpi->hash_adj_off != 0)
+    {
+      // NOTE(rjf): this table is laid out in the following format:
+      //
+      // pair_count: U32 -> # of name_index/type_index pairs
+      // slot_count: U32 -> # of slots in this hash table
+      // present_bit_array_count: U32 -> count for next array
+      // present_bit_array: U32[present_bit_array_count] -> 1 bit per slot, "is present"
+      // deleted_bit_array_count: U32 -> count for next array
+      // deleted_bit_array: U32[deleted_bit_array_count] -> 1 bit per slot, "is deleted"
+      // (U32, U32)[pair_count] -> array of name_index/type_index pairs
+      //
+      U8 *adjs = data.str + tpi->hash_adj_off;
+      U8 *adjs_opl = adjs + tpi->hash_adj_size;
+      U8 *adjs_cursor = adjs;
+      U32 pair_count = *(U32 *)adjs_cursor;
+      adjs_cursor += sizeof(U32);
+      U32 slot_count = *(U32 *)adjs_cursor;
+      adjs_cursor += sizeof(U32);
+      U32 present_bit_array_count = *(U32 *)adjs_cursor; // skip present_bit_array
+      adjs_cursor += sizeof(U32);
+      adjs_cursor += present_bit_array_count*sizeof(U32);
+      U32 deleted_bit_array_count = *(U32 *)adjs_cursor; // skip deleted_bit_array
+      adjs_cursor += sizeof(U32);
+      adjs_cursor += deleted_bit_array_count*sizeof(U32);
+      U32 adjs_stride = sizeof(U32)*2;
+      U32 pair_idx = 0;
+      for(;adjs_cursor < adjs_opl && pair_idx < pair_count;
+          adjs_cursor += adjs_stride, pair_idx += 1)
+      {
+        U32 name_index = ((U32 *)adjs_cursor)[0];
+        U32 type_index = ((U32 *)adjs_cursor)[1];
+        String8 string = pdb_strtbl_string_from_off(strtbl, name_index);
+        int x = 0;
+      }
+    }
+#endif
     
     // fill result
     result = push_array(arena, PDB_TpiHashParsed, 1);
