@@ -470,7 +470,7 @@ eval_leaf_type_from_name(RADDBG_Parsed *rdbg, String8 name)
       U32 *matches = raddbg_matches_from_map_node(rdbg, node, &match_count);
       if(match_count != 0)
       {
-        U32 type_node_idx = matches[match_count-1];
+        U32 type_node_idx = matches[0];
         if(type_node_idx < rdbg->type_node_count)
         {
           RADDBG_TypeNode *type_node = &rdbg->type_nodes[type_node_idx];

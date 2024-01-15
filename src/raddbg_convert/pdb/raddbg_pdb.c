@@ -344,10 +344,16 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
       itype += 1;
     }
     
+    //- rjf: compute bucket mask
+    U32 bucket_mask = 0;
+    if(IsPow2OrZero(bucket_count))
+    {
+      bucket_mask = bucket_count-1;
+    }
+    
     //- rjf: apply hash adjustments, to pull correct type IDs to the front of
     // the chains
-#if 0
-    if(tpi->hash_adj_off != 0)
+    if(tpi->hash_adj_size != 0)
     {
       // NOTE(rjf): this table is laid out in the following format:
       //
@@ -377,13 +383,35 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
       for(;adjs_cursor < adjs_opl && pair_idx < pair_count;
           adjs_cursor += adjs_stride, pair_idx += 1)
       {
-        U32 name_index = ((U32 *)adjs_cursor)[0];
-        U32 type_index = ((U32 *)adjs_cursor)[1];
-        String8 string = pdb_strtbl_string_from_off(strtbl, name_index);
-        int x = 0;
+        U32 name_off = ((U32 *)adjs_cursor)[0];
+        CV_TypeId type_id = ((CV_TypeId *)adjs_cursor)[1];
+        String8 string = pdb_strtbl_string_from_off(strtbl, name_off);
+        U32 hash = pdb_string_hash1(string);
+        U32 bucket_idx = ((bucket_mask != 0) ? hash&bucket_mask : hash%bucket_count);
+        PDB_TpiHashBlock *prev_block = 0;
+        for(PDB_TpiHashBlock *block = buckets[bucket_idx];
+            block != 0;
+            prev_block = block, block = block->next)
+        {
+          for(U32 local_idx = 0;
+              local_idx < block->local_count && local_idx < ArrayCount(block->itypes);
+              local_idx += 1)
+          {
+            if(block->itypes[local_idx] == type_id && prev_block != 0)
+            {
+              prev_block->next = block->next;
+              block->next = buckets[bucket_idx];
+              buckets[bucket_idx] = block;
+              if(local_idx != 0)
+              {
+                Swap(CV_TypeId, block->itypes[0], block->itypes[local_idx]);
+              }
+              break;
+            }
+          }
+        }
       }
     }
-#endif
     
     // fill result
     result = push_array(arena, PDB_TpiHashParsed, 1);
@@ -391,9 +419,7 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
     result->aux_data = aux_data;
     result->buckets = buckets;
     result->bucket_count = bucket_count;
-    if (IsPow2OrZero(bucket_count)){
-      result->bucket_mask = bucket_count - 1;
-    }
+    result->bucket_mask = bucket_mask;
   }
   
   ProfEnd();
