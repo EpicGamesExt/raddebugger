@@ -81,6 +81,15 @@ commands =
     .save_dirty_files = true,
     .cursor_at_end = false,
   },
+  .build_raddbg_dump =
+  {
+    .win = "build raddbg_dump",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
   .build_mule_main =
   {
     .win = "build mule_main",
