@@ -957,7 +957,9 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
             }
             
             // rjf: check if trap
-            B32 is_trap = (!first_bp && exception->ExceptionCode == DEMON_W32_EXCEPTION_BREAKPOINT);
+            B32 is_trap = (!first_bp &&
+                           (exception->ExceptionCode == DEMON_W32_EXCEPTION_BREAKPOINT ||
+                            exception->ExceptionCode == DEMON_W32_EXCEPTION_STACK_BUFFER_OVERRUN));
             
             // rjf: check if this trap is currently registered
             B32 hit_user_trap = 0;
@@ -979,7 +981,8 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
                 // TODO(rjf): x86/x64 specific check
                 // TODO(rjf): do we need to check to make sure the instruction
                 // pointer has not changed?
-                hit_explicit_trap = (instruction_byte == 0xCC);
+                hit_explicit_trap = (instruction_byte == 0xCC ||
+                                     instruction_byte == 0xCD);
               }
             }
             
@@ -1036,6 +1039,11 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
                   
                   // set event kind
                   e->kind = report_event_kind;
+                }break;
+                
+                case DEMON_W32_EXCEPTION_STACK_BUFFER_OVERRUN:
+                {
+                  e->kind = DEMON_EventKind_Trap;
                 }break;
                 
                 case DEMON_W32_EXCEPTION_SINGLE_STEP:

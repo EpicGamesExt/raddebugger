@@ -4990,7 +4990,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   }break;
                   case CTRL_EventCause_InterruptedByTrap:
                   {
-                    
+                    icon = DF_IconKind_WarningBig;
+                    explanation = push_str8f(scratch.arena, "%S interrupted by trap - 0x%x", thread_display_string, stop_event.exception_code);
                   }break;
                   case CTRL_EventCause_InterruptedByHalt:
                   {
