@@ -54,6 +54,9 @@ internal B32 demon_os_attach_process(U32 pid);
 internal B32 demon_os_kill_process(DEMON_Entity *process, U32 exit_code);
 internal B32 demon_os_detach_process(DEMON_Entity *process);
 
+internal DEMON_Handle demon_os_create_snapshot(DEMON_Entity *thread);
+internal void         demon_os_snapshot_release(DEMON_Entity *entity);
+
 ////////////////////////////////
 //~ rjf: @demon_os_hooks Entity Functions
 

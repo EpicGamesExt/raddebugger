@@ -2288,7 +2288,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = (unwind_count == 0 ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
+            B32 use_current_rip = unwind_count == 0 && df_entity_is_nil(thread->first);
+            U64 rip_vaddr = (use_current_rip ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -4507,6 +4508,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_CoreCmdKind_StepInto,
               DF_CoreCmdKind_StepOver,
               DF_CoreCmdKind_StepOut,
+              DF_CoreCmdKind_StepBack,
               DF_CoreCmdKind_Attach,
             };
             U32 codepoints[] =
@@ -4519,6 +4521,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               'i',
               'o',
               't',
+              'b',
               'a',
             };
             Assert(ArrayCount(codepoints) == ArrayCount(cmds));

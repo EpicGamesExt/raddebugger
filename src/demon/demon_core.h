@@ -240,6 +240,8 @@ internal U32 demon_launch_process(OS_LaunchOptions *options);
 internal B32 demon_attach_process(U32 pid);
 internal B32 demon_kill_process(DEMON_Handle process, U32 exit_code);
 internal B32 demon_detach_process(DEMON_Handle process);
+internal DEMON_Handle demon_snapshot_thread(DEMON_Handle process);
+internal void demon_snapshot_release(DEMON_Handle snapshot);
 
 ////////////////////////////////
 //~ rjf: Entity Functions

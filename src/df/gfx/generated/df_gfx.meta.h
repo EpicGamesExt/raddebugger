@@ -885,6 +885,7 @@ DF_StringBindingPair df_g_default_binding_table[] =
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_EventFlag_Alt}},
 {str8_lit_comp("step_over_inst"), {OS_Key_F10, 0   |OS_EventFlag_Alt}},
 {str8_lit_comp("step_out"), {OS_Key_F11, 0  |OS_EventFlag_Shift }},
+{str8_lit_comp("step_back"), {OS_Key_F8, 0   }},
 {str8_lit_comp("halt"), {OS_Key_X, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift }},
 {str8_lit_comp("halt"), {OS_Key_Pause, 0   }},
 {str8_lit_comp("soft_halt_refresh"), {OS_Key_R, 0   |OS_EventFlag_Alt}},

@@ -963,6 +963,7 @@ struct DF_RunUnwindCacheNode
   DF_RunUnwindCacheNode *hash_next;
   DF_Handle thread;
   DF_Unwind unwind;
+  U32 snapshot_index;
 };
 
 typedef struct DF_RunUnwindCacheSlot DF_RunUnwindCacheSlot;
@@ -1483,6 +1484,7 @@ internal String8 df_debug_info_path_from_module(Arena *arena, DF_Entity *module)
 ////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders
 
+internal B32           df_advance_current_snapshot(Arena *arena, DF_CmdList *cmds, DF_Entity *thread);
 internal CTRL_TrapList df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread);
 internal CTRL_TrapList df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread);
 internal CTRL_TrapList df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread);
@@ -1528,6 +1530,7 @@ internal U64 df_type_num_from_binary_name(DF_Entity *binary, String8 name);
 //- rjf: thread info extraction helpers
 internal DF_Entity *df_module_from_process_vaddr(DF_Entity *process, U64 vaddr);
 internal DF_Entity *df_module_from_thread(DF_Entity *thread);
+internal DF_Entity *df_current_snapshot_from_thread(DF_Entity *thread);
 internal U64 df_tls_base_vaddr_from_thread(DF_Entity *thread);
 internal Architecture df_architecture_from_entity(DF_Entity *entity);
 internal DF_Unwind df_push_unwind_from_thread(Arena *arena, DF_Entity *thread);
@@ -1651,11 +1654,13 @@ internal DF_EntityList df_push_active_binary_list(Arena *arena);
 internal DF_EntityList df_push_active_target_list(Arena *arena);
 
 //- rjf: per-run caches
+internal U64 df_hash_current_thread_snapshot(DF_Entity *thread, U32 *active_snapshot_index);
 internal DF_Unwind df_query_cached_unwind_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
 internal EVAL_String2NumMap *df_query_cached_locals_map_from_binary_voff(DF_Entity *binary, U64 voff);
 internal EVAL_String2NumMap *df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff);
+internal void df_clear_unwind_cache(DF_RunUnwindCache *cache);
 
 //- rjf: top-level command dispatch
 internal void df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec);

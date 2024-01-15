@@ -13,6 +13,7 @@
 
 #include <Windows.h>
 #include <Shlobj.h>
+#include <ProcessSnapshot.h>
 
 #if OS_FEATURE_GRAPHICAL
 #include <shellscalingapi.h>

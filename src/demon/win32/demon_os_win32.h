@@ -44,6 +44,10 @@ union DEMON_W32_Ext
     B32 is_main;
     B32 name_is_unicode;
   } module;
+  struct {
+    HANDLE handle;
+    HPSS snapshot_handle;
+  } snapshot;
 };
 
 //- helpers

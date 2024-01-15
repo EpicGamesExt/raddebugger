@@ -1410,6 +1410,56 @@ demon_os_detach_process(DEMON_Entity *process){
   return(result);
 }
 
+internal DEMON_Handle
+demon_os_create_snapshot(DEMON_Entity *thread)
+{
+  DEMON_Entity *process = thread->parent;
+  DEMON_W32_Ext *ext = demon_w32_ext(process);
+  OS_Handle result = os_handle_zero();
+  HANDLE proc_all = OpenProcess(PROCESS_ALL_ACCESS, 0, GetProcessId(ext->proc.handle));
+  if (!proc_all) {
+    return 0;
+  }
+
+  HPSS snapshot = 0;
+  DWORD success = PssCaptureSnapshot(
+    proc_all,
+    PSS_CAPTURE_VA_CLONE,
+    0,
+    &snapshot
+  );
+
+  CloseHandle(proc_all);
+  if (success != ERROR_SUCCESS)
+  {
+    return 0;
+  }
+
+  PSS_VA_CLONE_INFORMATION info = {0};
+  success = PssQuerySnapshot(snapshot, PSS_QUERY_VA_CLONE_INFORMATION, &info, sizeof(info));
+  if (success != ERROR_SUCCESS)
+  {
+    PssFreeSnapshot(GetCurrentProcess(), snapshot);
+    return 0;
+  }
+
+  DEMON_W32_Ext *snapshot_ext = demon_w32_ext_alloc();
+  snapshot_ext->snapshot.handle = info.VaCloneHandle;
+  snapshot_ext->snapshot.snapshot_handle = snapshot;
+
+  DEMON_Entity *entity = demon_ent_new(thread, DEMON_EntityKind_Snapshot, GetProcessId(info.VaCloneHandle));
+  entity->ext = snapshot_ext;
+  return demon_ent_handle_from_ptr(entity);
+}
+
+internal void
+demon_os_snapshot_release(DEMON_Entity *entity)
+{
+  DEMON_W32_Ext *ext = demon_w32_ext(entity);
+  PssFreeSnapshot(GetCurrentProcess(), ext->snapshot.snapshot_handle);
+  demon_ent_release_root_and_children(entity);
+}
+
 ////////////////////////////////
 //~ rjf: @demon_os_hooks Entity Functions
 

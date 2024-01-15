@@ -20,6 +20,7 @@ DF_DefaultBindingTable:
   { "step_into_inst"              F11       0        0         alt        }
   { "step_over_inst"              F10       0        0         alt        }
   { "step_out"                    F11       0        shift     0          }
+  { "step_back"                   F8        0        0         0          }
   { "halt"                        X         ctrl     shift     0          }
   { "halt"                        Pause     0        0         0          }
   { "soft_halt_refresh"           R         0        0         alt        }
@@ -614,6 +615,7 @@ raddbg_readme:
     @p "**F10**: Step Over";
     @p "**F11**: Step Into";
     @p "**Shift + F11**: Step Out";
+    @p "**F8**: Step Back";
     @p "**F5**: Run";
     @p "**Ctrl + Shift + X**, or **Pause**: Halt All Processes";
     @p "**Shift + F5**: Kill All Processes";

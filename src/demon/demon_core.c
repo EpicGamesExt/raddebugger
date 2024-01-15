@@ -396,6 +396,35 @@ demon_detach_process(DEMON_Handle process){
   return(result);
 }
 
+internal DEMON_Handle
+demon_snapshot_thread(DEMON_Handle thread)
+{
+  DEMON_Handle result = 0;
+  if (demon_access_begin()){
+    DEMON_Entity *entity = demon_ent_ptr_from_handle(thread);
+    if (entity != 0 &&
+        entity->kind == DEMON_EntityKind_Thread){
+      result = demon_os_create_snapshot(entity);
+    }
+    demon_access_end();
+  }
+
+  return(result);
+}
+
+internal void
+demon_snapshot_release(DEMON_Handle snapshot)
+{
+  if (demon_access_begin()){
+    DEMON_Entity *entity = demon_ent_ptr_from_handle(snapshot);
+    if (entity != 0 &&
+        entity->kind == DEMON_EntityKind_Snapshot){
+      demon_os_snapshot_release(entity);
+    }
+    demon_access_end();
+  }
+}
+
 ////////////////////////////////
 //~ rjf: Entity Functions
 
@@ -646,7 +675,7 @@ demon_read_memory(DEMON_Handle process, void *dst, U64 src_address, U64 size){
   if (demon_access_begin()){
     DEMON_Entity *entity = demon_ent_ptr_from_handle(process);
     if (entity != 0 &&
-        entity->kind == DEMON_EntityKind_Process){
+        (entity->kind == DEMON_EntityKind_Process || entity->kind == DEMON_EntityKind_Snapshot)){
       bytes_read = demon_os_read_memory(entity, dst, src_address, size);
     }
     demon_access_end();
