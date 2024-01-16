@@ -6815,7 +6815,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         }
         
         // rjf: arrow
-        if(did_ptr_value && direct_type_has_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
+        if(did_ptr_value && (direct_type_has_content || symbol_name.size != 0) && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
         {
           String8 arrow = str8_lit(" -> ");
           str8_list_push(arena, &list, arrow);
@@ -6835,7 +6835,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         }
         
         // rjf: special-case: symbols
-        else if(direct_type_has_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && symbol_name.size != 0)
+        else if((flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && symbol_name.size != 0)
         {
           str8_list_push(arena, &list, symbol_name);
           space_taken += f_dim_from_tag_size_string(font, font_size, symbol_name).x;

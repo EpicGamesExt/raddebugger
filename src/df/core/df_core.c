@@ -3015,7 +3015,7 @@ df_symbol_name_from_binary_voff(Arena *arena, DF_Entity *binary, U64 voff)
     String8 path = df_full_path_from_entity(scratch.arena, binary);
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, path, 0);
     RADDBG_Parsed *rdbg = &dbgi->rdbg;
-    if(rdbg->scope_vmap != 0)
+    if(result.size == 0 && rdbg->scope_vmap != 0)
     {
       U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
       RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
@@ -3023,6 +3023,14 @@ df_symbol_name_from_binary_voff(Arena *arena, DF_Entity *binary, U64 voff)
       RADDBG_Procedure *procedure = &rdbg->procedures[proc_idx];
       U64 name_size = 0;
       U8 *name_ptr = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+      result = push_str8_copy(arena, str8(name_ptr, name_size));
+    }
+    if(result.size == 0 && rdbg->global_vmap != 0)
+    {
+      U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, voff);
+      RADDBG_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
+      U64 name_size = 0;
+      U8 *name_ptr = raddbg_string_from_idx(rdbg, global_var->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
     }
     dbgi_scope_close(scope);
