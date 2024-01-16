@@ -4,13 +4,6 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] ** Module unloading needs to be synchronous with target execution, just
-//     like module loading. If we hold a handle for too long, but let the child
-//     process keep running, then e.g. HMH-style hot reloading will fail. This
-//     will require a pass over the DBGI layer, such that whoever releases a
-//     binary last can be guaranteed that the module in question is not being
-//     locked by the debugger.
-//
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
 // [ ] ** ASAN targets
 //
