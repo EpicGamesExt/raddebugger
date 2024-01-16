@@ -161,7 +161,19 @@ r_init(CmdLine *cmdln)
                             feature_levels, ArrayCount(feature_levels),
                             D3D11_SDK_VERSION,
                             &r_d3d11_state->base_device, 0, &r_d3d11_state->base_device_ctx);
-  if(!SUCCEEDED(error))
+  if(FAILED(error) && driver_type == D3D_DRIVER_TYPE_HARDWARE)
+  {
+    // try with WARP driver as backup solution in case HW device is not available
+    error = D3D11CreateDevice(0,
+                              D3D_DRIVER_TYPE_WARP,
+                              0,
+                              creation_flags,
+                              feature_levels, ArrayCount(feature_levels),
+                              D3D11_SDK_VERSION,
+                              &r_d3d11_state->base_device, 0, &r_d3d11_state->base_device_ctx);
+  }
+
+  if(FAILED(error))
   {
     char buffer[256] = {0};
     raddbg_snprintf(buffer, sizeof(buffer), "D3D11 device creation failure (%x). The process is terminating.", error);
@@ -307,7 +319,7 @@ r_init(CmdLine *cmdln)
                          &vshad_source_blob,
                          &vshad_source_errors);
       String8 errors = {0};
-      if(vshad_source_errors)
+      if(FAILED(error))
       {
         errors = str8((U8 *)vshad_source_errors->GetBufferPointer(),
                       (U64)vshad_source_errors->GetBufferSize());
@@ -328,6 +340,8 @@ r_init(CmdLine *cmdln)
                                                        vshad_source_blob->GetBufferSize(),
                                                        &ilay);
     }
+
+    vshad_source_blob->Release();
     
     // rjf: store
     r_d3d11_state->vshads[kind] = vshad;
@@ -359,7 +373,7 @@ r_init(CmdLine *cmdln)
                          &pshad_source_blob,
                          &pshad_source_errors);
       String8 errors = {0};
-      if(pshad_source_errors)
+      if(FAILED(error))
       {
         errors = str8((U8 *)pshad_source_errors->GetBufferPointer(),
                       (U64)pshad_source_errors->GetBufferSize());
@@ -370,6 +384,8 @@ r_init(CmdLine *cmdln)
         error = r_d3d11_state->device->CreatePixelShader(pshad_source_blob->GetBufferPointer(), pshad_source_blob->GetBufferSize(), 0, &pshad);
       }
     }
+
+    pshad_source_blob->Release();
     
     // rjf: store
     r_d3d11_state->pshads[kind] = pshad;
@@ -463,7 +479,14 @@ r_window_equip(OS_Handle handle)
       swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
       swapchain_desc.Flags              = 0;
     }
-    r_d3d11_state->dxgi_factory->CreateSwapChainForHwnd(r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
+    HRESULT error = r_d3d11_state->dxgi_factory->CreateSwapChainForHwnd(r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
+    if(FAILED(error))
+    {
+      char buffer[256] = {0};
+      raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%x). The process is terminating.", error);
+      os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      os_exit_process(1);
+    }
     
     //- rjf: create framebuffer & view
     window->swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)(&window->framebuffer));
@@ -971,7 +994,14 @@ r_window_end_frame(OS_Handle window, R_Handle window_equip)
     ////////////////////////////
     //- rjf: present
     //
-    wnd->swapchain->Present(1, 0);
+    HRESULT error = wnd->swapchain->Present(1, 0);
+    if(FAILED(error))
+    {
+      char buffer[256] = {0};
+      raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%x). The process is terminating.", error);
+      os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      os_exit_process(1);
+    }
     d_ctx->ClearState();
   }
   ProfEnd();
