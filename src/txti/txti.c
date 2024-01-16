@@ -1123,7 +1123,7 @@ txti_mut_thread_entry_point(void *p)
                 U8 *append_data_buffer = push_array_no_zero(buffer->data_arena, U8, msg->string.size);
                 MemoryCopy(append_data_buffer, msg->string.str, msg->string.size);
                 buffer->data.size += msg->string.size;
-                if(buffer->data.str == 0)
+                if(buffer->data.str == 0 && msg->string.size != 0)
                 {
                   buffer->data.str = append_data_buffer;
                 }
@@ -1133,7 +1133,14 @@ txti_mut_thread_entry_point(void *p)
               case TXTI_MsgKind_Reload: ProfScope("reload")
               {
                 arena_clear(buffer->data_arena);
-                buffer->data = push_str8_copy(buffer->data_arena, file_contents);
+                if(file_contents.size != 0)
+                {
+                  buffer->data = push_str8_copy(buffer->data_arena, file_contents);
+                }
+                else
+                {
+                  MemoryZeroStruct(&buffer->data);
+                }
               }break;
             }
             
