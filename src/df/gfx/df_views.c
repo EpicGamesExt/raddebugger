@@ -1051,22 +1051,49 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               // rjf: build
               UI_Signal sig = {0};
               B32 next_expanded = row_expanded;
-              UI_TableCell UI_Font(code_font)
-                UI_TextColor(row->depth > 0 ? df_rgba_from_theme_color(DF_ThemeColor_WeakText) : ui_top_text_color())
-                UI_FocusHot(cell_selected) UI_FocusActive(cell_selected && ewv->input_editing)
+              UI_TableCell UI_FocusHot(cell_selected) UI_FocusActive(cell_selected && ewv->input_editing)
               {
                 B32 expr_editing_active = ui_is_focus_active();
-                sig = df_line_editf((DF_LineEditFlag_CodeContents|
-                                     DF_LineEditFlag_NoBackground|
-                                     DF_LineEditFlag_DisableEdit*(!can_edit_expr)|
-                                     DF_LineEditFlag_Expander*!!(row->flags & DF_EvalVizRowFlag_CanExpand)|
-                                     DF_LineEditFlag_ExpanderPlaceholder*(row->depth==0)|
-                                     DF_LineEditFlag_ExpanderSpace*(row->depth!=0)),
-                                    row->depth,
-                                    &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, &next_expanded,
-                                    row->expr,
-                                    "###row_%I64x", row_hash);
+                B32 is_inherited = (row->inherited_type_key_chain.count != 0);
+                UI_Font(code_font) UI_TextColor(row->depth > 0 ? df_rgba_from_theme_color(DF_ThemeColor_WeakText) : ui_top_text_color())
+                {
+                  if(is_inherited)
+                  {
+                    Vec4F32 inherited_bg_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
+                    inherited_bg_color.w *= 0.2f;
+                    ui_set_next_background_color(inherited_bg_color);
+                  }
+                  sig = df_line_editf((DF_LineEditFlag_CodeContents|
+                                       DF_LineEditFlag_NoBackground*(!is_inherited)|
+                                       DF_LineEditFlag_DisableEdit*(!can_edit_expr)|
+                                       DF_LineEditFlag_Expander*!!(row->flags & DF_EvalVizRowFlag_CanExpand)|
+                                       DF_LineEditFlag_ExpanderPlaceholder*(row->depth==0)|
+                                       DF_LineEditFlag_ExpanderSpace*(row->depth!=0)),
+                                      row->depth,
+                                      &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, &next_expanded,
+                                      row->expr,
+                                      "###row_%I64x", row_hash);
+                }
                 edit_commit = edit_commit || sig.commit;
+                if(sig.hovering && is_inherited) UI_Tooltip
+                {
+                  String8List inheritance_chain_type_names = {0};
+                  for(TG_KeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
+                  {
+                    String8 inherited_type_name = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, n->v);
+                    inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
+                    str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
+                  }
+                  StringJoin join = {0};
+                  join.sep = str8_lit("::");
+                  String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
+                  ui_set_next_pref_width(ui_children_sum(1));
+                  UI_Row
+                  {
+                    ui_labelf("Inherited from ");
+                    UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1.f, df_rgba_from_theme_color(DF_ThemeColor_CodeType), inheritance_type);
+                  }
+                }
                 if(sig.hovering && DEV_eval_watch_key_tooltips) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Code))
                 {
                   ui_labelf("Parent Key:   %I64x, %I64x, %I64x", row->parent_key.uniquifier, row->parent_key.parent_hash, row->parent_key.child_num);
@@ -1217,7 +1244,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
                   UI_Parent(box)
                   {
-                    df_code_label(1.f, 1, row->display_value);
+                    df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
                   }
                   sig = ui_signal_from_box(box);
                 }
@@ -1261,7 +1288,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###type_%I64x", row_hash);
                 if(!tg_key_match(key, tg_key_zero())) UI_Parent(box)
                 {
-                  df_code_label(1.f, 1, string);
+                  df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeType), string);
                 }
                 UI_Signal sig = ui_signal_from_box(box);
                 if(sig.pressed)
@@ -7928,7 +7955,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
                 }
                 if(a->type_string.size != 0)
                 {
-                  df_code_label(1.f, 1, a->type_string);
+                  df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeType), a->type_string);
                 }
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_label(str8_from_memory_size(scratch.arena, dim_1u64(a->vaddr_range)));
                 if(a->next != 0)
@@ -8197,7 +8224,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
           UI_Parent(box)
           {
             String8 hit_count_string = str8_from_u64(scratch.arena, entity->u64, 10, 0, 0);
-            UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1, hit_count_string);
+            UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), hit_count_string);
           }
           UI_Signal sig = ui_signal_from_box(box);
           if(sig.pressed)

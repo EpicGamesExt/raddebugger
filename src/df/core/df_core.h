@@ -818,6 +818,7 @@ struct DF_EvalVizRow
   String8 expr;
   String8 display_value;
   String8 edit_value;
+  TG_KeyList inherited_type_key_chain;
   
   // rjf: variable-size & hook info
   U64 size_in_rows;

@@ -4172,7 +4172,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 }
                 UI_PrefWidth(ui_em(30.f, 1.f))
                 {
-                  UI_PrefWidth(ui_text_dim(10, 1.f)) df_code_label(1.f, 1, row->expr);
+                  UI_PrefWidth(ui_text_dim(10, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
                   ui_spacer(ui_em(1.5f, 1.f));
                   if(row->flags & DF_EvalVizRowFlag_CanEditValue)
                   {
@@ -4197,7 +4197,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   }
                   else
                   {
-                    df_code_label(1.f, 1, row->display_value);
+                    df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
                   }
                 }
                 ui_spacer(ui_em(0.75f, 1.f));
@@ -7207,6 +7207,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           row->expr = push_str8_copy(arena, member->name);
           row->display_value = str8_list_join(arena, &display_strings, 0);
           row->edit_value = str8_list_join(arena, &edit_strings, 0);
+          row->inherited_type_key_chain = tg_key_list_copy(arena, &member->inheritance_key_chain);
           row->value_ui_rule_node = value_ui_rule_node;
           row->value_ui_rule_spec = value_ui_rule_spec;
           row->expand_ui_rule_node = expand_ui_rule_node;
@@ -8646,14 +8647,14 @@ df_entity_tooltips(DF_Entity *entity)
           stop_condition = str8_lit("true");
         }
         UI_PrefWidth(ui_em(12.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("Stop Condition: ");
-        UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1, stop_condition);
+        UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), stop_condition);
       }
       UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
         U64 hit_count = entity->u64;
         String8 hit_count_text = str8_from_u64(scratch.arena, hit_count, 10, 0, 0);
         UI_PrefWidth(ui_em(12.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("Hit Count: ");
-        UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1, hit_count_text);
+        UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), hit_count_text);
       }
     }break;
     case DF_EntityKind_WatchPin: UI_Font(df_font_from_slot(DF_FontSlot_Code))
@@ -8664,7 +8665,7 @@ df_entity_tooltips(DF_Entity *entity)
         ui_set_next_text_color(color);
       }
       String8 display_string = df_display_string_from_entity(scratch.arena, entity);
-      UI_PrefWidth(ui_text_dim(10, 1)) df_code_label(1.f, 1, display_string);
+      UI_PrefWidth(ui_text_dim(10, 1)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), display_string);
     }break;
   }
   scratch_end(scratch);
@@ -9554,8 +9555,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                 ws->entity_ctx_menu_entity = df_handle_from_entity(pin);
               }
             }
-            df_code_label(0.8f, 1, pin_expr);
-            df_code_label(0.6f, 1, eval_string);
+            df_code_label(0.8f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), pin_expr);
+            df_code_label(0.6f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), eval_string);
           }
           UI_Signal pin_sig = ui_signal_from_box(pin_box);
           if(ui_key_match(pin_box_key, ui_hot_key()))
@@ -10466,7 +10467,7 @@ df_help_label(String8 string)
 }
 
 internal D_FancyStringList
-df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, String8 string)
+df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string)
 {
   Temp scratch = scratch_begin(&arena, 1);
   D_FancyStringList fancy_strings = {0};
@@ -10491,6 +10492,17 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
           ui_top_font(),
           token_string,
           token_color_rgba,
+          ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
+        };
+        d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
+      }break;
+      case TXTI_TokenKind_Identifier:
+      {
+        D_FancyString fancy_string =
+        {
+          ui_top_font(),
+          token_string,
+          base_color,
           ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
@@ -10606,10 +10618,10 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
 }
 
 internal void
-df_code_label(F32 alpha, B32 indirection_size_change, String8 string)
+df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
-  D_FancyStringList fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, alpha, indirection_size_change, string);
+  D_FancyStringList fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, alpha, indirection_size_change, base_color, string);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
   ui_box_equip_display_fancy_strings(box, &fancy_strings);
   scratch_end(scratch);
@@ -10815,11 +10827,11 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *
       if(!(flags & DF_LineEditFlag_PreferDisplayString) && pre_edit_value.size != 0)
       {
         display_string = pre_edit_value;
-        df_code_label(1.f, 1, display_string);
+        df_code_label(1.f, 1, ui_top_text_color(), display_string);
       }
       else if(flags & DF_LineEditFlag_DisplayStringIsCode)
       {
-        df_code_label(1.f, 1, display_string);
+        df_code_label(1.f, 1, ui_top_text_color(), display_string);
       }
       else
       {
@@ -10848,7 +10860,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
-      D_FancyStringList code_fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, edit_string);
+      D_FancyStringList code_fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_text_color(), edit_string);
       ui_box_equip_display_fancy_strings(editstr_box, &code_fancy_strings);
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);

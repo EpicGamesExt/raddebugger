@@ -30,6 +30,26 @@ tg_qsort_compare_members_offset(TG_Member *a, TG_Member *b)
   return result;
 }
 
+internal void
+tg_key_list_push(Arena *arena, TG_KeyList *list, TG_Key key)
+{
+  TG_KeyNode *n = push_array(arena, TG_KeyNode, 1);
+  n->v = key;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal TG_KeyList
+tg_key_list_copy(Arena *arena, TG_KeyList *src)
+{
+  TG_KeyList dst = {0};
+  for(TG_KeyNode *n = src->first; n != 0; n = n->next)
+  {
+    tg_key_list_push(arena, &dst, n->v);
+  }
+  return dst;
+}
+
 ////////////////////////////////
 //~ rjf: RADDBG <-> TG Enum Conversions
 
@@ -936,9 +956,12 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
     struct Task
     {
       Task *next;
+      U64 base_off;
+      TG_KeyList inheritance_chain;
+      TG_Key type_key;
       TG_Type *type;
     };
-    Task start_task = {0, root_type};
+    Task start_task = {0, 0, {0}, key, root_type};
     Task *first_task = &start_task;
     Task *last_task = &start_task;
     for(Task *task = first_task; task != 0; task = task->next)
@@ -952,12 +975,18 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
           {
             TG_MemberNode *n = push_array(scratch.arena, TG_MemberNode, 1);
             MemoryCopyStruct(&n->v, &type->members[member_idx]);
+            n->v.off += task->base_off;
+            n->v.inheritance_key_chain = task->inheritance_chain;
             SLLQueuePush(members_list.first, members_list.last, n);
             members_list.count += 1;
           }
           else if(type->members[member_idx].kind == TG_MemberKind_Base)
           {
             Task *t = push_array(scratch.arena, Task, 1);
+            t->base_off = type->members[member_idx].off + task->base_off;
+            t->inheritance_chain = tg_key_list_copy(scratch.arena, &task->inheritance_chain);
+            tg_key_list_push(scratch.arena, &t->inheritance_chain, type->members[member_idx].type_key);
+            t->type_key = type->members[member_idx].type_key;
             t->type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, type->members[member_idx].type_key);
             SLLQueuePush(first_task, last_task, t);
             members_need_offset_sort = 1;
@@ -975,6 +1004,7 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
     {
       MemoryCopyStruct(&members.v[idx], &n->v);
       members.v[idx].name = push_str8_copy(arena, members.v[idx].name);
+      members.v[idx].inheritance_key_chain = tg_key_list_copy(arena, &members.v[idx].inheritance_key_chain);
       idx += 1;
     }
   }
