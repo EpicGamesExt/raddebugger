@@ -35,6 +35,11 @@ cons_root_new(CONS_RootParams *params){
     result->scope_count += 1;
   }
   
+  // rjf: setup null UDT
+  {
+    cons__type_udt_from_any_type(result, result->nil_type);
+  }
+  
   // initialize maps
   {
 #define BKTCOUNT(x) ((x)?(u64_up_to_pow2(x)):(128))
