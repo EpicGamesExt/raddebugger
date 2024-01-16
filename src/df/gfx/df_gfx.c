@@ -9239,7 +9239,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_text_alignment(UI_TextAlign_Center);
 
             B32 is_snapshot_active = 0;
-            for (DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+            for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
             {
               if (child->kind == DF_EntityKind_Snapshot && child->b32 == 1)
               {

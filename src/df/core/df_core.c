@@ -2774,7 +2774,7 @@ df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread)
 internal B32
 df_advance_current_snapshot(Arena *arena, DF_CmdList *cmds, DF_Entity *thread)
 {
-  for (DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+  for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
   {
     if(child->kind == DF_EntityKind_Snapshot && child->b32 == 1)
     {
@@ -2803,7 +2803,6 @@ df_thread_snapshot(DF_Entity *thread)
     return;
   }
 
-  DF_Entity *prev = thread->last;
   DF_Entity *snapshot = df_entity_alloc(0, thread, DF_EntityKind_Snapshot);
   df_entity_equip_ctrl_machine_id(snapshot, thread->ctrl_machine_id);
   df_entity_equip_ctrl_handle(snapshot, snapshot_handle);
@@ -6144,7 +6143,8 @@ df_hash_current_thread_snapshot(DF_Entity *thread, U32 *active_snapshot_index)
   DF_Handle handle = df_handle_from_entity(thread);
   U64 hash = df_hash_from_string(str8_struct(&handle));
   *active_snapshot_index = 0;
-  for (DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next) {
+  for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+  {
     if (child->kind == DF_EntityKind_Snapshot && child->b32) {
       break;
     }
@@ -7125,7 +7125,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
           {
             DF_Entity *thread = n->entity;
-            for (DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+            for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
             {
               if (child->kind == DF_EntityKind_Snapshot)
               {
