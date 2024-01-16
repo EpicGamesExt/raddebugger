@@ -179,6 +179,7 @@ thread_static Arena *tg_build_arena = 0;
 //~ rjf: Basic Helpers
 
 internal U64 tg_hash_from_string(U64 seed, String8 string);
+internal int tg_qsort_compare_members_offset(TG_Member *a, TG_Member *b);
 
 ////////////////////////////////
 //~ rjf: RADDBG <-> TG Enum Conversions

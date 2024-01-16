@@ -914,6 +914,18 @@ struct Template_Example3{
   }
 };
 
+struct SingleInheritanceBase
+{
+  int x;
+  int y;
+};
+
+struct SingleInheritanceDerived : SingleInheritanceBase
+{
+  int z;
+  int w;
+};
+
 struct Has_Members{
   int a;
   int b;
@@ -1244,6 +1256,12 @@ extended_type_coverage_eval_tests(void){
     Template_Example3<int, float> temp3_if(2, 1.f);
     Template_Example3<void *, float> temp3_vi((void *)&temp3_if, 1.f);
     Template_Example3<int, Template_Example2<int, float>> temp3_itif(123, temp_if);
+    
+    SingleInheritanceDerived sid;
+    sid.x = 123;
+    sid.y = 456;
+    sid.z = 789;
+    sid.w = 999;
     
     Pointer_To_Member pointer_to_member = {
       &Has_Members::a, &Has_Members::c, &Has_Members::bas,
