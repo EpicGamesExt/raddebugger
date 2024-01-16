@@ -318,7 +318,7 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
           break;
         }
         else if(!sent &&
-                os_now_microseconds() >= ins_atomic_u64_eval(&binary->last_time_enqueued_for_parse_us)+1000000 &&
+                ins_atomic_u64_eval(&binary->last_time_enqueued_for_parse_us) == 0 &&
                 dbgi_u2p_enqueue_exe_path(exe_path, endt_us))
         {
           sent = 1;
