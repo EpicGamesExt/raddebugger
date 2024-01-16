@@ -1119,6 +1119,19 @@ struct Minheritance_Child : Minheritance_MidLeft, Minheritance_MidRight{
   char *name;
 };
 
+struct Pure
+{
+  virtual ~Pure() = default;
+  virtual void Foo() = 0;
+};
+
+struct PureChild : Pure
+{
+  virtual ~PureChild() = default;
+  virtual void Foo() {a += 1;}
+  double a = 0;
+};
+
 struct OverloadedMethods{
   int x;
   int cool_method(void){
@@ -1322,6 +1335,12 @@ extended_type_coverage_eval_tests(void){
     minheritance_child.Minheritance_MidLeft::y = -1;
     minheritance_child.Minheritance_MidRight::x = +1;
     minheritance_child.Minheritance_MidRight::y = +1;
+    
+    Pure *child = new PureChild();
+    child->Foo();
+    child->Foo();
+    child->Foo();
+    delete child;
     
     OverloadedMethods overloaded_methods;
     {
