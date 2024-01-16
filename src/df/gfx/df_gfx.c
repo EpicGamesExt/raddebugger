@@ -9237,12 +9237,24 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_pref_height(ui_pct(1, 0));
             ui_set_next_text_color(color);
             ui_set_next_text_alignment(UI_TextAlign_Center);
+
+            B32 is_snapshot_active = 0;
+            for (DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+            {
+              if (child->kind == DF_EntityKind_Snapshot && child->b32 == 1)
+              {
+                is_snapshot_active = 1;
+                break;
+              }
+            }
+
+            DF_IconKind icon_kind = is_snapshot_active ? DF_IconKind_Undo : DF_IconKind_RightArrow;
             UI_Box *thread_box = ui_build_box_from_stringf(UI_BoxFlag_DisableTextTrunc|
                                                            UI_BoxFlag_Clickable|
                                                            UI_BoxFlag_AnimatePosX|
                                                            UI_BoxFlag_DrawText,
                                                            "%S##ip_%p",
-                                                           df_g_icon_kind_text_table[DF_IconKind_RightArrow],
+                                                           df_g_icon_kind_text_table[icon_kind],
                                                            thread);
             UI_Signal thread_sig = ui_signal_from_box(thread_box);
             
