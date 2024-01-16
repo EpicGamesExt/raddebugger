@@ -942,14 +942,14 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
             
             if (l_good && r_good){
               Temp scratch = scratch_begin(&arena, 1);
-              TG_Type *check_type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, check_type_key);
+              TG_MemberArray check_type_members = tg_data_members_from_graph_raddbg_key(scratch.arena, graph, rdbg, check_type_key);
               
               // lookup member
               String8 member_name = exprr->name;
               TG_Member *match = 0;
-              for(U64 member_idx = 0; member_idx < check_type->count; member_idx += 1)
+              for(U64 member_idx = 0; member_idx < check_type_members.count; member_idx += 1)
               {
-                TG_Member *member = &check_type->members[member_idx];
+                TG_Member *member = &check_type_members.v[member_idx];
                 if(str8_match(member->name, member_name, 0))
                 {
                   match = member;
