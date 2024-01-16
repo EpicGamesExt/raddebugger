@@ -8017,7 +8017,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         UI_PrefHeight(ui_px(row_height_px, 0.f))
       {
         B32 cursor_in_range = (viz_range_bytes.min <= mv->cursor && mv->cursor+8 <= viz_range_bytes.max);
-        ui_labelf("%016X", mv->cursor);
+        ui_labelf("%016I64X", mv->cursor);
         if(cursor_in_range)
         {
           U64 as_u8  = 0;
@@ -8032,7 +8032,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
           ui_labelf("%02X (%I64u)",  as_u8,  as_u8);
           ui_labelf("%04X (%I64u)",  as_u16, as_u16);
           ui_labelf("%08X (%I64u)",  as_u32, as_u32);
-          ui_labelf("%016X (%I64u)", as_u64, as_u64);
+          ui_labelf("%016I64X (%I64u)", as_u64, as_u64);
         }
       }
     }
