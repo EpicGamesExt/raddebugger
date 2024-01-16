@@ -5051,18 +5051,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           Vec4F32 tx_color = df_rgba_from_theme_color(DF_ThemeColor_FailureText);
           F32 alpha_factor = Max(ws->error_t, 0.2f);
           tx_color.w *= alpha_factor;
-          ui_set_next_text_color(tx_color);
-          ui_set_next_pref_width(ui_children_sum(1));
-          UI_CornerRadius(4)
-            UI_Row
-            UI_PrefWidth(ui_text_dim(10, 1))
-            UI_TextAlignment(UI_TextAlign_Center)
+          String8 error_string = str8(ws->error_buffer, ws->error_string_size);
+          if(error_string.size != 0)
           {
-            String8 error_string = str8(ws->error_buffer, ws->error_string_size);
-            UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-              UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-              ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
-            ui_label(error_string);
+            ui_set_next_text_color(tx_color);
+            ui_set_next_pref_width(ui_children_sum(1));
+            UI_CornerRadius(4)
+              UI_Row
+              UI_PrefWidth(ui_text_dim(10, 1))
+              UI_TextAlignment(UI_TextAlign_Center)
+            {
+              UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+                ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
+              ui_label(error_string);
+            }
           }
         }
       }
@@ -11051,6 +11054,22 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           {
             DF_CmdParams params = df_cmd_params_from_window(window);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseWindow));
+          }
+        }break;
+        
+        //- rjf: errors
+        case DF_CoreCmdKind_Error:
+        {
+          DF_Window *window = df_window_from_handle(params.window);
+          if(window == 0)
+          {
+            for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
+            {
+              DF_CmdParams p = df_cmd_params_from_window(w);
+              p.string = push_str8_copy(arena, params.string);
+              df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+            }
           }
         }break;
         

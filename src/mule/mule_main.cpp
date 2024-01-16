@@ -1102,6 +1102,23 @@ struct Vinheritance_Child : Vinheritance_MidLeft, Vinheritance_MidRight{
   };
 };
 
+struct Minheritance_Base{
+  int x;
+  int y;
+};
+
+struct Minheritance_MidLeft : Minheritance_Base{
+  float left;
+};
+
+struct Minheritance_MidRight : Minheritance_Base{
+  float right;
+};
+
+struct Minheritance_Child : Minheritance_MidLeft, Minheritance_MidRight{
+  char *name;
+};
+
 struct OverloadedMethods{
   int x;
   int cool_method(void){
@@ -1296,6 +1313,15 @@ extended_type_coverage_eval_tests(void){
     vinheritance_child.right = 13.0f;
     vinheritance_child.x     = -1;
     vinheritance_child.y     = -1;
+    
+    Minheritance_Child minheritance_child;
+    minheritance_child.name  = "foobar";
+    minheritance_child.left  = 10.5f;
+    minheritance_child.right = 13.0f;
+    minheritance_child.Minheritance_MidLeft::x = -1;
+    minheritance_child.Minheritance_MidLeft::y = -1;
+    minheritance_child.Minheritance_MidRight::x = +1;
+    minheritance_child.Minheritance_MidRight::y = +1;
     
     OverloadedMethods overloaded_methods;
     {

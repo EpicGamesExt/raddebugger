@@ -194,6 +194,12 @@
 ////////////////////////////////
 //~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
 //
+//  [ ] ** Directory picking is kind of busted, as it goes through the same
+//      path as file picking, and this doesn't give the user a clean path to
+//      actually pick a folder, just navigate with them
+//
+//  [ ] ** Hover-Eval-Popup-While-Scrolling is very annoying!
+//
 //  [ ] ** In the call stack, I would like to be able to click quickly and move
 //      around the stack. Right now, you can do that with the first and third
 //      column, but the second column drops down a context menu. Since right
@@ -414,7 +420,7 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 3
+#define RADDBG_VERSION_PATCH 4
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""

@@ -6244,6 +6244,14 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
             }
           }
+          
+          // rjf: exception or unexpected trap -> push error
+          if(event->cause == CTRL_EventCause_InterruptedByException ||
+             event->cause == CTRL_EventCause_InterruptedByTrap)
+          {
+            DF_CmdParams params = df_cmd_params_zero();
+            df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+          }
         }break;
         
         //- rjf: entity creation/deletion
