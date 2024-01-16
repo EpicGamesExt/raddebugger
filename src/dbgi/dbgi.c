@@ -44,7 +44,6 @@ dbgi_init(void)
   {
     dbgi_shared->parse_threads[idx] = os_launch_thread(dbgi_parse_thread_entry_point, (void *)idx, 0);
   }
-  dbgi_shared->evictor_thread = os_launch_thread(dbgi_evictor_thread_entry_point, 0, 0);
 }
 
 ////////////////////////////////
@@ -253,9 +252,34 @@ dbgi_binary_close(String8 exe_path)
         break;
       }
     }
+    B32 need_deletion = 0;
     if(binary != 0 && binary->refcount>0)
     {
       binary->refcount -= 1;
+      need_deletion = (binary->refcount == 0);
+    }
+    if(need_deletion) for(;;)
+    {
+      os_rw_mutex_drop_w(stripe->rw_mutex);
+      for(U64 start_t = os_now_microseconds();
+          os_now_microseconds() <= start_t + 250;);
+      os_rw_mutex_take_w(stripe->rw_mutex);
+      if(binary->refcount == 0 && ins_atomic_u64_eval(&binary->scope_touch_count) == 0)
+      {
+        if(binary->parse.arena != 0) { arena_release(binary->parse.arena); }
+        if(binary->parse.exe_base != 0) { os_file_map_view_close(binary->exe_file_map, binary->parse.exe_base); }
+        if(!os_handle_match(os_handle_zero(), binary->exe_file_map)) { os_file_map_close(binary->exe_file_map); }
+        if(!os_handle_match(os_handle_zero(), binary->exe_file)) { os_file_close(binary->exe_file); }
+        if(binary->parse.dbg_base != 0) { os_file_map_view_close(binary->dbg_file_map, binary->parse.dbg_base); }
+        if(!os_handle_match(os_handle_zero(), binary->dbg_file_map)) { os_file_map_close(binary->dbg_file_map); }
+        if(!os_handle_match(os_handle_zero(), binary->dbg_file)) { os_file_close(binary->dbg_file); }
+        binary->exe_file_map = binary->exe_file = os_handle_zero();
+        binary->dbg_file_map = binary->dbg_file = os_handle_zero();
+        MemoryZeroStruct(&binary->parse);
+        binary->last_time_enqueued_for_parse_us = 0;
+        binary->gen = 1;
+        break;
+      }
     }
   }
   scratch_end(scratch);
@@ -451,7 +475,7 @@ dbgi_parse_thread_entry_point(void *p)
           break;
         }
       }
-      if(binary == 0 || binary->flags&DBGI_BinaryFlag_ParseInFlight)
+      if(binary == 0 || binary->flags&DBGI_BinaryFlag_ParseInFlight || binary->refcount == 0)
       {
         task_is_taken_by_other_thread = 1;
       }
@@ -708,8 +732,10 @@ dbgi_parse_thread_entry_point(void *p)
       }
     }
     
-    //- rjf: cache write, step 1: check if either EXE or raddbg file is new. if
-    // so, clear all old results & store new top-level info
+    //- rjf: cache write, step 1: check if refcount is still nonzero, &
+    // either EXE or raddbg file is new. if so, clear all old results &
+    // store new top-level info
+    B32 binary_refcount_is_zero = 0;
     B32 raddbg_or_exe_file_is_updated = 0;
     if(do_task) ProfScope("cache write, step 1: check if raddbg is new & clear")
     {
@@ -717,6 +743,11 @@ dbgi_parse_thread_entry_point(void *p)
       {
         if(str8_match(bin->exe_path, exe_path, 0))
         {
+          if(bin->refcount == 0)
+          {
+            binary_refcount_is_zero = 1;
+            break;
+          }
           if(bin->parse.dbg_props.modified != raddbg_file_props.modified ||
              bin->parse.exe_props.modified != exe_file_props.modified)
           {
@@ -751,7 +782,7 @@ dbgi_parse_thread_entry_point(void *p)
     
     //- rjf: raddbg file or exe is not new? cache can stay unmodified, close
     // handles & skip to end.
-    if(do_task) if(!raddbg_or_exe_file_is_updated) if(raddbg_file_is_up_to_date)
+    if(do_task) if((!raddbg_or_exe_file_is_updated && raddbg_file_is_up_to_date) || binary_refcount_is_zero)
     {
       os_file_map_view_close(raddbg_file_map, raddbg_file_base);
       os_file_map_close(raddbg_file_map);
@@ -759,6 +790,7 @@ dbgi_parse_thread_entry_point(void *p)
       os_file_map_view_close(exe_file_map, exe_file_base);
       os_file_map_close(exe_file_map);
       os_file_close(exe_file);
+      arena_release(parse_arena);
       do_task = 0;
     }
     
@@ -824,65 +856,5 @@ dbgi_parse_thread_entry_point(void *p)
     
     ProfEnd();
     scratch_end(scratch);
-  }
-}
-
-////////////////////////////////
-//~ rjf: Evictor Thread
-
-internal void
-dbgi_evictor_thread_entry_point(void *p)
-{
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  ProfThreadName("[dbgi] evictor");
-  for(;;)
-  {
-    ProfBegin("eviction scan");
-    U64 slots_per_stripe = dbgi_shared->binary_slots_count/dbgi_shared->binary_stripes_count;
-    for(U64 stripe_idx = 0; stripe_idx < dbgi_shared->binary_stripes_count; stripe_idx += 1)
-    {
-      DBGI_BinaryStripe *stripe = &dbgi_shared->binary_stripes[stripe_idx];
-      for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
-      {
-        U64 slot_idx = slots_per_stripe*stripe_idx + slot_in_stripe_idx;
-        DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
-        B32 slot_needs_work = 0;
-        OS_MutexScopeR(stripe->rw_mutex)
-        {
-          for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-          {
-            if(bin->refcount == 0 && bin->scope_touch_count == 0 && bin->flags == 0 && bin->gen > 1)
-            {
-              slot_needs_work = 1;
-              break;
-            }
-          }
-        }
-        if(slot_needs_work) ProfScope("eviction task (slot %I64u)", slot_idx) OS_MutexScopeW(stripe->rw_mutex)
-        {
-          for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-          {
-            if(bin->refcount == 0 && bin->scope_touch_count == 0 && bin->flags == 0)
-            {
-              if(bin->parse.arena != 0) { arena_release(bin->parse.arena); }
-              if(bin->parse.exe_base != 0) { os_file_map_view_close(bin->exe_file_map, bin->parse.exe_base); }
-              if(!os_handle_match(os_handle_zero(), bin->exe_file_map)) { os_file_map_close(bin->exe_file_map); }
-              if(!os_handle_match(os_handle_zero(), bin->exe_file)) { os_file_close(bin->exe_file); }
-              if(bin->parse.dbg_base != 0) { os_file_map_view_close(bin->dbg_file_map, bin->parse.dbg_base); }
-              if(!os_handle_match(os_handle_zero(), bin->dbg_file_map)) { os_file_map_close(bin->dbg_file_map); }
-              if(!os_handle_match(os_handle_zero(), bin->dbg_file)) { os_file_close(bin->dbg_file); }
-              bin->exe_file_map = bin->exe_file = os_handle_zero();
-              bin->dbg_file_map = bin->dbg_file = os_handle_zero();
-              MemoryZeroStruct(&bin->parse);
-              bin->last_time_enqueued_for_parse_us = 0;
-              bin->gen = 1;
-            }
-          }
-        }
-      }
-    }
-    ProfEnd();
-    os_sleep_milliseconds(250);
   }
 }

@@ -8,6 +8,6 @@ get_number(void)
     sum += i;
     sum += 1;
   }
-  sum = 0;
+  sum = 1000;
   return sum;
 }
