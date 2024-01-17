@@ -1167,6 +1167,21 @@ struct DerivedB : Base
   virtual ~DerivedB() = default;
 };
 
+struct NonVirtualBase
+{
+  int x;
+  int y;
+  int z;
+};
+
+struct NonVirtualDerived : NonVirtualBase
+{
+  int r;
+  int g;
+  int b;
+  int a;
+};
+
 struct OverloadedMethods{
   int x;
   int cool_method(void){
@@ -1382,6 +1397,12 @@ extended_type_coverage_eval_tests(void){
     derived->Foo();
     derived->Foo();
     delete derived;
+    
+    NonVirtualBase *non_virtual_derived = new NonVirtualDerived();
+    non_virtual_derived->x += 1;
+    non_virtual_derived->x += 1;
+    non_virtual_derived->x += 1;
+    delete non_virtual_derived;
     
     Base *base_array[1024] = {0};
     for(int i = 0; i < sizeof(base_array)/sizeof(base_array[0]); i += 1)
