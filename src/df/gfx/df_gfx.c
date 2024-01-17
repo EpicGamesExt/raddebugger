@@ -10442,12 +10442,72 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
   return change;
 }
 
+internal String8
+df_get_lines_in_range(Arena *arena, String8 *lines, Rng1S64 line_num_range, TxtRng *range)
+{
+  String8 text = {0};
+  Rng1S64 line_range = r1s64(ClampBot(1, range->min.line), ClampBot(1, range->max.line));
+  Rng1S64 column_range = r1s64(ClampBot(1, range->min.column), ClampBot(1, range->max.column));
+  U64 first_line_idx = line_range.min - line_num_range.min;
+  U64 last_line_idx = line_range.max - line_num_range.min;
+
+  if(first_line_idx == last_line_idx)
+  {
+    text = str8_substr(lines[first_line_idx], r1u64(column_range.min-1, column_range.max-1));
+  }
+  else
+  {
+    String8List line_strs = {0};
+    for(U64 line_idx = first_line_idx; line_idx < last_line_idx+1; ++line_idx)
+    {
+      String8 line_text = lines[line_idx];
+
+      if(line_idx == first_line_idx)
+      {
+        line_text = str8_skip(line_text, column_range.min-1);
+      }
+      else if(line_idx == last_line_idx)
+      {
+        line_text = str8_prefix(line_text, column_range.max-1);
+      }
+      str8_list_push(arena, &line_strs, line_text);
+    }
+
+    StringJoin join = {0};
+    join.sep = operating_system_from_context() == OperatingSystem_Windows ? str8_lit("\r\n") : str8_lit("\n");
+    text = str8_list_join(arena, &line_strs, &join);
+  }
+
+  return text;
+}
+
 internal B32
-df_do_dasm_controls(DASM_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
+df_do_dasm_controls(DASM_Handle handle, DF_CodeSliceParams *code_slice_params, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;
   UI_NavActionList *nav_actions = ui_nav_actions();
+
+  for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+  {
+    next = n->next;
+    B32 taken = 0;
+    
+    //- rjf: copy
+    if(n->v.flags & UI_NavActionFlag_Copy)
+    {
+      TxtRng range = txt_rng(*cursor, *mark);
+      String8 text = df_get_lines_in_range(scratch.arena, code_slice_params->line_text, code_slice_params->line_num_range, &range);
+      os_set_clipboard_text(text);
+    }
+    
+    //- rjf: consume
+    if(taken)
+    {
+      ui_nav_eat_action_node(nav_actions, n);
+    }
+  }
+  
   scratch_end(scratch);
   return change;
 }
