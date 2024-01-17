@@ -4082,6 +4082,32 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     //- rjf: build hover eval
     ProfScope("build hover eval")
     {
+      // find panel/view pair that the mouse is on and disable hover if that view is scrolling
+      if(hover_eval_is_open)
+      {
+        for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+        {
+          if(!df_panel_is_nil(panel->first))
+          {
+            continue;
+          }
+          DF_View *view = df_selected_view_from_panel(panel);
+          if (!df_view_is_nil(view))
+          {
+            Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+            if(contains_2f32(panel_rect, ws->ui->mouse))
+            {
+              if(abs_f32(view->scroll_pos.x.off) > 0.01f ||
+                 abs_f32(view->scroll_pos.y.off) > 0.01f)
+              {
+                hover_eval_is_open = 0;
+                ws->hover_eval_first_frame_idx = df_frame_index();
+              }
+            }
+          }
+        }
+      }
+
       if(ws->hover_eval_string.size == 0)
       {
         ws->hover_eval_num_visible_rows_t = 0;
