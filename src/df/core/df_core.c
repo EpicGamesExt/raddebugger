@@ -3632,7 +3632,6 @@ df_set_thread_rip(DF_Entity *thread, U64 vaddr)
     df_state->unwind_cache_invalidated = 1;
     df_state->locals_cache_invalidated = 1;
     df_state->member_cache_invalidated = 1;
-    df_state->local_dynamic_type_override_cache_invalidated = 1;
   }
   
   // rjf: early mutation of unwind cache for immediate frontend effect
@@ -3898,7 +3897,6 @@ df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 vof
   EVAL_String2NumMap *reg_alias_map = ctrl_string2alias_from_arch(arch);
   EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, voff);
   EVAL_String2NumMap *member_map = df_query_cached_member_map_from_binary_voff(binary, voff);
-  EVAL_String2NumMap *local_dynamic_type_override_map = df_query_cached_local_dynamic_type_override_map_from_module_voff(module, voff);
   
   //- rjf: build ctx
   EVAL_ParseCtx ctx = zero_struct;
@@ -3911,7 +3909,6 @@ df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 vof
     ctx.reg_alias_map   = reg_alias_map;
     ctx.locals_map      = locals_map;
     ctx.member_map      = member_map;
-    ctx.local_dynamic_type_override_map = local_dynamic_type_override_map;
   }
   scratch_end(scratch);
   return ctx;
@@ -4024,7 +4021,6 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
     ctx.reg_alias_map   = &eval_string2num_map_nil;
     ctx.locals_map      = &eval_string2num_map_nil;
     ctx.member_map      = &eval_string2num_map_nil;
-    ctx.local_dynamic_type_override_map = &eval_string2num_map_nil;
   }
   
   scratch_end(scratch);
@@ -4059,38 +4055,25 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
     }
   }
   
+  //- rjf: unpack module info & produce eval machine
+  DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_ip_vaddr);
+  U64 module_base = df_base_vaddr_from_module(module);
+  U64 tls_base = df_tls_base_vaddr_from_thread(thread);
+  EVAL_Machine machine = {0};
+  machine.u = (void *)thread->parent;
+  machine.arch = arch;
+  machine.memory_read = df_eval_memory_read;
+  machine.reg_data = thread_unwind_regs_block;
+  machine.reg_size = reg_size;
+  machine.module_base = &module_base;
+  machine.tls_base = &tls_base;
+  
   //- rjf: lex & parse
   EVAL_TokenArray tokens = eval_token_array_from_text(arena, string);
   EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(arena, parse_ctx, string, &tokens);
   EVAL_ErrorList errors = parse.errors;
   B32 parse_has_expr = (parse.expr != &eval_expr_nil);
   B32 parse_is_type = (parse_has_expr && parse.expr->kind == EVAL_ExprKind_TypeIdent);
-  
-  //- rjf: apply dynamic type overrides to expression tree - insert implicit cast
-  // nodes as necessary
-#if 0
-  if(errors.count != 0)
-  {
-    typedef struct Task Task;
-    struct Task
-    {
-      Task *next;
-      EVAL_Expr *expr;
-    };
-    Task start_task = {0, parse.expr};
-    Task *first_task = &start_task;
-    Task *last_task = &start_task;
-    for(Task *t = first_task; t != 0; t = t->next)
-    {
-      if(t->expr->kind == EVAL_ExprKind_LeafBytecode &&
-         t->expr->mode == EVAL_EvalMode_Addr)
-      {
-        String8 bytecode = t->expr->kind;
-        
-      }
-    }
-  }
-#endif
   
   //- rjf: produce IR tree & type
   EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
@@ -4113,23 +4096,10 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
     bytecode = eval_bytecode_from_oplist(arena, &op_list);
   }
   
-  //- rjf: grab thread/module
-  DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_ip_vaddr);
-  
   //- rjf: evaluate
   EVAL_Result eval = {0};
   if(bytecode.size != 0)
   {
-    U64 module_base = df_base_vaddr_from_module(module);
-    U64 tls_base = df_tls_base_vaddr_from_thread(thread);
-    EVAL_Machine machine = {0};
-    machine.u = (void *)thread->parent;
-    machine.arch = arch;
-    machine.memory_read = df_eval_memory_read;
-    machine.reg_data = thread_unwind_regs_block;
-    machine.reg_size = reg_size;
-    machine.module_base = &module_base;
-    machine.tls_base = &tls_base;
     eval = eval_interpret(&machine, bytecode);
   }
   
@@ -4158,6 +4128,12 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
       }break;
     }
     result.errors = errors;
+  }
+  
+  //- rjf: apply dynamic type overrides
+  if(parse.expr != 0 && parse.expr->kind != EVAL_ExprKind_Cast)
+  {
+    result = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, result);
   }
   
   scratch_end(scratch);
@@ -4235,42 +4211,65 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
 }
 
 internal DF_Eval
-df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_Eval eval, DF_CfgTable *cfg)
+df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
 {
-  ProfBeginFunction();
-  
-#if 0
-  //- rjf: pointer-to-struct -> read result & find "derived class" for "real"
-  // type of evaluation
+  Temp scratch = scratch_begin(0, 0);
+  DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+  Architecture arch = df_architecture_from_entity(thread);
+  DF_Entity *process = thread->parent;
+  U64 unwind_count = ctrl_ctx->unwind_count;
+  U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+  DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
+  TG_Key type_key = eval.type_key;
+  TG_Kind type_kind = tg_kind_from_key(type_key);
+  if(type_kind == TG_Kind_Ptr)
   {
-    TG_Kind kind = tg_kind_from_key(eval.type_key);
-    if(kind == TG_Kind_Ptr)
+    TG_Key ptee_type_key = tg_direct_from_graph_raddbg_key(graph, rdbg, type_key);
+    TG_Kind ptee_type_kind = tg_kind_from_key(ptee_type_key);
+    if(ptee_type_kind == TG_Kind_Struct || ptee_type_kind == TG_Kind_Class)
     {
-      TG_Key direct_key = tg_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, eval.type_key);
-      TG_Kind direct_kind = tg_kind_from_key(direct_key);
-      if((direct_kind == TG_Kind_Struct || direct_kind == TG_Kind_Class) && parse_ctx->rdbg->global_vmap != 0)
+      TG_Type *ptee_type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, ptee_type_key);
+      B32 has_vtable = 0;
+      for(U64 idx = 0; idx < ptee_type->count; idx += 1)
       {
-        DF_Eval ptr_addr_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
-        U64 vaddr = ptr_addr_eval.imm_u64;
-        String8 ptr_val_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(vaddr, vaddr+bit_size_from_arch(parse_ctx->arch)/8));
-        if(ptr_val_memory.size >= bit_size_from_arch(parse_ctx->arch)/8)
+        if(ptee_type->members[idx].kind == TG_MemberKind_VirtualMethod)
         {
-          U64 vtable_ptr_maybe = 0;
-          MemoryCopy(&vtable_ptr_maybe, ptr_val_memory.str, bit_size_from_arch(parse_ctx->arch)/8);
-          U64 voff = df_voff_from_vaddr(module, vtable_ptr_maybe);
-          U64 global_idx = raddbg_vmap_idx_from_voff(parse_ctx->rdbg->global_vmap, parse_ctx->rdbg->global_vmap_count, voff);
-          if(0 < global_idx && global_idx < parse_ctx->rdbg->global_variable_count)
+          has_vtable = 1;
+          break;
+        }
+      }
+      if(has_vtable)
+      {
+        U64 ptr_vaddr = eval.offset;
+        U64 addr_size = bit_size_from_arch(arch)/8;
+        String8 ptr_value_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                   r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        if(ptr_value_memory.size >= addr_size)
+        {
+          U64 class_base_vaddr = 0;
+          MemoryCopy(&class_base_vaddr, ptr_value_memory.str, addr_size);
+          String8 vtable_base_ptr_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                           r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          if(vtable_base_ptr_memory.size >= addr_size)
           {
-            RADDBG_GlobalVariable *global_var = &parse_ctx->rdbg->global_variables[global_idx];
-            if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped &&
-               0 < global_var->container_idx && global_var->container_idx < parse_ctx->rdbg->udt_count)
+            U64 vtable_vaddr = 0;
+            MemoryCopy(&vtable_vaddr, vtable_base_ptr_memory.str, addr_size);
+            U64 vtable_voff = df_voff_from_vaddr(module, vtable_vaddr);
+            U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, vtable_voff);
+            if(0 < global_idx && global_idx < rdbg->global_variable_count)
             {
-              RADDBG_UDT *udt = &parse_ctx->rdbg->udts[global_var->container_idx];
-              if(0 < udt->self_type_idx && udt->self_type_idx < parse_ctx->rdbg->type_node_count)
+              RADDBG_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
+              if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped &&
+                 0 < global_var->container_idx && global_var->container_idx < rdbg->udt_count)
               {
-                RADDBG_TypeNode *type = &parse_ctx->rdbg->type_nodes[udt->self_type_idx];
-                TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
-                eval.type_key = tg_cons_type_make(parse_ctx->type_graph, TG_Kind_Ptr, derived_type_key, 0);
+                RADDBG_UDT *udt = &rdbg->udts[global_var->container_idx];
+                if(0 < udt->self_type_idx && udt->self_type_idx < rdbg->type_node_count)
+                {
+                  RADDBG_TypeNode *type = &rdbg->type_nodes[udt->self_type_idx];
+                  TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
+                  TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
+                  eval.type_key = ptr_to_derived_type_key;
+                }
               }
             }
           }
@@ -4278,7 +4277,14 @@ df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ct
       }
     }
   }
-#endif
+  scratch_end(scratch);
+  return eval;
+}
+
+internal DF_Eval
+df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_Eval eval, DF_CfgTable *cfg)
+{
+  ProfBeginFunction();
   
   //- rjf: apply view rules
   for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
@@ -4958,6 +4964,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   //////////////////////////////
   //- rjf: apply view rules & resolve eval
   //
+  eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
   eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, cfg_table);
   
   //////////////////////////////
@@ -6091,56 +6098,6 @@ df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff)
   return map;
 }
 
-internal EVAL_String2NumMap *
-df_query_cached_local_dynamic_type_override_map_from_module_voff(DF_Entity *module, U64 voff)
-{
-  ProfBeginFunction();
-  EVAL_String2NumMap *map = &eval_string2num_map_nil;
-  {
-    DF_RunLocalsCache *cache = &df_state->local_dynamic_type_override_cache;
-    if(cache->table_size == 0)
-    {
-      cache->table_size = 256;
-      cache->table = push_array(cache->arena, DF_RunLocalsCacheSlot, cache->table_size);
-    }
-    DF_Handle handle = df_handle_from_entity(module);
-    U64 hash = df_hash_from_string(str8_struct(&handle));
-    U64 slot_idx = hash % cache->table_size;
-    DF_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
-    DF_RunLocalsCacheNode *node = 0;
-    for(DF_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
-    {
-      if(df_handle_match(n->binary, handle) && n->voff == voff)
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node == 0)
-    {
-      DBGI_Scope *scope = dbgi_scope_open();
-#if 0
-      EVAL_String2NumMap *map = df_push_member_map_from_binary_voff(cache->arena, scope, binary, voff);
-      if(map->slots_count != 0)
-      {
-        node = push_array(cache->arena, DF_RunLocalsCacheNode, 1);
-        node->binary = handle;
-        node->voff = voff;
-        node->locals_map = map;
-        SLLQueuePush_N(slot->first, slot->last, node, hash_next);
-      }
-#endif
-      dbgi_scope_close(scope);
-    }
-    if(node != 0)
-    {
-      map = node->locals_map;
-    }
-  }
-  ProfEnd();
-  return map;
-}
-
 //- rjf: top-level command dispatch
 
 internal void
@@ -6205,7 +6162,6 @@ df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist
   df_state->unwind_cache.arena = arena_alloc();
   df_state->locals_cache.arena = arena_alloc();
   df_state->member_cache.arena = arena_alloc();
-  df_state->local_dynamic_type_override_cache.arena = arena_alloc();
   
   // rjf: set up eval view cache
   df_state->eval_view_cache.slots_count = 4096;
@@ -6609,7 +6565,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       df_state->unwind_cache_invalidated = 1;
       df_state->locals_cache_invalidated = 1;
       df_state->member_cache_invalidated = 1;
-      df_state->local_dynamic_type_override_cache_invalidated = 1;
     }
     
     //- rjf: refresh unwind cache
@@ -6656,16 +6611,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     {
       df_state->member_cache_invalidated = 0;
       DF_RunLocalsCache *cache = &df_state->member_cache;
-      arena_clear(cache->arena);
-      cache->table_size = 0;
-      cache->table = 0;
-    }
-    
-    //- rjf: clear local -> dynamic type override cache
-    if(df_state->local_dynamic_type_override_cache_invalidated && !df_ctrl_targets_running())
-    {
-      df_state->local_dynamic_type_override_cache_invalidated = 0;
-      DF_RunLocalsCache *cache = &df_state->local_dynamic_type_override_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;

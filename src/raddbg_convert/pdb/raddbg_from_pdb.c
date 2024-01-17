@@ -1316,6 +1316,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
       case CV_LeafKind_STRUCTURE:
       {
         ProfBegin("CV_LeafKind_CLASS/CV_LeafKind_STRUCTURE");
+        
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafStruct) <= cap){
           CV_LeafStruct *lf_struct = (CV_LeafStruct*)first;

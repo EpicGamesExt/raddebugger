@@ -1151,6 +1151,22 @@ struct Derived : Base
   virtual void Foo() {a += 1;}
 };
 
+struct DerivedA : Base
+{
+  float a;
+  float b;
+  virtual void Foo() {a += 1;}
+  virtual ~DerivedA() = default;
+};
+
+struct DerivedB : Base
+{
+  double c;
+  double d;
+  virtual void Foo() {c += 1;}
+  virtual ~DerivedB() = default;
+};
+
 struct OverloadedMethods{
   int x;
   int cool_method(void){
@@ -1366,6 +1382,19 @@ extended_type_coverage_eval_tests(void){
     derived->Foo();
     derived->Foo();
     delete derived;
+    
+    Base *base_array[1024] = {0};
+    for(int i = 0; i < sizeof(base_array)/sizeof(base_array[0]); i += 1)
+    {
+      if(i & 1 == 1)
+      {
+        base_array[i] = new DerivedA();
+      }
+      else
+      {
+        base_array[i] = new DerivedB();
+      }
+    }
     
     OverloadedMethods overloaded_methods;
     {

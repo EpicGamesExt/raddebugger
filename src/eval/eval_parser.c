@@ -980,20 +980,6 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             }
           }
           
-          //- rjf: identifier refers to type which may be possibly overridden -> look up into
-          // identifier -> dynamic type table & patch
-          if(identifier_type_is_possibly_dynamically_overridden)
-          {
-            U64 base_type_num = eval_num_from_string(ctx->local_dynamic_type_override_map, token_string);
-            if(base_type_num != 0)
-            {
-              U64 type_idx = base_type_num;
-              RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
-              TG_Key base_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), type_idx);
-              type_key = tg_cons_type_make(ctx->type_graph, TG_Kind_Ptr, base_type_key, 0);
-            }
-          }
-          
           //- rjf: attach on map
           if(mapped_identifier != 0)
           {

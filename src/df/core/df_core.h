@@ -1135,8 +1135,6 @@ struct DF_State
   DF_RunLocalsCache locals_cache;
   B32 member_cache_invalidated;
   DF_RunLocalsCache member_cache;
-  B32 local_dynamic_type_override_cache_invalidated;
-  DF_RunLocalsCache local_dynamic_type_override_cache;
   
   // rjf: eval view cache
   DF_EvalViewCache eval_view_cache;
@@ -1565,6 +1563,7 @@ internal EVAL_ParseCtx df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_
 internal EVAL_ParseCtx df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt);
 internal DF_Eval df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, String8 string);
 internal DF_Eval df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
+internal DF_Eval df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
 internal DF_Eval df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////
@@ -1657,7 +1656,6 @@ internal U64 df_query_cached_rip_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
 internal EVAL_String2NumMap *df_query_cached_locals_map_from_binary_voff(DF_Entity *binary, U64 voff);
 internal EVAL_String2NumMap *df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff);
-internal EVAL_String2NumMap *df_query_cached_local_dynamic_type_override_map_from_module_voff(DF_Entity *module, U64 voff);
 
 //- rjf: top-level command dispatch
 internal void df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec);

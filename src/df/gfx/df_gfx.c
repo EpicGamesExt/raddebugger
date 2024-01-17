@@ -7195,6 +7195,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           
           // rjf: apply view rules to eval
           {
+            member_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, member_eval);
             member_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, member_eval, &view_rule_table);
           }
           
@@ -7275,6 +7276,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           
           // rjf: apply view rules to eval
           {
+            elem_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, elem_eval);
             elem_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, elem_eval, &view_rule_table);
           }
           
@@ -7354,6 +7356,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
           
           // rjf: apply view rules to eval
+          link_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, link_eval);
           link_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, link_eval, &view_rule_table);
           TG_Kind link_type_kind = tg_kind_from_key(link_eval.type_key);
           
