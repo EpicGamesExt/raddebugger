@@ -763,7 +763,13 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
         
         // discard cases - we don't currently do anything with these
         case CV_LeafKind_VFUNCTAB:
-        {}break;
+        {
+          // TODO(rjf): error if bad range
+          if(list_item_off + sizeof(CV_LeafVFuncTab) <= cap)
+          {
+            list_item_opl_off = list_item_off + sizeof(CV_LeafVFuncTab);
+          }
+        }break;
         
         // unhandled or invalid cases
         default:
