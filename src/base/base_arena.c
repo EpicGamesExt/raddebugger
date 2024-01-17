@@ -22,7 +22,7 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
 #if OS_WINDOWS
     cmt = res;
 #else
-    cmt AlignPow2(init_cmt, page_size);
+    cmt = AlignPow2(init_cmt, page_size);
 #endif
     
     memory = os_reserve_large(res);
