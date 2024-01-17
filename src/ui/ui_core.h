@@ -401,6 +401,7 @@ struct UI_State
   Vec2F32 drag_start_mouse;
   Arena *drag_state_arena;
   String8 drag_state_data;
+  B32 is_editing;
   
   //- rjf: context menu state
   UI_Key ctx_menu_anchor_key;

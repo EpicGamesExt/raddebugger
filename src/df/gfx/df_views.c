@@ -847,6 +847,15 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
     }
   }
   
+  // check if edit is still live and focus is on the same panel
+  if(ui_is_focus_active())
+  {
+    ui_state->is_editing = ewv->input_editing;
+  }
+  else if(ewv->input_editing)
+  {
+    ui_state->is_editing = 0;
+  }
   //////////////////////////////
   //- rjf: build ui
   //
@@ -1565,6 +1574,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   if(edit_end)
   {
     ewv->input_editing = 0;
+    ui_state->is_editing = 0;
   }
   
   //////////////////////////////
@@ -2943,6 +2953,16 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
       }
     }
   }
+
+  // check if edit is still live and focus is on the same panel
+  if(ui_is_focus_active())
+  {
+    ui_state->is_editing = tv->input_editing;
+  }
+  else if(tv->input_editing)
+  {
+    ui_state->is_editing = 0;
+  }
   
   //- rjf: build
   Rng1S64 visible_row_range = {0};
@@ -3113,6 +3133,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   if(edit_end)
   {
     tv->input_editing = 0;
+    ui_state->is_editing = 0;
   }
   if(edit_submit)
   {
@@ -3393,6 +3414,16 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
       }
     }
   }
+
+  // check if edit is still live and focus is on the same panel
+  if(ui_is_focus_active())
+  {
+    ui_state->is_editing = fpms->input_editing;
+  }
+  else if(fpms->input_editing)
+  {
+    ui_state->is_editing = 0;
+  }
   
   //- rjf: build
   DF_Handle commit_map = df_handle_zero();
@@ -3603,6 +3634,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
   if(edit_end)
   {
     fpms->input_editing = 0;
+    ui_state->is_editing = 0;
   }
   
   //- rjf: move down one row if submitted
@@ -4181,6 +4213,16 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
       edit_submit = 1;
     }
   }
+
+  // check if edit is still live and focus is on the same panel
+  if(ui_is_focus_active())
+  {
+    ui_state->is_editing = mv->txt_editing;
+  }
+  else if(mv->txt_editing)
+  {
+    ui_state->is_editing = 0;
+  }
   
   //- rjf: build table
   DF_Entity *commit_module = &df_g_nil_entity;
@@ -4338,6 +4380,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   if(edit_end)
   {
     mv->txt_editing = 0;
+    ui_state->is_editing = 0;
   }
   
   //- rjf: selected num -> selected entity

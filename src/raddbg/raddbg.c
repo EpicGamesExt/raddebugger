@@ -157,7 +157,21 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     {
       next = event->next;
       DF_Window *ws = df_window_from_os_handle(event->window);
-      if(ws == 0)
+      DF_CmdQueryRule query_rule = DF_CmdQueryRule_Null;
+      // check if focused panel has an active command query
+      {
+        DF_Panel *panel = ws->focused_panel;
+        if(!df_panel_is_nil(panel))
+        {
+          DF_View *view =  df_selected_view_from_panel(panel);
+          if(!df_view_is_nil(view))
+          {
+              query_rule = view->cmd_spec->info.query_rule;
+          }
+        }
+      }
+
+      if(ws == 0 || ui_state->is_editing || query_rule != DF_CmdQueryRule_Null)
       {
         continue;
       }
