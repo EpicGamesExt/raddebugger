@@ -1132,6 +1132,25 @@ struct PureChild : Pure
   double a = 0;
 };
 
+struct Base
+{
+  int x;
+  int y;
+  int z;
+  virtual ~Base() = default;
+  virtual void Foo() = 0;
+};
+
+struct Derived : Base
+{
+  int r;
+  int g;
+  int b;
+  int a;
+  virtual ~Derived() = default;
+  virtual void Foo() {a += 1;}
+};
+
 struct OverloadedMethods{
   int x;
   int cool_method(void){
@@ -1341,6 +1360,12 @@ extended_type_coverage_eval_tests(void){
     child->Foo();
     child->Foo();
     delete child;
+    
+    Base *derived = new Derived();
+    derived->Foo();
+    derived->Foo();
+    derived->Foo();
+    delete derived;
     
     OverloadedMethods overloaded_methods;
     {
