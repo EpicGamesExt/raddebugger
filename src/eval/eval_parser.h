@@ -98,6 +98,7 @@ struct EVAL_ParseCtx
   EVAL_String2NumMap *reg_alias_map;
   EVAL_String2NumMap *locals_map;
   EVAL_String2NumMap *member_map;
+  EVAL_String2NumMap *local_dynamic_type_override_map;
 };
 
 ////////////////////////////////

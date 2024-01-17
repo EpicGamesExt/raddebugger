@@ -778,6 +778,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
         case EVAL_TokenKind_Identifier:
         {
           B32 mapped_identifier = 0;
+          B32 identifier_type_is_possibly_dynamically_overridden = 0;
           B32 identifier_looks_like_type_expr = 0;
           RADDBG_LocationKind            loc_kind = RADDBG_LocationKind_NULL;
           RADDBG_LocationRegister        loc_reg = {0};
@@ -808,6 +809,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                ctx->rdbg->type_nodes != 0)
             {
               mapped_identifier = 1;
+              identifier_type_is_possibly_dynamically_overridden = 1;
               RADDBG_Local *local_var = &ctx->rdbg->locals[local_num-1];
               
               // rjf: grab location info
@@ -975,6 +977,20 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             {
               mapped_identifier = 1;
               identifier_looks_like_type_expr = 1;
+            }
+          }
+          
+          //- rjf: identifier refers to type which may be possibly overridden -> look up into
+          // identifier -> dynamic type table & patch
+          if(identifier_type_is_possibly_dynamically_overridden)
+          {
+            U64 base_type_num = eval_num_from_string(ctx->local_dynamic_type_override_map, token_string);
+            if(base_type_num != 0)
+            {
+              U64 type_idx = base_type_num;
+              RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
+              TG_Key base_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), type_idx);
+              type_key = tg_cons_type_make(ctx->type_graph, TG_Kind_Ptr, base_type_key, 0);
             }
           }
           

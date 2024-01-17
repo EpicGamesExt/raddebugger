@@ -2869,23 +2869,6 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
       {
         trap_addr = point->jump_dest_vaddr;
         flags &= ~CTRL_TrapFlag_SingleStepAfterHit;
-        
-        // rjf: read instruction one layer deep after a jump and determine if
-        // it is just jumping to an unconditional jump (e.g. a function
-        // dispatch table) - if so, then just follow one more layer
-        String8 dst_machine_code = {0};
-        dst_machine_code.str = push_array_no_zero(scratch.arena, U8, max_instruction_size_from_arch(arch));
-        dst_machine_code.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(trap_addr, trap_addr+max_instruction_size_from_arch(arch)), dst_machine_code.str);
-        if(dst_machine_code.size != 0)
-        {
-          DF_Inst inst = df_single_inst_from_machine_code(scratch.arena, arch, 0, dst_machine_code);
-          if((inst.flags & DF_InstFlag_UnconditionalJump ||
-              inst.flags & DF_InstFlag_Call) &&
-             inst.rel_voff != 0)
-          {
-            trap_addr = (U64)(trap_addr + (S64)((S32)inst.rel_voff));
-          }
-        }
       }
     }
     
@@ -3649,6 +3632,7 @@ df_set_thread_rip(DF_Entity *thread, U64 vaddr)
     df_state->unwind_cache_invalidated = 1;
     df_state->locals_cache_invalidated = 1;
     df_state->member_cache_invalidated = 1;
+    df_state->local_dynamic_type_override_cache_invalidated = 1;
   }
   
   // rjf: early mutation of unwind cache for immediate frontend effect
@@ -3914,6 +3898,7 @@ df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 vof
   EVAL_String2NumMap *reg_alias_map = ctrl_string2alias_from_arch(arch);
   EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, voff);
   EVAL_String2NumMap *member_map = df_query_cached_member_map_from_binary_voff(binary, voff);
+  EVAL_String2NumMap *local_dynamic_type_override_map = df_query_cached_local_dynamic_type_override_map_from_module_voff(module, voff);
   
   //- rjf: build ctx
   EVAL_ParseCtx ctx = zero_struct;
@@ -3926,6 +3911,7 @@ df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 vof
     ctx.reg_alias_map   = reg_alias_map;
     ctx.locals_map      = locals_map;
     ctx.member_map      = member_map;
+    ctx.local_dynamic_type_override_map = local_dynamic_type_override_map;
   }
   scratch_end(scratch);
   return ctx;
@@ -4038,6 +4024,7 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
     ctx.reg_alias_map   = &eval_string2num_map_nil;
     ctx.locals_map      = &eval_string2num_map_nil;
     ctx.member_map      = &eval_string2num_map_nil;
+    ctx.local_dynamic_type_override_map = &eval_string2num_map_nil;
   }
   
   scratch_end(scratch);
@@ -4225,6 +4212,49 @@ internal DF_Eval
 df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_Eval eval, DF_CfgTable *cfg)
 {
   ProfBeginFunction();
+  
+#if 0
+  //- rjf: pointer-to-struct -> read result & find "derived class" for "real"
+  // type of evaluation
+  {
+    TG_Kind kind = tg_kind_from_key(eval.type_key);
+    if(kind == TG_Kind_Ptr)
+    {
+      TG_Key direct_key = tg_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, eval.type_key);
+      TG_Kind direct_kind = tg_kind_from_key(direct_key);
+      if((direct_kind == TG_Kind_Struct || direct_kind == TG_Kind_Class) && parse_ctx->rdbg->global_vmap != 0)
+      {
+        DF_Eval ptr_addr_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
+        U64 vaddr = ptr_addr_eval.imm_u64;
+        String8 ptr_val_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(vaddr, vaddr+bit_size_from_arch(parse_ctx->arch)/8));
+        if(ptr_val_memory.size >= bit_size_from_arch(parse_ctx->arch)/8)
+        {
+          U64 vtable_ptr_maybe = 0;
+          MemoryCopy(&vtable_ptr_maybe, ptr_val_memory.str, bit_size_from_arch(parse_ctx->arch)/8);
+          U64 voff = df_voff_from_vaddr(module, vtable_ptr_maybe);
+          U64 global_idx = raddbg_vmap_idx_from_voff(parse_ctx->rdbg->global_vmap, parse_ctx->rdbg->global_vmap_count, voff);
+          if(0 < global_idx && global_idx < parse_ctx->rdbg->global_variable_count)
+          {
+            RADDBG_GlobalVariable *global_var = &parse_ctx->rdbg->global_variables[global_idx];
+            if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped &&
+               0 < global_var->container_idx && global_var->container_idx < parse_ctx->rdbg->udt_count)
+            {
+              RADDBG_UDT *udt = &parse_ctx->rdbg->udts[global_var->container_idx];
+              if(0 < udt->self_type_idx && udt->self_type_idx < parse_ctx->rdbg->type_node_count)
+              {
+                RADDBG_TypeNode *type = &parse_ctx->rdbg->type_nodes[udt->self_type_idx];
+                TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
+                eval.type_key = tg_cons_type_make(parse_ctx->type_graph, TG_Kind_Ptr, derived_type_key, 0);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+#endif
+  
+  //- rjf: apply view rules
   for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
   {
     DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
@@ -6035,6 +6065,56 @@ df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff)
   return map;
 }
 
+internal EVAL_String2NumMap *
+df_query_cached_local_dynamic_type_override_map_from_module_voff(DF_Entity *module, U64 voff)
+{
+  ProfBeginFunction();
+  EVAL_String2NumMap *map = &eval_string2num_map_nil;
+  {
+    DF_RunLocalsCache *cache = &df_state->local_dynamic_type_override_cache;
+    if(cache->table_size == 0)
+    {
+      cache->table_size = 256;
+      cache->table = push_array(cache->arena, DF_RunLocalsCacheSlot, cache->table_size);
+    }
+    DF_Handle handle = df_handle_from_entity(module);
+    U64 hash = df_hash_from_string(str8_struct(&handle));
+    U64 slot_idx = hash % cache->table_size;
+    DF_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
+    DF_RunLocalsCacheNode *node = 0;
+    for(DF_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
+    {
+      if(df_handle_match(n->binary, handle) && n->voff == voff)
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node == 0)
+    {
+      DBGI_Scope *scope = dbgi_scope_open();
+#if 0
+      EVAL_String2NumMap *map = df_push_member_map_from_binary_voff(cache->arena, scope, binary, voff);
+      if(map->slots_count != 0)
+      {
+        node = push_array(cache->arena, DF_RunLocalsCacheNode, 1);
+        node->binary = handle;
+        node->voff = voff;
+        node->locals_map = map;
+        SLLQueuePush_N(slot->first, slot->last, node, hash_next);
+      }
+#endif
+      dbgi_scope_close(scope);
+    }
+    if(node != 0)
+    {
+      map = node->locals_map;
+    }
+  }
+  ProfEnd();
+  return map;
+}
+
 //- rjf: top-level command dispatch
 
 internal void
@@ -6099,6 +6179,7 @@ df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist
   df_state->unwind_cache.arena = arena_alloc();
   df_state->locals_cache.arena = arena_alloc();
   df_state->member_cache.arena = arena_alloc();
+  df_state->local_dynamic_type_override_cache.arena = arena_alloc();
   
   // rjf: set up eval view cache
   df_state->eval_view_cache.slots_count = 4096;
@@ -6502,6 +6583,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       df_state->unwind_cache_invalidated = 1;
       df_state->locals_cache_invalidated = 1;
       df_state->member_cache_invalidated = 1;
+      df_state->local_dynamic_type_override_cache_invalidated = 1;
     }
     
     //- rjf: refresh unwind cache
@@ -6548,6 +6630,16 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     {
       df_state->member_cache_invalidated = 0;
       DF_RunLocalsCache *cache = &df_state->member_cache;
+      arena_clear(cache->arena);
+      cache->table_size = 0;
+      cache->table = 0;
+    }
+    
+    //- rjf: clear local -> dynamic type override cache
+    if(df_state->local_dynamic_type_override_cache_invalidated && !df_ctrl_targets_running())
+    {
+      df_state->local_dynamic_type_override_cache_invalidated = 0;
+      DF_RunLocalsCache *cache = &df_state->local_dynamic_type_override_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
