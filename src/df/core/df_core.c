@@ -4066,6 +4066,32 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   B32 parse_has_expr = (parse.expr != &eval_expr_nil);
   B32 parse_is_type = (parse_has_expr && parse.expr->kind == EVAL_ExprKind_TypeIdent);
   
+  //- rjf: apply dynamic type overrides to expression tree - insert implicit cast
+  // nodes as necessary
+#if 0
+  if(errors.count != 0)
+  {
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      EVAL_Expr *expr;
+    };
+    Task start_task = {0, parse.expr};
+    Task *first_task = &start_task;
+    Task *last_task = &start_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      if(t->expr->kind == EVAL_ExprKind_LeafBytecode &&
+         t->expr->mode == EVAL_EvalMode_Addr)
+      {
+        String8 bytecode = t->expr->kind;
+        
+      }
+    }
+  }
+#endif
+  
   //- rjf: produce IR tree & type
   EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
   if(parse_has_expr && errors.count == 0)
