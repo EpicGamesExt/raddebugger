@@ -5064,6 +5064,12 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
       {
         DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+        if(str8_match(spec->info.string, str8_lit("list"), 0))
+        {
+          // TODO(rjf): "list" view rule needs to be formally moved into the visualization
+          // engine hooks when the system is mature enough to support it
+          continue;
+        }
         if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_VizBlockProd)
         {
           expand_rule = DF_EvalVizExpandRule_ViewRule;

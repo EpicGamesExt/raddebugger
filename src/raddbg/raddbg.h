@@ -17,7 +17,6 @@
 //     progress bar in the disassembly window. I had to close and restart. Is
 //     console app debugging not working yet, perhaps?
 //
-// [ ] cannot see base class members
 // [ ] register value committing in watch
 //
 // [ ] Setting the code_font/main_font values to a font name doesn't work.
