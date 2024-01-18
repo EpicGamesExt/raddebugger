@@ -35,6 +35,8 @@
 //
 // [ ] ** while typing, "Alt" Windows menu things should not happen
 //
+// [ ] visualize conversion failures
+//
 //  [ ] I was a little confused about what a profile file was. I understood
 //      what the user file was, but the profile file sounded like it should
 //      perhaps be per-project, yet it sounded like it was meant to be somewhat
