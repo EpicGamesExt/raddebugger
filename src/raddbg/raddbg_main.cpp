@@ -142,10 +142,15 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
   int argc;
   WCHAR **argv_16 = CommandLineToArgvW(command_line, &argc);
   char **argv = push_array(perm_arena, char *, argc);
+  B32 is_quiet = 0;
   for(int i = 0; i < argc; i += 1)
   {
     String16 arg16 = str16_cstring((U16 *)argv_16[i]);
     String8 arg8 = str8_from_16(perm_arena, arg16);
+    if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive))
+    {
+      is_quiet = 1;
+    }
     argv[i] = (char *)arg8.str;
   }
   __try
@@ -154,9 +159,12 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
   }
   __except(win32_exception_filter(GetExceptionCode()))
   {
-    char buffer[256] = {0};
-    raddbg_snprintf(buffer, sizeof(buffer), "A fatal exception (code 0x%x) occurred. The process is terminating.", (U32)g_saved_exception_code);
-    os_graphical_message(1, str8_lit("Fatal Exception"), str8_cstring(buffer));
+    if(!is_quiet)
+    {
+      char buffer[256] = {0};
+      raddbg_snprintf(buffer, sizeof(buffer), "A fatal exception (code 0x%x) occurred. The process is terminating.", (U32)g_saved_exception_code);
+      os_graphical_message(1, str8_lit("Fatal Exception"), str8_cstring(buffer));
+    }
     ExitProcess(1);
   }
   return 0;

@@ -657,6 +657,7 @@ dbgi_parse_thread_entry_point(void *p)
             opts.consoleless = 1;
             str8_list_pushf(scratch.arena, &opts.cmd_line, "raddbg");
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--convert");
+            str8_list_pushf(scratch.arena, &opts.cmd_line, "--quiet");
             //str8_list_pushf(scratch.arena, &opts.cmd_line, "--capture");
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--exe:%S", exe_path);
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--pdb:%S", og_dbg_path);
