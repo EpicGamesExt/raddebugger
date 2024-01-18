@@ -69,6 +69,10 @@ txti_lang_kind_from_extension(String8 extension)
   {
     kind = TXTI_LangKind_CPlusPlus;
   }
+  else if (str8_match(extension, str8_lit("rs"), StringMatchFlag_CaseInsensitive))
+  {
+    kind = TXTI_LangKind_Rust;
+  }
   return kind;
 }
 
@@ -392,6 +396,234 @@ txti_token_array_from_string__cpp(Arena *arena, U64 *bytes_processed_counter, St
           for(U64 keyword_idx = 0; keyword_idx < ArrayCount(cpp_keywords); keyword_idx += 1)
           {
             if(str8_match(cpp_keywords[keyword_idx], token_string, 0))
+            {
+              token.kind = TXTI_TokenKind_Keyword;
+              break;
+            }
+          }
+        }
+        
+        // rjf: push
+        txti_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        
+        // rjf: increment by ender padding
+        idx += ender_pad;
+      }
+      
+      // rjf: advance by 1 byte if we haven't found an ender
+      if(!ender_found)
+      {
+        idx += 1;
+      }
+      escaped = next_escaped;
+    }
+  }
+  
+  //- rjf: token list -> token array
+  TXTI_TokenArray result = txti_token_array_from_chunk_list(arena, &tokens);
+  scratch_end(scratch);
+  return result;
+}
+
+internal TXTI_TokenArray
+txti_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: generate token list
+  TXTI_TokenChunkList tokens = {0};
+  {
+    B32 comment_is_single_line = 0;
+    B32 string_is_char = 0;
+    TXTI_TokenKind active_token_kind = TXTI_TokenKind_Null;
+    U64 active_token_start_idx = 0;
+    B32 escaped = 0;
+    B32 next_escaped = 0;
+    U64 byte_process_start_idx = 0;
+    for(U64 idx = 0; idx <= string.size;)
+    {
+      U8 byte      = (idx+0 < string.size) ? (string.str[idx+0]) : 0;
+      U8 next_byte = (idx+1 < string.size) ? (string.str[idx+1]) : 0;
+      
+      // rjf: update counter
+      if(bytes_processed_counter != 0 && ((idx-byte_process_start_idx) >= 1000 || idx == string.size))
+      {
+        ins_atomic_u64_add_eval(bytes_processed_counter, (idx-byte_process_start_idx));
+        byte_process_start_idx = idx;
+      }
+      
+      // rjf: escaping
+      if(escaped && (byte != '\r' && byte != '\n'))
+      {
+        next_escaped = 0;
+      }
+      else if(!escaped && byte == '\\')
+      {
+        next_escaped = 1;
+      }
+      
+      // rjf: take starter, determine active token kind
+      if(active_token_kind == TXTI_TokenKind_Null)
+      {
+        // rjf: use next bytes to start a new token
+        if(0){}
+        else if(char_is_space(byte))             { active_token_kind = TXTI_TokenKind_Whitespace; }
+        else if(byte == '_' ||
+                byte == '$' ||
+                char_is_alpha(byte))             { active_token_kind = TXTI_TokenKind_Identifier; }
+        else if(char_is_digit(byte, 10) ||
+                (byte == '.' &&
+                 char_is_digit(next_byte, 10)))  { active_token_kind = TXTI_TokenKind_Numeric; }
+        else if(byte == '"')                     { active_token_kind = TXTI_TokenKind_String; string_is_char = 0; }
+        else if(byte == '\'')                    { active_token_kind = TXTI_TokenKind_String; string_is_char = 1; }
+        else if(byte == '/' && next_byte == '/') { active_token_kind = TXTI_TokenKind_Comment; comment_is_single_line = 1; }
+        else if(byte == '/' && next_byte == '*') { active_token_kind = TXTI_TokenKind_Comment; comment_is_single_line = 0; }
+        else if(byte == '~' || byte == '!' ||
+                byte == '%' || byte == '^' ||
+                byte == '&' || byte == '*' ||
+                byte == '(' || byte == ')' ||
+                byte == '-' || byte == '=' ||
+                byte == '+' || byte == '[' ||
+                byte == ']' || byte == '{' ||
+                byte == '}' || byte == ':' ||
+                byte == ';' || byte == ',' ||
+                byte == '.' || byte == '<' ||
+                byte == '>' || byte == '/' ||
+                byte == '?' || byte == '|')      { active_token_kind = TXTI_TokenKind_Symbol; }
+        else if(byte == '#')                     { active_token_kind = TXTI_TokenKind_Meta; }
+        
+        // rjf: start new token
+        if(active_token_kind != TXTI_TokenKind_Null)
+        {
+          active_token_start_idx = idx;
+        }
+        
+        // rjf: invalid token kind -> emit error
+        else
+        {
+          TXTI_Token token = {TXTI_TokenKind_Error, r1u64(idx, idx+1)};
+          txti_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        }
+      }
+      
+      // rjf: look for ender
+      U64 ender_pad = 0;
+      B32 ender_found = 0;
+      if(active_token_kind != TXTI_TokenKind_Null && idx>active_token_start_idx)
+      {
+        if(idx == string.size)
+        {
+          ender_pad = 0;
+          ender_found = 1;
+        }
+        else switch(active_token_kind)
+        {
+          default:break;
+          case TXTI_TokenKind_Whitespace:
+          {
+            ender_found = !char_is_space(byte);
+          }break;
+          case TXTI_TokenKind_Identifier:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+          }break;
+          case TXTI_TokenKind_Numeric:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.');
+          }break;
+          case TXTI_TokenKind_String:
+          {
+            ender_found = (!escaped && ((!string_is_char && byte == '"') || (string_is_char && byte == '\'')));
+            ender_pad += 1;
+          }break;
+          case TXTI_TokenKind_Symbol:
+          {
+            ender_found = (byte != '~' && byte != '!' &&
+                           byte != '%' && byte != '^' &&
+                           byte != '&' && byte != '*' &&
+                           byte != '(' && byte != ')' &&
+                           byte != '-' && byte != '=' &&
+                           byte != '+' && byte != '[' &&
+                           byte != ']' && byte != '{' &&
+                           byte != '}' && byte != ':' &&
+                           byte != ';' && byte != ',' &&
+                           byte != '.' && byte != '<' &&
+                           byte != '>' && byte != '/' &&
+                           byte != '?' && byte != '|');
+          }break;
+          case TXTI_TokenKind_Comment:
+          {
+            if(comment_is_single_line)
+            {
+              ender_found = (!escaped && (byte == '\r' || byte == '\n'));
+            }
+            else
+            {
+              ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
+              ender_pad += 2;
+            }
+          }break;
+          case TXTI_TokenKind_Meta:
+          {
+            ender_found = (!escaped && (byte == '\r' || byte == '\n'));
+          }break;
+        }
+      }
+      
+      // rjf: next byte is ender => emit token
+      if(ender_found)
+      {
+        TXTI_Token token = {active_token_kind, r1u64(active_token_start_idx, idx+ender_pad)};
+        active_token_kind = TXTI_TokenKind_Null;
+        
+        // rjf: identifier -> keyword in special cases
+        if(token.kind == TXTI_TokenKind_Identifier)
+        {
+          read_only local_persist String8 rust_keywords[] =
+          {
+            str8_lit_comp("as"),
+            str8_lit_comp("async"),
+            str8_lit_comp("await"),
+            str8_lit_comp("break"),
+            str8_lit_comp("const"),
+            str8_lit_comp("continue"),
+            str8_lit_comp("crate"),
+            str8_lit_comp("dyn"),
+            str8_lit_comp("else"),
+            str8_lit_comp("enum"),
+            str8_lit_comp("extern"),
+            str8_lit_comp("false"),
+            str8_lit_comp("fn"),
+            str8_lit_comp("for"),
+            str8_lit_comp("if"),
+            str8_lit_comp("impl"),
+            str8_lit_comp("in"),
+            str8_lit_comp("let"),
+            str8_lit_comp("loop"),
+            str8_lit_comp("match"),
+            str8_lit_comp("mod"),
+            str8_lit_comp("move"),
+            str8_lit_comp("mut"),
+            str8_lit_comp("pub"),
+            str8_lit_comp("ref"),
+            str8_lit_comp("return"),
+            str8_lit_comp("Self"),
+            str8_lit_comp("self"),
+            str8_lit_comp("static"),
+            str8_lit_comp("struct"),
+            str8_lit_comp("super"),
+            str8_lit_comp("trait"),
+            str8_lit_comp("true"),
+            str8_lit_comp("type"),
+            str8_lit_comp("unsafe"),
+            str8_lit_comp("use"),
+            str8_lit_comp("where"),
+            str8_lit_comp("while"),
+          };
+          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
+          for(U64 keyword_idx = 0; keyword_idx < ArrayCount(rust_keywords); keyword_idx += 1)
+          {
+            if(str8_match(rust_keywords[keyword_idx], token_string, 0))
             {
               token.kind = TXTI_TokenKind_Keyword;
               break;
@@ -998,6 +1230,10 @@ txti_mut_thread_entry_point(void *p)
         case TXTI_LangKind_CPlusPlus:
         {
           lex_function = txti_token_array_from_string__cpp;
+        }break;
+        case TXTI_LangKind_Rust:
+        {
+          lex_function = txti_token_array_from_string__rust;
         }break;
       }
       
