@@ -859,8 +859,9 @@ enum
   DF_CmdSpecFlag_OmitFromLists      = (1<<0),
   DF_CmdSpecFlag_RunKeepsQuery      = (1<<1),
   DF_CmdSpecFlag_QueryUsesOldInput  = (1<<2),
-  DF_CmdSpecFlag_AppliesToView      = (1<<3),
-  DF_CmdSpecFlag_QueryIsCode        = (1<<4),
+  DF_CmdSpecFlag_OldInputSelect     = (1<<3),
+  DF_CmdSpecFlag_AppliesToView      = (1<<4),
+  DF_CmdSpecFlag_QueryIsCode        = (1<<5),
 };
 
 typedef struct DF_CmdSpecInfo DF_CmdSpecInfo;

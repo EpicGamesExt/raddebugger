@@ -894,8 +894,7 @@ df_view_equip_command(DF_View *view, DF_CmdSpec *spec, DF_CmdParams *params, Str
   MemoryCopy(view->query_buffer, default_query.str, Min(sizeof(view->query_buffer), default_query.size));
   view->query.str = view->query_buffer;
   view->query.size = default_query.size;
-  view->query_cursor = txt_pt(1, default_query.size+1);
-  view->query_mark = txt_pt(1, 1);
+  view->query_cursor = view->query_mark = txt_pt(1, default_query.size+1);
   
   // rjf: initialize state for new command spec, if needed
   if(view->cmd_spec != spec)
@@ -1259,6 +1258,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             DF_CmdQueryRule query_rule = spec->info.query_rule;
             B32 applies_to_view = !!(spec->info.flags & DF_CmdSpecFlag_AppliesToView);
             B32 fill_with_input = !!(spec->info.flags & DF_CmdSpecFlag_QueryUsesOldInput);
+            B32 select_old_input = !!(spec->info.flags & DF_CmdSpecFlag_OldInputSelect);
             
             //- rjf: grab active input from panel
             B32 active_input_valid = 0;
@@ -1330,6 +1330,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
               df_view_equip_command(view, spec, &params, default_input, &df_g_nil_cfg_node);
+              if(select_old_input)
+              {
+                view->query_mark = txt_pt(1, 1);
+              }
             }
             
             //- rjf: focus this panel
