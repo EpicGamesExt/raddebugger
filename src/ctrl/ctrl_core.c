@@ -1366,6 +1366,7 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
   Temp scratch = scratch_begin(&arena, 1);
   
   //- rjf: loop -> try to get event, run, repeat
+  U64 spoof_old_ip_value = 0;
   ProfScope("loop -> try to get event, run, repeat") for(B32 got_event = 0; got_event == 0;)
   {
     //- rjf: get next event
@@ -1437,7 +1438,6 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
     {
       // rjf: prep spoof
       B32 do_spoof = (spoof != 0 && run_ctrls->single_step_thread == 0);
-      U64 spoof_old_ip_value = 0;
       U64 size_of_spoof = 0;
       if(do_spoof) ProfScope("prep spoof")
       {
@@ -1484,6 +1484,18 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
         ins_atomic_u64_inc_eval(&ctrl_state->run_idx);
         ins_atomic_u64_inc_eval(&ctrl_state->memgen_idx);
       }
+    }
+  }
+  
+  //- rjf: irrespective of what event came back, we should ALWAYS check the
+  // spoof's thread and see if it hit the spoof address, because we may have
+  // simply been sent other debug events first
+  if(spoof != 0)
+  {
+    U64 spoof_thread_rip = demon_read_ip(ctrl_demon_handle_from_ctrl(spoof->thread));
+    if(spoof_thread_rip == spoof->new_ip_value)
+    {
+      demon_write_ip(ctrl_demon_handle_from_ctrl(spoof->thread), spoof_old_ip_value);
     }
   }
   
@@ -2124,10 +2136,14 @@ ctrl_thread__run(CTRL_Msg *msg)
   DEMON_Handle target_process = ctrl_demon_handle_from_ctrl(msg->parent);
   U64 spoof_ip_vaddr = 911;
   
+  //////////////////////////////
   //- rjf: gather processes
+  //
   DEMON_HandleArray processes = demon_all_processes(scratch.arena);
   
+  //////////////////////////////
   //- rjf: gather all initial breakpoints
+  //
   DEMON_TrapChunkList user_traps = {0};
   {
     // rjf: resolve module-dependent user bps
@@ -2149,6 +2165,7 @@ ctrl_thread__run(CTRL_Msg *msg)
     }
   }
   
+  //////////////////////////////
   //- rjf: single step "stuck threads"
   //
   // "Stuck threads" are threads that are already on a User BP and would hit
@@ -2253,7 +2270,9 @@ ctrl_thread__run(CTRL_Msg *msg)
     }
   }
   
+  //////////////////////////////
   //- rjf: resolve trap net
+  //
   DEMON_TrapChunkList trap_net_traps = {0};
   for(CTRL_TrapNode *node = msg->traps.first;
       node != 0;
@@ -2263,14 +2282,18 @@ ctrl_thread__run(CTRL_Msg *msg)
     demon_trap_chunk_list_push(scratch.arena, &trap_net_traps, 256, &trap);
   }
   
+  //////////////////////////////
   //- rjf: join user breakpoints and trap net traps
+  //
   DEMON_TrapChunkList joined_traps = {0};
   {
     demon_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &user_traps);
     demon_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &trap_net_traps);
   }
   
+  //////////////////////////////
   //- rjf: record start
+  //
   if(stop_event == 0)
   {
     CTRL_EventList evts = {0};
@@ -2279,31 +2302,37 @@ ctrl_thread__run(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //////////////////////////////
   //- rjf: run loop
+  //
   if(stop_event == 0)
   {
     U64 sp_check_value = demon_read_sp(target_thread);
     B32 spoof_mode = 0;
     CTRL_Spoof spoof = {0};
-    U64 spoof_1_return_ip = 0;
-    
     for(;;)
     {
+      //////////////////////////
       //- rjf: choose low level traps
+      //
       DEMON_TrapChunkList *trap_list = &joined_traps;
       if(spoof_mode)
       {
         trap_list = &user_traps;
       }
       
+      //////////////////////////
       //- rjf: choose spoof
+      //
       CTRL_Spoof *run_spoof = 0;
       if(spoof_mode)
       {
         run_spoof = &spoof;
       }
       
+      //////////////////////////
       //- rjf: setup run controls
+      //
       DEMON_RunCtrls run_ctrls = {0};
       run_ctrls.ignore_previous_exception = 1;
       run_ctrls.run_entity_count = msg->freeze_state_threads.count;
@@ -2317,12 +2346,16 @@ ctrl_thread__run(CTRL_Msg *msg)
           idx += 1;
         }
       }
-      run_ctrls.traps            = *trap_list;
+      run_ctrls.traps = *trap_list;
       
-      //- rjf: get an event
+      //////////////////////////
+      //- rjf: get next event
+      //
       DEMON_Event *event = ctrl_thread__next_demon_event(scratch.arena, msg, &run_ctrls, run_spoof);
       
+      //////////////////////////
       //- rjf: determine event handling
+      //
       B32 hard_stop = 0;
       CTRL_EventCause hard_stop_cause = ctrl_event_cause_from_demon_event_kind(event->kind);
       B32 use_stepping_logic = 0;
@@ -2356,7 +2389,9 @@ ctrl_thread__run(CTRL_Msg *msg)
         }break;
       }
       
+      //////////////////////////
       //- rjf: unpack info about thread attached to event
+      //
       Architecture arch = demon_arch_from_object(event->thread);
       U64 reg_size = regs_block_size_from_architecture(arch);
       void *thread_regs_block = demon_read_regs(event->thread);
@@ -2382,11 +2417,14 @@ ctrl_thread__run(CTRL_Msg *msg)
         temp_end(temp);
       }
       
-      ////////////////////////////////
-      //- rjf: stepping logic      -//
+      //////////////////////////
+      //- rjf: stepping logic
+      //
       //{
       
+      //////////////////////////
       //- rjf: handle if hitting a spoof or baked in trap
+      //
       B32 hit_spoof = 0;
       B32 exception_stop = 0;
       if(use_stepping_logic)
@@ -2411,28 +2449,9 @@ ctrl_thread__run(CTRL_Msg *msg)
         }
       }
       
-      //- TODO(rjf): Jeff is hitting a bug where a spoof IP (911) has been
-      // hit by a thread, !!!BUT!!! we seemingly don't catch that until a
-      // subsequent run of this loop, probably because there are other
-      // events in the queue that we report first, losing all state about
-      // spoof mode.
-      //
-      // I'm throwing in some detection for this case, so that we can diagnose
-      // it further from there.
-      //
-      if(event->kind == DEMON_EventKind_Exception &&
-         event->instruction_pointer == 911 &&
-         (hit_spoof == 0 || spoof_mode == 0))
-      {
-        os_graphical_message(1, str8_lit("RADDBG INTERNAL DEVELOPMENT MESSAGE"), str8_lit("a bad, rare bug that Jeff found has been detected to occur - attach with debugger now"));
-      }
-      
       //- rjf: handle spoof hit
       if(hit_spoof)
       {
-        // rjf: restore 1 ip
-        demon_write_ip(target_thread, spoof_1_return_ip);
-        
         // rjf: clear spoof mode
         spoof_mode = 0;
         MemoryZeroStruct(&spoof);
@@ -2675,15 +2694,12 @@ ctrl_thread__run(CTRL_Msg *msg)
         {
           // rjf: setup spoof mode
           begin_spoof_mode = 1;
-          
           U64 spoof_sp = demon_read_sp(target_thread);
           spoof_mode = 1;
           spoof.process = ctrl_handle_from_demon(target_process);
+          spoof.thread  = ctrl_handle_from_demon(target_thread);
           spoof.vaddr   = spoof_sp;
           spoof.new_ip_value = spoof_ip_vaddr;
-          
-          // rjf: remember 1 return ip
-          demon_read_memory(target_process, &spoof_1_return_ip, spoof_sp, sizeof(spoof_1_return_ip));
         }
       }
       
@@ -2717,7 +2733,8 @@ ctrl_thread__run(CTRL_Msg *msg)
       }
       
       //}
-      //- rjf: stepping logic      -//
+      //
+      //- rjf: stepping logic
       ////////////////////////////////
       
       //- rjf: handle step past trap net
@@ -2788,20 +2805,11 @@ ctrl_thread__run(CTRL_Msg *msg)
         break;
       }
     }
-    
-    //- rjf: unstick silently-hit spoofs
-    if(stop_event != 0 && stop_event->thread != target_thread && spoof_mode != 0)
-    {
-      U64 target_thread_rip = demon_read_ip(target_thread);
-      if(target_thread_rip == spoof.new_ip_value)
-      {
-        // rjf: restore 1 ip
-        demon_write_ip(target_thread, spoof_1_return_ip);
-      }
-    }
   }
   
+  //////////////////////////////
   //- rjf: record stop
+  //
   if(stop_event != 0)
   {
     CTRL_EventList evts = {0};

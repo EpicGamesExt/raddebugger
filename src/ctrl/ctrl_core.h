@@ -85,6 +85,7 @@ typedef struct CTRL_Spoof CTRL_Spoof;
 struct CTRL_Spoof
 {
   CTRL_Handle process;
+  CTRL_Handle thread;
   U64 vaddr;
   U64 new_ip_value;
 };
