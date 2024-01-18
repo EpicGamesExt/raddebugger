@@ -55,12 +55,21 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //- rjf: target Hz -> delta time
   F32 dt = 1.f/target_hz;
   
+  //- rjf: last frame before sleep -> disable txti change detection
+  if(df_gfx_state->num_frames_requested == 0)
+  {
+    txti_set_external_change_detection_enabled(0);
+  }
+  
   //- rjf: get events from the OS
   OS_EventList events = {0};
   if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
     events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
   }
+  
+  //- rjf: enable txti change detection
+  txti_set_external_change_detection_enabled(1);
   
   //- rjf: begin measuring actual per-frame work
   U64 begin_time_us = os_now_microseconds();

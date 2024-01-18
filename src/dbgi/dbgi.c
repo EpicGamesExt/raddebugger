@@ -499,7 +499,7 @@ dbgi_parse_thread_entry_point(void *p)
     void *exe_file_base = 0;
     if(do_task)
     {
-      exe_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, exe_path);
+      exe_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, exe_path);
       exe_file_props = os_properties_from_file(exe_file);
       exe_file_map = os_file_map_open(OS_AccessFlag_Read, exe_file);
       exe_file_base = os_file_map_view_open(exe_file_map, OS_AccessFlag_Read, r1u64(0, exe_file_props.size));
@@ -558,7 +558,7 @@ dbgi_parse_thread_entry_point(void *p)
     FileProperties og_dbg_props = {0};
     if(do_task) ProfScope("analyze O.G. dbg file")
     {
-      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, og_dbg_path);
+      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, og_dbg_path);
       OS_Handle file_map = os_file_map_open(OS_AccessFlag_Read, file);
       FileProperties props = og_dbg_props = os_properties_from_file(file);
       void *base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, props.size));
@@ -709,7 +709,7 @@ dbgi_parse_thread_entry_point(void *p)
     void *raddbg_file_base = 0;
     if(do_task && raddbg_file_is_up_to_date)
     {
-      raddbg_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, raddbg_path);
+      raddbg_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbg_path);
       raddbg_file_map = os_file_map_open(OS_AccessFlag_Read, raddbg_file);
       raddbg_file_props = os_properties_from_file(raddbg_file);
       raddbg_file_base = os_file_map_view_open(raddbg_file_map, OS_AccessFlag_Read, r1u64(0, raddbg_file_props.size));

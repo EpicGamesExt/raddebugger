@@ -7334,7 +7334,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           FileProperties props = {0};
           String8 data = {0};
           {
-            OS_Handle file = os_file_open(OS_AccessFlag_Shared|OS_AccessFlag_Read, new_path);
+            OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, new_path);
             props = os_properties_from_file(file);
             data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
             os_file_close(file);
@@ -7380,7 +7380,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             {
               DF_Entity *file_entity = cfg_files[src];
               String8 path = df_full_path_from_entity(scratch.arena, file_entity);
-              OS_Handle file = os_file_open(OS_AccessFlag_Shared|OS_AccessFlag_Read, path);
+              OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, path);
               FileProperties props = os_properties_from_file(file);
               String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
               if(data.size != 0)

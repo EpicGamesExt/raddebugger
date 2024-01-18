@@ -923,6 +923,15 @@ txti_append(TXTI_Handle handle, String8 string)
   os_condition_variable_broadcast(mut_thread->msg_cv);
 }
 
+//- rjf: buffer external change detection enabling/disabling
+
+internal void
+txti_set_external_change_detection_enabled(B32 enabled)
+{
+  U64 enabled_u64 = (U64)enabled;
+  ins_atomic_u64_eval_assign(&txti_state->detector_thread_enabled, enabled_u64);
+}
+
 ////////////////////////////////
 //~ rjf: Mutator Threads
 
@@ -972,7 +981,7 @@ txti_mut_thread_entry_point(void *p)
       U64 timestamp = 0;
       if(msg->kind == TXTI_MsgKind_Reload)
       {
-        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, msg->string);
+        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, msg->string);
         FileProperties props = os_properties_from_file(file);
         timestamp = props.modified;
         file_contents = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
@@ -1228,23 +1237,26 @@ txti_detector_thread_entry_point(void *p)
   ProfThreadName("[txti] detector");
   for(;;)
   {
-    U64 slots_per_stripe = txti_state->entity_map.slots_count/txti_state->entity_map_stripes.count;
-    for(U64 stripe_idx = 0; stripe_idx < txti_state->entity_map_stripes.count; stripe_idx += 1)
+    if(ins_atomic_u64_eval(&txti_state->detector_thread_enabled))
     {
-      TXTI_Stripe *stripe = &txti_state->entity_map_stripes.v[stripe_idx];
-      OS_MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
+      U64 slots_per_stripe = txti_state->entity_map.slots_count/txti_state->entity_map_stripes.count;
+      for(U64 stripe_idx = 0; stripe_idx < txti_state->entity_map_stripes.count; stripe_idx += 1)
       {
-        U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
-        TXTI_EntitySlot *slot = &txti_state->entity_map.slots[slot_idx];
-        for(TXTI_Entity *entity = slot->first; entity != 0; entity = entity->next)
+        TXTI_Stripe *stripe = &txti_state->entity_map_stripes.v[stripe_idx];
+        OS_MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
         {
-          FileProperties props = os_properties_from_file_path(entity->path);
-          U64 entity_timestamp = entity->timestamp;
-          if(props.modified != entity_timestamp && ins_atomic_u64_eval(&entity->working_count) == 0)
+          U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
+          TXTI_EntitySlot *slot = &txti_state->entity_map.slots[slot_idx];
+          for(TXTI_Entity *entity = slot->first; entity != 0; entity = entity->next)
           {
-            TXTI_Handle handle = {txti_hash_from_string(entity->path), entity->id};
-            txti_reload(handle, entity->path);
-            ins_atomic_u64_inc_eval(&entity->working_count);
+            FileProperties props = os_properties_from_file_path(entity->path);
+            U64 entity_timestamp = entity->timestamp;
+            if(props.modified != entity_timestamp && ins_atomic_u64_eval(&entity->working_count) == 0)
+            {
+              TXTI_Handle handle = {txti_hash_from_string(entity->path), entity->id};
+              txti_reload(handle, entity->path);
+              ins_atomic_u64_inc_eval(&entity->working_count);
+            }
           }
         }
       }

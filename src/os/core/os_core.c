@@ -86,7 +86,7 @@ os_relaunch_self(void){
 internal String8
 os_data_from_file_path(Arena *arena, String8 path)
 {
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, path);
+  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
   FileProperties props = os_properties_from_file(file);
   String8 data = os_string_from_file_range(arena, file, r1u64(0, props.size));
   os_file_close(file);
@@ -129,7 +129,7 @@ os_write_data_list_to_file_path(String8 path, String8List list)
 internal FileProperties
 os_properties_from_file_path(String8 path)
 {
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, path);
+  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
   FileProperties props = os_properties_from_file(file);
   os_file_close(file);
   return props;
@@ -138,7 +138,7 @@ os_properties_from_file_path(String8 path)
 internal OS_FileID
 os_id_from_file_path(String8 path)
 {
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, path);
+  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
   OS_FileID id = os_id_from_file(file);
   os_file_close(file);
   return id;

@@ -10,10 +10,11 @@
 typedef U32 OS_AccessFlags;
 enum
 {
-  OS_AccessFlag_Read    = (1<<0),
-  OS_AccessFlag_Write   = (1<<1),
-  OS_AccessFlag_Execute = (1<<2),
-  OS_AccessFlag_Shared  = (1<<3),
+  OS_AccessFlag_Read       = (1<<0),
+  OS_AccessFlag_Write      = (1<<1),
+  OS_AccessFlag_Execute    = (1<<2),
+  OS_AccessFlag_ShareRead  = (1<<3),
+  OS_AccessFlag_ShareWrite = (1<<4),
 };
 
 ////////////////////////////////
