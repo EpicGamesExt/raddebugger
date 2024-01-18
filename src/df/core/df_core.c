@@ -2642,6 +2642,98 @@ df_debug_info_path_from_module(Arena *arena, DF_Entity *module)
 ////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders
 
+// NOTE(rjf): Stepping Algorithm Overview (2024/01/17)
+//
+// The basic idea behind all stepping algorithms in the debugger are setting up
+// a "trap net". A "trap net" is just a collection of high-level traps that are
+// meant to "catch" a thread after letting it run. This trap net is submitted
+// when the debugger frontend sends a "run" command (it is just empty if doing
+// an actual 'run' or 'continue'). The debugger control thread then uses this
+// trap net to program a state machine, to appropriately respond to a variety
+// of debug events which it is passed from the OS.
+//
+// These are "high-level traps" because they can have specific behavioral info
+// attached to them. These are encoded via the `CTRL_TrapFlags` type, which
+// allow expression of the following behaviors:
+//
+//  - end-stepping: when this trap is hit, it will end the stepping operation,
+//      and the target will not continue.
+//  - ignore-stack-pointer-check: when a trap in the trap net is hit, it will
+//      by-default be ignored if the thread's stack pointer has changed. this
+//      flag disables that behavior, for when the stack pointer is expected to
+//      change (e.g. step-out).
+//  - single-step-after-hit: when a trap with this flag is hit, the debugger
+//      will immediately single-step the thread which hit it.
+//  - save-stack-pointer: when a trap with this flag is hit, it will rewrite
+//      the stack pointer which is used to compare against, when deciding
+//      whether or not to filter a trap (based on stack pointer changes).
+//  - begin-spoof-mode: this enables "spoof mode". "spoof mode" is a special
+//      mode that disables the trap net entirely, and lets the thread run
+//      freely - but it catches the thread not with a trap, but a false return
+//      address. the debugger will overwrite a specific return address on the
+//      stack. this address will be overwritten with an address which does NOT
+//      point to a valid page, such that when the thread returns out of a
+//      particular call frame, the debugger will receive a debug event, at
+//      which point it can move the thread back to the correct return address,
+//      and resume with the trap net enabled. this is used in "step over"
+//      operations, because it avoids target <-> debugger "roundtrips" (e.g.
+//      target being stopped, debugger being called with debug events, then
+//      target resumes when debugger's control thread is done running) for
+//      recursions. (it doesn't make a difference with non-recursive calls,
+//      but the debugger can't detect the difference).
+//
+// Each stepping command prepares its trap net differently.
+//
+// --- Instruction Step Into --------------------------------------------------
+// In this case, no trap net is prepared, and only a low-level single-step is
+// performed.
+//
+// --- Instruction Step Over --------------------------------------------------
+// To build a trap net for an instruction-level step-over, the next instruction
+// at the thread's current instruction pointer is decoded. If it is a call
+// instruction, or if it is a repeating instruction, then a trap with the
+// 'end-stepping' behavior is placed at the instruction immediately following
+// the 'call' instruction.
+//
+// --- Line Step Into ---------------------------------------------------------
+// For a source-line step-into, the thread's instruction pointer is first used
+// to look up into the debug info's line info, to find the machine code in the
+// thread's current source line. Every instruction in this range is decoded.
+// Traps are then built in the following way:
+//
+// - 'call' instruction -> if can decode call destination address, place
+//     "end-stepping | ignore-stack-pointer-check" trap at destination. if
+//     can't, "end-stepping | single-step-after | ignore-stack-pointer-check"
+//     trap at call.
+// - 'jmp' (both unconditional & conditional) -> if can decode jump destination
+//     address, AND if jump leaves the line, place "end-stepping | ignore-
+//     stack-pointer-check" trap at destination. if can't, "end-stepping |
+//     single-step-after | ignore-stack-pointer-check" trap at jmp. if jump
+//     stays within the line, do nothing.
+// - 'return' -> place "end-stepping | single-step-after" trap at return inst.
+// - "end-stepping" trap is placed at the first address after the line, to
+//     catch all steps which simply proceed linearly through the instruction
+//     stream.
+//
+// --- Line Step Over ---------------------------------------------------------
+// For a source-line step-over, the thread's instruction pointer is first used
+// to look up into the debug info's line info, to find the machine code in the
+// thread's current source line. Every instruction in this range is decoded.
+// Traps are then built in the following way:
+//
+// - 'call' instruction -> place "single-step-after | begin-spoof-mode" trap at
+//     call instruction.
+// - 'jmp' (both unconditional & conditional) -> if can decode jump destination
+//     address, AND if jump leaves the line, place "end-stepping" trap at
+//     destination. if can't, "end-stepping | single-step-after" trap at jmp.
+//     if jump stays within the line, do nothing.
+// - 'return' -> place "end-stepping | single-step-after" trap at return inst.
+// - "end-stepping" trap is placed at the first address after the line, to
+//     catch all steps which simply proceed linearly through the instruction
+//     stream.
+// - for any instructions which may change the stack pointer, traps are placed
+//     at them with the "save-stack-pointer | single-step-after" behaviors.
+
 internal CTRL_TrapList
 df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread)
 {
