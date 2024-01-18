@@ -894,7 +894,8 @@ df_view_equip_command(DF_View *view, DF_CmdSpec *spec, DF_CmdParams *params, Str
   MemoryCopy(view->query_buffer, default_query.str, Min(sizeof(view->query_buffer), default_query.size));
   view->query.str = view->query_buffer;
   view->query.size = default_query.size;
-  view->query_cursor = view->query_mark = txt_pt(1, default_query.size+1);
+  view->query_cursor = txt_pt(1, default_query.size+1);
+  view->query_mark = txt_pt(1, 1);
   
   // rjf: initialize state for new command spec, if needed
   if(view->cmd_spec != spec)
@@ -4107,7 +4108,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
         }
       }
-
+      
       if(ws->hover_eval_string.size == 0)
       {
         ws->hover_eval_num_visible_rows_t = 0;
