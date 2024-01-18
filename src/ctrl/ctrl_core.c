@@ -1822,6 +1822,7 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
                 str8_lit("WinMainCRTStartup"),
                 str8_lit("wWinMainCRTStartup"),
                 str8_lit("mainCRTStartup"),
+                str8_lit("wmainCRTStartup"),
               };
               
               // rjf: find voff for one of the custom entry points attached to this msg
