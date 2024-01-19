@@ -747,7 +747,10 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
         }
         if(info != 0)
         {
-          info->subrect = chosen_atlas_region;
+          info->subrect.min.x = chosen_atlas_region.min.x;
+          info->subrect.min.y = chosen_atlas_region.min.y;
+          info->subrect.max.x = chosen_atlas_region.min.x + raster.atlas_dim.x;
+          info->subrect.max.y = chosen_atlas_region.min.y + raster.atlas_dim.y;
           info->atlas_num = chosen_atlas_num;
           info->advance = raster.advance;
         }
