@@ -791,6 +791,25 @@ os_file_path_exists(String8 path)
   return exists;
 }
 
+internal FileProperties
+os_properties_from_file_path(String8 path)
+{
+  WIN32_FIND_DATAW find_data = {0};
+  Temp scratch = scratch_begin(0, 0);
+  String16 path16 = str16_from_8(scratch.arena, path);
+  HANDLE handle = FindFirstFileW((WCHAR *)path16.str, &find_data);
+  FindClose(handle);
+  FileProperties props = {0};
+  {
+    props.size = Compose64Bit(find_data.nFileSizeHigh, find_data.nFileSizeLow);
+    w32_dense_time_from_file_time(&props.created, &find_data.ftCreationTime);
+    w32_dense_time_from_file_time(&props.modified, &find_data.ftLastWriteTime);
+    props.flags = w32_file_property_flags_from_dwFileAttributes(find_data.dwFileAttributes);
+  }
+  scratch_end(scratch);
+  return props;
+}
+
 //- rjf: file maps
 
 internal OS_Handle

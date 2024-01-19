@@ -126,15 +126,6 @@ os_write_data_list_to_file_path(String8 path, String8List list)
   return good;
 }
 
-internal FileProperties
-os_properties_from_file_path(String8 path)
-{
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
-  FileProperties props = os_properties_from_file(file);
-  os_file_close(file);
-  return props;
-}
-
 internal OS_FileID
 os_id_from_file_path(String8 path)
 {

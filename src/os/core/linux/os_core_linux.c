@@ -1198,6 +1198,14 @@ os_file_path_exists(String8 path)
   return 0;
 }
 
+internal FileProperties
+os_properties_from_file_path(String8 path)
+{
+  FileProperties props = {0};
+  NotImplemented;
+  return props;
+}
+
 //- rjf: file maps
 
 internal OS_Handle
