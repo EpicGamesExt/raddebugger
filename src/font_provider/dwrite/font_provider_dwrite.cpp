@@ -420,6 +420,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
       U64 in_pitch  = (U64)dib.dsBm.bmWidthBytes;
       U8 *out_data  = (U8 *)result.atlas;
       U64 out_pitch = atlas_dim.x * 4;
+      U64 color_sum = 0;
       
       U8 *in_line = (U8 *)in_data;
       U8 *out_line = out_data;
@@ -434,11 +435,17 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
           out_pixel[1] = 255;
           out_pixel[2] = 255;
           out_pixel[3] = in_pixel_byte;
+          color_sum += in_pixel_byte;
           in_pixel += 4;
           out_pixel += 4;
         }
         in_line += in_pitch;
         out_line += out_pitch;
+      }
+
+      if (color_sum == 0)
+      {
+        result.atlas_dim = {0};
       }
     }
     render_target->Release();
