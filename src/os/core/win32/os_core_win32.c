@@ -6,6 +6,11 @@
 #pragma comment(lib, "shell32")
 #pragma comment(lib, "advapi32")
 #pragma comment(lib, "rpcrt4")
+#pragma comment(lib, "shlwapi")
+#pragma comment(lib, "comctl32")
+
+// this is required for loading correct comctl32 dll file
+#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 ////////////////////////////////
 //~ allen: Definitions For Symbols That Are Sometimes Missing in Older Windows SDKs

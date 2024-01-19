@@ -428,6 +428,7 @@
 #else
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ " [Debug]"
 #endif
+#define RADDBG_GITHUB_ISSUES "https://github.com/EpicGames/raddebugger/issues"
 
 ////////////////////////////////
 //~ rjf: Top-Level Execution Types
