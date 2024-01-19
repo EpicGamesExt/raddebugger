@@ -6784,7 +6784,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       B32 good = 1;
       DF_EntityList all_threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
       DF_RunUnwindCache *cache = &df_state->unwind_cache;
-      if (unwind_cache_clear)
+      if (unwind_cache_clear || cache->table_size == 0)
       {
         df_clear_unwind_cache(cache);
       }
