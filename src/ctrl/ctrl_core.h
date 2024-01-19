@@ -402,6 +402,7 @@ struct CTRL_State
   CTRL_WakeupFunctionType *wakeup_hook;
   U64 run_idx;
   U64 memgen_idx;
+  U64 reggen_idx;
   
   // rjf: name -> register/alias hash tables for eval
   EVAL_String2NumMap arch_string2reg_tables[Architecture_COUNT];
@@ -523,6 +524,7 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 //- rjf: run index
 internal U64 ctrl_run_idx(void);
 internal U64 ctrl_memgen_idx(void);
+internal U64 ctrl_reggen_idx(void);
 
 //- rjf: halt everything
 internal void ctrl_halt(void);
