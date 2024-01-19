@@ -444,6 +444,7 @@ txti_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, S
     {
       U8 byte      = (idx+0 < string.size) ? (string.str[idx+0]) : 0;
       U8 next_byte = (idx+1 < string.size) ? (string.str[idx+1]) : 0;
+	  U8 third_byte = (idx+2 < string.size) ? (string.str[idx+2]) : 0;
       
       // rjf: update counter
       if(bytes_processed_counter != 0 && ((idx-byte_process_start_idx) >= 1000 || idx == string.size))
@@ -470,7 +471,10 @@ txti_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, S
         else if(char_is_space(byte))             { active_token_kind = TXTI_TokenKind_Whitespace; }
         else if(byte == '_' ||
                 byte == '$' ||
-                char_is_alpha(byte))             { active_token_kind = TXTI_TokenKind_Identifier; }
+                char_is_alpha(byte) ||
+				(byte == '\'' &&
+				next_byte == 's' &&
+				third_byte != '\''))             { active_token_kind = TXTI_TokenKind_Identifier; }
         else if(char_is_digit(byte, 10) ||
                 (byte == '.' &&
                  char_is_digit(next_byte, 10)))  { active_token_kind = TXTI_TokenKind_Numeric; }
@@ -619,6 +623,22 @@ txti_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, S
             str8_lit_comp("use"),
             str8_lit_comp("where"),
             str8_lit_comp("while"),
+            str8_lit_comp("abstract"),
+            str8_lit_comp("become"),
+            str8_lit_comp("box"),
+            str8_lit_comp("do"),
+            str8_lit_comp("final"),
+            str8_lit_comp("macro"),
+            str8_lit_comp("override"),
+            str8_lit_comp("priv"),
+            str8_lit_comp("typeof"),
+            str8_lit_comp("unsized"),
+            str8_lit_comp("virtual"),
+            str8_lit_comp("yield"),
+            str8_lit_comp("try"),
+            str8_lit_comp("macro_rules"),
+            str8_lit_comp("union"),
+            str8_lit_comp("'static"),
           };
           String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
           for(U64 keyword_idx = 0; keyword_idx < ArrayCount(rust_keywords); keyword_idx += 1)
