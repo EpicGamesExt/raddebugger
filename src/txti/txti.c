@@ -984,12 +984,15 @@ txti_mut_thread_entry_point(void *p)
       {
         FileProperties pre_load_props = os_properties_from_file_path(msg->string);
         OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, msg->string);
-        timestamp = pre_load_props.modified;
         file_contents = os_string_from_file_range(scratch.arena, file, r1u64(0, pre_load_props.size));
         lang_kind = txti_lang_kind_from_extension(str8_skip_last_dot(msg->string));
         os_file_close(file);
         FileProperties post_load_props = os_properties_from_file_path(msg->string);
         load_valid = (post_load_props.modified == pre_load_props.modified);
+        if(load_valid)
+        {
+          timestamp = pre_load_props.modified;
+        }
       }
       
       //- rjf: nonzero lang kind -> unpack lang info
