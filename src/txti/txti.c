@@ -533,7 +533,7 @@ txti_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, S
           }break;
           case TXTI_TokenKind_Numeric:
           {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.');
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && (byte != '.' || next_byte == '.'));
           }break;
           case TXTI_TokenKind_String:
           {
