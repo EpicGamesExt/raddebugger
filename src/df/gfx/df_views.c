@@ -5525,6 +5525,29 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   }
   
   //////////////////////////////
+  //- rjf: determine up-to-dateness of source file
+  //
+  B32 file_is_out_of_date = 0;
+  String8 out_of_date_binary_name = {0};
+  for(DF_EntityNode *n = code_slice_params.relevant_binaries.first; n != 0; n = n->next)
+  {
+    DF_Entity *binary = n->entity;
+    if(!df_entity_is_nil(binary))
+    {
+      String8 full_path = df_full_path_from_entity(scratch.arena, entity);
+      TXTI_Handle handle = txti_handle_from_path(full_path);
+      TXTI_BufferInfo info = txti_buffer_info_from_handle(scratch.arena, handle);
+      DBGI_Parse *parse = df_dbgi_parse_from_binary_file(scope, binary);
+      if(parse->exe_props.modified < info.timestamp)
+      {
+        file_is_out_of_date = 1;
+        out_of_date_binary_name = binary->name;
+        break;
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build bottom info bar
   //
   if(txti_buffer_is_ready)
@@ -5533,26 +5556,47 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     ui_set_next_fixed_y(code_area_dim.y + scroll_bar_dim);
     ui_set_next_pref_width(ui_px(bottom_bar_dim.x, 1));
     ui_set_next_pref_height(ui_px(bottom_bar_dim.y, 1));
-    ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_AltBackground));
+    ui_set_next_background_color(df_rgba_from_theme_color(file_is_out_of_date ? DF_ThemeColor_FailureBackground : DF_ThemeColor_AltBackground));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
     UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
       UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-      UI_Font(code_font)
     {
       String8 full_path = df_full_path_from_entity(scratch.arena, entity);
       TXTI_Handle handle = txti_handle_from_path(full_path);
       TXTI_BufferInfo info = txti_buffer_info_from_handle(scratch.arena, handle);
-      ui_label(full_path);
-      ui_spacer(ui_em(1.5f, 1));
-      ui_labelf("Row: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
-      ui_spacer(ui_pct(1, 0));
-      ui_labelf("(read only)");
-      ui_labelf("%s",
-                info.line_end_kind == TXTI_LineEndKind_LF   ? "lf" :
-                info.line_end_kind == TXTI_LineEndKind_CRLF ? "crlf" :
-                "bin");
+      if(file_is_out_of_date)
+      {
+        UI_Box *box = &ui_g_nil_box;
+        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureText))
+          UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+        {
+          box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "%S###file_ood_warning", df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
+        }
+        UI_Signal sig = ui_signal_from_box(box);
+        if(sig.hovering) UI_Tooltip
+        {
+          UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
+          {
+            ui_labelf("This file has changed since ", out_of_date_binary_name);
+            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_Highlight0)) ui_label(out_of_date_binary_name);
+            ui_labelf(" was built.");
+          }
+        }
+      }
+      UI_Font(code_font)
+      {
+        ui_label(full_path);
+        ui_spacer(ui_em(1.5f, 1));
+        ui_labelf("Row: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
+        ui_spacer(ui_pct(1, 0));
+        ui_labelf("(read only)");
+        ui_labelf("%s",
+                  info.line_end_kind == TXTI_LineEndKind_LF   ? "lf" :
+                  info.line_end_kind == TXTI_LineEndKind_CRLF ? "crlf" :
+                  "bin");
+      }
     }
   }
   

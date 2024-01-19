@@ -189,6 +189,10 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
   {
     border_sdf_t = 1;
   }
+  if(border_sdf_t < 0.001f)
+  {
+    discard;
+  }
   
   // rjf: form+return final color
   float4 final_color = albedo_sample;
