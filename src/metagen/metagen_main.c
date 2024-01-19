@@ -323,7 +323,7 @@ int main(int argument_count, char **arguments)
           }
         }
         String8 output_path = push_str8f(mg_arena, "%S/%S.md", build_dir_path, node->string);
-        FILE *file = fopen((char *)output_path.str, "w");
+        FILE *file = fopen((char *)output_path.str, "wb");
         for(String8Node *n = md_strs.first; n != 0; n = n->next)
         {
           fwrite(n->string.str, n->string.size, 1, file);
@@ -355,7 +355,7 @@ int main(int argument_count, char **arguments)
           String8 h_path = push_str8f(mg_arena, "%S/%S.meta.h", layer_generated_folder, layer_key_filename);
           String8 c_path = push_str8f(mg_arena, "%S/%S.meta.c", layer_generated_folder, layer_key_filename);
           {
-            FILE *h = fopen((char *)h_path.str, "w");
+            FILE *h = fopen((char *)h_path.str, "wb");
             fprintf(h, "// Copyright (c) 2024 Epic Games Tools\n");
             fprintf(h, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
             fprintf(h, "//- GENERATED CODE\n\n");
@@ -385,7 +385,7 @@ int main(int argument_count, char **arguments)
             fclose(h);
           }
           {
-            FILE *c = fopen((char *)c_path.str, "w");
+            FILE *c = fopen((char *)c_path.str, "wb");
             fprintf(c, "// Copyright (c) 2024 Epic Games Tools\n");
             fprintf(c, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
             fprintf(c, "//- GENERATED CODE\n\n");
