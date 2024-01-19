@@ -663,6 +663,13 @@ ctrl_memgen_idx(void)
   return result;
 }
 
+internal U64
+ctrl_reggen_idx(void)
+{
+  U64 result = ins_atomic_u64_eval(&ctrl_state->reggen_idx);
+  return result;
+}
+
 //- rjf: halt everything
 
 internal void
@@ -1062,6 +1069,7 @@ internal B32
 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, CTRL_Handle thread, void *block)
 {
   B32 good = demon_write_regs(ctrl_demon_handle_from_ctrl(thread), block);
+  ins_atomic_u64_inc_eval(&ctrl_state->reggen_idx);
   return good;
 }
 
@@ -1479,10 +1487,11 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
         demon_write_memory(ctrl_demon_handle_from_ctrl(spoof->process), spoof->vaddr, &spoof_old_ip_value, size_of_spoof);
       }
       
-      // rjf: inc run idx & memgen idx
+      // rjf: inc generation counters
       {
         ins_atomic_u64_inc_eval(&ctrl_state->run_idx);
         ins_atomic_u64_inc_eval(&ctrl_state->memgen_idx);
+        ins_atomic_u64_inc_eval(&ctrl_state->reggen_idx);
       }
     }
   }
