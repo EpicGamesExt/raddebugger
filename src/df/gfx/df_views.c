@@ -7479,6 +7479,15 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   }
   
   //////////////////////////////
+  //- rjf: clamp cursor
+  //
+  {
+    Rng1U64 cursor_valid_rng = r1u64(0, 0x7FFFFFFFFFFFull);
+    mv->cursor = clamp_1u64(cursor_valid_rng, mv->cursor);
+    mv->mark = clamp_1u64(cursor_valid_rng, mv->mark);
+  }
+  
+  //////////////////////////////
   //- rjf: center cursor
   //
   if(mv->center_cursor)
