@@ -5,7 +5,6 @@
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
-// [ ] ** ASAN targets
 //
 // [ ] ** In solo-stepping mode, if I step over something like CreateFileA, it
 //     pseudo-hangs the debugger. I can't seem to do anything else, including
@@ -17,8 +16,6 @@
 //     progress bar in the disassembly window. I had to close and restart. Is
 //     console app debugging not working yet, perhaps?
 //
-// [ ] register value committing in watch
-//
 // [ ] Setting the code_font/main_font values to a font name doesn't work.
 //     Should probably make note that you have to set it to a path to a TTF,
 //     since that's not normally how Windows fonts work.
@@ -27,13 +24,17 @@
 //
 // [ ] disasm animation & go-to-address
 //
-// [ ] visualize mismatched source code and debug info
 // [ ] visualize remapped files (via path map)
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
+// [ ] escaping in config files - breakpoint labels etc.
+// [ ] focus changing between query bar & panel content via mouse
+//
 // [ ] ** while typing, "Alt" Windows menu things should not happen
+//
+// [ ] visualize conversion failures
 //
 //  [ ] I was a little confused about what a profile file was. I understood
 //      what the user file was, but the profile file sounded like it should
@@ -419,13 +420,14 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 4
+#define RADDBG_VERSION_PATCH 5
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""
 #else
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ " [Debug]"
 #endif
+#define RADDBG_GITHUB_ISSUES "https://github.com/EpicGames/raddebugger/issues"
 
 ////////////////////////////////
 //~ rjf: Top-Level Execution Types

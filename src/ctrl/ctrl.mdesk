@@ -43,6 +43,7 @@ CTRL_ExceptionCodeKindTable:
   {Win32ProcedureNotFound              win32_procedure_not_found                   0xc06d007f  0  "(Win32) Procedure Not Found"                                    }
   {Win32SanitizerErrorDetected         win32_sanitizer_error_detected              0xe073616e  1  "(Win32) Sanitizer Error Detected"                               }
   {Win32SanitizerRawAccessViolation    win32_sanitizer_raw_access_violation        0xe0736171  0  "(Win32) Sanitizer Raw Access Violation"                         }
+  {Win32DirectXDebugLayer              win32_directx_debug_layer                   0x0000087a  1  "(Win32) DirectX Debug Layer"                                    }
 }
 
 ////////////////////////////////

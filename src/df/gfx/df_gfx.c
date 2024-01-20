@@ -1258,6 +1258,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             DF_CmdQueryRule query_rule = spec->info.query_rule;
             B32 applies_to_view = !!(spec->info.flags & DF_CmdSpecFlag_AppliesToView);
             B32 fill_with_input = !!(spec->info.flags & DF_CmdSpecFlag_QueryUsesOldInput);
+            B32 select_old_input = !!(spec->info.flags & DF_CmdSpecFlag_OldInputSelect);
             
             //- rjf: grab active input from panel
             B32 active_input_valid = 0;
@@ -1329,6 +1330,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
               df_view_equip_command(view, spec, &params, default_input, &df_g_nil_cfg_node);
+              if(select_old_input)
+              {
+                view->query_mark = txt_pt(1, 1);
+              }
             }
             
             //- rjf: focus this panel
@@ -3497,14 +3502,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           color.y *= 0.7f;
           color.z *= 0.7f;
           ui_set_next_background_color(color);
-          if(is_frozen && df_icon_buttonf(DF_IconKind_Locked, "Thaw").clicked)
+          if(is_frozen && df_icon_buttonf(DF_IconKind_Locked, "Thaw###freeze_thaw").clicked)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(entity);
             df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ThawEntity));
           }
-          if(!is_frozen && df_icon_buttonf(DF_IconKind_Unlocked, "Freeze").clicked)
+          if(!is_frozen && df_icon_buttonf(DF_IconKind_Unlocked, "Freeze###freeze_thaw").clicked)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(entity);
@@ -3599,9 +3604,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               B32 is_selected = df_handle_match(ctrl_ctx.thread, df_handle_from_entity(entity));
               if(is_selected)
               {
-                df_icon_buttonf(DF_IconKind_Thread, "[Selected]");
+                df_icon_buttonf(DF_IconKind_Thread, "[Selected]###select_entity");
               }
-              else if(df_icon_buttonf(DF_IconKind_Thread, "Select").clicked)
+              else if(df_icon_buttonf(DF_IconKind_Thread, "Select###select_entity").clicked)
               {
                 DF_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = df_handle_from_entity(entity);
@@ -4108,7 +4113,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
         }
       }
-
+      
       if(ws->hover_eval_string.size == 0)
       {
         ws->hover_eval_num_visible_rows_t = 0;

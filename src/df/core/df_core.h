@@ -859,8 +859,9 @@ enum
   DF_CmdSpecFlag_OmitFromLists      = (1<<0),
   DF_CmdSpecFlag_RunKeepsQuery      = (1<<1),
   DF_CmdSpecFlag_QueryUsesOldInput  = (1<<2),
-  DF_CmdSpecFlag_AppliesToView      = (1<<3),
-  DF_CmdSpecFlag_QueryIsCode        = (1<<4),
+  DF_CmdSpecFlag_OldInputSelect     = (1<<3),
+  DF_CmdSpecFlag_AppliesToView      = (1<<4),
+  DF_CmdSpecFlag_QueryIsCode        = (1<<5),
 };
 
 typedef struct DF_CmdSpecInfo DF_CmdSpecInfo;
@@ -1130,11 +1131,12 @@ struct DF_State
   DF_EntityListCache bin_file_cache;
   
   // rjf: per-run caches
-  B32 unwind_cache_invalidated;
+  U64 unwind_cache_reggen_idx;
+  U64 unwind_cache_memgen_idx;
   DF_RunUnwindCache unwind_cache;
-  B32 locals_cache_invalidated;
+  U64 locals_cache_reggen_idx;
   DF_RunLocalsCache locals_cache;
-  B32 member_cache_invalidated;
+  U64 member_cache_reggen_idx;
   DF_RunLocalsCache member_cache;
   
   // rjf: eval view cache

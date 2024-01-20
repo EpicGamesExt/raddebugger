@@ -861,6 +861,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
             
             // init new entity
             DEMON_Entity *module = demon_ent_new(process, DEMON_EntityKind_Module, module_base);
+            module->addr_range_dim = image_info.size;
             demon_module_count += 1;
             DEMON_W32_Ext *module_ext = demon_w32_ext_alloc();
             module->ext = module_ext;

@@ -152,7 +152,6 @@ internal void           os_set_cursor(OS_Cursor cursor);
 internal F32            os_double_click_time(void);
 internal F32            os_caret_blink_time(void);
 internal F32            os_default_refresh_rate(void);
-internal B32            os_granular_sleep_enabled(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Native Messages & Panics (Implemented Per-OS)

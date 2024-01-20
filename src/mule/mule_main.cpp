@@ -1402,12 +1402,11 @@ extended_type_coverage_eval_tests(void){
     non_virtual_derived->x += 1;
     non_virtual_derived->x += 1;
     non_virtual_derived->x += 1;
-    delete non_virtual_derived;
     
     Base *base_array[1024] = {0};
     for(int i = 0; i < sizeof(base_array)/sizeof(base_array[0]); i += 1)
     {
-      if(i & 1 == 1)
+      if((i & 1) == 1)
       {
         base_array[i] = new DerivedA();
       }
@@ -1999,7 +1998,7 @@ control_flow_stepping_tests(void){
     if (i <= 1) goto done;
     if ((i&1) == 0) goto even_case;
     
-    odd_case:
+    // odd_case:
     i = 3*i + 1;
     
     even_case:

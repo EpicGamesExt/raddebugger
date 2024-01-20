@@ -47,6 +47,26 @@ struct CTRL_MachineIDHandlePairList
 };
 
 ////////////////////////////////
+//~ rjf: Unwind Types
+
+typedef struct CTRL_UnwindFrame CTRL_UnwindFrame;
+struct CTRL_UnwindFrame
+{
+  CTRL_UnwindFrame *next;
+  U64 rip;
+  void *regs;
+};
+
+typedef struct CTRL_Unwind CTRL_Unwind;
+struct CTRL_Unwind
+{
+  CTRL_UnwindFrame *first;
+  CTRL_UnwindFrame *last;
+  U64 count;
+  B32 error;
+};
+
+////////////////////////////////
 //~ rjf: Trap Types
 
 typedef U32 CTRL_TrapFlags;
@@ -402,6 +422,7 @@ struct CTRL_State
   CTRL_WakeupFunctionType *wakeup_hook;
   U64 run_idx;
   U64 memgen_idx;
+  U64 reggen_idx;
   
   // rjf: name -> register/alias hash tables for eval
   EVAL_String2NumMap arch_string2reg_tables[Architecture_COUNT];
@@ -523,6 +544,7 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 //- rjf: run index
 internal U64 ctrl_run_idx(void);
 internal U64 ctrl_memgen_idx(void);
+internal U64 ctrl_reggen_idx(void);
 
 //- rjf: halt everything
 internal void ctrl_halt(void);
@@ -551,6 +573,12 @@ internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, CTRL_Handle 
 internal U64 ctrl_rip_from_thread(CTRL_MachineID machine_id, CTRL_Handle thread);
 internal B32 ctrl_thread_write_rip(CTRL_MachineID machine_id, CTRL_Handle thread, U64 rip);
 internal U64 ctrl_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, CTRL_Handle thread);
+
+//- rjf: process * vaddr -> module
+internal CTRL_Handle ctrl_module_from_process_vaddr(CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr);
+
+//- rjf: unwinding
+internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle thread);
 
 //- rjf: name -> register/alias hash tables, for eval
 internal EVAL_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);

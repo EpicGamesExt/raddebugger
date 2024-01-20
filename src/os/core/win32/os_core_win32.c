@@ -6,6 +6,11 @@
 #pragma comment(lib, "shell32")
 #pragma comment(lib, "advapi32")
 #pragma comment(lib, "rpcrt4")
+#pragma comment(lib, "shlwapi")
+#pragma comment(lib, "comctl32")
+
+// this is required for loading correct comctl32 dll file
+#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 ////////////////////////////////
 //~ allen: Definitions For Symbols That Are Sometimes Missing in Older Windows SDKs
@@ -612,7 +617,8 @@ os_file_open(OS_AccessFlags flags, String8 path)
   if(flags & OS_AccessFlag_Read)    {access_flags |= GENERIC_READ;}
   if(flags & OS_AccessFlag_Write)   {access_flags |= GENERIC_WRITE;}
   if(flags & OS_AccessFlag_Execute) {access_flags |= GENERIC_EXECUTE;}
-  if(flags & OS_AccessFlag_Shared)  {share_mode = (!!(flags & OS_AccessFlag_Write)*FILE_SHARE_WRITE)|FILE_SHARE_READ;}
+  if(flags & OS_AccessFlag_ShareRead)  {share_mode |= FILE_SHARE_READ;}
+  if(flags & OS_AccessFlag_ShareWrite) {share_mode |= FILE_SHARE_WRITE;}
   if(flags & OS_AccessFlag_Write)   {creation_disposition = CREATE_ALWAYS;}
   HANDLE file = CreateFileW((WCHAR *)path16.str, access_flags, share_mode, 0, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
   if(file != INVALID_HANDLE_VALUE)
@@ -788,6 +794,26 @@ os_file_path_exists(String8 path)
   B32 exists = (attributes != INVALID_FILE_ATTRIBUTES) && !!(~attributes & FILE_ATTRIBUTE_DIRECTORY);
   scratch_end(scratch);
   return exists;
+}
+
+internal FileProperties
+os_properties_from_file_path(String8 path)
+{
+  WIN32_FIND_DATAW find_data = {0};
+  Temp scratch = scratch_begin(0, 0);
+  String16 path16 = str16_from_8(scratch.arena, path);
+  HANDLE handle = FindFirstFileW((WCHAR *)path16.str, &find_data);
+  FileProperties props = {0};
+  if(handle != INVALID_HANDLE_VALUE)
+  {
+    props.size = Compose64Bit(find_data.nFileSizeHigh, find_data.nFileSizeLow);
+    w32_dense_time_from_file_time(&props.created, &find_data.ftCreationTime);
+    w32_dense_time_from_file_time(&props.modified, &find_data.ftLastWriteTime);
+    props.flags = w32_file_property_flags_from_dwFileAttributes(find_data.dwFileAttributes);
+  }
+  FindClose(handle);
+  scratch_end(scratch);
+  return props;
 }
 
 //- rjf: file maps

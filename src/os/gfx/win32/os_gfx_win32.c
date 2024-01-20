@@ -14,7 +14,6 @@ global Arena *        w32_event_arena = 0;
 global HCURSOR        w32_hcursor = 0;
 global B32            w32_resizing = 0;
 global F32            w32_default_refresh_rate = 60.f;
-global B32            w32_granular_sleep_enabled = 0;
 
 ////////////////////////////////
 //~ allen: Windows SDK Inconsistency Fixer
@@ -585,9 +584,6 @@ os_graphical_init(void)
     }
   }
   
-  //- rjf: try to enable granular sleep
-  w32_granular_sleep_enabled = (timeBeginPeriod(1) == TIMERR_NOERROR);
-  
   //- rjf: set initial cursor
   os_set_cursor(OS_Cursor_Pointer);
 }
@@ -1079,12 +1075,6 @@ internal F32
 os_default_refresh_rate(void)
 {
   return w32_default_refresh_rate;
-}
-
-internal B32
-os_granular_sleep_enabled(void)
-{
-  return w32_granular_sleep_enabled;
 }
 
 ////////////////////////////////

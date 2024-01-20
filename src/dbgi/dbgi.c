@@ -499,7 +499,7 @@ dbgi_parse_thread_entry_point(void *p)
     void *exe_file_base = 0;
     if(do_task)
     {
-      exe_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, exe_path);
+      exe_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, exe_path);
       exe_file_props = os_properties_from_file(exe_file);
       exe_file_map = os_file_map_open(OS_AccessFlag_Read, exe_file);
       exe_file_base = os_file_map_view_open(exe_file_map, OS_AccessFlag_Read, r1u64(0, exe_file_props.size));
@@ -508,7 +508,8 @@ dbgi_parse_thread_entry_point(void *p)
     //- rjf: parse exe file info
     Arena *parse_arena = 0;
     PE_BinInfo exe_pe_info = {0};
-    String8 exe_dbg_path_embedded = {0};
+    String8 exe_dbg_path_embedded_absolute = {0};
+    String8 exe_dbg_path_embedded_relative = {0};
     if(do_task)
     {
       parse_arena = arena_alloc();
@@ -516,7 +517,9 @@ dbgi_parse_thread_entry_point(void *p)
       {
         String8 exe_data = str8((U8 *)exe_file_base, exe_file_props.size);
         exe_pe_info = pe_bin_info_from_data(parse_arena, exe_data);
-        exe_dbg_path_embedded = str8_cstring_capped((char *)exe_data.str+exe_pe_info.dbg_path_off, (char *)exe_data.str+exe_pe_info.dbg_path_off+Min(exe_data.size-exe_pe_info.dbg_path_off, 4096));
+        exe_dbg_path_embedded_absolute = str8_cstring_capped((char *)exe_data.str+exe_pe_info.dbg_path_off, (char *)exe_data.str+exe_pe_info.dbg_path_off+Min(exe_data.size-exe_pe_info.dbg_path_off, 4096));
+        String8 exe_folder = str8_chop_last_slash(exe_path);
+        exe_dbg_path_embedded_relative = push_str8f(scratch.arena, "%S/%S", exe_folder, exe_dbg_path_embedded_absolute);
       }
     }
     
@@ -533,9 +536,10 @@ dbgi_parse_thread_entry_point(void *p)
       {
         String8 possible_og_dbg_paths[] =
         {
-          /* inferred:                  */ exe_dbg_path_embedded,
-          /* "foo.exe" -> "foo.pdb"     */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path)),
-          /* "foo.exe" -> "foo.exe.pdb" */ push_str8f(scratch.arena, "%S.pdb", exe_path),
+          /* inferred (treated as absolute): */ exe_dbg_path_embedded_absolute,
+          /* inferred (treated as relative): */ exe_dbg_path_embedded_relative,
+          /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path)),
+          /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", exe_path),
         };
         for(U64 idx = 0; idx < ArrayCount(possible_og_dbg_paths); idx += 1)
         {
@@ -558,7 +562,7 @@ dbgi_parse_thread_entry_point(void *p)
     FileProperties og_dbg_props = {0};
     if(do_task) ProfScope("analyze O.G. dbg file")
     {
-      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, og_dbg_path);
+      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, og_dbg_path);
       OS_Handle file_map = os_file_map_open(OS_AccessFlag_Read, file);
       FileProperties props = og_dbg_props = os_properties_from_file(file);
       void *base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, props.size));
@@ -657,6 +661,7 @@ dbgi_parse_thread_entry_point(void *p)
             opts.consoleless = 1;
             str8_list_pushf(scratch.arena, &opts.cmd_line, "raddbg");
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--convert");
+            str8_list_pushf(scratch.arena, &opts.cmd_line, "--quiet");
             //str8_list_pushf(scratch.arena, &opts.cmd_line, "--capture");
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--exe:%S", exe_path);
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--pdb:%S", og_dbg_path);
@@ -709,7 +714,7 @@ dbgi_parse_thread_entry_point(void *p)
     void *raddbg_file_base = 0;
     if(do_task && raddbg_file_is_up_to_date)
     {
-      raddbg_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, raddbg_path);
+      raddbg_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbg_path);
       raddbg_file_map = os_file_map_open(OS_AccessFlag_Read, raddbg_file);
       raddbg_file_props = os_properties_from_file(raddbg_file);
       raddbg_file_base = os_file_map_view_open(raddbg_file_map, OS_AccessFlag_Read, r1u64(0, raddbg_file_props.size));
@@ -817,7 +822,11 @@ dbgi_parse_thread_entry_point(void *p)
           String8 dbg_path = og_dbg_path;
           if(dbg_path.size == 0)
           {
-            dbg_path = exe_dbg_path_embedded;
+            dbg_path = exe_dbg_path_embedded_absolute;
+          }
+          if(dbg_path.size == 0)
+          {
+            dbg_path = exe_dbg_path_embedded_relative;
           }
           if(dbg_path.size == 0)
           {
