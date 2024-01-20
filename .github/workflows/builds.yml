@@ -3,7 +3,7 @@ name: builds
 on: [push, pull_request]
 
 jobs:
-  build-windows:
+  build-windows-2022:
     runs-on: windows-2022
     steps:
       - name: checkout
@@ -11,27 +11,7 @@ jobs:
       - name: build (vs 2022)
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
-          build raddbg msvc debug
-          build raddbg_from_pdb msvc debug
-          build raddbg_from_dwarf msvc debug
-          build raddbg clang debug
-          build raddbg_from_pdb clang debug
-          build raddbg_from_dwarf clang debug
-      - name: build (vs 2019)
-        shell: cmd
-        run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
-          build raddbg msvc debug
-          build raddbg_from_pdb msvc debug
-          build raddbg_from_dwarf msvc debug
-          build raddbg clang debug
-          build raddbg_from_pdb clang debug
-          build raddbg_from_dwarf clang debug
-      - name: build (vs 2017)
-        shell: cmd
-        run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           build raddbg msvc debug
           build raddbg_from_pdb msvc debug
           build raddbg_from_dwarf msvc debug
