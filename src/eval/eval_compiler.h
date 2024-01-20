@@ -164,7 +164,6 @@ internal EVAL_Expr* eval_expr_leaf_type(Arena *arena, void *location, TG_Key typ
 
 internal RADDBG_EvalTypeGroup eval_type_group_from_kind(TG_Kind kind);
 
-internal TG_Key eval_type_unwrap(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key eval_type_unwrap_enum(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key eval_type_promote(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key eval_type_coerce(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key l, TG_Key r);
