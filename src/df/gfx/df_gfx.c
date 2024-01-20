@@ -8053,6 +8053,7 @@ df_theme_color_from_txti_token_kind(TXTI_TokenKind kind)
     case TXTI_TokenKind_Meta:   {color = DF_ThemeColor_CodeMeta;}break;
     case TXTI_TokenKind_Comment:{color = DF_ThemeColor_CodeComment;}break;
     case TXTI_TokenKind_Symbol: {color = DF_ThemeColor_CodeSymbol;}break;
+    case TXTI_TokenKind_Type:   {color = DF_ThemeColor_CodeType;}break;
   }
   return color;
 }

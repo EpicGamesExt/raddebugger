@@ -80,6 +80,7 @@ typedef enum TXTI_TokenKind
   TXTI_TokenKind_Symbol,
   TXTI_TokenKind_Comment,
   TXTI_TokenKind_Meta, // preprocessor, etc.
+  TXTI_TokenKind_Type,
   TXTI_TokenKind_COUNT
 }
 TXTI_TokenKind;
@@ -146,6 +147,7 @@ typedef enum TXTI_LangKind
   TXTI_LangKind_Null,
   TXTI_LangKind_C,
   TXTI_LangKind_CPlusPlus,
+  TXTI_LangKind_Odin,
   TXTI_LangKind_COUNT
 }
 TXTI_LangKind;
