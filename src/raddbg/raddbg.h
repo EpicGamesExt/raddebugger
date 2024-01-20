@@ -29,6 +29,10 @@
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
+// [ ] Watch Window Type Evaluation
+// [ ] Globals, Thread-Locals, Types Views
+// [ ] Watch Window Filtering
+//
 // [ ] escaping in config files - breakpoint labels etc.
 // [ ] focus changing between query bar & panel content via mouse
 //
@@ -420,7 +424,7 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 5
+#define RADDBG_VERSION_PATCH 6
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""

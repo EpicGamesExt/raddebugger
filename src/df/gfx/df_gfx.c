@@ -6782,7 +6782,11 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
   ProfBeginFunction();
   String8List list = {0};
   F32 space_taken = 0;
-  if(max_size > 0)
+  if(eval.mode == EVAL_EvalMode_NULL && !tg_key_match(tg_key_zero(), eval.type_key))
+  {
+    str8_list_push(arena, &list, str8_lit("-"));
+  }
+  else if(max_size > 0)
   {
     TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_raddbg_key(graph, rdbg, eval.type_key));
     U32 radix = default_radix;
@@ -7187,6 +7191,10 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
             {
               break;
             }
+            if(block->eval.mode == EVAL_EvalMode_NULL)
+            {
+              break;
+            }
           }
         }
         row->depth = block->depth;
@@ -7266,6 +7274,10 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
                 row->flags |= DF_EvalVizRowFlag_CanExpand;
               }
               if(row->flags & DF_EvalVizRowFlag_CanExpand)
+              {
+                break;
+              }
+              if(block->eval.mode == EVAL_EvalMode_NULL)
               {
                 break;
               }
@@ -7349,6 +7361,10 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
               {
                 break;
               }
+              if(block->eval.mode == EVAL_EvalMode_NULL)
+              {
+                break;
+              }
             }
           }
           row->depth = block->depth;
@@ -7426,6 +7442,10 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
                 row->flags |= DF_EvalVizRowFlag_CanExpand;
               }
               if(row->flags & DF_EvalVizRowFlag_CanExpand)
+              {
+                break;
+              }
+              if(block->eval.mode == EVAL_EvalMode_NULL)
               {
                 break;
               }

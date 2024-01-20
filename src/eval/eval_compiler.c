@@ -1542,6 +1542,11 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     }break;
     
     case EVAL_ExprKind_TypeIdent:
+    {
+      result.tree = &eval_irtree_nil;
+      result.type_key = expr->type_key;
+      result.mode = EVAL_EvalMode_NULL;
+    }break;
     case EVAL_ExprKind_Ptr:
     case EVAL_ExprKind_Array:
     case EVAL_ExprKind_Func:
