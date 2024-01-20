@@ -4308,7 +4308,7 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
   TG_Kind type_kind = tg_kind_from_key(type_key);
   if(type_kind == TG_Kind_Ptr)
   {
-    TG_Key ptee_type_key = tg_direct_from_graph_raddbg_key(graph, rdbg, type_key);
+    TG_Key ptee_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, type_key);
     TG_Kind ptee_type_kind = tg_kind_from_key(ptee_type_key);
     if(ptee_type_kind == TG_Kind_Struct || ptee_type_kind == TG_Kind_Class)
     {

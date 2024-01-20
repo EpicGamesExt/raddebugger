@@ -7168,7 +7168,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         row->errors = block->eval.errors;
         if(block_type_kind != TG_Kind_Null)
         {
-          for(TG_Key t = block->eval.type_key;; t = tg_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+          for(TG_Key t = block->eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
           {
             TG_Kind kind = tg_kind_from_key(t);
             if(kind == TG_Kind_Null)
@@ -7254,7 +7254,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           row->expand_ui_rule_spec = expand_ui_rule_spec;
           if(tg_kind_from_key(member_eval.type_key) != TG_Kind_Null)
           {
-            for(TG_Key t = member_eval.type_key;; t = tg_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+            for(TG_Key t = member_eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
             {
               TG_Kind kind = tg_kind_from_key(t);
               if(kind == TG_Kind_Null)
@@ -7294,7 +7294,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       //- rjf: elements -> produce rows for the visible range of elements.
       case DF_EvalVizBlockKind_Elements:
       {
-        TG_Key direct_type_key = tg_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        TG_Key direct_type_key = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
         U64 direct_type_key_byte_size = tg_byte_size_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, direct_type_key);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
@@ -7338,7 +7338,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           row->expand_ui_rule_spec = expand_ui_rule_spec;
           if(direct_type_kind != TG_Kind_Null)
           {
-            for(TG_Key t = elem_eval.type_key;; t = tg_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+            for(TG_Key t = elem_eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
             {
               TG_Kind kind = tg_kind_from_key(t);
               if(kind == TG_Kind_Null)
@@ -7422,7 +7422,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           row->expand_ui_rule_spec = expand_ui_rule_spec;
           if(link_type_kind != TG_Kind_Null)
           {
-            for(TG_Key t = link_eval.type_key;; t = tg_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+            for(TG_Key t = link_eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
             {
               TG_Kind kind = tg_kind_from_key(t);
               if(kind == TG_Kind_Null)
