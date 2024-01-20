@@ -3718,14 +3718,6 @@ df_set_thread_rip(DF_Entity *thread, U64 vaddr)
 {
   B32 result = ctrl_thread_write_rip(thread->ctrl_machine_id, thread->ctrl_handle, vaddr);
   
-  // rjf: invalidate unwind/locals cache
-  if(result)
-  {
-    df_state->unwind_cache_invalidated = 1;
-    df_state->locals_cache_invalidated = 1;
-    df_state->member_cache_invalidated = 1;
-  }
-  
   // rjf: early mutation of unwind cache for immediate frontend effect
   if(result)
   {
@@ -4734,18 +4726,22 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *r
       }
       if(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules)
       {
-        result = push_str8f(arena, "0x%I64x%s%S%s", eval.imm_u64,
-                            constant_name.size != 0 ? " (" : "",
-                            constant_name,
-                            constant_name.size != 0 ? ")" : "");
+        if(constant_name.size != 0)
+        {
+          result = push_str8f(arena, "0x%I64x (%S)", eval.imm_u64, constant_name);
+        }
+        else
+        {
+          result = push_str8f(arena, "0x%I64x (%I64u)", eval.imm_u64, eval.imm_u64);
+        }
       }
       else if(constant_name.size != 0)
       {
-        result = push_str8f(arena, "%S", constant_name);
+        result = push_str8_copy(arena, constant_name);
       }
       else
       {
-        result = push_str8f(arena, "0x%I64x", eval.imm_u64);
+        result = push_str8f(arena, "0x%I64x (%I64u)", eval.imm_u64, eval.imm_u64);
       }
       scratch_end(scratch);
     }break;
@@ -4871,8 +4867,17 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       }break;
       case EVAL_EvalMode_Reg:
       {
-        // TODO(rjf)
-        result = 0;
+        DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+        Architecture arch = df_architecture_from_entity(thread);
+        U64 reg_block_size = regs_block_size_from_architecture(arch);
+        if(unwind.first != 0 &&
+           (0 <= dst_eval.offset && dst_eval.offset+commit_data.size < reg_block_size))
+        {
+          void *new_regs = push_array(scratch.arena, U8, reg_block_size);
+          MemoryCopy(new_regs, unwind.first->regs, reg_block_size);
+          MemoryCopy((U8 *)new_regs+dst_eval.offset, commit_data.str, commit_data.size);
+          result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, new_regs);
+        }
       }break;
     }
   }
@@ -6349,8 +6354,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   {
     Temp scratch = scratch_begin(&arena, 1);
     
+    //- rjf: grab next reggen/memgen
+    U64 new_memgen_idx = ctrl_memgen_idx();
+    U64 new_reggen_idx = ctrl_reggen_idx();
+    
     //- rjf: consume & process events
-    B32 run_caches_invalidated = 0;
     CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
     for(CTRL_EventNode *event_n = events.first; event_n != 0; event_n = event_n->next)
     {
@@ -6370,7 +6378,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           df_state->ctrl_is_running = 0;
           df_state->ctrl_soft_halt_issued = 0;
-          run_caches_invalidated = 1;
           DF_Entity *stop_thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
           
           // rjf: gather stop info
@@ -6430,8 +6437,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         case CTRL_EventKind_NewProc:
         {
-          run_caches_invalidated = 1;
-          
           // rjf: the first process? -> clear session output & reset all bp hit counts
           DF_EntityList existing_processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
           if(existing_processes.count == 0)
@@ -6459,8 +6464,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         case CTRL_EventKind_NewThread:
         {
-          run_caches_invalidated = 1;
-          
           // rjf: create entity
           DF_Entity *parent = df_entity_from_ctrl_handle(event->machine_id, event->parent);
           DF_Entity *entity = df_entity_alloc(0, parent, DF_EntityKind_Thread);
@@ -6647,7 +6650,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                     df_entity_equip_color_rgba(thread, color);
                   }
                 }
-                run_caches_invalidated = 1;
               }break;
             }
           }
@@ -6660,16 +6662,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       }
     }
     
-    //- rjf: invalidate per-run caches
-    if(run_caches_invalidated)
-    {
-      df_state->unwind_cache_invalidated = 1;
-      df_state->locals_cache_invalidated = 1;
-      df_state->member_cache_invalidated = 1;
-    }
-    
     //- rjf: refresh unwind cache
-    if(df_state->unwind_cache_invalidated && !df_ctrl_targets_running()) ProfScope("per-thread unwind gather")
+    if((df_state->unwind_cache_memgen_idx != new_memgen_idx ||
+        df_state->unwind_cache_reggen_idx != new_reggen_idx) &&
+       !df_ctrl_targets_running()) ProfScope("per-thread unwind gather")
     {
       B32 good = 1;
       DF_EntityList all_threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
@@ -6694,27 +6690,28 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           break;
         }
       }
-      df_state->unwind_cache_invalidated = !good;
+      df_state->unwind_cache_memgen_idx = new_memgen_idx;
+      df_state->unwind_cache_reggen_idx = new_reggen_idx;
     }
     
     //- rjf: clear locals cache
-    if(df_state->locals_cache_invalidated && !df_ctrl_targets_running())
+    if(df_state->locals_cache_reggen_idx != new_reggen_idx && !df_ctrl_targets_running())
     {
-      df_state->locals_cache_invalidated = 0;
       DF_RunLocalsCache *cache = &df_state->locals_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
+      df_state->locals_cache_reggen_idx = new_reggen_idx;
     }
     
     //- rjf: clear members cache
-    if(df_state->member_cache_invalidated && !df_ctrl_targets_running())
+    if(df_state->member_cache_reggen_idx != new_reggen_idx && !df_ctrl_targets_running())
     {
-      df_state->member_cache_invalidated = 0;
       DF_RunLocalsCache *cache = &df_state->member_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
+      df_state->member_cache_reggen_idx = new_reggen_idx;
     }
     
     scratch_end(scratch);

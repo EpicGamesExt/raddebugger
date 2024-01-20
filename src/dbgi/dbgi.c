@@ -508,7 +508,8 @@ dbgi_parse_thread_entry_point(void *p)
     //- rjf: parse exe file info
     Arena *parse_arena = 0;
     PE_BinInfo exe_pe_info = {0};
-    String8 exe_dbg_path_embedded = {0};
+    String8 exe_dbg_path_embedded_absolute = {0};
+    String8 exe_dbg_path_embedded_relative = {0};
     if(do_task)
     {
       parse_arena = arena_alloc();
@@ -516,7 +517,9 @@ dbgi_parse_thread_entry_point(void *p)
       {
         String8 exe_data = str8((U8 *)exe_file_base, exe_file_props.size);
         exe_pe_info = pe_bin_info_from_data(parse_arena, exe_data);
-        exe_dbg_path_embedded = str8_cstring_capped((char *)exe_data.str+exe_pe_info.dbg_path_off, (char *)exe_data.str+exe_pe_info.dbg_path_off+Min(exe_data.size-exe_pe_info.dbg_path_off, 4096));
+        exe_dbg_path_embedded_absolute = str8_cstring_capped((char *)exe_data.str+exe_pe_info.dbg_path_off, (char *)exe_data.str+exe_pe_info.dbg_path_off+Min(exe_data.size-exe_pe_info.dbg_path_off, 4096));
+        String8 exe_folder = str8_chop_last_slash(exe_path);
+        exe_dbg_path_embedded_relative = push_str8f(scratch.arena, "%S/%S", exe_folder, exe_dbg_path_embedded_absolute);
       }
     }
     
@@ -533,9 +536,10 @@ dbgi_parse_thread_entry_point(void *p)
       {
         String8 possible_og_dbg_paths[] =
         {
-          /* inferred:                  */ exe_dbg_path_embedded,
-          /* "foo.exe" -> "foo.pdb"     */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path)),
-          /* "foo.exe" -> "foo.exe.pdb" */ push_str8f(scratch.arena, "%S.pdb", exe_path),
+          /* inferred (treated as absolute): */ exe_dbg_path_embedded_absolute,
+          /* inferred (treated as relative): */ exe_dbg_path_embedded_relative,
+          /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path)),
+          /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", exe_path),
         };
         for(U64 idx = 0; idx < ArrayCount(possible_og_dbg_paths); idx += 1)
         {
@@ -818,7 +822,11 @@ dbgi_parse_thread_entry_point(void *p)
           String8 dbg_path = og_dbg_path;
           if(dbg_path.size == 0)
           {
-            dbg_path = exe_dbg_path_embedded;
+            dbg_path = exe_dbg_path_embedded_absolute;
+          }
+          if(dbg_path.size == 0)
+          {
+            dbg_path = exe_dbg_path_embedded_relative;
           }
           if(dbg_path.size == 0)
           {

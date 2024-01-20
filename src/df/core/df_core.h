@@ -1130,11 +1130,12 @@ struct DF_State
   DF_EntityListCache bin_file_cache;
   
   // rjf: per-run caches
-  B32 unwind_cache_invalidated;
+  U64 unwind_cache_reggen_idx;
+  U64 unwind_cache_memgen_idx;
   DF_RunUnwindCache unwind_cache;
-  B32 locals_cache_invalidated;
+  U64 locals_cache_reggen_idx;
   DF_RunLocalsCache locals_cache;
-  B32 member_cache_invalidated;
+  U64 member_cache_reggen_idx;
   DF_RunLocalsCache member_cache;
   
   // rjf: eval view cache
