@@ -69,7 +69,7 @@ txti_lang_kind_from_extension(String8 extension)
   {
     kind = TXTI_LangKind_CPlusPlus;
   }
-  else if(str8_match(extension, str8_lit("odin"), StringMatchFlag_CaseInsensitive)) 
+  else if(str8_match(extension, str8_lit("odin"), 0)) 
   {
     kind = TXTI_LangKind_Odin;
   }
@@ -609,13 +609,9 @@ txti_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, S
             str8_lit_comp("for"),
             str8_lit_comp("foreign"),
             str8_lit_comp("if"),
-            str8_lit_comp("if"),
             str8_lit_comp("in"),
-            str8_lit_comp("inline"),
-            str8_lit_comp("inline"),
             str8_lit_comp("map"),
             str8_lit_comp("matrix"),
-            str8_lit_comp("no_inline"),
             str8_lit_comp("not_in"),
             str8_lit_comp("or_break"),
             str8_lit_comp("or_continue"),
