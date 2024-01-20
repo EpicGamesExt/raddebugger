@@ -1339,10 +1339,25 @@ demon_os_launch_process(OS_LaunchOptions *options){
   AllocConsole();
   if (CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, access_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str,
                      &startup_info, &process_info)){
-    CloseHandle(process_info.hProcess);
-    CloseHandle(process_info.hThread);
-    result = process_info.dwProcessId;
-    demon_w32_new_process_pending = 1;
+    // check if we are 32-bit app, and just close it immediately
+    BOOL is_wow = 0;
+    IsWow64Process(process_info.hProcess, &is_wow);
+    if ( is_wow ){
+      MessageBox(0,"Sorry, The RAD Debugger only debugs 64-bit applications currently.","Process error",MB_OK|MB_ICONSTOP);
+      DebugActiveProcessStop(process_info.dwProcessId);
+      TerminateProcess(process_info.hProcess,0xffffffff);
+      CloseHandle(process_info.hProcess);
+      CloseHandle(process_info.hThread);
+    }
+    else{
+      CloseHandle(process_info.hProcess);
+      CloseHandle(process_info.hThread);
+      result = process_info.dwProcessId;
+      demon_w32_new_process_pending = 1;
+    }
+  }
+  else{
+    MessageBox(0,"Error starting process.","Process error",MB_OK|MB_ICONSTOP);
   }
   FreeConsole();
   
