@@ -5,7 +5,6 @@
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
-// [ ] ** ASAN targets
 //
 // [ ] ** In solo-stepping mode, if I step over something like CreateFileA, it
 //     pseudo-hangs the debugger. I can't seem to do anything else, including
