@@ -6467,7 +6467,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     U64 new_reggen_idx = ctrl_reggen_idx();
     
     //- rjf: consume & process events
-    B32 run_caches_invalidated = 0;
     B32 unwind_cache_clear = 1;
     CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
     for(CTRL_EventNode *event_n = events.first; event_n != 0; event_n = event_n->next)
@@ -6488,7 +6487,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           df_state->ctrl_is_running = 0;
           df_state->ctrl_soft_halt_issued = 0;
-          run_caches_invalidated = 1;
           unwind_cache_clear = 0;
           DF_Entity *stop_thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
           
