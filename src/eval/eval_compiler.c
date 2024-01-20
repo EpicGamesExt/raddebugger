@@ -887,8 +887,9 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
         // determine which type to use
         TG_Key check_type_key = l_restype;
         TG_Kind check_type_kind = l_restype_kind;
-        if (l_restype_kind == TG_Kind_Ptr){
+        if (l_restype_kind == TG_Kind_Ptr || l_restype_kind == TG_Kind_LRef || l_restype_kind == TG_Kind_RRef){
           check_type_key = tg_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
+          check_type_key = eval_type_unwrap(graph, rdbg, check_type_key);
           check_type_kind = tg_kind_from_key(check_type_key);
         }
         
@@ -912,7 +913,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
             
             // determine how to treat left
             B32 l_good = 0;
-            if (l_restype_kind == TG_Kind_Ptr){
+            if (l_restype_kind == TG_Kind_Ptr || l_restype_kind == TG_Kind_LRef || l_restype_kind == TG_Kind_RRef){
               l_good = 1;
               l_resolve = 1;
             }
