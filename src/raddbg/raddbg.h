@@ -17,8 +17,6 @@
 //     progress bar in the disassembly window. I had to close and restart. Is
 //     console app debugging not working yet, perhaps?
 //
-// [ ] register value committing in watch
-//
 // [ ] Setting the code_font/main_font values to a font name doesn't work.
 //     Should probably make note that you have to set it to a path to a TTF,
 //     since that's not normally how Windows fonts work.
@@ -27,7 +25,6 @@
 //
 // [ ] disasm animation & go-to-address
 //
-// [ ] visualize mismatched source code and debug info
 // [ ] visualize remapped files (via path map)
 
 ////////////////////////////////

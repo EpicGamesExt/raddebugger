@@ -1402,7 +1402,6 @@ extended_type_coverage_eval_tests(void){
     non_virtual_derived->x += 1;
     non_virtual_derived->x += 1;
     non_virtual_derived->x += 1;
-    delete non_virtual_derived;
     
     Base *base_array[1024] = {0};
     for(int i = 0; i < sizeof(base_array)/sizeof(base_array[0]); i += 1)
