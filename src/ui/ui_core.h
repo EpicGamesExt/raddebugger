@@ -327,6 +327,7 @@ struct UI_Signal
   B8 clicked          :1;
   B8 keyboard_clicked :1;
   B8 double_clicked   :1;
+  B8 middle_clicked   :1;
   B8 right_clicked    :1;
   B8 pressed          :1;
   B8 released         :1;

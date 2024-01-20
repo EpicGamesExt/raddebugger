@@ -2262,6 +2262,8 @@ ui_signal_from_box(UI_Box *box)
   //- rjf: gather events
   OS_Event *left_press = 0;
   OS_Event *left_release = 0;
+  OS_Event *middle_press = 0;
+  OS_Event *middle_release = 0;
   OS_Event *right_press = 0;
   OS_Event *right_release = 0;
   for(OS_Event *evt = ui_state->events->first; evt != 0; evt = evt->next)
@@ -2275,6 +2277,14 @@ ui_signal_from_box(UI_Box *box)
       if(left_release == 0 && evt->kind == OS_EventKind_Release && evt->key == OS_Key_LeftMouseButton)
       {
         left_release = evt;
+      }
+      if(middle_press == 0 && evt->kind == OS_EventKind_Press && evt->key == OS_Key_MiddleMouseButton)
+      {
+        middle_press = evt;
+      }
+      if(middle_release == 0 && evt->kind == OS_EventKind_Release && evt->key == OS_Key_MiddleMouseButton)
+      {
+        middle_release = evt;
       }
       if(right_press == 0 && evt->kind == OS_EventKind_Press && evt->key == OS_Key_RightMouseButton)
       {
@@ -2370,6 +2380,27 @@ ui_signal_from_box(UI_Box *box)
       os_eat_event(ui_state->events, left_release);
       result.released = 1;
       result.clicked = mouse_is_over;
+      ui_state->hot_box_key = mouse_is_over ? box->key : ui_key_zero();
+      ui_state->active_box_key[Side_Min] = ui_key_zero();
+    }
+    
+    // n12: active management (middle click)
+    if(!disabled &&
+       ui_key_match(ui_state->hot_box_key, box->key) &&
+       ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) &&
+       middle_press != 0)
+    {
+      os_eat_event(ui_state->events, middle_press);
+      result.pressed = 1;
+      ui_state->active_box_key[Side_Min] = box->key;
+    }
+    else if(!disabled &&
+            ui_key_match(ui_state->active_box_key[Side_Min], box->key) &&
+            middle_release != 0)
+    {
+      os_eat_event(ui_state->events, middle_release);
+      result.released = 1;
+      result.middle_clicked = mouse_is_over;
       ui_state->hot_box_key = mouse_is_over ? box->key : ui_key_zero();
       ui_state->active_box_key[Side_Min] = ui_key_zero();
     }

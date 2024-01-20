@@ -5344,6 +5344,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               ui_ctx_menu_open(ws->tab_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
               ws->tab_ctx_menu_view = df_handle_from_view(view);
             }
+            else if(sig.middle_clicked)
+            {
+              DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+              df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseTab));
+            }
           }
         }
       }
@@ -5767,6 +5772,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   ui_ctx_menu_open(ws->tab_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
                   ws->tab_ctx_menu_view = df_handle_from_view(view);
+                }
+                else if(sig.middle_clicked)
+                {
+                  DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+                  df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseTab));
                 }
                 if(sig.released)
                 {
