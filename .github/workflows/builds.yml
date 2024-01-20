@@ -12,9 +12,9 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          build raddbg msvc debug
-          build raddbg_from_pdb msvc debug
-          build raddbg_from_dwarf msvc debug
-          build raddbg clang debug
-          build raddbg_from_pdb clang debug
-          build raddbg_from_dwarf clang debug
+          call build raddbg msvc debug
+          call build raddbg_from_pdb msvc debug
+          call build raddbg_from_dwarf msvc debug
+          call build raddbg clang debug
+          call build raddbg_from_pdb clang debug
+          call build raddbg_from_dwarf clang debug
