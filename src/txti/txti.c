@@ -69,7 +69,8 @@ txti_lang_kind_from_extension(String8 extension)
   {
     kind = TXTI_LangKind_CPlusPlus;
   }
-  else if(str8_match(extension, str8_lit("odin"), StringMatchFlag_CaseInsensitive)) {
+  else if(str8_match(extension, str8_lit("odin"), StringMatchFlag_CaseInsensitive)) 
+  {
     kind = TXTI_LangKind_Odin;
   }
   return kind;
