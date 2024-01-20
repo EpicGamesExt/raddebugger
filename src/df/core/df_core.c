@@ -2059,6 +2059,7 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
   
   //- rjf: pass 1: open parts, ignore overrides
   DF_Entity *file_no_override = &df_g_nil_entity;
+  if (path.size != 0)
   {
     DF_Entity *parent = df_entity_root();
     for(String8Node *path_part_n = path_parts.first;
@@ -2109,7 +2110,7 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
   
   //- rjf: pass 2: follow overrides
   DF_Entity *file_overrides_applied = &df_g_nil_entity;
-  if(flags & DF_EntityFromPathFlag_AllowOverrides)
+  if(path.size != 0 && flags & DF_EntityFromPathFlag_AllowOverrides)
   {
     DF_Entity *parent = df_entity_root();
     for(String8Node *path_part_n = path_parts.first;
@@ -2223,6 +2224,7 @@ df_possible_overrides_from_entity(Arena *arena, DF_Entity *entity)
         
         // rjf: descend tree if needed, by the chain names, find override
         DF_Entity *override = link_overridden_sibling;
+        if(!df_entity_is_nil(override))
         {
           DF_Entity *parent = override;
           for(String8Node *path_part_n = p_chain_names_to_entity.first;
