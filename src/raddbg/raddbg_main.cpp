@@ -110,13 +110,13 @@ win32_dialog_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, LONG_PT
 }
 
 internal LONG WINAPI
-win32_exception_filter(EXCEPTION_POINTERS* exception_info)
+win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
 {
   if(g_is_quiet)
   {
     ExitProcess(1);
   }
-
+  
   static volatile LONG first = 0;
   if(InterlockedCompareExchange(&first, 1, 0) != 0)
   {
@@ -128,10 +128,10 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
   
   WCHAR buffer[4096] = {0};
   int buflen = 0;
-
-  DWORD exception_code = exception_info->ExceptionRecord->ExceptionCode;
+  
+  DWORD exception_code = exception_ptrs->ExceptionRecord->ExceptionCode;
   buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"A fatal exception (code 0x%x) occurred. The process is terminating.\n", exception_code);
-
+  
   // load dbghelp dynamically just in case if it is missing
   HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
   if(dbghelp)
@@ -139,15 +139,15 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
     DWORD (WINAPI *dbg_SymSetOptions)(DWORD SymOptions);
     BOOL (WINAPI *dbg_SymInitializeW)(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeProcess);
     BOOL (WINAPI *dbg_StackWalk64)(DWORD MachineType, HANDLE hProcess, HANDLE hThread,
-      LPSTACKFRAME64 StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine,
-      PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine,
-      PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
+                                   LPSTACKFRAME64 StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine,
+                                   PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine,
+                                   PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
     PVOID (WINAPI *dbg_SymFunctionTableAccess64)(HANDLE hProcess, DWORD64 AddrBase);
     DWORD64 (WINAPI *dbg_SymGetModuleBase64)(HANDLE hProcess, DWORD64 qwAddr);
     BOOL (WINAPI *dbg_SymFromAddrW)(HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFOW Symbol);
     BOOL (WINAPI *dbg_SymGetLineFromAddrW64)(HANDLE hProcess, DWORD64 dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINEW64 Line);
     BOOL (WINAPI *dbg_SymGetModuleInfoW64)(HANDLE hProcess, DWORD64 qwAddr, PIMAGEHLP_MODULEW64 ModuleInfo);
-
+    
     *(FARPROC*)&dbg_SymSetOptions            = GetProcAddress(dbghelp, "SymSetOptions");
     *(FARPROC*)&dbg_SymInitializeW           = GetProcAddress(dbghelp, "SymInitializeW");
     *(FARPROC*)&dbg_StackWalk64              = GetProcAddress(dbghelp, "StackWalk64");
@@ -156,13 +156,13 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
     *(FARPROC*)&dbg_SymFromAddrW             = GetProcAddress(dbghelp, "SymFromAddrW");
     *(FARPROC*)&dbg_SymGetLineFromAddrW64    = GetProcAddress(dbghelp, "SymGetLineFromAddrW64");
     *(FARPROC*)&dbg_SymGetModuleInfoW64      = GetProcAddress(dbghelp, "SymGetModuleInfoW64");
-
+    
     if(dbg_SymSetOptions && dbg_SymInitializeW && dbg_StackWalk64 && dbg_SymFunctionTableAccess64 && dbg_SymGetModuleBase64 && dbg_SymFromAddrW && dbg_SymGetLineFromAddrW64 && dbg_SymGetModuleInfoW64)
     {
       HANDLE process = GetCurrentProcess();
       HANDLE thread = GetCurrentThread();
-      CONTEXT* context = exception_info->ContextRecord;
-
+      CONTEXT* context = exception_ptrs->ContextRecord;
+      
       dbg_SymSetOptions(SYMOPT_EXACT_SYMBOLS | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
       if(dbg_SymInitializeW(process, L"", TRUE))
       {
@@ -176,11 +176,11 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
             raddbg_pdb_valid = (module.SymType == SymPdb);
           }
         }
-
+        
         if(!raddbg_pdb_valid)
         {
           buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen,
-            L"\nraddbg.pdb debug file is not valid or not found. Please rebuild binary to get call stack.\n");
+                               L"\nraddbg.pdb debug file is not valid or not found. Please rebuild binary to get call stack.\n");
         }
         else
         {
@@ -205,7 +205,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
 #else
 #  error Architecture not supported!
 #endif
-
+          
           for(U32 idx=0; ;idx++)
           {
             const U32 max_frames = 32;
@@ -214,44 +214,44 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
               buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"...");
               break;
             }
-
+            
             if(!dbg_StackWalk64(image_type, process, thread, &frame, context, 0, dbg_SymFunctionTableAccess64, dbg_SymGetModuleBase64, 0))
             {
               break;
             }
-
+            
             U64 address = frame.AddrPC.Offset;
             if(address == 0)
             {
               break;
             }
-
+            
             if(idx==0)
             {
               buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen,
-                L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue in\n"
-                L"<a href=\"%S\">%S</a>\n\n", RADDBG_GITHUB_ISSUES, RADDBG_GITHUB_ISSUES);
+                                   L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue in\n"
+                                   L"<a href=\"%S\">%S</a>\n\n", RADDBG_GITHUB_ISSUES, RADDBG_GITHUB_ISSUES);
               buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"Call stack:\n");
             }
-
+            
             buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"%u. [0x%I64x]", idx, address);
-
+            
             struct {
               SYMBOL_INFOW info;
               WCHAR name[MAX_SYM_NAME];
             } symbol = {0};
-
+            
             symbol.info.SizeOfStruct = sizeof(symbol.info);
             symbol.info.MaxNameLen = MAX_SYM_NAME;
-
+            
             DWORD64 displacement = 0;
             if(dbg_SymFromAddrW(process, address, &displacement, &symbol.info))
             {
               buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L" %s +%u", symbol.info.Name, (DWORD)displacement);
-
+              
               IMAGEHLP_LINEW64 line = {0};
               line.SizeOfStruct = sizeof(line);
-
+              
               DWORD line_displacement = 0;
               if(dbg_SymGetLineFromAddrW64(process, address, &line_displacement, &line))
               {
@@ -267,17 +267,17 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
                 buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L" %s", module.ModuleName);
               }
             }
-
+            
             buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"\n");
           }
         }
       }
     }
   }
-
+  
   // remove last newline
   buffer[buflen] = 0;
-
+  
   TASKDIALOGCONFIG dialog = {0};
   dialog.cbSize = sizeof(dialog);
   dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
@@ -287,14 +287,14 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_info)
   dialog.pszContent = buffer;
   dialog.pfCallback = &win32_dialog_callback;
   TaskDialogIndirect(&dialog, 0, 0, 0);
-
+  
   ExitProcess(1);
 }
 
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
   SetUnhandledExceptionFilter(&win32_exception_filter);
-
+  
   HANDLE output_handles[3] =
   {
     GetStdHandle(STD_INPUT_HANDLE),
