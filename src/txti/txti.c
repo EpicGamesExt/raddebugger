@@ -592,7 +592,7 @@ txti_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, S
           read_only local_persist String8 cpp_keywords[] =
           {
             str8_lit_comp("asm"),
-            str8_lit_comp("auto_case"),
+            str8_lit_comp("auto_cast"),
             str8_lit_comp("bit_set"),
             str8_lit_comp("break"),
             str8_lit_comp("case"),
