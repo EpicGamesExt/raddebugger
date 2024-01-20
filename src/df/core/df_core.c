@@ -6705,7 +6705,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     }
     
     //- rjf: clear members cache
-    if(df_state->member_cache_reggen_idx && !df_ctrl_targets_running())
+    if(df_state->member_cache_reggen_idx != new_reggen_idx && !df_ctrl_targets_running())
     {
       DF_RunLocalsCache *cache = &df_state->member_cache;
       arena_clear(cache->arena);

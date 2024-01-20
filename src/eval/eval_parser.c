@@ -96,7 +96,7 @@ eval_string2num_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string
   {
     EVAL_String2NumMapNode *node = push_array(arena, EVAL_String2NumMapNode, 1);
     SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
-    node->string = string;
+    node->string = push_str8_copy(arena, string);
     node->num = num;
   }
 }
