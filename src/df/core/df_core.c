@@ -4726,18 +4726,22 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *r
       }
       if(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules)
       {
-        result = push_str8f(arena, "0x%I64x%s%S%s", eval.imm_u64,
-                            constant_name.size != 0 ? " (" : "",
-                            constant_name,
-                            constant_name.size != 0 ? ")" : "");
+        if(constant_name.size != 0)
+        {
+          result = push_str8f(arena, "0x%I64x (%S)", eval.imm_u64, constant_name);
+        }
+        else if(constant_name.size != 0)
+        {
+          result = push_str8f(arena, "0x%I64x (%I64u)", eval.imm_u64, eval.imm_u64);
+        }
       }
       else if(constant_name.size != 0)
       {
-        result = push_str8f(arena, "%S", constant_name);
+        result = push_str8_copy(arena, constant_name);
       }
       else
       {
-        result = push_str8f(arena, "0x%I64x", eval.imm_u64);
+        result = push_str8f(arena, "0x%I64x (%I64u)", eval.imm_u64, eval.imm_u64);
       }
       scratch_end(scratch);
     }break;
