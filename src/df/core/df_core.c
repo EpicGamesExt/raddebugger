@@ -4730,7 +4730,7 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *r
         {
           result = push_str8f(arena, "0x%I64x (%S)", eval.imm_u64, constant_name);
         }
-        else if(constant_name.size != 0)
+        else
         {
           result = push_str8f(arena, "0x%I64x (%I64u)", eval.imm_u64, eval.imm_u64);
         }

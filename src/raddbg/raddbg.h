@@ -29,6 +29,9 @@
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
+// [ ] escaping in config files - breakpoint labels etc.
+// [ ] focus changing between query bar & panel content via mouse
+//
 // [ ] ** while typing, "Alt" Windows menu things should not happen
 //
 // [ ] visualize conversion failures
