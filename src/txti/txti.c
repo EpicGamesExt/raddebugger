@@ -1059,7 +1059,6 @@ txti_mut_thread_entry_point(void *p)
       }
       
       //- rjf: apply edits
-      if(load_valid)
       {
         for(U64 buffer_apply_idx = 0;
             buffer_apply_idx < TXTI_ENTITY_BUFFER_COUNT;
