@@ -22,7 +22,7 @@ struct DF_FileInfo
 {
   String8 filename;
   FileProperties props;
-  FuzzyMatchRangeList match_ranges;
+  ScoredFuzzyMatchRangeList match_ranges;
 };
 
 typedef struct DF_FileInfoNode DF_FileInfoNode;
