@@ -2725,6 +2725,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
           
           // rjf: end this query
+          if(!(ws->query_cmd_spec->info.query.flags & DF_CmdQueryFlag_KeepOldInput))
           {
             DF_CmdParams p = df_cmd_params_from_window(ws);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CancelQuery));
@@ -4924,7 +4925,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         String8 default_query = {0};
         switch(first_missing_slot)
         {
-          default:{}break;
+          default:
+          if(cmd_spec->info.query.flags & DF_CmdQueryFlag_KeepOldInput)
+          {
+            default_query = df_push_search_string(scratch.arena);
+          }break;
           case DF_CmdParamSlot_FilePath:
           {
             default_query = path_normalized_from_string(scratch.arena, df_current_path());
@@ -4935,6 +4940,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         // rjf: construct & push new view
         DF_View *view = df_view_alloc();
         df_view_equip_spec(view, view_spec, &df_g_nil_entity, default_query, &df_g_nil_cfg_node);
+        if(cmd_spec->info.query.flags & DF_CmdQueryFlag_SelectOldInput)
+        {
+          view->query_mark = txt_pt(1, 1);
+        }
         ws->query_view_stack_top = view;
         view->next = &df_g_nil_view;
         
