@@ -853,15 +853,28 @@ struct DF_EvalVizWindowedRowList
 ////////////////////////////////
 //~ rjf: Command Specification Types
 
+typedef U32 DF_CmdQueryFlags;
+enum
+{
+  DF_CmdQueryFlag_FoldersOnly      = (1<<0),
+  DF_CmdQueryFlag_CodeInput        = (1<<1),
+  DF_CmdQueryFlag_KeepOldInput     = (1<<2),
+  DF_CmdQueryFlag_SelectOldInput   = (1<<3),
+  DF_CmdQueryFlag_Required         = (1<<4),
+};
+
+typedef struct DF_CmdQuery DF_CmdQuery;
+struct DF_CmdQuery
+{
+  DF_CmdParamSlot slot;
+  DF_EntityKind entity_kind;
+  DF_CmdQueryFlags flags;
+};
+
 typedef U32 DF_CmdSpecFlags;
 enum
 {
   DF_CmdSpecFlag_OmitFromLists      = (1<<0),
-  DF_CmdSpecFlag_RunKeepsQuery      = (1<<1),
-  DF_CmdSpecFlag_QueryUsesOldInput  = (1<<2),
-  DF_CmdSpecFlag_OldInputSelect     = (1<<3),
-  DF_CmdSpecFlag_AppliesToView      = (1<<4),
-  DF_CmdSpecFlag_QueryIsCode        = (1<<5),
 };
 
 typedef struct DF_CmdSpecInfo DF_CmdSpecInfo;
@@ -872,10 +885,8 @@ struct DF_CmdSpecInfo
   String8 search_tags;
   String8 display_name;
   DF_CmdSpecFlags flags;
-  DF_CmdParamSlot query_slots[4];
-  DF_CmdQueryRule query_rule;
+  DF_CmdQuery query;
   DF_IconKind canonical_icon_kind;
-  U64 query_info_u64[2];
 };
 
 typedef struct DF_CmdSpec DF_CmdSpec;

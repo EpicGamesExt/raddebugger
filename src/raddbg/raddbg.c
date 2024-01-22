@@ -134,12 +134,16 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         DF_CmdSpecList spec_candidates = df_cmd_spec_list_from_binding(scratch.arena, binding);
         if(spec_candidates.first != 0 && !df_cmd_spec_is_nil(spec_candidates.first->spec))
         {
+          DF_CmdSpec *run_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand);
           DF_CmdSpec *spec = spec_candidates.first->spec;
-          params.cmd_spec = spec;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
+          if(run_spec != spec)
+          {
+            params.cmd_spec = spec;
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
+          }
           U32 hit_char = os_codepoint_from_event_flags_and_key(event->flags, event->key);
           os_eat_event(&events, event);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CommandFastPath));
+          df_push_cmd__root(&params, run_spec);
           if(event->flags & OS_EventFlag_Alt)
           {
             window->menu_bar_focus_press_started = 0;
