@@ -47,8 +47,8 @@ set cl_debug=      call cl /Od %cl_common% %auto_compile_flags%
 set cl_release=    call cl /O2 /DNDEBUG %cl_common% %auto_compile_flags%
 set clang_debug=   call clang -g -O0 %clang_common% %auto_compile_flags%
 set clang_release= call clang -g -O3 -DNDEBUG %clang_common% %auto_compile_flags%
-set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /natvis:"%~dp0\src\natvis\base.natvis"
-set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /natvis:"%~dp0\src\natvis\base.natvis"
+set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /natvis:"%~dp0\src\natvis\base.natvis" logo.res
+set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /natvis:"%~dp0\src\natvis\base.natvis" logo.res
 set cl_out=        /out:
 set clang_out=     -o
 
@@ -76,6 +76,11 @@ if "%release%"=="1"   set compile=%compile_release%
 :: --- Prep Directories -------------------------------------------------------
 if not exist build mkdir build
 if not exist local mkdir local
+
+:: --- Produce Logo Icon File -------------------------------------------------
+pushd build
+rc /nologo /fo logo.res ..\data\logo.rc
+popd
 
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]

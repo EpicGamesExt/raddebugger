@@ -3884,8 +3884,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
           if(!df_view_is_nil(view) &&
              contains_2f32(panel_rect, ui_mouse()) &&
-             abs_f32(view->scroll_pos.x.off) > 0.01f ||
-             abs_f32(view->scroll_pos.y.off) > 0.01f)
+             (abs_f32(view->scroll_pos.x.off) > 0.01f ||
+              abs_f32(view->scroll_pos.y.off) > 0.01f))
           {
             build_hover_eval = 0;
             ws->hover_eval_first_frame_idx = df_frame_index();
