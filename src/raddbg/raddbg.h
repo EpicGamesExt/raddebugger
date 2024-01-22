@@ -76,6 +76,9 @@
 // [ ] Globals, Thread-Locals, Types Views
 // [ ] Watch Window Filtering
 //
+// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
+//     support it?
+//
 // [ ] escaping in config files - breakpoint labels etc.
 // [ ] focus changing between query bar & panel content via mouse
 //

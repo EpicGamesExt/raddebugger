@@ -176,6 +176,7 @@ struct DF_ViewSpecInfo
   String8 name;
   String8 display_string;
   DF_NameKind name_kind;
+  DF_IconKind icon_kind;
   DF_ViewSetupFunctionType *setup_hook;
   DF_ViewStringFromStateFunctionType *string_from_state_hook;
   DF_ViewCmdFunctionType *cmd_hook;
@@ -213,10 +214,6 @@ struct DF_View
   DF_View *next;
   DF_View *prev;
   
-  // rjf: call stack links (views can call into other views)
-  DF_View *callee_view;
-  DF_View *caller_view;
-  
   // rjf: allocation info
   U64 generation;
   
@@ -241,15 +238,15 @@ struct DF_View
   DF_ArenaExt *last_arena_ext;
   void *user_data;
   
-  // rjf: command data
-  DF_CmdSpec *cmd_spec;
-  DF_Handle cmd_entity;
+  // rjf: view kind info
+  DF_ViewSpec *spec;
+  DF_Handle entity;
   
   // rjf: query -> params data
-  String8 query;
   TxtPt query_cursor;
   TxtPt query_mark;
   U8 query_buffer[1024];
+  U64 query_string_size;
 };
 
 ////////////////////////////////
@@ -277,18 +274,13 @@ struct DF_Panel
   Vec2F32 size_pct_of_parent_target;
   
   // rjf: tab params
-  B32 hide_tab_bar;
-  B32 history_tab_bar_mode;
   Side tab_side;
   
-  // rjf: query view stack
-  DF_View *query_view_stack_top;
-  
   // rjf: stable view stacks (tabs)
-  DF_View *first_stable_view;
-  DF_View *last_stable_view;
-  U64 stable_view_count;
-  DF_View *selected_stable_view;
+  DF_View *first_tab_view;
+  DF_View *last_tab_view;
+  U64 tab_view_count;
+  DF_Handle selected_tab_view;
 };
 
 typedef struct DF_PanelRec DF_PanelRec;
@@ -572,6 +564,13 @@ struct DF_Window
   F32 autocomp_num_visible_rows_t;
   S64 autocomp_cursor_num;
   
+  // rjf: query view stack
+  Arena *query_cmd_arena;
+  DF_CmdSpec *query_cmd_spec;
+  DF_CmdParams query_cmd_params;
+  DF_View *query_view_stack_top;
+  F32 query_view_t;
+  
   // rjf: hover eval stable state
   TxtPt hover_eval_txt_cursor;
   TxtPt hover_eval_txt_mark;
@@ -707,9 +706,8 @@ struct DF_GfxState
   DF_ViewRuleBlockSlot *view_rule_block_slots;
   DF_ViewRuleBlockNode *free_view_rule_block_node;
   
-  // rjf: cmd -> view table
-  U64 cmd2view_slot_count;
-  DF_String2ViewSlot *cmd2view_slots;
+  // rjf: cmd param slot -> view spec table
+  DF_ViewSpec *cmd_param_slot_view_spec_table[DF_CmdParamSlot_COUNT];
   
   // rjf: windows
   OS_WindowRepaintFunctionType *repaint_hook;
@@ -753,6 +751,7 @@ read_only global DF_ViewSpec df_g_nil_view_spec =
     {0},
     {0},
     DF_NameKind_Null,
+    DF_IconKind_Null,
     DF_VIEW_SETUP_FUNCTION_NAME(Null),
     DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Null),
     DF_VIEW_CMD_FUNCTION_NAME(Null),
@@ -769,8 +768,6 @@ read_only global DF_View df_g_nil_view =
 {
   &df_g_nil_view,
   &df_g_nil_view,
-  &df_g_nil_view,
-  &df_g_nil_view,
   0,
   0,
   0,
@@ -783,7 +780,7 @@ read_only global DF_View df_g_nil_view =
   0,
   0,
   0,
-  &df_g_nil_cmd_spec,
+  &df_g_nil_view_spec,
   {0},
 };
 
@@ -812,7 +809,11 @@ internal DF_FuzzyMatchRangeList df_fuzzy_match_find(Arena *arena, String8List ne
 internal B32 df_view_is_nil(DF_View *view);
 internal DF_Handle df_handle_from_view(DF_View *view);
 internal DF_View *df_view_from_handle(DF_Handle handle);
-internal DF_View *df_view_caller_root_from_view(DF_View *view);
+
+////////////////////////////////
+//~ rjf: View Spec Type Functions
+
+internal DF_GfxViewKind df_gfx_view_kind_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Panel Type Functions
@@ -840,12 +841,8 @@ internal Rng2F32 df_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent,
 internal Rng2F32 df_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel);
 
 //- rjf: view ownership insertion/removal
-internal void df_panel_history_new_branch(DF_Panel *panel);
-internal void df_panel_insert_stable_view(DF_Panel *panel, DF_View *prev_view, DF_View *view);
-internal void df_panel_remove_stable_view(DF_Panel *panel, DF_View *view);
-internal DF_View *df_selected_view_stack_from_panel(DF_Panel *panel);
-internal DF_View *df_selected_view_from_panel(DF_Panel *panel);
-internal DF_View *df_query_view_from_panel(DF_Panel *panel);
+internal void df_panel_insert_tab_view(DF_Panel *panel, DF_View *prev_view, DF_View *view);
+internal void df_panel_remove_tab_view(DF_Panel *panel, DF_View *view);
 
 //- rjf: icons & display strings
 internal String8 df_display_string_from_view(Arena *arena, DF_CtrlCtx ctrl_ctx, DF_View *view);
@@ -871,6 +868,7 @@ internal B32 df_prefer_dasm_from_window(DF_Window *window);
 internal DF_CmdParams df_cmd_params_from_window(DF_Window *window);
 internal DF_CmdParams df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel);
 internal DF_CmdParams df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view);
+internal DF_CmdParams df_cmd_params_copy(Arena *arena, DF_CmdParams *src);
 
 ////////////////////////////////
 //~ rjf: Global Cross-Window UI Interaction State Functions
@@ -889,10 +887,9 @@ internal U64 df_get_hovered_line_info_voff(void);
 //~ rjf: View Spec State Functions
 
 internal void df_register_view_specs(DF_ViewSpecInfoArray specs);
-internal void df_register_cmd2view(String8 cmd_name, String8 view_name);
 internal DF_ViewSpec *df_view_spec_from_string(String8 string);
 internal DF_ViewSpec *df_view_spec_from_gfx_view_kind(DF_GfxViewKind gfx_view_kind);
-internal DF_ViewSpec *df_view_spec_from_cmd_spec(DF_CmdSpec *cmd_spec);
+internal DF_ViewSpec *df_view_spec_from_cmd_param_slot(DF_CmdParamSlot slot);
 
 ////////////////////////////////
 //~ rjf: View Rule Spec State Functions
@@ -904,9 +901,8 @@ internal DF_GfxViewRuleSpec *df_gfx_view_rule_spec_from_string(String8 string);
 //~ rjf: View State Functions
 
 internal DF_View *df_view_alloc(void);
-internal void df_view_release_single(DF_View *view);
 internal void df_view_release(DF_View *view);
-internal void df_view_equip_command(DF_View *view, DF_CmdSpec *spec, DF_CmdParams *params, String8 default_query, DF_CfgNode *cfg_root);
+internal void df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 default_query, DF_CfgNode *cfg_root);
 internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
 internal void df_view_clear_user_state(DF_View *view);
 internal void *df_view_get_or_push_user_state(DF_View *view, U64 size);

@@ -1042,20 +1042,23 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
 {
   String8 error = {0};
   B32 prefer_imm = 0;
-  switch(spec->info.query_rule)
+  switch(spec->info.query.slot)
   {
     default:
-    case DF_CmdQueryRule_String:
+    case DF_CmdParamSlot_String:
     {
       params->string = push_str8_copy(arena, query);
       df_cmd_params_mark_slot(params, DF_CmdParamSlot_String);
     }break;
-    case DF_CmdQueryRule_FilePath:
+    case DF_CmdParamSlot_FilePath:
     {
-      params->file_path = push_str8_copy(arena, query);
+      String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
+      params->file_path = push_str8_copy(arena, pair.string);
+      params->text_point = pair.pt;
       df_cmd_params_mark_slot(params, DF_CmdParamSlot_FilePath);
+      df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
     }break;
-    case DF_CmdQueryRule_TextPoint:
+    case DF_CmdParamSlot_TextPoint:
     {
       U64 v = 0;
       if(try_u64_from_str8_c_rules(query, &v))
@@ -1064,19 +1067,15 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
         params->text_point.line = v;
         df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
       }
+      else
+      {
+        error = str8_lit("Couldn't interpret as a line number.");
+      }
     }break;
-    case DF_CmdQueryRule_FilePathAndTextPoint:
-    {
-      String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
-      params->file_path = push_str8_copy(arena, pair.string);
-      params->text_point = pair.pt;
-      df_cmd_params_mark_slot(params, DF_CmdParamSlot_FilePath);
-      df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
-    }break;
-    case DF_CmdQueryRule_VirtualAddr: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdQueryRule_VirtualOff: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdQueryRule_Index: prefer_imm = 1; goto use_numeric_eval;
-    case DF_CmdQueryRule_ID: prefer_imm = 1; goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualAddr: prefer_imm = 0; goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualOff: prefer_imm = 0; goto use_numeric_eval;
+    case DF_CmdParamSlot_Index: prefer_imm = 1; goto use_numeric_eval;
+    case DF_CmdParamSlot_ID: prefer_imm = 1; goto use_numeric_eval;
     use_numeric_eval:
     {
       Temp scratch = scratch_begin(&arena, 1);
@@ -1097,25 +1096,25 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
           prefer_imm = 1;
         }
         U64 u64 = !prefer_imm && eval.offset ? eval.offset : eval.imm_u64;
-        switch(spec->info.query_rule)
+        switch(spec->info.query.slot)
         {
           default:{}break;
-          case DF_CmdQueryRule_VirtualAddr:
+          case DF_CmdParamSlot_VirtualAddr:
           {
             params->vaddr = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_VirtualAddr);
           }break;
-          case DF_CmdQueryRule_VirtualOff:
+          case DF_CmdParamSlot_VirtualOff:
           {
             params->voff = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_VirtualOff);
           }break;
-          case DF_CmdQueryRule_Index:
+          case DF_CmdParamSlot_Index:
           {
             params->index = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_Index);
           }break;
-          case DF_CmdQueryRule_ID:
+          case DF_CmdParamSlot_ID:
           {
             params->id = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_ID);
@@ -1140,11 +1139,7 @@ df_cmd_list_push(Arena *arena, DF_CmdList *cmds, DF_CmdParams *params, DF_CmdSpe
 {
   DF_CmdNode *n = push_array(arena, DF_CmdNode, 1);
   n->cmd.spec = spec;
-  MemoryCopyStruct(&n->cmd.params, params);
-  n->cmd.params.entity_list = df_push_handle_list_copy(arena, params->entity_list);
-  n->cmd.params.string = push_str8_copy(arena, params->string);
-  n->cmd.params.file_path = push_str8_copy(arena, params->file_path);
-  if(n->cmd.params.cmd_spec == 0) {n->cmd.params.cmd_spec = &df_g_nil_cmd_spec;}
+  n->cmd.params = df_cmd_params_copy(arena, params);
   DLLPushBack(cmds->first, cmds->last, n);
   cmds->count += 1;
 }
@@ -2503,9 +2498,8 @@ df_register_cmd_specs(DF_CmdSpecInfoArray specs)
     info_copy->search_tags            = push_str8_copy(df_state->arena, info->search_tags);
     info_copy->display_name           = push_str8_copy(df_state->arena, info->display_name);
     info_copy->flags                  = info->flags;
-    info_copy->query_rule             = info->query_rule;
+    info_copy->query                  = info->query;
     info_copy->canonical_icon_kind    = info->canonical_icon_kind;
-    MemoryCopyArray(info_copy->query_info_u64, info->query_info_u64);
     spec->registrar_index = registrar_idx;
     spec->ordering_index = idx;
   }
@@ -6802,13 +6796,18 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         default:{}break;
         
         //- rjf: command fast paths
-        case DF_CoreCmdKind_CommandFastPath:
+        case DF_CoreCmdKind_RunCommand:
         {
           DF_CmdSpec *spec = params.cmd_spec;
-          DF_CmdQueryRule query_rule = spec->info.query_rule;
-          if(query_rule == DF_CmdQueryRule_Null)
+          if(spec != cmd->spec)
           {
-            df_cmd_list_push(arena, cmds, &params, spec);
+            df_cmd_spec_counter_inc(spec);
+            if(!(spec->info.query.flags & DF_CmdQueryFlag_Required) &&
+               (spec->info.query.slot == DF_CmdParamSlot_Null ||
+                df_cmd_params_has_slot(&params, spec->info.query.slot)))
+            {
+              df_cmd_list_push(arena, cmds, &params, spec);
+            }
           }
         }break;
         
@@ -6979,14 +6978,17 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_Detach:
         {
-          DF_Entity *entity = df_entity_from_handle(params.entity);
-          if(entity->kind == DF_EntityKind_Process)
+          for(DF_HandleNode *n = params.entity_list.first; n != 0; n = n->next)
           {
-            CTRL_Msg msg = {CTRL_MsgKind_Detach};
-            msg.machine_id = entity->ctrl_machine_id;
-            msg.entity = entity->ctrl_handle;
-            MemoryCopyArray(msg.exception_code_filters, df_state->ctrl_exception_code_filters);
-            df_push_ctrl_msg(&msg);
+            DF_Entity *entity = df_entity_from_handle(n->handle);
+            if(entity->kind == DF_EntityKind_Process)
+            {
+              CTRL_Msg msg = {CTRL_MsgKind_Detach};
+              msg.machine_id = entity->ctrl_machine_id;
+              msg.entity = entity->ctrl_handle;
+              MemoryCopyArray(msg.exception_code_filters, df_state->ctrl_exception_code_filters);
+              df_push_ctrl_msg(&msg);
+            }
           }
         }break;
         case DF_CoreCmdKind_Continue:
@@ -7086,17 +7088,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               df_ctrl_run(DF_RunKind_SingleStep, thread, &traps);
             }
           }
-        }break;
-        case DF_CoreCmdKind_RunToModuleOffset:
-        {
-          DF_Entity *thread = df_entity_from_handle(params.entity);
-          DF_Entity *module = df_module_from_thread(thread);
-          U64 voff = params.voff;
-          U64 vaddr = df_vaddr_from_voff(module, voff);
-          DF_CmdParams params = df_cmd_params_zero();
-          params.vaddr = vaddr;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
         }break;
         case DF_CoreCmdKind_Halt:
         if(df_ctrl_targets_running())
