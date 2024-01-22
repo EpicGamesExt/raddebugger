@@ -355,6 +355,8 @@ type_coverage_eval_tests(void){
   Has_A_Post_Forward_Reference r2 = {0};
   
   Basics &basics_ref = basics;
+  const Basics *basics_const_ptr = &basics;
+  const Basics &basics_const_ref = basics;
   
   union
   {

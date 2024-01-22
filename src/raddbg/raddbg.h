@@ -2,6 +2,49 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Frontend/UI Pass Tasks
+//
+// [ ] source view -> floating margin/line-nums
+// [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
+//     & scrollbars etc.
+// [ ] drag/drop tab cleanup
+// [ ] target/breakpoint/watch-pin reordering
+// [ ] watch window reordering
+// [ ] query views, cleanup & floating - maybe merge "applies to view" vs. not
+// [ ] standard way to filter
+// [ ] visualize remapped files (via path map)
+// [ ] hovering truncated string for a short time -> tooltip with full wrapped
+//     string
+// [ ] theme lister -> fonts & font sizes
+// [ ] font lister
+// [ ] per-panel font size overrides
+//
+// [ ] For the Scheduler window, it would be nice if you could dim or
+//     folderize threads that are not your threads - eg., if a thread doesn't
+//     have any resolved stack pointers in your executable code, then you can
+//     ignore it when you are focusing on your own code. I don't know what the
+//     best way to detect this is, other than by walking the call stack... one
+//     way might be to just have a way to separate threads you've named from
+//     threads you haven't? Or, there could even be a debugger-specific API
+//     that you use to tag them. Just some way that would make it easier to
+//     focus on your own threads.
+//
+// [ ] autocomplete lister should respect position in edited expression,
+//     tabbing through should autocomplete but not exit, etc.
+//
+//  [ ]  it would be nice to have "show in explorer" for right click on source
+//       file tab (opens explorer & selects the file)
+//  [ ]  it would be nice if Alt+o in source file would switch between .h and
+//       .c/cpp file (just look for same name in same folder)
+//
+//  [ ]  what's up with decimal number coloring where every group of 3 are in
+//       different color? can I turn it off? And why sometimes digits in number
+//       start with brighter color, but sometimes with darker - shouldn't it
+//       always have the same color ordering?
+//
+//  [ ]  middle mouse button on tab should close it
+
+////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
@@ -28,6 +71,13 @@
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
+//
+// [ ] Watch Window Type Evaluation
+// [ ] Globals, Thread-Locals, Types Views
+// [ ] Watch Window Filtering
+//
+// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
+//     support it?
 //
 // [ ] escaping in config files - breakpoint labels etc.
 // [ ] focus changing between query bar & panel content via mouse
@@ -198,8 +248,6 @@
 //      path as file picking, and this doesn't give the user a clean path to
 //      actually pick a folder, just navigate with them
 //
-//  [ ] ** Hover-Eval-Popup-While-Scrolling is very annoying!
-//
 //  [ ] ** In the call stack, I would like to be able to click quickly and move
 //      around the stack. Right now, you can do that with the first and third
 //      column, but the second column drops down a context menu. Since right
@@ -248,21 +296,12 @@
 //  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
 //  [ ]  mouse back button should make view to go back after I double clicked
 //       on function to open it
-//  [ ]  middle mouse button on tab should close it
 //  [ ]  pressing random keyboard keys in source code advances text cursor like
 //       you were inputting text, very strange.
 //  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which
 //       panel was previous, don't want to use ctrl+, multiple times)
 //       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use
 //       in VS
-//  [ ]  what's up with decimal number coloring where every group of 3 are in
-//       different color? can I turn it off? And why sometimes digits in number
-//       start with brighter color, but sometimes with darker - shouldn't it
-//       always have the same color ordering?
-//  [ ]  it would be nice to have "show in explorer" for right click on source
-//       file tab (opens explorer & selects the file)
-//  [ ]  it would be nice if Alt+o in source file would switch between .h and
-//       .c/cpp file (just look for same name in same folder)
 //  [ ]  in watch window when I enter some new expression and then click mouse
 //       away from cell, then it should behave the same as if I pressed enter.
 //       Currently it does the same as if I have pressed esc and I have lost my
@@ -282,19 +321,6 @@
 
 ////////////////////////////////
 //~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
-//
-// [ ] For the Scheduler window, it would be nice if you could dim or
-//     folderize threads that are not your threads - eg., if a thread doesn't
-//     have any resolved stack pointers in your executable code, then you can
-//     ignore it when you are focusing on your own code. I don't know what the
-//     best way to detect this is, other than by walking the call stack... one
-//     way might be to just have a way to separate threads you've named from
-//     threads you haven't? Or, there could even be a debugger-specific API
-//     that you use to tag them. Just some way that would make it easier to
-//     focus on your own threads.
-//
-// [ ] autocomplete lister should respect position in edited expression,
-//     tabbing through should autocomplete but not exit, etc.
 //
 // [ ] Fancy View Rules
 //  [ ] table column boundaries should be checked against *AFTER* table
@@ -420,7 +446,7 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 5
+#define RADDBG_VERSION_PATCH 6
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""

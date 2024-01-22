@@ -226,6 +226,7 @@ internal TG_Key tg_cons_type_make(TG_Graph *graph, TG_Kind kind, TG_Key direct_t
 
 internal TG_Type *tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
+internal TG_Key tg_unwrapped_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_owner_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_ptee_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_unwrapped_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);

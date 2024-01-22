@@ -811,6 +811,15 @@ tg_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key
 }
 
 internal TG_Key
+tg_unwrapped_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
+{
+  key = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, key);
+  key = tg_direct_from_graph_raddbg_key(graph, rdbg, key);
+  key = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, key);
+  return key;
+}
+
+internal TG_Key
 tg_owner_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
 {
   TG_Key result = zero_struct;
