@@ -11498,17 +11498,17 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                 else
                 {
                   DF_CmdSpec *spec = df_cmd_spec_from_string(child->string);
-                  if(!df_cmd_spec_is_nil(spec))
-                  {
-                    cmd_spec = spec;
-                  }
-                  else for(U64 idx = 0; idx < ArrayCount(df_g_binding_version_remap_old_name_table); idx += 1)
+                  for(U64 idx = 0; idx < ArrayCount(df_g_binding_version_remap_old_name_table); idx += 1)
                   {
                     if(str8_match(df_g_binding_version_remap_old_name_table[idx], child->string, StringMatchFlag_CaseInsensitive))
                     {
                       String8 new_name = df_g_binding_version_remap_new_name_table[idx];
-                      cmd_spec = df_cmd_spec_from_string(new_name);
+                      spec = df_cmd_spec_from_string(new_name);
                     }
+                  }
+                  if(!df_cmd_spec_is_nil(spec))
+                  {
+                    cmd_spec = spec;
                   }
                   OS_Key k = df_os_key_from_cfg_string(child->string);
                   if(k != OS_Key_Null)
