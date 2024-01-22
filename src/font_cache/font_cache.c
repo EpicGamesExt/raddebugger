@@ -749,6 +749,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
         {
           info->subrect = chosen_atlas_region;
           info->atlas_num = chosen_atlas_num;
+          info->raster_dim = raster.atlas_dim;
           info->advance = raster.advance;
         }
       }
@@ -782,10 +783,10 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
         F_Piece *piece = f_piece_chunk_list_push_new(arena, &piece_chunks, string.size);
         {
           piece->texture = atlas ? atlas->texture : r_handle_zero();
-          piece->subrect = r2s16p(info->subrect.x0 + 1,
-                                  info->subrect.y0 + 1,
-                                  info->subrect.x1 - 1,
-                                  info->subrect.y1 - 1);
+          piece->subrect = r2s16p(info->subrect.x0,
+                                  info->subrect.y0,
+                                  info->subrect.x0 + info->raster_dim.x,
+                                  info->subrect.y0 + info->raster_dim.y);
           piece->advance = info->advance;
           piece->decode_size = piece_substring.size;
           piece->offset = v2s16(0, -hash2style_node->ascent - 4);
