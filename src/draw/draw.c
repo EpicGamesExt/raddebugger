@@ -528,7 +528,7 @@ d_text_run(Vec2F32 p, Vec4F32 color, F_Run run)
                          p.y + piece->offset.y,
                          p.x + piece->offset.x + advance + size.x,
                          p.y + piece->offset.y + size.y);
-    if(!r_handle_match(texture, r_handle_zero()))
+    if(size.x != 0 && size.y != 0 && !r_handle_match(texture, r_handle_zero()))
     {
       d_img(dst, src, texture, color, 0, 0, 0);
     }
@@ -598,7 +598,7 @@ d_truncated_text_run(Vec2F32 p, Vec4F32 color, F32 max_x, F_Run text_run, F_Run 
                            p.y + piece->offset.y,
                            p.x + piece->offset.x + advance + size.x,
                            p.y + piece->offset.y + size.y);
-      if(!r_handle_match(texture, r_handle_zero()))
+      if(size.x != 0 && size.y != 0 && !r_handle_match(texture, r_handle_zero()))
       {
         d_img(dst, src, texture, color, 0, 0, 0);
       }
@@ -625,7 +625,7 @@ d_truncated_text_run(Vec2F32 p, Vec4F32 color, F32 max_x, F_Run text_run, F_Run 
                            ellipses_p.y + piece->offset.y,
                            ellipses_p.x + piece->offset.x + advance + size.x,
                            ellipses_p.y + piece->offset.y + size.y);
-      if(!r_handle_match(texture, r_handle_zero()))
+      if(size.x != 0 && size.y != 0 && !r_handle_match(texture, r_handle_zero()))
       {
         d_img(dst, src, texture, ellipses_color, 0, 0, 0);
       }
