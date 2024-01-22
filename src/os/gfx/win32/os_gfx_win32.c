@@ -571,6 +571,7 @@ os_graphical_init(void)
     wndclass.hInstance = w32_h_instance;
     wndclass.lpszClassName = L"graphical-window";
     wndclass.hCursor = LoadCursorA(0, IDC_ARROW);
+    wndclass.hIcon = LoadIcon(w32_h_instance, MAKEINTRESOURCE(1));
     ATOM wndatom = RegisterClassExW(&wndclass);
     (void)wndatom;
   }
