@@ -4983,9 +4983,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       F32 query_container_width = dim_2f32(window_rect).x*0.5f;
       F32 query_container_margin = ui_top_font_size()*8.f;
       F32 query_line_edit_height = ui_top_font_size()*3.f;
-      Rng2F32 query_container_rect = r2f32p(window_center.x - query_container_width/2,
+      Rng2F32 query_container_rect = r2f32p(window_center.x - query_container_width/2 + (1-ws->query_view_t)*query_container_width/4,
                                             window_rect.y0 + query_container_margin,
-                                            window_center.x + query_container_width/2,
+                                            window_center.x + query_container_width/2 - (1-ws->query_view_t)*query_container_width/4,
                                             window_rect.y1 - query_container_margin);
       if(ws->query_view_stack_top->spec == &df_g_nil_view_spec)
       {
