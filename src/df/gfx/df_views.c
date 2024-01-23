@@ -1797,7 +1797,7 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
         UI_Flags(UI_BoxFlag_DrawBorder)
         UI_TextAlignment(UI_TextAlign_Center)
         df_cmd_binding_button(spec);
-      ui_labelf(", or start typing, to open command menu");
+      ui_labelf("to open command menu");
     }
   }
   scratch_end(scratch);
@@ -3914,8 +3914,8 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         // rjf: rip_vaddr => module
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         
-        // rjf: module => validity?
-        B32 frame_valid = !df_entity_is_nil(module);
+        // rjf: rip => validity?
+        B32 frame_valid = (rip_vaddr != 0);
         
         // rjf: build row
         if(frame_valid) UI_NamedTableVectorF("###callstack_%p_%I64x", view, frame_idx)
@@ -3951,7 +3951,21 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
           // rjf: build cell for module
           UI_TableCell UI_FocusHot((row_selected && cs->cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
-            df_entity_desc_button(ws, module);
+            if(df_entity_is_nil(module)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            {
+              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "(No Module)###moduleless_frame_%I64x", frame_idx);
+              UI_Signal sig = ui_signal_from_box(box);
+              if(sig.pressed)
+              {
+                next_cursor = v2s64(1, (S64)frame_idx+1);
+                DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+              }
+            }
+            else
+            {
+              df_entity_desc_button(ws, module);
+            }
           }
           
           // rjf: build cell for function name
@@ -5628,9 +5642,19 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       default: break;
       case DF_CoreCmdKind_GoToAddress:
       {
-        if(!df_entity_is_nil(df_entity_from_handle(params.entity)))
+        DF_Entity *entity = df_entity_from_handle(params.entity);
+        if(!df_entity_is_nil(entity) &&
+           (entity->kind == DF_EntityKind_Process ||
+            entity->kind == DF_EntityKind_Thread ||
+            entity->kind == DF_EntityKind_Module))
         {
-          dv->process = params.entity;
+          DF_Entity *process = entity;
+          if(entity->kind == DF_EntityKind_Thread ||
+             entity->kind == DF_EntityKind_Module)
+          {
+            process = df_entity_ancestor_from_kind(process, DF_EntityKind_Process);
+          }
+          dv->process = df_handle_from_entity(process);
         }
         dv->base_vaddr = params.vaddr;
         dv->goto_vaddr = params.vaddr;

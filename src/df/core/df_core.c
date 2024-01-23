@@ -3621,13 +3621,6 @@ df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
         DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
         String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
         
-        // rjf: cancel on bad data
-        if(binary_data.size == 0)
-        {
-          unwind.error = 1;
-          break;
-        }
-        
         // rjf: valid step -> push frame
         DF_UnwindFrame *frame = push_array(arena, DF_UnwindFrame, 1);
         frame->rip = rip;
