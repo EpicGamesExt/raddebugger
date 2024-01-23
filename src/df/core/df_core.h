@@ -1573,7 +1573,7 @@ internal CTRL_Event df_ctrl_last_stop_event(void);
 //~ rjf: Evaluation
 
 internal B32 df_eval_memory_read(void *u, void *out, U64 addr, U64 size);
-internal EVAL_ParseCtx df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 voff);
+internal EVAL_ParseCtx df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 vaddr);
 internal EVAL_ParseCtx df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt);
 internal DF_Eval df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, String8 string);
 internal DF_Eval df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);

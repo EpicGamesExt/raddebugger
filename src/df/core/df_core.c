@@ -1083,9 +1083,7 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
       DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
       U64 vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-      DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-      U64 voff = df_voff_from_vaddr(module, vaddr);
-      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, voff);
+      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, vaddr);
       DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, &parse_ctx, query);
       if(eval.errors.count == 0)
       {
@@ -3962,17 +3960,19 @@ df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 }
 
 internal EVAL_ParseCtx
-df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 voff)
+df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 vaddr)
 {
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: extract info
+  DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
+  U64 voff = df_voff_from_vaddr(module, vaddr);
   DF_Entity *binary = df_binary_file_from_module(module);
   String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
   RADDBG_Parsed *rdbg = &dbgi->rdbg;
-  Architecture arch = df_architecture_from_entity(module);
-  EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch (arch);
+  Architecture arch = df_architecture_from_entity(process);
+  EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch(arch);
   EVAL_String2NumMap *reg_alias_map = ctrl_string2alias_from_arch(arch);
   EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, voff);
   EVAL_String2NumMap *member_map = df_query_cached_member_map_from_binary_voff(binary, voff);
@@ -4083,7 +4083,10 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
       if(modules.count != 0)
       {
         DF_Entity *module = modules.first->entity;
-        ctx = df_eval_parse_ctx_from_module_voff(scope, module, src2dasm->voff_range.min);
+        DF_Entity *process = df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
+        U64 voff = src2dasm->voff_range.min;
+        U64 vaddr = df_vaddr_from_voff(module, voff);
+        ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, vaddr);
         good_ctx = 1;
         break;
       }
