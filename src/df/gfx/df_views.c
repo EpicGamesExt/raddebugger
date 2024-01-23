@@ -2028,7 +2028,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
   DF_PathQuery path_query = df_path_query_from_string(query_normalized_with_opt_slash);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
-  B32 dir_selection = 0;
+  B32 dir_selection = !!(ws->query_cmd_spec->info.query.flags & DF_CmdQueryFlag_FoldersOnly);
   
   //- rjf: get extra state for this view
   DF_FileSystemViewState *fs = df_view_user_state(view, DF_FileSystemViewState);
@@ -2207,6 +2207,15 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
       }
+    }
+    
+    // rjf: command argument is empty, picking folders -> use current folder
+    else if(path_query.search.size == 0 && dir_selection)
+    {
+      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+      params.file_path = path_query.path;
+      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
+      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
     }
     
     // rjf: command argument does not exactly match any file, but lister results are in:
@@ -2796,6 +2805,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Target)
     {
       default:break;
       case DF_CoreCmdKind_PickFile:
+      case DF_CoreCmdKind_PickFolder:
       {
         String8 pick_string = cmd->params.file_path;
         DF_Entity *storage_entity = entity;
@@ -2835,6 +2845,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   struct
   {
     B32 fill_with_file;
+    B32 fill_with_folder;
     B32 use_code_font;
     String8 key;
     DF_EntityKind storage_child_kind;
@@ -2842,11 +2853,11 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   }
   kv_info[] =
   {
-    { 0, 0, str8_lit("Label"),                DF_EntityKind_Nil,            entity->name },
-    { 1, 0, str8_lit("Executable"),           DF_EntityKind_Executable,     df_entity_child_from_kind(entity, DF_EntityKind_Executable)->name },
-    { 0, 0, str8_lit("Arguments"),            DF_EntityKind_Arguments,      df_entity_child_from_kind(entity, DF_EntityKind_Arguments)->name },
-    { 1, 0, str8_lit("Working Directory"),    DF_EntityKind_ExecutionPath,  df_entity_child_from_kind(entity, DF_EntityKind_ExecutionPath)->name },
-    { 0, 1, str8_lit("Entry Point Override"), DF_EntityKind_EntryPointName, df_entity_child_from_kind(entity, DF_EntityKind_EntryPointName)->name },
+    { 0, 0, 0, str8_lit("Label"),                DF_EntityKind_Nil,            entity->name },
+    { 1, 0, 0, str8_lit("Executable"),           DF_EntityKind_Executable,     df_entity_child_from_kind(entity, DF_EntityKind_Executable)->name },
+    { 0, 0, 0, str8_lit("Arguments"),            DF_EntityKind_Arguments,      df_entity_child_from_kind(entity, DF_EntityKind_Arguments)->name },
+    { 0, 1, 0, str8_lit("Working Directory"),    DF_EntityKind_ExecutionPath,  df_entity_child_from_kind(entity, DF_EntityKind_ExecutionPath)->name },
+    { 0, 0, 1, str8_lit("Entry Point Override"), DF_EntityKind_EntryPointName, df_entity_child_from_kind(entity, DF_EntityKind_EntryPointName)->name },
   };
   
   //- rjf: take controls to start/end editing
@@ -2922,7 +2933,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
         UI_TableVector
       {
         B32 row_selected = (tv->cursor.y == idx+1);
-        B32 has_browse = kv_info[idx].fill_with_file;
+        B32 has_browse = kv_info[idx].fill_with_file || kv_info[idx].fill_with_folder;
         
         //- rjf: key (label)
         UI_TableCell UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
@@ -3027,7 +3038,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
               if(ui_buttonf("Browse...").clicked)
             {
               DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-              params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFile);
+              params.cmd_spec = df_cmd_spec_from_core_cmd_kind(kv_info[idx].fill_with_file ? DF_CoreCmdKind_PickFile : DF_CoreCmdKind_PickFolder);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
               tv->pick_dst_kind = kv_info[idx].storage_child_kind;
