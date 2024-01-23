@@ -1263,8 +1263,8 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                   // zw elements are not used, a bit of waste but it allows for simpler shader code
                   uniforms.kernel[(idx+1)/2] = v4f32(w, (F32)idx + t, 0, 0);
               }
-              uniforms.kernel[0].x = weights[0];
             }
+            uniforms.kernel[0].x = weights[0];
 
             // technically we need just direction be different
             // but there are 256 bytes of usable space anyway for each constant buffer chunk
