@@ -569,6 +569,8 @@ struct DF_Window
   DF_CmdSpec *query_cmd_spec;
   DF_CmdParams query_cmd_params;
   DF_View *query_view_stack_top;
+  B32 query_view_selected;
+  F32 query_view_selected_t;
   F32 query_view_t;
   
   // rjf: hover eval stable state

@@ -1549,6 +1549,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             ws->focused_panel = panel;
             ws->menu_bar_focused = 0;
+            ws->query_view_selected = 0;
           }
         }break;
         
@@ -4943,6 +4944,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           view->query_mark = txt_pt(1, 1);
         }
         ws->query_view_stack_top = view;
+        ws->query_view_selected = 1;
         view->next = &df_g_nil_view;
         
         scratch_end(scratch);
@@ -4954,23 +4956,43 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     //
     {
       F32 rate = 1 - pow_f32(2, (-40.f * df_dt()));
-      F32 query_view_t_target = !df_view_is_nil(ws->query_view_stack_top);
-      F32 diff = abs_f32(query_view_t_target - ws->query_view_t);
-      if(diff > 0.005f)
+      
+      // rjf: animate query view selection transition
       {
-        df_gfx_request_frame();
+        F32 target = (F32)!!ws->query_view_selected;
+        F32 diff = abs_f32(target - ws->query_view_selected_t);
+        if(diff > 0.005f)
+        {
+          df_gfx_request_frame();
+          if(diff < 0.005f)
+          {
+            ws->query_view_selected_t = target;
+          }
+          ws->query_view_selected_t += (target - ws->query_view_selected_t) * rate;
+        }
       }
-      if(diff < 0.005f)
+      
+      // rjf: animate query view open/close transition
       {
-        ws->query_view_t = query_view_t_target;
+        F32 query_view_t_target = !df_view_is_nil(ws->query_view_stack_top);
+        F32 diff = abs_f32(query_view_t_target - ws->query_view_t);
+        if(diff > 0.005f)
+        {
+          df_gfx_request_frame();
+        }
+        if(diff < 0.005f)
+        {
+          ws->query_view_t = query_view_t_target;
+        }
+        ws->query_view_t += (query_view_t_target - ws->query_view_t) * rate;
       }
-      ws->query_view_t += (query_view_t_target - ws->query_view_t) * rate;
     }
     
     ////////////////////////////
     //- rjf: build query
     //
-    if(!df_view_is_nil(ws->query_view_stack_top)) UI_Focus((window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused) ? UI_FocusKind_On : UI_FocusKind_Off)
+    if(!df_view_is_nil(ws->query_view_stack_top))
+      UI_Focus((window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && ws->query_view_selected) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
       DF_View *view = ws->query_view_stack_top;
       DF_CmdSpec *cmd_spec = ws->query_cmd_spec;
@@ -5043,8 +5065,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                                          str8_lit("###query_text_input"));
             if(sig.pressed)
             {
-              DF_CmdParams p = df_cmd_params_from_window(ws);
-              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+              ws->query_view_selected = 1;
             }
           }
         }
@@ -5059,17 +5080,18 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       }
       
       //- rjf: query submission
+      if((ui_is_focus_active() || (window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && !ws->query_view_selected)) &&
+         os_key_press(events, ws->os, 0, OS_Key_Esc))
+      {
+        DF_CmdParams params = df_cmd_params_from_window(ws);
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CancelQuery));
+      }
       if(ui_is_focus_active())
       {
-        DF_View *view = ws->query_view_stack_top;
-        if(os_key_press(events, ws->os, 0, OS_Key_Esc))
-        {
-          DF_CmdParams params = df_cmd_params_from_window(ws);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CancelQuery));
-        }
-        else if(os_key_press(events, ws->os, 0, OS_Key_Return))
+        if(os_key_press(events, ws->os, 0, OS_Key_Return))
         {
           Temp scratch = scratch_begin(&arena, 1);
+          DF_View *view = ws->query_view_stack_top;
           DF_CmdParams params = df_cmd_params_from_window(ws);
           DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
           String8 error = df_cmd_params_apply_spec_query(scratch.arena, &ctrl_ctx, &params, ws->query_cmd_spec, str8(view->query_buffer, view->query_string_size));
@@ -5090,13 +5112,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         UI_Signal sig = ui_signal_from_box(query_container_box);
         if(sig.pressed)
         {
-          DF_CmdParams p = df_cmd_params_from_window(ws);
-          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+          ws->query_view_selected = 1;
         }
       }
       
       //- rjf: build darkening overlay for rest of screen
-      UI_BackgroundColor(mix_4f32(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-ws->query_view_t))
+      UI_BackgroundColor(mix_4f32(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-ws->query_view_selected_t))
         UI_Rect(window_rect)
       {
         ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
@@ -5202,7 +5223,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       if(!df_panel_is_nil(panel->first)) {continue;}
       B32 panel_is_focused = (window_is_focused &&
                               !ws->menu_bar_focused &&
-                              !query_is_open &&
+                              (!query_is_open || !ws->query_view_selected) &&
                               !ui_any_ctx_menu_is_open() &&
                               !hover_eval_is_open &&
                               ws->focused_panel == panel);
