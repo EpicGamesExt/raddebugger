@@ -244,7 +244,7 @@ pe_intel_pdata_off_from_voff__binary_search(String8 data, PE_BinInfo *bin, U64 v
     U64 pdata_count = (range.max - range.min)/sizeof(PE_IntelPdata);
     
     // check if this bin includes a pdata array
-    if(pdata_count > 0)
+    if(pdata_count > 0 && 0 <= pdata_off && pdata_off < data.size)
     {
       PE_IntelPdata *pdata_array = (PE_IntelPdata*)(data.str + pdata_off);
       if(voff >= pdata_array[0].voff_first)
