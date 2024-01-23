@@ -4747,7 +4747,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
   Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim - bottom_bar_dim.y);
   S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
-  B32 is_focused = ui_is_focus_active();
   
   //////////////////////////////
   //- rjf: unpack ctrl ctx & make parse ctx
@@ -5147,7 +5146,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   B32 snap[Axis2_COUNT] = {0};
   UI_Focus(UI_FocusKind_On)
   {
-    if(txti_buffer_is_ready && ui_is_focus_active())
+    if(txti_buffer_is_ready && visible_line_num_range.max >= visible_line_num_range.min && ui_is_focus_active())
     {
       snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(num_possible_visible_lines, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
     }
@@ -6694,7 +6693,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
   Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim - bottom_bar_dim.y);
   S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
-  B32 is_focused = ui_is_focus_active();
   
   //////////////////////////////
   //- rjf: unpack ctrl ctx & make parse ctx
@@ -6990,9 +6988,12 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //- rjf: do keyboard interaction
   //
   B32 snap[Axis2_COUNT] = {0};
-  if(txti_buffer_is_ready && is_focused && visible_line_num_range.max > visible_line_num_range.min)
+  UI_Focus(UI_FocusKind_On)
   {
-    snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(visible_line_count, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
+    if(txti_buffer_is_ready && visible_line_num_range.max >= visible_line_num_range.min && ui_is_focus_active())
+    {
+      snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(visible_line_count, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
+    }
   }
   
   //////////////////////////////
@@ -7006,7 +7007,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     
     //- rjf: build code slice
     DF_CodeSliceSignal sig = {0};
-    UI_Focus(is_focused ? UI_FocusKind_On : UI_FocusKind_Off)
+    UI_Focus(UI_FocusKind_On)
     {
       sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &tv->cursor, &tv->mark, &tv->preferred_column, "txt_view_%p", view);
     }
