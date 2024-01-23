@@ -204,10 +204,14 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
 cbuffer Globals : register(b0)
 {
   float4 rect;
-  float2 viewport_size;
-  float blur_size;
-  float is_vertical;
   float4 corner_radii_px;
+  float2 direction;
+  float2 viewport_size;
+  uint blur_count;
+}
+
+cbuffer Kernel : register(b1)
+{
   float4 kernel[32];
 }
 
@@ -220,7 +224,7 @@ struct Vertex2Pixel
 {
   float4 position        : SV_POSITION;
   float2 texcoord        : TEX;
-  float2 cornercoord     : CRN;
+  float2 sdf_sample_pos  : SDF;
   float corner_radius    : RAD;
 };
 
@@ -237,12 +241,12 @@ float rect_sdf(float2 sample_pos, float2 rect_half_size, float r)
 Vertex2Pixel
 vs_main(CPU2Vertex c2v)
 {
-  float4 vertex_positions__scrn[] =
+  float2 vertex_positions__scrn[] =
   {
-    float4(rect.x, rect.w, 0, 1) * float4(1, -1, 1, 1) + float4(0, viewport_size.y, 0, 0),
-    float4(rect.x, rect.y, 0, 1) * float4(1, -1, 1, 1) + float4(0, viewport_size.y, 0, 0),
-    float4(rect.z, rect.w, 0, 1) * float4(1, -1, 1, 1) + float4(0, viewport_size.y, 0, 0),
-    float4(rect.z, rect.y, 0, 1) * float4(1, -1, 1, 1) + float4(0, viewport_size.y, 0, 0),
+    rect.xw,
+    rect.xy,
+    rect.zw,
+    rect.zy,
   };
   float corner_radii__px[] =
   {
@@ -251,22 +255,20 @@ vs_main(CPU2Vertex c2v)
     corner_radii_px.w,
     corner_radii_px.z,
   };
-  float2 cornercoords__pct[] =
-  {
-    float2(0, 1),
-    float2(0, 0),
-    float2(1, 1),
-    float2(1, 0),
-  };
-  float4 vertex_position__scrn = vertex_positions__scrn[c2v.vertex_id];
-  float4 vertex_position__clip = float4(2*vertex_position__scrn.x/viewport_size.x - 1,
-                                        2*vertex_position__scrn.y/viewport_size.y - 1,
-                                        0, 1);
+  float2 cornercoords__pct = float2(
+    (c2v.vertex_id >> 1) ? 1.f : 0.f,
+    (c2v.vertex_id & 1)  ? 0.f : 1.f);
+
+  float2 vertex_position__pct = vertex_positions__scrn[c2v.vertex_id] / viewport_size;
+  float2 vertex_position__scr = 2.f * vertex_position__pct - 1.f;
+
+  float2 rect_half_size = float2((rect.z-rect.x)/2, (rect.w-rect.y)/2);
+
   Vertex2Pixel v2p;
   {
-    v2p.position = vertex_position__clip;
-    v2p.texcoord = float2(vertex_position__scrn.x/viewport_size.x, 1 - vertex_position__scrn.y/viewport_size.y);
-    v2p.cornercoord = cornercoords__pct[c2v.vertex_id];
+    v2p.position = float4(vertex_position__scr.x, -vertex_position__scr.y, 0.f, 1.f);
+    v2p.texcoord = vertex_position__pct;
+    v2p.sdf_sample_pos = (2.f * cornercoords__pct - 1.f) * rect_half_size;
     v2p.corner_radius = corner_radii__px[c2v.vertex_id];
   }
   return v2p;
@@ -278,26 +280,27 @@ float4
 ps_main(Vertex2Pixel v2p) : SV_TARGET
 {
   // rjf: blend weighted texture samples into color
-  float4 color = stage_t2d.Sample(stage_sampler, v2p.texcoord) * kernel[0].x;
+  float4 color = kernel[0].x * stage_t2d.Sample(stage_sampler, v2p.texcoord);
   color.a = kernel[0].x;
-  for(float i = 1; i < blur_size; i += 1)
+
+  for(uint i = 1; i < blur_count; i += 1)
   {
-    float weight = ((float[4])kernel[uint(i)/4])[uint(i)%4];
-    float4 min_sample = stage_t2d.Sample(stage_sampler, v2p.texcoord - float2(!is_vertical*i/viewport_size.x, is_vertical*i/viewport_size.y));
-    float4 max_sample = stage_t2d.Sample(stage_sampler, v2p.texcoord + float2(!is_vertical*i/viewport_size.x, is_vertical*i/viewport_size.y));
-    min_sample.a = 1;
-    max_sample.a = 1;
-    color += min_sample*weight;
-    color += max_sample*weight;
+    float weight = kernel[i].x;
+    float offset = kernel[i].y;
+    float4 min_sample = stage_t2d.Sample(stage_sampler, v2p.texcoord - offset * direction);
+    float4 max_sample = stage_t2d.Sample(stage_sampler, v2p.texcoord + offset * direction);
+    min_sample.a = 1.f;
+    max_sample.a = 1.f;
+    color += min_sample * weight;
+    color += max_sample * weight;
   }
   
   // rjf: determine SDF sample position
   float2 rect_half_size = float2((rect.z-rect.x)/2, (rect.w-rect.y)/2);
-  float2 sdf_sample_pos = float2((2*v2p.cornercoord.x-1)*rect_half_size.x,
-                                 (2*v2p.cornercoord.y-1)*rect_half_size.y);
+  float2 sdf_sample_pos = v2p.sdf_sample_pos;
   
   // rjf: sample for corners
-  float corner_sdf_s = rect_sdf(sdf_sample_pos, rect_half_size - float2(2.f, 2.f), v2p.corner_radius);
+  float corner_sdf_s = rect_sdf(sdf_sample_pos, rect_half_size - 2.f, v2p.corner_radius);
   float corner_sdf_t = 1-smoothstep(0, 2, corner_sdf_s);
   
   // rjf: weight output color by sdf

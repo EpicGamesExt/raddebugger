@@ -32,13 +32,20 @@ struct R_D3D11_Uniforms_Rect
   Vec2F32 xform_scale;
 };
 
-struct R_D3D11_Uniforms_Blur
+struct R_D3D11_Uniforms_BlurPass
 {
   Rng2F32 rect;
-  Vec2F32 viewport_size;
-  F32 blur_size;
-  F32 is_vertical;
   Vec4F32 corner_radii;
+  Vec2F32 direction;
+  Vec2F32 viewport_size;
+  U32 blur_count;
+  U8 _padding0_[204];
+};
+StaticAssert(sizeof(R_D3D11_Uniforms_BlurPass) % 256 == 0, NotAligned); // constant count/offset must be aligned to 256 bytes
+
+struct R_D3D11_Uniforms_Blur
+{
+  R_D3D11_Uniforms_BlurPass passes[Axis2_COUNT];
   Vec4F32 kernel[32];
 };
 
