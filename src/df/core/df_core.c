@@ -3805,6 +3805,10 @@ df_push_ctrl_msg(CTRL_Msg *msg)
 {
   CTRL_Msg *dst = ctrl_msg_list_push(df_state->ctrl_msg_arena, &df_state->ctrl_msgs);
   ctrl_msg_deep_copy(df_state->ctrl_msg_arena, dst, msg);
+  if(dst->kind == CTRL_MsgKind_LaunchAndInit)
+  {
+    df_state->ctrl_is_running = 1;
+  }
   if(df_state->ctrl_soft_halt_issued == 0 && df_ctrl_targets_running())
   {
     df_state->ctrl_soft_halt_issued = 1;
@@ -7132,7 +7136,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Continue));
           }
-          else
+          else if(!df_ctrl_targets_running())
           {
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndRun));
@@ -7187,7 +7191,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(step_cmd_kind));
           }
-          else
+          else if(!df_ctrl_targets_running())
           {
             DF_EntityList targets = df_push_active_target_list(scratch.arena);
             DF_CmdParams p = params;
