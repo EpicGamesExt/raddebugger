@@ -39,6 +39,7 @@ typedef enum UI_FocusKind
   UI_FocusKind_Null,
   UI_FocusKind_Off,
   UI_FocusKind_On,
+  UI_FocusKind_Root,
   UI_FocusKind_COUNT
 }
 UI_FocusKind;
