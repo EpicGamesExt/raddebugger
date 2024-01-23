@@ -4787,14 +4787,21 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       }break;
       
       //- rjf: integers
+      case TG_Kind_Char8:
+      case TG_Kind_Char16:
+      case TG_Kind_Char32:
       case TG_Kind_S8:
       case TG_Kind_S16:
       case TG_Kind_S32:
       case TG_Kind_S64:
+      case TG_Kind_UChar8:
+      case TG_Kind_UChar16:
+      case TG_Kind_UChar32:
       case TG_Kind_U8:
       case TG_Kind_U16:
       case TG_Kind_U32:
       case TG_Kind_U64:
+      case TG_Kind_Bool:
       if(TG_Kind_Char8 <= src_type_kind && src_type_kind <= TG_Kind_Bool)
       {
         DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdbg, ctrl_ctx, src_eval);
