@@ -232,6 +232,15 @@ r_init(CmdLine *cmdln)
     error = r_d3d11_state->device->CreateBlendState(&desc, &r_d3d11_state->main_blend_state);
   }
   
+  {
+    D3D11_BLEND_DESC desc = {0};
+    {
+      desc.RenderTarget[0].BlendEnable           = FALSE;
+      desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    }
+    error = r_d3d11_state->device->CreateBlendState(&desc, &r_d3d11_state->no_blend_state);
+  }
+
   //- rjf: create nearest-neighbor sampler
   {
     D3D11_SAMPLER_DESC desc = zero_struct;
@@ -1190,7 +1199,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
 
           // rjf: setup output merger
           d_ctx->OMSetDepthStencilState(r_d3d11_state->noop_depth_stencil, 0);
-          d_ctx->OMSetBlendState(r_d3d11_state->main_blend_state, 0, 0xffffffff);
+          d_ctx->OMSetBlendState(r_d3d11_state->no_blend_state, 0, 0xffffffff);
 
           // rjf: set up viewport
           Vec2S32 resolution = wnd->last_resolution;

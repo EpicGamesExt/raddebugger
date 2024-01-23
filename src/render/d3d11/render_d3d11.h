@@ -134,6 +134,7 @@ struct R_D3D11_State
   IDXGIFactory2           *dxgi_factory;
   ID3D11RasterizerState1  *main_rasterizer;
   ID3D11BlendState        *main_blend_state;
+  ID3D11BlendState        *no_blend_state;
   ID3D11SamplerState      *samplers[R_Tex2DSampleKind_COUNT];
   ID3D11DepthStencilState *noop_depth_stencil;
   ID3D11DepthStencilState *plain_depth_stencil;
