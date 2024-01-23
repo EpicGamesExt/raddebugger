@@ -736,13 +736,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   U64 thread_ip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-  DF_Entity *module = df_module_from_process_vaddr(process, thread_ip_vaddr);
-  U64 thread_ip_voff = df_voff_from_vaddr(module, thread_ip_vaddr);
   
   //////////////////////////////
   //- rjf: process * thread info -> parse_ctx
   //
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, thread_ip_voff);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_ip_vaddr);
   
   //////////////////////////////
   //- rjf: roots -> viz blocks
@@ -4769,9 +4767,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   U64 unwind_count = ctrl_ctx.unwind_count;
   U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-  U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, rip_voff);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, rip_vaddr);
   
   //////////////////////////////
   //- rjf: unpack entity info
@@ -5824,9 +5820,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   U64 unwind_count = ctrl_ctx.unwind_count;
   U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(selected_thread, unwind_count);
   DF_Entity *selected_thread_process = df_entity_ancestor_from_kind(selected_thread, DF_EntityKind_Process);
-  DF_Entity *selected_thread_module = df_module_from_process_vaddr(selected_thread_process, rip_vaddr);
-  U64 rip_voff = df_voff_from_vaddr(selected_thread_module, rip_vaddr);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, selected_thread_module, rip_voff);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, selected_thread_process, rip_vaddr);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
@@ -6725,9 +6719,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   U64 unwind_count = ctrl_ctx.unwind_count;
   U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-  U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, rip_voff);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, rip_vaddr);
   
   //////////////////////////////
   //- rjf: unpack entity info
@@ -7674,9 +7666,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       };
       DBGI_Scope *scope = dbgi_scope_open();
       U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-      DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
-      U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
-      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, thread_rip_voff);
+      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_rip_vaddr);
       RADDBG_Parsed *rdbg = parse_ctx.rdbg;
       for(U64 idx = 0; idx < parse_ctx.locals_map->slots_count; idx += 1)
       {

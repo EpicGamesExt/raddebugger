@@ -3918,9 +3918,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
         U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-        DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_rip_vaddr);
-        U64 thread_unwind_rip_voff = df_voff_from_vaddr(module, thread_unwind_rip_vaddr);
-        EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, thread_unwind_rip_voff);
+        EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_unwind_rip_vaddr);
         String8 expr = ws->hover_eval_string;
         DF_Eval eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, expr);
         
