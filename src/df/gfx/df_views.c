@@ -807,7 +807,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       UI_NavActionList *nav_actions = ui_nav_actions();
       for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
       {
-        if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+        if(!str8_match(n->v.insertion, str8_lit(" "), 0) && (n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste))
         {
           edit_begin = 1;
           break;
