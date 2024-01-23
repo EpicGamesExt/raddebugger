@@ -2353,9 +2353,12 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       if(sig.clicked)
       {
         String8 new_path = str8_chop_last_slash(str8_chop_last_slash(path_query.path));
-        new_path = path_normalized_from_string(scratch.arena, new_path);
-        String8 new_cmd = push_str8f(scratch.arena, "%S/", new_path);
-        df_view_equip_spec(view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
+        if(new_path.size != 0)
+        {
+          new_path = path_normalized_from_string(scratch.arena, new_path);
+          String8 new_cmd = push_str8f(scratch.arena, "%S/", new_path);
+          df_view_equip_spec(view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
+        }
       }
     }
     
