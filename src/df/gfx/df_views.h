@@ -430,9 +430,7 @@ internal void df_process_info_array_sort_by_strength__in_place(DF_ProcessInfoArr
 ////////////////////////////////
 //~ rjf: Entity Lister
 
-internal DF_EntityListerItemList df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind,
-                                                                        DF_EntityFlags omit_flags,
-                                                                        String8 needle);
+internal DF_EntityListerItemList df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind, DF_EntityFlags omit_flags, String8 needle);
 internal DF_EntityListerItemArray df_entity_lister_item_array_from_list(Arena *arena, DF_EntityListerItemList list);
 internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray array);
 

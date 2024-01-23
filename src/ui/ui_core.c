@@ -963,15 +963,6 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   {
     ui_state->time_since_last_click[side] += real_dt;
   }
-  
-  
-  //- rjf: push initial stack values
-  ui_push_pref_width(ui_px(150.f, 0.4f));
-  ui_push_pref_height(ui_px(25.f, 1.f));
-  ui_push_background_color(v4f32(0.1f, 0.1f, 0.1f, 0.8f));
-  ui_push_text_color(v4f32(1, 1, 1, 0.8f));
-  ui_push_border_color(v4f32(1, 1, 1, 0.1f));
-  ui_push_corner_radius(0.f);
 }
 
 internal void
@@ -2040,14 +2031,14 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   ProfBeginFunction();
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
-  if(box->flags & UI_BoxFlag_DrawText && (!(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint) || box->fastpath_codepoint == 0))
+  if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
     D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->text_color, box->font_size, 0, 0}};
     D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
     box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), &fancy_strings);
   }
-  if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
+  else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
     Temp scratch = scratch_begin(0, 0);
     String8 display_string = ui_box_display_string(box);

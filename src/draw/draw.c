@@ -468,7 +468,11 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
     }
     if(fr->underline_thickness > 0)
     {
-      d_rect(r2f32p(p.x+pre_advance, p.y+fr->run.descent-fr->underline_thickness/2, p.x+advance, p.y+fr->run.descent+fr->underline_thickness/2), fr->color, 0, 0, 1.f);
+      d_rect(r2f32p(p.x+pre_advance,
+                    p.y+fr->run.descent+fr->run.descent/8,
+                    p.x+advance + (advance-pre_advance)/8,
+                    p.y+fr->run.descent+fr->run.descent/8+fr->underline_thickness),
+             fr->color, 0, 0, 1.f);
     }
     if(fr->strikethrough_thickness > 0)
     {

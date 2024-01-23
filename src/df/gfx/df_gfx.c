@@ -2819,7 +2819,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_pref_width(ui_em(20.f, 1));
-      ui_push_pref_height(ui_em(2.25f, 1.f));
+      ui_push_pref_height(ui_em(2.5f, 1.f));
       ui_push_background_color(df_rgba_from_theme_color(DF_ThemeColor_PlainBackground));
       ui_push_text_color(df_rgba_from_theme_color(DF_ThemeColor_PlainText));
       ui_push_border_color(df_rgba_from_theme_color(DF_ThemeColor_PlainBorder));
