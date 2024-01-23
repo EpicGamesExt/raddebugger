@@ -2028,7 +2028,8 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
   DF_PathQuery path_query = df_path_query_from_string(query_normalized_with_opt_slash);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
-  B32 dir_selection = !!(ws->query_cmd_spec->info.query.flags & DF_CmdQueryFlag_FoldersOnly);
+  B32 file_selection = !!(ws->query_cmd_spec->info.query.flags & DF_CmdQueryFlag_AllowFiles);
+  B32 dir_selection = !!(ws->query_cmd_spec->info.query.flags & DF_CmdQueryFlag_AllowFolders);
   
   //- rjf: get extra state for this view
   DF_FileSystemViewState *fs = df_view_user_state(view, DF_FileSystemViewState);
@@ -3293,6 +3294,8 @@ DF_VIEW_CMD_FUNCTION_DEF(FilePathMap)
     {
       default:break;
       case DF_CoreCmdKind_PickFile:
+      case DF_CoreCmdKind_PickFolder:
+      case DF_CoreCmdKind_PickFileOrFolder:
       {
         String8 pick_string = cmd->params.file_path;
         Side pick_side = fpms->pick_file_dst_side;
@@ -3471,7 +3474,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
           if(ui_buttonf("Browse...").clicked)
         {
           DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-          params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFile);
+          params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFileOrFolder);
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
           fpms->pick_file_dst_map = df_handle_from_entity(map);
@@ -3546,7 +3549,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
             if(ui_buttonf("Browse...").clicked)
           {
             DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-            params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFile);
+            params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFileOrFolder);
             df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
             fpms->pick_file_dst_map = df_handle_from_entity(map);

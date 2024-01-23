@@ -2087,6 +2087,10 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
             next_parent->timestamp = file_properties.modified;
             next_parent->flags |= DF_EntityFlag_IsFolder * !!(file_properties.flags & FilePropertyFlag_IsFolder);
             next_parent->flags |= DF_EntityFlag_IsMissing * !!(file_properties.created == 0);
+            if(path_part_n->next != 0)
+            {
+              next_parent->flags |= DF_EntityFlag_IsFolder;
+            }
           }
         }
         else
@@ -2142,6 +2146,10 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
             next_parent->timestamp = file_properties.modified;
             next_parent->flags |= DF_EntityFlag_IsFolder * !!(file_properties.flags & FilePropertyFlag_IsFolder);
             next_parent->flags |= DF_EntityFlag_IsMissing * !!(file_properties.created == 0);
+            if(path_part_n->next != 0)
+            {
+              next_parent->flags |= DF_EntityFlag_IsFolder;
+            }
           }
         }
         else

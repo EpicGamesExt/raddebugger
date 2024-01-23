@@ -856,11 +856,12 @@ struct DF_EvalVizWindowedRowList
 typedef U32 DF_CmdQueryFlags;
 enum
 {
-  DF_CmdQueryFlag_FoldersOnly      = (1<<0),
-  DF_CmdQueryFlag_CodeInput        = (1<<1),
-  DF_CmdQueryFlag_KeepOldInput     = (1<<2),
-  DF_CmdQueryFlag_SelectOldInput   = (1<<3),
-  DF_CmdQueryFlag_Required         = (1<<4),
+  DF_CmdQueryFlag_AllowFiles       = (1<<0),
+  DF_CmdQueryFlag_AllowFolders     = (1<<1),
+  DF_CmdQueryFlag_CodeInput        = (1<<2),
+  DF_CmdQueryFlag_KeepOldInput     = (1<<3),
+  DF_CmdQueryFlag_SelectOldInput   = (1<<4),
+  DF_CmdQueryFlag_Required         = (1<<5),
 };
 
 typedef struct DF_CmdQuery DF_CmdQuery;
