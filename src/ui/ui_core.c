@@ -1668,12 +1668,16 @@ ui_begin_ctx_menu(UI_Key key)
   }
   ui_push_pref_width(ui_bottom_pref_width());
   ui_push_pref_height(ui_bottom_pref_height());
+  ui_push_focus_hot(UI_FocusKind_Root);
+  ui_push_focus_active(UI_FocusKind_Root);
   return result;
 }
 
 internal void
 ui_end_ctx_menu(void)
 {
+  ui_pop_focus_active();
+  ui_pop_focus_hot();
   ui_pop_pref_width();
   ui_pop_pref_height();
   ui_pop_parent();
@@ -1702,6 +1706,10 @@ ui_is_focus_hot(void)
   {
     for(UI_FocusHotNode *n = ui_state->focus_hot_stack.top; n != 0; n = n->next)
     {
+      if(n->v == UI_FocusKind_Root)
+      {
+        break;
+      }
       if(n->v == UI_FocusKind_Off)
       {
         result = 0;
@@ -1720,6 +1728,10 @@ ui_is_focus_active(void)
   {
     for(UI_FocusActiveNode *n = ui_state->focus_active_stack.top; n != 0; n = n->next)
     {
+      if(n->v == UI_FocusKind_Root)
+      {
+        break;
+      }
       if(n->v == UI_FocusKind_Off)
       {
         result = 0;
