@@ -7489,11 +7489,11 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   U8 *visible_memory = 0;
   {
     Rng1U64 chunk_aligned_range_bytes = r1u64(AlignDownPow2(viz_range_bytes.min, KB(4)), AlignPow2(viz_range_bytes.max, KB(4)));
-    U64 current_run_idx = ctrl_run_idx();
+    U64 current_memgen_idx = ctrl_memgen_idx();
     B32 range_changed = (chunk_aligned_range_bytes.min != mv->last_viewed_memory_cache_range.min ||
                          chunk_aligned_range_bytes.max != mv->last_viewed_memory_cache_range.max);
-    B32 run_happened = (current_run_idx != mv->last_viewed_memory_cache_run_idx);
-    if(range_changed || run_happened)
+    B32 mem_changed = (current_memgen_idx != mv->last_viewed_memory_cache_memgen_idx);
+    if(range_changed || mem_changed)
     {
       Temp scratch = scratch_begin(0, 0);
       
@@ -7537,7 +7537,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       if(!df_ctrl_targets_running())
       {
         mv->last_viewed_memory_cache_range = chunk_aligned_range_bytes;
-        mv->last_viewed_memory_cache_run_idx = current_run_idx;
+        mv->last_viewed_memory_cache_memgen_idx = current_memgen_idx;
       }
       
       scratch_end(scratch);
