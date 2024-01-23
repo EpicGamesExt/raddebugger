@@ -386,7 +386,7 @@ struct DF_MemoryViewState
   Arena *last_viewed_memory_cache_arena;
   U8 *last_viewed_memory_cache_buffer;
   Rng1U64 last_viewed_memory_cache_range;
-  U64 last_viewed_memory_cache_run_idx;
+  U64 last_viewed_memory_cache_memgen_idx;
   
   // rjf: control state
   U64 cursor;
