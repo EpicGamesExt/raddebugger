@@ -8232,7 +8232,7 @@ df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, DF_FuzzyMatchRangeList rang
         f_dim_from_tag_size_string(box->font, box->font_size, str8_prefix(display_string, match_n->range.max)).x,
       };
       ui_set_next_fixed_x(match_pixel_range.min + box->text_padding + 2.f);
-      ui_set_next_fixed_y(box->font_size/4.f);
+      ui_set_next_fixed_y(box->font_size/2.f);
       ui_set_next_fixed_width(match_pixel_range.max-match_pixel_range.min);
       ui_set_next_fixed_height(line_height*1.2f);
       ui_set_next_corner_radius_00(box->font_size/2.f);
