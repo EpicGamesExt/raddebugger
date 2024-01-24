@@ -1744,7 +1744,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         {
           DF_Panel *panel = df_panel_from_handle(params.panel);
           DF_ViewSpec *spec = params.view_spec;
-          DF_Entity *entity = df_entity_from_handle(params.entity);
+          DF_Entity *entity = &df_g_nil_entity;
+          if(spec->info.flags & DF_ViewSpecFlag_ParameterizedByEntity)
+          {
+            entity = df_entity_from_handle(params.entity);
+          }
           if(!df_panel_is_nil(panel) && spec != &df_g_nil_view_spec)
           {
             DF_View *view = df_view_alloc();
