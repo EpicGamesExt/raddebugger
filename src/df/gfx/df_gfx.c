@@ -2612,6 +2612,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
           
           // rjf: given the above, find source code location.
+          B32 disasm_view_prioritized = 0;
           DF_Panel *panel_used_for_src_code = &df_g_nil_panel;
           if(!df_entity_is_nil(src_code))
           {
@@ -2644,6 +2645,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             // rjf: move cursor & snap-to-cursor
             if(!df_panel_is_nil(dst_panel))
             {
+              disasm_view_prioritized = (df_view_from_handle(dst_panel->selected_tab_view) == view_w_disasm);
               dst_panel->selected_tab_view = df_handle_from_view(dst_view);
               DF_CmdParams params = df_cmd_params_from_view(ws, dst_panel, dst_view);
               params.text_point = point;
@@ -2664,7 +2666,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               if(df_panel_is_nil(dst_panel)) { dst_panel = panel_w_disasm; }
               if(df_panel_is_nil(panel_used_for_src_code) && df_panel_is_nil(dst_panel)) { dst_panel = biggest_empty_panel; }
               if(df_panel_is_nil(panel_used_for_src_code) && df_panel_is_nil(dst_panel)) { dst_panel = biggest_panel; }
-              if(dst_panel == panel_used_for_src_code)
+              if(dst_panel == panel_used_for_src_code &&
+                 !disasm_view_prioritized)
               {
                 dst_panel = &df_g_nil_panel;
               }
