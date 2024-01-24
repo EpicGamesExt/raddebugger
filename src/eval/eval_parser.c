@@ -132,34 +132,79 @@ eval_num_from_string(EVAL_String2NumMap *map, String8 string)
 internal EVAL_String2NumMap *
 eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 voff)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: gather scopes to walk
+  typedef struct Task Task;
+  struct Task
+  {
+    Task *next;
+    RADDBG_Scope *scope;
+  };
+  Task *first_task = 0;
+  Task *last_task = 0;
+  
   //- rjf: voff -> tightest scope
   RADDBG_Scope *tightest_scope = 0;
   if(rdbg->scope_vmap != 0 && rdbg->scopes != 0)
   {
     U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
-    tightest_scope = &rdbg->scopes[scope_idx];
+    RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+    Task *task = push_array(scratch.arena, Task, 1);
+    task->scope = scope;
+    SLLQueuePush(first_task, last_task, task);
+    tightest_scope = scope;
+  }
+  
+  //- rjf: voff-1 -> scope
+  if(voff > 0 && rdbg->scope_vmap != 0 && rdbg->scopes != 0)
+  {
+    U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff-1);
+    RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+    if(scope != tightest_scope)
+    {
+      Task *task = push_array(scratch.arena, Task, 1);
+      task->scope = scope;
+      SLLQueuePush(first_task, last_task, task);
+    }
+  }
+  
+  //- rjf: tightest scope -> walk up the tree & build tasks for each parent scope
+  if(tightest_scope != 0)
+  {
+    for(RADDBG_Scope *scope = &rdbg->scopes[tightest_scope->parent_scope_idx];
+        scope != 0 && scope != &rdbg->scopes[0];
+        scope = &rdbg->scopes[scope->parent_scope_idx])
+    {
+      Task *task = push_array(scratch.arena, Task, 1);
+      task->scope = scope;
+      SLLQueuePush(first_task, last_task, task);
+    }
   }
   
   //- rjf: build blank map
   EVAL_String2NumMap *map = push_array(arena, EVAL_String2NumMap, 1);
   *map = eval_string2num_map_make(arena, 1024);
   
-  //- rjf: tightest scope -> walk up the tree & accumulate all locals
-  for(RADDBG_Scope *scope = tightest_scope;
-      scope != 0 && scope != &rdbg->scopes[0];
-      scope = &rdbg->scopes[scope->parent_scope_idx])
+  //- rjf: accumulate locals for all tasks
+  for(Task *task = first_task; task != 0; task = task->next)
   {
-    U32 local_opl_idx = scope->local_first + scope->local_count;
-    for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
+    RADDBG_Scope *scope = task->scope;
+    if(scope != 0)
     {
-      RADDBG_Local *local_var = &rdbg->locals[local_idx];
-      U64 local_name_size = 0;
-      U8 *local_name_str = raddbg_string_from_idx(rdbg, local_var->name_string_idx, &local_name_size);
-      String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
-      eval_string2num_map_insert(arena, map, name, (U64)local_idx+1);
+      U32 local_opl_idx = scope->local_first + scope->local_count;
+      for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
+      {
+        RADDBG_Local *local_var = &rdbg->locals[local_idx];
+        U64 local_name_size = 0;
+        U8 *local_name_str = raddbg_string_from_idx(rdbg, local_var->name_string_idx, &local_name_size);
+        String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
+        eval_string2num_map_insert(arena, map, name, (U64)local_idx+1);
+      }
     }
   }
   
+  scratch_end(scratch);
   return map;
 }
 
