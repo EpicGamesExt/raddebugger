@@ -638,6 +638,32 @@ dbgi_parse_thread_entry_point(void *p)
       }
     }
     
+    //- rjf: if raddbg file is up to date based on timestamp, check the
+    // encoding generation number, to see if we need to regenerate it
+    // regardless
+    if(do_task && raddbg_file_is_up_to_date)
+    {
+      OS_Handle file = {0};
+      OS_Handle file_map = {0};
+      FileProperties file_props = {0};
+      void *file_base = 0;
+      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbg_path);
+      file_map = os_file_map_open(OS_AccessFlag_Read, file);
+      file_props = os_properties_from_file(file);
+      file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
+      if(sizeof(RADDBG_Header) <= file_props.size)
+      {
+        RADDBG_Header *header = (RADDBG_Header*)&file_base;
+        if(header->encoding_version != RADDBG_ENCODING_VERSION)
+        {
+          raddbg_file_is_up_to_date = 0;
+        }
+      }
+      os_file_map_view_close(file_map, file_base);
+      os_file_map_close(file_map);
+      os_file_close(file);
+    }
+    
     //- rjf: raddbg file not up-to-date? we need to generate it
     if(do_task)
     {
