@@ -163,6 +163,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
         df_push_cmd__root(&params, spec);
         df_gfx_request_frame();
+        os_eat_event(&events, event);
       }
     }
   }
