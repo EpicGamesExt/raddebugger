@@ -71,6 +71,7 @@ struct OS_Event
   B32 right_sided;
   U32 character;
   U32 repeat_count;
+  Vec2F32 pos;
   Vec2F32 delta;
   String8List strings;
 };

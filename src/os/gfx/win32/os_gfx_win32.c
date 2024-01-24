@@ -416,6 +416,8 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             event->key = OS_Key_RightMouseButton;
           }break;
         }
+        event->pos.x = (F32)LOWORD(lParam);
+        event->pos.y = (F32)HIWORD(lParam);
         if(release)
         {
           ReleaseCapture();

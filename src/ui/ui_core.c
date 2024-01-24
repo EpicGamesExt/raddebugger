@@ -2215,8 +2215,6 @@ ui_signal_from_box(UI_Box *box)
   UI_Signal result = {0};
   result.box = box;
   result.event_flags = os_get_event_flags();
-  Vec2F32 mouse = ui_state->mouse;
-  B32 mouse_is_over = contains_2f32(box->rect, mouse);
   B32 disabled = !!(box->flags & UI_BoxFlag_Disabled);
   B32 is_focused = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
   
@@ -2247,6 +2245,14 @@ ui_signal_from_box(UI_Box *box)
       }
     }
   }
+  
+  //- rjf: unpack mouse position info
+  Vec2F32 mouse = ui_state->mouse;
+  if(left_press != 0)   { mouse = left_press->pos; }
+  if(left_release != 0) { mouse = left_release->pos; }
+  if(right_press != 0)   { mouse = right_press->pos; }
+  if(right_release != 0) { mouse = right_release->pos; }
+  B32 mouse_is_over = contains_2f32(box->rect, mouse);
   
   //- rjf: check for parent that is clipping
   if(box->flags & (UI_BoxFlag_Clickable|UI_BoxFlag_ViewScroll) && mouse_is_over)
