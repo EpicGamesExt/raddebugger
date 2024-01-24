@@ -65,7 +65,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   OS_EventList events = {0};
   if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
-    events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
+    OS_EventList leftover_events_copy = os_event_list_copy(scratch.arena, &leftover_events);
+    OS_EventList new_events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
+    os_event_list_concat_in_place(&events, &leftover_events_copy);
+    os_event_list_concat_in_place(&events, &new_events);
   }
   
   //- rjf: enable txti change detection
@@ -296,6 +299,13 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
+  //- rjf: gather leftover events for subsequent frame
+  if(events.count != 0)
+  {
+    arena_clear(leftover_events_arena);
+    leftover_events = os_event_list_copy(leftover_events_arena, &events);
+  }
+  
   //- rjf: determine frame time, record into history
   U64 end_time_us = os_now_microseconds();
   U64 frame_time_us = end_time_us-begin_time_us;
@@ -403,6 +413,9 @@ entry_point(int argc, char **argv)
       OS_Handle ipc_semaphore = os_semaphore_alloc(1, 1, ipc_semaphore_name);
       IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
       ipc_info->msg_size = 0;
+      
+      //- rjf: set up leftover event arena
+      leftover_events_arena = arena_alloc();
       
       //- rjf: initialize stuff we depend on
       {

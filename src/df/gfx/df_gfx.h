@@ -662,7 +662,6 @@ struct DF_GfxState
 {
   // rjf: arenas
   Arena *arena;
-  Arena *frame_arena;
   
   // rjf: frame request state
   U64 num_frames_requested;

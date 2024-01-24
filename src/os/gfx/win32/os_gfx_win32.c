@@ -114,6 +114,7 @@ w32_push_event(OS_EventKind kind, W32_Window *window)
   result->kind = kind;
   result->window = os_window_from_w32_window(window);
   result->flags = os_get_event_flags();
+  w32_event_list.count += 1;
   return(result);
 }
 
