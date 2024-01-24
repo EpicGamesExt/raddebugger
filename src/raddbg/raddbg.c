@@ -284,8 +284,9 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   }
   
   //- rjf: take window closing events
-  for(OS_Event *e = events.first; e; e = e->next)
+  for(OS_Event *e = events.first, *next = 0; e; e = next)
   {
+    next = e->next;
     if(e->kind == OS_EventKind_WindowClose)
     {
       for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
@@ -297,6 +298,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
           break;
         }
       }
+      os_eat_event(&events, e);
     }
   }
   
