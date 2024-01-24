@@ -10909,7 +10909,6 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   Arena *arena = arena_alloc();
   df_gfx_state = push_array(arena, DF_GfxState, 1);
   df_gfx_state->arena = arena;
-  df_gfx_state->frame_arena = arena_alloc();
   df_gfx_state->num_frames_requested = 2;
   df_gfx_state->hist = hist;
   df_gfx_state->key_map_arena = arena_alloc();
@@ -10956,7 +10955,6 @@ internal void
 df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
 {
   ProfBeginFunction();
-  arena_clear(df_gfx_state->frame_arena);
   df_gfx_state->hover_line_set_this_frame = 0;
   
   //- rjf: animate confirmation
@@ -11102,6 +11100,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               arena_release(ws->hover_eval_arena);
               arena_release(ws->arena);
               SLLStackPush(df_gfx_state->free_window, ws);
+              ws->gen += 1;
             }
           }
         }break;

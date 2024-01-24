@@ -237,7 +237,7 @@ internal U64
 pe_intel_pdata_off_from_voff__binary_search(String8 data, PE_BinInfo *bin, U64 voff)
 {
   U64 result = 0;
-  if(bin->arch != Architecture_Null)
+  if(bin->arch != Architecture_Null && PE_DataDirectoryIndex_EXCEPTIONS < bin->data_dir_count)
   {
     Rng1U64 range = bin->data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS];
     U64 pdata_off = range.min;
