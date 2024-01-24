@@ -1865,6 +1865,47 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PendingEntity));
           }
         }break;
+        case DF_CoreCmdKind_SwitchToPartnerFile:
+        {
+          DF_Panel *panel = df_panel_from_handle(params.panel);
+          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_Entity *entity = df_entity_from_handle(view->entity);
+          DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
+          if(view_kind == DF_GfxViewKind_Code && entity->kind == DF_EntityKind_File)
+          {
+            String8 file_full_path = df_full_path_from_entity(scratch.arena, entity);
+            String8 file_folder = str8_chop_last_slash(file_full_path);
+            String8 file_name = str8_chop_last_dot(entity->name);
+            String8 file_ext = str8_skip_last_dot(entity->name);
+            String8 partner_ext_candidates[] =
+            {
+              str8_lit_comp("h"),
+              str8_lit_comp("hpp"),
+              str8_lit_comp("hxx"),
+              str8_lit_comp("c"),
+              str8_lit_comp("cc"),
+              str8_lit_comp("cxx"),
+              str8_lit_comp("cpp"),
+            };
+            for(U64 idx = 0; idx < ArrayCount(partner_ext_candidates); idx += 1)
+            {
+              if(!str8_match(partner_ext_candidates[idx], file_ext, StringMatchFlag_CaseInsensitive))
+              {
+                String8 candidate = push_str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
+                String8 candidate_path = push_str8f(scratch.arena, "%S/%S", file_folder, candidate);
+                FileProperties candidate_props = os_properties_from_file_path(candidate_path);
+                if(candidate_props.modified != 0)
+                {
+                  DF_Entity *candidate = df_entity_from_path(candidate_path, DF_EntityFromPathFlag_OpenAsNeeded);
+                  DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+                  p.entity = df_handle_from_entity(candidate);
+                  df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Switch));
+                  break;
+                }
+              }
+            }
+          }
+        }break;
         
         //- rjf: directional movement & text controls
         //

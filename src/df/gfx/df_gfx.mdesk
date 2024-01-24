@@ -83,6 +83,7 @@ DF_DefaultBindingTable:
   { "open"                        O         ctrl     0         0          }
   { "reload_active"               R         ctrl     shift     0          }
   { "switch"                      I         ctrl     0         0          }
+  { "switch_to_partner_file"      O         0        0         alt        }
   
   //- rjf: setting config paths
   { "load_user"                   O         ctrl     shift     alt        }

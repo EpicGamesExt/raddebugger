@@ -940,6 +940,7 @@ DF_StringBindingPair df_g_default_binding_table[] =
 {str8_lit_comp("open"), {OS_Key_O, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("reload_active"), {OS_Key_R, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift }},
 {str8_lit_comp("switch"), {OS_Key_I, 0 |OS_EventFlag_Ctrl  }},
+{str8_lit_comp("switch_to_partner_file"), {OS_Key_O, 0   |OS_EventFlag_Alt}},
 {str8_lit_comp("load_user"), {OS_Key_O, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift |OS_EventFlag_Alt}},
 {str8_lit_comp("load_profile"), {OS_Key_O, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
 {str8_lit_comp("move_left"), {OS_Key_Left, 0   }},

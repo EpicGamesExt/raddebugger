@@ -10,7 +10,7 @@
 // [ ] drag/drop tab cleanup
 // [ ] target/breakpoint/watch-pin reordering
 // [ ] watch window reordering
-// [ ] query views, cleanup & floating - maybe merge "applies to view" vs. not
+// [x] query views, cleanup & floating - maybe merge "applies to view" vs. not
 // [ ] standard way to filter
 // [ ] visualize remapped files (via path map)
 // [ ] hovering truncated string for a short time -> tooltip with full wrapped
@@ -34,7 +34,7 @@
 //
 //  [ ]  it would be nice to have "show in explorer" for right click on source
 //       file tab (opens explorer & selects the file)
-//  [ ]  it would be nice if Alt+o in source file would switch between .h and
+//  [x]  it would be nice if Alt+o in source file would switch between .h and
 //       .c/cpp file (just look for same name in same folder)
 //
 //  [ ]  what's up with decimal number coloring where every group of 3 are in
