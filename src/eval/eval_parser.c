@@ -857,7 +857,19 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                     case RADDBG_LocationKind_ValBytecodeStream:
                     {
                       U8 *bytecode_base = ctx->rdbg->location_data + block->location_data_off + sizeof(RADDBG_LocationKind);
-                      loc_bytecode = str8_cstring((char *)bytecode_base);
+                      U64 bytecode_size = 0;
+                      for(U64 idx = 0; idx < ctx->rdbg->location_data_size; idx += 1)
+                      {
+                        U8 op = bytecode_base[idx];
+                        if(op == 0)
+                        {
+                          break;
+                        }
+                        U8 ctrlbits = raddbg_eval_opcode_ctrlbits[op];
+                        U32 p_size = RADDBG_DECODEN_FROM_CTRLBITS(ctrlbits);
+                        bytecode_size += 1+p_size;
+                      }
+                      loc_bytecode = str8(bytecode_base, bytecode_size);
                     }break;
                     case RADDBG_LocationKind_AddrRegisterPlusU16:
                     case RADDBG_LocationKind_AddrAddrRegisterPlusU16:

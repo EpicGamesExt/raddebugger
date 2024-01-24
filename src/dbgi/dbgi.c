@@ -653,7 +653,7 @@ dbgi_parse_thread_entry_point(void *p)
       file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
       if(sizeof(RADDBG_Header) <= file_props.size)
       {
-        RADDBG_Header *header = (RADDBG_Header*)&file_base;
+        RADDBG_Header *header = (RADDBG_Header*)file_base;
         if(header->encoding_version != RADDBG_ENCODING_VERSION)
         {
           raddbg_file_is_up_to_date = 0;

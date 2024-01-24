@@ -219,9 +219,9 @@ static void pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *se
 // location info helpers
 static CONS_Location* pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
                                                          RADDBG_RegisterCode reg_code,
-                                                         U32 reg_byte_pos,
                                                          U32 reg_byte_size,
-                                                         U64 offset,
+                                                         U32 reg_byte_pos,
+                                                         S64 offset,
                                                          B32 extra_indirection);
 
 static CV_EncodedFramePtrReg pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx,

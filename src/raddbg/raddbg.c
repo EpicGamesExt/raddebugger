@@ -82,10 +82,12 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   {
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
     {
+      df_gfx_request_frame();
       df_gfx_state->bind_change_active = 0;
     }
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
     {
+      df_gfx_request_frame();
       df_unbind_spec(df_gfx_state->bind_change_cmd_spec, df_gfx_state->bind_change_binding);
       df_gfx_state->bind_change_active = 0;
       DF_CmdParams p = df_cmd_params_from_gfx();
@@ -117,6 +119,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         os_eat_event(&events, event);
         DF_CmdParams p = df_cmd_params_from_gfx();
         df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(df_g_cfg_src_write_cmd_kind_table[DF_CfgSrc_User]));
+        df_gfx_request_frame();
         break;
       }
     }
@@ -151,8 +154,8 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
           {
             window->menu_bar_focus_press_started = 0;
           }
+          df_gfx_request_frame();
         }
-        df_gfx_request_frame();
       }
       else if(event->kind == OS_EventKind_Text)
       {
@@ -180,28 +183,33 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       }
       if(event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
+        df_gfx_request_frame();
         ws->menu_bar_focused_on_press = ws->menu_bar_focused;
         ws->menu_bar_key_held = 1;
         ws->menu_bar_focus_press_started = 1;
       }
       if(event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
+        df_gfx_request_frame();
         ws->menu_bar_key_held = 0;
       }
       if(ws->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
         os_eat_event(&events, event);
+        df_gfx_request_frame();
         ws->menu_bar_focused = 0;
       }
       else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
         os_eat_event(&events, event);
+        df_gfx_request_frame();
         ws->menu_bar_focused = !ws->menu_bar_focused_on_press;
         ws->menu_bar_focus_press_started = 0;
       }
       else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && ws->menu_bar_focused && !ui_any_ctx_menu_is_open())
       {
         os_eat_event(&events, event);
+        df_gfx_request_frame();
         ws->menu_bar_focused = 0;
       }
     }
