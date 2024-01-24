@@ -468,7 +468,11 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
     }
     if(fr->underline_thickness > 0)
     {
-      d_rect(r2f32p(p.x+pre_advance, p.y+fr->run.descent-fr->underline_thickness/2, p.x+advance, p.y+fr->run.descent+fr->underline_thickness/2), fr->color, 0, 0, 1.f);
+      d_rect(r2f32p(p.x+pre_advance,
+                    p.y+fr->run.descent+fr->run.descent/8,
+                    p.x+advance + (advance-pre_advance)/8,
+                    p.y+fr->run.descent+fr->run.descent/8+fr->underline_thickness),
+             fr->color, 0, 0, 1.f);
     }
     if(fr->strikethrough_thickness > 0)
     {
@@ -528,7 +532,7 @@ d_text_run(Vec2F32 p, Vec4F32 color, F_Run run)
                          p.y + piece->offset.y,
                          p.x + piece->offset.x + advance + size.x,
                          p.y + piece->offset.y + size.y);
-    if(!r_handle_match(texture, r_handle_zero()))
+    if(size.x != 0 && size.y != 0 && !r_handle_match(texture, r_handle_zero()))
     {
       d_img(dst, src, texture, color, 0, 0, 0);
     }
@@ -598,7 +602,7 @@ d_truncated_text_run(Vec2F32 p, Vec4F32 color, F32 max_x, F_Run text_run, F_Run 
                            p.y + piece->offset.y,
                            p.x + piece->offset.x + advance + size.x,
                            p.y + piece->offset.y + size.y);
-      if(!r_handle_match(texture, r_handle_zero()))
+      if(size.x != 0 && size.y != 0 && !r_handle_match(texture, r_handle_zero()))
       {
         d_img(dst, src, texture, color, 0, 0, 0);
       }
@@ -625,7 +629,7 @@ d_truncated_text_run(Vec2F32 p, Vec4F32 color, F32 max_x, F_Run text_run, F_Run 
                            ellipses_p.y + piece->offset.y,
                            ellipses_p.x + piece->offset.x + advance + size.x,
                            ellipses_p.y + piece->offset.y + size.y);
-      if(!r_handle_match(texture, r_handle_zero()))
+      if(size.x != 0 && size.y != 0 && !r_handle_match(texture, r_handle_zero()))
       {
         d_img(dst, src, texture, ellipses_color, 0, 0, 0);
       }

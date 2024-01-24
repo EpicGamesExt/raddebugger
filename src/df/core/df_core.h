@@ -853,15 +853,29 @@ struct DF_EvalVizWindowedRowList
 ////////////////////////////////
 //~ rjf: Command Specification Types
 
+typedef U32 DF_CmdQueryFlags;
+enum
+{
+  DF_CmdQueryFlag_AllowFiles       = (1<<0),
+  DF_CmdQueryFlag_AllowFolders     = (1<<1),
+  DF_CmdQueryFlag_CodeInput        = (1<<2),
+  DF_CmdQueryFlag_KeepOldInput     = (1<<3),
+  DF_CmdQueryFlag_SelectOldInput   = (1<<4),
+  DF_CmdQueryFlag_Required         = (1<<5),
+};
+
+typedef struct DF_CmdQuery DF_CmdQuery;
+struct DF_CmdQuery
+{
+  DF_CmdParamSlot slot;
+  DF_EntityKind entity_kind;
+  DF_CmdQueryFlags flags;
+};
+
 typedef U32 DF_CmdSpecFlags;
 enum
 {
   DF_CmdSpecFlag_OmitFromLists      = (1<<0),
-  DF_CmdSpecFlag_RunKeepsQuery      = (1<<1),
-  DF_CmdSpecFlag_QueryUsesOldInput  = (1<<2),
-  DF_CmdSpecFlag_OldInputSelect     = (1<<3),
-  DF_CmdSpecFlag_AppliesToView      = (1<<4),
-  DF_CmdSpecFlag_QueryIsCode        = (1<<5),
 };
 
 typedef struct DF_CmdSpecInfo DF_CmdSpecInfo;
@@ -872,10 +886,8 @@ struct DF_CmdSpecInfo
   String8 search_tags;
   String8 display_name;
   DF_CmdSpecFlags flags;
-  DF_CmdParamSlot query_slots[4];
-  DF_CmdQueryRule query_rule;
+  DF_CmdQuery query;
   DF_IconKind canonical_icon_kind;
-  U64 query_info_u64[2];
 };
 
 typedef struct DF_CmdSpec DF_CmdSpec;
@@ -1564,7 +1576,7 @@ internal CTRL_Event df_ctrl_last_stop_event(void);
 //~ rjf: Evaluation
 
 internal B32 df_eval_memory_read(void *u, void *out, U64 addr, U64 size);
-internal EVAL_ParseCtx df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 voff);
+internal EVAL_ParseCtx df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 vaddr);
 internal EVAL_ParseCtx df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt);
 internal DF_Eval df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, String8 string);
 internal DF_Eval df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);

@@ -236,56 +236,56 @@ pe_bin_info_from_data(Arena *arena, String8 data)
 internal U64
 pe_intel_pdata_off_from_voff__binary_search(String8 data, PE_BinInfo *bin, U64 voff)
 {
-  // TODO(allen): cleanup pass.
-  Assert(bin->arch == Architecture_x86 || bin->arch == Architecture_x64);
-  Rng1U64 range = bin->data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS];
-  U64 pdata_off = range.min;
-  U64 pdata_count = (range.max - range.min)/sizeof(PE_IntelPdata);
-  
   U64 result = 0;
-  
-  // check if this bin includes a pdata array
-  if(pdata_count > 0)
+  if(bin->arch != Architecture_Null)
   {
-    PE_IntelPdata *pdata_array = (PE_IntelPdata*)(data.str + pdata_off);
-    if(voff >= pdata_array[0].voff_first)
+    Rng1U64 range = bin->data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS];
+    U64 pdata_off = range.min;
+    U64 pdata_count = (range.max - range.min)/sizeof(PE_IntelPdata);
+    
+    // check if this bin includes a pdata array
+    if(pdata_count > 0 && 0 <= pdata_off && pdata_off < data.size)
     {
-      // binary search:
-      //  find max index s.t. pdata_array[index].voff_first <= voff
-      //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
-      U64 index = pdata_count;
-      U64 min = 0;
-      U64 opl = pdata_count;
-      for(;;)
+      PE_IntelPdata *pdata_array = (PE_IntelPdata*)(data.str + pdata_off);
+      if(voff >= pdata_array[0].voff_first)
       {
-        U64 mid = (min + opl)/2;
-        PE_IntelPdata *pdata = pdata_array + mid;
-        if(voff < pdata->voff_first)
+        // binary search:
+        //  find max index s.t. pdata_array[index].voff_first <= voff
+        //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
+        U64 index = pdata_count;
+        U64 min = 0;
+        U64 opl = pdata_count;
+        for(;;)
         {
-          opl = mid;
+          U64 mid = (min + opl)/2;
+          PE_IntelPdata *pdata = pdata_array + mid;
+          if(voff < pdata->voff_first)
+          {
+            opl = mid;
+          }
+          else if(pdata->voff_first < voff)
+          {
+            min = mid;
+          }
+          else
+          {
+            index = mid;
+            break;
+          }
+          if(min + 1 >= opl)
+          {
+            index = min;
+            break;
+          }
         }
-        else if(pdata->voff_first < voff)
+        
+        // if we are in range fill result
         {
-          min = mid;
-        }
-        else
-        {
-          index = mid;
-          break;
-        }
-        if(min + 1 >= opl)
-        {
-          index = min;
-          break;
-        }
-      }
-      
-      // if we are in range fill result
-      {
-        PE_IntelPdata *pdata = pdata_array + index;
-        if(pdata->voff_first <= voff && voff < pdata->voff_one_past_last)
-        {
-          result = pdata_off + index*sizeof(PE_IntelPdata);
+          PE_IntelPdata *pdata = pdata_array + index;
+          if(pdata->voff_first <= voff && voff < pdata->voff_one_past_last)
+          {
+            result = pdata_off + index*sizeof(PE_IntelPdata);
+          }
         }
       }
     }

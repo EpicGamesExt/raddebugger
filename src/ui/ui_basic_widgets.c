@@ -163,14 +163,18 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
 internal UI_Signal
 ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, String8 string)
 {
-  //- rjf: build top-level box
+  //- rjf: make key
   UI_Key key = ui_key_from_string(ui_active_seed_key(), string);
+  
+  //- rjf: calculate focus
   B32 is_auto_focus_hot = ui_is_key_auto_focus_hot(key);
   B32 is_auto_focus_active = ui_is_key_auto_focus_active(key);
-  if(is_auto_focus_hot) { ui_set_focus_hot(1); }
-  if(is_auto_focus_active) { ui_set_focus_active(1); }
+  ui_push_focus_hot(is_auto_focus_hot ? UI_FocusKind_On : UI_FocusKind_Null);
+  ui_push_focus_active(is_auto_focus_active ? UI_FocusKind_On : UI_FocusKind_Null);
   B32 is_focus_hot    = ui_is_focus_hot();
   B32 is_focus_active = ui_is_focus_active();
+  
+  //- rjf: build top-level box
   ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                       UI_BoxFlag_DrawBorder|
@@ -302,6 +306,10 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
     box->view_off_target.x += min_delta;
     box->view_off_target.x += max_delta;
   }
+  
+  //- rjf: pop focus
+  ui_pop_focus_hot();
+  ui_pop_focus_active();
   
   return sig;
 }
@@ -1380,7 +1388,7 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   }
   
   //- rjf: build vertical scroll bar
-  UI_Parent(container_box)
+  UI_Parent(container_box) UI_Focus(UI_FocusKind_Null)
   {
     ui_set_next_fixed_width(ui_scroll_list_scroll_bar_dim_px);
     ui_set_next_fixed_height(ui_scroll_list_dim_px.y);

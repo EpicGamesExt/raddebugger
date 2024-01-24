@@ -1886,6 +1886,14 @@ ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
   }
   U32 id = demon_launch_process(&opts);
   
+  //- rjf: record start
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Started;
+    ctrl_c2u_push_events(&evts);
+  }
+  
   //- rjf: run to handshake
   DEMON_Event *stop_event = 0;
   if(id != 0)
@@ -1935,6 +1943,24 @@ ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //- rjf: record stop
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Stopped;
+    if(stop_event != 0)
+    {
+      event->cause = ctrl_event_cause_from_demon_event_kind(stop_event->kind);
+      event->machine_id = CTRL_MachineID_Client;
+      event->entity = ctrl_handle_from_demon(stop_event->thread);
+      event->parent = ctrl_handle_from_demon(stop_event->process);
+      event->exception_code = stop_event->code;
+      event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
+      event->rip_vaddr = stop_event->instruction_pointer;
+    }
+    ctrl_c2u_push_events(&evts);
+  }
+  
   //- rjf: push request resolution event
   {
     CTRL_EventList evts = {0};
@@ -1967,6 +1993,14 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     opts.inherit_env = msg->env_inherit;
   }
   U32 id = demon_launch_process(&opts);
+  
+  //- rjf: record start
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Started;
+    ctrl_c2u_push_events(&evts);
+  }
   
   //- rjf: run to initialization (entry point)
   DEMON_Event *stop_event = 0;
@@ -2180,6 +2214,24 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
     event->kind = CTRL_EventKind_Error;
     event->cause = CTRL_EventCause_Error;
+    ctrl_c2u_push_events(&evts);
+  }
+  
+  //- rjf: record stop
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Stopped;
+    if(stop_event != 0)
+    {
+      event->cause = ctrl_event_cause_from_demon_event_kind(stop_event->kind);
+      event->machine_id = CTRL_MachineID_Client;
+      event->entity = ctrl_handle_from_demon(stop_event->thread);
+      event->parent = ctrl_handle_from_demon(stop_event->process);
+      event->exception_code = stop_event->code;
+      event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
+      event->rip_vaddr = stop_event->instruction_pointer;
+    }
     ctrl_c2u_push_events(&evts);
   }
   
