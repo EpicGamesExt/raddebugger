@@ -937,7 +937,11 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               }
               if(matches_count != 0)
               {
-                U32 match_idx = matches[0];
+                // NOTE(rjf): apparently, PDBs can be produced such that they
+                // also keep stale *GLOBAL VARIABLE SYMBOLS* around too. I
+                // don't know of a magic hash table fixup path in PDBs, so
+                // in this case, I'm going to prefer the latest-added global.
+                U32 match_idx = matches[matches_count-1];
                 RADDBG_GlobalVariable *global_var = &ctx->rdbg->global_variables[match_idx];
                 EVAL_OpList oplist = {0};
                 eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_ModuleOff, global_var->voff);
