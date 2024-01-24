@@ -2117,7 +2117,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = (unwind_count == 0 ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
+            B32 use_current_rip = unwind_count == 0 && df_entity_is_nil(thread->first);
+            U64 rip_vaddr = (use_current_rip ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -4354,6 +4355,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_CoreCmdKind_StepInto,
               DF_CoreCmdKind_StepOver,
               DF_CoreCmdKind_StepOut,
+              DF_CoreCmdKind_StepBack,
               DF_CoreCmdKind_Attach,
             };
             U32 codepoints[] =
@@ -4366,6 +4368,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               'i',
               'o',
               't',
+              'b',
               'a',
             };
             Assert(ArrayCount(codepoints) == ArrayCount(cmds));
@@ -9180,12 +9183,24 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_pref_height(ui_pct(1, 0));
             ui_set_next_text_color(color);
             ui_set_next_text_alignment(UI_TextAlign_Center);
+
+            B32 is_snapshot_active = 0;
+            for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+            {
+              if (child->kind == DF_EntityKind_Snapshot && child->b32 == 1)
+              {
+                is_snapshot_active = 1;
+                break;
+              }
+            }
+
+            DF_IconKind icon_kind = is_snapshot_active ? DF_IconKind_Undo : DF_IconKind_RightArrow;
             UI_Box *thread_box = ui_build_box_from_stringf(UI_BoxFlag_DisableTextTrunc|
                                                            UI_BoxFlag_Clickable|
                                                            UI_BoxFlag_AnimatePosX|
                                                            UI_BoxFlag_DrawText,
                                                            "%S##ip_%p",
-                                                           df_g_icon_kind_text_table[DF_IconKind_RightArrow],
+                                                           df_g_icon_kind_text_table[icon_kind],
                                                            thread);
             UI_Signal thread_sig = ui_signal_from_box(thread_box);
             

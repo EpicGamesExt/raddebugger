@@ -1757,6 +1757,20 @@ demon_os_detach_process(DEMON_Entity *process){
   return(0);
 }
 
+internal DEMON_Handle
+demon_os_create_snapshot(DEMON_Entity *thread)
+{
+  NotImplemented;
+  return(0);
+}
+
+internal void
+demon_os_snapshot_release(DEMON_Entity *entity)
+{
+  NotImplemented;
+  return(0);
+}
+
 ////////////////////////////////
 //~ rjf: @demon_os_hooks Entity Functions
 

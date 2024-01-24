@@ -2771,6 +2771,44 @@ df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread)
   return result;
 }
 
+internal B32
+df_advance_current_snapshot(Arena *arena, DF_CmdList *cmds, DF_Entity *thread)
+{
+  for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+  {
+    if(child->kind == DF_EntityKind_Snapshot && child->b32 == 1)
+    {
+      child->b32 = 0;
+      if (!df_entity_is_nil(child->next))
+      {
+        child->next->b32 = 1;
+      }
+
+      DF_CmdParams params = df_cmd_params_zero();
+      params.entity = df_handle_from_entity(thread);
+      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+      df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectThread));
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+internal void
+df_thread_snapshot(DF_Entity *thread)
+{
+  CTRL_Handle snapshot_handle = ctrl_thread_snapshot(thread->ctrl_machine_id, thread->ctrl_handle);
+  if (snapshot_handle.u64 == 0) {
+    return;
+  }
+
+  DF_Entity *snapshot = df_entity_alloc(0, thread, DF_EntityKind_Snapshot);
+  df_entity_equip_ctrl_machine_id(snapshot, thread->ctrl_machine_id);
+  df_entity_equip_ctrl_handle(snapshot, snapshot_handle);
+  df_entity_equip_b32(snapshot, 0);
+}
+
 internal CTRL_TrapList
 df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
 {
@@ -2879,6 +2917,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     ctrl_trap_list_push(arena, &result, &trap);
   }
   
+  df_thread_snapshot(thread);
   scratch_end(scratch);
   return result;
 }
@@ -2984,9 +3023,33 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
     CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, line_vaddr_rng.max};
     ctrl_trap_list_push(arena, &result, &trap);
   }
-  
+
+  df_thread_snapshot(thread);
   scratch_end(scratch);
   return result;
+}
+
+internal void
+df_trap_net_from_thread__step_back(Arena* arena, DF_Entity* thread)
+{
+  for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+  {
+    if(child->kind == DF_EntityKind_Snapshot)
+    {
+      if (child->b32 == 1) {
+        DF_Entity *prev = child->prev;
+        if (!df_entity_is_nil(prev))
+        {
+          child->b32 = 0;
+          prev->b32 = 1;
+        }
+        break;
+      } else if (child == thread->last) {
+        child->b32 = 1;
+        break;
+      }
+    }
+  }
 }
 
 ////////////////////////////////
@@ -3447,6 +3510,22 @@ df_module_from_thread(DF_Entity *thread)
   DF_Entity *process = thread->parent;
   U64 rip = df_query_cached_rip_from_thread(thread);
   return df_module_from_process_vaddr(process, rip);
+}
+
+internal DF_Entity *
+df_current_snapshot_from_thread(DF_Entity *thread)
+{
+  DF_Entity *snapshot = thread->parent;
+  for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+  {
+    if(child->kind == DF_EntityKind_Snapshot && child->b32 == 1)
+    {
+      snapshot = child;
+      break;
+    }
+  }
+
+  return snapshot;
 }
 
 internal U64
@@ -3950,7 +4029,7 @@ internal B32
 df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 {
   DF_Entity *process = (DF_Entity *)u;
-  Assert(process->kind == DF_EntityKind_Process);
+  Assert(process->kind == DF_EntityKind_Process || process->kind == DF_EntityKind_Snapshot);
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
   String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
@@ -4143,10 +4222,12 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   
   //- rjf: unpack module info & produce eval machine
   DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_ip_vaddr);
+  DF_Entity *current_entity = df_current_snapshot_from_thread(thread);
+
   U64 module_base = df_base_vaddr_from_module(module);
   U64 tls_base = df_tls_base_vaddr_from_thread(thread);
   EVAL_Machine machine = {0};
-  machine.u = (void *)thread->parent;
+  machine.u = (void *)current_entity;
   machine.arch = arch;
   machine.memory_read = df_eval_memory_read;
   machine.reg_data = thread_unwind_regs_block;
@@ -4232,7 +4313,7 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
 {
   ProfBeginFunction();
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-  DF_Entity *process = thread->parent;
+  DF_Entity *process = df_current_snapshot_from_thread(thread);
   switch(eval.mode)
   {
     //- rjf: no work to be done. already in value mode
@@ -6062,6 +6143,32 @@ df_push_active_target_list(Arena *arena)
 }
 
 //- rjf: per-run caches
+internal void
+df_clear_unwind_cache(DF_RunUnwindCache *cache)
+{
+  arena_clear(cache->arena);
+  cache->table_size = 1024;
+  cache->table = push_array(cache->arena, DF_RunUnwindCacheSlot, cache->table_size);
+}
+
+internal U64
+df_hash_current_thread_snapshot(DF_Entity *thread, U32 *active_snapshot_index)
+{
+  DF_Handle handle = df_handle_from_entity(thread);
+  U64 hash = df_hash_from_string(str8_struct(&handle));
+  *active_snapshot_index = 0;
+  for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+  {
+    if (child->kind == DF_EntityKind_Snapshot && child->b32) {
+      break;
+    }
+
+    (*active_snapshot_index)++;
+  }
+
+  hash = df_hash_from_seed_string(hash, str8_struct(active_snapshot_index));
+  return hash;
+}
 
 internal DF_Unwind
 df_query_cached_unwind_from_thread(DF_Entity *thread)
@@ -6072,12 +6179,13 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
   if(cache->table_size != 0)
   {
     DF_Handle handle = df_handle_from_entity(thread);
-    U64 hash = df_hash_from_string(str8_struct(&handle));
+    U32 active_snapshot_index;
+    U64 hash = df_hash_current_thread_snapshot(thread, &active_snapshot_index);
     U64 slot_idx = hash % cache->table_size;
     DF_RunUnwindCacheSlot *slot = &cache->table[slot_idx];
     for(DF_RunUnwindCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      if(df_handle_match(n->thread, handle))
+      if(df_handle_match(n->thread, handle) && n->snapshot_index == active_snapshot_index)
       {
         result = n->unwind;
         break;
@@ -6368,6 +6476,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     U64 new_reggen_idx = ctrl_reggen_idx();
     
     //- rjf: consume & process events
+    B32 unwind_cache_clear = 1;
     CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
     for(CTRL_EventNode *event_n = events.first; event_n != 0; event_n = event_n->next)
     {
@@ -6387,6 +6496,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           df_state->ctrl_is_running = 0;
           df_state->ctrl_soft_halt_issued = 0;
+          unwind_cache_clear = 0;
           DF_Entity *stop_thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
           
           // rjf: gather stop info
@@ -6679,18 +6789,23 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       B32 good = 1;
       DF_EntityList all_threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
       DF_RunUnwindCache *cache = &df_state->unwind_cache;
-      arena_clear(cache->arena);
-      cache->table_size = 1024;
-      cache->table = push_array(cache->arena, DF_RunUnwindCacheSlot, cache->table_size);
+      if (unwind_cache_clear || cache->table_size == 0)
+      {
+        df_clear_unwind_cache(cache);
+      }
+
       for(DF_EntityNode *n = all_threads.first; n != 0; n = n->next)
       {
         DF_Entity *thread = n->entity;
         DF_Handle thread_handle = df_handle_from_entity(thread);
-        U64 hash = df_hash_from_string(str8_struct(&thread_handle));
+        U32 active_snapshot_index;
+        U64 hash = df_hash_current_thread_snapshot(thread, &active_snapshot_index);
+
         U64 slot_idx = hash % cache->table_size;
         DF_RunUnwindCacheSlot *slot = &cache->table[slot_idx];
         DF_RunUnwindCacheNode *cache_node = push_array(cache->arena, DF_RunUnwindCacheNode, 1);
         cache_node->thread = thread_handle;
+        cache_node->snapshot_index = active_snapshot_index;
         cache_node->unwind = df_push_unwind_from_thread(cache->arena, thread);
         SLLQueuePush_NZ(0, slot->first, slot->last, cache_node, hash_next);
         if(cache_node->unwind.error != 0)
@@ -7019,6 +7134,25 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               break;
             }
           }
+
+          DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
+          for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
+          {
+            DF_Entity *thread = n->entity;
+            for(DF_Entity *child = thread->first; !df_entity_is_nil(child); child = child->next)
+            {
+              if (child->kind == DF_EntityKind_Snapshot)
+              {
+                child->b32 = 0;
+                ctrl_snapshot_release(child->ctrl_machine_id, child->ctrl_handle);
+                df_entity_mark_for_deletion(child);
+              }
+            }
+          }
+
+          DF_RunUnwindCache *cache = &df_state->unwind_cache;
+          df_clear_unwind_cache(cache);
+
           if(good_to_run)
           {
             df_ctrl_run(DF_RunKind_Run, &df_g_nil_entity, 0);
@@ -7065,8 +7199,26 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               default: break;
               case DF_CoreCmdKind_StepIntoInst: {}break;
               case DF_CoreCmdKind_StepOverInst: {traps = df_trap_net_from_thread__step_over_inst(scratch.arena, thread);}break;
-              case DF_CoreCmdKind_StepIntoLine: {traps = df_trap_net_from_thread__step_into_line(scratch.arena, thread);}break;
-              case DF_CoreCmdKind_StepOverLine: {traps = df_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
+              case DF_CoreCmdKind_StepIntoLine: {
+                if (df_advance_current_snapshot(arena, cmds, thread))
+                {
+                  good = 0;
+                }
+                else
+                {
+                  traps = df_trap_net_from_thread__step_into_line(scratch.arena, thread);
+                }
+              }break;
+              case DF_CoreCmdKind_StepOverLine: {
+                if (df_advance_current_snapshot(arena, cmds, thread))
+                {
+                  good = 0;
+                }
+                else
+                {
+                  traps = df_trap_net_from_thread__step_over_line(scratch.arena, thread);
+                }
+              }break;
               case DF_CoreCmdKind_StepOut:
               {
                 // rjf: thread => full unwind
@@ -7200,7 +7352,20 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndInit));
           }
         }break;
-        
+        case DF_CoreCmdKind_StepBack:
+        {
+          DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+          if (processes.count != 0)
+          {
+            DF_Entity *thread = df_entity_from_handle(df_state->ctrl_ctx.thread);
+            df_trap_net_from_thread__step_back(scratch.arena, thread);
+
+            DF_CmdParams params = df_cmd_params_zero();
+            params.entity = df_handle_from_entity(thread);
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+            df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectThread));
+          }
+        }break;
         //- rjf: solo-stepping mode
         case DF_CoreCmdKind_EnableSoloSteppingMode:
         {

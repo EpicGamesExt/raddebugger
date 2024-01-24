@@ -15,6 +15,7 @@ typedef enum DEMON_EntityKind
   DEMON_EntityKind_Process,
   DEMON_EntityKind_Thread,
   DEMON_EntityKind_Module,
+  DEMON_EntityKind_Snapshot,
   
   DEMON_EntityKind_COUNT
 }

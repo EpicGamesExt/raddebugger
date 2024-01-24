@@ -1056,6 +1056,21 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle
   return result;
 }
 
+internal CTRL_Handle
+ctrl_thread_snapshot(CTRL_MachineID machine_id, CTRL_Handle thread)
+{
+  DEMON_Handle handle = ctrl_demon_handle_from_ctrl(thread);
+  DEMON_Handle snapshot_handle = demon_snapshot_thread(handle);
+  return ctrl_handle_from_demon(snapshot_handle);
+}
+
+internal void
+ctrl_snapshot_release(CTRL_MachineID machine_id, CTRL_Handle process)
+{
+  DEMON_Handle handle = ctrl_demon_handle_from_ctrl(process);
+  demon_snapshot_release(handle);
+}
+
 //- rjf: register reading/writing
 
 internal void *
