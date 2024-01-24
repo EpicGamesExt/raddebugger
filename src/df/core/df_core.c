@@ -7879,17 +7879,51 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_SetFileReplacementPath:
         {
+          // NOTE(rjf):
+          //
+          // C:/foo/bar/baz.c
+          // D:/foo/bar/baz.c
+          // -> override C: -> D:
+          //
+          // C:/1/2/foo/bar.c
+          // C:/2/3/foo/bar.c
+          // -> override C:/1/2 -> C:2/3
+          //
+          // C:/foo/bar/baz.c
+          // D:/1/2/3.c
+          // -> override C:/foo/bar/baz.c -> D:/1/2/3.c
+          
+          //- rjf: grab src file & chosen replacement
           DF_Entity *file = df_entity_from_handle(params.entity);
           DF_Entity *replacement = df_entity_from_path(params.file_path, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-          if(!df_entity_is_nil(file) && !df_entity_is_nil(replacement))
+          
+          //- rjf: find 
+          DF_Entity *first_diff_src = file;
+          DF_Entity *first_diff_dst = replacement;
+          for(;!df_entity_is_nil(first_diff_src) && !df_entity_is_nil(first_diff_dst);)
           {
-            DF_Entity *link = df_entity_child_from_name_and_kind(file->parent, file->name, DF_EntityKind_OverrideFileLink);
+            if(!str8_match(first_diff_src->name, first_diff_dst->name, StringMatchFlag_CaseInsensitive) ||
+               first_diff_src->parent->kind != DF_EntityKind_File ||
+               first_diff_src->parent->parent->kind != DF_EntityKind_File ||
+               first_diff_dst->parent->kind != DF_EntityKind_File ||
+               first_diff_dst->parent->parent->kind != DF_EntityKind_File)
+            {
+              break;
+            }
+            first_diff_src = first_diff_src->parent;
+            first_diff_dst = first_diff_dst->parent;
+          }
+          
+          //- rjf: override first different
+          if(!df_entity_is_nil(first_diff_src) && !df_entity_is_nil(first_diff_dst))
+          {
+            DF_Entity *link = df_entity_child_from_name_and_kind(first_diff_src->parent, first_diff_src->name, DF_EntityKind_OverrideFileLink);
             if(df_entity_is_nil(link))
             {
-              link = df_entity_alloc(0, file->parent, DF_EntityKind_OverrideFileLink);
-              df_entity_equip_name(0, link, file->name);
+              link = df_entity_alloc(0, first_diff_src->parent, DF_EntityKind_OverrideFileLink);
+              df_entity_equip_name(0, link, first_diff_src->name);
             }
-            df_entity_equip_entity_handle(link, df_handle_from_entity(replacement));
+            df_entity_equip_entity_handle(link, df_handle_from_entity(first_diff_dst));
           }
         }break;
         
