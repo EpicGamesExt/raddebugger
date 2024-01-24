@@ -315,6 +315,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   {
     arena_clear(leftover_events_arena);
     leftover_events = os_event_list_copy(leftover_events_arena, &events);
+    MemoryZeroStruct(&leftover_events);
   }
   
   //- rjf: determine frame time, record into history
