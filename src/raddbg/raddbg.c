@@ -154,8 +154,8 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
           {
             window->menu_bar_focus_press_started = 0;
           }
-          df_gfx_request_frame();
         }
+        df_gfx_request_frame();
       }
       else if(event->kind == OS_EventKind_Text)
       {
