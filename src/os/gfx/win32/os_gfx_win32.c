@@ -111,6 +111,7 @@ w32_push_event(OS_EventKind kind, W32_Window *window)
 {
   OS_Event *result = push_array(w32_event_arena, OS_Event, 1);
   DLLPushBack(w32_event_list.first, w32_event_list.last, result);
+  result->timestamp_us = os_now_microseconds();
   result->kind = kind;
   result->window = os_window_from_w32_window(window);
   result->flags = os_get_event_flags();

@@ -63,6 +63,7 @@ struct OS_Event
 {
   OS_Event *next;
   OS_Event *prev;
+  U64 timestamp_us;
   OS_Handle window;
   OS_EventKind kind;
   OS_EventFlags flags;

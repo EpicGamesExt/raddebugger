@@ -315,7 +315,14 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   {
     arena_clear(leftover_events_arena);
     leftover_events = os_event_list_copy(leftover_events_arena, &events);
-    MemoryZeroStruct(&leftover_events);
+    for(OS_Event *ev = leftover_events.first, *next = 0; ev != 0; ev = next)
+    {
+      next = ev->next;
+      if(ev->timestamp_us+1000000 < os_now_microseconds())
+      {
+        os_eat_event(&leftover_events, ev);
+      }
+    }
   }
   
   //- rjf: determine frame time, record into history
