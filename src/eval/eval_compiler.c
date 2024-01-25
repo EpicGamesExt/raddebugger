@@ -357,27 +357,6 @@ eval_type_group_from_kind(TG_Kind kind){
 }
 
 internal TG_Key
-eval_type_unwrap(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
-{
-  TG_Key result = key;
-  for(B32 good = 1; good;)
-  {
-    TG_Kind kind = tg_kind_from_key(result);
-    if((TG_Kind_FirstIncomplete <= kind && kind <= TG_Kind_LastIncomplete) ||
-       kind == TG_Kind_Modifier ||
-       kind == TG_Kind_Alias)
-    {
-      result = tg_direct_from_graph_raddbg_key(graph, rdbg, result);
-    }
-    else
-    {
-      good = 0;
-    }
-  }
-  return result;
-}
-
-internal TG_Key
 eval_type_unwrap_enum(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
 {
   TG_Key result = key;
@@ -435,8 +414,8 @@ eval_type_match(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key l, TG_Key r){
   B32 result = 0;
   
   // unwrap
-  TG_Key lu = eval_type_unwrap(graph, rdbg, l);
-  TG_Key ru = eval_type_unwrap(graph, rdbg, r);
+  TG_Key lu = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l);
+  TG_Key ru = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, r);
   
   if (tg_key_match(lu, ru)){
     result = 1;
@@ -802,8 +781,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprr, eout);
       
       if (l.tree->op != 0 && r.tree->op != 0){      
-        TG_Key l_restype = eval_type_unwrap(graph, rdbg, l.type_key);
-        TG_Key r_restype = eval_type_unwrap(graph, rdbg, r.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l.type_key);
+        TG_Key r_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, r.type_key);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         TG_Kind r_restype_kind = tg_kind_from_key(r_restype);
         
@@ -816,7 +795,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
           eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, exprr->location, "Cannot index with this type.");
         }
         else{
-          direct_type = tg_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
+          direct_type = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
           direct_type_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, direct_type);
           if (l_restype_kind == TG_Kind_Ptr){
             if (direct_type_size == 0){
@@ -881,14 +860,14 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprl, eout);
       
       if (l.tree->op != 0 && !tg_key_match(tg_key_zero(), l.type_key)){
-        TG_Key l_restype = eval_type_unwrap(graph, rdbg, l.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l.type_key);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         
         // determine which type to use
         TG_Key check_type_key = l_restype;
         TG_Kind check_type_kind = l_restype_kind;
-        if (l_restype_kind == TG_Kind_Ptr){
-          check_type_key = tg_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
+        if (l_restype_kind == TG_Kind_Ptr || l_restype_kind == TG_Kind_LRef || l_restype_kind == TG_Kind_RRef){
+          check_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
           check_type_kind = tg_kind_from_key(check_type_key);
         }
         
@@ -912,7 +891,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
             
             // determine how to treat left
             B32 l_good = 0;
-            if (l_restype_kind == TG_Kind_Ptr){
+            if (l_restype_kind == TG_Kind_Ptr || l_restype_kind == TG_Kind_LRef || l_restype_kind == TG_Kind_RRef){
               l_good = 1;
               l_resolve = 1;
             }
@@ -942,14 +921,14 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
             
             if (l_good && r_good){
               Temp scratch = scratch_begin(&arena, 1);
-              TG_Type *check_type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, check_type_key);
+              TG_MemberArray check_type_members = tg_data_members_from_graph_raddbg_key(scratch.arena, graph, rdbg, check_type_key);
               
               // lookup member
               String8 member_name = exprr->name;
               TG_Member *match = 0;
-              for(U64 member_idx = 0; member_idx < check_type->count; member_idx += 1)
+              for(U64 member_idx = 0; member_idx < check_type_members.count; member_idx += 1)
               {
-                TG_Member *member = &check_type->members[member_idx];
+                TG_Member *member = &check_type_members.v[member_idx];
                 if(str8_match(member->name, member_name, 0))
                 {
                   match = member;
@@ -999,15 +978,17 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
       
       if (c.tree->op != 0){
-        TG_Key c_restype = eval_type_unwrap(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
-        TG_Key c_restype_direct = tg_direct_from_graph_raddbg_key(graph, rdbg, c_restype);
+        TG_Key c_restype_direct = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, c_restype);
         U64 c_restype_direct_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, c_restype_direct);
         
         // analyze situation
         B32 can_generate = 0;
         B32 c_resolve = 0;
-        if (c_restype_kind == TG_Kind_Ptr){
+        if (c_restype_kind == TG_Kind_Ptr ||
+            c_restype_kind == TG_Kind_LRef ||
+            c_restype_kind == TG_Kind_RRef){
           if (c_restype_direct_size == 0){
             eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, exprc->location, "Cannot dereference pointers of zero-sized types.");
           }
@@ -1054,7 +1035,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
       if(c.tree->op != 0 && !tg_key_match(c.type_key, tg_key_zero()))
       {
-        TG_Key c_restype = eval_type_unwrap(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
         
         // analyze situation
@@ -1089,7 +1070,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       
       if(cast_type_kind != TG_Kind_Null && c.tree->op != 0)
       {
-        TG_Key c_restype = eval_type_unwrap(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
         U64 c_restype_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, c_restype);
         U64 cast_type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, cast_type_key);
@@ -1181,7 +1162,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       
       EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
       if (c.tree->op != 0){
-        TG_Key c_restype = eval_type_unwrap(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
         TG_Key p_type = eval_type_promote(graph, rdbg, c_restype);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
         
@@ -1237,8 +1218,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprr, eout);
       
       if (l.tree->op != 0 && r.tree->op != 0){
-        TG_Key l_restype = eval_type_unwrap(graph, rdbg, l.type_key);
-        TG_Key r_restype = eval_type_unwrap(graph, rdbg, r.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l.type_key);
+        TG_Key r_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, r.type_key);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         TG_Kind r_restype_kind = tg_kind_from_key(r_restype);
         
@@ -1286,8 +1267,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
             arith_path = EVAL_ArithPath_PtrAdd;
           }
           if (l_is_pointer_like && r_is_pointer_like){
-            TG_Key l_restype_direct = tg_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
-            TG_Key r_restype_direct = tg_direct_from_graph_raddbg_key(graph, rdbg, r_restype);
+            TG_Key l_restype_direct = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
+            TG_Key r_restype_direct = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, r_restype);
             U64 l_restype_direct_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, l_restype_direct);
             U64 r_restype_direct_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, r_restype_direct);
             if (l_restype_direct_byte_size == r_restype_direct_byte_size){
@@ -1358,7 +1339,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
               ptr_is_decay = r_is_decay;
             }
             
-            TG_Key direct = tg_direct_from_graph_raddbg_key(graph, rdbg, ptr->type_key);
+            TG_Key direct = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, ptr->type_key);
             U64 direct_type_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, direct);
             
             // generate ir tree
@@ -1387,7 +1368,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
           
           case EVAL_ArithPath_PtrSub:
           {
-            TG_Key direct = tg_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
+            TG_Key direct = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, l_restype);
             U64 direct_type_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, direct);
             
             // generate ir tree
@@ -1429,9 +1410,9 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       
       if (l.tree->op != 0 && r.tree->op != 0 && c.tree->op != 0){
         
-        TG_Key c_restype = eval_type_unwrap(graph, rdbg, c.type_key);
-        TG_Key l_restype = eval_type_unwrap(graph, rdbg, l.type_key);
-        TG_Key r_restype = eval_type_unwrap(graph, rdbg, r.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l.type_key);
+        TG_Key r_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, r.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         TG_Kind r_restype_kind = tg_kind_from_key(r_restype);
@@ -1541,6 +1522,11 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     }break;
     
     case EVAL_ExprKind_TypeIdent:
+    {
+      result.tree = &eval_irtree_nil;
+      result.type_key = expr->type_key;
+      result.mode = EVAL_EvalMode_NULL;
+    }break;
     case EVAL_ExprKind_Ptr:
     case EVAL_ExprKind_Array:
     case EVAL_ExprKind_Func:
@@ -1619,6 +1605,3 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
     }break;
   }
 }
-
-
-

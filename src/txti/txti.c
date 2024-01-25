@@ -923,6 +923,15 @@ txti_append(TXTI_Handle handle, String8 string)
   os_condition_variable_broadcast(mut_thread->msg_cv);
 }
 
+//- rjf: buffer external change detection enabling/disabling
+
+internal void
+txti_set_external_change_detection_enabled(B32 enabled)
+{
+  U64 enabled_u64 = (U64)enabled;
+  ins_atomic_u64_eval_assign(&txti_state->detector_thread_enabled, enabled_u64);
+}
+
 ////////////////////////////////
 //~ rjf: Mutator Threads
 
@@ -967,17 +976,23 @@ txti_mut_thread_entry_point(void *p)
       TXTI_Stripe *stripe = &txti_state->entity_map_stripes.v[stripe_idx];
       
       //- rjf: load file if we need it
+      B32 load_valid = 0;
       String8 file_contents = {0};
       TXTI_LangKind lang_kind = TXTI_LangKind_Null;
       U64 timestamp = 0;
       if(msg->kind == TXTI_MsgKind_Reload)
       {
-        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, msg->string);
-        FileProperties props = os_properties_from_file(file);
-        timestamp = props.modified;
-        file_contents = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
+        FileProperties pre_load_props = os_properties_from_file_path(msg->string);
+        OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, msg->string);
+        file_contents = os_string_from_file_range(scratch.arena, file, r1u64(0, pre_load_props.size));
         lang_kind = txti_lang_kind_from_extension(str8_skip_last_dot(msg->string));
         os_file_close(file);
+        FileProperties post_load_props = os_properties_from_file_path(msg->string);
+        load_valid = (post_load_props.modified == pre_load_props.modified);
+        if(load_valid)
+        {
+          timestamp = pre_load_props.modified;
+        }
       }
       
       //- rjf: nonzero lang kind -> unpack lang info
@@ -994,6 +1009,7 @@ txti_mut_thread_entry_point(void *p)
       
       //- rjf: detect line end kind
       TXTI_LineEndKind line_end_kind = TXTI_LineEndKind_Null;
+      if(load_valid)
       {
         U64 lf_count = 0;
         U64 cr_count = 0;
@@ -1020,7 +1036,7 @@ txti_mut_thread_entry_point(void *p)
       
       //- rjf: obtain initial buffer_apply_gen, reset byte processing counters
       U64 initial_buffer_apply_gen = 0;
-      OS_MutexScopeR(stripe->rw_mutex)
+      if(load_valid) OS_MutexScopeR(stripe->rw_mutex)
       {
         TXTI_Entity *entity = 0;
         for(TXTI_Entity *e = slot->first; e != 0; e = e->next)
@@ -1043,16 +1059,55 @@ txti_mut_thread_entry_point(void *p)
       }
       
       //- rjf: apply edits
-      for(U64 buffer_apply_idx = 0;
-          buffer_apply_idx < TXTI_ENTITY_BUFFER_COUNT;
-          buffer_apply_idx += 1)
       {
-        // rjf: last buffer we're going to edit? -> bump buffer_apply_gen,
-        // so that before we touch this last buffer, all readers of this
-        // entity will get the already-modified buffers.
-        if(buffer_apply_idx == TXTI_ENTITY_BUFFER_COUNT-1)
+        for(U64 buffer_apply_idx = 0;
+            buffer_apply_idx < TXTI_ENTITY_BUFFER_COUNT;
+            buffer_apply_idx += 1)
         {
-          OS_MutexScopeW(stripe->rw_mutex)
+          // rjf: last buffer we're going to edit? -> bump buffer_apply_gen,
+          // so that before we touch this last buffer, all readers of this
+          // entity will get the already-modified buffers.
+          if(buffer_apply_idx == TXTI_ENTITY_BUFFER_COUNT-1)
+          {
+            OS_MutexScopeW(stripe->rw_mutex)
+            {
+              TXTI_Entity *entity = 0;
+              for(TXTI_Entity *e = slot->first; e != 0; e = e->next)
+              {
+                if(e->id == id)
+                {
+                  entity = e;
+                  break;
+                }
+              }
+              if(entity != 0)
+              {
+                entity->buffer_apply_gen += 1;
+                if(line_end_kind != TXTI_LineEndKind_Null)
+                {
+                  entity->line_end_kind = line_end_kind;
+                }
+                if(lang_kind != TXTI_LangKind_Null)
+                {
+                  entity->lang_kind = lang_kind;
+                }
+                if(timestamp != 0)
+                {
+                  entity->timestamp = timestamp;
+                }
+              }
+            }
+          }
+          
+          // rjf: apply edit to this buffer.
+          //
+          // NOTE(rjf): all edits can apply *with a shared mutex lock*,
+          // because only the mutator thread for this buffer can touch the
+          // non-currently-viewable buffers. we only need to have an
+          // exclusive lock to bump the buffer_apply_gen (to change the
+          // actively viewable buffer).
+          //
+          OS_MutexScopeR(stripe->rw_mutex)
           {
             TXTI_Entity *entity = 0;
             for(TXTI_Entity *e = slot->first; e != 0; e = e->next)
@@ -1065,140 +1120,110 @@ txti_mut_thread_entry_point(void *p)
             }
             if(entity != 0)
             {
-              entity->buffer_apply_gen += 1;
-              if(line_end_kind != TXTI_LineEndKind_Null)
-              {
-                entity->line_end_kind = line_end_kind;
-              }
-              if(lang_kind != TXTI_LangKind_Null)
-              {
-                entity->lang_kind = lang_kind;
-              }
-              if(timestamp != 0)
-              {
-                entity->timestamp = timestamp;
-              }
-            }
-          }
-        }
-        
-        // rjf: apply edit to this buffer.
-        //
-        // NOTE(rjf): all edits can apply *with a shared mutex lock*,
-        // because only the mutator thread for this buffer can touch the
-        // non-currently-viewable buffers. we only need to have an
-        // exclusive lock to bump the buffer_apply_gen (to change the
-        // actively viewable buffer).
-        //
-        OS_MutexScopeR(stripe->rw_mutex)
-        {
-          TXTI_Entity *entity = 0;
-          for(TXTI_Entity *e = slot->first; e != 0; e = e->next)
-          {
-            if(e->id == id)
-            {
-              entity = e;
-              break;
-            }
-          }
-          if(entity != 0)
-          {
-            TXTI_Buffer *buffer = &entity->buffers[(initial_buffer_apply_gen+1+buffer_apply_idx)%TXTI_ENTITY_BUFFER_COUNT];
-            
-            // rjf: clear old analysis data
-            arena_clear(buffer->analysis_arena);
-            buffer->lines_count = 0;
-            buffer->lines_ranges = 0;
-            buffer->lines_max_size = 0;
-            MemoryZeroStruct(&buffer->tokens);
-            
-            // rjf: perform edit to buffer data
-            switch(msg->kind)
-            {
-              default:{}break;
+              TXTI_Buffer *buffer = &entity->buffers[(initial_buffer_apply_gen+1+buffer_apply_idx)%TXTI_ENTITY_BUFFER_COUNT];
               
-              // rjf: replace range
-              case TXTI_MsgKind_Append: ProfScope("append")
-              {
-                U8 *append_data_buffer = push_array_no_zero(buffer->data_arena, U8, msg->string.size);
-                MemoryCopy(append_data_buffer, msg->string.str, msg->string.size);
-                buffer->data.size += msg->string.size;
-                if(buffer->data.str == 0)
-                {
-                  buffer->data.str = append_data_buffer;
-                }
-              }break;
+              // rjf: clear old analysis data
+              arena_clear(buffer->analysis_arena);
+              buffer->lines_count = 0;
+              buffer->lines_ranges = 0;
+              buffer->lines_max_size = 0;
+              MemoryZeroStruct(&buffer->tokens);
               
-              // rjf: reload from disk
-              case TXTI_MsgKind_Reload: ProfScope("reload")
+              // rjf: perform edit to buffer data
+              switch(msg->kind)
               {
-                arena_clear(buffer->data_arena);
-                buffer->data = push_str8_copy(buffer->data_arena, file_contents);
-              }break;
-            }
-            
-            // rjf: parse & store line range info
-            {
-              // rjf: count # of lines
-              U64 line_count = 1;
-              U64 byte_process_start_idx = 0;
-              for(U64 idx = 0; idx < buffer->data.size; idx += 1)
-              {
-                if(buffer_apply_idx == 0 && idx-byte_process_start_idx >= 1000)
+                default:{}break;
+                
+                // rjf: replace range
+                case TXTI_MsgKind_Append: ProfScope("append")
                 {
-                  ins_atomic_u64_add_eval(&entity->bytes_processed, (idx-byte_process_start_idx));
-                  byte_process_start_idx = idx;
-                }
-                if(buffer->data.str[idx] == '\n' || buffer->data.str[idx] == '\r')
-                {
-                  line_count += 1;
-                  if(buffer->data.str[idx] == '\r')
+                  U8 *append_data_buffer = push_array_no_zero(buffer->data_arena, U8, msg->string.size);
+                  MemoryCopy(append_data_buffer, msg->string.str, msg->string.size);
+                  buffer->data.size += msg->string.size;
+                  if(buffer->data.str == 0 && msg->string.size != 0)
                   {
-                    idx += 1;
+                    buffer->data.str = append_data_buffer;
+                  }
+                }break;
+                
+                // rjf: reload from disk
+                case TXTI_MsgKind_Reload: ProfScope("reload")
+                {
+                  arena_clear(buffer->data_arena);
+                  if(file_contents.size != 0)
+                  {
+                    buffer->data = push_str8_copy(buffer->data_arena, file_contents);
+                  }
+                  else
+                  {
+                    MemoryZeroStruct(&buffer->data);
+                  }
+                }break;
+              }
+              
+              // rjf: parse & store line range info
+              {
+                // rjf: count # of lines
+                U64 line_count = 1;
+                U64 byte_process_start_idx = 0;
+                for(U64 idx = 0; idx < buffer->data.size; idx += 1)
+                {
+                  if(buffer_apply_idx == 0 && idx-byte_process_start_idx >= 1000)
+                  {
+                    ins_atomic_u64_add_eval(&entity->bytes_processed, (idx-byte_process_start_idx));
+                    byte_process_start_idx = idx;
+                  }
+                  if(buffer->data.str[idx] == '\n' || buffer->data.str[idx] == '\r')
+                  {
+                    line_count += 1;
+                    if(buffer->data.str[idx] == '\r')
+                    {
+                      idx += 1;
+                    }
+                  }
+                }
+                
+                // rjf: allocate & store line ranges
+                buffer->lines_count = line_count;
+                buffer->lines_ranges = push_array_no_zero(buffer->analysis_arena, Rng1U64, buffer->lines_count);
+                U64 line_idx = 0;
+                U64 line_start_idx = 0;
+                for(U64 idx = 0; idx <= buffer->data.size; idx += 1)
+                {
+                  if(idx == buffer->data.size || buffer->data.str[idx] == '\n' || buffer->data.str[idx] == '\r')
+                  {
+                    Rng1U64 line_range = r1u64(line_start_idx, idx);
+                    U64 line_size = dim_1u64(line_range);
+                    buffer->lines_ranges[line_idx] = line_range;
+                    buffer->lines_max_size = Max(buffer->lines_max_size, line_size);
+                    line_idx += 1;
+                    line_start_idx = idx+1;
+                    if(idx < buffer->data.size && buffer->data.str[idx] == '\r')
+                    {
+                      line_start_idx += 1;
+                      idx += 1;
+                    }
                   }
                 }
               }
               
-              // rjf: allocate & store line ranges
-              buffer->lines_count = line_count;
-              buffer->lines_ranges = push_array_no_zero(buffer->analysis_arena, Rng1U64, buffer->lines_count);
-              U64 line_idx = 0;
-              U64 line_start_idx = 0;
-              for(U64 idx = 0; idx <= buffer->data.size; idx += 1)
+              // rjf: lex file contents
+              if(lex_function != 0)
               {
-                if(idx == buffer->data.size || buffer->data.str[idx] == '\n' || buffer->data.str[idx] == '\r')
-                {
-                  Rng1U64 line_range = r1u64(line_start_idx, idx);
-                  U64 line_size = dim_1u64(line_range);
-                  buffer->lines_ranges[line_idx] = line_range;
-                  buffer->lines_max_size = Max(buffer->lines_max_size, line_size);
-                  line_idx += 1;
-                  line_start_idx = idx+1;
-                  if(idx < buffer->data.size && buffer->data.str[idx] == '\r')
-                  {
-                    line_start_idx += 1;
-                    idx += 1;
-                  }
-                }
+                buffer->tokens = lex_function(buffer->analysis_arena, buffer_apply_idx == 0 ? &entity->bytes_processed : 0, buffer->data);
               }
-            }
-            
-            // rjf: lex file contents
-            if(lex_function != 0)
-            {
-              buffer->tokens = lex_function(buffer->analysis_arena, buffer_apply_idx == 0 ? &entity->bytes_processed : 0, buffer->data);
-            }
-            
-            // rjf: mark final process counter
-            if(buffer_apply_idx == 0)
-            {
-              ins_atomic_u64_eval_assign(&entity->bytes_processed, entity->bytes_to_process);
-            }
-            
-            // rjf: mark task completion
-            if(buffer_apply_idx == TXTI_ENTITY_BUFFER_COUNT-1)
-            {
-              ins_atomic_u64_eval_assign(&entity->working_count, 0);
+              
+              // rjf: mark final process counter
+              if(buffer_apply_idx == 0)
+              {
+                ins_atomic_u64_eval_assign(&entity->bytes_processed, entity->bytes_to_process);
+              }
+              
+              // rjf: mark task completion
+              if(buffer_apply_idx == TXTI_ENTITY_BUFFER_COUNT-1)
+              {
+                ins_atomic_u64_eval_assign(&entity->working_count, 0);
+              }
             }
           }
         }
@@ -1221,23 +1246,26 @@ txti_detector_thread_entry_point(void *p)
   ProfThreadName("[txti] detector");
   for(;;)
   {
-    U64 slots_per_stripe = txti_state->entity_map.slots_count/txti_state->entity_map_stripes.count;
-    for(U64 stripe_idx = 0; stripe_idx < txti_state->entity_map_stripes.count; stripe_idx += 1)
+    if(ins_atomic_u64_eval(&txti_state->detector_thread_enabled))
     {
-      TXTI_Stripe *stripe = &txti_state->entity_map_stripes.v[stripe_idx];
-      OS_MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
+      U64 slots_per_stripe = txti_state->entity_map.slots_count/txti_state->entity_map_stripes.count;
+      for(U64 stripe_idx = 0; stripe_idx < txti_state->entity_map_stripes.count; stripe_idx += 1)
       {
-        U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
-        TXTI_EntitySlot *slot = &txti_state->entity_map.slots[slot_idx];
-        for(TXTI_Entity *entity = slot->first; entity != 0; entity = entity->next)
+        TXTI_Stripe *stripe = &txti_state->entity_map_stripes.v[stripe_idx];
+        OS_MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
         {
-          FileProperties props = os_properties_from_file_path(entity->path);
-          U64 entity_timestamp = entity->timestamp;
-          if(props.modified != entity_timestamp && ins_atomic_u64_eval(&entity->working_count) == 0)
+          U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
+          TXTI_EntitySlot *slot = &txti_state->entity_map.slots[slot_idx];
+          for(TXTI_Entity *entity = slot->first; entity != 0; entity = entity->next)
           {
-            TXTI_Handle handle = {txti_hash_from_string(entity->path), entity->id};
-            txti_reload(handle, entity->path);
-            ins_atomic_u64_inc_eval(&entity->working_count);
+            FileProperties props = os_properties_from_file_path(entity->path);
+            U64 entity_timestamp = entity->timestamp;
+            if(props.modified != entity_timestamp && ins_atomic_u64_eval(&entity->working_count) == 0)
+            {
+              TXTI_Handle handle = {txti_hash_from_string(entity->path), entity->id};
+              txti_reload(handle, entity->path);
+              ins_atomic_u64_inc_eval(&entity->working_count);
+            }
           }
         }
       }

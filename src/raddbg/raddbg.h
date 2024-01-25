@@ -2,23 +2,52 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Frontend/UI Pass Tasks
+//
+// [ ] source view -> floating margin/line-nums
+// [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
+//     & scrollbars etc.
+// [ ] drag/drop tab cleanup
+// [ ] target/breakpoint/watch-pin reordering
+// [ ] watch window reordering
+// [x] query views, cleanup & floating - maybe merge "applies to view" vs. not
+// [ ] standard way to filter
+// [ ] visualize remapped files (via path map)
+// [ ] hovering truncated string for a short time -> tooltip with full wrapped
+//     string
+// [ ] theme lister -> fonts & font sizes
+// [ ] font lister
+// [ ] per-panel font size overrides
+//
+// [ ] For the Scheduler window, it would be nice if you could dim or
+//     folderize threads that are not your threads - eg., if a thread doesn't
+//     have any resolved stack pointers in your executable code, then you can
+//     ignore it when you are focusing on your own code. I don't know what the
+//     best way to detect this is, other than by walking the call stack... one
+//     way might be to just have a way to separate threads you've named from
+//     threads you haven't? Or, there could even be a debugger-specific API
+//     that you use to tag them. Just some way that would make it easier to
+//     focus on your own threads.
+//
+// [ ] autocomplete lister should respect position in edited expression,
+//     tabbing through should autocomplete but not exit, etc.
+//
+//  [ ]  it would be nice to have "show in explorer" for right click on source
+//       file tab (opens explorer & selects the file)
+//  [x]  it would be nice if Alt+o in source file would switch between .h and
+//       .c/cpp file (just look for same name in same folder)
+//
+//  [ ]  what's up with decimal number coloring where every group of 3 are in
+//       different color? can I turn it off? And why sometimes digits in number
+//       start with brighter color, but sometimes with darker - shouldn't it
+//       always have the same color ordering?
+//
+//  [ ]  middle mouse button on tab should close it
+
+////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
-// [ ] ** ASAN targets
-// [ ] ** while typing, "Alt" Windows menu things should not happen
-//
-// [ ] ** I can't seem to get the .raddbg files to update consistently, or
-//     something. I can't seem to reproduce it reliably, but sometimes when I
-//     rebuild, for example, it seems to keep using the old PDB data
-//     effectively - like it doesn't think it needs to update the raddbg file,
-//     or something? But if I manually delete the raddbg file and relaunch,
-//     then it will have the new debug info. It would be nice if there was
-//     some kind of way to interrogate this in the debugger so I can send a
-//     more constructive report, like some way to get a hash of the PDB that
-//     is thinks it has converted to the RAD format, and then a way I can hash
-//     the PDB on the drive, or something, so I can figure out if they are
-//     mismatching for sure?
 //
 // [ ] ** In solo-stepping mode, if I step over something like CreateFileA, it
 //     pseudo-hangs the debugger. I can't seem to do anything else, including
@@ -30,19 +59,32 @@
 //     progress bar in the disassembly window. I had to close and restart. Is
 //     console app debugging not working yet, perhaps?
 //
-//  [ ] Setting the code_font/main_font values to a font name doesn't work.
-//      Should probably make note that you have to set it to a path to a TTF,
-//      since that's not normally how Windows fonts work.
-
+// [ ] Setting the code_font/main_font values to a font name doesn't work.
+//     Should probably make note that you have to set it to a path to a TTF,
+//     since that's not normally how Windows fonts work.
+//
 // [ ] ** Converter performance & heuristics for asynchronously doing it early
 //
 // [ ] disasm animation & go-to-address
 //
-// [ ] visualize mismatched source code and debug info
 // [ ] visualize remapped files (via path map)
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
+//
+// [ ] Watch Window Type Evaluation
+// [ ] Globals, Thread-Locals, Types Views
+// [ ] Watch Window Filtering
+//
+// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
+//     support it?
+//
+// [ ] escaping in config files - breakpoint labels etc.
+// [ ] focus changing between query bar & panel content via mouse
+//
+// [ ] ** while typing, "Alt" Windows menu things should not happen
+//
+// [ ] visualize conversion failures
 //
 //  [ ] I was a little confused about what a profile file was. I understood
 //      what the user file was, but the profile file sounded like it should
@@ -202,6 +244,10 @@
 ////////////////////////////////
 //~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
 //
+//  [ ] ** Directory picking is kind of busted, as it goes through the same
+//      path as file picking, and this doesn't give the user a clean path to
+//      actually pick a folder, just navigate with them
+//
 //  [ ] ** In the call stack, I would like to be able to click quickly and move
 //      around the stack. Right now, you can do that with the first and third
 //      column, but the second column drops down a context menu. Since right
@@ -250,21 +296,12 @@
 //  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
 //  [ ]  mouse back button should make view to go back after I double clicked
 //       on function to open it
-//  [ ]  middle mouse button on tab should close it
 //  [ ]  pressing random keyboard keys in source code advances text cursor like
 //       you were inputting text, very strange.
 //  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which
 //       panel was previous, don't want to use ctrl+, multiple times)
 //       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use
 //       in VS
-//  [ ]  what's up with decimal number coloring where every group of 3 are in
-//       different color? can I turn it off? And why sometimes digits in number
-//       start with brighter color, but sometimes with darker - shouldn't it
-//       always have the same color ordering?
-//  [ ]  it would be nice to have "show in explorer" for right click on source
-//       file tab (opens explorer & selects the file)
-//  [ ]  it would be nice if Alt+o in source file would switch between .h and
-//       .c/cpp file (just look for same name in same folder)
 //  [ ]  in watch window when I enter some new expression and then click mouse
 //       away from cell, then it should behave the same as if I pressed enter.
 //       Currently it does the same as if I have pressed esc and I have lost my
@@ -284,19 +321,6 @@
 
 ////////////////////////////////
 //~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
-//
-// [ ] For the Scheduler window, it would be nice if you could dim or
-//     folderize threads that are not your threads - eg., if a thread doesn't
-//     have any resolved stack pointers in your executable code, then you can
-//     ignore it when you are focusing on your own code. I don't know what the
-//     best way to detect this is, other than by walking the call stack... one
-//     way might be to just have a way to separate threads you've named from
-//     threads you haven't? Or, there could even be a debugger-specific API
-//     that you use to tag them. Just some way that would make it easier to
-//     focus on your own threads.
-//
-// [ ] autocomplete lister should respect position in edited expression,
-//     tabbing through should autocomplete but not exit, etc.
 //
 // [ ] Fancy View Rules
 //  [ ] table column boundaries should be checked against *AFTER* table
@@ -422,13 +446,14 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 3
+#define RADDBG_VERSION_PATCH 6
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""
 #else
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ " [Debug]"
 #endif
+#define RADDBG_GITHUB_ISSUES "https://github.com/EpicGames/raddebugger/issues"
 
 ////////////////////////////////
 //~ rjf: Top-Level Execution Types
@@ -457,6 +482,8 @@ read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_sha
 read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
 global U64 frame_time_us_history[64] = {0};
 global U64 frame_time_us_history_idx = 0;
+global Arena *leftover_events_arena = 0;
+global OS_EventList leftover_events = {0};
 
 ////////////////////////////////
 //~ rjf: Frontend Entry Points

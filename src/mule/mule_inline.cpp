@@ -16,7 +16,7 @@
 ////////////////////////////////
 // NOTE(allen): Inline Stepping
 
-extern unsigned int fixed_frac_bits = 5;
+unsigned int fixed_frac_bits = 5;
 static unsigned int bias = 7;
 
 static FORCE_INLINE unsigned int

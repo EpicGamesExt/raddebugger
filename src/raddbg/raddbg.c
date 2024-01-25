@@ -55,12 +55,24 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //- rjf: target Hz -> delta time
   F32 dt = 1.f/target_hz;
   
+  //- rjf: last frame before sleep -> disable txti change detection
+  if(df_gfx_state->num_frames_requested == 0)
+  {
+    txti_set_external_change_detection_enabled(0);
+  }
+  
   //- rjf: get events from the OS
   OS_EventList events = {0};
   if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
-    events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
+    OS_EventList leftover_events_copy = os_event_list_copy(scratch.arena, &leftover_events);
+    OS_EventList new_events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
+    os_event_list_concat_in_place(&events, &leftover_events_copy);
+    os_event_list_concat_in_place(&events, &new_events);
   }
+  
+  //- rjf: enable txti change detection
+  txti_set_external_change_detection_enabled(1);
   
   //- rjf: begin measuring actual per-frame work
   U64 begin_time_us = os_now_microseconds();
@@ -70,10 +82,12 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   {
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
     {
+      df_gfx_request_frame();
       df_gfx_state->bind_change_active = 0;
     }
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
     {
+      df_gfx_request_frame();
       df_unbind_spec(df_gfx_state->bind_change_cmd_spec, df_gfx_state->bind_change_binding);
       df_gfx_state->bind_change_active = 0;
       DF_CmdParams p = df_cmd_params_from_gfx();
@@ -105,6 +119,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         os_eat_event(&events, event);
         DF_CmdParams p = df_cmd_params_from_gfx();
         df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(df_g_cfg_src_write_cmd_kind_table[DF_CfgSrc_User]));
+        df_gfx_request_frame();
         break;
       }
     }
@@ -125,12 +140,16 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         DF_CmdSpecList spec_candidates = df_cmd_spec_list_from_binding(scratch.arena, binding);
         if(spec_candidates.first != 0 && !df_cmd_spec_is_nil(spec_candidates.first->spec))
         {
+          DF_CmdSpec *run_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand);
           DF_CmdSpec *spec = spec_candidates.first->spec;
-          params.cmd_spec = spec;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
+          if(run_spec != spec)
+          {
+            params.cmd_spec = spec;
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
+          }
           U32 hit_char = os_codepoint_from_event_flags_and_key(event->flags, event->key);
           os_eat_event(&events, event);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CommandFastPath));
+          df_push_cmd__root(&params, run_spec);
           if(event->flags & OS_EventFlag_Alt)
           {
             window->menu_bar_focus_press_started = 0;
@@ -147,6 +166,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
         df_push_cmd__root(&params, spec);
         df_gfx_request_frame();
+        os_eat_event(&events, event);
       }
     }
   }
@@ -161,31 +181,43 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       {
         continue;
       }
+      B32 take = 0;
       if(event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
+        take = 1;
+        df_gfx_request_frame();
         ws->menu_bar_focused_on_press = ws->menu_bar_focused;
         ws->menu_bar_key_held = 1;
         ws->menu_bar_focus_press_started = 1;
       }
       if(event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
+        take = 1;
+        df_gfx_request_frame();
         ws->menu_bar_key_held = 0;
       }
       if(ws->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
-        os_eat_event(&events, event);
+        take = 1;
+        df_gfx_request_frame();
         ws->menu_bar_focused = 0;
       }
       else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
-        os_eat_event(&events, event);
+        take = 1;
+        df_gfx_request_frame();
         ws->menu_bar_focused = !ws->menu_bar_focused_on_press;
         ws->menu_bar_focus_press_started = 0;
       }
       else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && ws->menu_bar_focused && !ui_any_ctx_menu_is_open())
       {
-        os_eat_event(&events, event);
+        take = 1;
+        df_gfx_request_frame();
         ws->menu_bar_focused = 0;
+      }
+      if(take)
+      {
+        os_eat_event(&events, event);
       }
     }
   }
@@ -267,8 +299,9 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   }
   
   //- rjf: take window closing events
-  for(OS_Event *e = events.first; e; e = e->next)
+  for(OS_Event *e = events.first, *next = 0; e; e = next)
   {
+    next = e->next;
     if(e->kind == OS_EventKind_WindowClose)
     {
       for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
@@ -279,6 +312,30 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseWindow));
           break;
         }
+      }
+      os_eat_event(&events, e);
+    }
+  }
+  
+  //- rjf: gather leftover events for subsequent frame
+  if(events.count != 0)
+  {
+    arena_clear(leftover_events_arena);
+    leftover_events = os_event_list_copy(leftover_events_arena, &events);
+    for(OS_Event *ev = leftover_events.first, *next = 0; ev != 0; ev = next)
+    {
+      next = ev->next;
+      if(ev->timestamp_us+1000000 < os_now_microseconds() ||
+         ev->kind == OS_EventKind_Text ||
+         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_LeftMouseButton) ||
+         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_RightMouseButton) ||
+         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_MiddleMouseButton) ||
+         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_LeftMouseButton) ||
+         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_RightMouseButton) ||
+         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_MiddleMouseButton) ||
+         (ev->kind == OS_EventKind_Scroll))
+      {
+        os_eat_event(&leftover_events, ev);
       }
     }
   }
@@ -390,6 +447,9 @@ entry_point(int argc, char **argv)
       OS_Handle ipc_semaphore = os_semaphore_alloc(1, 1, ipc_semaphore_name);
       IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
       ipc_info->msg_size = 0;
+      
+      //- rjf: set up leftover event arena
+      leftover_events_arena = arena_alloc();
       
       //- rjf: initialize stuff we depend on
       {

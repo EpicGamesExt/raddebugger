@@ -322,6 +322,7 @@ struct TXTI_State
   TXTI_MutThread *mut_threads;
   
   // rjf: detector thread
+  U64 detector_thread_enabled;
   OS_Handle detector_thread;
 };
 
@@ -378,6 +379,9 @@ internal TxtRng txti_expr_range_from_handle_pt(TXTI_Handle handle, TxtPt pt);
 //- rjf: buffer mutations
 internal void txti_reload(TXTI_Handle handle, String8 path);
 internal void txti_append(TXTI_Handle handle, String8 string);
+
+//- rjf: buffer external change detection enabling/disabling
+internal void txti_set_external_change_detection_enabled(B32 enabled);
 
 ////////////////////////////////
 //~ rjf: Mutator Threads

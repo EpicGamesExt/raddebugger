@@ -41,14 +41,14 @@ if "%telemetry%"=="1" set auto_compile_flags=%auto_compile_flags% -DPROFILE_TELE
 if "%asan%"=="1"      set auto_compile_flags=%auto_compile_flags% -fsanitize=address && echo [asan enabled]
 
 :: --- Compile/Link Line Definitions ------------------------------------------
-set cl_common=     /I..\src\ /I..\local\ /nologo /FC /Z7 /MP
-set clang_common=  -I..\src\ -I..\local\ -maes -mssse3 -msse4 -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf
-set cl_debug=      call cl /Od /D_DEBUG %cl_common%
-set cl_release=    call cl /O2 /DNDEBUG %cl_common%
-set clang_debug=   call clang -g -O0 -D_DEBUG %clang_common%
-set clang_release= call clang -g -O3 -DNDEBUG %clang_common% 
-set cl_link=       /link /natvis:"%~dp0\src\natvis\base.natvis"
-set clang_link=    -Xlinker /natvis:"%~dp0\src\natvis\base.natvis"
+set cl_common=     /I..\src\ /I..\local\ /nologo /FC /Z7
+set clang_common=  -I..\src\ -I..\local\ -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf
+set cl_debug=      call cl /Od %cl_common% %auto_compile_flags%
+set cl_release=    call cl /O2 /DNDEBUG %cl_common% %auto_compile_flags%
+set clang_debug=   call clang -g -O0 %clang_common% %auto_compile_flags%
+set clang_release= call clang -g -O3 -DNDEBUG %clang_common% %auto_compile_flags%
+set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /natvis:"%~dp0\src\natvis\base.natvis" logo.res
+set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /natvis:"%~dp0\src\natvis\base.natvis" logo.res
 set cl_out=        /out:
 set clang_out=     -o
 
@@ -56,6 +56,10 @@ set clang_out=     -o
 set gfx=-DOS_FEATURE_GRAPHICAL=1
 set net=-DOS_FEATURE_SOCKET=1
 set link_dll=-DLL
+if "%msvc%"=="1"  set only_compile=/c
+if "%clang%"=="1" set only_compile=-c
+if "%msvc%"=="1"  set EHsc=/EHsc
+if "%clang%"=="1" set EHsc=
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%
@@ -68,31 +72,37 @@ if "%clang%"=="1"     set compile_link=%clang_link%
 if "%clang%"=="1"     set out=%clang_out%
 if "%debug%"=="1"     set compile=%compile_debug%
 if "%release%"=="1"   set compile=%compile_release%
-set compile=%compile% %auto_compile_flags%
 
 :: --- Prep Directories -------------------------------------------------------
 if not exist build mkdir build
 if not exist local mkdir local
 
+:: --- Produce Logo Icon File -------------------------------------------------
+pushd build
+rc /nologo /fo logo.res ..\data\logo.rc
+popd
+
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]
 if not "%no_meta%"=="1" (
   pushd build
-  %compile_debug% ..\src\metagen\metagen_main.c %compile_link% %out%metagen.exe
-  metagen.exe
+  %compile_debug% ..\src\metagen\metagen_main.c %compile_link% %out%metagen.exe || exit /b 1
+  metagen.exe || exit /b 1
   popd
 )
 
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
-if "%raddbg%"=="1"             %compile% %gfx%       ..\src\raddbg\raddbg_main.cpp                                %compile_link% %out%raddbg.exe
-if "%raddbg_from_pdb%"=="1"    %compile%             ..\src\raddbg_convert\pdb\raddbg_from_pdb_main.c             %compile_link% %out%raddbg_from_pdb.exe
-if "%raddbg_from_dwarf%"=="1"  %compile%             ..\src\raddbg_convert\dwarf\raddbg_from_dwarf.c              %compile_link% %out%raddbg_from_dwarf.exe
-if "%raddbg_dump%"=="1"        %compile%             ..\src\raddbg_dump\raddbg_dump.c                             %compile_link% %out%raddbg_dump.exe
-if "%ryan_scratch%"=="1"       %compile%             ..\src\scratch\ryan_scratch.c                                %compile_link% %out%ryan_scratch.exe
-if "%look_at_raddbg%"=="1"     %compile%             ..\src\scratch\look_at_raddbg.c                              %compile_link% %out%look_at_raddbg.exe
-if "%mule_main%"=="1"          del vc*.pdb mule*.pdb && %cl_release% /c ..\src\mule\mule_inline.cpp && %cl_release% /c ..\src\mule\mule_o2.cpp && %cl_debug% /EHsc ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj
-if "%mule_module%"=="1"        %compile%             ..\src\mule\mule_module.cpp                                  %compile_link% %link_dll% %out%mule_module.dll
+if "%raddbg%"=="1"             %compile% %gfx%       ..\src\raddbg\raddbg_main.cpp                                %compile_link% %out%raddbg.exe || exit /b 1
+if "%raddbg_from_pdb%"=="1"    %compile%             ..\src\raddbg_convert\pdb\raddbg_from_pdb_main.c             %compile_link% %out%raddbg_from_pdb.exe || exit /b 1
+if "%raddbg_from_dwarf%"=="1"  %compile%             ..\src\raddbg_convert\dwarf\raddbg_from_dwarf.c              %compile_link% %out%raddbg_from_dwarf.exe || exit /b 1
+if "%raddbg_dump%"=="1"        %compile%             ..\src\raddbg_dump\raddbg_dump.c                             %compile_link% %out%raddbg_dump.exe || exit /b 1
+if "%ryan_scratch%"=="1"       %compile%             ..\src\scratch\ryan_scratch.c                                %compile_link% %out%ryan_scratch.exe || exit /b 1
+if "%cpp_tests%"=="1"          %compile%             ..\src\scratch\i_hate_c_plus_plus.cpp                        %compile_link% %out%cpp_tests.exe || exit /b 1
+if "%look_at_raddbg%"=="1"     %compile%             ..\src\scratch\look_at_raddbg.c                              %compile_link% %out%look_at_raddbg.exe || exit /b 1
+if "%mule_main%"=="1"          del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj || exit /b 1
+if "%mule_module%"=="1"        %compile%             ..\src\mule\mule_module.cpp                                  %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
+if "%mule_hotload%"=="1"       %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
 popd
 
 :: --- Unset ------------------------------------------------------------------

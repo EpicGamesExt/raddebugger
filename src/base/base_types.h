@@ -170,9 +170,6 @@
 #define DeferLoop(begin, end)        for(int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
 #define DeferLoopChecked(begin, end) for(int _i_ = 2 * !(begin); (_i_ == 2 ? ((end), 0) : !_i_); _i_ += 1, (end))
 
-#define B8  S8
-#define B32 rrbool
-
 #if LANG_CPP
 # define zero_struct {}
 #else

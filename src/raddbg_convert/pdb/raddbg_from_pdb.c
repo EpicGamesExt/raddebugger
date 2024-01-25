@@ -763,7 +763,13 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
         
         // discard cases - we don't currently do anything with these
         case CV_LeafKind_VFUNCTAB:
-        {}break;
+        {
+          // TODO(rjf): error if bad range
+          if(list_item_off + sizeof(CV_LeafVFuncTab) <= cap)
+          {
+            list_item_opl_off = list_item_off + sizeof(CV_LeafVFuncTab);
+          }
+        }break;
         
         // unhandled or invalid cases
         default:
@@ -1310,6 +1316,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
       case CV_LeafKind_STRUCTURE:
       {
         ProfBegin("CV_LeafKind_CLASS/CV_LeafKind_STRUCTURE");
+        
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafStruct) <= cap){
           CV_LeafStruct *lf_struct = (CV_LeafStruct*)first;
@@ -2100,7 +2107,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               // set location case
               CONS_Location *loc =
                 pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
-                                                   var_off, extra_indirection_to_value);
+                                                   (S64)(S32)var_off, extra_indirection_to_value);
               
               CONS_LocationSet *locset = cons_location_set_from_local(ctx->root, local_var);
               cons_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
@@ -2268,11 +2275,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               B32 extra_indirection = 0;
               U32 byte_size = ctx->addr_size;
               U32 byte_pos = 0;
-              U64 var_off = defrange_fprel->off;
+              S64 var_off = (S64)defrange_fprel->off;
               CONS_Location *location =
                 pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
                                                    var_off, extra_indirection);
-              
               
               // extract range info
               CV_LvarAddrRange *range = &defrange_fprel->range;
@@ -2345,7 +2351,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               B32 extra_indirection = 0;
               U32 byte_size = ctx->addr_size;
               U32 byte_pos = 0;
-              U64 var_off = defrange_fprel_full_scope->off;
+              S64 var_off = (S64)defrange_fprel_full_scope->off;
               CONS_Location *location =
                 pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
                                                    var_off, extra_indirection);
@@ -2378,7 +2384,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               U32 byte_pos = 0;
               
               B32 extra_indirection_to_value = 0;
-              U64 var_off = defrange_register_rel->reg_off;
+              S64 var_off = defrange_register_rel->reg_off;
               
               // setup location
               CONS_Location *location =
@@ -2663,17 +2669,17 @@ pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 n
 static CONS_Location*
 pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
                                    RADDBG_RegisterCode reg_code,
-                                   U32 reg_byte_pos,
                                    U32 reg_byte_size,
-                                   U64 offset,
+                                   U32 reg_byte_pos,
+                                   S64 offset,
                                    B32 extra_indirection){
   CONS_Location *result = 0;
-  if (offset <= max_U16){
+  if (0 <= offset && offset <= (S64)max_U16){
     if (extra_indirection){
-      result = cons_location_addr_addr_reg_plus_u16(ctx->root, reg_code, offset);
+      result = cons_location_addr_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
     }
     else{
-      result = cons_location_addr_reg_plus_u16(ctx->root, reg_code, offset);
+      result = cons_location_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
     }
   }
   else{
@@ -2682,7 +2688,7 @@ pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
     CONS_EvalBytecode bytecode = {0};
     U32 regread_param = RADDBG_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
     cons_bytecode_push_op(arena, &bytecode, RADDBG_EvalOp_RegRead, regread_param);
-    cons_bytecode_push_uconst(arena, &bytecode, offset);
+    cons_bytecode_push_sconst(arena, &bytecode, offset);
     cons_bytecode_push_op(arena, &bytecode, RADDBG_EvalOp_Add, 0);
     if (extra_indirection){
       cons_bytecode_push_op(arena, &bytecode, RADDBG_EvalOp_MemRead, ctx->addr_size);

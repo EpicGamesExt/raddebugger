@@ -14,7 +14,6 @@ global Arena *        w32_event_arena = 0;
 global HCURSOR        w32_hcursor = 0;
 global B32            w32_resizing = 0;
 global F32            w32_default_refresh_rate = 60.f;
-global B32            w32_granular_sleep_enabled = 0;
 
 ////////////////////////////////
 //~ allen: Windows SDK Inconsistency Fixer
@@ -112,9 +111,11 @@ w32_push_event(OS_EventKind kind, W32_Window *window)
 {
   OS_Event *result = push_array(w32_event_arena, OS_Event, 1);
   DLLPushBack(w32_event_list.first, w32_event_list.last, result);
+  result->timestamp_us = os_now_microseconds();
   result->kind = kind;
   result->window = os_window_from_w32_window(window);
   result->flags = os_get_event_flags();
+  w32_event_list.count += 1;
   return(result);
 }
 
@@ -416,6 +417,8 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             event->key = OS_Key_RightMouseButton;
           }break;
         }
+        event->pos.x = (F32)LOWORD(lParam);
+        event->pos.y = (F32)HIWORD(lParam);
         if(release)
         {
           ReleaseCapture();
@@ -572,6 +575,7 @@ os_graphical_init(void)
     wndclass.hInstance = w32_h_instance;
     wndclass.lpszClassName = L"graphical-window";
     wndclass.hCursor = LoadCursorA(0, IDC_ARROW);
+    wndclass.hIcon = LoadIcon(w32_h_instance, MAKEINTRESOURCE(1));
     ATOM wndatom = RegisterClassExW(&wndclass);
     (void)wndatom;
   }
@@ -584,9 +588,6 @@ os_graphical_init(void)
       w32_default_refresh_rate = (F32)devmodew.dmDisplayFrequency;
     }
   }
-  
-  //- rjf: try to enable granular sleep
-  w32_granular_sleep_enabled = (timeBeginPeriod(1) == TIMERR_NOERROR);
   
   //- rjf: set initial cursor
   os_set_cursor(OS_Cursor_Pointer);
@@ -1079,12 +1080,6 @@ internal F32
 os_default_refresh_rate(void)
 {
   return w32_default_refresh_rate;
-}
-
-internal B32
-os_granular_sleep_enabled(void)
-{
-  return w32_granular_sleep_enabled;
 }
 
 ////////////////////////////////

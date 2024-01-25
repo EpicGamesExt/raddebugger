@@ -430,6 +430,7 @@ ui_state_alloc(void)
   ui->drag_state_arena = arena_alloc();
   ui->box_table_size = 4096;
   ui->box_table = push_array(arena, UI_BoxHashSlot, ui->box_table_size);
+  UI_InitStackNils(ui);
   return ui;
 }
 
@@ -603,7 +604,7 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
 {
   //- rjf: reset per-build ui state
   {
-    UI_ZeroAllStacks(ui_state);
+    UI_InitStacks(ui_state);
     ui_state->root = &ui_g_nil_box;
     ui_state->ctx_menu_touched_this_frame = 0;
     ui_state->is_animating = 0;
@@ -905,7 +906,8 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
       ui_state->ctx_menu_anchor_box_last_pos = anchor_box->rect.p0;
     }
     Vec2F32 anchor = add_2f32(ui_state->ctx_menu_anchor_box_last_pos, ui_state->ctx_menu_anchor_off);
-    UI_FixedX(anchor.x) UI_FixedY(anchor.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f)) UI_Focus(ui_state->ctx_menu_open)
+    UI_FixedX(anchor.x) UI_FixedY(anchor.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
+      UI_Focus(UI_FocusKind_On)
     {
       ui_set_next_child_layout_axis(Axis2_Y);
       ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawDropShadow|(ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY), "###ctx_menu_%I64x", window.u64[0]);
@@ -961,15 +963,6 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   {
     ui_state->time_since_last_click[side] += real_dt;
   }
-  
-  
-  //- rjf: push initial stack values
-  ui_push_pref_width(ui_px(150.f, 0.4f));
-  ui_push_pref_height(ui_px(25.f, 1.f));
-  ui_push_background_color(v4f32(0.1f, 0.1f, 0.1f, 0.8f));
-  ui_push_text_color(v4f32(1, 1, 1, 0.8f));
-  ui_push_border_color(v4f32(1, 1, 1, 0.1f));
-  ui_push_corner_radius(0.f);
 }
 
 internal void
@@ -1666,12 +1659,16 @@ ui_begin_ctx_menu(UI_Key key)
   }
   ui_push_pref_width(ui_bottom_pref_width());
   ui_push_pref_height(ui_bottom_pref_height());
+  ui_push_focus_hot(UI_FocusKind_Root);
+  ui_push_focus_active(UI_FocusKind_Root);
   return result;
 }
 
 internal void
 ui_end_ctx_menu(void)
 {
+  ui_pop_focus_active();
+  ui_pop_focus_hot();
   ui_pop_pref_width();
   ui_pop_pref_height();
   ui_pop_parent();
@@ -1692,49 +1689,22 @@ ui_any_ctx_menu_is_open(void)
 
 //- rjf: focus tree coloring
 
-internal void
-ui_set_focus_active(B32 check)
-{
-  ui_state->focus_active_is_set = check;
-  ui_state->focus_active_is_possible = 1;
-}
-
-internal void
-ui_unset_focus_active(void)
-{
-  ui_state->focus_active_is_set = 0;
-  ui_state->focus_active_is_possible = 0;
-}
-
-internal void
-ui_set_focus_hot(B32 check)
-{
-  ui_state->focus_hot_is_set = check;
-  ui_state->focus_hot_is_possible = 1;
-}
-
-internal void
-ui_unset_focus_hot(void)
-{
-  ui_state->focus_hot_is_set = 0;
-  ui_state->focus_hot_is_possible = 0;
-}
-
 internal B32
-ui_is_focus_active(void)
+ui_is_focus_hot(void)
 {
-  B32 result = ui_state->focus_active_is_set;
+  B32 result = (ui_state->focus_hot_stack.top->v == UI_FocusKind_On);
   if(result)
   {
-    for(UI_Box *box = ui_top_parent(); !ui_box_is_nil(box); box = box->parent)
+    for(UI_FocusHotNode *n = ui_state->focus_hot_stack.top; n != 0; n = n->next)
     {
-      if(box->flags & UI_BoxFlag_FocusActive)
+      if(n->v == UI_FocusKind_Root)
       {
-        result = !(box->flags & UI_BoxFlag_FocusActiveDisabled);
-        if(result == 0)
-        {
-          break;
-        }
+        break;
+      }
+      if(n->v == UI_FocusKind_Off)
+      {
+        result = 0;
+        break;
       }
     }
   }
@@ -1742,20 +1712,21 @@ ui_is_focus_active(void)
 }
 
 internal B32
-ui_is_focus_hot(void)
+ui_is_focus_active(void)
 {
-  B32 result = ui_state->focus_hot_is_set;
+  B32 result = (ui_state->focus_active_stack.top->v == UI_FocusKind_On);
   if(result)
   {
-    for(UI_Box *box = ui_top_parent(); !ui_box_is_nil(box); box = box->parent)
+    for(UI_FocusActiveNode *n = ui_state->focus_active_stack.top; n != 0; n = n->next)
     {
-      if(box->flags & UI_BoxFlag_FocusHot)
+      if(n->v == UI_FocusKind_Root)
       {
-        result = !(box->flags & UI_BoxFlag_FocusHotDisabled);
-        if(result == 0)
-        {
-          break;
-        }
+        break;
+      }
+      if(n->v == UI_FocusKind_Off)
+      {
+        result = 0;
+        break;
       }
     }
   }
@@ -1901,8 +1872,8 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   //- rjf: fill box
   {
     box->key = key;
-    box->flags = flags|ui_state->flags.active;
-    box->fastpath_codepoint = ui_state->fastpath_codepoint.active;
+    box->flags = flags|ui_state->flags_stack.top->v;
+    box->fastpath_codepoint = ui_state->fastpath_codepoint_stack.top->v;
     
     if(ui_is_focus_active() && (box->flags & UI_BoxFlag_DefaultFocusNav) && ui_key_match(ui_state->default_nav_root_key, ui_key_zero()))
     {
@@ -1921,87 +1892,77 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
       box->first_disabled_build_index = ui_state->build_index;
     }
     
-    if(ui_state->fixed_x.count != 0)
+    if(ui_state->fixed_x_stack.top != &ui_state->fixed_x_nil_stack_top)
     {
       box->flags |= UI_BoxFlag_FloatingX;
-      box->fixed_position.x = ui_state->fixed_x.active;
+      box->fixed_position.x = ui_state->fixed_x_stack.top->v;
     }
-    if(ui_state->fixed_y.count != 0)
+    if(ui_state->fixed_y_stack.top != &ui_state->fixed_y_nil_stack_top)
     {
       box->flags |= UI_BoxFlag_FloatingY;
-      box->fixed_position.y = ui_state->fixed_y.active;
+      box->fixed_position.y = ui_state->fixed_y_stack.top->v;
     }
-    if(ui_state->fixed_width.count != 0)
+    if(ui_state->fixed_width_stack.top != &ui_state->fixed_width_nil_stack_top)
     {
       box->flags |= UI_BoxFlag_FixedWidth;
-      box->fixed_size.x = ui_state->fixed_width.active;
+      box->fixed_size.x = ui_state->fixed_width_stack.top->v;
     }
     else
     {
-      box->pref_size[Axis2_X] = ui_state->pref_width.active;
+      box->pref_size[Axis2_X] = ui_state->pref_width_stack.top->v;
     }
-    if(ui_state->fixed_height.count != 0)
+    if(ui_state->fixed_height_stack.top != &ui_state->fixed_height_nil_stack_top)
     {
       box->flags |= UI_BoxFlag_FixedHeight;
-      box->fixed_size.y = ui_state->fixed_height.active;
+      box->fixed_size.y = ui_state->fixed_height_stack.top->v;
     }
     else
     {
-      box->pref_size[Axis2_Y] = ui_state->pref_height.active;
+      box->pref_size[Axis2_Y] = ui_state->pref_height_stack.top->v;
     }
     
     B32 is_auto_focus_active = ui_is_key_auto_focus_active(key);
     B32 is_auto_focus_hot    = ui_is_key_auto_focus_hot(key);
     if(is_auto_focus_active)
     {
-      ui_state->focus_active_is_possible = ui_state->focus_active_is_set = 1;
+      ui_set_next_focus_active(UI_FocusKind_On);
     }
     if(is_auto_focus_hot)
     {
-      ui_state->focus_hot_is_possible = ui_state->focus_hot_is_set = 1;
+      ui_set_next_focus_hot(UI_FocusKind_On);
     }
-    box->flags |=            UI_BoxFlag_FocusHot*!!(ui_state->focus_hot_is_possible);
-    box->flags |=         UI_BoxFlag_FocusActive*!!(ui_state->focus_active_is_possible);
-    box->flags |=    UI_BoxFlag_FocusHotDisabled*(!(ui_state->focus_hot_is_set) && ui_state->focus_hot_is_possible);
-    box->flags |= UI_BoxFlag_FocusActiveDisabled*(!(ui_state->focus_active_is_set) && ui_state->focus_active_is_possible);
-    if((box->flags & UI_BoxFlag_FocusHot    && ~box->flags & UI_BoxFlag_FocusHotDisabled) ||
-       (box->flags & UI_BoxFlag_FocusActive && ~box->flags & UI_BoxFlag_FocusActiveDisabled))
+    box->flags |= UI_BoxFlag_FocusHot    * (ui_state->focus_hot_stack.top->v == UI_FocusKind_On);
+    box->flags |= UI_BoxFlag_FocusActive * (ui_state->focus_active_stack.top->v == UI_FocusKind_On);
+    if(box->flags & UI_BoxFlag_FocusHot && !ui_is_focus_hot())
     {
-      for(UI_Box *p = box->parent; !ui_box_is_nil(p); p = p->parent)
-      {
-        if(p->flags & (UI_BoxFlag_FocusHotDisabled|UI_BoxFlag_FocusActiveDisabled))
-        {
-          box->flags |= (UI_BoxFlag_FocusHotDisabled|UI_BoxFlag_FocusActiveDisabled);
-          break;
-        }
-      }
+      box->flags |= UI_BoxFlag_FocusHotDisabled;
     }
-    ui_state->focus_hot_is_set = 0;
-    ui_state->focus_hot_is_possible = 0;
-    ui_state->focus_active_is_set = 0;
-    ui_state->focus_active_is_possible = 0;
+    if(box->flags & UI_BoxFlag_FocusActive && !ui_is_focus_active())
+    {
+      box->flags |= UI_BoxFlag_FocusActiveDisabled;
+    }
     
-    box->text_align = ui_state->text_alignment.active;
-    box->child_layout_axis = ui_state->child_layout_axis.active;
-    box->background_color = ui_state->background_color.active;
-    box->text_color = ui_state->text_color.active;
-    box->border_color = ui_state->border_color.active;
-    box->overlay_color = ui_state->overlay_color.active;
-    box->font = ui_state->font.active;
-    box->font_size = ui_state->font_size.active;
-    box->corner_radii[Corner_00] = ui_state->corner_radius_00.active;
-    box->corner_radii[Corner_01] = ui_state->corner_radius_01.active;
-    box->corner_radii[Corner_10] = ui_state->corner_radius_10.active;
-    box->corner_radii[Corner_11] = ui_state->corner_radius_11.active;
-    box->blur_size = ui_state->blur_size.active;
-    box->text_padding = ui_state->text_padding.active;
-    box->hover_cursor = ui_state->hover_cursor.active;
+    box->text_align = ui_state->text_alignment_stack.top->v;
+    box->child_layout_axis = ui_state->child_layout_axis_stack.top->v;
+    box->background_color = ui_state->background_color_stack.top->v;
+    box->text_color = ui_state->text_color_stack.top->v;
+    box->border_color = ui_state->border_color_stack.top->v;
+    box->overlay_color = ui_state->overlay_color_stack.top->v;
+    box->font = ui_state->font_stack.top->v;
+    box->font_size = ui_state->font_size_stack.top->v;
+    box->corner_radii[Corner_00] = ui_state->corner_radius_00_stack.top->v;
+    box->corner_radii[Corner_01] = ui_state->corner_radius_01_stack.top->v;
+    box->corner_radii[Corner_10] = ui_state->corner_radius_10_stack.top->v;
+    box->corner_radii[Corner_11] = ui_state->corner_radius_11_stack.top->v;
+    box->blur_size = ui_state->blur_size_stack.top->v;
+    box->text_padding = ui_state->text_padding_stack.top->v;
+    box->hover_cursor = ui_state->hover_cursor_stack.top->v;
     box->custom_draw = 0;
   }
   
   //- rjf: auto-pop all stacks
   {
-    UI_AutoPopAllStacks(ui_state);
+    UI_AutoPopStacks(ui_state);
   }
   
   //- rjf: return
@@ -2070,14 +2031,14 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   ProfBeginFunction();
   box->string = push_str8_copy(ui_build_arena(), string);
   box->flags |= UI_BoxFlag_HasDisplayString;
-  if(box->flags & UI_BoxFlag_DrawText && (!(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint) || box->fastpath_codepoint == 0))
+  if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
     D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->text_color, box->font_size, 0, 0}};
     D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
     box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), &fancy_strings);
   }
-  if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
+  else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
     Temp scratch = scratch_begin(0, 0);
     String8 display_string = ui_box_display_string(box);
@@ -2254,8 +2215,6 @@ ui_signal_from_box(UI_Box *box)
   UI_Signal result = {0};
   result.box = box;
   result.event_flags = os_get_event_flags();
-  Vec2F32 mouse = ui_state->mouse;
-  B32 mouse_is_over = contains_2f32(box->rect, mouse);
   B32 disabled = !!(box->flags & UI_BoxFlag_Disabled);
   B32 is_focused = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
   
@@ -2286,6 +2245,14 @@ ui_signal_from_box(UI_Box *box)
       }
     }
   }
+  
+  //- rjf: unpack mouse position info
+  Vec2F32 mouse = ui_state->mouse;
+  if(left_press != 0)   { mouse = left_press->pos; }
+  if(left_release != 0) { mouse = left_release->pos; }
+  if(right_press != 0)   { mouse = right_press->pos; }
+  if(right_release != 0) { mouse = right_release->pos; }
+  B32 mouse_is_over = contains_2f32(box->rect, mouse);
   
   //- rjf: check for parent that is clipping
   if(box->flags & (UI_BoxFlag_Clickable|UI_BoxFlag_ViewScroll) && mouse_is_over)
@@ -2476,7 +2443,8 @@ ui_signal_from_box(UI_Box *box)
   B32 keyboard_click = 0;
   if(!disabled && is_focused && box->flags & UI_BoxFlag_KeyboardClickable)
   {
-    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return) != 0 ||
+       os_key_press(ui_events(), ui_window(), 0, OS_Key_Space) != 0)
     {
       keyboard_click = 1;
       result.clicked = 1;
@@ -2603,35 +2571,6 @@ ui_signal_from_box(UI_Box *box)
 ////////////////////////////////
 //~ rjf: Stacks
 
-#define UI_StackPush(name, new_top)\
-(\
-(ui_state->name.v[ui_state->name.count] = ui_state->name.active),\
-(ui_state->name.active = new_top),\
-(ui_state->name.count += 1),\
-(ui_state->name.v[ui_state->name.count-1])\
-)
-#define UI_StackPop(name, popped)\
-(\
-(ui_state->name.count -= 1),\
-(popped = ui_state->name.active),\
-(ui_state->name.active = ui_state->name.v[ui_state->name.count]),\
-(popped)\
-)
-#define UI_StackSetNext(name, new_top)\
-(\
-(ui_state->name.auto_pop) ?\
-(ui_state->name.active = new_top) :\
-(\
-(ui_state->name.v[ui_state->name.count] = ui_state->name.active),\
-(ui_state->name.active = new_top),\
-(ui_state->name.count += 1),\
-(ui_state->name.auto_pop = 1),\
-(ui_state->name.v[ui_state->name.count-1])\
-)\
-)
-#define UI_StackTop(name) (ui_state->name.active)
-#define UI_StackBottom(name) (ui_state->name.count > 1 ? ui_state->name.v[1] : ui_state->name.active)
-
 //- rjf: helpers
 
 internal Rng2F32
@@ -2709,5 +2648,45 @@ ui_pop_corner_radius(void)
 
 ////////////////////////////////
 //~ rjf: Generated Code
+
+#define UI_StackTopImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.top->v;
+
+#define UI_StackBottomImpl(state, name_upper, name_lower) \
+return state->name_lower##_stack.bottom_val;
+
+#define UI_StackPushImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+if(node->next == &state->name_lower##_nil_stack_top)\
+{\
+state->name_lower##_stack.bottom_val = (new_value);\
+}\
+state->name_lower##_stack.auto_pop = 0;\
+return old_value;
+
+#define UI_StackPopImpl(state, name_upper, name_lower) \
+UI_##name_upper##Node *popped = state->name_lower##_stack.top;\
+if(popped != &state->name_lower##_nil_stack_top)\
+{\
+SLLStackPop(state->name_lower##_stack.top);\
+SLLStackPush(state->name_lower##_stack.free, popped);\
+state->name_lower##_stack.auto_pop = 0;\
+}\
+return popped->v;\
+
+#define UI_StackSetNextImpl(state, name_upper, name_lower, type, new_value) \
+UI_##name_upper##Node *node = state->name_lower##_stack.free;\
+if(node != 0) {SLLStackPop(state->name_lower##_stack.free);}\
+else {node = push_array(ui_build_arena(), UI_##name_upper##Node, 1);}\
+type old_value = state->name_lower##_stack.top->v;\
+node->v = new_value;\
+SLLStackPush(state->name_lower##_stack.top, node);\
+state->name_lower##_stack.auto_pop = 1;\
+return old_value;
 
 #include "generated/ui.meta.c"

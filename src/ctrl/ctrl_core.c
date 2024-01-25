@@ -663,6 +663,13 @@ ctrl_memgen_idx(void)
   return result;
 }
 
+internal U64
+ctrl_reggen_idx(void)
+{
+  U64 result = ins_atomic_u64_eval(&ctrl_state->reggen_idx);
+  return result;
+}
+
 //- rjf: halt everything
 
 internal void
@@ -1062,6 +1069,7 @@ internal B32
 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, CTRL_Handle thread, void *block)
 {
   B32 good = demon_write_regs(ctrl_demon_handle_from_ctrl(thread), block);
+  ins_atomic_u64_inc_eval(&ctrl_state->reggen_idx);
   return good;
 }
 
@@ -1100,6 +1108,146 @@ ctrl_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, CTRL_Handle thread)
   DEMON_Handle demon_handle = ctrl_demon_handle_from_ctrl(thread);
   result = demon_tls_root_vaddr_from_thread(demon_handle);
   return result;
+}
+
+//- rjf: process * vaddr -> module
+
+internal CTRL_Handle
+ctrl_module_from_process_vaddr(CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr)
+{
+  CTRL_Handle handle = {0};
+  {
+    Temp scratch = scratch_begin(0, 0);
+    DEMON_HandleArray modules = demon_modules_from_process(scratch.arena, ctrl_demon_handle_from_ctrl(process));
+    for(U64 idx = 0; idx < modules.count; idx += 1)
+    {
+      DEMON_Handle m = modules.handles[idx];
+      Rng1U64 m_vaddr_rng = demon_vaddr_range_from_module(m);
+      if(contains_1u64(m_vaddr_rng, vaddr))
+      {
+        handle = ctrl_handle_from_demon(m);
+        break;
+      }
+    }
+    scratch_end(scratch);
+  }
+  return handle;
+}
+
+//- rjf: unwinding
+
+internal CTRL_Unwind
+ctrl_unwind_from_process_thread(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, CTRL_Handle thread)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+  DBGI_Scope *scope = dbgi_scope_open();
+  Architecture arch = demon_arch_from_object(ctrl_demon_handle_from_ctrl(thread));
+  U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
+  CTRL_Unwind unwind = {0};
+  unwind.error = 1;
+  switch(arch)
+  {
+    default:{}break;
+    case Architecture_x64:
+    {
+      // rjf: grab initial register block
+      void *regs_block = push_array(scratch.arena, U8, arch_reg_block_size);
+      B32 regs_block_good = 0;
+      {
+        void *regs_raw = ctrl_reg_block_from_thread(machine_id, thread);
+        if(regs_raw != 0)
+        {
+          MemoryCopy(regs_block, regs_raw, arch_reg_block_size);
+          regs_block_good = 1;
+        }
+      }
+      
+      // rjf: grab initial memory view
+      B32 stack_memview_good = 0;
+      UNW_MemView stack_memview = {0};
+      if(regs_block_good)
+      {
+        U64 stack_base_unrounded = demon_stack_base_vaddr_from_thread(ctrl_demon_handle_from_ctrl(thread));
+        U64 stack_top_unrounded = regs_rsp_from_arch_block(arch, regs_block);
+        U64 stack_base = AlignPow2(stack_base_unrounded, KB(4));
+        U64 stack_top = AlignDownPow2(stack_top_unrounded, KB(4));
+        U64 stack_size = stack_base - stack_top;
+        if(stack_base >= stack_top)
+        {
+          String8 stack_memory = {0};
+          stack_memory.str = push_array_no_zero(scratch.arena, U8, stack_size);
+          stack_memory.size = ctrl_process_read(machine_id, process, r1u64(stack_top, stack_top+stack_size), stack_memory.str);
+          if(stack_memory.size != 0)
+          {
+            stack_memview_good = 1;
+            stack_memview.data = stack_memory.str;
+            stack_memview.addr_first = stack_top;
+            stack_memview.addr_opl = stack_base;
+          }
+        }
+      }
+      
+      // rjf: loop & unwind
+      UNW_MemView memview = stack_memview;
+      if(stack_memview_good) for(;;)
+      {
+        unwind.error = 0;
+        
+        // rjf: regs -> rip*module*binary
+        U64 rip = regs_rip_from_arch_block(arch, regs_block);
+        CTRL_Handle module = ctrl_module_from_process_vaddr(machine_id, process, rip);
+        
+        // rjf: cancel on 0 rip
+        if(rip == 0)
+        {
+          break;
+        }
+        
+        // rjf: binary -> all the binary info
+        String8 binary_full_path = demon_full_path_from_module(scratch.arena, ctrl_demon_handle_from_ctrl(module));
+        DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
+        String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
+        
+        // rjf: cancel on bad data
+        if(binary_data.size == 0)
+        {
+          unwind.error = 1;
+          break;
+        }
+        
+        // rjf: valid step -> push frame
+        CTRL_UnwindFrame *frame = push_array(arena, CTRL_UnwindFrame, 1);
+        frame->rip = rip;
+        frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
+        MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
+        SLLQueuePush(unwind.first, unwind.last, frame);
+        unwind.count += 1;
+        
+        // rjf: unwind one step
+        UNW_Result unwind_step = unw_pe_x64(binary_data, &dbgi->pe, demon_vaddr_range_from_module(ctrl_demon_handle_from_ctrl(module)).min, &memview, (UNW_X64_Regs *)regs_block);
+        
+        // rjf: cancel on bad step
+        if(unwind_step.dead != 0)
+        {
+          break;
+        }
+        if(unwind_step.missed_read != 0)
+        {
+          unwind.error = 1;
+          break;
+        }
+        if(unwind_step.stack_pointer == 0)
+        {
+          break;
+        }
+      }
+    }break;
+  }
+  dbgi_scope_close(scope);
+  scratch_end(scratch);
+  ProfEnd();
+  return unwind;
 }
 
 //- rjf: name -> register/alias hash tables, for eval
@@ -1366,6 +1514,7 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
   Temp scratch = scratch_begin(&arena, 1);
   
   //- rjf: loop -> try to get event, run, repeat
+  U64 spoof_old_ip_value = 0;
   ProfScope("loop -> try to get event, run, repeat") for(B32 got_event = 0; got_event == 0;)
   {
     //- rjf: get next event
@@ -1410,6 +1559,67 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
                 should_filter_event = 0;
               }
             }
+            
+            // rjf: special case: be gracious with ASan modules or symbols if
+            // they do their cute little 0xc0000005 exception trick...
+            if(!should_filter_event && ev->code == 0xc0000005 &&
+               (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
+            {
+              DBGI_Scope *scope = dbgi_scope_open();
+              DEMON_HandleArray modules = demon_modules_from_process(scratch.arena, ev->process);
+              if(modules.count != 0)
+              {
+                // rjf: determine base address of asan shadow space
+                U64 asan_shadow_base_vaddr = 0;
+                B32 asan_shadow_variable_exists_but_is_zero = 0;
+                CTRL_Handle module = ctrl_handle_from_demon(modules.handles[0]);
+                String8 module_path = demon_full_path_from_module(scratch.arena, ctrl_demon_handle_from_ctrl(module));
+                DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, module_path, max_U64);
+                RADDBG_Parsed *rdbg = &dbgi->rdbg;
+                RADDBG_NameMap *unparsed_map = raddbg_name_map_from_kind(rdbg, RADDBG_NameMapKind_GlobalVariables);
+                if(rdbg->global_variables != 0 && unparsed_map != 0)
+                {
+                  RADDBG_ParsedNameMap map = {0};
+                  raddbg_name_map_parse(rdbg, unparsed_map, &map);
+                  String8 name = str8_lit("__asan_shadow_memory_dynamic_address");
+                  RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
+                  if(node != 0)
+                  {
+                    U32 id_count = 0;
+                    U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                    if(id_count > 0 && 0 < ids[0] && ids[0] < rdbg->global_variable_count)
+                    {
+                      RADDBG_GlobalVariable *global_var = &rdbg->global_variables[ids[0]];
+                      U64 global_var_voff = global_var->voff;
+                      U64 global_var_vaddr = global_var->voff + demon_base_vaddr_from_module(ctrl_demon_handle_from_ctrl(module));
+                      Architecture arch = demon_arch_from_object(ev->thread);
+                      U64 addr_size = bit_size_from_arch(arch)/8;
+                      ctrl_process_read(CTRL_MachineID_Client, ctrl_handle_from_demon(ev->process), r1u64(global_var_vaddr, global_var_vaddr+addr_size), &asan_shadow_base_vaddr);
+                      asan_shadow_variable_exists_but_is_zero = (asan_shadow_base_vaddr == 0);
+                    }
+                  }
+                }
+                
+                // rjf: determine if this was a read/write to the shadow space
+                B32 violation_in_shadow_space = 0;
+                if(asan_shadow_base_vaddr != 0)
+                {
+                  U64 asan_shadow_space_size = TB(128)/8;
+                  if(asan_shadow_base_vaddr <= ev->address && ev->address < asan_shadow_base_vaddr+asan_shadow_space_size)
+                  {
+                    violation_in_shadow_space = 1;
+                  }
+                }
+                
+                // rjf: filter event if this violation occurred in asan's shadow space
+                if(violation_in_shadow_space || asan_shadow_variable_exists_but_is_zero)
+                {
+                  should_filter_event = 1;
+                }
+              }
+              
+              dbgi_scope_close(scope);
+            }
           }break;
         }
       }
@@ -1437,7 +1647,6 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
     {
       // rjf: prep spoof
       B32 do_spoof = (spoof != 0 && run_ctrls->single_step_thread == 0);
-      U64 spoof_old_ip_value = 0;
       U64 size_of_spoof = 0;
       if(do_spoof) ProfScope("prep spoof")
       {
@@ -1479,11 +1688,24 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
         demon_write_memory(ctrl_demon_handle_from_ctrl(spoof->process), spoof->vaddr, &spoof_old_ip_value, size_of_spoof);
       }
       
-      // rjf: inc run idx & memgen idx
+      // rjf: inc generation counters
       {
         ins_atomic_u64_inc_eval(&ctrl_state->run_idx);
         ins_atomic_u64_inc_eval(&ctrl_state->memgen_idx);
+        ins_atomic_u64_inc_eval(&ctrl_state->reggen_idx);
       }
+    }
+  }
+  
+  //- rjf: irrespective of what event came back, we should ALWAYS check the
+  // spoof's thread and see if it hit the spoof address, because we may have
+  // simply been sent other debug events first
+  if(spoof != 0)
+  {
+    U64 spoof_thread_rip = demon_read_ip(ctrl_demon_handle_from_ctrl(spoof->thread));
+    if(spoof_thread_rip == spoof->new_ip_value)
+    {
+      demon_write_ip(ctrl_demon_handle_from_ctrl(spoof->thread), spoof_old_ip_value);
     }
   }
   
@@ -1649,6 +1871,14 @@ ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
   }
   U32 id = demon_launch_process(&opts);
   
+  //- rjf: record start
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Started;
+    ctrl_c2u_push_events(&evts);
+  }
+  
   //- rjf: run to handshake
   DEMON_Event *stop_event = 0;
   if(id != 0)
@@ -1698,6 +1928,24 @@ ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //- rjf: record stop
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Stopped;
+    if(stop_event != 0)
+    {
+      event->cause = ctrl_event_cause_from_demon_event_kind(stop_event->kind);
+      event->machine_id = CTRL_MachineID_Client;
+      event->entity = ctrl_handle_from_demon(stop_event->thread);
+      event->parent = ctrl_handle_from_demon(stop_event->process);
+      event->exception_code = stop_event->code;
+      event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
+      event->rip_vaddr = stop_event->instruction_pointer;
+    }
+    ctrl_c2u_push_events(&evts);
+  }
+  
   //- rjf: push request resolution event
   {
     CTRL_EventList evts = {0};
@@ -1730,6 +1978,14 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     opts.inherit_env = msg->env_inherit;
   }
   U32 id = demon_launch_process(&opts);
+  
+  //- rjf: record start
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Started;
+    ctrl_c2u_push_events(&evts);
+  }
   
   //- rjf: run to initialization (entry point)
   DEMON_Event *stop_event = 0;
@@ -1821,6 +2077,8 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
                 str8_lit("wmain"),
                 str8_lit("WinMainCRTStartup"),
                 str8_lit("wWinMainCRTStartup"),
+                str8_lit("mainCRTStartup"),
+                str8_lit("wmainCRTStartup"),
               };
               
               // rjf: find voff for one of the custom entry points attached to this msg
@@ -1941,6 +2199,24 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
     event->kind = CTRL_EventKind_Error;
     event->cause = CTRL_EventCause_Error;
+    ctrl_c2u_push_events(&evts);
+  }
+  
+  //- rjf: record stop
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind = CTRL_EventKind_Stopped;
+    if(stop_event != 0)
+    {
+      event->cause = ctrl_event_cause_from_demon_event_kind(stop_event->kind);
+      event->machine_id = CTRL_MachineID_Client;
+      event->entity = ctrl_handle_from_demon(stop_event->thread);
+      event->parent = ctrl_handle_from_demon(stop_event->process);
+      event->exception_code = stop_event->code;
+      event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
+      event->rip_vaddr = stop_event->instruction_pointer;
+    }
     ctrl_c2u_push_events(&evts);
   }
   
@@ -2122,10 +2398,14 @@ ctrl_thread__run(CTRL_Msg *msg)
   DEMON_Handle target_process = ctrl_demon_handle_from_ctrl(msg->parent);
   U64 spoof_ip_vaddr = 911;
   
+  //////////////////////////////
   //- rjf: gather processes
+  //
   DEMON_HandleArray processes = demon_all_processes(scratch.arena);
   
+  //////////////////////////////
   //- rjf: gather all initial breakpoints
+  //
   DEMON_TrapChunkList user_traps = {0};
   {
     // rjf: resolve module-dependent user bps
@@ -2147,6 +2427,7 @@ ctrl_thread__run(CTRL_Msg *msg)
     }
   }
   
+  //////////////////////////////
   //- rjf: single step "stuck threads"
   //
   // "Stuck threads" are threads that are already on a User BP and would hit
@@ -2251,7 +2532,9 @@ ctrl_thread__run(CTRL_Msg *msg)
     }
   }
   
+  //////////////////////////////
   //- rjf: resolve trap net
+  //
   DEMON_TrapChunkList trap_net_traps = {0};
   for(CTRL_TrapNode *node = msg->traps.first;
       node != 0;
@@ -2261,14 +2544,18 @@ ctrl_thread__run(CTRL_Msg *msg)
     demon_trap_chunk_list_push(scratch.arena, &trap_net_traps, 256, &trap);
   }
   
+  //////////////////////////////
   //- rjf: join user breakpoints and trap net traps
+  //
   DEMON_TrapChunkList joined_traps = {0};
   {
     demon_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &user_traps);
     demon_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &trap_net_traps);
   }
   
+  //////////////////////////////
   //- rjf: record start
+  //
   if(stop_event == 0)
   {
     CTRL_EventList evts = {0};
@@ -2277,31 +2564,37 @@ ctrl_thread__run(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //////////////////////////////
   //- rjf: run loop
+  //
   if(stop_event == 0)
   {
     U64 sp_check_value = demon_read_sp(target_thread);
     B32 spoof_mode = 0;
     CTRL_Spoof spoof = {0};
-    U64 spoof_1_return_ip = 0;
-    
     for(;;)
     {
+      //////////////////////////
       //- rjf: choose low level traps
+      //
       DEMON_TrapChunkList *trap_list = &joined_traps;
       if(spoof_mode)
       {
         trap_list = &user_traps;
       }
       
+      //////////////////////////
       //- rjf: choose spoof
+      //
       CTRL_Spoof *run_spoof = 0;
       if(spoof_mode)
       {
         run_spoof = &spoof;
       }
       
+      //////////////////////////
       //- rjf: setup run controls
+      //
       DEMON_RunCtrls run_ctrls = {0};
       run_ctrls.ignore_previous_exception = 1;
       run_ctrls.run_entity_count = msg->freeze_state_threads.count;
@@ -2315,12 +2608,16 @@ ctrl_thread__run(CTRL_Msg *msg)
           idx += 1;
         }
       }
-      run_ctrls.traps            = *trap_list;
+      run_ctrls.traps = *trap_list;
       
-      //- rjf: get an event
+      //////////////////////////
+      //- rjf: get next event
+      //
       DEMON_Event *event = ctrl_thread__next_demon_event(scratch.arena, msg, &run_ctrls, run_spoof);
       
+      //////////////////////////
       //- rjf: determine event handling
+      //
       B32 hard_stop = 0;
       CTRL_EventCause hard_stop_cause = ctrl_event_cause_from_demon_event_kind(event->kind);
       B32 use_stepping_logic = 0;
@@ -2354,7 +2651,9 @@ ctrl_thread__run(CTRL_Msg *msg)
         }break;
       }
       
+      //////////////////////////
       //- rjf: unpack info about thread attached to event
+      //
       Architecture arch = demon_arch_from_object(event->thread);
       U64 reg_size = regs_block_size_from_architecture(arch);
       void *thread_regs_block = demon_read_regs(event->thread);
@@ -2380,11 +2679,14 @@ ctrl_thread__run(CTRL_Msg *msg)
         temp_end(temp);
       }
       
-      ////////////////////////////////
-      //- rjf: stepping logic      -//
+      //////////////////////////
+      //- rjf: stepping logic
+      //
       //{
       
+      //////////////////////////
       //- rjf: handle if hitting a spoof or baked in trap
+      //
       B32 hit_spoof = 0;
       B32 exception_stop = 0;
       if(use_stepping_logic)
@@ -2409,28 +2711,9 @@ ctrl_thread__run(CTRL_Msg *msg)
         }
       }
       
-      //- TODO(rjf): Jeff is hitting a bug where a spoof IP (911) has been
-      // hit by a thread, !!!BUT!!! we seemingly don't catch that until a
-      // subsequent run of this loop, probably because there are other
-      // events in the queue that we report first, losing all state about
-      // spoof mode.
-      //
-      // I'm throwing in some detection for this case, so that we can diagnose
-      // it further from there.
-      //
-      if(event->kind == DEMON_EventKind_Exception &&
-         event->instruction_pointer == 911 &&
-         (hit_spoof == 0 || spoof_mode == 0))
-      {
-        os_graphical_message(1, str8_lit("RADDBG INTERNAL DEVELOPMENT MESSAGE"), str8_lit("a bad, rare bug that Jeff found has been detected to occur - attach with debugger now"));
-      }
-      
       //- rjf: handle spoof hit
       if(hit_spoof)
       {
-        // rjf: restore 1 ip
-        demon_write_ip(target_thread, spoof_1_return_ip);
-        
         // rjf: clear spoof mode
         spoof_mode = 0;
         MemoryZeroStruct(&spoof);
@@ -2673,15 +2956,12 @@ ctrl_thread__run(CTRL_Msg *msg)
         {
           // rjf: setup spoof mode
           begin_spoof_mode = 1;
-          
           U64 spoof_sp = demon_read_sp(target_thread);
           spoof_mode = 1;
           spoof.process = ctrl_handle_from_demon(target_process);
+          spoof.thread  = ctrl_handle_from_demon(target_thread);
           spoof.vaddr   = spoof_sp;
           spoof.new_ip_value = spoof_ip_vaddr;
-          
-          // rjf: remember 1 return ip
-          demon_read_memory(target_process, &spoof_1_return_ip, spoof_sp, sizeof(spoof_1_return_ip));
         }
       }
       
@@ -2715,7 +2995,8 @@ ctrl_thread__run(CTRL_Msg *msg)
       }
       
       //}
-      //- rjf: stepping logic      -//
+      //
+      //- rjf: stepping logic
       ////////////////////////////////
       
       //- rjf: handle step past trap net
@@ -2786,20 +3067,11 @@ ctrl_thread__run(CTRL_Msg *msg)
         break;
       }
     }
-    
-    //- rjf: unstick silently-hit spoofs
-    if(stop_event != 0 && stop_event->thread != target_thread && spoof_mode != 0)
-    {
-      U64 target_thread_rip = demon_read_ip(target_thread);
-      if(target_thread_rip == spoof.new_ip_value)
-      {
-        // rjf: restore 1 ip
-        demon_write_ip(target_thread, spoof_1_return_ip);
-      }
-    }
   }
   
+  //////////////////////////////
   //- rjf: record stop
+  //
   if(stop_event != 0)
   {
     CTRL_EventList evts = {0};

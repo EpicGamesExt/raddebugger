@@ -335,7 +335,11 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
           block = push_array(arena, PDB_TpiHashBlock, 1);
           SLLStackPush(buckets[bucket_idx], block);
         }
-        block->itypes[block->local_count] = itype;
+        if(block->local_count != 0)
+        {
+          MemoryCopy(block->itypes+1, block->itypes, sizeof(CV_TypeId)*block->local_count);
+        }
+        block->itypes[0] = itype;
         block->local_count += 1;
       }
       
@@ -397,11 +401,14 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
               local_idx < block->local_count && local_idx < ArrayCount(block->itypes);
               local_idx += 1)
           {
-            if(block->itypes[local_idx] == type_id && prev_block != 0)
+            if(block->itypes[local_idx] == type_id)
             {
-              prev_block->next = block->next;
-              block->next = buckets[bucket_idx];
-              buckets[bucket_idx] = block;
+              if(prev_block != 0)
+              {
+                prev_block->next = block->next;
+                block->next = buckets[bucket_idx];
+                buckets[bucket_idx] = block;
+              }
               if(local_idx != 0)
               {
                 Swap(CV_TypeId, block->itypes[0], block->itypes[local_idx]);

@@ -44,7 +44,6 @@ dbgi_init(void)
   {
     dbgi_shared->parse_threads[idx] = os_launch_thread(dbgi_parse_thread_entry_point, (void *)idx, 0);
   }
-  dbgi_shared->evictor_thread = os_launch_thread(dbgi_evictor_thread_entry_point, 0, 0);
 }
 
 ////////////////////////////////
@@ -253,9 +252,34 @@ dbgi_binary_close(String8 exe_path)
         break;
       }
     }
+    B32 need_deletion = 0;
     if(binary != 0 && binary->refcount>0)
     {
       binary->refcount -= 1;
+      need_deletion = (binary->refcount == 0);
+    }
+    if(need_deletion) for(;;)
+    {
+      os_rw_mutex_drop_w(stripe->rw_mutex);
+      for(U64 start_t = os_now_microseconds();
+          os_now_microseconds() <= start_t + 250;);
+      os_rw_mutex_take_w(stripe->rw_mutex);
+      if(binary->refcount == 0 && ins_atomic_u64_eval(&binary->scope_touch_count) == 0)
+      {
+        if(binary->parse.arena != 0) { arena_release(binary->parse.arena); }
+        if(binary->parse.exe_base != 0) { os_file_map_view_close(binary->exe_file_map, binary->parse.exe_base); }
+        if(!os_handle_match(os_handle_zero(), binary->exe_file_map)) { os_file_map_close(binary->exe_file_map); }
+        if(!os_handle_match(os_handle_zero(), binary->exe_file)) { os_file_close(binary->exe_file); }
+        if(binary->parse.dbg_base != 0) { os_file_map_view_close(binary->dbg_file_map, binary->parse.dbg_base); }
+        if(!os_handle_match(os_handle_zero(), binary->dbg_file_map)) { os_file_map_close(binary->dbg_file_map); }
+        if(!os_handle_match(os_handle_zero(), binary->dbg_file)) { os_file_close(binary->dbg_file); }
+        binary->exe_file_map = binary->exe_file = os_handle_zero();
+        binary->dbg_file_map = binary->dbg_file = os_handle_zero();
+        MemoryZeroStruct(&binary->parse);
+        binary->last_time_enqueued_for_parse_us = 0;
+        binary->gen = 1;
+        break;
+      }
     }
   }
   scratch_end(scratch);
@@ -294,7 +318,7 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
           break;
         }
         else if(!sent &&
-                os_now_microseconds() >= ins_atomic_u64_eval(&binary->last_time_enqueued_for_parse_us)+1000000 &&
+                ins_atomic_u64_eval(&binary->last_time_enqueued_for_parse_us) == 0 &&
                 dbgi_u2p_enqueue_exe_path(exe_path, endt_us))
         {
           sent = 1;
@@ -451,7 +475,7 @@ dbgi_parse_thread_entry_point(void *p)
           break;
         }
       }
-      if(binary == 0 || binary->flags&DBGI_BinaryFlag_ParseInFlight)
+      if(binary == 0 || binary->flags&DBGI_BinaryFlag_ParseInFlight || binary->refcount == 0)
       {
         task_is_taken_by_other_thread = 1;
       }
@@ -475,7 +499,7 @@ dbgi_parse_thread_entry_point(void *p)
     void *exe_file_base = 0;
     if(do_task)
     {
-      exe_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, exe_path);
+      exe_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, exe_path);
       exe_file_props = os_properties_from_file(exe_file);
       exe_file_map = os_file_map_open(OS_AccessFlag_Read, exe_file);
       exe_file_base = os_file_map_view_open(exe_file_map, OS_AccessFlag_Read, r1u64(0, exe_file_props.size));
@@ -484,7 +508,8 @@ dbgi_parse_thread_entry_point(void *p)
     //- rjf: parse exe file info
     Arena *parse_arena = 0;
     PE_BinInfo exe_pe_info = {0};
-    String8 exe_dbg_path_embedded = {0};
+    String8 exe_dbg_path_embedded_absolute = {0};
+    String8 exe_dbg_path_embedded_relative = {0};
     if(do_task)
     {
       parse_arena = arena_alloc();
@@ -492,7 +517,9 @@ dbgi_parse_thread_entry_point(void *p)
       {
         String8 exe_data = str8((U8 *)exe_file_base, exe_file_props.size);
         exe_pe_info = pe_bin_info_from_data(parse_arena, exe_data);
-        exe_dbg_path_embedded = str8_cstring_capped((char *)exe_data.str+exe_pe_info.dbg_path_off, (char *)exe_data.str+exe_pe_info.dbg_path_off+Min(exe_data.size-exe_pe_info.dbg_path_off, 4096));
+        exe_dbg_path_embedded_absolute = str8_cstring_capped((char *)exe_data.str+exe_pe_info.dbg_path_off, (char *)exe_data.str+exe_pe_info.dbg_path_off+Min(exe_data.size-exe_pe_info.dbg_path_off, 4096));
+        String8 exe_folder = str8_chop_last_slash(exe_path);
+        exe_dbg_path_embedded_relative = push_str8f(scratch.arena, "%S/%S", exe_folder, exe_dbg_path_embedded_absolute);
       }
     }
     
@@ -509,9 +536,10 @@ dbgi_parse_thread_entry_point(void *p)
       {
         String8 possible_og_dbg_paths[] =
         {
-          /* inferred:                  */ exe_dbg_path_embedded,
-          /* "foo.exe" -> "foo.pdb"     */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path)),
-          /* "foo.exe" -> "foo.exe.pdb" */ push_str8f(scratch.arena, "%S.pdb", exe_path),
+          /* inferred (treated as absolute): */ exe_dbg_path_embedded_absolute,
+          /* inferred (treated as relative): */ exe_dbg_path_embedded_relative,
+          /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path)),
+          /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", exe_path),
         };
         for(U64 idx = 0; idx < ArrayCount(possible_og_dbg_paths); idx += 1)
         {
@@ -534,7 +562,7 @@ dbgi_parse_thread_entry_point(void *p)
     FileProperties og_dbg_props = {0};
     if(do_task) ProfScope("analyze O.G. dbg file")
     {
-      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, og_dbg_path);
+      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, og_dbg_path);
       OS_Handle file_map = os_file_map_open(OS_AccessFlag_Read, file);
       FileProperties props = og_dbg_props = os_properties_from_file(file);
       void *base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, props.size));
@@ -610,6 +638,32 @@ dbgi_parse_thread_entry_point(void *p)
       }
     }
     
+    //- rjf: if raddbg file is up to date based on timestamp, check the
+    // encoding generation number, to see if we need to regenerate it
+    // regardless
+    if(do_task && raddbg_file_is_up_to_date)
+    {
+      OS_Handle file = {0};
+      OS_Handle file_map = {0};
+      FileProperties file_props = {0};
+      void *file_base = 0;
+      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbg_path);
+      file_map = os_file_map_open(OS_AccessFlag_Read, file);
+      file_props = os_properties_from_file(file);
+      file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
+      if(sizeof(RADDBG_Header) <= file_props.size)
+      {
+        RADDBG_Header *header = (RADDBG_Header*)file_base;
+        if(header->encoding_version != RADDBG_ENCODING_VERSION)
+        {
+          raddbg_file_is_up_to_date = 0;
+        }
+      }
+      os_file_map_view_close(file_map, file_base);
+      os_file_map_close(file_map);
+      os_file_close(file);
+    }
+    
     //- rjf: raddbg file not up-to-date? we need to generate it
     if(do_task)
     {
@@ -633,6 +687,7 @@ dbgi_parse_thread_entry_point(void *p)
             opts.consoleless = 1;
             str8_list_pushf(scratch.arena, &opts.cmd_line, "raddbg");
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--convert");
+            str8_list_pushf(scratch.arena, &opts.cmd_line, "--quiet");
             //str8_list_pushf(scratch.arena, &opts.cmd_line, "--capture");
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--exe:%S", exe_path);
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--pdb:%S", og_dbg_path);
@@ -685,7 +740,7 @@ dbgi_parse_thread_entry_point(void *p)
     void *raddbg_file_base = 0;
     if(do_task && raddbg_file_is_up_to_date)
     {
-      raddbg_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, raddbg_path);
+      raddbg_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbg_path);
       raddbg_file_map = os_file_map_open(OS_AccessFlag_Read, raddbg_file);
       raddbg_file_props = os_properties_from_file(raddbg_file);
       raddbg_file_base = os_file_map_view_open(raddbg_file_map, OS_AccessFlag_Read, r1u64(0, raddbg_file_props.size));
@@ -708,8 +763,10 @@ dbgi_parse_thread_entry_point(void *p)
       }
     }
     
-    //- rjf: cache write, step 1: check if either EXE or raddbg file is new. if
-    // so, clear all old results & store new top-level info
+    //- rjf: cache write, step 1: check if refcount is still nonzero, &
+    // either EXE or raddbg file is new. if so, clear all old results &
+    // store new top-level info
+    B32 binary_refcount_is_zero = 0;
     B32 raddbg_or_exe_file_is_updated = 0;
     if(do_task) ProfScope("cache write, step 1: check if raddbg is new & clear")
     {
@@ -717,6 +774,11 @@ dbgi_parse_thread_entry_point(void *p)
       {
         if(str8_match(bin->exe_path, exe_path, 0))
         {
+          if(bin->refcount == 0)
+          {
+            binary_refcount_is_zero = 1;
+            break;
+          }
           if(bin->parse.dbg_props.modified != raddbg_file_props.modified ||
              bin->parse.exe_props.modified != exe_file_props.modified)
           {
@@ -751,7 +813,7 @@ dbgi_parse_thread_entry_point(void *p)
     
     //- rjf: raddbg file or exe is not new? cache can stay unmodified, close
     // handles & skip to end.
-    if(do_task) if(!raddbg_or_exe_file_is_updated) if(raddbg_file_is_up_to_date)
+    if(do_task) if((!raddbg_or_exe_file_is_updated && raddbg_file_is_up_to_date) || binary_refcount_is_zero)
     {
       os_file_map_view_close(raddbg_file_map, raddbg_file_base);
       os_file_map_close(raddbg_file_map);
@@ -759,6 +821,7 @@ dbgi_parse_thread_entry_point(void *p)
       os_file_map_view_close(exe_file_map, exe_file_base);
       os_file_map_close(exe_file_map);
       os_file_close(exe_file);
+      arena_release(parse_arena);
       do_task = 0;
     }
     
@@ -785,7 +848,11 @@ dbgi_parse_thread_entry_point(void *p)
           String8 dbg_path = og_dbg_path;
           if(dbg_path.size == 0)
           {
-            dbg_path = exe_dbg_path_embedded;
+            dbg_path = exe_dbg_path_embedded_absolute;
+          }
+          if(dbg_path.size == 0)
+          {
+            dbg_path = exe_dbg_path_embedded_relative;
           }
           if(dbg_path.size == 0)
           {
@@ -824,65 +891,5 @@ dbgi_parse_thread_entry_point(void *p)
     
     ProfEnd();
     scratch_end(scratch);
-  }
-}
-
-////////////////////////////////
-//~ rjf: Evictor Thread
-
-internal void
-dbgi_evictor_thread_entry_point(void *p)
-{
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  ProfThreadName("[dbgi] evictor");
-  for(;;)
-  {
-    ProfBegin("eviction scan");
-    U64 slots_per_stripe = dbgi_shared->binary_slots_count/dbgi_shared->binary_stripes_count;
-    for(U64 stripe_idx = 0; stripe_idx < dbgi_shared->binary_stripes_count; stripe_idx += 1)
-    {
-      DBGI_BinaryStripe *stripe = &dbgi_shared->binary_stripes[stripe_idx];
-      for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
-      {
-        U64 slot_idx = slots_per_stripe*stripe_idx + slot_in_stripe_idx;
-        DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
-        B32 slot_needs_work = 0;
-        OS_MutexScopeR(stripe->rw_mutex)
-        {
-          for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-          {
-            if(bin->refcount == 0 && bin->scope_touch_count == 0 && bin->flags == 0 && bin->gen > 1)
-            {
-              slot_needs_work = 1;
-              break;
-            }
-          }
-        }
-        if(slot_needs_work) ProfScope("eviction task (slot %I64u)", slot_idx) OS_MutexScopeW(stripe->rw_mutex)
-        {
-          for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-          {
-            if(bin->refcount == 0 && bin->scope_touch_count == 0 && bin->flags == 0)
-            {
-              if(bin->parse.arena != 0) { arena_release(bin->parse.arena); }
-              if(bin->parse.exe_base != 0) { os_file_map_view_close(bin->exe_file_map, bin->parse.exe_base); }
-              if(!os_handle_match(os_handle_zero(), bin->exe_file_map)) { os_file_map_close(bin->exe_file_map); }
-              if(!os_handle_match(os_handle_zero(), bin->exe_file)) { os_file_close(bin->exe_file); }
-              if(bin->parse.dbg_base != 0) { os_file_map_view_close(bin->dbg_file_map, bin->parse.dbg_base); }
-              if(!os_handle_match(os_handle_zero(), bin->dbg_file_map)) { os_file_map_close(bin->dbg_file_map); }
-              if(!os_handle_match(os_handle_zero(), bin->dbg_file)) { os_file_close(bin->dbg_file); }
-              bin->exe_file_map = bin->exe_file = os_handle_zero();
-              bin->dbg_file_map = bin->dbg_file = os_handle_zero();
-              MemoryZeroStruct(&bin->parse);
-              bin->last_time_enqueued_for_parse_us = 0;
-              bin->gen = 1;
-            }
-          }
-        }
-      }
-    }
-    ProfEnd();
-    os_sleep_milliseconds(250);
   }
 }

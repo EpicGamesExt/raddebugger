@@ -879,6 +879,24 @@ str8_lit_comp("entity_lister"),
 str8_lit_comp("entity_lister"),
 };
 
+DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[] =
+{
+DF_CmdParamSlot_Entity,
+DF_CmdParamSlot_EntityList,
+DF_CmdParamSlot_FilePath,
+DF_CmdParamSlot_CmdSpec,
+DF_CmdParamSlot_ID,
+};
+
+String8 df_g_cmd_param_slot_2_view_spec_dst_map[] =
+{
+str8_lit_comp("entity_lister"),
+str8_lit_comp("entity_lister"),
+str8_lit_comp("file_system"),
+str8_lit_comp("commands"),
+str8_lit_comp("system_processes"),
+};
+
 DF_StringBindingPair df_g_default_binding_table[] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_EventFlag_Shift }},
@@ -922,6 +940,7 @@ DF_StringBindingPair df_g_default_binding_table[] =
 {str8_lit_comp("open"), {OS_Key_O, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("reload_active"), {OS_Key_R, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift }},
 {str8_lit_comp("switch"), {OS_Key_I, 0 |OS_EventFlag_Ctrl  }},
+{str8_lit_comp("switch_to_partner_file"), {OS_Key_O, 0   |OS_EventFlag_Alt}},
 {str8_lit_comp("load_user"), {OS_Key_O, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift |OS_EventFlag_Alt}},
 {str8_lit_comp("load_profile"), {OS_Key_O, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
 {str8_lit_comp("move_left"), {OS_Key_Left, 0   }},
@@ -975,38 +994,47 @@ DF_StringBindingPair df_g_default_binding_table[] =
 {str8_lit_comp("toggle_breakpoint_cursor"), {OS_Key_F9, 0   }},
 {str8_lit_comp("add_target"), {OS_Key_T, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("attach"), {OS_Key_F6, 0  |OS_EventFlag_Shift }},
-{str8_lit_comp("commands"), {OS_Key_F1, 0   }},
-{str8_lit_comp("scheduler"), {OS_Key_S, 0   |OS_EventFlag_Alt}},
+{str8_lit_comp("run_command"), {OS_Key_F1, 0   }},
 {str8_lit_comp("clear_diag_log"), {OS_Key_D, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
 {str8_lit_comp("open_diag_log"), {OS_Key_D, 0 |OS_EventFlag_Ctrl  }},
 };
 
+String8 df_g_binding_version_remap_old_name_table[] =
+{
+str8_lit_comp("commands"),
+};
+
+String8 df_g_binding_version_remap_new_name_table[] =
+{
+str8_lit_comp("run_command"),
+};
+
 DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[] =
 {
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("null"), str8_lit_comp(""), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Null), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Null), DF_VIEW_CMD_FUNCTION_NAME(Null), DF_VIEW_UI_FUNCTION_NAME(Null)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("empty"), str8_lit_comp(""), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Empty), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Empty), DF_VIEW_CMD_FUNCTION_NAME(Empty), DF_VIEW_UI_FUNCTION_NAME(Empty)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("commands"), str8_lit_comp("Commands"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Commands), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Commands), DF_VIEW_CMD_FUNCTION_NAME(Commands), DF_VIEW_UI_FUNCTION_NAME(Commands)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("file_system"), str8_lit_comp("File System"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(FileSystem), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(FileSystem), DF_VIEW_CMD_FUNCTION_NAME(FileSystem), DF_VIEW_UI_FUNCTION_NAME(FileSystem)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("system_processes"), str8_lit_comp("System Processes"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(SystemProcesses), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(SystemProcesses), DF_VIEW_CMD_FUNCTION_NAME(SystemProcesses), DF_VIEW_UI_FUNCTION_NAME(SystemProcesses)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("entity_lister"), str8_lit_comp("Entity List"), DF_NameKind_EntityKindName, DF_VIEW_SETUP_FUNCTION_NAME(EntityLister), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(EntityLister), DF_VIEW_CMD_FUNCTION_NAME(EntityLister), DF_VIEW_UI_FUNCTION_NAME(EntityLister)},
-{(0|1*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("target"), str8_lit_comp("Target"), DF_NameKind_EntityName, DF_VIEW_SETUP_FUNCTION_NAME(Target), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Target), DF_VIEW_CMD_FUNCTION_NAME(Target), DF_VIEW_UI_FUNCTION_NAME(Target)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("targets"), str8_lit_comp("Targets"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Targets), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Targets), DF_VIEW_CMD_FUNCTION_NAME(Targets), DF_VIEW_UI_FUNCTION_NAME(Targets)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("file_path_map"), str8_lit_comp("File Path Map"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(FilePathMap), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(FilePathMap), DF_VIEW_CMD_FUNCTION_NAME(FilePathMap), DF_VIEW_UI_FUNCTION_NAME(FilePathMap)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("scheduler"), str8_lit_comp("Scheduler"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Scheduler), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Scheduler), DF_VIEW_CMD_FUNCTION_NAME(Scheduler), DF_VIEW_UI_FUNCTION_NAME(Scheduler)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("call_stack"), str8_lit_comp("Call Stack"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(CallStack), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(CallStack), DF_VIEW_CMD_FUNCTION_NAME(CallStack), DF_VIEW_UI_FUNCTION_NAME(CallStack)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("modules"), str8_lit_comp("Modules"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Modules), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Modules), DF_VIEW_CMD_FUNCTION_NAME(Modules), DF_VIEW_UI_FUNCTION_NAME(Modules)},
-{(0|1*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("pending_entity"), str8_lit_comp("Pending Entity"), DF_NameKind_EntityName, DF_VIEW_SETUP_FUNCTION_NAME(PendingEntity), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(PendingEntity), DF_VIEW_CMD_FUNCTION_NAME(PendingEntity), DF_VIEW_UI_FUNCTION_NAME(PendingEntity)},
-{(0|1*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("code"), str8_lit_comp("Code"), DF_NameKind_EntityName, DF_VIEW_SETUP_FUNCTION_NAME(Code), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Code), DF_VIEW_CMD_FUNCTION_NAME(Code), DF_VIEW_UI_FUNCTION_NAME(Code)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("disassembly"), str8_lit_comp("Disassembly"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Disassembly), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Disassembly), DF_VIEW_CMD_FUNCTION_NAME(Disassembly), DF_VIEW_UI_FUNCTION_NAME(Disassembly)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("watch"), str8_lit_comp("Watch"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Watch), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Watch), DF_VIEW_CMD_FUNCTION_NAME(Watch), DF_VIEW_UI_FUNCTION_NAME(Watch)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("locals"), str8_lit_comp("Locals"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Locals), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Locals), DF_VIEW_CMD_FUNCTION_NAME(Locals), DF_VIEW_UI_FUNCTION_NAME(Locals)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("registers"), str8_lit_comp("Registers"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Registers), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Registers), DF_VIEW_CMD_FUNCTION_NAME(Registers), DF_VIEW_UI_FUNCTION_NAME(Registers)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("output"), str8_lit_comp("Output"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Output), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Output), DF_VIEW_CMD_FUNCTION_NAME(Output), DF_VIEW_UI_FUNCTION_NAME(Output)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("memory"), str8_lit_comp("Memory"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Memory), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Memory), DF_VIEW_CMD_FUNCTION_NAME(Memory), DF_VIEW_UI_FUNCTION_NAME(Memory)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("breakpoints"), str8_lit_comp("Breakpoints"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Breakpoints), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Breakpoints), DF_VIEW_CMD_FUNCTION_NAME(Breakpoints), DF_VIEW_UI_FUNCTION_NAME(Breakpoints)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("watch_pins"), str8_lit_comp("Watch Pins"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(WatchPins), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(WatchPins), DF_VIEW_CMD_FUNCTION_NAME(WatchPins), DF_VIEW_UI_FUNCTION_NAME(WatchPins)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("exception_filters"), str8_lit_comp("Exception Filters"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(ExceptionFilters), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(ExceptionFilters), DF_VIEW_CMD_FUNCTION_NAME(ExceptionFilters), DF_VIEW_UI_FUNCTION_NAME(ExceptionFilters)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("theme"), str8_lit_comp("Theme"), DF_NameKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Theme), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Theme), DF_VIEW_CMD_FUNCTION_NAME(Theme), DF_VIEW_UI_FUNCTION_NAME(Theme)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("null"), str8_lit_comp(""), DF_NameKind_Null, DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Null), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Null), DF_VIEW_CMD_FUNCTION_NAME(Null), DF_VIEW_UI_FUNCTION_NAME(Null)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("empty"), str8_lit_comp(""), DF_NameKind_Null, DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Empty), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Empty), DF_VIEW_CMD_FUNCTION_NAME(Empty), DF_VIEW_UI_FUNCTION_NAME(Empty)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("commands"), str8_lit_comp("Commands"), DF_NameKind_Null, DF_IconKind_List, DF_VIEW_SETUP_FUNCTION_NAME(Commands), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Commands), DF_VIEW_CMD_FUNCTION_NAME(Commands), DF_VIEW_UI_FUNCTION_NAME(Commands)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("file_system"), str8_lit_comp("File System"), DF_NameKind_Null, DF_IconKind_FileOutline, DF_VIEW_SETUP_FUNCTION_NAME(FileSystem), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(FileSystem), DF_VIEW_CMD_FUNCTION_NAME(FileSystem), DF_VIEW_UI_FUNCTION_NAME(FileSystem)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("system_processes"), str8_lit_comp("System Processes"), DF_NameKind_Null, DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(SystemProcesses), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(SystemProcesses), DF_VIEW_CMD_FUNCTION_NAME(SystemProcesses), DF_VIEW_UI_FUNCTION_NAME(SystemProcesses)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("entity_lister"), str8_lit_comp("Entity List"), DF_NameKind_EntityKindName, DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(EntityLister), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(EntityLister), DF_VIEW_CMD_FUNCTION_NAME(EntityLister), DF_VIEW_UI_FUNCTION_NAME(EntityLister)},
+{(0|1*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("target"), str8_lit_comp("Target"), DF_NameKind_EntityName, DF_IconKind_Target, DF_VIEW_SETUP_FUNCTION_NAME(Target), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Target), DF_VIEW_CMD_FUNCTION_NAME(Target), DF_VIEW_UI_FUNCTION_NAME(Target)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("targets"), str8_lit_comp("Targets"), DF_NameKind_Null, DF_IconKind_Target, DF_VIEW_SETUP_FUNCTION_NAME(Targets), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Targets), DF_VIEW_CMD_FUNCTION_NAME(Targets), DF_VIEW_UI_FUNCTION_NAME(Targets)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("file_path_map"), str8_lit_comp("File Path Map"), DF_NameKind_Null, DF_IconKind_FileOutline, DF_VIEW_SETUP_FUNCTION_NAME(FilePathMap), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(FilePathMap), DF_VIEW_CMD_FUNCTION_NAME(FilePathMap), DF_VIEW_UI_FUNCTION_NAME(FilePathMap)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("scheduler"), str8_lit_comp("Scheduler"), DF_NameKind_Null, DF_IconKind_Scheduler, DF_VIEW_SETUP_FUNCTION_NAME(Scheduler), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Scheduler), DF_VIEW_CMD_FUNCTION_NAME(Scheduler), DF_VIEW_UI_FUNCTION_NAME(Scheduler)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("call_stack"), str8_lit_comp("Call Stack"), DF_NameKind_Null, DF_IconKind_Thread, DF_VIEW_SETUP_FUNCTION_NAME(CallStack), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(CallStack), DF_VIEW_CMD_FUNCTION_NAME(CallStack), DF_VIEW_UI_FUNCTION_NAME(CallStack)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("modules"), str8_lit_comp("Modules"), DF_NameKind_Null, DF_IconKind_Module, DF_VIEW_SETUP_FUNCTION_NAME(Modules), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Modules), DF_VIEW_CMD_FUNCTION_NAME(Modules), DF_VIEW_UI_FUNCTION_NAME(Modules)},
+{(0|1*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("pending_entity"), str8_lit_comp("Pending Entity"), DF_NameKind_EntityName, DF_IconKind_FileOutline, DF_VIEW_SETUP_FUNCTION_NAME(PendingEntity), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(PendingEntity), DF_VIEW_CMD_FUNCTION_NAME(PendingEntity), DF_VIEW_UI_FUNCTION_NAME(PendingEntity)},
+{(0|1*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("code"), str8_lit_comp("Code"), DF_NameKind_EntityName, DF_IconKind_FileOutline, DF_VIEW_SETUP_FUNCTION_NAME(Code), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Code), DF_VIEW_CMD_FUNCTION_NAME(Code), DF_VIEW_UI_FUNCTION_NAME(Code)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("disassembly"), str8_lit_comp("Disassembly"), DF_NameKind_Null, DF_IconKind_Glasses, DF_VIEW_SETUP_FUNCTION_NAME(Disassembly), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Disassembly), DF_VIEW_CMD_FUNCTION_NAME(Disassembly), DF_VIEW_UI_FUNCTION_NAME(Disassembly)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("watch"), str8_lit_comp("Watch"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Watch), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Watch), DF_VIEW_CMD_FUNCTION_NAME(Watch), DF_VIEW_UI_FUNCTION_NAME(Watch)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("locals"), str8_lit_comp("Locals"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Locals), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Locals), DF_VIEW_CMD_FUNCTION_NAME(Locals), DF_VIEW_UI_FUNCTION_NAME(Locals)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("registers"), str8_lit_comp("Registers"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Registers), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Registers), DF_VIEW_CMD_FUNCTION_NAME(Registers), DF_VIEW_UI_FUNCTION_NAME(Registers)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("output"), str8_lit_comp("Output"), DF_NameKind_Null, DF_IconKind_List, DF_VIEW_SETUP_FUNCTION_NAME(Output), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Output), DF_VIEW_CMD_FUNCTION_NAME(Output), DF_VIEW_UI_FUNCTION_NAME(Output)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("memory"), str8_lit_comp("Memory"), DF_NameKind_Null, DF_IconKind_Grid, DF_VIEW_SETUP_FUNCTION_NAME(Memory), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Memory), DF_VIEW_CMD_FUNCTION_NAME(Memory), DF_VIEW_UI_FUNCTION_NAME(Memory)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("breakpoints"), str8_lit_comp("Breakpoints"), DF_NameKind_Null, DF_IconKind_CircleFilled, DF_VIEW_SETUP_FUNCTION_NAME(Breakpoints), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Breakpoints), DF_VIEW_CMD_FUNCTION_NAME(Breakpoints), DF_VIEW_UI_FUNCTION_NAME(Breakpoints)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("watch_pins"), str8_lit_comp("Watch Pins"), DF_NameKind_Null, DF_IconKind_Pin, DF_VIEW_SETUP_FUNCTION_NAME(WatchPins), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(WatchPins), DF_VIEW_CMD_FUNCTION_NAME(WatchPins), DF_VIEW_UI_FUNCTION_NAME(WatchPins)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("exception_filters"), str8_lit_comp("Exception Filters"), DF_NameKind_Null, DF_IconKind_Gear, DF_VIEW_SETUP_FUNCTION_NAME(ExceptionFilters), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(ExceptionFilters), DF_VIEW_CMD_FUNCTION_NAME(ExceptionFilters), DF_VIEW_UI_FUNCTION_NAME(ExceptionFilters)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("theme"), str8_lit_comp("Theme"), DF_NameKind_Null, DF_IconKind_Palette, DF_VIEW_SETUP_FUNCTION_NAME(Theme), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Theme), DF_VIEW_CMD_FUNCTION_NAME(Theme), DF_VIEW_UI_FUNCTION_NAME(Theme)},
 };
 
 String8 df_g_theme_color_display_string_table[] =

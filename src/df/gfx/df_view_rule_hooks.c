@@ -31,7 +31,7 @@ df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed 
       U64 array_total_size_capped = ClampTop(array_total_size, 64);
       Rng1U64 array_memory_vaddr_rng = r1u64(eval.offset, eval.offset + array_total_size_capped);
       String8 array_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, array_memory_vaddr_rng);
-      TG_Key element_type_key = tg_direct_from_graph_raddbg_key(graph, raddbg, type_key);
+      TG_Key element_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, raddbg, type_key);
       TG_Kind element_type_kind = tg_kind_from_key(element_type_key);
       U64 element_type_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, element_type_key);
       for(U64 element_idx = 0; element_idx < 4; element_idx += 1)
@@ -128,7 +128,7 @@ df_view_rule_hooks__eval_commit_rgba(DF_Eval eval, TG_Graph *graph, RADDBG_Parse
       U64 array_total_size_capped = ClampTop(array_total_size, 64);
       Rng1U64 array_memory_vaddr_rng = r1u64(eval.offset, eval.offset + array_total_size_capped);
       String8 array_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, array_memory_vaddr_rng);
-      TG_Key element_type_key = tg_direct_from_graph_raddbg_key(graph, raddbg, type_key);
+      TG_Key element_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, raddbg, type_key);
       TG_Kind element_type_kind = tg_kind_from_key(element_type_key);
       U64 element_type_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, element_type_key);
       for(U64 element_idx = 0; element_idx < 4; element_idx += 1)

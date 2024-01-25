@@ -54,6 +54,15 @@ commands =
     .save_dirty_files = true,
     .cursor_at_end = false,
   },
+  .rjf_f2 =
+  {
+    .win = "build raddbg_from_pdb",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
   .rjf_f3 =
   {
     .win = "pushd build && raddbg.exe && popd",
@@ -75,6 +84,15 @@ commands =
   .build_raddbg_from_pdb =
   {
     .win = "build raddbg_from_pdb",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .build_raddbg_dump =
+  {
+    .win = "build raddbg_dump",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -112,6 +130,7 @@ fkey_command_override =
   .rjf =
   {
     .F1 = "rjf_f1",
+    .F2 = "rjf_f2",
     .F3 = "rjf_f3",
   },
 };

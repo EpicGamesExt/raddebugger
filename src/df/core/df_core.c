@@ -1042,20 +1042,23 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
 {
   String8 error = {0};
   B32 prefer_imm = 0;
-  switch(spec->info.query_rule)
+  switch(spec->info.query.slot)
   {
     default:
-    case DF_CmdQueryRule_String:
+    case DF_CmdParamSlot_String:
     {
       params->string = push_str8_copy(arena, query);
       df_cmd_params_mark_slot(params, DF_CmdParamSlot_String);
     }break;
-    case DF_CmdQueryRule_FilePath:
+    case DF_CmdParamSlot_FilePath:
     {
-      params->file_path = push_str8_copy(arena, query);
+      String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
+      params->file_path = push_str8_copy(arena, pair.string);
+      params->text_point = pair.pt;
       df_cmd_params_mark_slot(params, DF_CmdParamSlot_FilePath);
+      df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
     }break;
-    case DF_CmdQueryRule_TextPoint:
+    case DF_CmdParamSlot_TextPoint:
     {
       U64 v = 0;
       if(try_u64_from_str8_c_rules(query, &v))
@@ -1064,19 +1067,15 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
         params->text_point.line = v;
         df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
       }
+      else
+      {
+        error = str8_lit("Couldn't interpret as a line number.");
+      }
     }break;
-    case DF_CmdQueryRule_FilePathAndTextPoint:
-    {
-      String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
-      params->file_path = push_str8_copy(arena, pair.string);
-      params->text_point = pair.pt;
-      df_cmd_params_mark_slot(params, DF_CmdParamSlot_FilePath);
-      df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
-    }break;
-    case DF_CmdQueryRule_VirtualAddr: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdQueryRule_VirtualOff: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdQueryRule_Index: prefer_imm = 1; goto use_numeric_eval;
-    case DF_CmdQueryRule_ID: prefer_imm = 1; goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualAddr: prefer_imm = 0; goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualOff: prefer_imm = 0; goto use_numeric_eval;
+    case DF_CmdParamSlot_Index: prefer_imm = 1; goto use_numeric_eval;
+    case DF_CmdParamSlot_ID: prefer_imm = 1; goto use_numeric_eval;
     use_numeric_eval:
     {
       Temp scratch = scratch_begin(&arena, 1);
@@ -1084,9 +1083,7 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
       DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
       U64 vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-      DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-      U64 voff = df_voff_from_vaddr(module, vaddr);
-      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, voff);
+      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, vaddr);
       DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, &parse_ctx, query);
       if(eval.errors.count == 0)
       {
@@ -1097,25 +1094,25 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
           prefer_imm = 1;
         }
         U64 u64 = !prefer_imm && eval.offset ? eval.offset : eval.imm_u64;
-        switch(spec->info.query_rule)
+        switch(spec->info.query.slot)
         {
           default:{}break;
-          case DF_CmdQueryRule_VirtualAddr:
+          case DF_CmdParamSlot_VirtualAddr:
           {
             params->vaddr = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_VirtualAddr);
           }break;
-          case DF_CmdQueryRule_VirtualOff:
+          case DF_CmdParamSlot_VirtualOff:
           {
             params->voff = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_VirtualOff);
           }break;
-          case DF_CmdQueryRule_Index:
+          case DF_CmdParamSlot_Index:
           {
             params->index = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_Index);
           }break;
-          case DF_CmdQueryRule_ID:
+          case DF_CmdParamSlot_ID:
           {
             params->id = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_ID);
@@ -1140,11 +1137,7 @@ df_cmd_list_push(Arena *arena, DF_CmdList *cmds, DF_CmdParams *params, DF_CmdSpe
 {
   DF_CmdNode *n = push_array(arena, DF_CmdNode, 1);
   n->cmd.spec = spec;
-  MemoryCopyStruct(&n->cmd.params, params);
-  n->cmd.params.entity_list = df_push_handle_list_copy(arena, params->entity_list);
-  n->cmd.params.string = push_str8_copy(arena, params->string);
-  n->cmd.params.file_path = push_str8_copy(arena, params->file_path);
-  if(n->cmd.params.cmd_spec == 0) {n->cmd.params.cmd_spec = &df_g_nil_cmd_spec;}
+  n->cmd.params = df_cmd_params_copy(arena, params);
   DLLPushBack(cmds->first, cmds->last, n);
   cmds->count += 1;
 }
@@ -2092,6 +2085,10 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
             next_parent->timestamp = file_properties.modified;
             next_parent->flags |= DF_EntityFlag_IsFolder * !!(file_properties.flags & FilePropertyFlag_IsFolder);
             next_parent->flags |= DF_EntityFlag_IsMissing * !!(file_properties.created == 0);
+            if(path_part_n->next != 0)
+            {
+              next_parent->flags |= DF_EntityFlag_IsFolder;
+            }
           }
         }
         else
@@ -2147,6 +2144,10 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
             next_parent->timestamp = file_properties.modified;
             next_parent->flags |= DF_EntityFlag_IsFolder * !!(file_properties.flags & FilePropertyFlag_IsFolder);
             next_parent->flags |= DF_EntityFlag_IsMissing * !!(file_properties.created == 0);
+            if(path_part_n->next != 0)
+            {
+              next_parent->flags |= DF_EntityFlag_IsFolder;
+            }
           }
         }
         else
@@ -2503,9 +2504,8 @@ df_register_cmd_specs(DF_CmdSpecInfoArray specs)
     info_copy->search_tags            = push_str8_copy(df_state->arena, info->search_tags);
     info_copy->display_name           = push_str8_copy(df_state->arena, info->display_name);
     info_copy->flags                  = info->flags;
-    info_copy->query_rule             = info->query_rule;
+    info_copy->query                  = info->query;
     info_copy->canonical_icon_kind    = info->canonical_icon_kind;
-    MemoryCopyArray(info_copy->query_info_u64, info->query_info_u64);
     spec->registrar_index = registrar_idx;
     spec->ordering_index = idx;
   }
@@ -2641,6 +2641,98 @@ df_debug_info_path_from_module(Arena *arena, DF_Entity *module)
 
 ////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders
+
+// NOTE(rjf): Stepping Algorithm Overview (2024/01/17)
+//
+// The basic idea behind all stepping algorithms in the debugger are setting up
+// a "trap net". A "trap net" is just a collection of high-level traps that are
+// meant to "catch" a thread after letting it run. This trap net is submitted
+// when the debugger frontend sends a "run" command (it is just empty if doing
+// an actual 'run' or 'continue'). The debugger control thread then uses this
+// trap net to program a state machine, to appropriately respond to a variety
+// of debug events which it is passed from the OS.
+//
+// These are "high-level traps" because they can have specific behavioral info
+// attached to them. These are encoded via the `CTRL_TrapFlags` type, which
+// allow expression of the following behaviors:
+//
+//  - end-stepping: when this trap is hit, it will end the stepping operation,
+//      and the target will not continue.
+//  - ignore-stack-pointer-check: when a trap in the trap net is hit, it will
+//      by-default be ignored if the thread's stack pointer has changed. this
+//      flag disables that behavior, for when the stack pointer is expected to
+//      change (e.g. step-out).
+//  - single-step-after-hit: when a trap with this flag is hit, the debugger
+//      will immediately single-step the thread which hit it.
+//  - save-stack-pointer: when a trap with this flag is hit, it will rewrite
+//      the stack pointer which is used to compare against, when deciding
+//      whether or not to filter a trap (based on stack pointer changes).
+//  - begin-spoof-mode: this enables "spoof mode". "spoof mode" is a special
+//      mode that disables the trap net entirely, and lets the thread run
+//      freely - but it catches the thread not with a trap, but a false return
+//      address. the debugger will overwrite a specific return address on the
+//      stack. this address will be overwritten with an address which does NOT
+//      point to a valid page, such that when the thread returns out of a
+//      particular call frame, the debugger will receive a debug event, at
+//      which point it can move the thread back to the correct return address,
+//      and resume with the trap net enabled. this is used in "step over"
+//      operations, because it avoids target <-> debugger "roundtrips" (e.g.
+//      target being stopped, debugger being called with debug events, then
+//      target resumes when debugger's control thread is done running) for
+//      recursions. (it doesn't make a difference with non-recursive calls,
+//      but the debugger can't detect the difference).
+//
+// Each stepping command prepares its trap net differently.
+//
+// --- Instruction Step Into --------------------------------------------------
+// In this case, no trap net is prepared, and only a low-level single-step is
+// performed.
+//
+// --- Instruction Step Over --------------------------------------------------
+// To build a trap net for an instruction-level step-over, the next instruction
+// at the thread's current instruction pointer is decoded. If it is a call
+// instruction, or if it is a repeating instruction, then a trap with the
+// 'end-stepping' behavior is placed at the instruction immediately following
+// the 'call' instruction.
+//
+// --- Line Step Into ---------------------------------------------------------
+// For a source-line step-into, the thread's instruction pointer is first used
+// to look up into the debug info's line info, to find the machine code in the
+// thread's current source line. Every instruction in this range is decoded.
+// Traps are then built in the following way:
+//
+// - 'call' instruction -> if can decode call destination address, place
+//     "end-stepping | ignore-stack-pointer-check" trap at destination. if
+//     can't, "end-stepping | single-step-after | ignore-stack-pointer-check"
+//     trap at call.
+// - 'jmp' (both unconditional & conditional) -> if can decode jump destination
+//     address, AND if jump leaves the line, place "end-stepping | ignore-
+//     stack-pointer-check" trap at destination. if can't, "end-stepping |
+//     single-step-after | ignore-stack-pointer-check" trap at jmp. if jump
+//     stays within the line, do nothing.
+// - 'return' -> place "end-stepping | single-step-after" trap at return inst.
+// - "end-stepping" trap is placed at the first address after the line, to
+//     catch all steps which simply proceed linearly through the instruction
+//     stream.
+//
+// --- Line Step Over ---------------------------------------------------------
+// For a source-line step-over, the thread's instruction pointer is first used
+// to look up into the debug info's line info, to find the machine code in the
+// thread's current source line. Every instruction in this range is decoded.
+// Traps are then built in the following way:
+//
+// - 'call' instruction -> place "single-step-after | begin-spoof-mode" trap at
+//     call instruction.
+// - 'jmp' (both unconditional & conditional) -> if can decode jump destination
+//     address, AND if jump leaves the line, place "end-stepping" trap at
+//     destination. if can't, "end-stepping | single-step-after" trap at jmp.
+//     if jump stays within the line, do nothing.
+// - 'return' -> place "end-stepping | single-step-after" trap at return inst.
+// - "end-stepping" trap is placed at the first address after the line, to
+//     catch all steps which simply proceed linearly through the instruction
+//     stream.
+// - for any instructions which may change the stack pointer, traps are placed
+//     at them with the "save-stack-pointer | single-step-after" behaviors.
 
 internal CTRL_TrapList
 df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread)
@@ -2869,23 +2961,6 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
       {
         trap_addr = point->jump_dest_vaddr;
         flags &= ~CTRL_TrapFlag_SingleStepAfterHit;
-        
-        // rjf: read instruction one layer deep after a jump and determine if
-        // it is just jumping to an unconditional jump (e.g. a function
-        // dispatch table) - if so, then just follow one more layer
-        String8 dst_machine_code = {0};
-        dst_machine_code.str = push_array_no_zero(scratch.arena, U8, max_instruction_size_from_arch(arch));
-        dst_machine_code.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(trap_addr, trap_addr+max_instruction_size_from_arch(arch)), dst_machine_code.str);
-        if(dst_machine_code.size != 0)
-        {
-          DF_Inst inst = df_single_inst_from_machine_code(scratch.arena, arch, 0, dst_machine_code);
-          if((inst.flags & DF_InstFlag_UnconditionalJump ||
-              inst.flags & DF_InstFlag_Call) &&
-             inst.rel_voff != 0)
-          {
-            trap_addr = (U64)(trap_addr + (S64)((S32)inst.rel_voff));
-          }
-        }
       }
     }
     
@@ -3015,7 +3090,7 @@ df_symbol_name_from_binary_voff(Arena *arena, DF_Entity *binary, U64 voff)
     String8 path = df_full_path_from_entity(scratch.arena, binary);
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, path, 0);
     RADDBG_Parsed *rdbg = &dbgi->rdbg;
-    if(rdbg->scope_vmap != 0)
+    if(result.size == 0 && rdbg->scope_vmap != 0)
     {
       U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
       RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
@@ -3023,6 +3098,14 @@ df_symbol_name_from_binary_voff(Arena *arena, DF_Entity *binary, U64 voff)
       RADDBG_Procedure *procedure = &rdbg->procedures[proc_idx];
       U64 name_size = 0;
       U8 *name_ptr = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+      result = push_str8_copy(arena, str8(name_ptr, name_size));
+    }
+    if(result.size == 0 && rdbg->global_vmap != 0)
+    {
+      U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, voff);
+      RADDBG_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
+      U64 name_size = 0;
+      U8 *name_ptr = raddbg_string_from_idx(rdbg, global_var->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
     }
     dbgi_scope_close(scope);
@@ -3536,13 +3619,6 @@ df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
         DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
         String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
         
-        // rjf: cancel on bad data
-        if(binary_data.size == 0)
-        {
-          unwind.error = 1;
-          break;
-        }
-        
         // rjf: valid step -> push frame
         DF_UnwindFrame *frame = push_array(arena, DF_UnwindFrame, 1);
         frame->rip = rip;
@@ -3634,14 +3710,6 @@ internal B32
 df_set_thread_rip(DF_Entity *thread, U64 vaddr)
 {
   B32 result = ctrl_thread_write_rip(thread->ctrl_machine_id, thread->ctrl_handle, vaddr);
-  
-  // rjf: invalidate unwind/locals cache
-  if(result)
-  {
-    df_state->unwind_cache_invalidated = 1;
-    df_state->locals_cache_invalidated = 1;
-    df_state->member_cache_invalidated = 1;
-  }
   
   // rjf: early mutation of unwind cache for immediate frontend effect
   if(result)
@@ -3737,6 +3805,10 @@ df_push_ctrl_msg(CTRL_Msg *msg)
 {
   CTRL_Msg *dst = ctrl_msg_list_push(df_state->ctrl_msg_arena, &df_state->ctrl_msgs);
   ctrl_msg_deep_copy(df_state->ctrl_msg_arena, dst, msg);
+  if(dst->kind == CTRL_MsgKind_LaunchAndInit)
+  {
+    df_state->ctrl_is_running = 1;
+  }
   if(df_state->ctrl_soft_halt_issued == 0 && df_ctrl_targets_running())
   {
     df_state->ctrl_soft_halt_issued = 1;
@@ -3892,17 +3964,19 @@ df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 }
 
 internal EVAL_ParseCtx
-df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 voff)
+df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 vaddr)
 {
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: extract info
+  DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
+  U64 voff = df_voff_from_vaddr(module, vaddr);
   DF_Entity *binary = df_binary_file_from_module(module);
   String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
   RADDBG_Parsed *rdbg = &dbgi->rdbg;
-  Architecture arch = df_architecture_from_entity(module);
-  EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch (arch);
+  Architecture arch = df_architecture_from_entity(process);
+  EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch(arch);
   EVAL_String2NumMap *reg_alias_map = ctrl_string2alias_from_arch(arch);
   EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, voff);
   EVAL_String2NumMap *member_map = df_query_cached_member_map_from_binary_voff(binary, voff);
@@ -4013,7 +4087,10 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
       if(modules.count != 0)
       {
         DF_Entity *module = modules.first->entity;
-        ctx = df_eval_parse_ctx_from_module_voff(scope, module, src2dasm->voff_range.min);
+        DF_Entity *process = df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
+        U64 voff = src2dasm->voff_range.min;
+        U64 vaddr = df_vaddr_from_voff(module, voff);
+        ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, vaddr);
         good_ctx = 1;
         break;
       }
@@ -4064,6 +4141,19 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
     }
   }
   
+  //- rjf: unpack module info & produce eval machine
+  DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_ip_vaddr);
+  U64 module_base = df_base_vaddr_from_module(module);
+  U64 tls_base = df_tls_base_vaddr_from_thread(thread);
+  EVAL_Machine machine = {0};
+  machine.u = (void *)thread->parent;
+  machine.arch = arch;
+  machine.memory_read = df_eval_memory_read;
+  machine.reg_data = thread_unwind_regs_block;
+  machine.reg_size = reg_size;
+  machine.module_base = &module_base;
+  machine.tls_base = &tls_base;
+  
   //- rjf: lex & parse
   EVAL_TokenArray tokens = eval_token_array_from_text(arena, string);
   EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(arena, parse_ctx, string, &tokens);
@@ -4092,23 +4182,10 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
     bytecode = eval_bytecode_from_oplist(arena, &op_list);
   }
   
-  //- rjf: grab thread/module
-  DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_ip_vaddr);
-  
   //- rjf: evaluate
   EVAL_Result eval = {0};
   if(bytecode.size != 0)
   {
-    U64 module_base = df_base_vaddr_from_module(module);
-    U64 tls_base = df_tls_base_vaddr_from_thread(thread);
-    EVAL_Machine machine = {0};
-    machine.u = (void *)thread->parent;
-    machine.arch = arch;
-    machine.memory_read = df_eval_memory_read;
-    machine.reg_data = thread_unwind_regs_block;
-    machine.reg_size = reg_size;
-    machine.module_base = &module_base;
-    machine.tls_base = &tls_base;
     eval = eval_interpret(&machine, bytecode);
   }
   
@@ -4137,6 +4214,12 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
       }break;
     }
     result.errors = errors;
+  }
+  
+  //- rjf: apply dynamic type overrides
+  if(parse.expr != 0 && parse.expr->kind != EVAL_ExprKind_Cast)
+  {
+    result = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, result);
   }
   
   scratch_end(scratch);
@@ -4214,9 +4297,82 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
 }
 
 internal DF_Eval
+df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
+{
+  Temp scratch = scratch_begin(0, 0);
+  DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+  Architecture arch = df_architecture_from_entity(thread);
+  DF_Entity *process = thread->parent;
+  U64 unwind_count = ctrl_ctx->unwind_count;
+  U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+  DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
+  TG_Key type_key = eval.type_key;
+  TG_Kind type_kind = tg_kind_from_key(type_key);
+  if(type_kind == TG_Kind_Ptr)
+  {
+    TG_Key ptee_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, type_key);
+    TG_Kind ptee_type_kind = tg_kind_from_key(ptee_type_key);
+    if(ptee_type_kind == TG_Kind_Struct || ptee_type_kind == TG_Kind_Class)
+    {
+      TG_Type *ptee_type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, ptee_type_key);
+      B32 has_vtable = 0;
+      for(U64 idx = 0; idx < ptee_type->count; idx += 1)
+      {
+        if(ptee_type->members[idx].kind == TG_MemberKind_VirtualMethod)
+        {
+          has_vtable = 1;
+          break;
+        }
+      }
+      if(has_vtable)
+      {
+        U64 ptr_vaddr = eval.offset;
+        U64 addr_size = bit_size_from_arch(arch)/8;
+        String8 ptr_value_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                   r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        if(ptr_value_memory.size >= addr_size)
+        {
+          U64 class_base_vaddr = 0;
+          MemoryCopy(&class_base_vaddr, ptr_value_memory.str, addr_size);
+          String8 vtable_base_ptr_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                           r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          if(vtable_base_ptr_memory.size >= addr_size)
+          {
+            U64 vtable_vaddr = 0;
+            MemoryCopy(&vtable_vaddr, vtable_base_ptr_memory.str, addr_size);
+            U64 vtable_voff = df_voff_from_vaddr(module, vtable_vaddr);
+            U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, vtable_voff);
+            if(0 < global_idx && global_idx < rdbg->global_variable_count)
+            {
+              RADDBG_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
+              if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped &&
+                 0 < global_var->container_idx && global_var->container_idx < rdbg->udt_count)
+              {
+                RADDBG_UDT *udt = &rdbg->udts[global_var->container_idx];
+                if(0 < udt->self_type_idx && udt->self_type_idx < rdbg->type_node_count)
+                {
+                  RADDBG_TypeNode *type = &rdbg->type_nodes[udt->self_type_idx];
+                  TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
+                  TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
+                  eval.type_key = ptr_to_derived_type_key;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  scratch_end(scratch);
+  return eval;
+}
+
+internal DF_Eval
 df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_Eval eval, DF_CfgTable *cfg)
 {
   ProfBeginFunction();
+  
+  //- rjf: apply view rules
   for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
   {
     DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
@@ -4572,18 +4728,22 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *r
       }
       if(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules)
       {
-        result = push_str8f(arena, "0x%I64x%s%S%s", eval.imm_u64,
-                            constant_name.size != 0 ? " (" : "",
-                            constant_name,
-                            constant_name.size != 0 ? ")" : "");
+        if(constant_name.size != 0)
+        {
+          result = push_str8f(arena, "0x%I64x (%S)", eval.imm_u64, constant_name);
+        }
+        else
+        {
+          result = push_str8f(arena, "0x%I64x (%I64u)", eval.imm_u64, eval.imm_u64);
+        }
       }
       else if(constant_name.size != 0)
       {
-        result = push_str8f(arena, "%S", constant_name);
+        result = push_str8_copy(arena, constant_name);
       }
       else
       {
-        result = push_str8f(arena, "0x%I64x", eval.imm_u64);
+        result = push_str8f(arena, "0x%I64x (%I64u)", eval.imm_u64, eval.imm_u64);
       }
       scratch_end(scratch);
     }break;
@@ -4635,14 +4795,21 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       }break;
       
       //- rjf: integers
+      case TG_Kind_Char8:
+      case TG_Kind_Char16:
+      case TG_Kind_Char32:
       case TG_Kind_S8:
       case TG_Kind_S16:
       case TG_Kind_S32:
       case TG_Kind_S64:
+      case TG_Kind_UChar8:
+      case TG_Kind_UChar16:
+      case TG_Kind_UChar32:
       case TG_Kind_U8:
       case TG_Kind_U16:
       case TG_Kind_U32:
       case TG_Kind_U64:
+      case TG_Kind_Bool:
       if(TG_Kind_Char8 <= src_type_kind && src_type_kind <= TG_Kind_Bool)
       {
         DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdbg, ctrl_ctx, src_eval);
@@ -4709,8 +4876,17 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       }break;
       case EVAL_EvalMode_Reg:
       {
-        // TODO(rjf)
-        result = 0;
+        DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+        Architecture arch = df_architecture_from_entity(thread);
+        U64 reg_block_size = regs_block_size_from_architecture(arch);
+        if(unwind.first != 0 &&
+           (0 <= dst_eval.offset && dst_eval.offset+commit_data.size < reg_block_size))
+        {
+          void *new_regs = push_array(scratch.arena, U8, reg_block_size);
+          MemoryCopy(new_regs, unwind.first->regs, reg_block_size);
+          MemoryCopy((U8 *)new_regs+dst_eval.offset, commit_data.str, commit_data.size);
+          result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, new_regs);
+        }
       }break;
     }
   }
@@ -4894,6 +5070,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   //////////////////////////////
   //- rjf: apply view rules & resolve eval
   //
+  eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
   eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, cfg_table);
   
   //////////////////////////////
@@ -4993,6 +5170,15 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
       {
         DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+        if(str8_match(spec->info.string, str8_lit("list"), 0) ||
+           str8_match(spec->info.string, str8_lit("omit"), 0) ||
+           str8_match(spec->info.string, str8_lit("only"), 0))
+        {
+          // TODO(rjf): "list" view rule needs to be formally moved into the visualization
+          // engine hooks when the system is mature enough to support it
+          // also "omit", "only"
+          continue;
+        }
         if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_VizBlockProd)
         {
           expand_rule = DF_EvalVizExpandRule_ViewRule;
@@ -6177,8 +6363,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   {
     Temp scratch = scratch_begin(&arena, 1);
     
+    //- rjf: grab next reggen/memgen
+    U64 new_memgen_idx = ctrl_memgen_idx();
+    U64 new_reggen_idx = ctrl_reggen_idx();
+    
     //- rjf: consume & process events
-    B32 run_caches_invalidated = 0;
     CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
     for(CTRL_EventNode *event_n = events.first; event_n != 0; event_n = event_n->next)
     {
@@ -6198,7 +6387,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           df_state->ctrl_is_running = 0;
           df_state->ctrl_soft_halt_issued = 0;
-          run_caches_invalidated = 1;
           DF_Entity *stop_thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
           
           // rjf: gather stop info
@@ -6244,14 +6432,20 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
             }
           }
+          
+          // rjf: exception or unexpected trap -> push error
+          if(event->cause == CTRL_EventCause_InterruptedByException ||
+             event->cause == CTRL_EventCause_InterruptedByTrap)
+          {
+            DF_CmdParams params = df_cmd_params_zero();
+            df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+          }
         }break;
         
         //- rjf: entity creation/deletion
         
         case CTRL_EventKind_NewProc:
         {
-          run_caches_invalidated = 1;
-          
           // rjf: the first process? -> clear session output & reset all bp hit counts
           DF_EntityList existing_processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
           if(existing_processes.count == 0)
@@ -6279,8 +6473,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         case CTRL_EventKind_NewThread:
         {
-          run_caches_invalidated = 1;
-          
           // rjf: create entity
           DF_Entity *parent = df_entity_from_ctrl_handle(event->machine_id, event->parent);
           DF_Entity *entity = df_entity_alloc(0, parent, DF_EntityKind_Thread);
@@ -6467,7 +6659,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                     df_entity_equip_color_rgba(thread, color);
                   }
                 }
-                run_caches_invalidated = 1;
               }break;
             }
           }
@@ -6480,16 +6671,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       }
     }
     
-    //- rjf: invalidate per-run caches
-    if(run_caches_invalidated)
-    {
-      df_state->unwind_cache_invalidated = 1;
-      df_state->locals_cache_invalidated = 1;
-      df_state->member_cache_invalidated = 1;
-    }
-    
     //- rjf: refresh unwind cache
-    if(df_state->unwind_cache_invalidated && !df_ctrl_targets_running()) ProfScope("per-thread unwind gather")
+    if((df_state->unwind_cache_memgen_idx != new_memgen_idx ||
+        df_state->unwind_cache_reggen_idx != new_reggen_idx) &&
+       !df_ctrl_targets_running()) ProfScope("per-thread unwind gather")
     {
       B32 good = 1;
       DF_EntityList all_threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
@@ -6514,27 +6699,28 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           break;
         }
       }
-      df_state->unwind_cache_invalidated = !good;
+      df_state->unwind_cache_memgen_idx = new_memgen_idx;
+      df_state->unwind_cache_reggen_idx = new_reggen_idx;
     }
     
     //- rjf: clear locals cache
-    if(df_state->locals_cache_invalidated && !df_ctrl_targets_running())
+    if(df_state->locals_cache_reggen_idx != new_reggen_idx && !df_ctrl_targets_running())
     {
-      df_state->locals_cache_invalidated = 0;
       DF_RunLocalsCache *cache = &df_state->locals_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
+      df_state->locals_cache_reggen_idx = new_reggen_idx;
     }
     
     //- rjf: clear members cache
-    if(df_state->member_cache_invalidated && !df_ctrl_targets_running())
+    if(df_state->member_cache_reggen_idx != new_reggen_idx && !df_ctrl_targets_running())
     {
-      df_state->member_cache_invalidated = 0;
       DF_RunLocalsCache *cache = &df_state->member_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
+      df_state->member_cache_reggen_idx = new_reggen_idx;
     }
     
     scratch_end(scratch);
@@ -6625,13 +6811,18 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         default:{}break;
         
         //- rjf: command fast paths
-        case DF_CoreCmdKind_CommandFastPath:
+        case DF_CoreCmdKind_RunCommand:
         {
           DF_CmdSpec *spec = params.cmd_spec;
-          DF_CmdQueryRule query_rule = spec->info.query_rule;
-          if(query_rule == DF_CmdQueryRule_Null)
+          if(spec != cmd->spec)
           {
-            df_cmd_list_push(arena, cmds, &params, spec);
+            df_cmd_spec_counter_inc(spec);
+            if(!(spec->info.query.flags & DF_CmdQueryFlag_Required) &&
+               (spec->info.query.slot == DF_CmdParamSlot_Null ||
+                df_cmd_params_has_slot(&params, spec->info.query.slot)))
+            {
+              df_cmd_list_push(arena, cmds, &params, spec);
+            }
           }
         }break;
         
@@ -6802,14 +6993,17 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_Detach:
         {
-          DF_Entity *entity = df_entity_from_handle(params.entity);
-          if(entity->kind == DF_EntityKind_Process)
+          for(DF_HandleNode *n = params.entity_list.first; n != 0; n = n->next)
           {
-            CTRL_Msg msg = {CTRL_MsgKind_Detach};
-            msg.machine_id = entity->ctrl_machine_id;
-            msg.entity = entity->ctrl_handle;
-            MemoryCopyArray(msg.exception_code_filters, df_state->ctrl_exception_code_filters);
-            df_push_ctrl_msg(&msg);
+            DF_Entity *entity = df_entity_from_handle(n->handle);
+            if(entity->kind == DF_EntityKind_Process)
+            {
+              CTRL_Msg msg = {CTRL_MsgKind_Detach};
+              msg.machine_id = entity->ctrl_machine_id;
+              msg.entity = entity->ctrl_handle;
+              MemoryCopyArray(msg.exception_code_filters, df_state->ctrl_exception_code_filters);
+              df_push_ctrl_msg(&msg);
+            }
           }
         }break;
         case DF_CoreCmdKind_Continue:
@@ -6910,17 +7104,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
           }
         }break;
-        case DF_CoreCmdKind_RunToModuleOffset:
-        {
-          DF_Entity *thread = df_entity_from_handle(params.entity);
-          DF_Entity *module = df_module_from_thread(thread);
-          U64 voff = params.voff;
-          U64 vaddr = df_vaddr_from_voff(module, voff);
-          DF_CmdParams params = df_cmd_params_zero();
-          params.vaddr = vaddr;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
-        }break;
         case DF_CoreCmdKind_Halt:
         if(df_ctrl_targets_running())
         {
@@ -6953,7 +7136,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Continue));
           }
-          else
+          else if(!df_ctrl_targets_running())
           {
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndRun));
@@ -7008,7 +7191,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(step_cmd_kind));
           }
-          else
+          else if(!df_ctrl_targets_running())
           {
             DF_EntityList targets = df_push_active_target_list(scratch.arena);
             DF_CmdParams p = params;
@@ -7154,7 +7337,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           FileProperties props = {0};
           String8 data = {0};
           {
-            OS_Handle file = os_file_open(OS_AccessFlag_Shared|OS_AccessFlag_Read, new_path);
+            OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, new_path);
             props = os_properties_from_file(file);
             data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
             os_file_close(file);
@@ -7200,7 +7383,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             {
               DF_Entity *file_entity = cfg_files[src];
               String8 path = df_full_path_from_entity(scratch.arena, file_entity);
-              OS_Handle file = os_file_open(OS_AccessFlag_Shared|OS_AccessFlag_Read, path);
+              OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, path);
               FileProperties props = os_properties_from_file(file);
               String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
               if(data.size != 0)
@@ -7696,17 +7879,51 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_SetFileReplacementPath:
         {
+          // NOTE(rjf):
+          //
+          // C:/foo/bar/baz.c
+          // D:/foo/bar/baz.c
+          // -> override C: -> D:
+          //
+          // C:/1/2/foo/bar.c
+          // C:/2/3/foo/bar.c
+          // -> override C:/1/2 -> C:2/3
+          //
+          // C:/foo/bar/baz.c
+          // D:/1/2/3.c
+          // -> override C:/foo/bar/baz.c -> D:/1/2/3.c
+          
+          //- rjf: grab src file & chosen replacement
           DF_Entity *file = df_entity_from_handle(params.entity);
           DF_Entity *replacement = df_entity_from_path(params.file_path, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-          if(!df_entity_is_nil(file) && !df_entity_is_nil(replacement))
+          
+          //- rjf: find 
+          DF_Entity *first_diff_src = file;
+          DF_Entity *first_diff_dst = replacement;
+          for(;!df_entity_is_nil(first_diff_src) && !df_entity_is_nil(first_diff_dst);)
           {
-            DF_Entity *link = df_entity_child_from_name_and_kind(file->parent, file->name, DF_EntityKind_OverrideFileLink);
+            if(!str8_match(first_diff_src->name, first_diff_dst->name, StringMatchFlag_CaseInsensitive) ||
+               first_diff_src->parent->kind != DF_EntityKind_File ||
+               first_diff_src->parent->parent->kind != DF_EntityKind_File ||
+               first_diff_dst->parent->kind != DF_EntityKind_File ||
+               first_diff_dst->parent->parent->kind != DF_EntityKind_File)
+            {
+              break;
+            }
+            first_diff_src = first_diff_src->parent;
+            first_diff_dst = first_diff_dst->parent;
+          }
+          
+          //- rjf: override first different
+          if(!df_entity_is_nil(first_diff_src) && !df_entity_is_nil(first_diff_dst))
+          {
+            DF_Entity *link = df_entity_child_from_name_and_kind(first_diff_src->parent, first_diff_src->name, DF_EntityKind_OverrideFileLink);
             if(df_entity_is_nil(link))
             {
-              link = df_entity_alloc(0, file->parent, DF_EntityKind_OverrideFileLink);
-              df_entity_equip_name(0, link, file->name);
+              link = df_entity_alloc(0, first_diff_src->parent, DF_EntityKind_OverrideFileLink);
+              df_entity_equip_name(0, link, first_diff_src->name);
             }
-            df_entity_equip_entity_handle(link, df_handle_from_entity(replacement));
+            df_entity_equip_entity_handle(link, df_handle_from_entity(first_diff_dst));
           }
         }break;
         

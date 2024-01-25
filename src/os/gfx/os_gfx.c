@@ -189,3 +189,35 @@ os_text(OS_EventList *events, OS_Handle window, U32 character)
   }
   return result;
 }
+
+internal OS_EventList
+os_event_list_copy(Arena *arena, OS_EventList *src)
+{
+  OS_EventList dst = {0};
+  for(OS_Event *s = src->first; s != 0; s = s->next)
+  {
+    OS_Event *d = push_array(arena, OS_Event, 1);
+    MemoryCopyStruct(d, s);
+    d->strings = str8_list_copy(arena, &s->strings);
+    DLLPushBack(dst.first, dst.last, d);
+    dst.count += 1;
+  }
+  return dst;
+}
+
+internal void
+os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push)
+{
+  if(dst->last && to_push->first)
+  {
+    dst->last->next = to_push->first;
+    to_push->first->prev = dst->last;
+    dst->last = to_push->last;
+    dst->count += to_push->count;
+  }
+  else if(!dst->last && to_push->first)
+  {
+    MemoryCopyStruct(dst, to_push);
+  }
+  MemoryZeroStruct(to_push);
+}

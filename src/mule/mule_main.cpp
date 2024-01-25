@@ -355,6 +355,8 @@ type_coverage_eval_tests(void){
   Has_A_Post_Forward_Reference r2 = {0};
   
   Basics &basics_ref = basics;
+  const Basics *basics_const_ptr = &basics;
+  const Basics &basics_const_ref = basics;
   
   union
   {
@@ -914,6 +916,18 @@ struct Template_Example3{
   }
 };
 
+struct SingleInheritanceBase
+{
+  int x;
+  int y;
+};
+
+struct SingleInheritanceDerived : SingleInheritanceBase
+{
+  int z;
+  int w;
+};
+
 struct Has_Members{
   int a;
   int b;
@@ -1090,6 +1104,86 @@ struct Vinheritance_Child : Vinheritance_MidLeft, Vinheritance_MidRight{
   };
 };
 
+struct Minheritance_Base{
+  int x;
+  int y;
+};
+
+struct Minheritance_MidLeft : Minheritance_Base{
+  float left;
+};
+
+struct Minheritance_MidRight : Minheritance_Base{
+  float right;
+};
+
+struct Minheritance_Child : Minheritance_MidLeft, Minheritance_MidRight{
+  char *name;
+};
+
+struct Pure
+{
+  virtual ~Pure() = default;
+  virtual void Foo() = 0;
+};
+
+struct PureChild : Pure
+{
+  virtual ~PureChild() = default;
+  virtual void Foo() {a += 1;}
+  double a = 0;
+};
+
+struct Base
+{
+  int x;
+  int y;
+  int z;
+  virtual ~Base() = default;
+  virtual void Foo() = 0;
+};
+
+struct Derived : Base
+{
+  int r;
+  int g;
+  int b;
+  int a;
+  virtual ~Derived() = default;
+  virtual void Foo() {a += 1;}
+};
+
+struct DerivedA : Base
+{
+  float a;
+  float b;
+  virtual void Foo() {a += 1;}
+  virtual ~DerivedA() = default;
+};
+
+struct DerivedB : Base
+{
+  double c;
+  double d;
+  virtual void Foo() {c += 1;}
+  virtual ~DerivedB() = default;
+};
+
+struct NonVirtualBase
+{
+  int x;
+  int y;
+  int z;
+};
+
+struct NonVirtualDerived : NonVirtualBase
+{
+  int r;
+  int g;
+  int b;
+  int a;
+};
+
 struct OverloadedMethods{
   int x;
   int cool_method(void){
@@ -1245,6 +1339,12 @@ extended_type_coverage_eval_tests(void){
     Template_Example3<void *, float> temp3_vi((void *)&temp3_if, 1.f);
     Template_Example3<int, Template_Example2<int, float>> temp3_itif(123, temp_if);
     
+    SingleInheritanceDerived sid;
+    sid.x = 123;
+    sid.y = 456;
+    sid.z = 789;
+    sid.w = 999;
+    
     Pointer_To_Member pointer_to_member = {
       &Has_Members::a, &Has_Members::c, &Has_Members::bas,
       &Has_Members::x, &Has_Members::z, &Has_Members::bas_f,
@@ -1278,6 +1378,45 @@ extended_type_coverage_eval_tests(void){
     vinheritance_child.right = 13.0f;
     vinheritance_child.x     = -1;
     vinheritance_child.y     = -1;
+    
+    Minheritance_Child minheritance_child;
+    minheritance_child.name  = "foobar";
+    minheritance_child.left  = 10.5f;
+    minheritance_child.right = 13.0f;
+    minheritance_child.Minheritance_MidLeft::x = -1;
+    minheritance_child.Minheritance_MidLeft::y = -1;
+    minheritance_child.Minheritance_MidRight::x = +1;
+    minheritance_child.Minheritance_MidRight::y = +1;
+    
+    Pure *child = new PureChild();
+    child->Foo();
+    child->Foo();
+    child->Foo();
+    delete child;
+    
+    Base *derived = new Derived();
+    derived->Foo();
+    derived->Foo();
+    derived->Foo();
+    delete derived;
+    
+    NonVirtualBase *non_virtual_derived = new NonVirtualDerived();
+    non_virtual_derived->x += 1;
+    non_virtual_derived->x += 1;
+    non_virtual_derived->x += 1;
+    
+    Base *base_array[1024] = {0};
+    for(int i = 0; i < sizeof(base_array)/sizeof(base_array[0]); i += 1)
+    {
+      if((i & 1) == 1)
+      {
+        base_array[i] = new DerivedA();
+      }
+      else
+      {
+        base_array[i] = new DerivedB();
+      }
+    }
     
     OverloadedMethods overloaded_methods;
     {
@@ -1317,7 +1456,53 @@ extended_type_coverage_eval_tests(void){
 }
 
 ////////////////////////////////
-// NOTE(allen): C Type Coverage
+//~ rjf: Templated Function Eval Tests
+
+typedef struct TemplateArg TemplateArg;
+struct TemplateArg
+{
+  int x;
+  int y;
+  int z;
+  float a;
+  float b;
+  float c;
+  char *name;
+};
+
+template<typename T> static T
+templated_factorial(T t)
+{
+  T result = t;
+  if(t > 1)
+  {
+    result *= templated_factorial<T>(t-1);
+  }
+  return result;
+}
+
+template<typename T> static T
+compute_template_arg_info(T t)
+{
+  int sum = t.x + t.y + t.z;
+  int size = sizeof(t);
+  float sum_f = t.a + t.b + t.c;
+  OutputDebugStringA(t.name);
+  return t;
+}
+
+static void
+templated_function_eval_tests(void)
+{
+  int int_factorial = templated_factorial<int>(10);
+  float float_factorial = templated_factorial<float>(10);
+  TemplateArg arg = {1, 2, 3, 4.f, 5.f, 6.f, "my template arg"};
+  compute_template_arg_info(arg);
+  int x = 0;
+}
+
+////////////////////////////////
+//~ NOTE(allen): C Type Coverage
 
 extern "C"{
 #include "mule_c.h"
@@ -1815,7 +2000,7 @@ control_flow_stepping_tests(void){
     if (i <= 1) goto done;
     if ((i&1) == 0) goto even_case;
     
-    odd_case:
+    // odd_case:
     i = 3*i + 1;
     
     even_case:
@@ -2342,6 +2527,8 @@ mule_main(int argc, char** argv){
   complicated_type_coverage_tests();
   
   extended_type_coverage_eval_tests();
+  
+  templated_function_eval_tests();
   
   c_type_coverage_eval_tests();
   

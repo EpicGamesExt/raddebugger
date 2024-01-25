@@ -198,7 +198,6 @@ struct DBGI_Shared
   // rjf: threads
   U64 parse_thread_count;
   OS_Handle *parse_threads;
-  OS_Handle evictor_thread;
 };
 
 ////////////////////////////////
@@ -253,10 +252,5 @@ internal void dbgi_p2u_push_event(DBGI_Event *event);
 internal DBGI_EventList dbgi_p2u_pop_events(Arena *arena, U64 endt_us);
 
 internal void dbgi_parse_thread_entry_point(void *p);
-
-////////////////////////////////
-//~ rjf: Evictor Thread
-
-internal void dbgi_evictor_thread_entry_point(void *p);
 
 #endif //DBGI_H

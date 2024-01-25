@@ -861,6 +861,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
             
             // init new entity
             DEMON_Entity *module = demon_ent_new(process, DEMON_EntityKind_Module, module_base);
+            module->addr_range_dim = image_info.size;
             demon_module_count += 1;
             DEMON_W32_Ext *module_ext = demon_w32_ext_alloc();
             module->ext = module_ext;
@@ -957,7 +958,9 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
             }
             
             // rjf: check if trap
-            B32 is_trap = (!first_bp && exception->ExceptionCode == DEMON_W32_EXCEPTION_BREAKPOINT);
+            B32 is_trap = (!first_bp &&
+                           (exception->ExceptionCode == DEMON_W32_EXCEPTION_BREAKPOINT ||
+                            exception->ExceptionCode == DEMON_W32_EXCEPTION_STACK_BUFFER_OVERRUN));
             
             // rjf: check if this trap is currently registered
             B32 hit_user_trap = 0;
@@ -979,7 +982,8 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
                 // TODO(rjf): x86/x64 specific check
                 // TODO(rjf): do we need to check to make sure the instruction
                 // pointer has not changed?
-                hit_explicit_trap = (instruction_byte == 0xCC);
+                hit_explicit_trap = (instruction_byte == 0xCC ||
+                                     instruction_byte == 0xCD);
               }
             }
             
@@ -1036,6 +1040,11 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
                   
                   // set event kind
                   e->kind = report_event_kind;
+                }break;
+                
+                case DEMON_W32_EXCEPTION_STACK_BUFFER_OVERRUN:
+                {
+                  e->kind = DEMON_EventKind_Trap;
                 }break;
                 
                 case DEMON_W32_EXCEPTION_SINGLE_STEP:
@@ -1330,10 +1339,25 @@ demon_os_launch_process(OS_LaunchOptions *options){
   AllocConsole();
   if (CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, access_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str,
                      &startup_info, &process_info)){
-    CloseHandle(process_info.hProcess);
-    CloseHandle(process_info.hThread);
-    result = process_info.dwProcessId;
-    demon_w32_new_process_pending = 1;
+    // check if we are 32-bit app, and just close it immediately
+    BOOL is_wow = 0;
+    IsWow64Process(process_info.hProcess, &is_wow);
+    if ( is_wow ){
+      MessageBox(0,"Sorry, The RAD Debugger only debugs 64-bit applications currently.","Process error",MB_OK|MB_ICONSTOP);
+      DebugActiveProcessStop(process_info.dwProcessId);
+      TerminateProcess(process_info.hProcess,0xffffffff);
+      CloseHandle(process_info.hProcess);
+      CloseHandle(process_info.hThread);
+    }
+    else{
+      CloseHandle(process_info.hProcess);
+      CloseHandle(process_info.hThread);
+      result = process_info.dwProcessId;
+      demon_w32_new_process_pending = 1;
+    }
+  }
+  else{
+    MessageBox(0,"Error starting process.","Process error",MB_OK|MB_ICONSTOP);
   }
   FreeConsole();
   

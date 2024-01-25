@@ -6,7 +6,6 @@
 
 #pragma comment(lib, "user32")
 #pragma comment(lib, "gdi32")
-#pragma comment(lib, "winmm")
 
 ////////////////////////////////
 //~ rjf: Windows

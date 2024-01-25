@@ -31,6 +31,21 @@ struct TG_Key
   U64 u64[1]; // ext -> unique id; cons -> idx; reg -> code
 };
 
+typedef struct TG_KeyNode TG_KeyNode;
+struct TG_KeyNode
+{
+  TG_KeyNode *next;
+  TG_Key v;
+};
+
+typedef struct TG_KeyList TG_KeyList;
+struct TG_KeyList
+{
+  TG_KeyNode *first;
+  TG_KeyNode *last;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Graph Types
 
@@ -102,6 +117,7 @@ struct TG_Member
   TG_Key type_key;
   String8 name;
   U64 off;
+  TG_KeyList inheritance_key_chain;
 };
 
 typedef struct TG_MemberNode TG_MemberNode;
@@ -179,6 +195,9 @@ thread_static Arena *tg_build_arena = 0;
 //~ rjf: Basic Helpers
 
 internal U64 tg_hash_from_string(U64 seed, String8 string);
+internal int tg_qsort_compare_members_offset(TG_Member *a, TG_Member *b);
+internal void tg_key_list_push(Arena *arena, TG_KeyList *list, TG_Key key);
+internal TG_KeyList tg_key_list_copy(Arena *arena, TG_KeyList *src);
 
 ////////////////////////////////
 //~ rjf: RADDBG <-> TG Enum Conversions
@@ -207,6 +226,7 @@ internal TG_Key tg_cons_type_make(TG_Graph *graph, TG_Kind kind, TG_Key direct_t
 
 internal TG_Type *tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
+internal TG_Key tg_unwrapped_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_owner_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_ptee_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Key tg_unwrapped_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);

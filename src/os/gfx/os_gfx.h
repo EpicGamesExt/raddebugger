@@ -63,6 +63,7 @@ struct OS_Event
 {
   OS_Event *next;
   OS_Event *prev;
+  U64 timestamp_us;
   OS_Handle window;
   OS_EventKind kind;
   OS_EventFlags flags;
@@ -71,6 +72,7 @@ struct OS_Event
   B32 right_sided;
   U32 character;
   U32 repeat_count;
+  Vec2F32 pos;
   Vec2F32 delta;
   String8List strings;
 };
@@ -92,6 +94,8 @@ internal void os_eat_event(OS_EventList *events, OS_Event *event);
 internal B32  os_key_press(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key);
 internal B32  os_key_release(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key);
 internal B32  os_text(OS_EventList *events, OS_Handle window, U32 character);
+internal OS_EventList os_event_list_copy(Arena *arena, OS_EventList *src);
+internal void os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
@@ -152,7 +156,6 @@ internal void           os_set_cursor(OS_Cursor cursor);
 internal F32            os_double_click_time(void);
 internal F32            os_caret_blink_time(void);
 internal F32            os_default_refresh_rate(void);
-internal B32            os_granular_sleep_enabled(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Native Messages & Panics (Implemented Per-OS)

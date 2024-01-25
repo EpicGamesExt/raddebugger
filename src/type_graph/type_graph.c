@@ -15,6 +15,41 @@ tg_hash_from_string(U64 seed, String8 string)
   return result;
 }
 
+internal int
+tg_qsort_compare_members_offset(TG_Member *a, TG_Member *b)
+{
+  int result = 0;
+  if(a->off < b->off)
+  {
+    result = -1;
+  }
+  else if(a->off > b->off)
+  {
+    result = +1;
+  }
+  return result;
+}
+
+internal void
+tg_key_list_push(Arena *arena, TG_KeyList *list, TG_Key key)
+{
+  TG_KeyNode *n = push_array(arena, TG_KeyNode, 1);
+  n->v = key;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal TG_KeyList
+tg_key_list_copy(Arena *arena, TG_KeyList *src)
+{
+  TG_KeyList dst = {0};
+  for(TG_KeyNode *n = src->first; n != 0; n = n->next)
+  {
+    tg_key_list_push(arena, &dst, n->v);
+  }
+  return dst;
+}
+
 ////////////////////////////////
 //~ rjf: RADDBG <-> TG Enum Conversions
 
@@ -742,7 +777,7 @@ tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg
         
         // rjf: commit members
         type->count = members.count;
-        type->members = push_array_no_zero(arena, TG_Member, 1);
+        type->members = push_array_no_zero(arena, TG_Member, members.count);
         U64 idx = 0;
         for(TG_MemberNode *n = members.first; n != 0; n = n->next, idx += 1)
         {
@@ -773,6 +808,15 @@ tg_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key
     }break;
   }
   return result;
+}
+
+internal TG_Key
+tg_unwrapped_direct_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
+{
+  key = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, key);
+  key = tg_direct_from_graph_raddbg_key(graph, rdbg, key);
+  key = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, key);
+  return key;
 }
 
 internal TG_Key
@@ -912,36 +956,73 @@ tg_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *r
 internal TG_MemberArray
 tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
 {
-  TG_MemberArray result = {0};
   Temp scratch = scratch_begin(&arena, 1);
+  TG_MemberList members_list = {0};
+  B32 members_need_offset_sort = 0;
   {
-    TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, key);
-    if(type->members != 0)
+    TG_Type *root_type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, key);
+    typedef struct Task Task;
+    struct Task
     {
-      U64 data_member_count = 0;
-      for(U64 member_idx = 0; member_idx < type->count; member_idx += 1)
+      Task *next;
+      U64 base_off;
+      TG_KeyList inheritance_chain;
+      TG_Key type_key;
+      TG_Type *type;
+    };
+    Task start_task = {0, 0, {0}, key, root_type};
+    Task *first_task = &start_task;
+    Task *last_task = &start_task;
+    for(Task *task = first_task; task != 0; task = task->next)
+    {
+      TG_Type *type = task->type;
+      if(type->members != 0)
       {
-        if(type->members[member_idx].kind == TG_MemberKind_DataField)
+        for(U64 member_idx = 0; member_idx < type->count; member_idx += 1)
         {
-          data_member_count += 1;
-        }
-      }
-      result.count = data_member_count;
-      result.v = push_array_no_zero(arena, TG_Member, result.count);
-      U64 idx = 0;
-      for(U64 member_idx = 0; member_idx < type->count; member_idx += 1)
-      {
-        if(type->members[member_idx].kind == TG_MemberKind_DataField)
-        {
-          MemoryCopyStruct(&result.v[idx], &type->members[member_idx]);
-          result.v[idx].name = push_str8_copy(arena, result.v[idx].name);
-          idx += 1;
+          if(type->members[member_idx].kind == TG_MemberKind_DataField)
+          {
+            TG_MemberNode *n = push_array(scratch.arena, TG_MemberNode, 1);
+            MemoryCopyStruct(&n->v, &type->members[member_idx]);
+            n->v.off += task->base_off;
+            n->v.inheritance_key_chain = task->inheritance_chain;
+            SLLQueuePush(members_list.first, members_list.last, n);
+            members_list.count += 1;
+          }
+          else if(type->members[member_idx].kind == TG_MemberKind_Base)
+          {
+            Task *t = push_array(scratch.arena, Task, 1);
+            t->base_off = type->members[member_idx].off + task->base_off;
+            t->inheritance_chain = tg_key_list_copy(scratch.arena, &task->inheritance_chain);
+            tg_key_list_push(scratch.arena, &t->inheritance_chain, type->members[member_idx].type_key);
+            t->type_key = type->members[member_idx].type_key;
+            t->type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, type->members[member_idx].type_key);
+            SLLQueuePush(first_task, last_task, t);
+            members_need_offset_sort = 1;
+          }
         }
       }
     }
   }
+  TG_MemberArray members = {0};
+  {
+    members.count = members_list.count;
+    members.v = push_array(arena, TG_Member, members.count);
+    U64 idx = 0;
+    for(TG_MemberNode *n = members_list.first; n != 0; n = n->next)
+    {
+      MemoryCopyStruct(&members.v[idx], &n->v);
+      members.v[idx].name = push_str8_copy(arena, members.v[idx].name);
+      members.v[idx].inheritance_key_chain = tg_key_list_copy(arena, &members.v[idx].inheritance_key_chain);
+      idx += 1;
+    }
+  }
+  if(members_need_offset_sort)
+  {
+    qsort(members.v, members.count, sizeof(TG_Member), (int (*)(const void *, const void *))tg_qsort_compare_members_offset);
+  }
   scratch_end(scratch);
-  return result;
+  return members;
 }
 
 internal void

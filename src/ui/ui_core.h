@@ -32,6 +32,19 @@ struct UI_IconInfo
 };
 
 ////////////////////////////////
+//~ rjf: Focus Types
+
+typedef enum UI_FocusKind
+{
+  UI_FocusKind_Null,
+  UI_FocusKind_Off,
+  UI_FocusKind_On,
+  UI_FocusKind_Root,
+  UI_FocusKind_COUNT
+}
+UI_FocusKind;
+
+////////////////////////////////
 //~ rjf: Navigation Types
 
 typedef enum UI_NavDeltaUnit
@@ -412,14 +425,9 @@ struct UI_State
   F32 ctx_menu_open_t;
   UI_Key ctx_menu_key;
   
-  //- rjf: build phase focus masks
-  B32 focus_hot_is_set;
-  B32 focus_hot_is_possible;
-  B32 focus_active_is_set;
-  B32 focus_active_is_possible;
-  
   //- rjf: build phase stacks
-  UI_StackDecls;
+  UI_DeclStackNils;
+  UI_DeclStacks;
 };
 
 ////////////////////////////////
@@ -558,12 +566,8 @@ internal B32               ui_ctx_menu_is_open(UI_Key key);
 internal B32               ui_any_ctx_menu_is_open(void);
 
 //- rjf: focus tree coloring
-internal void              ui_set_focus_active(B32 check);
-internal void              ui_unset_focus_active(void);
-internal void              ui_set_focus_hot(B32 check);
-internal void              ui_unset_focus_hot(void);
-internal B32               ui_is_focus_active(void);
 internal B32               ui_is_focus_hot(void);
+internal B32               ui_is_focus_active(void);
 
 //- rjf: implicit auto-managed tree-based focus state
 internal B32               ui_is_key_auto_focus_active(UI_Key key);
@@ -601,58 +605,6 @@ internal UI_Signal ui_signal_from_box(UI_Box *box);
 //~ rjf: Stacks
 
 //- rjf: base
-internal UI_Box *                   ui_push_parent(UI_Box * v);
-internal Axis2                      ui_push_child_layout_axis(Axis2 v);
-internal F32                        ui_push_fixed_x(F32 v);
-internal F32                        ui_push_fixed_y(F32 v);
-internal F32                        ui_push_fixed_width(F32 v);
-internal F32                        ui_push_fixed_height(F32 v);
-internal UI_Size                    ui_push_pref_width(UI_Size v);
-internal UI_Size                    ui_push_pref_height(UI_Size v);
-internal UI_BoxFlags                ui_push_flags(UI_BoxFlags v);
-internal U32                        ui_push_fastpath_codepoint(U32 v);
-internal Vec4F32                    ui_push_background_color(Vec4F32 v);
-internal Vec4F32                    ui_push_text_color(Vec4F32 v);
-internal Vec4F32                    ui_push_border_color(Vec4F32 v);
-internal Vec4F32                    ui_push_overlay_color(Vec4F32 v);
-internal Vec4F32                    ui_push_text_select_color(Vec4F32 v);
-internal Vec4F32                    ui_push_text_cursor_color(Vec4F32 v);
-internal OS_Cursor                  ui_push_hover_cursor(OS_Cursor v);
-internal F_Tag                      ui_push_font(F_Tag v);
-internal F32                        ui_push_font_size(F32 v);
-internal F32                        ui_push_corner_radius_00(F32 v);
-internal F32                        ui_push_corner_radius_01(F32 v);
-internal F32                        ui_push_corner_radius_10(F32 v);
-internal F32                        ui_push_corner_radius_11(F32 v);
-internal F32                        ui_push_blur_size(F32 v);
-internal F32                        ui_push_text_padding(F32 v);
-internal UI_TextAlign               ui_push_text_alignment(UI_TextAlign v);
-internal UI_Box *                   ui_pop_parent(void);
-internal Axis2                      ui_pop_child_layout_axis(void);
-internal F32                        ui_pop_fixed_x(void);
-internal F32                        ui_pop_fixed_y(void);
-internal F32                        ui_pop_fixed_width(void);
-internal F32                        ui_pop_fixed_height(void);
-internal UI_Size                    ui_pop_pref_width(void);
-internal UI_Size                    ui_pop_pref_height(void);
-internal UI_BoxFlags                ui_pop_flags(void);
-internal U32                        ui_pop_fastpath_codepoint(void);
-internal Vec4F32                    ui_pop_background_color(void);
-internal Vec4F32                    ui_pop_text_color(void);
-internal Vec4F32                    ui_pop_border_color(void);
-internal Vec4F32                    ui_pop_overlay_color(void);
-internal Vec4F32                    ui_pop_text_select_color(void);
-internal Vec4F32                    ui_pop_text_cursor_color(void);
-internal OS_Cursor                  ui_pop_hover_cursor(void);
-internal F_Tag                      ui_pop_font(void);
-internal F32                        ui_pop_font_size(void);
-internal F32                        ui_pop_corner_radius_00(void);
-internal F32                        ui_pop_corner_radius_01(void);
-internal F32                        ui_pop_corner_radius_10(void);
-internal F32                        ui_pop_corner_radius_11(void);
-internal F32                        ui_pop_blur_size(void);
-internal F32                        ui_pop_text_padding(void);
-internal UI_TextAlign               ui_pop_text_alignment(void);
 internal UI_Box *                   ui_top_parent(void);
 internal Axis2                      ui_top_child_layout_axis(void);
 internal F32                        ui_top_fixed_x(void);
@@ -662,6 +614,8 @@ internal F32                        ui_top_fixed_height(void);
 internal UI_Size                    ui_top_pref_width(void);
 internal UI_Size                    ui_top_pref_height(void);
 internal UI_BoxFlags                ui_top_flags(void);
+internal UI_FocusKind               ui_top_focus_hot(void);
+internal UI_FocusKind               ui_top_focus_active(void);
 internal U32                        ui_top_fastpath_codepoint(void);
 internal Vec4F32                    ui_top_background_color(void);
 internal Vec4F32                    ui_top_text_color(void);
@@ -688,6 +642,8 @@ internal F32                        ui_bottom_fixed_height(void);
 internal UI_Size                    ui_bottom_pref_width(void);
 internal UI_Size                    ui_bottom_pref_height(void);
 internal UI_BoxFlags                ui_bottom_flags(void);
+internal UI_FocusKind               ui_bottom_focus_hot(void);
+internal UI_FocusKind               ui_bottom_focus_active(void);
 internal U32                        ui_bottom_fastpath_codepoint(void);
 internal Vec4F32                    ui_bottom_background_color(void);
 internal Vec4F32                    ui_bottom_text_color(void);
@@ -705,6 +661,62 @@ internal F32                        ui_bottom_corner_radius_11(void);
 internal F32                        ui_bottom_blur_size(void);
 internal F32                        ui_bottom_text_padding(void);
 internal UI_TextAlign               ui_bottom_text_alignment(void);
+internal UI_Box *                   ui_push_parent(UI_Box * v);
+internal Axis2                      ui_push_child_layout_axis(Axis2 v);
+internal F32                        ui_push_fixed_x(F32 v);
+internal F32                        ui_push_fixed_y(F32 v);
+internal F32                        ui_push_fixed_width(F32 v);
+internal F32                        ui_push_fixed_height(F32 v);
+internal UI_Size                    ui_push_pref_width(UI_Size v);
+internal UI_Size                    ui_push_pref_height(UI_Size v);
+internal UI_BoxFlags                ui_push_flags(UI_BoxFlags v);
+internal UI_FocusKind               ui_push_focus_hot(UI_FocusKind v);
+internal UI_FocusKind               ui_push_focus_active(UI_FocusKind v);
+internal U32                        ui_push_fastpath_codepoint(U32 v);
+internal Vec4F32                    ui_push_background_color(Vec4F32 v);
+internal Vec4F32                    ui_push_text_color(Vec4F32 v);
+internal Vec4F32                    ui_push_border_color(Vec4F32 v);
+internal Vec4F32                    ui_push_overlay_color(Vec4F32 v);
+internal Vec4F32                    ui_push_text_select_color(Vec4F32 v);
+internal Vec4F32                    ui_push_text_cursor_color(Vec4F32 v);
+internal OS_Cursor                  ui_push_hover_cursor(OS_Cursor v);
+internal F_Tag                      ui_push_font(F_Tag v);
+internal F32                        ui_push_font_size(F32 v);
+internal F32                        ui_push_corner_radius_00(F32 v);
+internal F32                        ui_push_corner_radius_01(F32 v);
+internal F32                        ui_push_corner_radius_10(F32 v);
+internal F32                        ui_push_corner_radius_11(F32 v);
+internal F32                        ui_push_blur_size(F32 v);
+internal F32                        ui_push_text_padding(F32 v);
+internal UI_TextAlign               ui_push_text_alignment(UI_TextAlign v);
+internal UI_Box *                   ui_pop_parent(void);
+internal Axis2                      ui_pop_child_layout_axis(void);
+internal F32                        ui_pop_fixed_x(void);
+internal F32                        ui_pop_fixed_y(void);
+internal F32                        ui_pop_fixed_width(void);
+internal F32                        ui_pop_fixed_height(void);
+internal UI_Size                    ui_pop_pref_width(void);
+internal UI_Size                    ui_pop_pref_height(void);
+internal UI_BoxFlags                ui_pop_flags(void);
+internal UI_FocusKind               ui_pop_focus_hot(void);
+internal UI_FocusKind               ui_pop_focus_active(void);
+internal U32                        ui_pop_fastpath_codepoint(void);
+internal Vec4F32                    ui_pop_background_color(void);
+internal Vec4F32                    ui_pop_text_color(void);
+internal Vec4F32                    ui_pop_border_color(void);
+internal Vec4F32                    ui_pop_overlay_color(void);
+internal Vec4F32                    ui_pop_text_select_color(void);
+internal Vec4F32                    ui_pop_text_cursor_color(void);
+internal OS_Cursor                  ui_pop_hover_cursor(void);
+internal F_Tag                      ui_pop_font(void);
+internal F32                        ui_pop_font_size(void);
+internal F32                        ui_pop_corner_radius_00(void);
+internal F32                        ui_pop_corner_radius_01(void);
+internal F32                        ui_pop_corner_radius_10(void);
+internal F32                        ui_pop_corner_radius_11(void);
+internal F32                        ui_pop_blur_size(void);
+internal F32                        ui_pop_text_padding(void);
+internal UI_TextAlign               ui_pop_text_alignment(void);
 internal UI_Box *                   ui_set_next_parent(UI_Box * v);
 internal Axis2                      ui_set_next_child_layout_axis(Axis2 v);
 internal F32                        ui_set_next_fixed_x(F32 v);
@@ -714,6 +726,8 @@ internal F32                        ui_set_next_fixed_height(F32 v);
 internal UI_Size                    ui_set_next_pref_width(UI_Size v);
 internal UI_Size                    ui_set_next_pref_height(UI_Size v);
 internal UI_BoxFlags                ui_set_next_flags(UI_BoxFlags v);
+internal UI_FocusKind               ui_set_next_focus_hot(UI_FocusKind v);
+internal UI_FocusKind               ui_set_next_focus_active(UI_FocusKind v);
 internal U32                        ui_set_next_fastpath_codepoint(U32 v);
 internal Vec4F32                    ui_set_next_background_color(Vec4F32 v);
 internal Vec4F32                    ui_set_next_text_color(Vec4F32 v);
@@ -745,32 +759,34 @@ internal void     ui_pop_corner_radius(void);
 //~ rjf: Macro Loop Wrappers
 
 //- rjf: stacks (base)
-#define UI_Parent(v)                DeferLoop(ui_push_parent(v), ui_pop_parent())
-#define UI_ChildLayoutAxis(v)       DeferLoop(ui_push_child_layout_axis(v), ui_pop_child_layout_axis())
-#define UI_FixedX(v)                DeferLoop(ui_push_fixed_x(v), ui_pop_fixed_x())
-#define UI_FixedY(v)                DeferLoop(ui_push_fixed_y(v), ui_pop_fixed_y())
-#define UI_FixedWidth(v)            DeferLoop(ui_push_fixed_width(v), ui_pop_fixed_width())
-#define UI_FixedHeight(v)           DeferLoop(ui_push_fixed_height(v), ui_pop_fixed_height())
-#define UI_PrefWidth(v)             DeferLoop(ui_push_pref_width(v), ui_pop_pref_width())
-#define UI_PrefHeight(v)            DeferLoop(ui_push_pref_height(v), ui_pop_pref_height())
-#define UI_Flags(v)                 DeferLoop(ui_push_flags(v), ui_pop_flags())
-#define UI_FastpathCodepoint(v)     DeferLoop(ui_push_fastpath_codepoint(v), ui_pop_fastpath_codepoint())
-#define UI_BackgroundColor(v)       DeferLoop(ui_push_background_color(v), ui_pop_background_color())
-#define UI_TextColor(v)             DeferLoop(ui_push_text_color(v), ui_pop_text_color())
-#define UI_BorderColor(v)           DeferLoop(ui_push_border_color(v), ui_pop_border_color())
-#define UI_OverlayColor(v)          DeferLoop(ui_push_overlay_color(v), ui_pop_overlay_color())
-#define UI_TextSelectColor(v)       DeferLoop(ui_push_text_select_color(v), ui_pop_text_select_color())
-#define UI_TextCursorColor(v)       DeferLoop(ui_push_text_cursor_color(v), ui_pop_text_cursor_color())
-#define UI_HoverCursor(v)           DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
-#define UI_Font(v)                  DeferLoop(ui_push_font(v), ui_pop_font())
-#define UI_FontSize(v)              DeferLoop(ui_push_font_size(v), ui_pop_font_size())
-#define UI_CornerRadius00(v)        DeferLoop(ui_push_corner_radius_00(v), ui_pop_corner_radius_00())
-#define UI_CornerRadius01(v)        DeferLoop(ui_push_corner_radius_01(v), ui_pop_corner_radius_01())
-#define UI_CornerRadius10(v)        DeferLoop(ui_push_corner_radius_10(v), ui_pop_corner_radius_10())
-#define UI_CornerRadius11(v)        DeferLoop(ui_push_corner_radius_11(v), ui_pop_corner_radius_11())
-#define UI_BlurSize(v)              DeferLoop(ui_push_blur_size(v), ui_pop_blur_size())
-#define UI_TextPadding(v)           DeferLoop(ui_push_text_padding(v), ui_pop_text_padding())
-#define UI_TextAlignment(v)         DeferLoop(ui_push_text_alignment(v), ui_pop_text_alignment())
+#define UI_Parent(v) DeferLoop(ui_push_parent(v), ui_pop_parent())
+#define UI_ChildLayoutAxis(v) DeferLoop(ui_push_child_layout_axis(v), ui_pop_child_layout_axis())
+#define UI_FixedX(v) DeferLoop(ui_push_fixed_x(v), ui_pop_fixed_x())
+#define UI_FixedY(v) DeferLoop(ui_push_fixed_y(v), ui_pop_fixed_y())
+#define UI_FixedWidth(v) DeferLoop(ui_push_fixed_width(v), ui_pop_fixed_width())
+#define UI_FixedHeight(v) DeferLoop(ui_push_fixed_height(v), ui_pop_fixed_height())
+#define UI_PrefWidth(v) DeferLoop(ui_push_pref_width(v), ui_pop_pref_width())
+#define UI_PrefHeight(v) DeferLoop(ui_push_pref_height(v), ui_pop_pref_height())
+#define UI_Flags(v) DeferLoop(ui_push_flags(v), ui_pop_flags())
+#define UI_FocusHot(v) DeferLoop(ui_push_focus_hot(v), ui_pop_focus_hot())
+#define UI_FocusActive(v) DeferLoop(ui_push_focus_active(v), ui_pop_focus_active())
+#define UI_FastpathCodepoint(v) DeferLoop(ui_push_fastpath_codepoint(v), ui_pop_fastpath_codepoint())
+#define UI_BackgroundColor(v) DeferLoop(ui_push_background_color(v), ui_pop_background_color())
+#define UI_TextColor(v) DeferLoop(ui_push_text_color(v), ui_pop_text_color())
+#define UI_BorderColor(v) DeferLoop(ui_push_border_color(v), ui_pop_border_color())
+#define UI_OverlayColor(v) DeferLoop(ui_push_overlay_color(v), ui_pop_overlay_color())
+#define UI_TextSelectColor(v) DeferLoop(ui_push_text_select_color(v), ui_pop_text_select_color())
+#define UI_TextCursorColor(v) DeferLoop(ui_push_text_cursor_color(v), ui_pop_text_cursor_color())
+#define UI_HoverCursor(v) DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
+#define UI_Font(v) DeferLoop(ui_push_font(v), ui_pop_font())
+#define UI_FontSize(v) DeferLoop(ui_push_font_size(v), ui_pop_font_size())
+#define UI_CornerRadius00(v) DeferLoop(ui_push_corner_radius_00(v), ui_pop_corner_radius_00())
+#define UI_CornerRadius01(v) DeferLoop(ui_push_corner_radius_01(v), ui_pop_corner_radius_01())
+#define UI_CornerRadius10(v) DeferLoop(ui_push_corner_radius_10(v), ui_pop_corner_radius_10())
+#define UI_CornerRadius11(v) DeferLoop(ui_push_corner_radius_11(v), ui_pop_corner_radius_11())
+#define UI_BlurSize(v) DeferLoop(ui_push_blur_size(v), ui_pop_blur_size())
+#define UI_TextPadding(v) DeferLoop(ui_push_text_padding(v), ui_pop_text_padding())
+#define UI_TextAlignment(v) DeferLoop(ui_push_text_alignment(v), ui_pop_text_alignment())
 
 //- rjf: stacks (compositions)
 #define UI_WidthFill         UI_PrefWidth(ui_pct(1.f, 0.f))
@@ -778,6 +794,7 @@ internal void     ui_pop_corner_radius(void);
 #define UI_Rect(r)           DeferLoop(ui_push_rect(r), ui_pop_rect())
 #define UI_PrefSize(axis, v) DeferLoop(ui_push_pref_size((axis), (v)), ui_pop_pref_size(axis))
 #define UI_CornerRadius(v)   DeferLoop(ui_push_corner_radius(v), ui_pop_corner_radius())
+#define UI_Focus(kind)       DeferLoop((ui_push_focus_hot(kind), ui_push_focus_active(kind)), (ui_pop_focus_hot(), ui_pop_focus_active()))
 
 //- rjf: tooltip
 #define UI_TooltipBase DeferLoop(ui_tooltip_begin_base(), ui_tooltip_end_base())
@@ -785,10 +802,5 @@ internal void     ui_pop_corner_radius(void);
 
 //- rjf: context menu
 #define UI_CtxMenu(key) DeferLoopChecked(ui_begin_ctx_menu(key), ui_end_ctx_menu())
-
-//- rjf: focus
-#define UI_FocusHot(is_focused) DeferLoop(ui_set_focus_hot(is_focused), ui_unset_focus_hot())
-#define UI_FocusActive(is_focused) DeferLoop(ui_set_focus_active(is_focused), ui_unset_focus_hot())
-#define UI_Focus(is_focused) UI_FocusHot(is_focused) UI_FocusActive(is_focused)
 
 #endif // UI_H
