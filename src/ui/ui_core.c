@@ -2443,8 +2443,10 @@ ui_signal_from_box(UI_Box *box)
   B32 keyboard_click = 0;
   if(!disabled && is_focused && box->flags & UI_BoxFlag_KeyboardClickable)
   {
-    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return) != 0 ||
-       os_key_press(ui_events(), ui_window(), 0, OS_Key_Space) != 0)
+    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return) != 0)
+      // TODO(rjf): need to handle case where this would conflict with typing.
+      // if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return) != 0 ||
+      // os_key_press(ui_events(), ui_window(), 0, OS_Key_Space) != 0)
     {
       keyboard_click = 1;
       result.clicked = 1;
