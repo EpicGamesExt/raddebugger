@@ -821,7 +821,6 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
             {
               page_found = 1;
               MemoryCopy((U8*)read_out + (page_vaddr-page_range.min), page_data.str, KB(4));
-              result.fresh = result.fresh || !!(node4->page_fresh_flags[lvl5_idx/64] & (1ull<<(lvl5_idx%64)));
             }
             else
             {
@@ -899,16 +898,6 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
             };
             U128 page_key = hs_hash_from_data(str8((U8 *)page_key_data, sizeof(page_key_data)));
             U128 page_hash = hs_submit_data(page_key,  &page_arena, str8((U8 *)page_base, KB(4)));
-            if(!u128_match(node4->page_hashes[lvl5_idx], u128_zero()) &&
-               !u128_match(node4->page_hashes[lvl5_idx], page_hash))
-            {
-              node4->page_fresh_flags[lvl5_idx/64] |=  (1ull<<(lvl5_idx%64));
-            }
-            else
-            {
-              node4->page_fresh_flags[lvl5_idx/64] &= ~(1ull<<(lvl5_idx%64));
-            }
-            result.fresh = result.fresh || !!(node4->page_fresh_flags[lvl5_idx/64] & (1ull<<(lvl5_idx%64)));
             node4->page_hashes[lvl5_idx] = page_hash;
           }
           else

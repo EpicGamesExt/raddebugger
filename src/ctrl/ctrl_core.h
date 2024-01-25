@@ -333,8 +333,6 @@ struct CTRL_ProcessMemoryCacheNode4
 {
   U64 page_memgen_idxs[256];
   U128 page_hashes[256];
-  U128 last_page_hashes[256];
-  U64 page_fresh_flags[4];
 };
 
 typedef struct CTRL_ProcessMemoryCacheNode3 CTRL_ProcessMemoryCacheNode3;

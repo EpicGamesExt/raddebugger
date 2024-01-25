@@ -139,7 +139,7 @@ internal void hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *no
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal U128 hs_hash_from_key(U128 key);
+internal U128 hs_hash_from_key(U128 key, U64 rewind_count);
 internal String8 hs_data_from_hash(HS_Scope *scope, U128 hash);
 
 ////////////////////////////////

@@ -243,7 +243,7 @@ hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node)
 //~ rjf: Cache Lookup
 
 internal U128
-hs_hash_from_key(U128 key)
+hs_hash_from_key(U128 key, U64 rewind_count)
 {
   U128 result = {0};
   U64 key_slot_idx = key.u64[1]%hs_shared->key_slots_count;
@@ -254,9 +254,9 @@ hs_hash_from_key(U128 key)
   {
     for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
     {
-      if(u128_match(n->key, key) && n->hash_history_gen > 0)
+      if(u128_match(n->key, key) && n->hash_history_gen > 0 && n->hash_history_gen-1 >= rewind_count)
       {
-        result = n->hash_history[(n->hash_history_gen-1)%ArrayCount(n->hash_history)];
+        result = n->hash_history[(n->hash_history_gen-1-rewind_count)%ArrayCount(n->hash_history)];
         break;
       }
     }
