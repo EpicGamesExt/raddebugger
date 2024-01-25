@@ -367,8 +367,8 @@ typedef struct CTRL_ProcessMemorySlice CTRL_ProcessMemorySlice;
 struct CTRL_ProcessMemorySlice
 {
   String8 data;
-  U64 *byte_good_flags;
-  B32 fresh;
+  U64 *byte_bad_flags;
+  U64 *byte_changed_flags;
 };
 
 ////////////////////////////////

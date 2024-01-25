@@ -142,9 +142,9 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
     }
     if(key_node)
     {
-      if(key_node->hash_history_gen+1 >= ArrayCount(key_node->hash_history))
+      if(key_node->hash_history_gen >= ArrayCount(key_node->hash_history))
       {
-        key_expired_hash = key_node->hash_history[(key_node->hash_history_gen-1)%ArrayCount(key_node->hash_history)];
+        key_expired_hash = key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)];
       }
       key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)] = hash;
       key_node->hash_history_gen += 1;

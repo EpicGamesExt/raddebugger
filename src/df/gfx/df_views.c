@@ -976,6 +976,27 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
         DF_EvalHistoryCacheNode *history_cache_node = df_eval_history_cache_node_from_key(eval_view, row->key);
         
+        //- rjf: determine if row's data is fresh
+        B32 row_is_fresh = 0;
+        switch(row->eval.mode)
+        {
+          default:{}break;
+          case EVAL_EvalMode_Addr:
+          {
+            U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+            Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
+            CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng);
+            for(U64 idx = 0; idx < (size+63)/64; idx += 1)
+            {
+              if(slice.byte_changed_flags[idx] != 0)
+              {
+                row_is_fresh = 1;
+                break;
+              }
+            }
+          }break;
+        }
+        
         //- rjf: store root edit commit info
         if(row_selected)
         {
@@ -1032,7 +1053,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         //- rjf: build normal row
         if(!(row->flags & DF_EvalVizRowFlag_Canvas))
         {
-          ui_set_next_flags(disabled_flags);
+          ui_set_next_flags(disabled_flags|(row_is_fresh*UI_BoxFlag_DrawOverlay));
+          if(row_is_fresh)
+          {
+            ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
+          }
           UI_NamedTableVectorF("row_%I64x", row_hash)
           {
             //- rjf: expression

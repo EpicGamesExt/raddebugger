@@ -1,17 +1,16 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-int Foo(int x, int y)
-{
-  return x + y;
-}
-
 int main(void)
 {
+  int x = 0;
+  int y = 0;
+  int z = 0;
+  for(;;)
   {
-    int x = 23;
-    int y = 45;
-    Foo(x, y);
+    x += 1;
+    y += 1;
+    z += 1;
   }
   return 0;
 }

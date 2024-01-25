@@ -918,33 +918,32 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     U128 *page_hashes = push_array(scratch.arena, U128, page_count);
     U128 *page_last_hashes = push_array(scratch.arena, U128, page_count);
     
-    //- rjf: gather hashes for each page
-    for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
-    {
-      U64 page_base_vaddr = page_range.min + page_idx*page_size;
-      U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
-      page_hashes[page_idx] = page_hash;
-    }
-    
-    //- rjf: gather last hashes for each page
+    //- rjf: gather hashes & last-hashes for each page
     for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
     {
       U64 page_base_vaddr = page_range.min + page_idx*page_size;
       U128 page_key = ctrl_hash_store_key_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
+      U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
       U128 page_last_hash = hs_hash_from_key(page_key, 1);
+      page_hashes[page_idx] = page_hash;
       page_last_hashes[page_idx] = page_last_hash;
     }
     
-    //- rjf: setup output buffer
+    //- rjf: setup output buffers
     void *read_out = push_array(arena, U8, dim_1u64(range));
+    U64 *byte_bad_flags = push_array(arena, U64, (dim_1u64(range)+63)/64);
+    U64 *byte_changed_flags = push_array(arena, U64, (dim_1u64(range)+63)/64);
     
     //- rjf: iterate pages, fill output
     {
       U64 write_off = 0;
       for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
       {
+        // rjf: read data for this page
         String8 data = hs_data_from_hash(scope, page_hashes[page_idx]);
         Rng1U64 data_vaddr_range = r1u64(page_range.min + page_idx*page_size, page_range.min + page_idx*page_size+data.size);
+        
+        // rjf: skip/chop bytes which are irrelevant for the actual requested read
         String8 in_range_data = data;
         if(page_idx == page_count-1 && data_vaddr_range.max > range.max)
         {
@@ -954,11 +953,42 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
         {
           in_range_data = str8_skip(in_range_data, range.min-data_vaddr_range.min);
         }
+        
+        // rjf: write this chunk
         MemoryCopy((U8*)read_out+write_off, in_range_data.str, in_range_data.size);
+        
+        // rjf: if this page's hash & last_hash don't match, diff each byte &
+        // fill out changed flags
+        if(!u128_match(page_hashes[page_idx], page_last_hashes[page_idx]))
+        {
+          String8 last_data = hs_data_from_hash(scope, page_last_hashes[page_idx]);
+          String8 in_range_last_data = last_data;
+          if(page_idx == page_count-1 && data_vaddr_range.max > range.max)
+          {
+            in_range_last_data = str8_chop(in_range_last_data, data_vaddr_range.max-range.max);
+          }
+          if(page_idx == 0 && range.min > data_vaddr_range.min)
+          {
+            in_range_last_data = str8_skip(in_range_last_data, range.min-data_vaddr_range.min);
+          }
+          for(U64 idx = 0; idx < in_range_data.size; idx += 1)
+          {
+            U8 last_byte = idx < in_range_last_data.size ? in_range_last_data.str[idx] : 0;
+            U8 now_byte  = idx < in_range_data.size ? in_range_data.str[idx] : 0;
+            if(last_byte != now_byte)
+            {
+              U64 idx_in_read_out = write_off+idx;
+              byte_changed_flags[idx_in_read_out/64] |= (1ull<<(idx_in_read_out%64));
+            }
+          }
+        }
+        
+        // rjf: increment past this chunk
         write_off += in_range_data.size;
         if(data.size < page_size)
         {
-          write_off += page_size-data.size;
+          U64 missed_byte_count = page_size-data.size;
+          write_off += missed_byte_count;
         }
       }
     }
@@ -966,6 +996,8 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     //- rjf: fill result
     result.data.str = (U8*)read_out;
     result.data.size = dim_1u64(range);
+    result.byte_bad_flags = byte_bad_flags;
+    result.byte_changed_flags = byte_changed_flags;
     
     hs_scope_close(scope);
     scratch_end(scratch);
@@ -3121,7 +3153,9 @@ ctrl_mem_stream_thread__entry_point(void *p)
     
     //- rjf: take task
     B32 got_task = 0;
-    OS_MutexScopeR(process_stripe->rw_mutex)
+    U64 preexisting_memgen_idx = 0;
+    U128 preexisting_hash = {0};
+    OS_MutexScopeW(process_stripe->rw_mutex)
     {
       for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
       {
@@ -3134,6 +3168,8 @@ ctrl_mem_stream_thread__entry_point(void *p)
             if(MemoryMatchStruct(&range_n->vaddr_range, &vaddr_range) && range_n->zero_terminated == zero_terminated)
             {
               got_task = !ins_atomic_u32_eval_cond_assign(&range_n->is_taken, 1, 0);
+              preexisting_memgen_idx = range_n->memgen_idx;
+              preexisting_hash = range_n->hash;
               goto take_task__break_all;
             }
           }
@@ -3148,7 +3184,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     void *range_base = 0;
     U64 zero_terminated_size = 0;
     U64 memgen_idx = ctrl_memgen_idx();
-    if(got_task)
+    if(got_task && memgen_idx != preexisting_memgen_idx)
     {
       range_size = dim_1u64(vaddr_range);
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, KB(64));
