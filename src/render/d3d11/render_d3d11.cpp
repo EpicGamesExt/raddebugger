@@ -1300,8 +1300,8 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
 
           U32 uniform_offset[Axis2_COUNT][2] =
           {
-              { 0 * sizeof(R_D3D11_Uniforms_BlurPass) / 16, OffsetOf(R_D3D11_Uniforms_Blur, kernel) / 16 },
-              { 1 * sizeof(R_D3D11_Uniforms_BlurPass) / 16, OffsetOf(R_D3D11_Uniforms_Blur, kernel) / 16 },
+              { 0 * sizeof(R_D3D11_Uniforms_BlurPass) / 16, (U32)OffsetOf(R_D3D11_Uniforms_Blur, kernel) / 16 },
+              { 1 * sizeof(R_D3D11_Uniforms_BlurPass) / 16, (U32)OffsetOf(R_D3D11_Uniforms_Blur, kernel) / 16 },
           };
 
           U32 uniform_count[Axis2_COUNT][2] =
