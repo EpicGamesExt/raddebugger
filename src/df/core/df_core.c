@@ -1621,7 +1621,7 @@ df_entity_notify_mutation(DF_Entity *entity)
       DF_CmdParams p = {0};
       df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
     }
-    if(e == entity && flags & DF_EntityKindFlag_LeafMutationSoftHalt)
+    if(e == entity && flags & DF_EntityKindFlag_LeafMutationSoftHalt && df_ctrl_targets_running())
     {
       df_state->entities_mut_soft_halt = 1;
     }
@@ -1629,7 +1629,7 @@ df_entity_notify_mutation(DF_Entity *entity)
     {
       df_state->entities_mut_dbg_info_map = 1;
     }
-    if(flags & DF_EntityKindFlag_TreeMutationSoftHalt)
+    if(flags & DF_EntityKindFlag_TreeMutationSoftHalt && df_ctrl_targets_running())
     {
       df_state->entities_mut_soft_halt = 1;
     }
@@ -3486,12 +3486,14 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
     U64 thread_info_addr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
     U64 tls_addr_off = tls_index*addr_size;
     U64 tls_addr_array = 0;
-    String8 tls_addr_array_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size));
+    CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size));
+    String8 tls_addr_array_data = tls_addr_array_slice.data;
     if(tls_addr_array_data.size >= 8)
     {
       MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
     }
-    String8 result_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size));
+    CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size));
+    String8 result_data = result_slice.data;
     if(result_data.size >= 8)
     {
       MemoryCopy(&base_vaddr, result_data.str, sizeof(U64));
@@ -3953,7 +3955,8 @@ df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
   Assert(process->kind == DF_EntityKind_Process);
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
-  String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
+  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
+  String8 data = slice.data;
   if(data.size == size)
   {
     result = 1;
@@ -4251,7 +4254,8 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
         Rng1U64 vaddr_range = r1u64(eval.offset, eval.offset + type_byte_size);
         if(dim_1u64(vaddr_range) == type_byte_size)
         {
-          String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range);
+          CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range);
+          String8 data = slice.data;
           MemoryZeroArray(eval.imm_u128);
           MemoryCopy(eval.imm_u128, data.str, Min(data.size, sizeof(U64)*2));
           eval.mode = EVAL_EvalMode_Value;
@@ -4328,14 +4332,16 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
       {
         U64 ptr_vaddr = eval.offset;
         U64 addr_size = bit_size_from_arch(arch)/8;
-        String8 ptr_value_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                   r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        CTRL_ProcessMemorySlice ptr_value_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                  r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        String8 ptr_value_memory = ptr_value_slice.data;
         if(ptr_value_memory.size >= addr_size)
         {
           U64 class_base_vaddr = 0;
           MemoryCopy(&class_base_vaddr, ptr_value_memory.str, addr_size);
-          String8 vtable_base_ptr_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                           r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          CTRL_ProcessMemorySlice vtable_base_ptr_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                          r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          String8 vtable_base_ptr_memory = vtable_base_ptr_slice.data;
           if(vtable_base_ptr_memory.size >= addr_size)
           {
             U64 vtable_vaddr = 0;
@@ -4872,7 +4878,7 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       default:{}break;
       case EVAL_EvalMode_Addr:
       {
-        ctrl_process_write_data(process->ctrl_machine_id, process->ctrl_handle, dst_eval.offset, commit_data);
+        ctrl_process_write(process->ctrl_machine_id, process->ctrl_handle, r1u64(dst_eval.offset, dst_eval.offset+commit_data.size), commit_data.str);
       }break;
       case EVAL_EvalMode_Reg:
       {
@@ -6440,6 +6446,23 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
           }
+          
+          // rjf: kill all entities which are marked to die on stop
+          {
+            DF_Entity *request = df_entity_from_id(event->msg_id);
+            if(df_entity_is_nil(request))
+            {
+              for(DF_Entity *entity = df_entity_root();
+                  !df_entity_is_nil(entity);
+                  entity = df_entity_rec_df_pre(entity, df_entity_root()).next)
+              {
+                if(entity->flags & DF_EntityFlag_DiesOnRunStop)
+                {
+                  df_entity_mark_for_deletion(entity);
+                }
+              }
+            }
+          }
         }break;
         
         //- rjf: entity creation/deletion
@@ -7036,7 +7059,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_StepIntoLine:
         case DF_CoreCmdKind_StepOverLine:
         case DF_CoreCmdKind_StepOut:
-        case DF_CoreCmdKind_RunToAddress:
         {
           DF_Entity *thread = df_entity_from_handle(params.entity);
           if(df_ctrl_targets_running())
@@ -7088,11 +7110,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                   good = 0;
                 }
               }break;
-              case DF_CoreCmdKind_RunToAddress:
-              {
-                CTRL_Trap trap = {CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck, params.vaddr};
-                ctrl_trap_list_push(scratch.arena, &traps, &trap);
-              }break;
             }
             if(good && traps.count != 0)
             {
@@ -7127,6 +7144,30 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: high-level composite target control operations
+        case DF_CoreCmdKind_RunToLine:
+        {
+          DF_Entity *file = df_entity_from_handle(params.entity);
+          TxtPt point = params.text_point;
+          if(file->kind == DF_EntityKind_File)
+          {
+            DF_Entity *bp = df_entity_alloc(0, file, DF_EntityKind_Breakpoint);
+            bp->flags |= DF_EntityFlag_DiesOnRunStop;
+            df_entity_equip_b32(bp, 1);
+            df_entity_equip_txt_pt(bp, point);
+            df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+            DF_CmdParams p = df_cmd_params_zero();
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
+          }
+        }break;
+        case DF_CoreCmdKind_RunToAddress:
+        {
+          DF_Entity *bp = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Breakpoint);
+          bp->flags |= DF_EntityFlag_DiesOnRunStop;
+          df_entity_equip_vaddr(bp, params.vaddr);
+          df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+          DF_CmdParams p = df_cmd_params_zero();
+          df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
+        }break;
         case DF_CoreCmdKind_Run:
         {
           DF_CmdParams params = df_cmd_params_zero();

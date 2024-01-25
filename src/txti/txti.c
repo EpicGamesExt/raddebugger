@@ -821,13 +821,15 @@ txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, S
           default:{}break;
           case TXTI_TokenKind_Symbol:
           {
+            B32 is_scope_resolution = str8_match(wb_token_string, str8_lit("::"), 0);
             B32 is_dot = str8_match(wb_token_string, str8_lit("."), 0);
             B32 is_arrow = str8_match(wb_token_string, str8_lit("->"), 0);
             B32 is_open_bracket = str8_match(wb_token_string, str8_lit("["), 0);
             B32 is_close_bracket = str8_match(wb_token_string, str8_lit("]"), 0);
             nest -= !!(is_open_bracket);
             nest += !!(is_close_bracket);
-            if(is_dot ||
+            if(is_scope_resolution ||
+               is_dot ||
                is_arrow ||
                is_open_bracket||
                is_close_bracket)

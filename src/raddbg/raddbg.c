@@ -167,6 +167,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         df_push_cmd__root(&params, spec);
         df_gfx_request_frame();
         os_eat_event(&events, event);
+        if(event->flags & OS_EventFlag_Alt)
+        {
+          window->menu_bar_focus_press_started = 0;
+        }
       }
     }
   }
@@ -182,7 +186,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         continue;
       }
       B32 take = 0;
-      if(event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->is_repeat == 0)
+      if(event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
       {
         take = 1;
         df_gfx_request_frame();
@@ -190,19 +194,19 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         ws->menu_bar_key_held = 1;
         ws->menu_bar_focus_press_started = 1;
       }
-      if(event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->is_repeat == 0)
+      if(event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
       {
         take = 1;
         df_gfx_request_frame();
         ws->menu_bar_key_held = 0;
       }
-      if(ws->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->is_repeat == 0)
+      if(ws->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
       {
         take = 1;
         df_gfx_request_frame();
         ws->menu_bar_focused = 0;
       }
-      else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->is_repeat == 0)
+      else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == OS_EventKind_Release && event->flags == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
       {
         take = 1;
         df_gfx_request_frame();

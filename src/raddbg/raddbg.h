@@ -7,6 +7,9 @@
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
+// [ ] need bilinear interpolation on color picker - fine for most UI to not do
+//     do it but it needs to be correct for the color picker, so maybe that
+//     should be a heavier path
 // [ ] drag/drop tab cleanup
 // [ ] target/breakpoint/watch-pin reordering
 // [ ] watch window reordering
@@ -81,8 +84,6 @@
 //
 // [ ] escaping in config files - breakpoint labels etc.
 // [ ] focus changing between query bar & panel content via mouse
-//
-// [ ] ** while typing, "Alt" Windows menu things should not happen
 //
 // [ ] visualize conversion failures
 //

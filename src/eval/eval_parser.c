@@ -834,8 +834,8 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           TG_Key                         type_key = zero_struct;
           String8                        local_lookup_string = token_string;
           
-          //- rjf: form namespaceify fallback
-          String8 namespaceified_token_string = token_string;
+          //- rjf: form namespaceified fallback versions of this lookup string
+          String8List namespaceified_token_strings = {0};
           if(ctx->rdbg->procedures != 0 && ctx->rdbg->scopes != 0 && ctx->rdbg->scope_vmap != 0)
           {
             U64 scope_idx = raddbg_vmap_idx_from_voff(ctx->rdbg->scope_vmap, ctx->rdbg->scope_vmap_count, ctx->ip_voff);
@@ -844,23 +844,22 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             RADDBG_Procedure *procedure = &ctx->rdbg->procedures[proc_idx];
             U64 name_size = 0;
             U8 *name_ptr = raddbg_string_from_idx(ctx->rdbg, procedure->name_string_idx, &name_size);
-            String8 name = str8(name_ptr, name_size);
-            U64 past_scope_resolution_pos = 0;
+            String8 containing_procedure_name = str8(name_ptr, name_size);
+            U64 last_past_scope_resolution_pos = 0;
             for(;;)
             {
-              U64 past_next_dbl_colon_pos = str8_find_needle(name, past_scope_resolution_pos, str8_lit("::"), 0)+2;
-              U64 past_next_dot_pos = str8_find_needle(name, past_scope_resolution_pos, str8_lit("."), 0)+1;
+              U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
+              U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
               U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
-              if(past_next_scope_resolution_pos < name.size)
-              {
-                past_scope_resolution_pos = past_next_scope_resolution_pos;
-              }
-              else
+              if(past_next_scope_resolution_pos >= containing_procedure_name.size)
               {
                 break;
               }
+              String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
+              String8 namespaceified_token_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, token_string);
+              str8_list_push_front(scratch.arena, &namespaceified_token_strings, namespaceified_token_string);
+              last_past_scope_resolution_pos = past_next_scope_resolution_pos;
             }
-            namespaceified_token_string = push_str8f(scratch.arena, "%S%S", str8_prefix(name, past_scope_resolution_pos), token_string);
           }
           
           //- rjf: try members
@@ -974,9 +973,11 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
               U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
-              if(matches_count == 0)
+              for(String8Node *n = namespaceified_token_strings.first;
+                  n != 0 && matches_count == 0;
+                  n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, namespaceified_token_string.str, namespaceified_token_string.size);
+                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
                 matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }
@@ -1014,9 +1015,11 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
               U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
-              if(matches_count == 0)
+              for(String8Node *n = namespaceified_token_strings.first;
+                  n != 0 && matches_count == 0;
+                  n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, namespaceified_token_string.str, namespaceified_token_string.size);
+                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
                 matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }
@@ -1050,9 +1053,11 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
               U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
-              if(matches_count == 0)
+              for(String8Node *n = namespaceified_token_strings.first;
+                  n != 0 && matches_count == 0;
+                  n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, namespaceified_token_string.str, namespaceified_token_string.size);
+                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
                 matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }

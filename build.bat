@@ -60,6 +60,8 @@ if "%msvc%"=="1"  set only_compile=/c
 if "%clang%"=="1" set only_compile=-c
 if "%msvc%"=="1"  set EHsc=/EHsc
 if "%clang%"=="1" set EHsc=
+if "%msvc%"=="1"  set rc=rc.exe
+if "%clang%"=="1" set rc=llvm-rc.exe
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%
@@ -79,7 +81,7 @@ if not exist local mkdir local
 
 :: --- Produce Logo Icon File -------------------------------------------------
 pushd build
-rc /nologo /fo logo.res ..\data\logo.rc
+%rc% /nologo /fo logo.res ..\data\logo.rc || exit /b 1
 popd
 
 :: --- Build & Run Metaprogram ------------------------------------------------
