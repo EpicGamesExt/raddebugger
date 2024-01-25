@@ -85,8 +85,6 @@
 // [ ] escaping in config files - breakpoint labels etc.
 // [ ] focus changing between query bar & panel content via mouse
 //
-// [ ] ** while typing, "Alt" Windows menu things should not happen
-//
 // [ ] visualize conversion failures
 //
 //  [ ] I was a little confused about what a profile file was. I understood
