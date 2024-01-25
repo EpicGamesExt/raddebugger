@@ -11,6 +11,7 @@ typedef enum DF_CfgSrc
 DF_CfgSrc_User,
 DF_CfgSrc_Profile,
 DF_CfgSrc_CommandLine,
+DF_CfgSrc_Transient,
 DF_CfgSrc_COUNT
 } DF_CfgSrc;
 
@@ -70,10 +71,11 @@ DF_CoreCmdKind_StepOverInst,
 DF_CoreCmdKind_StepIntoLine,
 DF_CoreCmdKind_StepOverLine,
 DF_CoreCmdKind_StepOut,
-DF_CoreCmdKind_RunToAddress,
 DF_CoreCmdKind_Halt,
 DF_CoreCmdKind_SoftHaltRefresh,
 DF_CoreCmdKind_SetThreadIP,
+DF_CoreCmdKind_RunToLine,
+DF_CoreCmdKind_RunToAddress,
 DF_CoreCmdKind_Run,
 DF_CoreCmdKind_Restart,
 DF_CoreCmdKind_StepInto,
@@ -1680,12 +1682,14 @@ String8 df_g_cfg_src_string_table[] =
 str8_lit_comp("user"),
 str8_lit_comp("profile"),
 str8_lit_comp("command_line"),
+str8_lit_comp("transient"),
 };
 
 DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[] =
 {
 DF_CoreCmdKind_LoadUser,
 DF_CoreCmdKind_LoadProfile,
+DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 
@@ -1694,12 +1698,14 @@ DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[] =
 DF_CoreCmdKind_WriteUserData,
 DF_CoreCmdKind_WriteProfileData,
 DF_CoreCmdKind_Null,
+DF_CoreCmdKind_Null,
 };
 
 DF_CoreCmdKind df_g_cfg_src_apply_cmd_kind_table[] =
 {
 DF_CoreCmdKind_ApplyUserData,
 DF_CoreCmdKind_ApplyProfileData,
+DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 

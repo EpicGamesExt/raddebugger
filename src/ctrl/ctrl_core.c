@@ -2206,16 +2206,17 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
   {
     CTRL_EventList evts = {0};
     CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
-    event->kind = CTRL_EventKind_Stopped;
+    event->kind    = CTRL_EventKind_Stopped;
+    event->msg_id  = msg->msg_id;
     if(stop_event != 0)
     {
-      event->cause = ctrl_event_cause_from_demon_event_kind(stop_event->kind);
-      event->machine_id = CTRL_MachineID_Client;
-      event->entity = ctrl_handle_from_demon(stop_event->thread);
-      event->parent = ctrl_handle_from_demon(stop_event->process);
+      event->cause          = ctrl_event_cause_from_demon_event_kind(stop_event->kind);
+      event->machine_id     = CTRL_MachineID_Client;
+      event->entity         = ctrl_handle_from_demon(stop_event->thread);
+      event->parent         = ctrl_handle_from_demon(stop_event->process);
       event->exception_code = stop_event->code;
-      event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
-      event->rip_vaddr = stop_event->instruction_pointer;
+      event->vaddr_rng      = r1u64(stop_event->address, stop_event->address);
+      event->rip_vaddr      = stop_event->instruction_pointer;
     }
     ctrl_c2u_push_events(&evts);
   }

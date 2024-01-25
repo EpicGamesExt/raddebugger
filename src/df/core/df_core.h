@@ -463,21 +463,22 @@ enum
   DF_EntityFlag_HasRng1U64        = (1<<5),
   DF_EntityFlag_HasColor          = (1<<6),
   DF_EntityFlag_DiesWithTime      = (1<<7),
+  DF_EntityFlag_DiesOnRunStop     = (1<<8),
   
   //- rjf: ctrl entity equipment
-  DF_EntityFlag_HasCtrlMachineID  = (1<<8),
-  DF_EntityFlag_HasCtrlHandle     = (1<<9),
-  DF_EntityFlag_HasArch           = (1<<10),
-  DF_EntityFlag_HasCtrlID         = (1<<11),
-  DF_EntityFlag_HasStackBase      = (1<<12),
-  DF_EntityFlag_HasTLSRoot        = (1<<13),
-  DF_EntityFlag_HasVAddrRng       = (1<<14),
-  DF_EntityFlag_HasVAddr          = (1<<15),
+  DF_EntityFlag_HasCtrlMachineID  = (1<<9),
+  DF_EntityFlag_HasCtrlHandle     = (1<<10),
+  DF_EntityFlag_HasArch           = (1<<11),
+  DF_EntityFlag_HasCtrlID         = (1<<12),
+  DF_EntityFlag_HasStackBase      = (1<<13),
+  DF_EntityFlag_HasTLSRoot        = (1<<14),
+  DF_EntityFlag_HasVAddrRng       = (1<<15),
+  DF_EntityFlag_HasVAddr          = (1<<16),
   
   //- rjf: file properties
-  DF_EntityFlag_IsFolder          = (1<<16),
-  DF_EntityFlag_IsMissing         = (1<<17),
-  DF_EntityFlag_Output            = (1<<18), // NOTE(rjf): might be missing, but written by us
+  DF_EntityFlag_IsFolder          = (1<<17),
+  DF_EntityFlag_IsMissing         = (1<<18),
+  DF_EntityFlag_Output            = (1<<19), // NOTE(rjf): might be missing, but written by us
   
   //- rjf: deletion
   DF_EntityFlag_MarkedForDeletion = (1<<31),

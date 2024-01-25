@@ -4621,30 +4621,10 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
       }break;
       case DF_CoreCmdKind_RunToCursor:
       {
-        Temp scratch = scratch_begin(0, 0);
-        DF_Entity *thread = df_entity_from_handle(cmd->params.entity);
-        S64 line_num = tv->cursor.line;
-        DF_TextLineSrc2DasmInfoListArray src2dasm = df_text_line_src2dasm_info_list_array_from_src_line_range(scratch.arena, entity, r1s64(line_num, line_num));
-        if(!df_entity_is_nil(thread) && src2dasm.count != 0)
-        {
-          DF_TextLineSrc2DasmInfoList *src2dasm_list = &src2dasm.v[0];
-          if(src2dasm_list->first != 0)
-          {
-            Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-            DF_Entity *binary = src2dasm_list->first->v.binary;
-            DF_EntityList possible_modules = df_modules_from_binary_file(scratch.arena, binary);
-            DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
-            U64 thread_dst_voff = voff_rng.min;
-            if(!df_entity_is_nil(thread_dst_module) && thread_dst_voff != 0)
-            {
-              DF_CmdParams params = df_cmd_params_from_window(ws);
-              params.vaddr = df_vaddr_from_voff(thread_dst_module, thread_dst_voff);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-              df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
-            }
-          }
-        }
-        scratch_end(scratch);
+        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+        params.entity = view->entity;
+        params.text_point = tv->cursor;
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToLine));
       }break;
       case DF_CoreCmdKind_SetNextStatement:
       {
@@ -5310,29 +5290,10 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     //- rjf: run-to-line
     if(sig.run_to_line_num != 0 && contains_1s64(visible_line_num_range, sig.run_to_line_num))
     {
-      U64 line_idx = (sig.run_to_line_num-visible_line_num_range.min);
-      DF_TextLineSrc2DasmInfoList *src2dasm_list = &code_slice_params.line_src2dasm[line_idx];
-      if(src2dasm_list->first != 0)
-      {
-        Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-        DF_Entity *binary = src2dasm_list->first->v.binary;
-        DF_EntityList possible_modules = df_modules_from_binary_file(scratch.arena, binary);
-        DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-        DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
-        DF_Entity *module = thread_dst_module;
-        if(df_entity_is_nil(module))
-        {
-          module = df_first_entity_from_list(&possible_modules);
-        }
-        U64 voff = voff_rng.min;
-        if(!df_entity_is_nil(module) && voff != 0)
-        {
-          DF_CmdParams params = df_cmd_params_from_window(ws);
-          params.vaddr = df_vaddr_from_voff(module, voff);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
-        }
-      }
+      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+      params.entity = df_handle_from_entity(entity);
+      params.text_point = txt_pt(sig.run_to_line_num, 1);
+      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToLine));
     }
     
     //- rjf: go to disasm
