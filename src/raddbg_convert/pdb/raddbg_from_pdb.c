@@ -294,6 +294,38 @@ pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype){
         }
       }break;
       
+      case CV_LeafKind_CLASS2:
+      case CV_LeafKind_STRUCT2:
+      {
+        // TODO(allen): error if bad range
+        if (sizeof(CV_LeafStruct2) <= cap){
+          CV_LeafStruct2 *lf_struct = (CV_LeafStruct2*)first;
+          
+          // size
+          U8 *numeric_ptr = (U8*)(lf_struct + 1);
+          CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+          
+          // name
+          U8 *name_ptr = (U8 *)numeric_ptr + size.encoded_size;
+          String8 name = str8_cstring_capped((char*)name_ptr, first + cap);
+          
+          // unique name
+          U8 *unique_name_ptr = name_ptr + name.size + 1;
+          String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, first + cap);
+          
+          if (lf_struct->props & CV_TypeProp_FwdRef){
+            B32 do_unique_name_lookup = ((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
+            ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0);
+            if (do_unique_name_lookup){
+              result = pdb_tpi_first_itype_from_name(ctx->hash, ctx->leaf, unique_name, 1);
+            }
+            else{
+              result = pdb_tpi_first_itype_from_name(ctx->hash, ctx->leaf, name, 0);
+            }
+          }
+        }
+      }break;
+      
       case CV_LeafKind_UNION:
       {
         // TODO(allen): error if bad range
@@ -1371,9 +1403,19 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           
           // TODO(allen): handle props
           
+          // size
+          U8 *numeric_ptr = (U8*)(lf_struct + 1);
+          CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+          U64 size_u64 = cv_u64_from_numeric(&size);
+          
           // name
-          U8 *name_ptr = (U8*)(lf_struct + 1);
+          U8 *name_ptr = numeric_ptr + size.encoded_size;
           String8 name = str8_cstring_capped((char*)name_ptr, first + cap);
+          
+          if(str8_match(name, str8_lit("Foo"), 0))
+          {
+            int x = 0;
+          }
           
           // incomplete type
           if (lf_struct->props & CV_TypeProp_FwdRef){
@@ -1390,7 +1432,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             if (range->hdr.kind == CV_LeafKind_CLASS2){
               type_kind = RADDBG_TypeKind_Class;
             }
-            result = cons_type_udt(ctx->root, type_kind, name, lf_struct->size);
+            result = cons_type_udt(ctx->root, type_kind, name, size_u64);
             
             // remember to revisit this for members
             {
