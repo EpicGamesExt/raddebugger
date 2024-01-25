@@ -311,48 +311,6 @@ struct CTRL_EventList
 ////////////////////////////////
 //~ rjf: Process Memory Cache Types
 
-// NOTE(rjf):
-//
-// Process memory is cached with a 5-level page table. Each level has 256
-// slots, and is indexed into with 8 bits. Each index is extracted from a
-// virtual address in the following manner:
-//
-//              |1------||2------||3------||4------||5------||byte-n-page|
-// xxxxxxxx xxxx0000 00000000 00000000 00000000 00000000 0000xxxx xxxxxxxx
-//
-// The top 12 bits are not used (a 52-bit address space is supported at most).
-// The next 8 most-significant-bits are used to index into the level 1 table.
-// The next 8 are used to index into the level 2. Then the level 3. Then the
-// level 4. At the level 4 table, instead of pointing to other tables, each
-// slot points at the base address of a cached 4KB page. The next 8 bits are
-// used to index into that table. The final 12 bits in the address are used
-// to refer to unique bytes within each page.
-
-typedef struct CTRL_ProcessMemoryCacheNode4 CTRL_ProcessMemoryCacheNode4;
-struct CTRL_ProcessMemoryCacheNode4
-{
-  U64 page_memgen_idxs[256];
-  U128 page_hashes[256];
-};
-
-typedef struct CTRL_ProcessMemoryCacheNode3 CTRL_ProcessMemoryCacheNode3;
-struct CTRL_ProcessMemoryCacheNode3
-{
-  CTRL_ProcessMemoryCacheNode4 *children[256];
-};
-
-typedef struct CTRL_ProcessMemoryCacheNode2 CTRL_ProcessMemoryCacheNode2;
-struct CTRL_ProcessMemoryCacheNode2
-{
-  CTRL_ProcessMemoryCacheNode3 *children[256];
-};
-
-typedef struct CTRL_ProcessMemoryCacheNode1 CTRL_ProcessMemoryCacheNode1;
-struct CTRL_ProcessMemoryCacheNode1
-{
-  CTRL_ProcessMemoryCacheNode2 *children[256];
-};
-
 typedef struct CTRL_ProcessMemoryRangeHashNode CTRL_ProcessMemoryRangeHashNode;
 struct CTRL_ProcessMemoryRangeHashNode
 {
@@ -379,7 +337,6 @@ struct CTRL_ProcessMemoryCacheNode
   Arena *arena;
   CTRL_MachineID machine_id;
   CTRL_Handle process;
-  CTRL_ProcessMemoryCacheNode1 *children[256];
   U64 range_hash_slots_count;
   CTRL_ProcessMemoryRangeHashSlot *range_hash_slots;
 };
@@ -410,6 +367,7 @@ typedef struct CTRL_ProcessMemorySlice CTRL_ProcessMemorySlice;
 struct CTRL_ProcessMemorySlice
 {
   String8 data;
+  U64 *byte_good_flags;
   B32 fresh;
 };
 
@@ -567,10 +525,15 @@ internal Architecture ctrl_arch_from_handle(CTRL_MachineID machine, CTRL_Handle 
 
 //- rjf: process memory reading/writing
 internal U64 ctrl_process_read(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, void *dst);
+internal B32 ctrl_process_write(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, void *src);
+
+//- rjf: process memory cache interaction
+internal U128 ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated);
+internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated);
+
+//- rjf: process memory cache reading helpers
 internal CTRL_ProcessMemorySlice ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range);
 internal CTRL_ProcessMemorySlice ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, U64 limit, U64 endt_us);
-internal B32 ctrl_process_write_data(CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, String8 data);
-internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated);
 
 //- rjf: register reading/writing
 internal void *ctrl_reg_block_from_thread(CTRL_MachineID machine_id, CTRL_Handle thread);

@@ -4878,7 +4878,7 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       default:{}break;
       case EVAL_EvalMode_Addr:
       {
-        ctrl_process_write_data(process->ctrl_machine_id, process->ctrl_handle, dst_eval.offset, commit_data);
+        ctrl_process_write(process->ctrl_machine_id, process->ctrl_handle, r1u64(dst_eval.offset, dst_eval.offset+commit_data.size), commit_data.str);
       }break;
       case EVAL_EvalMode_Reg:
       {
