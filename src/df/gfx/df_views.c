@@ -3216,9 +3216,20 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
       // rjf: enabled
       UI_PrefWidth(ui_em(2.25f, 1))
         UI_FocusHot((row_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
-        if(df_icon_buttonf(target->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, "###ebl_%p", target).clicked)
       {
-        df_entity_equip_b32(target, !target->b32);
+        UI_Signal sig = df_icon_buttonf(target->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, "###ebl_%p", target);
+        if(sig.clicked && sig.event_flags == 0)
+        {
+          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+          p.entity = df_handle_from_entity(target);
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectTarget));
+        }
+        else if(sig.clicked && sig.event_flags == OS_EventFlag_Ctrl)
+        {
+          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+          p.entity = df_handle_from_entity(target);
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(target->b32 ? DF_CoreCmdKind_DisableTarget : DF_CoreCmdKind_EnableTarget));
+        }
       }
       
       // rjf: target name

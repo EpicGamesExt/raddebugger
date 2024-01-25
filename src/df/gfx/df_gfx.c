@@ -8692,12 +8692,17 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity)
       ui_set_next_background_color(special_color);
     }
   }
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   if(entity->cfg_src == DF_CfgSrc_CommandLine)
   {
     Vec4F32 bg_color = mix_4f32(ui_top_background_color(), df_rgba_from_theme_color(DF_ThemeColor_Highlight0), 0.25f);
     ui_set_next_background_color(bg_color);
   }
+  else if(entity->kind == DF_EntityKind_Target && entity->b32 != 0)
+  {
+    Vec4F32 bg_color = mix_4f32(ui_top_background_color(), df_rgba_from_theme_color(DF_ThemeColor_Highlight1), 0.25f);
+    ui_set_next_background_color(bg_color);
+  }
+  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   UI_Key key = ui_key_from_stringf(ui_top_parent()->key, "entity_ref_button_%p", entity);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_Clickable|
                                       UI_BoxFlag_DrawBorder|
