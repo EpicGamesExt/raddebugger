@@ -167,6 +167,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         df_push_cmd__root(&params, spec);
         df_gfx_request_frame();
         os_eat_event(&events, event);
+        if(event->flags & OS_EventFlag_Alt)
+        {
+          window->menu_bar_focus_press_started = 0;
+        }
       }
     }
   }
