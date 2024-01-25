@@ -6385,7 +6385,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                                                         b->rect.y1),
                                                  6.f),
                                         color, 4.f, 0, 4.f);
-            inst->colors[Corner_10] = inst->colors[Corner_01] = inst->colors[Corner_11] = v4f32(color.x, color.y, color.z, color.w/3.f);
+            inst->colors[Corner_00] = inst->colors[Corner_10] = v4f32(color.x, color.y, color.z, color.w/3.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
