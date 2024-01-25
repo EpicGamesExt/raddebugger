@@ -525,19 +525,17 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
   // rjf: hue => rgb
   Vec3F32 hue_rgb = rgb_from_hsv(v3f32(data->hue, 1, 1));
   
-  // rjf: value
+  // rjf: white -> rgb background
   {
-    R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 1), 4.f, 0, 1.f);
-    inst->colors[Corner_00] = inst->colors[Corner_10] = v4f32(1, 1, 1, 1);
+    R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1), 4.f, 0, 1.f);
+    inst->colors[Corner_00] = inst->colors[Corner_01] = v4f32(1, 1, 1, 1);
   }
   
-  // rjf: saturation
+  // rjf: black gradient overlay
   {
     R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
-    inst->colors[Corner_00] = v4f32(1, 1, 1, 1);
-    inst->colors[Corner_01] = v4f32(0, 0, 0, 0);
-    inst->colors[Corner_10] = v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1);
-    inst->colors[Corner_11] = v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 0);
+    inst->colors[Corner_01] = v4f32(0, 0, 0, 1);
+    inst->colors[Corner_11] = v4f32(0, 0, 0, 1);
   }
   
   // rjf: indicator
