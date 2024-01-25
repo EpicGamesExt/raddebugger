@@ -1032,7 +1032,23 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         //- rjf: build normal row
         if(!(row->flags & DF_EvalVizRowFlag_Canvas))
         {
-          ui_set_next_flags(disabled_flags);
+          B32 row_is_fresh = 0;
+          if(row->eval.mode == EVAL_EvalMode_Addr)
+          {
+            Temp temp = temp_begin(scratch.arena);
+            U64 vaddr = row->eval.offset;
+            U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+            CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(vaddr, vaddr+size));
+            row_is_fresh = slice.fresh;
+            temp_end(temp);
+          }
+          ui_set_next_flags(disabled_flags|(UI_BoxFlag_DrawBackground*row_is_fresh));
+          if(row_is_fresh)
+          {
+            Vec4F32 fresh_bg_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+            fresh_bg_color.w *= 0.25f;
+            ui_set_next_background_color(fresh_bg_color);
+          }
           UI_NamedTableVectorF("row_%I64x", row_hash)
           {
             //- rjf: expression

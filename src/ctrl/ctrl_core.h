@@ -333,6 +333,8 @@ struct CTRL_ProcessMemoryCacheNode4
 {
   U64 page_memgen_idxs[256];
   U128 page_hashes[256];
+  U128 last_page_hashes[256];
+  U64 page_fresh_flags[4];
 };
 
 typedef struct CTRL_ProcessMemoryCacheNode3 CTRL_ProcessMemoryCacheNode3;
@@ -404,6 +406,13 @@ struct CTRL_ProcessMemoryCache
   CTRL_ProcessMemoryCacheSlot *slots;
   U64 stripes_count;
   CTRL_ProcessMemoryCacheStripe *stripes;
+};
+
+typedef struct CTRL_ProcessMemorySlice CTRL_ProcessMemorySlice;
+struct CTRL_ProcessMemorySlice
+{
+  String8 data;
+  B32 fresh;
 };
 
 ////////////////////////////////
@@ -560,8 +569,8 @@ internal Architecture ctrl_arch_from_handle(CTRL_MachineID machine, CTRL_Handle 
 
 //- rjf: process memory reading/writing
 internal U64 ctrl_process_read(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, void *dst);
-internal String8 ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range);
-internal String8 ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, U64 limit, U64 endt_us);
+internal CTRL_ProcessMemorySlice ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range);
+internal CTRL_ProcessMemorySlice ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, U64 limit, U64 endt_us);
 internal B32 ctrl_process_write_data(CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, String8 data);
 internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated);
 

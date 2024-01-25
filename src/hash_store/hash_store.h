@@ -12,7 +12,8 @@ struct HS_KeyNode
 {
   HS_KeyNode *next;
   U128 key;
-  U128 hash;
+  U128 hash_history[2];
+  U64 hash_history_gen;
 };
 
 typedef struct HS_KeySlot HS_KeySlot;

@@ -754,10 +754,10 @@ ctrl_process_read(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range,
   return actual_bytes_read;
 }
 
-internal String8
+internal CTRL_ProcessMemorySlice
 ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range)
 {
-  String8 result = {0};
+  CTRL_ProcessMemorySlice result = {0};
   if(range.max > range.min &&
      dim_1u64(range) <= MB(256) &&
      range.min <= 0x000FFFFFFFFFFFFFull &&
@@ -821,6 +821,7 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
             {
               page_found = 1;
               MemoryCopy((U8*)read_out + (page_vaddr-page_range.min), page_data.str, KB(4));
+              result.fresh = result.fresh || !!(node4->page_fresh_flags[lvl5_idx/64] & (1ull<<(lvl5_idx%64)));
             }
             else
             {
@@ -898,6 +899,16 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
             };
             U128 page_key = hs_hash_from_data(str8((U8 *)page_key_data, sizeof(page_key_data)));
             U128 page_hash = hs_submit_data(page_key,  &page_arena, str8((U8 *)page_base, KB(4)));
+            if(!u128_match(node4->page_hashes[lvl5_idx], u128_zero()) &&
+               !u128_match(node4->page_hashes[lvl5_idx], page_hash))
+            {
+              node4->page_fresh_flags[lvl5_idx/64] |=  (1ull<<(lvl5_idx%64));
+            }
+            else
+            {
+              node4->page_fresh_flags[lvl5_idx/64] &= ~(1ull<<(lvl5_idx%64));
+            }
+            result.fresh = result.fresh || !!(node4->page_fresh_flags[lvl5_idx/64] & (1ull<<(lvl5_idx%64)));
             node4->page_hashes[lvl5_idx] = page_hash;
           }
           else
@@ -910,22 +921,22 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     
     //- rjf: fill result by skipping/chopping read memory
     U64 byte_in_page_idx = (range.min&0x0000000000000FFFull) >> 0;
-    result.str = (U8*)read_out + byte_in_page_idx;
-    result.size = dim_1u64(range);
+    result.data.str = (U8*)read_out + byte_in_page_idx;
+    result.data.size = dim_1u64(range);
     hs_scope_close(scope);
   }
   return result;
 }
 
-internal String8
+internal CTRL_ProcessMemorySlice
 ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, U64 limit, U64 endt_us)
 {
-  String8 result = ctrl_query_cached_data_from_process_vaddr_range(arena, machine_id, process, r1u64(vaddr, vaddr+limit));
-  for(U64 idx = 0; idx < result.size; idx += 1)
+  CTRL_ProcessMemorySlice result = ctrl_query_cached_data_from_process_vaddr_range(arena, machine_id, process, r1u64(vaddr, vaddr+limit));
+  for(U64 idx = 0; idx < result.data.size; idx += 1)
   {
-    if(result.str[idx] == 0)
+    if(result.data.str[idx] == 0)
     {
-      result.size = idx;
+      result.data.size = idx;
       break;
     }
   }

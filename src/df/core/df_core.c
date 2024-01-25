@@ -3486,12 +3486,14 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
     U64 thread_info_addr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
     U64 tls_addr_off = tls_index*addr_size;
     U64 tls_addr_array = 0;
-    String8 tls_addr_array_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size));
+    CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size));
+    String8 tls_addr_array_data = tls_addr_array_slice.data;
     if(tls_addr_array_data.size >= 8)
     {
       MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
     }
-    String8 result_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size));
+    CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size));
+    String8 result_data = result_slice.data;
     if(result_data.size >= 8)
     {
       MemoryCopy(&base_vaddr, result_data.str, sizeof(U64));
@@ -3953,7 +3955,8 @@ df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
   Assert(process->kind == DF_EntityKind_Process);
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
-  String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
+  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
+  String8 data = slice.data;
   if(data.size == size)
   {
     result = 1;
@@ -4251,7 +4254,8 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
         Rng1U64 vaddr_range = r1u64(eval.offset, eval.offset + type_byte_size);
         if(dim_1u64(vaddr_range) == type_byte_size)
         {
-          String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range);
+          CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range);
+          String8 data = slice.data;
           MemoryZeroArray(eval.imm_u128);
           MemoryCopy(eval.imm_u128, data.str, Min(data.size, sizeof(U64)*2));
           eval.mode = EVAL_EvalMode_Value;
@@ -4328,14 +4332,16 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
       {
         U64 ptr_vaddr = eval.offset;
         U64 addr_size = bit_size_from_arch(arch)/8;
-        String8 ptr_value_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                   r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        CTRL_ProcessMemorySlice ptr_value_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                  r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        String8 ptr_value_memory = ptr_value_slice.data;
         if(ptr_value_memory.size >= addr_size)
         {
           U64 class_base_vaddr = 0;
           MemoryCopy(&class_base_vaddr, ptr_value_memory.str, addr_size);
-          String8 vtable_base_ptr_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                           r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          CTRL_ProcessMemorySlice vtable_base_ptr_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                          r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          String8 vtable_base_ptr_memory = vtable_base_ptr_slice.data;
           if(vtable_base_ptr_memory.size >= addr_size)
           {
             U64 vtable_vaddr = 0;

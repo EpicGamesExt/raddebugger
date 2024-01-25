@@ -6786,7 +6786,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         if(!has_array && direct_type_is_string && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && eval.mode == EVAL_EvalMode_Addr)
         {
           U64 string_memory_addr = value_eval.imm_u64;
-          String8 text = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, max_U64);
+          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, max_U64);
+          String8 text = text_slice.data;
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));
@@ -6858,7 +6859,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           special_case = 1;
           DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
           DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-          String8 text = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, max_U64);
+          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, max_U64);
+          String8 text = text_slice.data;
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));
@@ -9009,6 +9011,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx->thread);
+  DF_Entity *selected_thread_process = df_entity_ancestor_from_kind(selected_thread, DF_EntityKind_Process);
+  U64 selected_thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(selected_thread, ctrl_ctx->unwind_count);
+  DF_Entity *selected_thread_module = df_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
   CTRL_Event stop_event = df_ctrl_last_stop_event();
   DF_Entity *stopper_thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
@@ -9847,7 +9852,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           {
             has_line_info = (src2dasm_list->first->v.remap_line == line_num);
             line_info_line_num = line_num;
-            line_info_t = src2dasm_list->first->v.binary->alive_t;
+            line_info_t = selected_thread_module->alive_t;
           }
           if(dasm2src_list->first != 0)
           {
@@ -9866,7 +9871,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               DF_Entity *binary = dasm2src_info->binary;
               has_line_info = 1;
               line_info_line_num = dasm2src_info->pt.line;
-              line_info_t = binary->alive_t;
+              line_info_t = selected_thread_module->alive_t;
             }
           }
           if(has_line_info)
@@ -9969,7 +9974,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                       {
                         mapped_special = 1;
                         new_color_kind = DF_ThemeColor_CodeFunction;
-                        mix_t = binary->alive_t;
+                        mix_t = selected_thread_module->alive_t;
                       }
                     }
                     if(!mapped_special)
@@ -9979,7 +9984,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                       {
                         mapped_special = 1;
                         new_color_kind = DF_ThemeColor_CodeType;
-                        mix_t = binary->alive_t;
+                        mix_t = selected_thread_module->alive_t;
                       }
                     }
                     if(!mapped_special)
@@ -9989,7 +9994,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                       {
                         mapped_special = 1;
                         new_color_kind = DF_ThemeColor_CodeLocal;
-                        mix_t = binary->alive_t;
+                        mix_t = selected_thread_module->alive_t;
                       }
                     }
                     break;
