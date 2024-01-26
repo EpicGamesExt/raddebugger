@@ -2887,6 +2887,19 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
     
     ////////////////////////////
+    //- rjf: truncated string hover
+    //
+    if(ui_string_hover_active()) UI_Tooltip
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      String8 string = ui_string_hover_string(scratch.arena);
+      D_FancyRunList runs = ui_string_hover_runs(scratch.arena);
+      UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+      ui_box_equip_display_string_fancy_runs(box, string, &runs);
+      scratch_end(scratch);
+    }
+    
+    ////////////////////////////
     //- rjf: drag/drop visualization tooltips
     //
     B32 drag_active = df_drag_is_active();

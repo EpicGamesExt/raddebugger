@@ -7,13 +7,9 @@
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
-// [ ] need bilinear interpolation on color picker - fine for most UI to not do
-//     do it but it needs to be correct for the color picker, so maybe that
-//     should be a heavier path
 // [ ] drag/drop tab cleanup
 // [ ] target/breakpoint/watch-pin reordering
 // [ ] watch window reordering
-// [x] query views, cleanup & floating - maybe merge "applies to view" vs. not
 // [ ] standard way to filter
 // [ ] visualize remapped files (via path map)
 // [ ] hovering truncated string for a short time -> tooltip with full wrapped

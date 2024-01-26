@@ -416,6 +416,11 @@ struct UI_State
   Vec2F32 drag_start_mouse;
   Arena *drag_state_arena;
   String8 drag_state_data;
+  Arena *string_hover_arena;
+  String8 string_hover_string;
+  D_FancyRunList string_hover_fancy_runs;
+  U64 string_hover_begin_us;
+  U64 string_hover_build_index;
   
   //- rjf: tooltip state
   F32 tooltip_open_t;
@@ -533,6 +538,10 @@ internal String8           ui_get_drag_data(U64 min_required_size);
 #define ui_store_drag_struct(ptr) ui_store_drag_data(str8_struct(ptr))
 #define ui_get_drag_struct(type) ((type *)ui_get_drag_data(sizeof(type)).str)
 
+//- rjf: hovered string info
+internal B32               ui_string_hover_active(void);
+internal D_FancyRunList    ui_string_hover_runs(Arena *arena);
+
 //- rjf: interaction keys
 internal UI_Key            ui_hot_key(void);
 internal UI_Key            ui_active_key(Side side);
@@ -591,6 +600,7 @@ internal UI_Box *          ui_build_box_from_stringf(UI_BoxFlags flags, char *fm
 //- rjf: box node equipment
 internal inline void       ui_box_equip_display_string(UI_Box *box, String8 string);
 internal inline void       ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings);
+internal inline void       ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, D_FancyRunList *runs);
 internal inline void       ui_box_equip_draw_bucket(UI_Box *box, D_Bucket *bucket);
 internal inline void       ui_box_equip_custom_draw(UI_Box *box, UI_BoxCustomDrawFunctionType *custom_draw, void *user_data);
 

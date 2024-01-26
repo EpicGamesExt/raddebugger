@@ -428,6 +428,7 @@ ui_state_alloc(void)
   ui->build_arenas[0] = arena_alloc();
   ui->build_arenas[1] = arena_alloc();
   ui->drag_state_arena = arena_alloc();
+  ui->string_hover_arena = arena_alloc();
   ui->box_table_size = 4096;
   ui->box_table = push_array(arena, UI_BoxHashSlot, ui->box_table_size);
   UI_InitStackNils(ui);
@@ -437,6 +438,7 @@ ui_state_alloc(void)
 internal void
 ui_state_release(UI_State *state)
 {
+  arena_release(state->string_hover_arena);
   arena_release(state->drag_state_arena);
   for(int i = 0; i < ArrayCount(state->build_arenas); i += 1)
   {
@@ -549,6 +551,35 @@ ui_get_drag_data(U64 min_required_size)
     scratch_end(scratch);
   }
   return ui_state->drag_state_data;
+}
+
+//- rjf: hovered string info
+
+internal B32
+ui_string_hover_active(void)
+{
+  return (ui_state->build_index > 0 && ui_state->string_hover_build_index >= ui_state->build_index-1 &&
+          os_now_microseconds() >= ui_state->string_hover_begin_us + 500000);
+}
+
+internal U64
+ui_string_hover_begin_time_us(void)
+{
+  return ui_state->string_hover_begin_us;
+}
+
+internal String8
+ui_string_hover_string(Arena *arena)
+{
+  String8 result = push_str8_copy(arena, ui_state->string_hover_string);
+  return result;
+}
+
+internal D_FancyRunList
+ui_string_hover_runs(Arena *arena)
+{
+  D_FancyRunList result = d_fancy_run_list_copy(arena, &ui_state->string_hover_fancy_runs);
+  return result;
 }
 
 //- rjf: interaction keys
@@ -1268,6 +1299,55 @@ ui_end_build(void)
       }
     }
     scratch_end(scratch);
+  }
+  
+  //- rjf: hovering possibly-truncated drawn text -> store text
+  {
+    B32 found = 0;
+    for(UI_Box *box = ui_state->root, *next = 0; !ui_box_is_nil(box); box = next)
+    {
+      UI_BoxRec rec = ui_box_rec_df_pre(box, ui_state->root);
+      next = rec.next;
+      S32 pop_idx = 0;
+      for(UI_Box *b = box; !ui_box_is_nil(b) && pop_idx <= rec.pop_count; b = b->parent, pop_idx += 1)
+      {
+        if(b->flags & UI_BoxFlag_DrawText && !(b->flags & UI_BoxFlag_DisableTextTrunc))
+        {
+          String8 box_display_string = ui_box_display_string(b);
+          Vec2F32 text_pos = ui_box_text_position(b);
+          Vec2F32 drawn_text_dim = b->display_string_runs.dim;
+          if(drawn_text_dim.x > dim_2f32(b->rect).x &&
+             contains_2f32(r2f32p(text_pos.x,
+                                  b->rect.y0,
+                                  Min(text_pos.x+drawn_text_dim.x, b->rect.x1),
+                                  b->rect.y1),
+                           ui_state->mouse))
+          {
+            if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+            {
+              arena_clear(ui_state->string_hover_arena);
+              ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
+              ui_state->string_hover_fancy_runs = d_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
+              ui_state->string_hover_begin_us = os_now_microseconds();
+            }
+            ui_state->string_hover_build_index = ui_state->build_index;
+            found = 1;
+            goto break_all_hover_string;
+          }
+        }
+      }
+    }
+    break_all_hover_string:;
+    if(!found)
+    {
+      arena_clear(ui_state->string_hover_arena);
+      ui_state->string_hover_build_index = 0;
+      MemoryZeroStruct(&ui_state->string_hover_string);
+    }
+    if(found && !ui_string_hover_active())
+    {
+      ui_state->is_animating = 1;
+    }
   }
   
   ui_state->build_index += 1;
@@ -2101,6 +2181,14 @@ ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings)
   box->flags |= UI_BoxFlag_HasDisplayString;
   box->string = d_string_from_fancy_string_list(ui_build_arena(), strings);
   box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), strings);
+}
+
+internal inline void
+ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, D_FancyRunList *runs)
+{
+  box->flags |= UI_BoxFlag_HasDisplayString;
+  box->string = push_str8_copy(ui_build_arena(), string);
+  box->display_string_runs = d_fancy_run_list_copy(ui_build_arena(), runs);
 }
 
 internal void

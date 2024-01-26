@@ -90,6 +90,22 @@ d_fancy_run_list_from_fancy_string_list(Arena *arena, D_FancyStringList *strs)
   return run_list;
 }
 
+internal D_FancyRunList
+d_fancy_run_list_copy(Arena *arena, D_FancyRunList *src)
+{
+  D_FancyRunList dst = {0};
+  for(D_FancyRunNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  {
+    D_FancyRunNode *dst_n = push_array(arena, D_FancyRunNode, 1);
+    SLLQueuePush(dst.first, dst.last, dst_n);
+    MemoryCopyStruct(&dst_n->v, &src_n->v);
+    dst_n->v.run.pieces = f_piece_array_copy(arena, &src_n->v.run.pieces);
+    dst.node_count += 1;
+  }
+  dst.dim = src->dim;
+  return dst;
+}
+
 ////////////////////////////////
 //~ rjf: Top-Level API
 //
