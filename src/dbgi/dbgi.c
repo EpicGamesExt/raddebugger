@@ -659,6 +659,10 @@ dbgi_parse_thread_entry_point(void *p)
           raddbg_file_is_up_to_date = 0;
         }
       }
+      else
+      {
+        raddbg_file_is_up_to_date = 0;
+      }
       os_file_map_view_close(file_map, file_base);
       os_file_map_close(file_map);
       os_file_close(file);
