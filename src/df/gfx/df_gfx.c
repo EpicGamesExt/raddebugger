@@ -3853,10 +3853,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         df_autocomp_lister_item_array_sort__in_place(&item_array);
         
         //- rjf: animate
-        F32 rate = 1 - pow_f32(2, (-40.f * df_dt()));
         {
           // rjf: animate target # of rows
           {
+            F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
             F32 target = Min((F32)item_array.count, 8.f);
             if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
             {
@@ -3871,6 +3871,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           
           // rjf: animate open
           {
+            F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
             F32 diff = 1.f-ws->autocomp_open_t;
             ws->autocomp_open_t += diff*rate;
             if(abs_f32(diff) < 0.05f)
@@ -4009,10 +4010,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
-          F32 fish_rate = 1 - pow_f32(2, (-40.f * df_dt()));
           {
             // rjf: animate height
             {
+              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
               F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
               ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
               if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
@@ -4027,6 +4028,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             // rjf: animate open
             {
+              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
               F32 diff = 1.f - ws->hover_eval_open_t;
               ws->hover_eval_open_t += diff*fish_rate;
               if(abs_f32(diff) < 0.01f)
@@ -5050,7 +5052,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     //- rjf: animate query info
     //
     {
-      F32 rate = 1 - pow_f32(2, (-40.f * df_dt()));
+      F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
       
       // rjf: animate query view selection transition
       {

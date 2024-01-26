@@ -1089,19 +1089,19 @@ ui_end_build(void)
   //- rjf: animate
   {
     ProfBegin("ui animate");
-    F32 vast_rate = 1 - pow_f32(2, (-100.f* ui_state->animation_dt));
+    F32 vast_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
     F32 fast_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
     F32 fish_rate = 1 - pow_f32(2, (-40.f * ui_state->animation_dt));
     F32 slow_rate = 1 - pow_f32(2, (-30.f * ui_state->animation_dt));
     F32 slug_rate = 1 - pow_f32(2, (-15.f * ui_state->animation_dt));
     F32 slaf_rate = 1 - pow_f32(2, (-8.f * ui_state->animation_dt));
-    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * fish_rate;
+    ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * vast_rate;
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
     if(ui_state->ctx_menu_open_t >= 0.99f && ui_state->ctx_menu_open)
     {
       ui_state->ctx_menu_open_t = 1.f;
     }
-    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * fish_rate;
+    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * vast_rate;
     ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) > 0.01f);
     if(ui_state->tooltip_open_t >= 0.99f && ui_state->tooltip_open)
     {
@@ -1205,7 +1205,7 @@ ui_end_build(void)
   }
   
   //- rjf: animate context menu
-  if(ui_state->ctx_menu_open && !ui_box_is_nil(ui_state->ctx_menu_root))
+  if(ui_state->ctx_menu_open && !ui_box_is_nil(ui_state->ctx_menu_root) && !ui_state->ctx_menu_changed)
   {
     UI_Box *root = ui_state->ctx_menu_root;
     Rng2F32 rect = root->rect;
