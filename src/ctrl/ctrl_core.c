@@ -2032,6 +2032,20 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
               RADDBG_ParsedNameMap map = {0};
               raddbg_name_map_parse(rdbg, unparsed_map, &map);
               
+              // rjf: look up binary's built-in entry point name
+              String8 builtin_entry_point_name = {0};
+              if(rdbg->scope_vmap != 0 && rdbg->procedures != 0)
+              {
+                U64 builtin_entry_point_voff = dbgi->pe.entry_point;
+                U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, builtin_entry_point_voff);
+                RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+                U64 proc_idx = scope->proc_idx;
+                RADDBG_Procedure *procedure = &rdbg->procedures[proc_idx];
+                U64 name_size = 0;
+                U8 *name_ptr = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+                builtin_entry_point_name = str8(name_ptr, name_size);
+              }
+              
               // rjf: grab entry point symbol names we might want to run to
               String8 default_entry_points[] =
               {
@@ -2045,8 +2059,30 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
                 str8_lit("wmainCRTStartup"),
               };
               
-              // rjf: find voff for one of the custom entry points attached to this msg
+              // rjf: determine if built-in entry point is not one of the defaults, and thus
+              // specified by user
+              B32 builtin_entry_point_is_special = 0;
+              if(builtin_entry_point_name.size != 0)
+              {
+                builtin_entry_point_is_special = 1;
+                for(U64 idx = 0; idx < ArrayCount(default_entry_points); idx += 1)
+                {
+                  if(str8_match(default_entry_points[idx], builtin_entry_point_name, 0))
+                  {
+                    builtin_entry_point_is_special = 0;
+                    break;
+                  }
+                }
+              }
+              
+              // rjf: builtin entry point is unique -> use entry point voff
               U64 voff = 0;
+              if(voff == 0 && builtin_entry_point_is_special)
+              {
+                voff = dbgi->pe.entry_point;
+              }
+              
+              // rjf: find voff for one of the custom entry points attached to this msg
               if(voff == 0)
               {
                 for(String8Node *n = msg->strings.first; n != 0; n = n->next)
