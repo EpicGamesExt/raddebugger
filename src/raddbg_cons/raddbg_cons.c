@@ -399,8 +399,6 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out){
         MemoryCopy(out_ptr, node->idx_run, sizeof(*node->idx_run)*node->count);
         out_ptr += node->count;
       }
-      // both iterators should reach the end at the same time
-      Assert(node == 0);
       Assert(out_ptr == opl);
     }
     
