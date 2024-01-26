@@ -561,6 +561,7 @@ struct DF_Window
   DF_AutoCompListerFlags autocomp_lister_flags;
   U8 autocomp_lister_query_buffer[1024];
   U64 autocomp_lister_query_size;
+  F32 autocomp_open_t;
   F32 autocomp_num_visible_rows_t;
   S64 autocomp_cursor_num;
   
@@ -591,6 +592,7 @@ struct DF_Window
   DF_Handle hover_eval_file;
   TxtPt hover_eval_file_pt;
   U64 hover_eval_vaddr;
+  F32 hover_eval_open_t;
   F32 hover_eval_num_visible_rows_t;
   
   // rjf: error state

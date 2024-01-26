@@ -3852,17 +3852,36 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         DF_AutoCompListerItemArray item_array = df_autocomp_lister_item_array_from_chunk_list(scratch.arena, &item_list);
         df_autocomp_lister_item_array_sort__in_place(&item_array);
         
-        //- rjf: animate toward capped number of items
+        //- rjf: animate
         F32 rate = 1 - pow_f32(2, (-40.f * df_dt()));
-        F32 target = Min((F32)item_array.count, 8.f);
-        if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
         {
-          df_gfx_request_frame();
-        }
-        ws->autocomp_num_visible_rows_t += (target - ws->autocomp_num_visible_rows_t) * rate;
-        if(abs_f32(target - ws->autocomp_num_visible_rows_t) <= 0.02f)
-        {
-          ws->autocomp_num_visible_rows_t = target;
+          // rjf: animate target # of rows
+          {
+            F32 target = Min((F32)item_array.count, 8.f);
+            if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
+            {
+              df_gfx_request_frame();
+            }
+            ws->autocomp_num_visible_rows_t += (target - ws->autocomp_num_visible_rows_t) * rate;
+            if(abs_f32(target - ws->autocomp_num_visible_rows_t) <= 0.02f)
+            {
+              ws->autocomp_num_visible_rows_t = target;
+            }
+          }
+          
+          // rjf: animate open
+          {
+            F32 diff = 1.f-ws->autocomp_open_t;
+            ws->autocomp_open_t += diff*rate;
+            if(abs_f32(diff) < 0.05f)
+            {
+              ws->autocomp_open_t = 1.f;
+            }
+            else
+            {
+              df_gfx_request_frame();
+            }
+          }
         }
         
         //- rjf: build
@@ -3878,6 +3897,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           ui_set_next_corner_radius_11(ui_top_font_size()*0.25f);
           ui_set_next_corner_radius_10(ui_top_font_size()*0.25f);
           UI_Focus(UI_FocusKind_On)
+            UI_Squish(0.25f-0.25f*ws->autocomp_open_t)
+            UI_Transparency(1.f-ws->autocomp_open_t)
           {
             autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_Clip|UI_BoxFlag_RoundChildrenByParent|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackground, "autocomp_box");
           }
@@ -3947,6 +3968,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       // rjf: reset open animation
       if(ws->hover_eval_string.size == 0)
       {
+        ws->hover_eval_open_t = 0;
         ws->hover_eval_num_visible_rows_t = 0;
       }
       
@@ -3955,6 +3977,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       {
         df_gfx_request_frame();
         ws->hover_eval_num_visible_rows_t = 0;
+        ws->hover_eval_open_t = 0;
       }
       
       // rjf: build hover eval
@@ -3985,18 +4008,39 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, expr);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
-          //- rjf: build hover eval box
+          //- rjf: animate
           F32 fish_rate = 1 - pow_f32(2, (-40.f * df_dt()));
-          F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
-          ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
-          if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
           {
-            df_gfx_request_frame();
+            // rjf: animate height
+            {
+              F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
+              ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
+              if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
+              {
+                df_gfx_request_frame();
+              }
+              else
+              {
+                ws->hover_eval_num_visible_rows_t = hover_eval_container_height_target;
+              }
+            }
+            
+            // rjf: animate open
+            {
+              F32 diff = 1.f - ws->hover_eval_open_t;
+              ws->hover_eval_open_t += diff*fish_rate;
+              if(abs_f32(diff) < 0.01f)
+              {
+                ws->hover_eval_open_t = 1.f;
+              }
+              else
+              {
+                df_gfx_request_frame();
+              }
+            }
           }
-          else
-          {
-            ws->hover_eval_num_visible_rows_t = hover_eval_container_height_target;
-          }
+          
+          //- rjf: build hover eval box
           F32 hover_eval_container_height = ws->hover_eval_num_visible_rows_t;
           F32 corner_radius = ui_top_font_size()*0.25f;
           ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
@@ -4009,6 +4053,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           ui_set_next_corner_radius_10(corner_radius);
           ui_set_next_corner_radius_11(corner_radius);
           ui_set_next_child_layout_axis(Axis2_Y);
+          ui_set_next_squish(0.25f-0.25f*ws->hover_eval_open_t);
+          ui_set_next_transparency(1.f-ws->hover_eval_open_t);
           UI_Focus(UI_FocusKind_On)
           {
             hover_eval_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|
@@ -5068,7 +5114,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       
       //- rjf: build floating query view container
       UI_Box *query_container_box = &ui_g_nil_box;
-      UI_Rect(query_container_rect) UI_CornerRadius(ui_top_font_size()*0.2f) UI_ChildLayoutAxis(Axis2_Y)
+      UI_Rect(query_container_rect)
+        UI_CornerRadius(ui_top_font_size()*0.2f)
+        UI_ChildLayoutAxis(Axis2_Y)
+        UI_Squish(0.25f-ws->query_view_t*0.25f)
+        UI_Transparency(1-ws->query_view_t)
       {
         query_container_box = ui_build_box_from_stringf(UI_BoxFlag_Floating|
                                                         UI_BoxFlag_AllowOverflow|
@@ -6128,6 +6178,23 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
       }
       
+      // rjf: push transparency
+      if(box->transparency != 0)
+      {
+        d_push_transparency(box->transparency);
+      }
+      
+      // rjf: push squish
+      if(box->squish != 0)
+      {
+        Vec2F32 box_dim = dim_2f32(box->rect);
+        Mat3x3F32 box2origin_xform = make_translate_3x3f32(v2f32(-box->rect.x0 - box_dim.x/2, -box->rect.y0));
+        Mat3x3F32 scale_xform = make_scale_3x3f32(v2f32(1-box->squish, 1-box->squish));
+        Mat3x3F32 origin2box_xform = make_translate_3x3f32(v2f32(box->rect.x0 + box_dim.x/2, box->rect.y0));
+        Mat3x3F32 xform = mul_3x3f32(origin2box_xform, mul_3x3f32(scale_xform, box2origin_xform));
+        d_push_xform2d(xform);
+      }
+      
       // rjf: draw drop shadow
       if(box->flags & UI_BoxFlag_DrawDropShadow)
       {
@@ -6139,7 +6206,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       // rjf: blur background
       if(box->flags & UI_BoxFlag_DrawBackgroundBlur)
       {
-        R_PassParams_Blur *params = d_blur(box->rect, box->blur_size, 0);
+        R_PassParams_Blur *params = d_blur(box->rect, box->blur_size*(1-box->transparency), 0);
         MemoryCopyArray(params->corner_radii, box->corner_radii);
       }
       
@@ -6329,6 +6396,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             d_pop_clip();
           }
           
+          // rjf: draw debug border
+          if(0)
+          {
+            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1), v4f32(1, 0, 1, 0.5f), 0, 1.f, 1.f);
+          }
+          
           // rjf: draw border
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
@@ -6421,6 +6494,18 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             R_Rect2DInst *inst = d_rect(b->rect, v4f32(0, 0, 0, 0.5f*b->disabled_t), 0, 0, 1);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
+          }
+          
+          // rjf: pop squish
+          if((b != box || rec.push_count == 0) && b->squish != 0)
+          {
+            d_pop_xform2d();
+          }
+          
+          // rjf: pop transparency
+          if((b != box || rec.push_count == 0) && b->transparency != 0)
+          {
+            d_pop_transparency();
           }
           
           pop_idx += 1;
@@ -7511,11 +7596,13 @@ df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx
   {
     ws->autocomp_force_closed = 0;
     ws->autocomp_num_visible_rows_t = 0;
+    ws->autocomp_open_t = 0;
   }
   if(ws->autocomp_last_frame_idx+1 < df_frame_index())
   {
     ws->autocomp_force_closed = 0;
     ws->autocomp_num_visible_rows_t = 0;
+    ws->autocomp_open_t = 0;
   }
   ws->autocomp_ctrl_ctx = ctrl_ctx;
   ws->autocomp_root_key = root_key;
@@ -8549,15 +8636,17 @@ internal void
 df_entity_tooltips(DF_Entity *entity)
 {
   Temp scratch = scratch_begin(0, 0);
-  UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1)) switch(entity->kind)
+  switch(entity->kind)
   {
     default:break;
     case DF_EntityKind_File:
+    UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
       String8 full_path = df_full_path_from_entity(scratch.arena, entity);
       ui_label(full_path);
     }break;
     case DF_EntityKind_Thread: UI_Flags(0)
+      UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
       String8 display_string = df_display_string_from_entity(scratch.arena, entity);
       U64 rip_vaddr = df_query_cached_rip_from_thread(entity);
@@ -8609,6 +8698,7 @@ df_entity_tooltips(DF_Entity *entity)
       }
     }break;
     case DF_EntityKind_Breakpoint: UI_Flags(0)
+      UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
       if(entity->flags & DF_EntityFlag_HasColor)
       {
@@ -8635,7 +8725,9 @@ df_entity_tooltips(DF_Entity *entity)
         UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), hit_count_text);
       }
     }break;
-    case DF_EntityKind_WatchPin: UI_Font(df_font_from_slot(DF_FontSlot_Code))
+    case DF_EntityKind_WatchPin:
+    UI_Font(df_font_from_slot(DF_FontSlot_Code))
+      UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
       if(entity->flags & DF_EntityFlag_HasColor)
       {

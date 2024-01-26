@@ -191,7 +191,7 @@ str8_lit_comp(
 "  // rjf: form+return final color\n"
 "  float4 final_color = albedo_sample;\n"
 "  final_color *= tint;\n"
-"  final_color *= opacity;\n"
+"  final_color.a *= opacity;\n"
 "  final_color.a *= corner_sdf_t;\n"
 "  final_color.a *= border_sdf_t;\n"
 "  return final_color;\n"

@@ -190,7 +190,7 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
   // rjf: form+return final color
   float4 final_color = albedo_sample;
   final_color *= tint;
-  final_color *= opacity;
+  final_color.a *= opacity;
   final_color.a *= corner_sdf_t;
   final_color.a *= border_sdf_t;
   return final_color;

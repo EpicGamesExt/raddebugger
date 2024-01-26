@@ -611,6 +611,8 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     ui_state->clipboard_copy_key = ui_key_zero();
     ui_state->last_build_box_count = ui_state->build_box_count;
     ui_state->build_box_count = 0;
+    ui_state->tooltip_open = 0;
+    ui_state->ctx_menu_changed = 0;
   }
   
   //- rjf: fill build phase parameters
@@ -908,6 +910,8 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     Vec2F32 anchor = add_2f32(ui_state->ctx_menu_anchor_box_last_pos, ui_state->ctx_menu_anchor_off);
     UI_FixedX(anchor.x) UI_FixedY(anchor.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
       UI_Focus(UI_FocusKind_On)
+      UI_Squish(0.25f-ui_state->ctx_menu_open_t*0.25f)
+      UI_Transparency(1-ui_state->ctx_menu_open_t)
     {
       ui_set_next_child_layout_axis(Axis2_Y);
       ui_state->ctx_menu_root = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawDropShadow|(ui_state->ctx_menu_open*UI_BoxFlag_DefaultFocusNavY), "###ctx_menu_%I64x", window.u64[0]);
@@ -1014,7 +1018,7 @@ ui_end_build(void)
   }
   
   //- rjf: stick ctx menu to anchor
-  if(ui_state->ctx_menu_touched_this_frame)
+  if(ui_state->ctx_menu_touched_this_frame && !ui_state->ctx_menu_changed)
   {
     UI_Box *anchor_box = ui_box_from_key(ui_state->ctx_menu_anchor_key);
     if(!ui_box_is_nil(anchor_box))
@@ -1092,10 +1096,16 @@ ui_end_build(void)
     F32 slug_rate = 1 - pow_f32(2, (-15.f * ui_state->animation_dt));
     F32 slaf_rate = 1 - pow_f32(2, (-8.f * ui_state->animation_dt));
     ui_state->ctx_menu_open_t += ((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) * fish_rate;
-    ui_state->is_animating = (ui_state->is_animating || fabsf((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
-    if(ui_state->ctx_menu_open_t >= 0.99f)
+    ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->ctx_menu_open - ui_state->ctx_menu_open_t) > 0.01f);
+    if(ui_state->ctx_menu_open_t >= 0.99f && ui_state->ctx_menu_open)
     {
       ui_state->ctx_menu_open_t = 1.f;
+    }
+    ui_state->tooltip_open_t += ((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) * fish_rate;
+    ui_state->is_animating = (ui_state->is_animating || abs_f32((F32)!!ui_state->tooltip_open - ui_state->tooltip_open_t) > 0.01f);
+    if(ui_state->tooltip_open_t >= 0.99f && ui_state->tooltip_open)
+    {
+      ui_state->tooltip_open_t = 1.f;
     }
     for(U64 slot_idx = 0; slot_idx < ui_state->box_table_size; slot_idx += 1)
     {
@@ -1578,13 +1588,17 @@ ui_layout_root(UI_Box *root, Axis2 axis)
 internal void
 ui_tooltip_begin_base(void)
 {
+  ui_state->tooltip_open = 1;
   ui_push_parent(ui_root_from_state(ui_state));
   ui_push_parent(ui_state->tooltip_root);
+  ui_push_flags(0);
 }
 
 internal void
 ui_tooltip_end_base(void)
 {
+  ui_pop_flags();
+  ui_pop_transparency();
   ui_pop_parent();
   ui_pop_parent();
 }
@@ -1593,10 +1607,20 @@ internal void
 ui_tooltip_begin(void)
 {
   ui_tooltip_begin_base();
-  UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_RoundChildrenByParent)
+  ui_set_next_squish(0.25f-ui_state->tooltip_open_t*0.25f);
+  ui_set_next_transparency(1-ui_state->tooltip_open_t);
+  UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow)
     UI_PrefWidth(ui_children_sum(1))
     UI_PrefHeight(ui_children_sum(1))
     UI_CornerRadius(ui_top_font_size()*0.25f)
+    ui_column_begin();
+  UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  UI_PrefWidth(ui_children_sum(1))
+    UI_PrefHeight(ui_children_sum(1))
+    ui_row_begin();
+  UI_PrefHeight(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  UI_PrefWidth(ui_children_sum(1))
+    UI_PrefHeight(ui_children_sum(1))
     ui_column_begin();
   ui_push_pref_width(ui_text_dim(10.f, 1.f));
   ui_push_pref_height(ui_em(2.f, 1.f));
@@ -1610,6 +1634,10 @@ ui_tooltip_end(void)
   ui_pop_pref_width();
   ui_pop_pref_height();
   ui_column_end();
+  UI_PrefHeight(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  ui_row_end();
+  UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  ui_column_end();
   ui_tooltip_end_base();
 }
 
@@ -1621,6 +1649,7 @@ ui_ctx_menu_open(UI_Key key, UI_Key anchor_box_key, Vec2F32 anchor_off)
   anchor_off.x = (F32)(int)anchor_off.x;
   anchor_off.y = (F32)(int)anchor_off.y;
   ui_state->next_ctx_menu_open = 1;
+  ui_state->ctx_menu_changed = 1;
   ui_state->ctx_menu_open_t = 0;
   ui_state->ctx_menu_key = key;
   ui_state->next_ctx_menu_anchor_key = anchor_box_key;
@@ -1955,6 +1984,8 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->corner_radii[Corner_10] = ui_state->corner_radius_10_stack.top->v;
     box->corner_radii[Corner_11] = ui_state->corner_radius_11_stack.top->v;
     box->blur_size = ui_state->blur_size_stack.top->v;
+    box->transparency = ui_state->transparency_stack.top->v;
+    box->squish = ui_state->squish_stack.top->v;
     box->text_padding = ui_state->text_padding_stack.top->v;
     box->hover_cursor = ui_state->hover_cursor_stack.top->v;
     box->custom_draw = 0;
