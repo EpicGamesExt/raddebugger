@@ -6899,7 +6899,9 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         
         // rjf: special-case: symbols
         else if((flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && symbol_name.size != 0 &&
-                (type_kind == TG_Kind_Function || direct_type_kind == TG_Kind_Void))
+                (type_kind == TG_Kind_Function ||
+                 direct_type_kind == TG_Kind_Function ||
+                 direct_type_kind == TG_Kind_Void))
         {
           str8_list_push(arena, &list, symbol_name);
           space_taken += f_dim_from_tag_size_string(font, font_size, symbol_name).x;
