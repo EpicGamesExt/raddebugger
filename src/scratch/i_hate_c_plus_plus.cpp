@@ -1,20 +1,21 @@
-#include <fstream>
-
-namespace SomeWeirdNamespace
+namespace NS
 {
-  int X = 0;
-  int Y = 0;
-  void Foo(void)
+  static int X = 123;
+  static int Y = 456;
+  namespace SubNS
   {
-    X = 123;
-    Y = 456;
-    int x = 0;
+    static int X = 111;
+    static int Y = 222;
+    int Foo(int x, int y)
+    {
+      int z = x + y + X + Y + NS::X + NS::Y;
+      return z;
+    }
   }
 }
 
-int main()
+int main(void)
 {
-  std::fstream temp;
-  SomeWeirdNamespace::Foo();
+  int result = NS::SubNS::Foo(5, 6);
   return 0;
 }

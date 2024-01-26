@@ -1042,20 +1042,23 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
 {
   String8 error = {0};
   B32 prefer_imm = 0;
-  switch(spec->info.query_rule)
+  switch(spec->info.query.slot)
   {
     default:
-    case DF_CmdQueryRule_String:
+    case DF_CmdParamSlot_String:
     {
       params->string = push_str8_copy(arena, query);
       df_cmd_params_mark_slot(params, DF_CmdParamSlot_String);
     }break;
-    case DF_CmdQueryRule_FilePath:
+    case DF_CmdParamSlot_FilePath:
     {
-      params->file_path = push_str8_copy(arena, query);
+      String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
+      params->file_path = push_str8_copy(arena, pair.string);
+      params->text_point = pair.pt;
       df_cmd_params_mark_slot(params, DF_CmdParamSlot_FilePath);
+      df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
     }break;
-    case DF_CmdQueryRule_TextPoint:
+    case DF_CmdParamSlot_TextPoint:
     {
       U64 v = 0;
       if(try_u64_from_str8_c_rules(query, &v))
@@ -1064,19 +1067,15 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
         params->text_point.line = v;
         df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
       }
+      else
+      {
+        error = str8_lit("Couldn't interpret as a line number.");
+      }
     }break;
-    case DF_CmdQueryRule_FilePathAndTextPoint:
-    {
-      String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
-      params->file_path = push_str8_copy(arena, pair.string);
-      params->text_point = pair.pt;
-      df_cmd_params_mark_slot(params, DF_CmdParamSlot_FilePath);
-      df_cmd_params_mark_slot(params, DF_CmdParamSlot_TextPoint);
-    }break;
-    case DF_CmdQueryRule_VirtualAddr: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdQueryRule_VirtualOff: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdQueryRule_Index: prefer_imm = 1; goto use_numeric_eval;
-    case DF_CmdQueryRule_ID: prefer_imm = 1; goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualAddr: prefer_imm = 0; goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualOff: prefer_imm = 0; goto use_numeric_eval;
+    case DF_CmdParamSlot_Index: prefer_imm = 1; goto use_numeric_eval;
+    case DF_CmdParamSlot_ID: prefer_imm = 1; goto use_numeric_eval;
     use_numeric_eval:
     {
       Temp scratch = scratch_begin(&arena, 1);
@@ -1084,9 +1083,7 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
       DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
       U64 vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-      DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-      U64 voff = df_voff_from_vaddr(module, vaddr);
-      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_module_voff(scope, module, voff);
+      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, vaddr);
       DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, &parse_ctx, query);
       if(eval.errors.count == 0)
       {
@@ -1097,25 +1094,25 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
           prefer_imm = 1;
         }
         U64 u64 = !prefer_imm && eval.offset ? eval.offset : eval.imm_u64;
-        switch(spec->info.query_rule)
+        switch(spec->info.query.slot)
         {
           default:{}break;
-          case DF_CmdQueryRule_VirtualAddr:
+          case DF_CmdParamSlot_VirtualAddr:
           {
             params->vaddr = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_VirtualAddr);
           }break;
-          case DF_CmdQueryRule_VirtualOff:
+          case DF_CmdParamSlot_VirtualOff:
           {
             params->voff = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_VirtualOff);
           }break;
-          case DF_CmdQueryRule_Index:
+          case DF_CmdParamSlot_Index:
           {
             params->index = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_Index);
           }break;
-          case DF_CmdQueryRule_ID:
+          case DF_CmdParamSlot_ID:
           {
             params->id = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_ID);
@@ -1140,11 +1137,7 @@ df_cmd_list_push(Arena *arena, DF_CmdList *cmds, DF_CmdParams *params, DF_CmdSpe
 {
   DF_CmdNode *n = push_array(arena, DF_CmdNode, 1);
   n->cmd.spec = spec;
-  MemoryCopyStruct(&n->cmd.params, params);
-  n->cmd.params.entity_list = df_push_handle_list_copy(arena, params->entity_list);
-  n->cmd.params.string = push_str8_copy(arena, params->string);
-  n->cmd.params.file_path = push_str8_copy(arena, params->file_path);
-  if(n->cmd.params.cmd_spec == 0) {n->cmd.params.cmd_spec = &df_g_nil_cmd_spec;}
+  n->cmd.params = df_cmd_params_copy(arena, params);
   DLLPushBack(cmds->first, cmds->last, n);
   cmds->count += 1;
 }
@@ -1628,7 +1621,7 @@ df_entity_notify_mutation(DF_Entity *entity)
       DF_CmdParams p = {0};
       df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
     }
-    if(e == entity && flags & DF_EntityKindFlag_LeafMutationSoftHalt)
+    if(e == entity && flags & DF_EntityKindFlag_LeafMutationSoftHalt && df_ctrl_targets_running())
     {
       df_state->entities_mut_soft_halt = 1;
     }
@@ -1636,7 +1629,7 @@ df_entity_notify_mutation(DF_Entity *entity)
     {
       df_state->entities_mut_dbg_info_map = 1;
     }
-    if(flags & DF_EntityKindFlag_TreeMutationSoftHalt)
+    if(flags & DF_EntityKindFlag_TreeMutationSoftHalt && df_ctrl_targets_running())
     {
       df_state->entities_mut_soft_halt = 1;
     }
@@ -2092,6 +2085,10 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
             next_parent->timestamp = file_properties.modified;
             next_parent->flags |= DF_EntityFlag_IsFolder * !!(file_properties.flags & FilePropertyFlag_IsFolder);
             next_parent->flags |= DF_EntityFlag_IsMissing * !!(file_properties.created == 0);
+            if(path_part_n->next != 0)
+            {
+              next_parent->flags |= DF_EntityFlag_IsFolder;
+            }
           }
         }
         else
@@ -2147,6 +2144,10 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
             next_parent->timestamp = file_properties.modified;
             next_parent->flags |= DF_EntityFlag_IsFolder * !!(file_properties.flags & FilePropertyFlag_IsFolder);
             next_parent->flags |= DF_EntityFlag_IsMissing * !!(file_properties.created == 0);
+            if(path_part_n->next != 0)
+            {
+              next_parent->flags |= DF_EntityFlag_IsFolder;
+            }
           }
         }
         else
@@ -2503,9 +2504,8 @@ df_register_cmd_specs(DF_CmdSpecInfoArray specs)
     info_copy->search_tags            = push_str8_copy(df_state->arena, info->search_tags);
     info_copy->display_name           = push_str8_copy(df_state->arena, info->display_name);
     info_copy->flags                  = info->flags;
-    info_copy->query_rule             = info->query_rule;
+    info_copy->query                  = info->query;
     info_copy->canonical_icon_kind    = info->canonical_icon_kind;
-    MemoryCopyArray(info_copy->query_info_u64, info->query_info_u64);
     spec->registrar_index = registrar_idx;
     spec->ordering_index = idx;
   }
@@ -3486,12 +3486,14 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
     U64 thread_info_addr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
     U64 tls_addr_off = tls_index*addr_size;
     U64 tls_addr_array = 0;
-    String8 tls_addr_array_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size));
+    CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size));
+    String8 tls_addr_array_data = tls_addr_array_slice.data;
     if(tls_addr_array_data.size >= 8)
     {
       MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
     }
-    String8 result_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size));
+    CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size));
+    String8 result_data = result_slice.data;
     if(result_data.size >= 8)
     {
       MemoryCopy(&base_vaddr, result_data.str, sizeof(U64));
@@ -3618,13 +3620,6 @@ df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
         String8 binary_full_path = df_full_path_from_entity(scratch.arena, binary);
         DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
         String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
-        
-        // rjf: cancel on bad data
-        if(binary_data.size == 0)
-        {
-          unwind.error = 1;
-          break;
-        }
         
         // rjf: valid step -> push frame
         DF_UnwindFrame *frame = push_array(arena, DF_UnwindFrame, 1);
@@ -3812,6 +3807,10 @@ df_push_ctrl_msg(CTRL_Msg *msg)
 {
   CTRL_Msg *dst = ctrl_msg_list_push(df_state->ctrl_msg_arena, &df_state->ctrl_msgs);
   ctrl_msg_deep_copy(df_state->ctrl_msg_arena, dst, msg);
+  if(dst->kind == CTRL_MsgKind_LaunchAndInit)
+  {
+    df_state->ctrl_is_running = 1;
+  }
   if(df_state->ctrl_soft_halt_issued == 0 && df_ctrl_targets_running())
   {
     df_state->ctrl_soft_halt_issued = 1;
@@ -3956,7 +3955,8 @@ df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
   Assert(process->kind == DF_EntityKind_Process);
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
-  String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
+  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
+  String8 data = slice.data;
   if(data.size == size)
   {
     result = 1;
@@ -3967,17 +3967,19 @@ df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 }
 
 internal EVAL_ParseCtx
-df_eval_parse_ctx_from_module_voff(DBGI_Scope *scope, DF_Entity *module, U64 voff)
+df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 vaddr)
 {
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: extract info
+  DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
+  U64 voff = df_voff_from_vaddr(module, vaddr);
   DF_Entity *binary = df_binary_file_from_module(module);
   String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
   RADDBG_Parsed *rdbg = &dbgi->rdbg;
-  Architecture arch = df_architecture_from_entity(module);
-  EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch (arch);
+  Architecture arch = df_architecture_from_entity(process);
+  EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch(arch);
   EVAL_String2NumMap *reg_alias_map = ctrl_string2alias_from_arch(arch);
   EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, voff);
   EVAL_String2NumMap *member_map = df_query_cached_member_map_from_binary_voff(binary, voff);
@@ -4088,7 +4090,10 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
       if(modules.count != 0)
       {
         DF_Entity *module = modules.first->entity;
-        ctx = df_eval_parse_ctx_from_module_voff(scope, module, src2dasm->voff_range.min);
+        DF_Entity *process = df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
+        U64 voff = src2dasm->voff_range.min;
+        U64 vaddr = df_vaddr_from_voff(module, voff);
+        ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, vaddr);
         good_ctx = 1;
         break;
       }
@@ -4249,7 +4254,8 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
         Rng1U64 vaddr_range = r1u64(eval.offset, eval.offset + type_byte_size);
         if(dim_1u64(vaddr_range) == type_byte_size)
         {
-          String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range);
+          CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range);
+          String8 data = slice.data;
           MemoryZeroArray(eval.imm_u128);
           MemoryCopy(eval.imm_u128, data.str, Min(data.size, sizeof(U64)*2));
           eval.mode = EVAL_EvalMode_Value;
@@ -4308,7 +4314,7 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
   TG_Kind type_kind = tg_kind_from_key(type_key);
   if(type_kind == TG_Kind_Ptr)
   {
-    TG_Key ptee_type_key = tg_direct_from_graph_raddbg_key(graph, rdbg, type_key);
+    TG_Key ptee_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, type_key);
     TG_Kind ptee_type_kind = tg_kind_from_key(ptee_type_key);
     if(ptee_type_kind == TG_Kind_Struct || ptee_type_kind == TG_Kind_Class)
     {
@@ -4326,14 +4332,16 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
       {
         U64 ptr_vaddr = eval.offset;
         U64 addr_size = bit_size_from_arch(arch)/8;
-        String8 ptr_value_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                   r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        CTRL_ProcessMemorySlice ptr_value_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                  r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        String8 ptr_value_memory = ptr_value_slice.data;
         if(ptr_value_memory.size >= addr_size)
         {
           U64 class_base_vaddr = 0;
           MemoryCopy(&class_base_vaddr, ptr_value_memory.str, addr_size);
-          String8 vtable_base_ptr_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                           r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          CTRL_ProcessMemorySlice vtable_base_ptr_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                          r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          String8 vtable_base_ptr_memory = vtable_base_ptr_slice.data;
           if(vtable_base_ptr_memory.size >= addr_size)
           {
             U64 vtable_vaddr = 0;
@@ -4793,14 +4801,21 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       }break;
       
       //- rjf: integers
+      case TG_Kind_Char8:
+      case TG_Kind_Char16:
+      case TG_Kind_Char32:
       case TG_Kind_S8:
       case TG_Kind_S16:
       case TG_Kind_S32:
       case TG_Kind_S64:
+      case TG_Kind_UChar8:
+      case TG_Kind_UChar16:
+      case TG_Kind_UChar32:
       case TG_Kind_U8:
       case TG_Kind_U16:
       case TG_Kind_U32:
       case TG_Kind_U64:
+      case TG_Kind_Bool:
       if(TG_Kind_Char8 <= src_type_kind && src_type_kind <= TG_Kind_Bool)
       {
         DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdbg, ctrl_ctx, src_eval);
@@ -4863,7 +4878,7 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       default:{}break;
       case EVAL_EvalMode_Addr:
       {
-        ctrl_process_write_data(process->ctrl_machine_id, process->ctrl_handle, dst_eval.offset, commit_data);
+        ctrl_process_write(process->ctrl_machine_id, process->ctrl_handle, r1u64(dst_eval.offset, dst_eval.offset+commit_data.size), commit_data.str);
       }break;
       case EVAL_EvalMode_Reg:
       {
@@ -6431,6 +6446,23 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
           }
+          
+          // rjf: kill all entities which are marked to die on stop
+          {
+            DF_Entity *request = df_entity_from_id(event->msg_id);
+            if(df_entity_is_nil(request))
+            {
+              for(DF_Entity *entity = df_entity_root();
+                  !df_entity_is_nil(entity);
+                  entity = df_entity_rec_df_pre(entity, df_entity_root()).next)
+              {
+                if(entity->flags & DF_EntityFlag_DiesOnRunStop)
+                {
+                  df_entity_mark_for_deletion(entity);
+                }
+              }
+            }
+          }
         }break;
         
         //- rjf: entity creation/deletion
@@ -6802,13 +6834,18 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         default:{}break;
         
         //- rjf: command fast paths
-        case DF_CoreCmdKind_CommandFastPath:
+        case DF_CoreCmdKind_RunCommand:
         {
           DF_CmdSpec *spec = params.cmd_spec;
-          DF_CmdQueryRule query_rule = spec->info.query_rule;
-          if(query_rule == DF_CmdQueryRule_Null)
+          if(spec != cmd->spec)
           {
-            df_cmd_list_push(arena, cmds, &params, spec);
+            df_cmd_spec_counter_inc(spec);
+            if(!(spec->info.query.flags & DF_CmdQueryFlag_Required) &&
+               (spec->info.query.slot == DF_CmdParamSlot_Null ||
+                df_cmd_params_has_slot(&params, spec->info.query.slot)))
+            {
+              df_cmd_list_push(arena, cmds, &params, spec);
+            }
           }
         }break;
         
@@ -6979,14 +7016,17 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_Detach:
         {
-          DF_Entity *entity = df_entity_from_handle(params.entity);
-          if(entity->kind == DF_EntityKind_Process)
+          for(DF_HandleNode *n = params.entity_list.first; n != 0; n = n->next)
           {
-            CTRL_Msg msg = {CTRL_MsgKind_Detach};
-            msg.machine_id = entity->ctrl_machine_id;
-            msg.entity = entity->ctrl_handle;
-            MemoryCopyArray(msg.exception_code_filters, df_state->ctrl_exception_code_filters);
-            df_push_ctrl_msg(&msg);
+            DF_Entity *entity = df_entity_from_handle(n->handle);
+            if(entity->kind == DF_EntityKind_Process)
+            {
+              CTRL_Msg msg = {CTRL_MsgKind_Detach};
+              msg.machine_id = entity->ctrl_machine_id;
+              msg.entity = entity->ctrl_handle;
+              MemoryCopyArray(msg.exception_code_filters, df_state->ctrl_exception_code_filters);
+              df_push_ctrl_msg(&msg);
+            }
           }
         }break;
         case DF_CoreCmdKind_Continue:
@@ -7019,7 +7059,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_StepIntoLine:
         case DF_CoreCmdKind_StepOverLine:
         case DF_CoreCmdKind_StepOut:
-        case DF_CoreCmdKind_RunToAddress:
         {
           DF_Entity *thread = df_entity_from_handle(params.entity);
           if(df_ctrl_targets_running())
@@ -7071,11 +7110,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                   good = 0;
                 }
               }break;
-              case DF_CoreCmdKind_RunToAddress:
-              {
-                CTRL_Trap trap = {CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck, params.vaddr};
-                ctrl_trap_list_push(scratch.arena, &traps, &trap);
-              }break;
             }
             if(good && traps.count != 0)
             {
@@ -7086,17 +7120,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               df_ctrl_run(DF_RunKind_SingleStep, thread, &traps);
             }
           }
-        }break;
-        case DF_CoreCmdKind_RunToModuleOffset:
-        {
-          DF_Entity *thread = df_entity_from_handle(params.entity);
-          DF_Entity *module = df_module_from_thread(thread);
-          U64 voff = params.voff;
-          U64 vaddr = df_vaddr_from_voff(module, voff);
-          DF_CmdParams params = df_cmd_params_zero();
-          params.vaddr = vaddr;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
         }break;
         case DF_CoreCmdKind_Halt:
         if(df_ctrl_targets_running())
@@ -7121,6 +7144,30 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: high-level composite target control operations
+        case DF_CoreCmdKind_RunToLine:
+        {
+          DF_Entity *file = df_entity_from_handle(params.entity);
+          TxtPt point = params.text_point;
+          if(file->kind == DF_EntityKind_File)
+          {
+            DF_Entity *bp = df_entity_alloc(0, file, DF_EntityKind_Breakpoint);
+            bp->flags |= DF_EntityFlag_DiesOnRunStop;
+            df_entity_equip_b32(bp, 1);
+            df_entity_equip_txt_pt(bp, point);
+            df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+            DF_CmdParams p = df_cmd_params_zero();
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
+          }
+        }break;
+        case DF_CoreCmdKind_RunToAddress:
+        {
+          DF_Entity *bp = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Breakpoint);
+          bp->flags |= DF_EntityFlag_DiesOnRunStop;
+          df_entity_equip_vaddr(bp, params.vaddr);
+          df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+          DF_CmdParams p = df_cmd_params_zero();
+          df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
+        }break;
         case DF_CoreCmdKind_Run:
         {
           DF_CmdParams params = df_cmd_params_zero();
@@ -7130,7 +7177,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Continue));
           }
-          else
+          else if(!df_ctrl_targets_running())
           {
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndRun));
@@ -7185,7 +7232,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(step_cmd_kind));
           }
-          else
+          else if(!df_ctrl_targets_running())
           {
             DF_EntityList targets = df_push_active_target_list(scratch.arena);
             DF_CmdParams p = params;
@@ -7524,46 +7571,63 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           
           //- rjf: apply targets
           DF_CfgVal *targets = df_cfg_val_from_string(table, str8_lit("target"));
-          for(DF_CfgNode *target = targets->first;
-              target != &df_g_nil_cfg_node;
-              target = target->next)
           {
-            if(target->source == src)
+            B32 cmd_line_target_present = 0;
             {
-              DF_CfgNode *label_cfg  = df_cfg_node_child_from_string(target, str8_lit("label"),             StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *exe_cfg    = df_cfg_node_child_from_string(target, str8_lit("exe"),               StringMatchFlag_CaseInsensitive);
-              if(exe_cfg == &df_g_nil_cfg_node)
+              DF_EntityList existing_target_entities = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
+              for(DF_EntityNode *n = existing_target_entities.first; n != 0; n = n->next)
               {
-                exe_cfg = df_cfg_node_child_from_string(target, str8_lit("name"), StringMatchFlag_CaseInsensitive);
+                DF_Entity *target = n->entity;
+                if(target->cfg_src == DF_CfgSrc_CommandLine && target->b32)
+                {
+                  cmd_line_target_present = 1;
+                }
               }
-              DF_CfgNode *args_cfg   = df_cfg_node_child_from_string(target, str8_lit("arguments"),         StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *wdir_cfg   = df_cfg_node_child_from_string(target, str8_lit("working_directory"), StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *entry_cfg  = df_cfg_node_child_from_string(target, str8_lit("entry_point"),       StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *active_cfg = df_cfg_node_child_from_string(target, str8_lit("active"),            StringMatchFlag_CaseInsensitive);
-              Vec4F32 hsva = df_hsva_from_cfg_node(target);
-              U64 is_active_u64 = 0;
-              try_u64_from_str8_c_rules(active_cfg->first->string, &is_active_u64);
-              DF_Entity *target__ent = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Target);
-              DF_Entity *exe__ent    = df_entity_alloc(0, target__ent, DF_EntityKind_Executable);
-              DF_Entity *args__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_Arguments);
-              DF_Entity *path__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_ExecutionPath);
-              DF_Entity *entry__ent  = df_entity_alloc(0, target__ent, DF_EntityKind_EntryPointName);
-              String8 saved_label = label_cfg->first->string;
-              String8 saved_exe = exe_cfg->first->string;
-              String8 saved_exe_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_exe, cfg_folder);
-              String8 saved_wdir = wdir_cfg->first->string;
-              String8 saved_wdir_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_wdir, cfg_folder);
-              String8 saved_entry_point = entry_cfg->first->string;
-              df_entity_equip_b32(target__ent, active_cfg != &df_g_nil_cfg_node ? !!is_active_u64 : 1);
-              df_entity_equip_name(0, target__ent, saved_label);
-              df_entity_equip_name(0, exe__ent,    saved_exe_absolute);
-              df_entity_equip_name(0, args__ent,   args_cfg->first->string);
-              df_entity_equip_name(0, path__ent,   saved_wdir_absolute);
-              df_entity_equip_name(0, entry__ent,  saved_entry_point);
-              df_entity_equip_cfg_src(target__ent, src);
-              if(!memory_is_zero(&hsva, sizeof(hsva)))
+            }
+            for(DF_CfgNode *target = targets->first;
+                target != &df_g_nil_cfg_node;
+                target = target->next)
+            {
+              if(target->source == src)
               {
-                df_entity_equip_color_hsva(target__ent, hsva);
+                DF_CfgNode *label_cfg  = df_cfg_node_child_from_string(target, str8_lit("label"),             StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *exe_cfg    = df_cfg_node_child_from_string(target, str8_lit("exe"),               StringMatchFlag_CaseInsensitive);
+                if(exe_cfg == &df_g_nil_cfg_node)
+                {
+                  exe_cfg = df_cfg_node_child_from_string(target, str8_lit("name"), StringMatchFlag_CaseInsensitive);
+                }
+                DF_CfgNode *args_cfg   = df_cfg_node_child_from_string(target, str8_lit("arguments"),         StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *wdir_cfg   = df_cfg_node_child_from_string(target, str8_lit("working_directory"), StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *entry_cfg  = df_cfg_node_child_from_string(target, str8_lit("entry_point"),       StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *active_cfg = df_cfg_node_child_from_string(target, str8_lit("active"),            StringMatchFlag_CaseInsensitive);
+                Vec4F32 hsva = df_hsva_from_cfg_node(target);
+                U64 is_active_u64 = 0;
+                if(!cmd_line_target_present)
+                {
+                  try_u64_from_str8_c_rules(active_cfg->first->string, &is_active_u64);
+                }
+                DF_Entity *target__ent = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Target);
+                DF_Entity *exe__ent    = df_entity_alloc(0, target__ent, DF_EntityKind_Executable);
+                DF_Entity *args__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_Arguments);
+                DF_Entity *path__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_ExecutionPath);
+                DF_Entity *entry__ent  = df_entity_alloc(0, target__ent, DF_EntityKind_EntryPointName);
+                String8 saved_label = label_cfg->first->string;
+                String8 saved_exe = exe_cfg->first->string;
+                String8 saved_exe_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_exe, cfg_folder);
+                String8 saved_wdir = wdir_cfg->first->string;
+                String8 saved_wdir_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_wdir, cfg_folder);
+                String8 saved_entry_point = entry_cfg->first->string;
+                df_entity_equip_b32(target__ent, active_cfg != &df_g_nil_cfg_node ? !!is_active_u64 : 1);
+                df_entity_equip_name(0, target__ent, saved_label);
+                df_entity_equip_name(0, exe__ent,    saved_exe_absolute);
+                df_entity_equip_name(0, args__ent,   args_cfg->first->string);
+                df_entity_equip_name(0, path__ent,   saved_wdir_absolute);
+                df_entity_equip_name(0, entry__ent,  saved_entry_point);
+                df_entity_equip_cfg_src(target__ent, src);
+                if(!memory_is_zero(&hsva, sizeof(hsva)))
+                {
+                  df_entity_equip_color_hsva(target__ent, hsva);
+                }
               }
             }
           }
@@ -7873,23 +7937,58 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_SetFileReplacementPath:
         {
+          // NOTE(rjf):
+          //
+          // C:/foo/bar/baz.c
+          // D:/foo/bar/baz.c
+          // -> override C: -> D:
+          //
+          // C:/1/2/foo/bar.c
+          // C:/2/3/foo/bar.c
+          // -> override C:/1/2 -> C:2/3
+          //
+          // C:/foo/bar/baz.c
+          // D:/1/2/3.c
+          // -> override C:/foo/bar/baz.c -> D:/1/2/3.c
+          
+          //- rjf: grab src file & chosen replacement
           DF_Entity *file = df_entity_from_handle(params.entity);
           DF_Entity *replacement = df_entity_from_path(params.file_path, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-          if(!df_entity_is_nil(file) && !df_entity_is_nil(replacement))
+          
+          //- rjf: find 
+          DF_Entity *first_diff_src = file;
+          DF_Entity *first_diff_dst = replacement;
+          for(;!df_entity_is_nil(first_diff_src) && !df_entity_is_nil(first_diff_dst);)
           {
-            DF_Entity *link = df_entity_child_from_name_and_kind(file->parent, file->name, DF_EntityKind_OverrideFileLink);
+            if(!str8_match(first_diff_src->name, first_diff_dst->name, StringMatchFlag_CaseInsensitive) ||
+               first_diff_src->parent->kind != DF_EntityKind_File ||
+               first_diff_src->parent->parent->kind != DF_EntityKind_File ||
+               first_diff_dst->parent->kind != DF_EntityKind_File ||
+               first_diff_dst->parent->parent->kind != DF_EntityKind_File)
+            {
+              break;
+            }
+            first_diff_src = first_diff_src->parent;
+            first_diff_dst = first_diff_dst->parent;
+          }
+          
+          //- rjf: override first different
+          if(!df_entity_is_nil(first_diff_src) && !df_entity_is_nil(first_diff_dst))
+          {
+            DF_Entity *link = df_entity_child_from_name_and_kind(first_diff_src->parent, first_diff_src->name, DF_EntityKind_OverrideFileLink);
             if(df_entity_is_nil(link))
             {
-              link = df_entity_alloc(0, file->parent, DF_EntityKind_OverrideFileLink);
-              df_entity_equip_name(0, link, file->name);
+              link = df_entity_alloc(0, first_diff_src->parent, DF_EntityKind_OverrideFileLink);
+              df_entity_equip_name(0, link, first_diff_src->name);
             }
-            df_entity_equip_entity_handle(link, df_handle_from_entity(replacement));
+            df_entity_equip_entity_handle(link, df_handle_from_entity(first_diff_dst));
           }
         }break;
         
         //- rjf: general entity operations
         case DF_CoreCmdKind_EnableEntity:
         case DF_CoreCmdKind_EnableBreakpoint:
+        case DF_CoreCmdKind_EnableTarget:
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
           df_state_delta_history_push_batch(df_state->hist, &entity->generation);
@@ -7898,6 +7997,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_DisableEntity:
         case DF_CoreCmdKind_DisableBreakpoint:
+        case DF_CoreCmdKind_DisableTarget:
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
           df_state_delta_history_push_batch(df_state->hist, &entity->generation);
@@ -8115,7 +8215,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           // rjf: build target
           df_state_delta_history_push_batch(df_state_delta_history(), 0);
           DF_Entity *entity = df_entity_alloc(df_state_delta_history(), df_entity_root(), DF_EntityKind_Target);
-          df_entity_equip_b32(entity, 1);
           df_entity_equip_cfg_src(entity, DF_CfgSrc_Profile);
           DF_Entity *exe = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_Executable);
           df_entity_equip_name(df_state_delta_history(), exe, params.file_path);
@@ -8130,6 +8229,25 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           p.entity = df_handle_from_entity(entity);
           df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
           df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_EditTarget));
+          df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectTarget));
+        }break;
+        case DF_CoreCmdKind_SelectTarget:
+        {
+          DF_Entity *entity = df_entity_from_handle(params.entity);
+          if(entity->kind == DF_EntityKind_Target)
+          {
+            DF_EntityList all_targets = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
+            B32 is_selected = entity->b32;
+            for(DF_EntityNode *n = all_targets.first; n != 0; n = n->next)
+            {
+              DF_Entity *target = n->entity;
+              df_entity_equip_b32(target, 0);
+            }
+            if(!is_selected)
+            {
+              df_entity_equip_b32(entity, 1);
+            }
+          }
         }break;
         
         //- rjf: ended processes

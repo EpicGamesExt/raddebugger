@@ -142,6 +142,15 @@ make_translate_3x3f32(Vec2F32 delta)
 }
 
 internal Mat3x3F32
+make_scale_3x3f32(Vec2F32 scale)
+{
+  Mat3x3F32 mat = mat_3x3f32(1.f);
+  mat.v[0][0] = scale.x;
+  mat.v[1][1] = scale.y;
+  return mat;
+}
+
+internal Mat3x3F32
 mul_3x3f32(Mat3x3F32 a, Mat3x3F32 b)
 {
   Mat3x3F32 c = {0};

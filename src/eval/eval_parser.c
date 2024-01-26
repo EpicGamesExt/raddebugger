@@ -132,34 +132,79 @@ eval_num_from_string(EVAL_String2NumMap *map, String8 string)
 internal EVAL_String2NumMap *
 eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 voff)
 {
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: gather scopes to walk
+  typedef struct Task Task;
+  struct Task
+  {
+    Task *next;
+    RADDBG_Scope *scope;
+  };
+  Task *first_task = 0;
+  Task *last_task = 0;
+  
   //- rjf: voff -> tightest scope
   RADDBG_Scope *tightest_scope = 0;
   if(rdbg->scope_vmap != 0 && rdbg->scopes != 0)
   {
     U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
-    tightest_scope = &rdbg->scopes[scope_idx];
+    RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+    Task *task = push_array(scratch.arena, Task, 1);
+    task->scope = scope;
+    SLLQueuePush(first_task, last_task, task);
+    tightest_scope = scope;
+  }
+  
+  //- rjf: voff-1 -> scope
+  if(voff > 0 && rdbg->scope_vmap != 0 && rdbg->scopes != 0)
+  {
+    U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff-1);
+    RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+    if(scope != tightest_scope)
+    {
+      Task *task = push_array(scratch.arena, Task, 1);
+      task->scope = scope;
+      SLLQueuePush(first_task, last_task, task);
+    }
+  }
+  
+  //- rjf: tightest scope -> walk up the tree & build tasks for each parent scope
+  if(tightest_scope != 0)
+  {
+    for(RADDBG_Scope *scope = &rdbg->scopes[tightest_scope->parent_scope_idx];
+        scope != 0 && scope != &rdbg->scopes[0];
+        scope = &rdbg->scopes[scope->parent_scope_idx])
+    {
+      Task *task = push_array(scratch.arena, Task, 1);
+      task->scope = scope;
+      SLLQueuePush(first_task, last_task, task);
+    }
   }
   
   //- rjf: build blank map
   EVAL_String2NumMap *map = push_array(arena, EVAL_String2NumMap, 1);
   *map = eval_string2num_map_make(arena, 1024);
   
-  //- rjf: tightest scope -> walk up the tree & accumulate all locals
-  for(RADDBG_Scope *scope = tightest_scope;
-      scope != 0 && scope != &rdbg->scopes[0];
-      scope = &rdbg->scopes[scope->parent_scope_idx])
+  //- rjf: accumulate locals for all tasks
+  for(Task *task = first_task; task != 0; task = task->next)
   {
-    U32 local_opl_idx = scope->local_first + scope->local_count;
-    for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
+    RADDBG_Scope *scope = task->scope;
+    if(scope != 0)
     {
-      RADDBG_Local *local_var = &rdbg->locals[local_idx];
-      U64 local_name_size = 0;
-      U8 *local_name_str = raddbg_string_from_idx(rdbg, local_var->name_string_idx, &local_name_size);
-      String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
-      eval_string2num_map_insert(arena, map, name, (U64)local_idx+1);
+      U32 local_opl_idx = scope->local_first + scope->local_count;
+      for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
+      {
+        RADDBG_Local *local_var = &rdbg->locals[local_idx];
+        U64 local_name_size = 0;
+        U8 *local_name_str = raddbg_string_from_idx(rdbg, local_var->name_string_idx, &local_name_size);
+        String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
+        eval_string2num_map_insert(arena, map, name, (U64)local_idx+1);
+      }
     }
   }
   
+  scratch_end(scratch);
   return map;
 }
 
@@ -789,8 +834,8 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           TG_Key                         type_key = zero_struct;
           String8                        local_lookup_string = token_string;
           
-          //- rjf: form namespaceify fallback
-          String8 namespaceified_token_string = token_string;
+          //- rjf: form namespaceified fallback versions of this lookup string
+          String8List namespaceified_token_strings = {0};
           if(ctx->rdbg->procedures != 0 && ctx->rdbg->scopes != 0 && ctx->rdbg->scope_vmap != 0)
           {
             U64 scope_idx = raddbg_vmap_idx_from_voff(ctx->rdbg->scope_vmap, ctx->rdbg->scope_vmap_count, ctx->ip_voff);
@@ -799,23 +844,22 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             RADDBG_Procedure *procedure = &ctx->rdbg->procedures[proc_idx];
             U64 name_size = 0;
             U8 *name_ptr = raddbg_string_from_idx(ctx->rdbg, procedure->name_string_idx, &name_size);
-            String8 name = str8(name_ptr, name_size);
-            U64 past_scope_resolution_pos = 0;
+            String8 containing_procedure_name = str8(name_ptr, name_size);
+            U64 last_past_scope_resolution_pos = 0;
             for(;;)
             {
-              U64 past_next_dbl_colon_pos = str8_find_needle(name, past_scope_resolution_pos, str8_lit("::"), 0)+2;
-              U64 past_next_dot_pos = str8_find_needle(name, past_scope_resolution_pos, str8_lit("."), 0)+1;
+              U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
+              U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
               U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
-              if(past_next_scope_resolution_pos < name.size)
-              {
-                past_scope_resolution_pos = past_next_scope_resolution_pos;
-              }
-              else
+              if(past_next_scope_resolution_pos >= containing_procedure_name.size)
               {
                 break;
               }
+              String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
+              String8 namespaceified_token_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, token_string);
+              str8_list_push_front(scratch.arena, &namespaceified_token_strings, namespaceified_token_string);
+              last_past_scope_resolution_pos = past_next_scope_resolution_pos;
             }
-            namespaceified_token_string = push_str8f(scratch.arena, "%S%S", str8_prefix(name, past_scope_resolution_pos), token_string);
           }
           
           //- rjf: try members
@@ -857,7 +901,19 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                     case RADDBG_LocationKind_ValBytecodeStream:
                     {
                       U8 *bytecode_base = ctx->rdbg->location_data + block->location_data_off + sizeof(RADDBG_LocationKind);
-                      loc_bytecode = str8_cstring((char *)bytecode_base);
+                      U64 bytecode_size = 0;
+                      for(U64 idx = 0; idx < ctx->rdbg->location_data_size; idx += 1)
+                      {
+                        U8 op = bytecode_base[idx];
+                        if(op == 0)
+                        {
+                          break;
+                        }
+                        U8 ctrlbits = raddbg_eval_opcode_ctrlbits[op];
+                        U32 p_size = RADDBG_DECODEN_FROM_CTRLBITS(ctrlbits);
+                        bytecode_size += 1+p_size;
+                      }
+                      loc_bytecode = str8(bytecode_base, bytecode_size);
                     }break;
                     case RADDBG_LocationKind_AddrRegisterPlusU16:
                     case RADDBG_LocationKind_AddrAddrRegisterPlusU16:
@@ -917,15 +973,21 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
               U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
-              if(matches_count == 0)
+              for(String8Node *n = namespaceified_token_strings.first;
+                  n != 0 && matches_count == 0;
+                  n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, namespaceified_token_string.str, namespaceified_token_string.size);
+                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
                 matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }
               if(matches_count != 0)
               {
-                U32 match_idx = matches[0];
+                // NOTE(rjf): apparently, PDBs can be produced such that they
+                // also keep stale *GLOBAL VARIABLE SYMBOLS* around too. I
+                // don't know of a magic hash table fixup path in PDBs, so
+                // in this case, I'm going to prefer the latest-added global.
+                U32 match_idx = matches[matches_count-1];
                 RADDBG_GlobalVariable *global_var = &ctx->rdbg->global_variables[match_idx];
                 EVAL_OpList oplist = {0};
                 eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_ModuleOff, global_var->voff);
@@ -953,9 +1015,11 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
               U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
-              if(matches_count == 0)
+              for(String8Node *n = namespaceified_token_strings.first;
+                  n != 0 && matches_count == 0;
+                  n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, namespaceified_token_string.str, namespaceified_token_string.size);
+                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
                 matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }
@@ -989,9 +1053,11 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
               U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
-              if(matches_count == 0)
+              for(String8Node *n = namespaceified_token_strings.first;
+                  n != 0 && matches_count == 0;
+                  n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, namespaceified_token_string.str, namespaceified_token_string.size);
+                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
                 matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }

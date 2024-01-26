@@ -1,0 +1,28 @@
+name: builds
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  build-windows-2022:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: build (vs 2022)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          call build raddbg msvc debug             || exit /b 1
+          call build raddbg_from_pdb msvc debug    || exit /b 1
+          call build raddbg_from_dwarf msvc debug  || exit /b 1
+          call build raddbg clang debug            || exit /b 1
+          call build raddbg_from_pdb clang debug   || exit /b 1
+          call build raddbg_from_dwarf clang debug || exit /b 1

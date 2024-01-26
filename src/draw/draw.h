@@ -111,6 +111,7 @@ internal U64 d_hash_from_string(String8 string);
 internal void d_fancy_string_list_push(Arena *arena, D_FancyStringList *list, D_FancyString *str);
 internal String8 d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list);
 internal D_FancyRunList d_fancy_run_list_from_fancy_string_list(Arena *arena, D_FancyStringList *strs);
+internal D_FancyRunList d_fancy_run_list_copy(Arena *arena, D_FancyRunList *src);
 
 ////////////////////////////////
 //~ rjf: Top-Level API

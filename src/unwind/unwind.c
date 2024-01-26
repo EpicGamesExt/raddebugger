@@ -248,7 +248,8 @@ unw_pe_x64(String8 bindata, PE_BinInfo *bin,
               
               case UNW_PE_OpCode_SPARE_CODE:
               {
-                Assert(!"Hit me!");
+                result.dead = 1;
+                // Assert(!"Hit me!");
                 // TODO(allen): ???
               }break;
               

@@ -2,6 +2,46 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Frontend/UI Pass Tasks
+//
+// [ ] committing needs to happen when navigating focus away for any reason
+//
+// [ ] source view -> floating margin/line-nums
+// [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
+//     & scrollbars etc.
+// [ ] drag/drop tab cleanup
+// [ ] target/breakpoint/watch-pin reordering
+// [ ] watch window reordering
+// [ ] standard way to filter
+// [ ] visualize remapped files (via path map)
+// [ ] theme lister -> fonts & font sizes
+// [ ] font lister
+// [ ] per-panel font size overrides
+//
+// [ ] For the Scheduler window, it would be nice if you could dim or
+//     folderize threads that are not your threads - eg., if a thread doesn't
+//     have any resolved stack pointers in your executable code, then you can
+//     ignore it when you are focusing on your own code. I don't know what the
+//     best way to detect this is, other than by walking the call stack... one
+//     way might be to just have a way to separate threads you've named from
+//     threads you haven't? Or, there could even be a debugger-specific API
+//     that you use to tag them. Just some way that would make it easier to
+//     focus on your own threads.
+//
+// [ ] autocomplete lister should respect position in edited expression,
+//     tabbing through should autocomplete but not exit, etc.
+//
+//  [ ]  it would be nice to have "show in explorer" for right click on source
+//       file tab (opens explorer & selects the file)
+//
+//  [ ]  what's up with decimal number coloring where every group of 3 are in
+//       different color? can I turn it off? And why sometimes digits in number
+//       start with brighter color, but sometimes with darker - shouldn't it
+//       always have the same color ordering?
+//
+//  [ ]  middle mouse button on tab should close it
+
+////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
@@ -29,10 +69,14 @@
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
-// [ ] escaping in config files - breakpoint labels etc.
-// [ ] focus changing between query bar & panel content via mouse
+// [ ] Watch Window Type Evaluation
+// [ ] Globals, Thread-Locals, Types Views
+// [ ] Watch Window Filtering
 //
-// [ ] ** while typing, "Alt" Windows menu things should not happen
+// [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
+//     support it?
+//
+// [ ] escaping in config files - breakpoint labels etc.
 //
 // [ ] visualize conversion failures
 //
@@ -99,10 +143,6 @@
 //      (partial) matches as you type, so you can stop typing once it gets the
 //      right function instead of having to type the entire function name.
 //
-//  [ ] Hovering over a source tab that is clipped should probably display the
-//      full thing that was in that tab (like the whole filename, etc.). Right
-//      now, hovering does nothing AFAICT.
-//
 //  [ ] ** I couldn't figure out how to really view threads in the debugger.
 //      The only place I found a thread list was in "The Scheduler", but it
 //      only lists threads by ID, which is hard to use. I can hover over them
@@ -134,18 +174,6 @@
 //      wouldn't think to look there.
 //  [ ] I had to go into the user file to change the font. That should probably
 //      be in the theme window?
-//
-//  [ ] The way the "commands" view worked was idiosyncratic. All the other
-//      views stay up, but that one goes away whenever I select a command for
-//      some reason.
-//   [ ] Also, I could not move the commands window anywhere AFAICT. It seems
-//       to just pop up over whatever window I currently have selected. This
-//       would make sense for a hotkey (which I assume is the way it was
-//       designed), but it seems like it should be permanent if you can select
-//       it from the View menu.
-//  [ ] If the command window is not wide enough, you cannot read the
-//      description of a command because it doesn't word-wrap, nor can you
-//      hover over it to get the description in a tooltip (AFAICT).
 //
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
@@ -180,8 +208,6 @@
 //      "save" option in the menus.
 //
 // [ ] @cleanup @feature double & triple click select in source views
-// [ ] @feature hovering truncated text in UI for some amount of time -> show
-//     tooltip with full text
 // [ ] @feature disasm keyboard navigation & copy/paste
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
@@ -189,16 +215,10 @@
 //     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
 //
-// [ ] C++ single & multi inheritance member visualization in watch window
+// [ ] C++ virtual inheritance member visualization in watch window
 
 ////////////////////////////////
 //~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
-//
-//  [ ] ** Directory picking is kind of busted, as it goes through the same
-//      path as file picking, and this doesn't give the user a clean path to
-//      actually pick a folder, just navigate with them
-//
-//  [ ] ** Hover-Eval-Popup-While-Scrolling is very annoying!
 //
 //  [ ] ** In the call stack, I would like to be able to click quickly and move
 //      around the stack. Right now, you can do that with the first and third
@@ -248,21 +268,12 @@
 //  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
 //  [ ]  mouse back button should make view to go back after I double clicked
 //       on function to open it
-//  [ ]  middle mouse button on tab should close it
 //  [ ]  pressing random keyboard keys in source code advances text cursor like
 //       you were inputting text, very strange.
 //  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which
 //       panel was previous, don't want to use ctrl+, multiple times)
 //       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use
 //       in VS
-//  [ ]  what's up with decimal number coloring where every group of 3 are in
-//       different color? can I turn it off? And why sometimes digits in number
-//       start with brighter color, but sometimes with darker - shouldn't it
-//       always have the same color ordering?
-//  [ ]  it would be nice to have "show in explorer" for right click on source
-//       file tab (opens explorer & selects the file)
-//  [ ]  it would be nice if Alt+o in source file would switch between .h and
-//       .c/cpp file (just look for same name in same folder)
 //  [ ]  in watch window when I enter some new expression and then click mouse
 //       away from cell, then it should behave the same as if I pressed enter.
 //       Currently it does the same as if I have pressed esc and I have lost my
@@ -282,19 +293,6 @@
 
 ////////////////////////////////
 //~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
-//
-// [ ] For the Scheduler window, it would be nice if you could dim or
-//     folderize threads that are not your threads - eg., if a thread doesn't
-//     have any resolved stack pointers in your executable code, then you can
-//     ignore it when you are focusing on your own code. I don't know what the
-//     best way to detect this is, other than by walking the call stack... one
-//     way might be to just have a way to separate threads you've named from
-//     threads you haven't? Or, there could even be a debugger-specific API
-//     that you use to tag them. Just some way that would make it easier to
-//     focus on your own threads.
-//
-// [ ] autocomplete lister should respect position in edited expression,
-//     tabbing through should autocomplete but not exit, etc.
 //
 // [ ] Fancy View Rules
 //  [ ] table column boundaries should be checked against *AFTER* table
@@ -420,7 +418,7 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 5
+#define RADDBG_VERSION_PATCH 6
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
 # define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""
@@ -456,6 +454,8 @@ read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_sha
 read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
 global U64 frame_time_us_history[64] = {0};
 global U64 frame_time_us_history_idx = 0;
+global Arena *leftover_events_arena = 0;
+global OS_EventList leftover_events = {0};
 
 ////////////////////////////////
 //~ rjf: Frontend Entry Points

@@ -11,6 +11,7 @@ typedef enum DF_CfgSrc
 DF_CfgSrc_User,
 DF_CfgSrc_Profile,
 DF_CfgSrc_CommandLine,
+DF_CfgSrc_Transient,
 DF_CfgSrc_COUNT
 } DF_CfgSrc;
 
@@ -57,7 +58,7 @@ typedef enum DF_CoreCmdKind
 {
 DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Exit,
-DF_CoreCmdKind_CommandFastPath,
+DF_CoreCmdKind_RunCommand,
 DF_CoreCmdKind_Error,
 DF_CoreCmdKind_LaunchAndRun,
 DF_CoreCmdKind_LaunchAndInit,
@@ -70,11 +71,11 @@ DF_CoreCmdKind_StepOverInst,
 DF_CoreCmdKind_StepIntoLine,
 DF_CoreCmdKind_StepOverLine,
 DF_CoreCmdKind_StepOut,
-DF_CoreCmdKind_RunToAddress,
-DF_CoreCmdKind_RunToModuleOffset,
 DF_CoreCmdKind_Halt,
 DF_CoreCmdKind_SoftHaltRefresh,
 DF_CoreCmdKind_SetThreadIP,
+DF_CoreCmdKind_RunToLine,
+DF_CoreCmdKind_RunToAddress,
 DF_CoreCmdKind_Run,
 DF_CoreCmdKind_Restart,
 DF_CoreCmdKind_StepInto,
@@ -126,19 +127,17 @@ DF_CoreCmdKind_NextTab,
 DF_CoreCmdKind_PrevTab,
 DF_CoreCmdKind_MoveTabRight,
 DF_CoreCmdKind_MoveTabLeft,
+DF_CoreCmdKind_OpenTab,
 DF_CoreCmdKind_CloseTab,
 DF_CoreCmdKind_MoveTab,
 DF_CoreCmdKind_TabBarTop,
 DF_CoreCmdKind_TabBarBottom,
-DF_CoreCmdKind_TabBarEnable,
-DF_CoreCmdKind_TabBarDisable,
-DF_CoreCmdKind_TabBarHistoryModeEnable,
-DF_CoreCmdKind_TabBarHistoryModeDisable,
 DF_CoreCmdKind_SetCurrentPath,
 DF_CoreCmdKind_Open,
 DF_CoreCmdKind_Reload,
 DF_CoreCmdKind_ReloadActive,
 DF_CoreCmdKind_Switch,
+DF_CoreCmdKind_SwitchToPartnerFile,
 DF_CoreCmdKind_SetFileOverrideLinkSrc,
 DF_CoreCmdKind_SetFileOverrideLinkDst,
 DF_CoreCmdKind_SetFileReplacementPath,
@@ -199,9 +198,6 @@ DF_CoreCmdKind_GoToName,
 DF_CoreCmdKind_GoToNameAtCursor,
 DF_CoreCmdKind_ToggleWatchExpression,
 DF_CoreCmdKind_ToggleWatchExpressionAtCursor,
-DF_CoreCmdKind_OpenFileMemory,
-DF_CoreCmdKind_OpenProcessMemory,
-DF_CoreCmdKind_OpenSelectedProcessMemory,
 DF_CoreCmdKind_SetColumns,
 DF_CoreCmdKind_ToggleAddressVisibility,
 DF_CoreCmdKind_ToggleCodeBytesVisibility,
@@ -225,6 +221,9 @@ DF_CoreCmdKind_ToggleWatchPinAtCursor,
 DF_CoreCmdKind_AddTarget,
 DF_CoreCmdKind_RemoveTarget,
 DF_CoreCmdKind_EditTarget,
+DF_CoreCmdKind_SelectTarget,
+DF_CoreCmdKind_EnableTarget,
+DF_CoreCmdKind_DisableTarget,
 DF_CoreCmdKind_RetryEndedProcess,
 DF_CoreCmdKind_Attach,
 DF_CoreCmdKind_RegisterAsJITDebugger,
@@ -251,7 +250,10 @@ DF_CoreCmdKind_WatchPins,
 DF_CoreCmdKind_ExceptionFilters,
 DF_CoreCmdKind_Theme,
 DF_CoreCmdKind_PickFile,
-DF_CoreCmdKind_ViewReturn,
+DF_CoreCmdKind_PickFolder,
+DF_CoreCmdKind_PickFileOrFolder,
+DF_CoreCmdKind_CompleteQuery,
+DF_CoreCmdKind_CancelQuery,
 DF_CoreCmdKind_ToggleDevMenu,
 DF_CoreCmdKind_COUNT
 } DF_CoreCmdKind;
@@ -365,6 +367,7 @@ DF_CmdParamSlot_String,
 DF_CmdParamSlot_FilePath,
 DF_CmdParamSlot_TextPoint,
 DF_CmdParamSlot_CmdSpec,
+DF_CmdParamSlot_ViewSpec,
 DF_CmdParamSlot_VirtualAddr,
 DF_CmdParamSlot_VirtualOff,
 DF_CmdParamSlot_Index,
@@ -373,22 +376,6 @@ DF_CmdParamSlot_PreferDisassembly,
 DF_CmdParamSlot_ForceConfirm,
 DF_CmdParamSlot_COUNT
 } DF_CmdParamSlot;
-
-typedef enum DF_CmdQueryRule
-{
-DF_CmdQueryRule_Null,
-DF_CmdQueryRule_Entity,
-DF_CmdQueryRule_String,
-DF_CmdQueryRule_SearchString,
-DF_CmdQueryRule_FilePath,
-DF_CmdQueryRule_TextPoint,
-DF_CmdQueryRule_FilePathAndTextPoint,
-DF_CmdQueryRule_VirtualAddr,
-DF_CmdQueryRule_VirtualOff,
-DF_CmdQueryRule_Index,
-DF_CmdQueryRule_ID,
-DF_CmdQueryRule_COUNT
-} DF_CmdQueryRule;
 
 typedef struct DF_CmdParams DF_CmdParams;
 struct DF_CmdParams
@@ -405,6 +392,7 @@ String8 string;
 String8 file_path;
 TxtPt text_point;
 struct DF_CmdSpec * cmd_spec;
+struct DF_ViewSpec * view_spec;
 U64 vaddr;
 U64 voff;
 U64 index;
@@ -1519,19 +1507,27 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_scratch_mouse_draw, str8_lit_comp("scratch_mouse_draw")},
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
-String8 df_g_cmd_query_rule_kind_arg_desc_table[] =
+Rng1U64 df_g_cmd_param_slot_range_table[] =
 {
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp("<file path>"),
-str8_lit_comp("<line>[:column]"),
-str8_lit_comp("<file path>[:line[:column]]"),
-str8_lit_comp("<address>"),
-str8_lit_comp("<offset>"),
-str8_lit_comp("<index>"),
-str8_lit_comp("<id>"),
+{0},
+{OffsetOf(DF_CmdParams, window), OffsetOf(DF_CmdParams, window) + sizeof(DF_Handle)},
+{OffsetOf(DF_CmdParams, panel), OffsetOf(DF_CmdParams, panel) + sizeof(DF_Handle)},
+{OffsetOf(DF_CmdParams, dest_panel), OffsetOf(DF_CmdParams, dest_panel) + sizeof(DF_Handle)},
+{OffsetOf(DF_CmdParams, prev_view), OffsetOf(DF_CmdParams, prev_view) + sizeof(DF_Handle)},
+{OffsetOf(DF_CmdParams, view), OffsetOf(DF_CmdParams, view) + sizeof(DF_Handle)},
+{OffsetOf(DF_CmdParams, entity), OffsetOf(DF_CmdParams, entity) + sizeof(DF_Handle)},
+{OffsetOf(DF_CmdParams, entity_list), OffsetOf(DF_CmdParams, entity_list) + sizeof(DF_HandleList)},
+{OffsetOf(DF_CmdParams, string), OffsetOf(DF_CmdParams, string) + sizeof(String8)},
+{OffsetOf(DF_CmdParams, file_path), OffsetOf(DF_CmdParams, file_path) + sizeof(String8)},
+{OffsetOf(DF_CmdParams, text_point), OffsetOf(DF_CmdParams, text_point) + sizeof(TxtPt)},
+{OffsetOf(DF_CmdParams, cmd_spec), OffsetOf(DF_CmdParams, cmd_spec) + sizeof(struct DF_CmdSpec *)},
+{OffsetOf(DF_CmdParams, view_spec), OffsetOf(DF_CmdParams, view_spec) + sizeof(struct DF_ViewSpec *)},
+{OffsetOf(DF_CmdParams, vaddr), OffsetOf(DF_CmdParams, vaddr) + sizeof(U64)},
+{OffsetOf(DF_CmdParams, voff), OffsetOf(DF_CmdParams, voff) + sizeof(U64)},
+{OffsetOf(DF_CmdParams, index), OffsetOf(DF_CmdParams, index) + sizeof(U64)},
+{OffsetOf(DF_CmdParams, id), OffsetOf(DF_CmdParams, id) + sizeof(U64)},
+{OffsetOf(DF_CmdParams, prefer_dasm), OffsetOf(DF_CmdParams, prefer_dasm) + sizeof(B32)},
+{OffsetOf(DF_CmdParams, force_confirm), OffsetOf(DF_CmdParams, force_confirm) + sizeof(B32)},
 };
 
 DF_IconKind df_g_entity_kind_icon_kind_table[] =
@@ -1689,12 +1685,14 @@ String8 df_g_cfg_src_string_table[] =
 str8_lit_comp("user"),
 str8_lit_comp("profile"),
 str8_lit_comp("command_line"),
+str8_lit_comp("transient"),
 };
 
 DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[] =
 {
 DF_CoreCmdKind_LoadUser,
 DF_CoreCmdKind_LoadProfile,
+DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 
@@ -1703,12 +1701,14 @@ DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[] =
 DF_CoreCmdKind_WriteUserData,
 DF_CoreCmdKind_WriteProfileData,
 DF_CoreCmdKind_Null,
+DF_CoreCmdKind_Null,
 };
 
 DF_CoreCmdKind df_g_cfg_src_apply_cmd_kind_table[] =
 {
 DF_CoreCmdKind_ApplyUserData,
 DF_CoreCmdKind_ApplyProfileData,
+DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 

@@ -111,9 +111,11 @@ w32_push_event(OS_EventKind kind, W32_Window *window)
 {
   OS_Event *result = push_array(w32_event_arena, OS_Event, 1);
   DLLPushBack(w32_event_list.first, w32_event_list.last, result);
+  result->timestamp_us = os_now_microseconds();
   result->kind = kind;
   result->window = os_window_from_w32_window(window);
   result->flags = os_get_event_flags();
+  w32_event_list.count += 1;
   return(result);
 }
 
@@ -415,6 +417,8 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             event->key = OS_Key_RightMouseButton;
           }break;
         }
+        event->pos.x = (F32)LOWORD(lParam);
+        event->pos.y = (F32)HIWORD(lParam);
         if(release)
         {
           ReleaseCapture();
@@ -489,6 +493,10 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         if(character >= 32 && character != 127)
         {
           OS_Event *event = w32_push_event(OS_EventKind_Text, window);
+          if(lParam & bit29)
+          {
+            event->flags |= OS_EventFlag_Alt;
+          }
           event->character = character;
         }
       }break;
@@ -571,6 +579,7 @@ os_graphical_init(void)
     wndclass.hInstance = w32_h_instance;
     wndclass.lpszClassName = L"graphical-window";
     wndclass.hCursor = LoadCursorA(0, IDC_ARROW);
+    wndclass.hIcon = LoadIcon(w32_h_instance, MAKEINTRESOURCE(1));
     ATOM wndatom = RegisterClassExW(&wndclass);
     (void)wndatom;
   }

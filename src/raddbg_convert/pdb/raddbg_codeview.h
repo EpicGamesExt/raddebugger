@@ -1868,7 +1868,7 @@ typedef struct CV_SymDefrangeRegister{
 
 //   (SymKind: DEFRANGE_FRAMEPOINTER_REL)
 typedef struct CV_SymDefrangeFramepointerRel{
-  U32 off;
+  S32 off;
   CV_LvarAddrRange range;
   // CV_LvarAddrGap[] gaps (rest of data)
 } CV_SymDefrangeFramepointerRel;
@@ -1884,7 +1884,7 @@ typedef struct CV_SymDefrangeSubfieldRegister{
 
 //   (SymKind: DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE)
 typedef struct CV_SymDefrangeFramepointerRelFullScope{
-  U32 off;
+  S32 off;
 } CV_SymDefrangeFramepointerRelFullScope;
 
 //   (SymKind: DEFRANGE_REGISTER_REL)
@@ -1897,7 +1897,7 @@ enum{
 typedef struct CV_SymDefrangeRegisterRel{
   CV_Reg reg;
   CV_DefrangeRegisterRelFlags flags;
-  U32 reg_off;
+  S32 reg_off;
   CV_LvarAddrRange range;
   // CV_LvarAddGap[] gaps (rest of data)
 } CV_SymDefrangeRegisterRel;
@@ -2709,7 +2709,7 @@ typedef struct CV_LeafVFPath{
   // CV_TypeId[count] base;
 } CV_LeafVFPath;
 
-//   (LeafKind: CLASS2, CLASS2)
+//   (LeafKind: CLASS2, STRUCT2)
 typedef struct CV_LeafStruct2{
   // NOTE: still reverse engineering this - if you find docs please help!
   CV_TypeProps props;
@@ -2718,11 +2718,10 @@ typedef struct CV_LeafStruct2{
   CV_TypeId derived_itype;
   CV_TypeId vshape_itype;
   U16 unknown2;
-  U16 size;
+  // CV_Numeric size
   // U8[] name (null terminated)
   // U8[] unique_name (null terminated)
 } CV_LeafStruct2;
-
 
 //   (LeafIDKind: FUNC_ID)
 typedef struct CV_LeafFuncId{

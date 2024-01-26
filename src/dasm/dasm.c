@@ -263,6 +263,7 @@ internal DASM_InstArray
 dasm_inst_array_from_handle(Arena *arena, DASM_Handle handle, U64 endt_us)
 {
   DASM_InstArray result = {0};
+  if(handle.u64[0] != 0 || handle.u64[1] != 0)
   {
     U64 hash = handle.u64[0];
     U64 id = handle.u64[1];
