@@ -4,6 +4,8 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] committing needs to happen when navigating focus away for any reason
+//
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
@@ -75,7 +77,6 @@
 //     support it?
 //
 // [ ] escaping in config files - breakpoint labels etc.
-// [ ] focus changing between query bar & panel content via mouse
 //
 // [ ] visualize conversion failures
 //
@@ -142,10 +143,6 @@
 //      (partial) matches as you type, so you can stop typing once it gets the
 //      right function instead of having to type the entire function name.
 //
-//  [ ] Hovering over a source tab that is clipped should probably display the
-//      full thing that was in that tab (like the whole filename, etc.). Right
-//      now, hovering does nothing AFAICT.
-//
 //  [ ] ** I couldn't figure out how to really view threads in the debugger.
 //      The only place I found a thread list was in "The Scheduler", but it
 //      only lists threads by ID, which is hard to use. I can hover over them
@@ -177,18 +174,6 @@
 //      wouldn't think to look there.
 //  [ ] I had to go into the user file to change the font. That should probably
 //      be in the theme window?
-//
-//  [ ] The way the "commands" view worked was idiosyncratic. All the other
-//      views stay up, but that one goes away whenever I select a command for
-//      some reason.
-//   [ ] Also, I could not move the commands window anywhere AFAICT. It seems
-//       to just pop up over whatever window I currently have selected. This
-//       would make sense for a hotkey (which I assume is the way it was
-//       designed), but it seems like it should be permanent if you can select
-//       it from the View menu.
-//  [ ] If the command window is not wide enough, you cannot read the
-//      description of a command because it doesn't word-wrap, nor can you
-//      hover over it to get the description in a tooltip (AFAICT).
 //
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
@@ -230,14 +215,10 @@
 //     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
 //
-// [ ] C++ single & multi inheritance member visualization in watch window
+// [ ] C++ virtual inheritance member visualization in watch window
 
 ////////////////////////////////
 //~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
-//
-//  [ ] ** Directory picking is kind of busted, as it goes through the same
-//      path as file picking, and this doesn't give the user a clean path to
-//      actually pick a folder, just navigate with them
 //
 //  [ ] ** In the call stack, I would like to be able to click quickly and move
 //      around the stack. Right now, you can do that with the first and third

@@ -458,6 +458,7 @@ entry_point(int argc, char **argv)
       //- rjf: initialize stuff we depend on
       {
         hs_init();
+        fs_init();
         txt_init();
         dbgi_init();
         txti_init();

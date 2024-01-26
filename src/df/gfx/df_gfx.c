@@ -10543,22 +10543,22 @@ internal B32
 df_help_label(String8 string)
 {
   B32 result = 0;
-  UI_Box *box = ui_build_box_from_stringf(0, "###%S_help_label", string);
-  UI_Key help_hoverer_key = ui_key_from_stringf(box->key, "###help_hoverer");
-  B32 box_is_hot = ((ui_key_match(ui_active_key(Side_Min), ui_key_zero()) || ui_key_match(ui_active_key(Side_Min), help_hoverer_key)) &&
-                    (ui_key_match(ui_active_key(Side_Max), ui_key_zero()) || ui_key_match(ui_active_key(Side_Min), help_hoverer_key)) &&
-                    contains_2f32(box->rect, ui_mouse()));
+  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%S_help_label", string);
+  UI_Signal sig = ui_signal_from_box(box);
   UI_Parent(box)
   {
     UI_PrefWidth(ui_pct(1, 0)) ui_label(string);
-    if(box_is_hot) UI_PrefWidth(ui_em(2.25f, 1))
+    if(sig.hovering) UI_PrefWidth(ui_em(2.25f, 1))
     {
+      result = 1;
       ui_set_next_font(ui_icon_font());
       ui_set_next_text_alignment(UI_TextAlign_Center);
-      UI_Box *help_hoverer = ui_build_box_from_key(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_Clickable, help_hoverer_key);
+      UI_Box *help_hoverer = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawHotEffects, "###help_hoverer_%S", string);
       ui_box_equip_display_string(help_hoverer, df_g_icon_kind_text_table[DF_IconKind_QuestionMark]);
-      UI_Signal sig = ui_signal_from_box(help_hoverer);
-      result = sig.hovering;
+      if(!contains_2f32(help_hoverer->rect, ui_mouse()))
+      {
+        result = 0;
+      }
     }
   }
   return result;

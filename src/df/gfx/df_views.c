@@ -984,6 +984,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           case EVAL_EvalMode_Addr:
           {
             U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+            size = Min(size, 64);
             Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
             CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng);
             for(U64 idx = 0; idx < (size+63)/64; idx += 1)
@@ -1243,19 +1244,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   }
                   StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
                   String8 error_string = str8_list_join(scratch.arena, &strings, &join);
-                  sig = df_error_label(error_string);
-                  if(sig.hovering)
-                  {
-                    UI_Tooltip
-                      UI_Font(df_font_from_slot(DF_FontSlot_Main))
-                      UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
-                    {
-                      for(EVAL_Error *error = row->errors.first; error != 0; error = error->next)
-                      {
-                        ui_label(error->text);
-                      }
-                    }
-                  }
+                  df_error_label(error_string);
                 }
                 
                 // rjf: hook -> call hook

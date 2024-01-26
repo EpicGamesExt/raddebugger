@@ -1335,6 +1335,10 @@ ui_end_build(void)
             goto break_all_hover_string;
           }
         }
+        if(b != box && contains_2f32(b->rect, ui_state->mouse))
+        {
+          goto break_all_hover_string;
+        }
       }
     }
     break_all_hover_string:;
