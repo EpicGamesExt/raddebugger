@@ -6854,6 +6854,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdbg, ctrl_ctx, eval);
         
         // rjf: get pointed-at info
+        TG_Kind type_kind = tg_kind_from_key(eval.type_key);
         TG_Key direct_type_key = tg_ptee_from_graph_raddbg_key(graph, rdbg, eval.type_key);
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
         B32 direct_type_has_content = (direct_type_kind != TG_Kind_Null && direct_type_kind != TG_Kind_Void && value_eval.imm_u64 != 0);
@@ -6897,7 +6898,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         }
         
         // rjf: special-case: symbols
-        else if((flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && symbol_name.size != 0)
+        else if((flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && symbol_name.size != 0 &&
+                (type_kind == TG_Kind_Function || direct_type_kind == TG_Kind_Void))
         {
           str8_list_push(arena, &list, symbol_name);
           space_taken += f_dim_from_tag_size_string(font, font_size, symbol_name).x;

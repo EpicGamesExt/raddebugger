@@ -12,8 +12,6 @@
 // [ ] watch window reordering
 // [ ] standard way to filter
 // [ ] visualize remapped files (via path map)
-// [ ] hovering truncated string for a short time -> tooltip with full wrapped
-//     string
 // [ ] theme lister -> fonts & font sizes
 // [ ] font lister
 // [ ] per-panel font size overrides
@@ -33,8 +31,6 @@
 //
 //  [ ]  it would be nice to have "show in explorer" for right click on source
 //       file tab (opens explorer & selects the file)
-//  [x]  it would be nice if Alt+o in source file would switch between .h and
-//       .c/cpp file (just look for same name in same folder)
 //
 //  [ ]  what's up with decimal number coloring where every group of 3 are in
 //       different color? can I turn it off? And why sometimes digits in number
@@ -227,8 +223,6 @@
 //      "save" option in the menus.
 //
 // [ ] @cleanup @feature double & triple click select in source views
-// [ ] @feature hovering truncated text in UI for some amount of time -> show
-//     tooltip with full text
 // [ ] @feature disasm keyboard navigation & copy/paste
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
