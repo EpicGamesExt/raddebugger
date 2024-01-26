@@ -3285,7 +3285,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     {
       if(sym_for_unit[comp_unit_idx] != 0)
       {
-        architecture = raddbg_arch_from_cv_arch(sym_for_unit[0]->info.arch);
+        architecture = raddbg_arch_from_cv_arch(sym_for_unit[idx]->info.arch);
         if(architecture != 0)
         {
           break;
