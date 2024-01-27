@@ -174,13 +174,13 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
   float corner_sdf_t = 1-smoothstep(0, 2*vertex2pixel.softness_px, corner_sdf_s);
   
   // rjf: sample for borders
-  float border_sdf_s = rect_sdf(sdf_sample_pos,
-                                vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f) - vertex2pixel.border_thickness_px,
-                                max(vertex2pixel.corner_radius_px-vertex2pixel.border_thickness_px, 0));
-  float border_sdf_t = smoothstep(0, 2*vertex2pixel.softness_px, border_sdf_s);
-  if(vertex2pixel.border_thickness_px == 0)
+  float border_sdf_t = 1;
+  if(vertex2pixel.border_thickness_px > 0)
   {
-    border_sdf_t = 1;
+    float border_sdf_s = rect_sdf(sdf_sample_pos,
+                                  vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f) - vertex2pixel.border_thickness_px,
+                                  max(vertex2pixel.corner_radius_px-vertex2pixel.border_thickness_px, 0));
+    border_sdf_t = smoothstep(0, 2*vertex2pixel.softness_px, border_sdf_s);
   }
   if(border_sdf_t < 0.001f)
   {

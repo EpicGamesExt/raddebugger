@@ -124,9 +124,9 @@ fs_u2s_dequeue_path(Arena *arena)
     U64 unconsumed_size = fs_shared->u2s_ring_write_pos - fs_shared->u2s_ring_read_pos;
     if(unconsumed_size >= sizeof(U64))
     {
-      fs_shared->u2s_ring_read_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &path.size);
+      fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &path.size);
       path.str = push_array(arena, U8, path.size);
-      fs_shared->u2s_ring_read_pos += ring_write(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, path.str, path.size);
+      fs_shared->u2s_ring_read_pos += ring_read(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, path.str, path.size);
       fs_shared->u2s_ring_read_pos += 7;
       fs_shared->u2s_ring_read_pos -= fs_shared->u2s_ring_read_pos%8;
       break;
