@@ -2027,150 +2027,174 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
             DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
             RADDBG_Parsed *rdbg = &dbgi->rdbg;
             RADDBG_NameMap *unparsed_map = raddbg_name_map_from_kind(rdbg, RADDBG_NameMapKind_Procedures);
+            RADDBG_ParsedNameMap map = {0};
+            raddbg_name_map_parse(rdbg, unparsed_map, &map);
+            String8 default_entry_points[] =
+            {
+              str8_lit("WinMain"),
+              str8_lit("wWinMain"),
+              str8_lit("main"),
+              str8_lit("wmain"),
+              str8_lit("WinMainCRTStartup"),
+              str8_lit("wWinMainCRTStartup"),
+              str8_lit("mainCRTStartup"),
+              str8_lit("wmainCRTStartup"),
+            };
+            
+            // rjf: default to picking PE header's entry
+            B32 entry_is_user_defined = 0;
+            U64 entry_voff = dbgi->pe.entry_point;
+            if(rdbg->scope_vmap != 0 && rdbg->procedures != 0 &&
+               rdbg->unit_vmap != 0 && rdbg->units != 0 &&
+               rdbg->file_paths)
+            {
+              U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, entry_voff);
+              RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+              U64 proc_idx = scope->proc_idx;
+              RADDBG_Procedure *procedure = &rdbg->procedures[proc_idx];
+              U64 name_size = 0;
+              U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+              String8 name = str8(name_base, name_size);
+              U64 unit_idx = raddbg_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, entry_voff);
+              RADDBG_Unit *unit = &rdbg->units[unit_idx];
+              RADDBG_ParsedLineInfo unit_line_info = {0};
+              raddbg_line_info_from_unit(rdbg, unit, &unit_line_info);
+              U64 line_info_idx = raddbg_line_info_idx_from_voff(&unit_line_info, entry_voff);
+              if(name_size != 0 && line_info_idx < unit_line_info.count)
+              {
+                String8 obj_path = {0};
+                {
+                  String8List obj_path_nodes = {0};
+                  for(U32 idx = unit->object_file_path_node; idx != 0; idx = rdbg->file_paths[idx].parent_path_node)
+                  {
+                    RADDBG_FilePathNode *n = &rdbg->file_paths[idx];
+                    U64 n_name_size = 0;
+                    U8 *n_name_base = raddbg_string_from_idx(rdbg, n->name_string_idx, &n_name_size);
+                    str8_list_push_front(scratch.arena, &obj_path_nodes, str8(n_name_base, n_name_size));
+                  }
+                  StringJoin join = {0};
+                  join.sep = str8_lit("/");
+                  obj_path = str8_list_join(scratch.arena, &obj_path_nodes, &join);
+                }
+                FileProperties props = os_properties_from_file_path(obj_path);
+                if(props.modified)
+                {
+                  entry_is_user_defined = 1;
+                }
+              }
+              B32 entry_point_matches_defaults = 0;
+              for(U64 idx = 0; idx < ArrayCount(default_entry_points); idx += 1)
+              {
+                if(str8_match(name, default_entry_points[idx], 0))
+                {
+                  entry_point_matches_defaults = 1;
+                }
+              }
+              if(!entry_point_matches_defaults && name.size != 0)
+              {
+                entry_is_user_defined = 1;
+              }
+            }
+            
+            // rjf: find voff for one of the default entry points
+            if(!entry_is_user_defined)
+            {
+              for(U64 idx = 0; idx < ArrayCount(default_entry_points); idx += 1)
+              {
+                U32 procedure_id = 0;
+                {
+                  String8 name = default_entry_points[idx];
+                  RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
+                  if(node != 0)
+                  {
+                    U32 id_count = 0;
+                    U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                    if(id_count > 0)
+                    {
+                      procedure_id = ids[0];
+                    }
+                  }
+                }
+                if(procedure_id != 0)
+                {
+                  U64 new_voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                  if(new_voff != 0)
+                  {
+                    entry_voff = new_voff;
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // rjf: find voff for one of the custom entry points attached to this msg
             if(rdbg->procedures != 0 && unparsed_map != 0)
             {
-              // rjf: grab parsed name map
-              RADDBG_ParsedNameMap map = {0};
-              raddbg_name_map_parse(rdbg, unparsed_map, &map);
-              
-              // rjf: look up binary's built-in entry point name
-              String8 builtin_entry_point_name = {0};
-              if(rdbg->scope_vmap != 0 && rdbg->procedures != 0)
+              for(String8Node *n = msg->strings.first; n != 0; n = n->next)
               {
-                U64 builtin_entry_point_voff = dbgi->pe.entry_point;
-                U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, builtin_entry_point_voff);
-                RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
-                U64 proc_idx = scope->proc_idx;
-                RADDBG_Procedure *procedure = &rdbg->procedures[proc_idx];
-                U64 name_size = 0;
-                U8 *name_ptr = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
-                builtin_entry_point_name = str8(name_ptr, name_size);
-              }
-              
-              // rjf: grab entry point symbol names we might want to run to
-              String8 default_entry_points[] =
-              {
-                str8_lit("WinMain"),
-                str8_lit("wWinMain"),
-                str8_lit("main"),
-                str8_lit("wmain"),
-                str8_lit("WinMainCRTStartup"),
-                str8_lit("wWinMainCRTStartup"),
-                str8_lit("mainCRTStartup"),
-                str8_lit("wmainCRTStartup"),
-              };
-              
-              // rjf: determine if built-in entry point is not one of the defaults, and thus
-              // specified by user
-              B32 builtin_entry_point_is_special = 0;
-              if(builtin_entry_point_name.size != 0)
-              {
-                builtin_entry_point_is_special = 1;
-                for(U64 idx = 0; idx < ArrayCount(default_entry_points); idx += 1)
+                U32 procedure_id = 0;
                 {
-                  if(str8_match(default_entry_points[idx], builtin_entry_point_name, 0))
+                  String8 name = n->string;
+                  RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
+                  if(node != 0)
                   {
-                    builtin_entry_point_is_special = 0;
-                    break;
-                  }
-                }
-              }
-              
-              // rjf: builtin entry point is unique -> use entry point voff
-              U64 voff = 0;
-              if(voff == 0 && builtin_entry_point_is_special)
-              {
-                voff = dbgi->pe.entry_point;
-              }
-              
-              // rjf: find voff for one of the custom entry points attached to this msg
-              if(voff == 0)
-              {
-                for(String8Node *n = msg->strings.first; n != 0; n = n->next)
-                {
-                  U32 procedure_id = 0;
-                  {
-                    String8 name = n->string;
-                    RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
-                    if(node != 0)
+                    U32 id_count = 0;
+                    U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                    if(id_count > 0)
                     {
-                      U32 id_count = 0;
-                      U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
-                      if(id_count > 0)
-                      {
-                        procedure_id = ids[0];
-                      }
+                      procedure_id = ids[0];
                     }
                   }
-                  if(procedure_id != 0)
+                }
+                if(procedure_id != 0)
+                {
+                  U64 new_voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                  if(new_voff != 0)
                   {
-                    voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                    entry_voff = new_voff;
                     break;
                   }
                 }
               }
-              
-              // rjf: find voff for one of the user's custom entry points
-              if(voff == 0)
+            }
+            
+            // rjf: find voff for one of the user's custom entry points
+            if(rdbg->procedures != 0 && unparsed_map != 0)
+            {
+              for(String8Node *n = ctrl_state->user_entry_points.first; n != 0; n = n->next)
               {
-                for(String8Node *n = ctrl_state->user_entry_points.first; n != 0; n = n->next)
+                U32 procedure_id = 0;
                 {
-                  U32 procedure_id = 0;
+                  String8 name = n->string;
+                  RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
+                  if(node != 0)
                   {
-                    String8 name = n->string;
-                    RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
-                    if(node != 0)
+                    U32 id_count = 0;
+                    U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                    if(id_count > 0)
                     {
-                      U32 id_count = 0;
-                      U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
-                      if(id_count > 0)
-                      {
-                        procedure_id = ids[0];
-                      }
+                      procedure_id = ids[0];
                     }
                   }
-                  if(procedure_id != 0)
-                  {
-                    voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
-                    break;
-                  }
                 }
-              }
-              
-              // rjf: find voff for one of the default entry points
-              if(voff == 0)
-              {
-                for(U64 idx = 0; voff == 0 && idx < ArrayCount(default_entry_points); idx += 1)
+                if(procedure_id != 0)
                 {
-                  U32 procedure_id = 0;
+                  U64 new_voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                  if(new_voff != 0)
                   {
-                    String8 name = default_entry_points[idx];
-                    RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
-                    if(node != 0)
-                    {
-                      U32 id_count = 0;
-                      U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
-                      if(id_count > 0)
-                      {
-                        procedure_id = ids[0];
-                      }
-                    }
-                  }
-                  if(procedure_id != 0)
-                  {
-                    voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                    entry_voff = new_voff;
                     break;
                   }
                 }
               }
-              
-              // rjf: nonzero voff? => store
-              if(voff != 0)
-              {
-                U64 base_vaddr = demon_base_vaddr_from_module(module);
-                entry_vaddr = base_vaddr + voff;
-                entry_vaddr_proc = run_ctrls.run_entities[process_idx];
-              }
+            }
+            
+            // rjf: nonzero voff? => store
+            if(entry_voff != 0)
+            {
+              U64 base_vaddr = demon_base_vaddr_from_module(module);
+              entry_vaddr = base_vaddr + entry_voff;
+              entry_vaddr_proc = run_ctrls.run_entities[process_idx];
             }
             
             // rjf: found entry point -> insert into trap controls
