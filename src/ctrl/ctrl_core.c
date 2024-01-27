@@ -1931,7 +1931,6 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
   
   //- rjf: launch
   OS_LaunchOptions opts = {0};
@@ -2016,6 +2015,8 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
         // rjf: done with handshake -> ready to find entry point. search launched processes
         case DEMON_EventKind_HandshakeComplete:
         {
+          DBGI_Scope *scope = dbgi_scope_open();
+          
           // rjf: find entry point vaddr
           for(U64 process_idx = 0; process_idx < run_ctrls.run_entity_count; process_idx += 1)
           {
@@ -2187,6 +2188,8 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
               stop_event = event;
             }
           }
+          
+          dbgi_scope_close(scope);
         }break;
       }
     }
@@ -2232,7 +2235,6 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
-  dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
