@@ -8730,9 +8730,9 @@ internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions)
   // rjf: draw line before next-to-execute line
   {
     R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
-                                       box->parent->rect.y0 - box->font_size*0.075f,
+                                       box->parent->rect.y0 - box->font_size*0.125f,
                                        box->rect.x0 + box->font_size*260*u->alive_t,
-                                       box->parent->rect.y0 + box->font_size*0.075f),
+                                       box->parent->rect.y0 + box->font_size*0.125f),
                                 v4f32(u->thread_color.x, u->thread_color.y, u->thread_color.z, 0),
                                 0, 0, 1);
     inst->colors[Corner_00] = inst->colors[Corner_01] = u->thread_color;
@@ -8797,9 +8797,9 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
   // rjf: draw line before next-to-execute line
   {
     R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
-                                       box->parent->rect.y0 - box->font_size*0.075f,
+                                       box->parent->rect.y0 - box->font_size*0.125f,
                                        box->rect.x0 + ui_top_font_size()*250.f*u->alive_t,
-                                       box->parent->rect.y0 + box->font_size*0.075f),
+                                       box->parent->rect.y0 + box->font_size*0.125f),
                                 v4f32(u->color.x, u->color.y, u->color.z, 0),
                                 0, 0, 1.f);
     inst->colors[Corner_00] = inst->colors[Corner_01] = u->color;

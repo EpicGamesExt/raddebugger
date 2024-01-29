@@ -183,7 +183,7 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
   
   // rjf: sample for corners
   float corner_sdf_t = 1;
-  if(vertex2pixel.corner_radius_px > 0)
+  if(vertex2pixel.corner_radius_px > 0 || vertex2pixel.softness_px > 0.75f)
   {
     float corner_sdf_s = rect_sdf(sdf_sample_pos,
                                   vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f),

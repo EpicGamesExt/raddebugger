@@ -184,7 +184,7 @@ str8_lit_comp(
 "  \n"
 "  // rjf: sample for corners\n"
 "  float corner_sdf_t = 1;\n"
-"  if(vertex2pixel.corner_radius_px > 0)\n"
+"  if(vertex2pixel.corner_radius_px > 0 || vertex2pixel.softness_px > 0.75f)\n"
 "  {\n"
 "    float corner_sdf_s = rect_sdf(sdf_sample_pos,\n"
 "                                  vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f),\n"
