@@ -331,12 +331,8 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       next = ev->next;
       if(ev->timestamp_us+1000000 < os_now_microseconds() ||
          ev->kind == OS_EventKind_Text ||
-         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_LeftMouseButton) ||
-         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_RightMouseButton) ||
-         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_MiddleMouseButton) ||
-         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_LeftMouseButton) ||
-         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_RightMouseButton) ||
-         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_MiddleMouseButton) ||
+         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_LeftMouseButton && ev->key != OS_Key_RightMouseButton && ev->key != OS_Key_MiddleMouseButton) ||
+         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_LeftMouseButton && ev->key != OS_Key_RightMouseButton && ev->key != OS_Key_MiddleMouseButton) ||
          (ev->kind == OS_EventKind_Scroll))
       {
         os_eat_event(&leftover_events, ev);

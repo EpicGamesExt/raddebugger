@@ -8409,14 +8409,14 @@ df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, DF_FuzzyMatchRangeList rang
         f_dim_from_tag_size_string(box->font, box->font_size, str8_prefix(display_string, match_n->range.min)).x,
         f_dim_from_tag_size_string(box->font, box->font_size, str8_prefix(display_string, match_n->range.max)).x,
       };
-      ui_set_next_fixed_x(match_pixel_range.min + box->text_padding + 2.f);
-      ui_set_next_fixed_y(box->font_size/2.f);
+      ui_set_next_fixed_x(match_pixel_range.min + box->text_padding + 4.f);
+      ui_set_next_fixed_y(box->font_size/8.f);
       ui_set_next_fixed_width(match_pixel_range.max-match_pixel_range.min);
-      ui_set_next_fixed_height(line_height*1.2f);
-      ui_set_next_corner_radius_00(box->font_size/2.f);
-      ui_set_next_corner_radius_01(box->font_size/2.f);
-      ui_set_next_corner_radius_10(box->font_size/2.f);
-      ui_set_next_corner_radius_11(box->font_size/2.f);
+      ui_set_next_pref_height(ui_pct(1, 0));
+      ui_set_next_corner_radius_00(box->font_size/3.f);
+      ui_set_next_corner_radius_01(box->font_size/3.f);
+      ui_set_next_corner_radius_10(box->font_size/3.f);
+      ui_set_next_corner_radius_11(box->font_size/3.f);
       ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_PlainOverlay));
       ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY|UI_BoxFlag_DrawBackground, ui_key_zero());
     }
