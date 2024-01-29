@@ -5690,6 +5690,64 @@ df_cfg_table(void)
 
 //- rjf: config serialization
 
+internal String8
+df_cfg_escaped_from_raw_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  U64 split_start_idx = 0;
+  for(U64 idx = 0; idx <= string.size; idx += 1)
+  {
+    U8 byte = (idx < string.size ? string.str[idx] : 0);
+    if(byte == 0 || byte == '\"')
+    {
+      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
+      str8_list_push(scratch.arena, &parts, part);
+      switch(byte)
+      {
+        default:{}break;
+        case '\"':{str8_list_push(scratch.arena, &parts, str8_lit("\\\""));}break;
+      }
+      split_start_idx = idx+1;
+    }
+  }
+  StringJoin join = {0};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+df_cfg_raw_from_escaped_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  U64 split_start_idx = 0;
+  U64 extra_advance = 0;
+  for(U64 idx = 0; idx <= string.size; ((idx += 1+extra_advance), extra_advance=0))
+  {
+    U8 byte = (idx < string.size ? string.str[idx] : 0);
+    if(byte == 0 || byte == '\\')
+    {
+      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
+      str8_list_push(scratch.arena, &parts, part);
+      if(byte == '\\' && idx+1 < string.size)
+      {
+        switch(string.str[idx+1])
+        {
+          default:{}break;
+          case '"':{extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\""));}break;
+        }
+      }
+      split_start_idx = idx+1+extra_advance;
+    }
+  }
+  StringJoin join = {0};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8List
 df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
 {
@@ -5724,18 +5782,21 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         String8 wdir_normalized = path_normalized_from_string(scratch.arena, wdir);
         String8 wdir_normalized_rel = path_relative_dst_from_absolute_dst_src(scratch.arena, wdir_normalized, root_path);
         String8 entry_point_name = entr__ent->name;
+        String8 label_escaped = df_cfg_escaped_from_raw_string(arena, label);
+        String8 args_escaped = df_cfg_escaped_from_raw_string(arena, args__ent->name);
+        String8 entry_escaped = df_cfg_escaped_from_raw_string(arena, entry_point_name);
         str8_list_push (arena, &strs,  str8_lit("target:\n"));
         str8_list_push (arena, &strs,  str8_lit("{\n"));
         if(label.size != 0)
         {
-          str8_list_pushf(arena, &strs,          "  label:             \"%S\"\n", label);
+          str8_list_pushf(arena, &strs,          "  label:             \"%S\"\n", label_escaped);
         }
         str8_list_pushf(arena, &strs,           "  exe:               \"%S\"\n", exe_normalized_rel);
-        str8_list_pushf(arena, &strs,           "  arguments:         \"%S\"\n", args__ent->name);
+        str8_list_pushf(arena, &strs,           "  arguments:         \"%S\"\n", args_escaped);
         str8_list_pushf(arena, &strs,           "  working_directory: \"%S\"\n", wdir_normalized_rel);
         if(entry_point_name.size != 0)
         {
-          str8_list_pushf(arena, &strs,          "  entry_point:       \"%S\"\n", entry_point_name);
+          str8_list_pushf(arena, &strs,          "  entry_point:       \"%S\"\n", entry_escaped);
         }
         str8_list_pushf(arena, &strs,           "  active:            %i\n", (int)target->b32);
         if(target->flags & DF_EntityFlag_HasColor)
@@ -5812,7 +5873,8 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         // rjf: function name breakpoints
         else if(!df_entity_is_nil(symb) && symb->name.size != 0)
         {
-          str8_list_pushf(arena, &strs, "  symbol: \"%S\"\n", symb->name);
+          String8 symb_escaped = df_cfg_escaped_from_raw_string(arena, symb->name);
+          str8_list_pushf(arena, &strs, "  symbol: \"%S\"\n", symb_escaped);
         }
         
         // rjf: address breakpoints
@@ -5824,13 +5886,15 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         // rjf: conditions
         if(!df_entity_is_nil(cond))
         {
-          str8_list_pushf(arena, &strs, "  condition: \"%S\"\n", cond->name);
+          String8 cond_escaped = df_cfg_escaped_from_raw_string(arena, cond->name);
+          str8_list_pushf(arena, &strs, "  condition: \"%S\"\n", cond_escaped);
         }
         
         // rjf: universal options
         str8_list_pushf(arena, &strs, "  enabled: %i\n", (int)bp->b32);
         if(bp->name.size != 0)
         {
+          String8 label_escaped = df_cfg_escaped_from_raw_string(arena, bp->name);
           str8_list_pushf(arena, &strs, "  label: \"%S\"\n", bp->name);
         }
         if(bp->flags & DF_EntityFlag_HasColor)
@@ -5864,7 +5928,8 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         // rjf: write
         str8_list_push(arena, &strs, str8_lit("watch_pin:\n"));
         str8_list_push(arena, &strs, str8_lit("{\n"));
-        str8_list_pushf(arena, &strs, "  expression: \"%S\"\n", pin->name);
+        String8 expr_escaped = df_cfg_escaped_from_raw_string(arena, pin->name);
+        str8_list_pushf(arena, &strs, "  expression: \"%S\"\n", expr_escaped);
         DF_Entity *file = df_entity_ancestor_from_kind(pin, DF_EntityKind_File);
         if(pin->flags & DF_EntityFlag_HasTextPoint && !df_entity_is_nil(file))
         {
@@ -7609,12 +7674,15 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                 String8 saved_wdir = wdir_cfg->first->string;
                 String8 saved_wdir_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_wdir, cfg_folder);
                 String8 saved_entry_point = entry_cfg->first->string;
+                String8 saved_label_raw = df_cfg_raw_from_escaped_string(scratch.arena, saved_label);
+                String8 saved_entry_raw = df_cfg_raw_from_escaped_string(scratch.arena, saved_entry_point);
+                String8 saved_args_raw = df_cfg_raw_from_escaped_string(scratch.arena, args_cfg->first->string);
                 df_entity_equip_b32(target__ent, active_cfg != &df_g_nil_cfg_node ? !!is_active_u64 : 1);
-                df_entity_equip_name(0, target__ent, saved_label);
+                df_entity_equip_name(0, target__ent, saved_label_raw);
                 df_entity_equip_name(0, exe__ent,    saved_exe_absolute);
-                df_entity_equip_name(0, args__ent,   args_cfg->first->string);
+                df_entity_equip_name(0, args__ent,   saved_args_raw);
                 df_entity_equip_name(0, path__ent,   saved_wdir_absolute);
-                df_entity_equip_name(0, entry__ent,  saved_entry_point);
+                df_entity_equip_name(0, entry__ent,  saved_entry_raw);
                 df_entity_equip_cfg_src(target__ent, src);
                 if(!memory_is_zero(&hsva, sizeof(hsva)))
                 {
@@ -7728,12 +7796,14 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
               if(symb_cfg != &df_g_nil_cfg_node)
               {
+                String8 symb_raw = df_cfg_raw_from_escaped_string(scratch.arena, symb_cfg->string);
                 DF_Entity *symb = df_entity_alloc(0, bp_ent, DF_EntityKind_EntryPointName);
-                df_entity_equip_name(0, symb, symb_cfg->first->string);
+                df_entity_equip_name(0, symb, symb_raw);
               }
               if(labl_cfg->string.size != 0)
               {
-                df_entity_equip_name(0, bp_ent, labl_cfg->first->string);
+                String8 label_raw = df_cfg_raw_from_escaped_string(scratch.arena, labl_cfg->string);
+                df_entity_equip_name(0, bp_ent, label_raw);
               }
               if(!memory_is_zero(&hsva, sizeof(hsva)))
               {
@@ -7741,8 +7811,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
               if(cond_cfg->string.size != 0)
               {
+                String8 cond_raw = df_cfg_raw_from_escaped_string(scratch.arena, cond_cfg->string);
                 DF_Entity *cond = df_entity_alloc(0, bp_ent, DF_EntityKind_Condition);
-                df_entity_equip_name(0, cond, cond_cfg->first->string);
+                df_entity_equip_name(0, cond, cond_raw);
               }
             }
           }
@@ -7759,6 +7830,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             Vec4F32 hsva = df_hsva_from_cfg_node(pin);
             String8 string = df_string_from_cfg_node_key(pin, str8_lit("expression"), StringMatchFlag_CaseInsensitive);
+            String8 string_raw = df_cfg_raw_from_escaped_string(scratch.arena, string);
             DF_CfgNode *line_cfg = df_cfg_node_child_from_string(pin, str8_lit("line"), StringMatchFlag_CaseInsensitive);
             DF_CfgNode *addr_cfg = df_cfg_node_child_from_string(pin, str8_lit("addr"), StringMatchFlag_CaseInsensitive);
             DF_Entity *pin_parent_ent = df_entity_root();
@@ -7785,7 +7857,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             DF_Entity *pin_ent = df_entity_alloc(0, pin_parent_ent, DF_EntityKind_WatchPin);
             df_entity_equip_cfg_src(pin_ent, src);
-            df_entity_equip_name(0, pin_ent, string);
+            df_entity_equip_name(0, pin_ent, string_raw);
             if(!memory_is_zero(&hsva, sizeof(hsva)))
             {
               df_entity_equip_color_hsva(pin_ent, hsva);

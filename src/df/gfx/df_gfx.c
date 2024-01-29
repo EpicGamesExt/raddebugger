@@ -8378,10 +8378,12 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
   //- rjf: serialize fonts
   if(source == DF_CfgSrc_User)
   {
+    String8 code_font_path_escaped = df_cfg_escaped_from_raw_string(arena, df_gfx_state->cfg_code_font_path);
+    String8 main_font_path_escaped = df_cfg_escaped_from_raw_string(arena, df_gfx_state->cfg_main_font_path);
     str8_list_push(arena, &strs, str8_lit("/// fonts /////////////////////////////////////////////////////////////////////\n"));
     str8_list_push(arena, &strs, str8_lit("\n"));
-    str8_list_pushf(arena, &strs, "code_font: \"%S\"\n", df_gfx_state->cfg_code_font_path);
-    str8_list_pushf(arena, &strs, "main_font: \"%S\"\n", df_gfx_state->cfg_main_font_path);
+    str8_list_pushf(arena, &strs, "code_font: \"%S\"\n", code_font_path_escaped);
+    str8_list_pushf(arena, &strs, "main_font: \"%S\"\n", main_font_path_escaped);
     str8_list_push(arena, &strs, str8_lit("\n"));
   }
   

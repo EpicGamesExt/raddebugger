@@ -1650,6 +1650,8 @@ internal String8 df_cfg_path_from_src(DF_CfgSrc src);
 internal DF_CfgTable *df_cfg_table(void);
 
 //- rjf: config serialization
+internal String8 df_cfg_escaped_from_raw_string(Arena *arena, String8 string);
+internal String8 df_cfg_raw_from_escaped_string(Arena *arena, String8 string);
 internal String8List df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source);
 internal void df_cfg_push_write_string(DF_CfgSrc src, String8 string);
 
