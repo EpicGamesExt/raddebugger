@@ -5368,87 +5368,17 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         UI_Box *panel_box = &ui_g_nil_box;
         UI_Rect(content_rect) UI_ChildLayoutAxis(Axis2_Y) UI_CornerRadius(0) UI_Focus(UI_FocusKind_On)
         {
-          UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_PlainBackground))
+          UI_Key panel_key = df_ui_key_from_panel(panel);
+          if(ws->focused_panel != panel)
           {
-            UI_Key panel_key = df_ui_key_from_panel(panel);
-            if(ws->focused_panel != panel)
-            {
-              ui_set_next_overlay_color(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay));
-            }
-            panel_box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
-                                              UI_BoxFlag_Clip|
-                                              UI_BoxFlag_DrawBorder|
-                                              UI_BoxFlag_DrawBackground|
-                                              ((ws->focused_panel != panel)*UI_BoxFlag_DrawOverlay),
-                                              panel_key);
+            ui_set_next_overlay_color(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay));
           }
+          panel_box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
+                                            UI_BoxFlag_Clip|
+                                            UI_BoxFlag_DrawBorder|
+                                            ((ws->focused_panel != panel)*UI_BoxFlag_DrawOverlay),
+                                            panel_key);
         }
-        
-#if 0
-        //- rjf: panel query ui
-        if(!df_view_is_nil(query_view)) UI_PrefHeight(ui_em(2.5f, 1.f))
-        {
-          DF_IconKind icon_kind = query_cmd_spec->info.canonical_icon_kind;
-          
-          // rjf: begin
-          ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_QueryBar));
-          ui_set_next_flags(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow);
-          if(query_view_spec == &df_g_nil_view_spec)
-          {
-            F32 padding = ui_em(5.25f, 1.f).value;
-            F32 corner_radius = ui_top_font_size() * 0.2f;
-            F32 width = dim_2f32(content_rect).x*0.7f;
-            width = Max(width, ui_top_font_size()*40);
-            width = Min(width, dim_2f32(content_rect).x - padding*2);
-            ui_set_next_fixed_x(padding/2);
-            ui_set_next_fixed_y(padding/2);
-            ui_set_next_fixed_width(width);
-            ui_set_next_fixed_height(ui_em(2.5f, 1.f).value);
-            ui_set_next_corner_radius_00(corner_radius);
-            ui_set_next_corner_radius_01(corner_radius);
-            ui_set_next_corner_radius_10(corner_radius);
-            ui_set_next_corner_radius_11(corner_radius);
-            ui_set_next_flags(ui_top_flags()|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY);
-          }
-          ui_named_row_begin(str8_lit("query_bar"));
-          
-          // rjf: build contents
-          UI_TextAlignment(UI_TextAlign_Center)
-            UI_PrefWidth(ui_text_dim(10, 1))
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-          {
-            if(icon_kind != DF_IconKind_Null)
-            {
-              ui_spacer(ui_em(0.3f, 1.f));
-              UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-                UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-                UI_PrefWidth(ui_em(2.25f, 1.f))
-                UI_HeightFill
-                ui_label(df_g_icon_kind_text_table[icon_kind]);
-            }
-            ui_labelf("%S", query_cmd_spec->info.display_name);
-          }
-          B32 query_is_code = !!(query_cmd_spec->info.flags & DF_CmdSpecFlag_QueryIsCode);
-          UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_PlainBackground))
-            UI_CornerRadius00(ui_em(0.6f, 1.f).value)
-            UI_CornerRadius01(ui_em(0.6f, 1.f).value)
-            UI_WidthFill
-            UI_Focus(!ctx_menu_is_focused && panel_is_focused && query_is_focused && !ws->menu_bar_focused)
-            UI_Font(query_is_code ? df_font_from_slot(DF_FontSlot_Code) : ui_top_font())
-          {
-            query_view->query.str = query_view->query_buffer;
-            UI_Signal sig = df_line_edit(query_is_code*DF_LineEditFlag_CodeContents, 0, &query_view->query_cursor, &query_view->query_mark, query_view->query_buffer, sizeof(query_view->query_buffer), &query_view->query.size, 0, query_view->query, str8_lit("###cmd_query_str"));
-            if(sig.pressed)
-            {
-              DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
-              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
-            }
-          }
-          
-          // rjf: end
-          ui_named_row_end();
-        }
-#endif
         
         //////////////////////////
         //- rjf: flash animation for stable view
@@ -6373,7 +6303,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       }
       
       // rjf: push clip
-      if(box->flags & UI_BoxFlag_Clip && rec.push_count != 0)
+      if(box->flags & UI_BoxFlag_Clip)
       {
         Rng2F32 top_clip = d_top_clip();
         Rng2F32 new_clip = pad_2f32(box->rect, -1);
@@ -6405,16 +6335,16 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         S32 pop_idx = 0;
         for(UI_Box *b = box; !ui_box_is_nil(b) && pop_idx <= rec.pop_count; b = b->parent)
         {
-          // rjf: pop clips
-          if(b != box && b->flags & UI_BoxFlag_Clip)
+          pop_idx += 1;
+          if(b == box && rec.push_count != 0)
           {
-            d_pop_clip();
+            continue;
           }
           
-          // rjf: draw debug border
-          if(0)
+          // rjf: pop clips
+          if(b->flags & UI_BoxFlag_Clip)
           {
-            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1), v4f32(1, 0, 1, 0.5f), 0, 1.f, 1.f);
+            d_pop_clip();
           }
           
           // rjf: draw border
@@ -6494,16 +6424,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
-          // rjf: draw keyboard root vis
-#if 0
-          if(b->flags & UI_BoxFlag_FocusRoot)
-          {
-            Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-            R2_CmdInst_Rect *inst = d_rect(rect_grow(b->rect, 2.f), color, 0, 2.f, 1.f);
-            MemoryCopyArray(inst->corner_radii, b->corner_radii);
-          }
-#endif
-          
           // rjf: disabled overlay
           if(b->disabled_t >= 0.005f)
           {
@@ -6512,18 +6432,16 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
           
           // rjf: pop squish
-          if((b != box || rec.push_count == 0) && b->squish != 0)
+          if(b->squish != 0)
           {
             d_pop_xform2d();
           }
           
           // rjf: pop transparency
-          if((b != box || rec.push_count == 0) && b->transparency != 0)
+          if(b->transparency != 0)
           {
             d_pop_transparency();
           }
-          
-          pop_idx += 1;
         }
       }
       
@@ -6549,208 +6467,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         d_rect(rect, v4f32(rgb.x, rgb.y, rgb.z, 0.3f), 0, 0, 0);
       }
     }
-    
-    // TODO(rjf): MESH DRAWING TEST
-#if 0
-    {
-      F32 vertex_data[] = // pos.x, pos.y, pos.z, nor.x, nor.y, nor.z, tex.u, tex.v, col.r, col.g, col.b, ...
-      {
-        -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  2.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  8.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 10.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f,  0.6f, -1.0f,  0.0f,  0.0f, -1.0f,  2.0f,  2.0f,  0.973f,  0.480f,  0.002f,
-        0.6f,  0.6f, -1.0f,  0.0f,  0.0f, -1.0f,  8.0f,  2.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f, -0.6f, -1.0f,  0.0f,  0.0f, -1.0f,  2.0f,  8.0f,  0.973f,  0.480f,  0.002f,
-        0.6f, -0.6f, -1.0f,  0.0f,  0.0f, -1.0f,  8.0f,  8.0f,  0.973f,  0.480f,  0.002f,
-        -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f, 10.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  2.0f, 10.0f,  0.973f,  0.480f,  0.002f,
-        0.6f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  8.0f, 10.0f,  0.973f,  0.480f,  0.002f,
-        1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 10.0f, 10.0f,  0.973f,  0.480f,  0.002f,
-        1.0f,  1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  1.0f, -0.6f,  1.0f,  0.0f,  0.0f,  2.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  1.0f,  0.6f,  1.0f,  0.0f,  0.0f,  8.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 10.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  2.0f,  2.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  8.0f,  2.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  2.0f,  8.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  8.0f,  8.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  0.0f, 10.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -1.0f, -0.6f,  1.0f,  0.0f,  0.0f,  2.0f, 10.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -1.0f,  0.6f,  1.0f,  0.0f,  0.0f,  8.0f, 10.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 10.0f, 10.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f,  2.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f,  8.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 10.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  1.0f,  2.0f,  2.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  1.0f,  8.0f,  2.0f,  0.612f,  0.000f,  0.069f,
-        0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  1.0f,  2.0f,  8.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  1.0f,  8.0f,  8.0f,  0.612f,  0.000f,  0.069f,
-        1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f,  0.0f, 10.0f,  0.612f,  0.000f,  0.069f,
-        0.6f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f,  2.0f, 10.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f,  8.0f, 10.0f,  0.612f,  0.000f,  0.069f,
-        -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 10.0f, 10.0f,  0.612f,  0.000f,  0.069f,
-        -1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  1.0f,  0.6f, -1.0f,  0.0f,  0.0f,  2.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  1.0f, -0.6f, -1.0f,  0.0f,  0.0f,  8.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 10.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  0.6f,  0.6f, -1.0f,  0.0f,  0.0f,  2.0f,  2.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  0.6f, -0.6f, -1.0f,  0.0f,  0.0f,  8.0f,  2.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -0.6f,  0.6f, -1.0f,  0.0f,  0.0f,  2.0f,  8.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -0.6f, -0.6f, -1.0f,  0.0f,  0.0f,  8.0f,  8.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -1.0f,  1.0f, -1.0f,  0.0f,  0.0f,  0.0f, 10.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -1.0f,  0.6f, -1.0f,  0.0f,  0.0f,  2.0f, 10.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -1.0f, -0.6f, -1.0f,  0.0f,  0.0f,  8.0f, 10.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 10.0f, 10.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f,  2.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f,  8.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 10.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  1.0f,  0.6f,  0.0f,  1.0f,  0.0f,  2.0f,  2.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f,  0.6f,  0.0f,  1.0f,  0.0f,  8.0f,  2.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  1.0f, -0.6f,  0.0f,  1.0f,  0.0f,  2.0f,  8.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f, -0.6f,  0.0f,  1.0f,  0.0f,  8.0f,  8.0f,  0.000f,  0.254f,  0.637f,
-        -1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f,  0.0f, 10.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f,  2.0f, 10.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f,  8.0f, 10.0f,  0.000f,  0.254f,  0.637f,
-        1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 10.0f, 10.0f,  0.000f,  0.254f,  0.637f,
-        -1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f,  2.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f,  8.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 10.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f, -0.6f,  0.0f, -1.0f,  0.0f,  2.0f,  2.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f, -0.6f,  0.0f, -1.0f,  0.0f,  8.0f,  2.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f,  0.6f,  0.0f, -1.0f,  0.0f,  2.0f,  8.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f,  0.6f,  0.0f, -1.0f,  0.0f,  8.0f,  8.0f,  0.001f,  0.447f,  0.067f,
-        -1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f,  0.0f, 10.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f,  2.0f, 10.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f,  8.0f, 10.0f,  0.001f,  0.447f,  0.067f,
-        1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 10.0f, 10.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f,  0.6f, -1.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f,  0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f, -0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f, -0.6f, -1.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f,  0.6f, -0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f,  0.6f, -1.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f, -0.6f, -1.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f, -0.6f, -0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f, -0.6f, -1.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f, -0.6f, -0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f, -0.6f, -0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f, -0.6f, -1.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f,  0.6f, -0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        -0.6f,  0.6f, -1.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f,  0.6f, -1.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        0.6f,  0.6f, -0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.973f,  0.480f,  0.002f,
-        1.0f,  0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f,  0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f, -0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f,  0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f, -0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  0.6f,  0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f,  0.6f,  0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f,  0.6f, -0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f,  0.6f, -0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f, -0.6f,  0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -0.6f,  0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        1.0f, -0.6f, -0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f, -0.6f, -0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.897f,  0.163f,  0.011f,
-        0.6f,  0.6f,  1.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f,  0.6f,  0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f, -0.6f,  0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f, -0.6f,  1.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f,  0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f,  0.6f,  1.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f, -0.6f,  1.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f, -0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f, -0.6f,  1.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f, -0.6f,  0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f, -0.6f,  0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f, -0.6f,  1.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f,  0.6f,  0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        0.6f,  0.6f,  1.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f,  0.6f,  1.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -0.6f,  0.6f,  0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.612f,  0.000f,  0.069f,
-        -1.0f,  0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f,  0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f, -0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f,  0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f, -0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -0.6f,  0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f, -0.6f,  0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f, -0.6f, -0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f, -0.6f, -0.6f,  0.0f,  1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f,  0.6f,  0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  0.6f,  0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -1.0f,  0.6f, -0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f,  0.6f, -0.6f,  0.0f, -1.0f,  0.0f,  0.0f,  0.0f,  0.127f,  0.116f,  0.408f,
-        -0.6f,  1.0f,  0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  1.0f, -0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  0.6f,  0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f,  0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f, -0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  0.6f, -0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  1.0f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f,  1.0f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  1.0f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        0.6f,  0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.000f,  0.254f,  0.637f,
-        -0.6f, -0.6f,  0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f,  0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f, -0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -0.6f, -0.6f,  1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f,  0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -0.6f,  0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -0.6f, -0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f, -0.6f, -1.0f,  0.0f,  0.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -0.6f, -0.6f,  0.0f,  0.0f,  1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -1.0f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        -0.6f, -0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -0.6f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-        0.6f, -1.0f,  0.6f,  0.0f,  0.0f, -1.0f,  0.0f,  0.0f,  0.001f,  0.447f,  0.067f,
-      };
-      
-      U32 index_data[] =
-      {
-        0,   1,   9,   9,   8,   0,   1,   2,   5,   5,   4,   1,   6,   7,  10,  10,   9,   6,   2,   3,  11,  11,  10,   2,
-        12,  13,  21,  21,  20,  12,  13,  14,  17,  17,  16,  13,  18,  19,  22,  22,  21,  18,  14,  15,  23,  23,  22,  14,
-        24,  25,  33,  33,  32,  24,  25,  26,  29,  29,  28,  25,  30,  31,  34,  34,  33,  30,  26,  27,  35,  35,  34,  26,
-        36,  37,  45,  45,  44,  36,  37,  38,  41,  41,  40,  37,  42,  43,  46,  46,  45,  42,  38,  39,  47,  47,  46,  38,
-        48,  49,  57,  57,  56,  48,  49,  50,  53,  53,  52,  49,  54,  55,  58,  58,  57,  54,  50,  51,  59,  59,  58,  50,
-        60,  61,  69,  69,  68,  60,  61,  62,  65,  65,  64,  61,  66,  67,  70,  70,  69,  66,  62,  63,  71,  71,  70,  62,
-        72,  73,  74,  74,  75,  72,  76,  77,  78,  78,  79,  76,  80,  81,  82,  82,  83,  80,  84,  85,  86,  86,  87,  84,
-        88,  89,  90,  90,  91,  88,  92,  93,  94,  94,  95,  92,  96,  97,  98,  98,  99,  96, 100, 101, 102, 102, 103, 100,
-        104, 105, 106, 106, 107, 104, 108, 109, 110, 110, 111, 108, 112, 113, 114, 114, 115, 112, 116, 117, 118, 118, 119, 116,
-        120, 121, 122, 122, 123, 120, 124, 125, 126, 126, 127, 124, 128, 129, 130, 130, 131, 128, 132, 133, 134, 134, 135, 132,
-        136, 137, 138, 138, 139, 136, 140, 141, 142, 142, 143, 140, 144, 145, 146, 146, 147, 144, 148, 149, 150, 150, 151, 148,
-        152, 153, 154, 154, 155, 152, 156, 157, 158, 158, 159, 156, 160, 161, 162, 162, 163, 160, 164, 165, 166, 166, 167, 164,
-      };
-      
-      R_Handle vertex_buffer = r_buffer_alloc(R_BufferKind_Static, sizeof(vertex_data), vertex_data);
-      R_Handle index_buffer = r_buffer_alloc(R_BufferKind_Static, sizeof(index_data), index_data);
-      Rng2F32 viewport = os_client_rect_from_window(ws->os);
-      Vec2F32 viewport_dim = dim_2f32(viewport);
-      d_geo3d_begin(viewport,
-                    make_look_at_4x4f32(v3f32(10*cos_f32(df_time_in_seconds()), 10*sin_f32(df_time_in_seconds()), 10), v3f32(0, 0, 0), v3f32(0, 0, 1)),
-                    make_perspective_4x4f32(0.25f, viewport_dim.x/viewport_dim.y, 0.1f, 500.f));
-      d_mesh(vertex_buffer, index_buffer, R_GeoTopologyKind_Triangles, R_GeoVertexFlag_TexCoord|R_GeoVertexFlag_Normals|R_GeoVertexFlag_RGB, r_handle_zero(), mat_4x4f32(1.f));
-    }
-#endif
     
     //- rjf: draw border/overlay color to signify error
     if(ws->error_t > 0.01f)
@@ -6808,10 +6524,14 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
   ProfBeginFunction();
   String8List list = {0};
   F32 space_taken = 0;
+  
+  //- rjf: type path -> empty
   if(eval.mode == EVAL_EvalMode_NULL && !tg_key_match(tg_key_zero(), eval.type_key))
   {
     str8_list_push(arena, &list, str8_lit("-"));
   }
+  
+  //- rjf: non-type path: descend recursively & produce single-line value strings
   else if(max_size > 0)
   {
     TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_raddbg_key(graph, rdbg, eval.type_key));
@@ -7207,7 +6927,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
             {
               break;
             }
-            if((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef)
+            if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
             {
               row->flags |= DF_EvalVizRowFlag_CanEditValue;
             }
@@ -7293,7 +7013,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
               {
                 break;
               }
-              if((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef)
+              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
               {
                 row->flags |= DF_EvalVizRowFlag_CanEditValue;
               }
@@ -7377,7 +7097,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
               {
                 break;
               }
-              if((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef)
+              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
               {
                 row->flags |= DF_EvalVizRowFlag_CanEditValue;
               }

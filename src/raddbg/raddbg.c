@@ -322,7 +322,8 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   }
   
   //- rjf: gather leftover events for subsequent frame
-  if(events.count != 0)
+  // TODO(rjf): need to prevent spurious unconsumed events in UI layer & other event handling paths
+  if(events.count != 0 && 0)
   {
     arena_clear(leftover_events_arena);
     leftover_events = os_event_list_copy(leftover_events_arena, &events);

@@ -1,21 +1,30 @@
-namespace NS
+
+struct Bar
 {
-  static int X = 123;
-  static int Y = 456;
-  namespace SubNS
-  {
-    static int X = 111;
-    static int Y = 222;
-    int Foo(int x, int y)
-    {
-      int z = x + y + X + Y + NS::X + NS::Y;
-      return z;
-    }
-  }
-}
+  int x;
+  int y;
+  int z;
+};
+
+struct BarContainer
+{
+  Bar *bar;
+  int bar_count;
+  int bar_cap;
+};
+
+struct Foo
+{
+  BarContainer bar;
+  int a;
+  int b;
+  int c;
+};
 
 int main(void)
 {
-  int result = NS::SubNS::Foo(5, 6);
+  Bar bar[100] = {0};
+  Foo foo_ = {bar, 50, sizeof(bar)/sizeof(Bar)};
+  Foo &foo = foo_;
   return 0;
 }
