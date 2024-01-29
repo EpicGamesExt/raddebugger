@@ -167,12 +167,6 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
   // rjf: determine SDF sample position
   float2 sdf_sample_pos = vertex2pixel.sdf_sample_pos;
   
-  // rjf: sample for corners
-  float corner_sdf_s = rect_sdf(sdf_sample_pos,
-                                vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f),
-                                vertex2pixel.corner_radius_px);
-  float corner_sdf_t = 1-smoothstep(0, 2*vertex2pixel.softness_px, corner_sdf_s);
-  
   // rjf: sample for borders
   float border_sdf_t = 1;
   if(vertex2pixel.border_thickness_px > 0)
@@ -185,6 +179,16 @@ ps_main(Vertex2Pixel vertex2pixel) : SV_TARGET
   if(border_sdf_t < 0.001f)
   {
     discard;
+  }
+  
+  // rjf: sample for corners
+  float corner_sdf_t = 1;
+  if(vertex2pixel.corner_radius_px > 0)
+  {
+    float corner_sdf_s = rect_sdf(sdf_sample_pos,
+                                  vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f),
+                                  vertex2pixel.corner_radius_px);
+    corner_sdf_t = 1-smoothstep(0, 2*vertex2pixel.softness_px, corner_sdf_s);
   }
   
   // rjf: form+return final color

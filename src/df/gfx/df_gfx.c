@@ -5352,11 +5352,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         F32 tab_bar_vheight = ui_top_font_size()*2.6f;
         F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
         F32 tab_spacing = ui_top_font_size()*0.4f;
-        Rng2F32 tab_bar_rect = r2f32p(panel_rect.x0, panel_rect.y0, panel_rect.x1, panel_rect.y0 + tab_bar_rheight);
+        Rng2F32 tab_bar_rect = r2f32p(panel_rect.x0, panel_rect.y0, panel_rect.x1, panel_rect.y0 + tab_bar_vheight);
         Rng2F32 content_rect = r2f32p(panel_rect.x0, panel_rect.y0+tab_bar_vheight, panel_rect.x1, panel_rect.y1);
         if(panel->tab_side == Side_Max)
         {
-          tab_bar_rect.y0 = panel_rect.y1 - tab_bar_rheight;
+          tab_bar_rect.y0 = panel_rect.y1 - tab_bar_vheight;
           tab_bar_rect.y1 = panel_rect.y1;
           content_rect.y0 = panel_rect.y0;
           content_rect.y1 = panel_rect.y1 - tab_bar_vheight;
@@ -6418,7 +6418,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
           
           // rjf: draw overlay
-          if(b->flags & UI_BoxFlag_DrawOverlay)
+          if(b->flags & UI_BoxFlag_DrawOverlay && b->overlay_color.w > 0.05f)
           {
             R_Rect2DInst *inst = d_rect(b->rect, b->overlay_color, 0, 0, 1);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
@@ -8730,9 +8730,9 @@ internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions)
   // rjf: draw line before next-to-execute line
   {
     R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
-                                       box->parent->rect.y0 - box->font_size*0.25f,
+                                       box->parent->rect.y0 - box->font_size*0.075f,
                                        box->rect.x0 + box->font_size*260*u->alive_t,
-                                       box->parent->rect.y0 + box->font_size*0.25f),
+                                       box->parent->rect.y0 + box->font_size*0.075f),
                                 v4f32(u->thread_color.x, u->thread_color.y, u->thread_color.z, 0),
                                 0, 0, 1);
     inst->colors[Corner_00] = inst->colors[Corner_01] = u->thread_color;
@@ -8797,9 +8797,9 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
   // rjf: draw line before next-to-execute line
   {
     R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
-                                       box->parent->rect.y0 - ui_top_font_size()*0.225f,
+                                       box->parent->rect.y0 - box->font_size*0.075f,
                                        box->rect.x0 + ui_top_font_size()*250.f*u->alive_t,
-                                       box->parent->rect.y0 + ui_top_font_size()*0.225f),
+                                       box->parent->rect.y0 + box->font_size*0.075f),
                                 v4f32(u->color.x, u->color.y, u->color.z, 0),
                                 0, 0, 1.f);
     inst->colors[Corner_00] = inst->colors[Corner_01] = u->color;
@@ -8867,7 +8867,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     ui_set_next_child_layout_axis(Axis2_X);
     ui_set_next_pref_width(ui_px(params->line_text_max_width_px, 1));
     ui_set_next_pref_height(ui_children_sum(1));
-    top_container_box = ui_build_box_from_string(UI_BoxFlag_DisableFocusViz|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, string);
+    top_container_box = ui_build_box_from_string(UI_BoxFlag_DisableFocusViz|UI_BoxFlag_DrawBorder, string);
     clipped_top_container_rect = top_container_box->rect;
     for(UI_Box *b = top_container_box; !ui_box_is_nil(b); b = b->parent)
     {
@@ -9724,7 +9724,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         // rjf: build line num box
         ui_set_next_text_color(text_color);
         ui_set_next_background_color(bg_color);
-        ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBackground, "%I64u##line_num", line_num);
+        ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%I64u##line_num", line_num);
       }
     }
   }

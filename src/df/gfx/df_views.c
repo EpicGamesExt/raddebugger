@@ -4990,7 +4990,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     ui_set_next_child_layout_axis(Axis2_Y);
     container_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|
                                               UI_BoxFlag_Scroll|
-                                              UI_BoxFlag_DrawBorder|
                                               UI_BoxFlag_AllowOverflowX|
                                               UI_BoxFlag_AllowOverflowY,
                                               "###code_area_%p", view);
