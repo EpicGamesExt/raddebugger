@@ -6997,7 +6997,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   {
     if(txti_buffer_is_ready && visible_line_num_range.max >= visible_line_num_range.min && ui_is_focus_active())
     {
-      snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(visible_line_count, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
+      snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(num_possible_visible_lines, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
     }
   }
   
@@ -7140,10 +7140,10 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     if(snap[Axis2_Y])
     {
       Rng1S64 cursor_visibility_range = r1s64(tv->cursor.line-4, tv->cursor.line+4);
-      cursor_visibility_range.min = Clamp(0, cursor_visibility_range.min, (S64)txti_buffer_info.total_line_count);
-      cursor_visibility_range.max = Clamp(0, cursor_visibility_range.max, (S64)txti_buffer_info.total_line_count);
-      S64 min_delta = Min(0, cursor_visibility_range.min-target_visible_line_num_range.min);
-      S64 max_delta = Max(0, cursor_visibility_range.max-target_visible_line_num_range.max);
+      cursor_visibility_range.min = ClampBot(0, cursor_visibility_range.min);
+      cursor_visibility_range.max = ClampBot(0, cursor_visibility_range.max);
+      S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
+      S64 max_delta = Max(0, cursor_visibility_range.max-(target_visible_line_num_range.min+num_possible_visible_lines));
       S64 new_idx = view->scroll_pos.y.idx+min_delta+max_delta;
       new_idx = Clamp(0, new_idx, (S64)txti_buffer_info.total_line_count-1);
       ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
