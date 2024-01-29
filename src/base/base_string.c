@@ -1341,7 +1341,7 @@ utf16_decode(U16 *str, U64 max){
   result.codepoint = str[0];
   result.inc = 1;
   if (max > 1 && 0xD800 <= str[0] && str[0] < 0xDC00 && 0xDC00 <= str[1] && str[1] < 0xE000){
-    result.codepoint = ((str[0] - 0xD800) << 10) | (str[1] - 0xDC00);
+    result.codepoint = ((str[0] - 0xD800) << 10) | (str[1] - 0xDC00) + 0x10000;
     result.inc = 2;
   }
   return(result);

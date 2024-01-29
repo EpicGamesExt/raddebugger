@@ -6900,14 +6900,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       String8 string = str8_substr(args, r1u64(start_split_idx, idx));
                       if(string.size > 0)
                       {
-                        if(str8_match(str8_prefix(string, 1), str8_lit("\""), 0))
-                        {
-                          string = str8_skip(string, 1);
-                        }
-                        if(str8_match(str8_postfix(string, 1), str8_lit("\""), 0))
-                        {
-                          string = str8_chop(string, 1);
-                        }
                         str8_list_push(scratch.arena, &cmdln_strings, string);
                       }
                       start_split_idx = idx+1;
