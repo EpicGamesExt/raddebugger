@@ -6597,6 +6597,25 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           df_entity_equip_stack_base(entity, event->stack_base);
           df_entity_equip_tls_root(entity, event->tls_root);
           df_entity_equip_vaddr(entity, event->rip_vaddr);
+          if(event->string.size != 0)
+          {
+            df_entity_equip_name(0, entity, event->string);
+          }
+          
+          // rjf: find any pending thread names correllating with this TID -> equip name if found match
+          {
+            DF_EntityList pending_thread_names = df_query_cached_entity_list_with_kind(DF_EntityKind_PendingThreadName);
+            for(DF_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
+            {
+              DF_Entity *pending_thread_name = n->entity;
+              if(event->machine_id == pending_thread_name->ctrl_machine_id && event->entity_id == pending_thread_name->ctrl_id)
+              {
+                df_entity_mark_for_deletion(pending_thread_name);
+                df_entity_equip_name(0, entity, pending_thread_name->name);
+                break;
+              }
+            }
+          }
           
           // rjf: determine index in process
           U64 thread_idx_in_process = 0;
@@ -6730,14 +6749,25 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case CTRL_EventKind_ThreadName:
         {
           String8 string = event->string;
-          DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
+          DF_Entity *entity = df_entity_from_ctrl_handle(event->machine_id, event->entity);
           if(event->entity_id != 0)
           {
-            thread = df_entity_from_ctrl_id(event->machine_id, event->entity_id);
+            entity = df_entity_from_ctrl_id(event->machine_id, event->entity_id);
           }
-          if(!df_entity_is_nil(thread))
+          if(df_entity_is_nil(entity))
           {
-            df_entity_equip_name(0, thread, string);
+            DF_Entity *process = df_entity_from_ctrl_handle(event->machine_id, event->parent);
+            if(!df_entity_is_nil(process))
+            {
+              entity = df_entity_alloc(0, process, DF_EntityKind_PendingThreadName);
+              df_entity_equip_name(0, entity, string);
+              df_entity_equip_ctrl_machine_id(entity, event->machine_id);
+              df_entity_equip_ctrl_id(entity, event->entity_id);
+            }
+          }
+          if(!df_entity_is_nil(entity))
+          {
+            df_entity_equip_name(0, entity, string);
           }
         }break;
         
