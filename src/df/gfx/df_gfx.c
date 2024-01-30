@@ -5597,9 +5597,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           U64 view_idx = 0;
           
           // rjf: build
-          UI_Rect(tab_bar_rect) UI_CornerRadius(0)
+          UI_CornerRadius(0)
           {
-            tab_bar_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_ViewScroll|UI_BoxFlag_Clickable, "tab_bar_%p", panel);
+            UI_Rect(tab_bar_rect) tab_bar_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_AllowOverflowY|UI_BoxFlag_ViewScroll|UI_BoxFlag_Clickable, "tab_bar_%p", panel);
+            if(panel->tab_side == Side_Max)
+            {
+              tab_bar_box->view_off.y = tab_bar_box->view_off_target.y = (tab_bar_rheight - tab_bar_vheight);
+            }
           }
           UI_Parent(tab_bar_box) UI_PrefHeight(ui_pct(1, 0))
           {
