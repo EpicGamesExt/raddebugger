@@ -6624,7 +6624,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           // rjf: disabled overlay
           if(b->disabled_t >= 0.005f)
           {
-            R_Rect2DInst *inst = d_rect(b->rect, v4f32(0, 0, 0, 0.5f*b->disabled_t), 0, 0, 1);
+            // rhp: disabled overlay color blends from plain background and inactive panel overlay
+            Vec4F32 bg = df_rgba_from_theme_color(DF_ThemeColor_PlainBackground);
+            Vec4F32 ov = df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay);
+            Vec4F32 color = {};
+            color.x = bg.x * bg.w + ov.x * ov.w * (1.0f - bg.w);
+            color.y = bg.y * bg.w + ov.y * ov.w * (1.0f - bg.w);
+            color.z = bg.z * bg.w + ov.z * ov.w * (1.0f - bg.w);
+            color.w = bg.w + ov.w * (1.0f - bg.w);
+            if (1.0f - color.w < 0.01f)
+            {
+              color.x *= color.w;
+              color.y *= color.w;
+              color.z *= color.w;
+            }
+            color.w = 0.60f * b->disabled_t;
+            R_Rect2DInst *inst = d_rect(b->rect, color, 0, 0, 1);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
