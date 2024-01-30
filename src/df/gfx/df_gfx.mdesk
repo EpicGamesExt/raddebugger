@@ -274,15 +274,16 @@ DF_CmdSpec2ViewSpecMap:
 ////////////////////////////////
 //~ rjf: Command Parameter Slot -> View
 
-@table(slot view_spec)
+@table(slot  view_spec  opt_cmd_spec)
 DF_CmdParamSlot2ViewSpecMap:
 {
-  {Entity            "entity_lister"            }
-  {EntityList        "entity_lister"            }
-  {FilePath          "file_system"              }
-  {CmdSpec           "commands"                 }
-  {ID                "system_processes"         }
-  {String            "symbol_lister"            }
+  {Entity            "entity_lister"            ""                    }
+  {EntityList        "entity_lister"            ""                    }
+  {FilePath          "file_system"              ""                    }
+  {CmdSpec           "commands"                 ""                    }
+  {ID                "system_processes"         ""                    }
+  {String            "symbol_lister"            "goto_name"           }
+  {String            "symbol_lister"            "function_breakpoint" }
 }
 
 ////////////////////////////////
@@ -583,6 +584,12 @@ df_g_cmd_param_slot_2_view_spec_src_map:
 df_g_cmd_param_slot_2_view_spec_dst_map:
 {
   @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)"),`
+}
+
+@table_gen_data(type: String8, fallback:`{0}`)
+df_g_cmd_param_slot_2_view_spec_cmd_map:
+{
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)"),`
 }
 
 //- rjf: default bindings table

@@ -197,6 +197,22 @@ struct DF_ViewSpecInfoArray
   U64 count;
 };
 
+typedef struct DF_CmdParamSlotViewSpecRuleNode DF_CmdParamSlotViewSpecRuleNode;
+struct DF_CmdParamSlotViewSpecRuleNode
+{
+  DF_CmdParamSlotViewSpecRuleNode *next;
+  DF_ViewSpec *view_spec;
+  DF_CmdSpec *cmd_spec;
+};
+
+typedef struct DF_CmdParamSlotViewSpecRuleList DF_CmdParamSlotViewSpecRuleList;
+struct DF_CmdParamSlotViewSpecRuleList
+{
+  DF_CmdParamSlotViewSpecRuleNode *first;
+  DF_CmdParamSlotViewSpecRuleNode *last;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: View Types
 
@@ -709,8 +725,8 @@ struct DF_GfxState
   DF_ViewRuleBlockSlot *view_rule_block_slots;
   DF_ViewRuleBlockNode *free_view_rule_block_node;
   
-  // rjf: cmd param slot -> view spec table
-  DF_ViewSpec *cmd_param_slot_view_spec_table[DF_CmdParamSlot_COUNT];
+  // rjf: cmd param slot -> view spec rule table
+  DF_CmdParamSlotViewSpecRuleList cmd_param_slot_view_spec_table[DF_CmdParamSlot_COUNT];
   
   // rjf: windows
   OS_WindowRepaintFunctionType *repaint_hook;
@@ -891,7 +907,7 @@ internal U64 df_get_hovered_line_info_voff(void);
 internal void df_register_view_specs(DF_ViewSpecInfoArray specs);
 internal DF_ViewSpec *df_view_spec_from_string(String8 string);
 internal DF_ViewSpec *df_view_spec_from_gfx_view_kind(DF_GfxViewKind gfx_view_kind);
-internal DF_ViewSpec *df_view_spec_from_cmd_param_slot(DF_CmdParamSlot slot);
+internal DF_ViewSpec *df_view_spec_from_cmd_param_slot_spec(DF_CmdParamSlot slot, DF_CmdSpec *cmd_spec);
 
 ////////////////////////////////
 //~ rjf: View Rule Spec State Functions

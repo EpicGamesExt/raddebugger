@@ -905,6 +905,7 @@ DF_CmdParamSlot_FilePath,
 DF_CmdParamSlot_CmdSpec,
 DF_CmdParamSlot_ID,
 DF_CmdParamSlot_String,
+DF_CmdParamSlot_String,
 };
 
 String8 df_g_cmd_param_slot_2_view_spec_dst_map[] =
@@ -915,6 +916,18 @@ str8_lit_comp("file_system"),
 str8_lit_comp("commands"),
 str8_lit_comp("system_processes"),
 str8_lit_comp("symbol_lister"),
+str8_lit_comp("symbol_lister"),
+};
+
+String8 df_g_cmd_param_slot_2_view_spec_cmd_map[] =
+{
+str8_lit_comp(""),
+str8_lit_comp(""),
+str8_lit_comp(""),
+str8_lit_comp(""),
+str8_lit_comp(""),
+str8_lit_comp("goto_name"),
+str8_lit_comp("function_breakpoint"),
 };
 
 DF_StringBindingPair df_g_default_binding_table[] =

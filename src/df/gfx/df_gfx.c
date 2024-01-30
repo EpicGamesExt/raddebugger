@@ -647,12 +647,21 @@ df_view_spec_from_gfx_view_kind(DF_GfxViewKind gfx_view_kind)
 }
 
 internal DF_ViewSpec *
-df_view_spec_from_cmd_param_slot(DF_CmdParamSlot slot)
+df_view_spec_from_cmd_param_slot_spec(DF_CmdParamSlot slot, DF_CmdSpec *cmd_spec)
 {
-  DF_ViewSpec *spec = df_gfx_state->cmd_param_slot_view_spec_table[slot];
-  if(spec == 0)
+  DF_ViewSpec *spec = &df_g_nil_view_spec;
+  for(DF_CmdParamSlotViewSpecRuleNode *n = df_gfx_state->cmd_param_slot_view_spec_table[slot].first;
+      n != 0;
+      n = n->next)
   {
-    spec = &df_g_nil_view_spec;
+    if(cmd_spec == n->cmd_spec || df_cmd_spec_is_nil(n->cmd_spec))
+    {
+      spec = n->view_spec;
+      if(!df_cmd_spec_is_nil(n->cmd_spec))
+      {
+        break;
+      }
+    }
   }
   return spec;
 }
@@ -5018,7 +5027,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     {
       DF_CmdSpec *cmd_spec = ws->query_cmd_spec;
       DF_CmdParamSlot first_missing_slot = cmd_spec->info.query.slot;
-      DF_ViewSpec *view_spec = df_view_spec_from_cmd_param_slot(first_missing_slot);
+      DF_ViewSpec *view_spec = df_view_spec_from_cmd_param_slot_spec(first_missing_slot, cmd_spec);
       if(ws->query_view_stack_top->spec != view_spec ||
          df_view_is_nil(ws->query_view_stack_top))
       {
@@ -5766,7 +5775,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           
           // rjf: more precise drop-sites on tab bar
           {
-            Vec2F32 mouse = os_mouse_from_window(ws->os);
+            Vec2F32 mouse = ui_mouse();
             DF_View *view = df_view_from_handle(df_g_drag_drop_payload.view);
             if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, mouse) && !df_view_is_nil(view))
             {
@@ -5842,7 +5851,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //////////////////////////
         //- rjf: less granular panel for tabs & entities drop-site
         //
-        if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, os_mouse_from_window(ws->os)))
+        if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, ui_mouse()))
         {
           DF_DragDropPayload *payload = &df_g_drag_drop_payload;
           DF_View *dragged_view = df_view_from_handle(payload->view);
@@ -10865,8 +10874,14 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
     {
       DF_CmdParamSlot slot = df_g_cmd_param_slot_2_view_spec_src_map[idx];
       String8 view_spec_name = df_g_cmd_param_slot_2_view_spec_dst_map[idx];
+      String8 cmd_spec_name = df_g_cmd_param_slot_2_view_spec_cmd_map[idx];
       DF_ViewSpec *view_spec = df_view_spec_from_string(view_spec_name);
-      df_gfx_state->cmd_param_slot_view_spec_table[slot] = view_spec;
+      DF_CmdSpec *cmd_spec = cmd_spec_name.size != 0 ? df_cmd_spec_from_string(cmd_spec_name) : &df_g_nil_cmd_spec;
+      DF_CmdParamSlotViewSpecRuleNode *n = push_array(df_gfx_state->arena, DF_CmdParamSlotViewSpecRuleNode, 1);
+      n->view_spec = view_spec;
+      n->cmd_spec = cmd_spec;
+      SLLQueuePush(df_gfx_state->cmd_param_slot_view_spec_table[slot].first, df_gfx_state->cmd_param_slot_view_spec_table[slot].last, n);
+      df_gfx_state->cmd_param_slot_view_spec_table[slot].count += 1;
     }
   }
   

@@ -651,7 +651,7 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     ui_state->events = events;
     ui_state->window = window;
     ui_state->nav_actions = nav_actions;
-    ui_state->mouse = os_mouse_from_window(window);
+    ui_state->mouse = os_window_is_focused(window) ? os_mouse_from_window(window) : v2f32(-100, -100);
     ui_state->animation_dt = animation_dt;
     MemoryZeroStruct(&ui_state->icon_info);
     ui_state->icon_info.icon_font = icon_info->icon_font;
