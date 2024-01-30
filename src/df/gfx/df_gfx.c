@@ -2154,8 +2154,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
-            // rjf: retry on pending debug info
-            if(dbg_info_pending || missing_rip)
+            // rjf: retry on stopped, pending debug info
+            if(!df_ctrl_targets_running() && (dbg_info_pending || missing_rip))
             {
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindThread));
             }
