@@ -4092,6 +4092,29 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             //- rjf: build rows
             for(DF_EvalVizRow *row = viz_rows.first; row != 0; row = row->next)
             {
+              //- rjf: determine if row's data is fresh
+              B32 row_is_fresh = 0;
+              switch(row->eval.mode)
+              {
+                default:{}break;
+                case EVAL_EvalMode_Addr:
+                {
+                  U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+                  size = Min(size, 64);
+                  Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
+                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng);
+                  for(U64 idx = 0; idx < (size+63)/64; idx += 1)
+                  {
+                    if(slice.byte_changed_flags[idx] != 0)
+                    {
+                      row_is_fresh = 1;
+                      break;
+                    }
+                  }
+                }break;
+              }
+              
+              //- rjf: build row
               UI_PrefWidth(ui_children_sum(1)) UI_Row
               {
                 ui_spacer(ui_em(0.75f, 1.f));
@@ -4102,12 +4125,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
                 }
-                UI_PrefWidth(ui_em(40.f, 1.f))
+                UI_PrefWidth(ui_em(50.f, 1.f))
                 {
-                  UI_PrefWidth(ui_text_dim(10, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
+                  UI_PrefWidth(ui_em(10.f, 1.f))
+                  {
+                    df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
+                  }
                   ui_spacer(ui_em(1.5f, 1.f));
                   if(row->flags & DF_EvalVizRowFlag_CanEditValue)
                   {
+                    if(row_is_fresh)
+                    {
+                      Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+                      rgba.w *= 0.2f;
+                      ui_set_next_background_color(rgba);
+                    }
                     UI_Signal sig = df_line_editf(DF_LineEditFlag_CodeContents|
                                                   DF_LineEditFlag_DisplayStringIsCode|
                                                   DF_LineEditFlag_PreferDisplayString|
@@ -4129,6 +4161,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   }
                   else
                   {
+                    if(row_is_fresh)
+                    {
+                      Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+                      rgba.w *= 0.2f;
+                      ui_set_next_background_color(rgba);
+                      ui_set_next_flags(UI_BoxFlag_DrawBackground);
+                    }
                     df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
                   }
                 }
