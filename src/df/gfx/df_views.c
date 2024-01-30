@@ -4907,7 +4907,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         U64 rip_voff = df_voff_from_vaddr(module, last_inst_on_unwound_rip_vaddr);
         DF_Entity *binary = df_binary_file_from_module(module);
         DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_binary_voff(binary, rip_voff);
-        if(dasm2src_info.file == entity && visible_line_num_range.min <= dasm2src_info.pt.line && dasm2src_info.pt.line < visible_line_num_range.max)
+        if(dasm2src_info.file == entity && visible_line_num_range.min <= dasm2src_info.pt.line && dasm2src_info.pt.line <= visible_line_num_range.max)
         {
           U64 slice_line_idx = dasm2src_info.pt.line-visible_line_num_range.min;
           df_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
@@ -4921,7 +4921,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       for(DF_Entity *wp = entity->first; !df_entity_is_nil(wp); wp = wp->next)
       {
         if(wp->deleted || wp->kind != DF_EntityKind_WatchPin) { continue; }
-        if(visible_line_num_range.min <= wp->text_point.line && wp->text_point.line < visible_line_num_range.max)
+        if(visible_line_num_range.min <= wp->text_point.line && wp->text_point.line <= visible_line_num_range.max)
         {
           U64 slice_line_idx = (wp->text_point.line-visible_line_num_range.min);
           df_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);

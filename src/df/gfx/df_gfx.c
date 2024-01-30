@@ -9649,7 +9649,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   if(text_container_sig.hovering && contains_1s64(params->line_num_range, mouse_pt.line))
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
-    if(params->line_src2dasm[line_slice_idx].first != 0)
+    if(params->line_src2dasm[line_slice_idx].first != 0 &&
+       params->line_src2dasm[line_slice_idx].first->v.remap_line == mouse_pt.line)
     {
       df_set_hovered_line_info(params->line_src2dasm[line_slice_idx].first->v.binary, params->line_src2dasm[line_slice_idx].first->v.voff_range.min);
     }

@@ -2796,6 +2796,19 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     }
   }
   
+  // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
+  //
+  // MSVC exports line info at these line numbers when /JMC (Just My Code) debugging
+  // is enabled. This is enabled by default normally.
+  {
+    U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_binary_voff(binary, opl_line_voff_rng);
+    if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
+    {
+      line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
+    }
+  }
+  
   // rjf: line vaddr range => did we find anything successfully?
   B32 good_line_info = (line_vaddr_rng.max != 0);
   
@@ -2905,6 +2918,19 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
     if(line_voff_rng.max != 0)
     {
       line_vaddr_rng = df_vaddr_range_from_voff_range(module, line_voff_rng);
+    }
+  }
+  
+  // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
+  //
+  // MSVC exports line info at these line numbers when /JMC (Just My Code) debugging
+  // is enabled. This is enabled by default normally.
+  {
+    U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_binary_voff(binary, opl_line_voff_rng);
+    if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
+    {
+      line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
     }
   }
   
