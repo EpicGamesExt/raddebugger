@@ -98,67 +98,6 @@ struct DBGI_BinaryStripe
 };
 
 ////////////////////////////////
-//~ rjf: Weak Access Scope Types
-
-typedef struct DBGI_TouchedBinary DBGI_TouchedBinary;
-struct DBGI_TouchedBinary
-{
-  DBGI_TouchedBinary *next;
-  DBGI_Binary *binary;
-};
-
-typedef struct DBGI_Scope DBGI_Scope;
-struct DBGI_Scope
-{
-  DBGI_Scope *next;
-  DBGI_TouchedBinary *first_tb;
-  DBGI_TouchedBinary *last_tb;
-};
-
-typedef struct DBGI_ThreadCtx DBGI_ThreadCtx;
-struct DBGI_ThreadCtx
-{
-  Arena *arena;
-  DBGI_Scope *free_scope;
-  DBGI_TouchedBinary *free_tb;
-};
-
-////////////////////////////////
-//~ rjf: Event Types
-
-typedef enum DBGI_EventKind
-{
-  DBGI_EventKind_Null,
-  DBGI_EventKind_ConversionStarted,
-  DBGI_EventKind_ConversionEnded,
-  DBGI_EventKind_ConversionFailureUnsupportedFormat,
-  DBGI_EventKind_COUNT
-}
-DBGI_EventKind;
-
-typedef struct DBGI_Event DBGI_Event;
-struct DBGI_Event
-{
-  DBGI_EventKind kind;
-  String8 string;
-};
-
-typedef struct DBGI_EventNode DBGI_EventNode;
-struct DBGI_EventNode
-{
-  DBGI_EventNode *next;
-  DBGI_Event v;
-};
-
-typedef struct DBGI_EventList DBGI_EventList;
-struct DBGI_EventList
-{
-  DBGI_EventNode *first;
-  DBGI_EventNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Fuzzy Search Cache Types
 
 typedef struct DBGI_FuzzySearchItem DBGI_FuzzySearchItem;
@@ -195,6 +134,9 @@ struct DBGI_FuzzySearchItemArray
 typedef struct DBGI_FuzzySearchResult DBGI_FuzzySearchResult;
 struct DBGI_FuzzySearchResult
 {
+  Arena *arena;
+  String8 exe_path;
+  String8 query;
   DBGI_FuzzySearchItemArray items;
 };
 
@@ -203,8 +145,9 @@ struct DBGI_FuzzySearchNode
 {
   DBGI_FuzzySearchNode *next;
   DBGI_FuzzySearchNode *prev;
-  Arena *arena;
   U128 key;
+  U64 submitted;
+  U64 scope_touch_count;
   U64 gen;
   DBGI_FuzzySearchResult v[2];
 };
@@ -222,6 +165,77 @@ struct DBGI_FuzzySearchStripe
   Arena *arena;
   OS_Handle rw_mutex;
   OS_Handle cv;
+};
+
+////////////////////////////////
+//~ rjf: Weak Access Scope Types
+
+typedef struct DBGI_TouchedBinary DBGI_TouchedBinary;
+struct DBGI_TouchedBinary
+{
+  DBGI_TouchedBinary *next;
+  DBGI_Binary *binary;
+};
+
+typedef struct DBGI_TouchedFuzzySearch DBGI_TouchedFuzzySearch;
+struct DBGI_TouchedFuzzySearch
+{
+  DBGI_TouchedFuzzySearch *next;
+  DBGI_FuzzySearchNode *node;
+};
+
+typedef struct DBGI_Scope DBGI_Scope;
+struct DBGI_Scope
+{
+  DBGI_Scope *next;
+  DBGI_TouchedBinary *first_tb;
+  DBGI_TouchedBinary *last_tb;
+  DBGI_TouchedFuzzySearch *first_tfs;
+  DBGI_TouchedFuzzySearch *last_tfs;
+};
+
+typedef struct DBGI_ThreadCtx DBGI_ThreadCtx;
+struct DBGI_ThreadCtx
+{
+  Arena *arena;
+  DBGI_Scope *free_scope;
+  DBGI_TouchedBinary *free_tb;
+  DBGI_TouchedFuzzySearch *free_tfs;
+};
+
+////////////////////////////////
+//~ rjf: Event Types
+
+typedef enum DBGI_EventKind
+{
+  DBGI_EventKind_Null,
+  DBGI_EventKind_ConversionStarted,
+  DBGI_EventKind_ConversionEnded,
+  DBGI_EventKind_ConversionFailureUnsupportedFormat,
+  DBGI_EventKind_COUNT
+}
+DBGI_EventKind;
+
+typedef struct DBGI_Event DBGI_Event;
+struct DBGI_Event
+{
+  DBGI_EventKind kind;
+  String8 string;
+};
+
+typedef struct DBGI_EventNode DBGI_EventNode;
+struct DBGI_EventNode
+{
+  DBGI_EventNode *next;
+  DBGI_Event v;
+};
+
+typedef struct DBGI_EventList DBGI_EventList;
+struct DBGI_EventList
+{
+  DBGI_EventNode *first;
+  DBGI_EventNode *last;
+  U64 count;
 };
 
 ////////////////////////////////
@@ -288,7 +302,6 @@ struct DBGI_Shared
 global DBGI_Shared *dbgi_shared = 0;
 thread_static DBGI_ThreadCtx *dbgi_tctx = 0;
 global DBGI_Parse dbgi_parse_nil = {0};
-global DBGI_FuzzySearchResult dbgi_fuzzy_search_result_nil = {0};
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
@@ -317,6 +330,7 @@ internal String8 dbgi_forced_dbg_path_from_exe_path(Arena *arena, String8 exe_pa
 internal DBGI_Scope *dbgi_scope_open(void);
 internal void dbgi_scope_close(DBGI_Scope *scope);
 internal void dbgi_scope_touch_binary__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_Binary *binary);
+internal void dbgi_scope_touch_fuzzy_search__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_FuzzySearchNode *node);
 
 ////////////////////////////////
 //~ rjf: Binary Cache Functions
@@ -328,7 +342,7 @@ internal DBGI_Parse *dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_pat
 ////////////////////////////////
 //~ rjf: Fuzzy Search Cache Functions
 
-internal DBGI_FuzzySearchResult *dbgi_fuzzy_search_result_from_key_exe_query(U128 key, String8 exe_path, String8 query, U64 endt_us);
+internal DBGI_FuzzySearchItemArray dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
@@ -344,7 +358,7 @@ internal void dbgi_parse_thread_entry_point(void *p);
 ////////////////////////////////
 //~ rjf: Fuzzy Searching Threads
 
-internal void dbgi_u2f_enqueue_req(U128 key, String8 exe_path, String8 query);
+internal B32 dbgi_u2f_enqueue_req(U128 key, String8 exe_path, String8 query, U64 endt_us);
 internal void dbgi_u2f_dequeue_req(Arena *arena, U128 *key_out, String8 *exe_path_out, String8 *query_out);
 
 internal void dbgi_fuzzy_thread__entry_point(void *p);

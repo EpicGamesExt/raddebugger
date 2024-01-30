@@ -189,6 +189,12 @@ dbgi_scope_touch_binary__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_Binary *
   SLLQueuePush(scope->first_tb, scope->last_tb, tb);
 }
 
+internal void
+dbgi_scope_touch_fuzzy_search__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_FuzzySearchNode *node)
+{
+  
+}
+
 ////////////////////////////////
 //~ rjf: Binary Cache Functions
 
@@ -339,10 +345,11 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
 ////////////////////////////////
 //~ rjf: Fuzzy Search Cache Functions
 
-internal DBGI_FuzzySearchResult *
-dbgi_fuzzy_search_result_from_key_exe_query(U128 key, String8 exe_path, String8 query, U64 endt_us)
+internal DBGI_FuzzySearchItemArray
+dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us)
 {
-  DBGI_FuzzySearchResult *result = &dbgi_fuzzy_search_result_nil;
+  DBGI_FuzzySearchItemArray items = {0};
+#if 0
   {
     U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->fuzzy_search_stripes_count;
@@ -363,10 +370,31 @@ dbgi_fuzzy_search_result_from_key_exe_query(U128 key, String8 exe_path, String8 
       {
         node = push_array(stripe->arena, DBGI_FuzzySearchNode, 1);
         DLLPushBack(slot->first, slot->last, node);
+        node->key = key;
       }
+      B32 stale = 1;
+      if(node->gen > 0)
+      {
+        U64 v_idx = (node->gen-1)%ArrayCount(node->v);
+        if(str8_match(exe_path, node->v[v_idx].exe_path, 0))
+        {
+          items = node->v[v_idx].items;
+          stale = str8_match(query, node->v[v_idx].query, 0);
+        }
+      }
+      if(stale && node->submitted != 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
+      {
+        node->submitted = (U64)!!dbgi_u2f_enqueue_req(key, exe_path, query, endt_us);
+      }
+      if(!stale || os_now_microseconds() >= endt_us)
+      {
+        break;
+      }
+      os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
     }
   }
-  return result;
+#endif
+  return items;
 }
 
 ////////////////////////////////
@@ -929,4 +957,25 @@ dbgi_parse_thread_entry_point(void *p)
     ProfEnd();
     scratch_end(scratch);
   }
+}
+
+////////////////////////////////
+//~ rjf: Fuzzy Searching Threads
+
+internal B32
+dbgi_u2f_enqueue_req(U128 key, String8 exe_path, String8 query, U64 endt_us)
+{
+  return 0;
+}
+
+internal void
+dbgi_u2f_dequeue_req(Arena *arena, U128 *key_out, String8 *exe_path_out, String8 *query_out)
+{
+  
+}
+
+internal void
+dbgi_fuzzy_thread__entry_point(void *p)
+{
+  
 }
