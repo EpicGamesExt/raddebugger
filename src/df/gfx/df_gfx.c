@@ -8075,24 +8075,60 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
   //- rjf: serialize theme colors
   if(source == DF_CfgSrc_User)
   {
+    // rjf: determine if this theme matches an existing preset
+    B32 is_preset = 0;
+    DF_ThemePreset matching_preset = DF_ThemePreset_DefaultDark;
+    {
+      for(DF_ThemePreset p = (DF_ThemePreset)0; p < DF_ThemePreset_COUNT; p = (DF_ThemePreset)(p+1))
+      {
+        B32 matches_this_preset = 1;
+        for(DF_ThemeColor c = (DF_ThemeColor)(DF_ThemeColor_Null+1); c < DF_ThemeColor_COUNT; c = (DF_ThemeColor)(c+1))
+        {
+          if(!MemoryMatchStruct(&df_gfx_state->cfg_theme_target.colors[c], &df_g_theme_preset_colors_table[p][c]))
+          {
+            matches_this_preset = 0;
+            break;
+          }
+        }
+        if(matches_this_preset)
+        {
+          is_preset = 1;
+          matching_preset = p;
+          break;
+        }
+      }
+    }
+    
+    // rjf: serialize header
     String8 indent_str = str8_lit("                                                                                                             ");
     str8_list_push(arena, &strs, str8_lit("/// colors ////////////////////////////////////////////////////////////////////\n"));
     str8_list_push(arena, &strs, str8_lit("\n"));
-    str8_list_push(arena, &strs, str8_lit("colors:\n"));
-    str8_list_push(arena, &strs, str8_lit("{\n"));
-    for(DF_ThemeColor color = (DF_ThemeColor)(DF_ThemeColor_Null+1);
-        color < DF_ThemeColor_COUNT;
-        color = (DF_ThemeColor)(color+1))
+    
+    // rjf: serialize preset theme
+    if(is_preset)
     {
-      String8 color_name = df_g_theme_color_cfg_string_table[color];
-      Vec4F32 color_rgba = df_gfx_state->cfg_theme_target.colors[color];
-      String8 color_hex  = hex_string_from_rgba_4f32(arena, color_rgba);
-      str8_list_pushf(arena, &strs, "  %S:%.*s0x%S\n",
-                      color_name,
-                      30 > color_name.size ? ((int)(30 - color_name.size)) : 0, indent_str.str,
-                      color_hex);
+      str8_list_pushf(arena, &strs, "color_preset: \"%S\"\n\n", df_g_theme_preset_code_string_table[matching_preset]);
     }
-    str8_list_push(arena, &strs, str8_lit("}\n\n"));
+    
+    // rjf: serialize non-preset theme
+    if(!is_preset)
+    {
+      str8_list_push(arena, &strs, str8_lit("colors:\n"));
+      str8_list_push(arena, &strs, str8_lit("{\n"));
+      for(DF_ThemeColor color = (DF_ThemeColor)(DF_ThemeColor_Null+1);
+          color < DF_ThemeColor_COUNT;
+          color = (DF_ThemeColor)(color+1))
+      {
+        String8 color_name = df_g_theme_color_cfg_string_table[color];
+        Vec4F32 color_rgba = df_gfx_state->cfg_theme_target.colors[color];
+        String8 color_hex  = hex_string_from_rgba_4f32(arena, color_rgba);
+        str8_list_pushf(arena, &strs, "  %S:%.*s0x%S\n",
+                        color_name,
+                        30 > color_name.size ? ((int)(30 - color_name.size)) : 0, indent_str.str,
+                        color_hex);
+      }
+      str8_list_push(arena, &strs, str8_lit("}\n\n"));
+    }
   }
   
   //- rjf: serialize fonts
@@ -11474,6 +11510,29 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                   df_gfx_state->cfg_theme.colors[color_code] = color_rgba;
                 }
               }
+            }
+          }
+          
+          //- rjf: apply theme presets
+          DF_CfgVal *color_preset = df_cfg_val_from_string(table, str8_lit("color_preset"));
+          if(color_preset != &df_g_nil_cfg_val)
+          {
+            String8 color_preset_name = color_preset->last->first->string;
+            DF_ThemePreset preset = (DF_ThemePreset)0;
+            B32 found_preset = 0;
+            for(DF_ThemePreset p = (DF_ThemePreset)0; p < DF_ThemePreset_COUNT; p = (DF_ThemePreset)(p+1))
+            {
+              if(str8_match(color_preset_name, df_g_theme_preset_code_string_table[p], StringMatchFlag_CaseInsensitive))
+              {
+                found_preset = 1;
+                preset = p;
+                break;
+              }
+            }
+            if(found_preset)
+            {
+              MemoryCopy(df_gfx_state->cfg_theme_target.colors, df_g_theme_preset_colors_table[preset], sizeof(df_g_theme_preset_colors__default_dark));
+              MemoryCopy(df_gfx_state->cfg_theme.colors, df_g_theme_preset_colors_table[preset], sizeof(df_g_theme_preset_colors__default_dark));
             }
           }
           

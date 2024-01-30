@@ -235,6 +235,19 @@ str8_lit_comp("4coder"),
 str8_lit_comp("Far Manager"),
 };
 
+String8 df_g_theme_preset_code_string_table[] =
+{
+str8_lit_comp("default_dark"),
+str8_lit_comp("default_light"),
+str8_lit_comp("vs_dark"),
+str8_lit_comp("vs_light"),
+str8_lit_comp("solarized_dark"),
+str8_lit_comp("solarized_light"),
+str8_lit_comp("handmade_hero"),
+str8_lit_comp("four_coder"),
+str8_lit_comp("far_manager"),
+};
+
 Vec4F32 df_g_theme_preset_colors__default_dark[] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
