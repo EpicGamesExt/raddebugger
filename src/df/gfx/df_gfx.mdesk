@@ -170,7 +170,9 @@ DF_DefaultBindingTable:
 @table(old_name new_name)
 DF_BindingVersionRemapTable:
 {
-  {"commands" "run_command"}
+  {"commands"     "run_command"}
+  {"load_user"    "open_user"}
+  {"load_profile" "open_profile"}
 }
 
 ////////////////////////////////

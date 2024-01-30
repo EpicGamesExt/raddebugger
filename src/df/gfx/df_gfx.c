@@ -4279,8 +4279,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             DF_CoreCmdKind cmds[] =
             {
               DF_CoreCmdKind_Open,
-              DF_CoreCmdKind_LoadUser,
-              DF_CoreCmdKind_LoadProfile,
+              DF_CoreCmdKind_OpenUser,
+              DF_CoreCmdKind_OpenProfile,
               DF_CoreCmdKind_Exit,
             };
             U32 codepoints[] =
@@ -4658,7 +4658,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(user_sig.clicked)
           {
             DF_CmdParams p = df_cmd_params_from_window(ws);
-            p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LoadUser);
+            p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenUser);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CmdSpec);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
           }
@@ -4688,7 +4688,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(prof_sig.clicked)
           {
             DF_CmdParams p = df_cmd_params_from_window(ws);
-            p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LoadProfile);
+            p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProfile);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CmdSpec);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
           }

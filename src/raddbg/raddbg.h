@@ -76,7 +76,7 @@
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
 //
-// [ ] escaping in config files - breakpoint labels etc.
+// [x] escaping in config files - breakpoint labels etc.
 //
 // [ ] visualize conversion failures
 //
@@ -197,7 +197,7 @@
 //      opens the context window. It seems like maybe menus should be right,
 //      and left should do the default action, more consistently?
 //
-//  [ ] Hovering over disassembly highlights blocks of instructions, which I
+//  [x] Hovering over disassembly highlights blocks of instructions, which I
 //      assume correspond to source lines. But perhaps it should also highlight
 //      the source lines? The inverse hover works (you hover over source, and
 //      it highlights ASM), but ASM->source doesn't.

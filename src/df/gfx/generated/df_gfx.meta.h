@@ -1015,11 +1015,15 @@ DF_StringBindingPair df_g_default_binding_table[] =
 String8 df_g_binding_version_remap_old_name_table[] =
 {
 str8_lit_comp("commands"),
+str8_lit_comp("load_user"),
+str8_lit_comp("load_profile"),
 };
 
 String8 df_g_binding_version_remap_new_name_table[] =
 {
 str8_lit_comp("run_command"),
+str8_lit_comp("open_user"),
+str8_lit_comp("open_profile"),
 };
 
 DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[] =

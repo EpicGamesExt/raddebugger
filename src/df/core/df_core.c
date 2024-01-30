@@ -7419,8 +7419,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: config path saving/loading/applying
-        case DF_CoreCmdKind_LoadUser:
-        case DF_CoreCmdKind_LoadProfile:
+        case DF_CoreCmdKind_OpenUser:
+        case DF_CoreCmdKind_OpenProfile:
         {
           B32 load_cfg[DF_CfgSrc_COUNT] = {0};
           for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))

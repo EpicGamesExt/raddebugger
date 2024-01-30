@@ -141,8 +141,8 @@ DF_CoreCmdKind_SwitchToPartnerFile,
 DF_CoreCmdKind_SetFileOverrideLinkSrc,
 DF_CoreCmdKind_SetFileOverrideLinkDst,
 DF_CoreCmdKind_SetFileReplacementPath,
-DF_CoreCmdKind_LoadUser,
-DF_CoreCmdKind_LoadProfile,
+DF_CoreCmdKind_OpenUser,
+DF_CoreCmdKind_OpenProfile,
 DF_CoreCmdKind_ApplyUserData,
 DF_CoreCmdKind_ApplyProfileData,
 DF_CoreCmdKind_WriteUserData,
@@ -1690,8 +1690,8 @@ str8_lit_comp("transient"),
 
 DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[] =
 {
-DF_CoreCmdKind_LoadUser,
-DF_CoreCmdKind_LoadProfile,
+DF_CoreCmdKind_OpenUser,
+DF_CoreCmdKind_OpenProfile,
 DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };

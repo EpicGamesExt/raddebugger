@@ -7,8 +7,8 @@
 @table(string, name, load_cmd, write_cmd, apply_cmd)
 DF_CfgSrcTable:
 {
-  {"user"            User             LoadUser       WriteUserData       ApplyUserData    }
-  {"profile"         Profile          LoadProfile    WriteProfileData    ApplyProfileData }
+  {"user"            User             OpenUser       WriteUserData       ApplyUserData    }
+  {"profile"         Profile          OpenProfile    WriteProfileData    ApplyProfileData }
   {"command_line"    CommandLine      Null           Null                Null             }
   {"transient"       Transient        Null           Null                Null             }
 }
@@ -231,8 +231,8 @@ DF_CoreCmdTable://               |            |                  |              
   {SetFileReplacementPath         1            Null               Nil                0  0  0  0  0  0                                                           Null                  "set_file_replacement_path"   "Set File Replacement Path"                   "Sets the path which should be used as the replacement for the passed file."                                       ""                               }
   
   //- rjf: setting config paths
-  {LoadUser                       0            FilePath           Nil                1  0  0  0  0  1                                                           Person                "load_user"                   "Load User"                                   "Loads and applies a user file."                                                                                   "load,user,profile,layout"       }
-  {LoadProfile                    0            FilePath           Nil                1  0  0  0  0  1                                                           Briefcase             "load_profile"                "Load Profile"                                "Loads and applies a profile file."                                                                                "profile,project,session"        }
+  {OpenUser                       0            FilePath           Nil                1  0  0  0  0  1                                                           Person                "open_user"                   "Open User"                                   "Opens a user file path, immediately loading it, and begins autosaving to it."                                     "load,user,profile,layout"       }
+  {OpenProfile                    0            FilePath           Nil                1  0  0  0  0  1                                                           Briefcase             "open_profile"                "Open Profile"                                "Opens a profile file path, immediately loading it, and begins autosaving to it."                                  "profile,project,session"        }
   
   //- rjf: loading/applying stateful config changes
   {ApplyUserData                  1            Null               Nil                0  0  0  0  0  0                                                           Null                  "apply_user_data"             "Apply User Data"                             "Applies user data from the active user file."                                                                     ""                               }
