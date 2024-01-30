@@ -1306,7 +1306,7 @@ utf8_encode(U8 *str, U32 codepoint){
     inc = 3;
   }
   else if (codepoint <= 0x10FFFF){
-    str[0] = (bitmask4 << 3) | ((codepoint >> 18) & bitmask3);
+    str[0] = (bitmask4 << 4) | ((codepoint >> 18) & bitmask3);
     str[1] = bit8 | ((codepoint >> 12) & bitmask6);
     str[2] = bit8 | ((codepoint >>  6) & bitmask6);
     str[3] = bit8 | ( codepoint        & bitmask6);
