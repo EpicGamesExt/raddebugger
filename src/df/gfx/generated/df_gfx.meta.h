@@ -14,6 +14,7 @@ DF_GfxViewKind_Commands,
 DF_GfxViewKind_FileSystem,
 DF_GfxViewKind_SystemProcesses,
 DF_GfxViewKind_EntityLister,
+DF_GfxViewKind_SymbolLister,
 DF_GfxViewKind_Target,
 DF_GfxViewKind_Targets,
 DF_GfxViewKind_FilePathMap,
@@ -113,6 +114,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Commands);
 DF_VIEW_SETUP_FUNCTION_DEF(FileSystem);
 DF_VIEW_SETUP_FUNCTION_DEF(SystemProcesses);
 DF_VIEW_SETUP_FUNCTION_DEF(EntityLister);
+DF_VIEW_SETUP_FUNCTION_DEF(SymbolLister);
 DF_VIEW_SETUP_FUNCTION_DEF(Target);
 DF_VIEW_SETUP_FUNCTION_DEF(Targets);
 DF_VIEW_SETUP_FUNCTION_DEF(FilePathMap);
@@ -137,6 +139,7 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Commands);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(FileSystem);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(SystemProcesses);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(EntityLister);
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(SymbolLister);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Target);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Targets);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(FilePathMap);
@@ -161,6 +164,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Commands);
 DF_VIEW_CMD_FUNCTION_DEF(FileSystem);
 DF_VIEW_CMD_FUNCTION_DEF(SystemProcesses);
 DF_VIEW_CMD_FUNCTION_DEF(EntityLister);
+DF_VIEW_CMD_FUNCTION_DEF(SymbolLister);
 DF_VIEW_CMD_FUNCTION_DEF(Target);
 DF_VIEW_CMD_FUNCTION_DEF(Targets);
 DF_VIEW_CMD_FUNCTION_DEF(FilePathMap);
@@ -185,6 +189,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands);
 DF_VIEW_UI_FUNCTION_DEF(FileSystem);
 DF_VIEW_UI_FUNCTION_DEF(SystemProcesses);
 DF_VIEW_UI_FUNCTION_DEF(EntityLister);
+DF_VIEW_UI_FUNCTION_DEF(SymbolLister);
 DF_VIEW_UI_FUNCTION_DEF(Target);
 DF_VIEW_UI_FUNCTION_DEF(Targets);
 DF_VIEW_UI_FUNCTION_DEF(FilePathMap);
@@ -899,6 +904,7 @@ DF_CmdParamSlot_EntityList,
 DF_CmdParamSlot_FilePath,
 DF_CmdParamSlot_CmdSpec,
 DF_CmdParamSlot_ID,
+DF_CmdParamSlot_String,
 };
 
 String8 df_g_cmd_param_slot_2_view_spec_dst_map[] =
@@ -908,6 +914,7 @@ str8_lit_comp("entity_lister"),
 str8_lit_comp("file_system"),
 str8_lit_comp("commands"),
 str8_lit_comp("system_processes"),
+str8_lit_comp("symbol_lister"),
 };
 
 DF_StringBindingPair df_g_default_binding_table[] =
@@ -1034,6 +1041,7 @@ DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[] =
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("file_system"), str8_lit_comp("File System"), DF_NameKind_Null, DF_IconKind_FileOutline, DF_VIEW_SETUP_FUNCTION_NAME(FileSystem), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(FileSystem), DF_VIEW_CMD_FUNCTION_NAME(FileSystem), DF_VIEW_UI_FUNCTION_NAME(FileSystem)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("system_processes"), str8_lit_comp("System Processes"), DF_NameKind_Null, DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(SystemProcesses), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(SystemProcesses), DF_VIEW_CMD_FUNCTION_NAME(SystemProcesses), DF_VIEW_UI_FUNCTION_NAME(SystemProcesses)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("entity_lister"), str8_lit_comp("Entity List"), DF_NameKind_EntityKindName, DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(EntityLister), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(EntityLister), DF_VIEW_CMD_FUNCTION_NAME(EntityLister), DF_VIEW_UI_FUNCTION_NAME(EntityLister)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("symbol_lister"), str8_lit_comp("Symbols"), DF_NameKind_Null, DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(SymbolLister), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(SymbolLister), DF_VIEW_CMD_FUNCTION_NAME(SymbolLister), DF_VIEW_UI_FUNCTION_NAME(SymbolLister)},
 {(0|1*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("target"), str8_lit_comp("Target"), DF_NameKind_EntityName, DF_IconKind_Target, DF_VIEW_SETUP_FUNCTION_NAME(Target), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Target), DF_VIEW_CMD_FUNCTION_NAME(Target), DF_VIEW_UI_FUNCTION_NAME(Target)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("targets"), str8_lit_comp("Targets"), DF_NameKind_Null, DF_IconKind_Target, DF_VIEW_SETUP_FUNCTION_NAME(Targets), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Targets), DF_VIEW_CMD_FUNCTION_NAME(Targets), DF_VIEW_UI_FUNCTION_NAME(Targets)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("file_path_map"), str8_lit_comp("File Path Map"), DF_NameKind_Null, DF_IconKind_FileOutline, DF_VIEW_SETUP_FUNCTION_NAME(FilePathMap), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(FilePathMap), DF_VIEW_CMD_FUNCTION_NAME(FilePathMap), DF_VIEW_UI_FUNCTION_NAME(FilePathMap)},

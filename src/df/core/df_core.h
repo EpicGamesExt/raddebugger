@@ -71,24 +71,6 @@ struct DF_ExpandTreeTable
 };
 
 ////////////////////////////////
-//~ rjf: Fuzzy Matching
-
-typedef struct DF_FuzzyMatchRangeNode DF_FuzzyMatchRangeNode;
-struct DF_FuzzyMatchRangeNode
-{
-  DF_FuzzyMatchRangeNode *next;
-  Rng1U64 range;
-};
-
-typedef struct DF_FuzzyMatchRangeList DF_FuzzyMatchRangeList;
-struct DF_FuzzyMatchRangeList
-{
-  DF_FuzzyMatchRangeNode *first;
-  DF_FuzzyMatchRangeNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Control Context Types
 
 typedef struct DF_CtrlCtx DF_CtrlCtx;

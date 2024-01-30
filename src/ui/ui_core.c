@@ -2553,13 +2553,16 @@ ui_signal_from_box(UI_Box *box)
         }
       }
     }
-    Vec2F32 max_view_off_target =
+    if(box->flags & UI_BoxFlag_ViewClamp)
     {
-      ClampBot(0, box->view_bounds.x - box->fixed_size.x),
-      ClampBot(0, box->view_bounds.y - box->fixed_size.y),
-    };
-    box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x);
-    box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y);
+      Vec2F32 max_view_off_target =
+      {
+        ClampBot(0, box->view_bounds.x - box->fixed_size.x),
+        ClampBot(0, box->view_bounds.y - box->fixed_size.y),
+      };
+      box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x);
+      box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y);
+    }
   }
   
   //- rjf: focus + clicks

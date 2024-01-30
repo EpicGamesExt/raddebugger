@@ -22,7 +22,7 @@ struct DF_FileInfo
 {
   String8 filename;
   FileProperties props;
-  DF_FuzzyMatchRangeList match_ranges;
+  FuzzyMatchRangeList match_ranges;
 };
 
 typedef struct DF_FileInfoNode DF_FileInfoNode;
@@ -66,9 +66,9 @@ struct DF_CmdListerItem
   DF_CmdSpec *cmd_spec;
   U64 registrar_idx;
   U64 ordering_idx;
-  DF_FuzzyMatchRangeList name_match_ranges;
-  DF_FuzzyMatchRangeList desc_match_ranges;
-  DF_FuzzyMatchRangeList tags_match_ranges;
+  FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList desc_match_ranges;
+  FuzzyMatchRangeList tags_match_ranges;
 };
 
 typedef struct DF_CmdListerItemNode DF_CmdListerItemNode;
@@ -113,7 +113,7 @@ typedef struct DF_EntityListerItem DF_EntityListerItem;
 struct DF_EntityListerItem
 {
   DF_Entity *entity;
-  DF_FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList name_match_ranges;
 };
 
 typedef struct DF_EntityListerItemNode DF_EntityListerItemNode;
@@ -146,9 +146,9 @@ struct DF_ProcessInfo
 {
   DEMON_ProcessInfo info;
   B32 is_attached;
-  DF_FuzzyMatchRangeList attached_match_ranges;
-  DF_FuzzyMatchRangeList name_match_ranges;
-  DF_FuzzyMatchRangeList pid_match_ranges;
+  FuzzyMatchRangeList attached_match_ranges;
+  FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList pid_match_ranges;
 };
 
 typedef struct DF_ProcessInfoNode DF_ProcessInfoNode;

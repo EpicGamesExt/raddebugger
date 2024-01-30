@@ -129,6 +129,24 @@ struct UnicodeDecode
 };
 
 ////////////////////////////////
+//~ rjf: String Fuzzy Matching Types
+
+typedef struct FuzzyMatchRangeNode FuzzyMatchRangeNode;
+struct FuzzyMatchRangeNode
+{
+  FuzzyMatchRangeNode *next;
+  Rng1U64 range;
+};
+
+typedef struct FuzzyMatchRangeList FuzzyMatchRangeList;
+struct FuzzyMatchRangeList
+{
+  FuzzyMatchRangeNode *first;
+  FuzzyMatchRangeNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Character Classification & Conversion Functions
 
 internal B32 char_is_space(U8 c);
@@ -317,6 +335,11 @@ internal String8 string_from_elapsed_time(Arena *arena, DateTime dt);
 
 internal String8 hex_string_from_rgba_4f32(Arena *arena, Vec4F32 rgba);
 internal Vec4F32 rgba_from_hex_string_4f32(String8 hex_string);
+
+////////////////////////////////
+//~ rjf: String Fuzzy Matching
+
+internal FuzzyMatchRangeList fuzzy_match_find(Arena *arena, String8List needles, String8 haystack);
 
 ////////////////////////////////
 //~ NOTE(allen): Serialization Helpers

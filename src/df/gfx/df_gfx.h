@@ -483,7 +483,7 @@ struct DF_AutoCompListerItem
 {
   String8 string;
   String8 kind_string;
-  DF_FuzzyMatchRangeList matches;
+  FuzzyMatchRangeList matches;
 };
 
 typedef struct DF_AutoCompListerItemChunkNode DF_AutoCompListerItemChunkNode;
@@ -804,7 +804,6 @@ global DF_DragDropPayload df_g_drag_drop_payload = {0};
 //~ rjf: Basic Helpers
 
 internal DF_PathQuery df_path_query_from_string(String8 string);
-internal DF_FuzzyMatchRangeList df_fuzzy_match_find(Arena *arena, String8List needles, String8 haystack);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
@@ -999,7 +998,7 @@ internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF
 ////////////////////////////////
 //~ rjf: UI Helpers
 
-internal void df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, DF_FuzzyMatchRangeList range_list);
+internal void df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, FuzzyMatchRangeList range_list);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons

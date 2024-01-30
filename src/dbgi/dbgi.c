@@ -337,6 +337,39 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
 }
 
 ////////////////////////////////
+//~ rjf: Fuzzy Search Cache Functions
+
+internal DBGI_FuzzySearchResult *
+dbgi_fuzzy_search_result_from_key_exe_query(U128 key, String8 exe_path, String8 query, U64 endt_us)
+{
+  DBGI_FuzzySearchResult *result = &dbgi_fuzzy_search_result_nil;
+  {
+    U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
+    U64 stripe_idx = slot_idx%dbgi_shared->fuzzy_search_stripes_count;
+    DBGI_FuzzySearchSlot *slot = &dbgi_shared->fuzzy_search_slots[slot_idx];
+    DBGI_FuzzySearchStripe *stripe = &dbgi_shared->fuzzy_search_stripes[stripe_idx];
+    OS_MutexScopeR(stripe->rw_mutex) for(;;)
+    {
+      DBGI_FuzzySearchNode *node = 0;
+      for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(u128_match(n->key, key))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(node == 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
+      {
+        node = push_array(stripe->arena, DBGI_FuzzySearchNode, 1);
+        DLLPushBack(slot->first, slot->last, node);
+      }
+    }
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Analysis Threads
 
 internal B32

@@ -65,43 +65,6 @@ df_path_query_from_string(String8 string)
   return path_query;
 }
 
-internal DF_FuzzyMatchRangeList
-df_fuzzy_match_find(Arena *arena, String8List needles, String8 haystack)
-{
-  DF_FuzzyMatchRangeList result = {0};
-  for(String8Node *needle_n = needles.first; needle_n != 0; needle_n = needle_n->next)
-  {
-    U64 find_pos = 0;
-    for(;find_pos < haystack.size;)
-    {
-      find_pos = str8_find_needle(haystack, find_pos, needle_n->string, StringMatchFlag_CaseInsensitive);
-      B32 is_in_gathered_ranges = 0;
-      for(DF_FuzzyMatchRangeNode *n = result.first; n != 0; n = n->next)
-      {
-        if(n->range.min <= find_pos && find_pos < n->range.max)
-        {
-          is_in_gathered_ranges = 1;
-          find_pos = n->range.max;
-          break;
-        }
-      }
-      if(!is_in_gathered_ranges)
-      {
-        break;
-      }
-    }
-    if(find_pos < haystack.size)
-    {
-      Rng1U64 range = r1u64(find_pos, find_pos+needle_n->string.size);
-      DF_FuzzyMatchRangeNode *n = push_array(arena, DF_FuzzyMatchRangeNode, 1);
-      n->range = range;
-      SLLQueuePush(result.first, result.last, n);
-      result.count += 1;
-    }
-  }
-  return result;
-}
-
 ////////////////////////////////
 //~ rjf: View Type Functions
 
@@ -3791,7 +3754,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   item.string      = n->string;
                   item.kind_string = str8_lit("Local");
-                  item.matches     = df_fuzzy_match_find(scratch.arena, search_needles, n->string);
+                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, n->string);
                 }
                 if(search_needles.node_count == 0 || item.matches.count != 0)
                 {
@@ -3815,7 +3778,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   item.string      = reg_names[idx];
                   item.kind_string = str8_lit("Register");
-                  item.matches     = df_fuzzy_match_find(scratch.arena, search_needles, reg_names[idx]);
+                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, reg_names[idx]);
                 }
                 if(search_needles.node_count == 0 || item.matches.count != 0)
                 {
@@ -3831,7 +3794,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   item.string      = alias_names[idx];
                   item.kind_string = str8_lit("Reg. Alias");
-                  item.matches     = df_fuzzy_match_find(scratch.arena, search_needles, alias_names[idx]);
+                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, alias_names[idx]);
                 }
                 if(search_needles.node_count == 0 || item.matches.count != 0)
                 {
@@ -3850,7 +3813,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   item.string      = spec->info.string;
                   item.kind_string = str8_lit("View Rule");
-                  item.matches     = df_fuzzy_match_find(scratch.arena, search_needles, spec->info.string);
+                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, spec->info.string);
                 }
                 if(search_needles.node_count == 0 || item.matches.count != 0)
                 {
@@ -8194,14 +8157,14 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
 //~ rjf: UI Helpers
 
 internal void
-df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, DF_FuzzyMatchRangeList range_list)
+df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, FuzzyMatchRangeList range_list)
 {
   UI_Parent(box)
   {
     String8 display_string = ui_box_display_string(box);
     F_Metrics metrics = f_metrics_from_tag_size(box->font, box->font_size);
     F32 line_height = f_line_height_from_metrics(&metrics);
-    for(DF_FuzzyMatchRangeNode *match_n = range_list.first; match_n != 0; match_n = match_n->next)
+    for(FuzzyMatchRangeNode *match_n = range_list.first; match_n != 0; match_n = match_n->next)
     {
       Rng1F32 match_pixel_range =
       {

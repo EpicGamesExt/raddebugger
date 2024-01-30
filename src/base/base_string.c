@@ -1658,6 +1658,45 @@ rgba_from_hex_string_4f32(String8 hex_string)
 }
 
 ////////////////////////////////
+//~ rjf: String Fuzzy Matching
+
+internal FuzzyMatchRangeList
+fuzzy_match_find(Arena *arena, String8List needles, String8 haystack)
+{
+  FuzzyMatchRangeList result = {0};
+  for(String8Node *needle_n = needles.first; needle_n != 0; needle_n = needle_n->next)
+  {
+    U64 find_pos = 0;
+    for(;find_pos < haystack.size;)
+    {
+      find_pos = str8_find_needle(haystack, find_pos, needle_n->string, StringMatchFlag_CaseInsensitive);
+      B32 is_in_gathered_ranges = 0;
+      for(FuzzyMatchRangeNode *n = result.first; n != 0; n = n->next)
+      {
+        if(n->range.min <= find_pos && find_pos < n->range.max)
+        {
+          is_in_gathered_ranges = 1;
+          find_pos = n->range.max;
+          break;
+        }
+      }
+      if(!is_in_gathered_ranges)
+      {
+        break;
+      }
+    }
+    if(find_pos < haystack.size)
+    {
+      Rng1U64 range = r1u64(find_pos, find_pos+needle_n->string.size);
+      FuzzyMatchRangeNode *n = push_array(arena, FuzzyMatchRangeNode, 1);
+      n->range = range;
+      SLLQueuePush(result.first, result.last, n);
+      result.count += 1;
+    }
+  }
+  return result;
+}
+////////////////////////////////
 //~ NOTE(allen): Serialization Helpers
 
 internal void
