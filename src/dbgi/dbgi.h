@@ -147,7 +147,7 @@ struct DBGI_FuzzySearchNode
   U128 key;
   U64 scope_touch_count;
   U64 last_time_submitted_us;
-  DBGI_FuzzySearchBucket buckets[2];
+  DBGI_FuzzySearchBucket buckets[3];
   U64 gen;
   U64 submit_gen;
   DBGI_FuzzySearchItemArray gen_items;
