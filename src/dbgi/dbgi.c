@@ -30,6 +30,16 @@ dbgi_init(void)
     dbgi_shared->binary_stripes[idx].rw_mutex = os_rw_mutex_alloc();
     dbgi_shared->binary_stripes[idx].cv = os_condition_variable_alloc();
   }
+  dbgi_shared->fuzzy_search_slots_count = 64;
+  dbgi_shared->fuzzy_search_stripes_count = 8;
+  dbgi_shared->fuzzy_search_slots = push_array(arena, DBGI_FuzzySearchSlot, dbgi_shared->fuzzy_search_slots_count);
+  dbgi_shared->fuzzy_search_stripes = push_array(arena, DBGI_FuzzySearchStripe, dbgi_shared->fuzzy_search_stripes_count);
+  for(U64 idx = 0; idx < dbgi_shared->fuzzy_search_stripes_count; idx += 1)
+  {
+    dbgi_shared->fuzzy_search_stripes[idx].arena = arena_alloc();
+    dbgi_shared->fuzzy_search_stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    dbgi_shared->fuzzy_search_stripes[idx].cv = os_condition_variable_alloc();
+  }
   dbgi_shared->u2p_ring_mutex = os_mutex_alloc();
   dbgi_shared->u2p_ring_cv = os_condition_variable_alloc();
   dbgi_shared->u2p_ring_size = KB(64);
@@ -43,6 +53,17 @@ dbgi_init(void)
   for(U64 idx = 0; idx < dbgi_shared->parse_thread_count; idx += 1)
   {
     dbgi_shared->parse_threads[idx] = os_launch_thread(dbgi_parse_thread_entry_point, (void *)idx, 0);
+  }
+  dbgi_shared->fuzzy_thread_count = Clamp(1, os_logical_core_count()-1, 4);
+  dbgi_shared->fuzzy_threads = push_array(arena, DBGI_FuzzySearchThread, dbgi_shared->fuzzy_thread_count);
+  for(U64 idx = 0; idx < dbgi_shared->fuzzy_thread_count; idx += 1)
+  {
+    DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[idx];
+    thread->u2f_ring_mutex = os_mutex_alloc();
+    thread->u2f_ring_cv = os_condition_variable_alloc();
+    thread->u2f_ring_size = KB(64);
+    thread->u2f_ring_base = push_array_no_zero(dbgi_shared->arena, U8, thread->u2f_ring_size);
+    thread->thread = os_launch_thread(dbgi_fuzzy_thread__entry_point, (void *)idx, 0);
   }
 }
 
@@ -169,6 +190,12 @@ dbgi_scope_close(DBGI_Scope *scope)
     ins_atomic_u64_dec_eval(&tb->binary->scope_touch_count);
     SLLStackPush(dbgi_tctx->free_tb, tb);
   }
+  for(DBGI_TouchedFuzzySearch *tfs = scope->first_tfs, *next = 0; tfs != 0; tfs = next)
+  {
+    next = tfs->next;
+    ins_atomic_u64_dec_eval(&tfs->node->scope_touch_count);
+    SLLStackPush(dbgi_tctx->free_tfs, tfs);
+  }
   SLLStackPush(dbgi_tctx->free_scope, scope);
 }
 
@@ -192,7 +219,18 @@ dbgi_scope_touch_binary__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_Binary *
 internal void
 dbgi_scope_touch_fuzzy_search__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_FuzzySearchNode *node)
 {
-  
+  DBGI_TouchedFuzzySearch *tfs = dbgi_tctx->free_tfs;
+  ins_atomic_u64_inc_eval(&node->scope_touch_count);
+  if(tfs != 0)
+  {
+    SLLStackPop(dbgi_tctx->free_tfs);
+  }
+  else
+  {
+    tfs = push_array(dbgi_tctx->arena, DBGI_TouchedFuzzySearch, 1);
+  }
+  tfs->node = node;
+  SLLQueuePush(scope->first_tfs, scope->last_tfs, tfs);
 }
 
 ////////////////////////////////
@@ -297,6 +335,7 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
   Temp scratch = scratch_begin(0, 0);
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
   DBGI_Parse *parse = &dbgi_parse_nil;
+  if(exe_path.size != 0)
   {
     U64 hash = dbgi_hash_from_string(exe_path);
     U64 slot_idx = hash%dbgi_shared->binary_slots_count;
@@ -346,17 +385,22 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
 //~ rjf: Fuzzy Search Cache Functions
 
 internal DBGI_FuzzySearchItemArray
-dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us)
+dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us, B32 *stale_out)
 {
+  Temp scratch = scratch_begin(0, 0);
   DBGI_FuzzySearchItemArray items = {0};
-#if 0
+  exe_path = path_normalized_from_string(scratch.arena, exe_path);
   {
+    //- rjf: unpack key
     U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->fuzzy_search_stripes_count;
     DBGI_FuzzySearchSlot *slot = &dbgi_shared->fuzzy_search_slots[slot_idx];
     DBGI_FuzzySearchStripe *stripe = &dbgi_shared->fuzzy_search_stripes[stripe_idx];
+    
+    //- rjf: query and/or request
     OS_MutexScopeR(stripe->rw_mutex) for(;;)
     {
+      // rjf: map key -> node
       DBGI_FuzzySearchNode *node = 0;
       for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
       {
@@ -366,34 +410,56 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
           break;
         }
       }
+      
+      // rjf: no node? -> allocate
       if(node == 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
       {
         node = push_array(stripe->arena, DBGI_FuzzySearchNode, 1);
-        DLLPushBack(slot->first, slot->last, node);
+        SLLQueuePush(slot->first, slot->last, node);
         node->key = key;
-      }
-      B32 stale = 1;
-      if(node->gen > 0)
-      {
-        U64 v_idx = (node->gen-1)%ArrayCount(node->v);
-        if(str8_match(exe_path, node->v[v_idx].exe_path, 0))
+        for(U64 idx = 0; idx < ArrayCount(node->buckets); idx += 1)
         {
-          items = node->v[v_idx].items;
-          stale = str8_match(query, node->v[v_idx].query, 0);
+          node->buckets[idx].arena = arena_alloc();
         }
       }
-      if(stale && node->submitted != 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
+      
+      // rjf: try to grab last valid results for this key/query; determine if stale
+      B32 stale = 1;
+      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, 0) && node->gen != 0)
       {
-        node->submitted = (U64)!!dbgi_u2f_enqueue_req(key, exe_path, query, endt_us);
+        dbgi_scope_touch_fuzzy_search__stripe_mutex_r_guarded(scope, node);
+        items = node->gen_items;
+        stale = !str8_match(query, node->buckets[node->gen%ArrayCount(node->buckets)].query, 0);
+        *stale_out = stale;
       }
+      
+      // rjf: if stale -> request again
+      if(stale) OS_MutexScopeRWPromote(stripe->rw_mutex)
+      {
+        if(node->submit_gen == node->gen)
+        {
+          node->submit_gen += 1;
+          arena_clear(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena);
+          node->buckets[node->submit_gen%ArrayCount(node->buckets)].exe_path = push_str8_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, exe_path);
+          node->buckets[node->submit_gen%ArrayCount(node->buckets)].query = push_str8_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, query);
+        }
+        if(os_now_microseconds() >= node->last_time_submitted_us+100000 && dbgi_u2f_enqueue_req(key, endt_us))
+        {
+          node->last_time_submitted_us = os_now_microseconds();
+        }
+      }
+      
+      // rjf: not stale, or timeout -> break
       if(!stale || os_now_microseconds() >= endt_us)
       {
         break;
       }
+      
+      // rjf: no results, but have time to wait -> wait
       os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
     }
   }
-#endif
+  scratch_end(scratch);
   return items;
 }
 
@@ -963,19 +1029,154 @@ dbgi_parse_thread_entry_point(void *p)
 //~ rjf: Fuzzy Searching Threads
 
 internal B32
-dbgi_u2f_enqueue_req(U128 key, String8 exe_path, String8 query, U64 endt_us)
+dbgi_u2f_enqueue_req(U128 key, U64 endt_us)
 {
-  return 0;
+  B32 sent = 0;
+  DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[key.u64[1]%dbgi_shared->fuzzy_thread_count];
+  OS_MutexScope(thread->u2f_ring_mutex) for(;;)
+  {
+    U64 unconsumed_size = thread->u2f_ring_write_pos - thread->u2f_ring_read_pos;
+    U64 available_size = thread->u2f_ring_size - unconsumed_size;
+    if(available_size >= sizeof(U128))
+    {
+      sent = 1;
+      thread->u2f_ring_write_pos += ring_write_struct(thread->u2f_ring_base, thread->u2f_ring_size, thread->u2f_ring_write_pos, &key);
+      break;
+    }
+    os_condition_variable_wait(thread->u2f_ring_cv, thread->u2f_ring_mutex, endt_us);
+  }
+  if(sent)
+  {
+    os_condition_variable_broadcast(thread->u2f_ring_cv);
+  }
+  return sent;
 }
 
 internal void
-dbgi_u2f_dequeue_req(Arena *arena, U128 *key_out, String8 *exe_path_out, String8 *query_out)
+dbgi_u2f_dequeue_req(Arena *arena, DBGI_FuzzySearchThread *thread, U128 *key_out)
 {
-  
+  OS_MutexScope(thread->u2f_ring_mutex) for(;;)
+  {
+    U64 unconsumed_size = thread->u2f_ring_write_pos - thread->u2f_ring_read_pos;
+    if(unconsumed_size >= sizeof(U128))
+    {
+      thread->u2f_ring_read_pos += ring_read_struct(thread->u2f_ring_base, thread->u2f_ring_size, thread->u2f_ring_read_pos, key_out);
+      break;
+    }
+    os_condition_variable_wait(thread->u2f_ring_cv, thread->u2f_ring_mutex, max_U64);
+  }
+  os_condition_variable_broadcast(thread->u2f_ring_cv);
 }
 
 internal void
 dbgi_fuzzy_thread__entry_point(void *p)
 {
-  
+  TCTX tctx_;
+  tctx_init_and_equip(&tctx_);
+  ProfThreadName("[dbgi] fuzzy search #%I64U", (U64)p);
+  DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[(U64)p];
+  for(;;)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    DBGI_Scope *scope = dbgi_scope_open();
+    
+    //- rjf: dequeue next request
+    U128 key = {0};
+    dbgi_u2f_dequeue_req(scratch.arena, thread, &key);
+    U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
+    U64 stripe_idx = slot_idx%dbgi_shared->fuzzy_search_stripes_count;
+    DBGI_FuzzySearchSlot *slot = &dbgi_shared->fuzzy_search_slots[slot_idx];
+    DBGI_FuzzySearchStripe *stripe = &dbgi_shared->fuzzy_search_stripes[stripe_idx];
+    
+    //- rjf: grab next exe_path/query for this key
+    B32 task_is_good = 0;
+    Arena *task_arena = 0;
+    String8 exe_path = {0};
+    String8 query = {0};
+    OS_MutexScopeW(stripe->rw_mutex)
+    {
+      for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(u128_match(n->key, key))
+        {
+          task_is_good = 1;
+          task_arena = n->buckets[n->submit_gen%ArrayCount(n->buckets)].arena;
+          exe_path = n->buckets[n->submit_gen%ArrayCount(n->buckets)].exe_path;
+          query = n->buckets[n->submit_gen%ArrayCount(n->buckets)].query;
+          break;
+        }
+      }
+    }
+    
+    //- rjf: form space-separated search needles
+    U8 splits[] = {' '};
+    String8List query_needles = str8_split(scratch.arena, query, splits, ArrayCount(splits), 0);
+    
+    //- rjf: exe_path -> dbgi_parse, raddbg
+    DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
+    RADDBG_Parsed *rdbg = &dbgi->rdbg;
+    
+    //- rjf: rdbg * query -> item list
+    DBGI_FuzzySearchItemChunkList items_list = {0};
+    if(task_is_good)
+    {
+      for(U64 procedure_idx = 0; procedure_idx < rdbg->procedure_count; procedure_idx += 1)
+      {
+        RADDBG_Procedure *procedure = &rdbg->procedures[procedure_idx];
+        U64 name_size = 0;
+        U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+        String8 name = str8(name_base, name_size);
+        if(name.size == 0) { continue; }
+        FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query_needles, name);
+        if(matches.count == query_needles.node_count)
+        {
+          DBGI_FuzzySearchItemChunk *chunk = items_list.last;
+          if(chunk == 0 || chunk->count >= chunk->cap)
+          {
+            chunk = push_array(scratch.arena, DBGI_FuzzySearchItemChunk, 1);
+            chunk->cap = 512;
+            chunk->count = 0;
+            chunk->v = push_array_no_zero(scratch.arena, DBGI_FuzzySearchItem, chunk->cap);
+            SLLQueuePush(items_list.first, items_list.last, chunk);
+            items_list.chunk_count += 1;
+          }
+          chunk->v[chunk->count].procedure_idx = procedure_idx;
+          chunk->v[chunk->count].match_ranges = matches;
+          chunk->count += 1;
+          items_list.total_count += 1;
+        }
+      }
+    }
+    
+    //- rjf: item list -> item array
+    DBGI_FuzzySearchItemArray items = {0};
+    if(task_is_good)
+    {
+      items.count = items_list.total_count;
+      items.v = push_array_no_zero(task_arena, DBGI_FuzzySearchItem, items.count);
+      U64 idx = 0;
+      for(DBGI_FuzzySearchItemChunk *chunk = items_list.first; chunk != 0; chunk = chunk->next)
+      {
+        MemoryCopy(items.v+idx, chunk->v, sizeof(DBGI_FuzzySearchItemChunk)*chunk->count);
+        idx += chunk->count;
+      }
+    }
+    
+    //- rjf: commit to cache
+    if(task_is_good) OS_MutexScopeW(stripe->rw_mutex)
+    {
+      for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(u128_match(n->key, key))
+        {
+          n->gen += 1;
+          n->gen_items = items;
+          break;
+        }
+      }
+    }
+    
+    dbgi_scope_close(scope);
+    scratch_end(scratch);
+  }
 }

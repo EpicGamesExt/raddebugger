@@ -35,7 +35,7 @@ geo_init(void)
   geo_shared->u2x_ring_base = push_array_no_zero(arena, U8, geo_shared->u2x_ring_size);
   geo_shared->u2x_ring_cv = os_condition_variable_alloc();
   geo_shared->u2x_ring_mutex = os_mutex_alloc();
-  geo_shared->xfer_thread_count = Min(4, os_logical_core_count()-1);
+  geo_shared->xfer_thread_count = Clamp(1, os_logical_core_count()-1, 4);
   geo_shared->xfer_threads = push_array(arena, OS_Handle, geo_shared->xfer_thread_count);
   for(U64 idx = 0; idx < geo_shared->xfer_thread_count; idx += 1)
   {

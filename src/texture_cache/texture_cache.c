@@ -48,7 +48,7 @@ tex_init(void)
   tex_shared->u2x_ring_base = push_array_no_zero(arena, U8, tex_shared->u2x_ring_size);
   tex_shared->u2x_ring_cv = os_condition_variable_alloc();
   tex_shared->u2x_ring_mutex = os_mutex_alloc();
-  tex_shared->xfer_thread_count = Min(4, os_logical_core_count()-1);
+  tex_shared->xfer_thread_count = Clamp(1, os_logical_core_count()-1, 4);
   tex_shared->xfer_threads = push_array(arena, OS_Handle, tex_shared->xfer_thread_count);
   for(U64 idx = 0; idx < tex_shared->xfer_thread_count; idx += 1)
   {

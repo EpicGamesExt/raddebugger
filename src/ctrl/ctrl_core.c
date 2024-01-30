@@ -58,7 +58,7 @@ ctrl_init(CTRL_WakeupFunctionType *wakeup_hook)
   ctrl_state->u2ms_ring_mutex = os_mutex_alloc();
   ctrl_state->u2ms_ring_cv = os_condition_variable_alloc();
   ctrl_state->ctrl_thread = os_launch_thread(ctrl_thread__entry_point, 0, 0);
-  ctrl_state->ms_thread_count = Min(4, os_logical_core_count()-1);
+  ctrl_state->ms_thread_count = Clamp(1, os_logical_core_count()-1, 4);
   ctrl_state->ms_threads = push_array(arena, OS_Handle, ctrl_state->ms_thread_count);
   for(U64 idx = 0; idx < ctrl_state->ms_thread_count; idx += 1)
   {

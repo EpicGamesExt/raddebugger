@@ -103,13 +103,14 @@ struct DBGI_BinaryStripe
 typedef struct DBGI_FuzzySearchItem DBGI_FuzzySearchItem;
 struct DBGI_FuzzySearchItem
 {
-  U64 function_idx;
+  U64 procedure_idx;
   FuzzyMatchRangeList match_ranges;
 };
 
 typedef struct DBGI_FuzzySearchItemChunk DBGI_FuzzySearchItemChunk;
 struct DBGI_FuzzySearchItemChunk
 {
+  DBGI_FuzzySearchItemChunk *next;
   DBGI_FuzzySearchItem *v;
   U64 count;
   U64 cap;
@@ -131,25 +132,25 @@ struct DBGI_FuzzySearchItemArray
   U64 count;
 };
 
-typedef struct DBGI_FuzzySearchResult DBGI_FuzzySearchResult;
-struct DBGI_FuzzySearchResult
+typedef struct DBGI_FuzzySearchBucket DBGI_FuzzySearchBucket;
+struct DBGI_FuzzySearchBucket
 {
   Arena *arena;
   String8 exe_path;
   String8 query;
-  DBGI_FuzzySearchItemArray items;
 };
 
 typedef struct DBGI_FuzzySearchNode DBGI_FuzzySearchNode;
 struct DBGI_FuzzySearchNode
 {
   DBGI_FuzzySearchNode *next;
-  DBGI_FuzzySearchNode *prev;
   U128 key;
-  U64 submitted;
   U64 scope_touch_count;
+  U64 last_time_submitted_us;
+  DBGI_FuzzySearchBucket buckets[2];
   U64 gen;
-  DBGI_FuzzySearchResult v[2];
+  U64 submit_gen;
+  DBGI_FuzzySearchItemArray gen_items;
 };
 
 typedef struct DBGI_FuzzySearchSlot DBGI_FuzzySearchSlot;
@@ -165,6 +166,18 @@ struct DBGI_FuzzySearchStripe
   Arena *arena;
   OS_Handle rw_mutex;
   OS_Handle cv;
+};
+
+typedef struct DBGI_FuzzySearchThread DBGI_FuzzySearchThread;
+struct DBGI_FuzzySearchThread
+{
+  OS_Handle thread;
+  OS_Handle u2f_ring_mutex;
+  OS_Handle u2f_ring_cv;
+  U64 u2f_ring_size;
+  U8 *u2f_ring_base;
+  U64 u2f_ring_write_pos;
+  U64 u2f_ring_read_pos;
 };
 
 ////////////////////////////////
@@ -273,14 +286,6 @@ struct DBGI_Shared
   U64 u2p_ring_write_pos;
   U64 u2p_ring_read_pos;
   
-  // rjf: user -> fuzzy ring
-  OS_Handle u2f_ring_mutex;
-  OS_Handle u2f_ring_cv;
-  U64 u2f_ring_size;
-  U8 *u2f_ring_base;
-  U64 u2f_ring_write_pos;
-  U64 u2f_ring_read_pos;
-  
   // rjf: parse -> user event ring
   OS_Handle p2u_ring_mutex;
   OS_Handle p2u_ring_cv;
@@ -293,7 +298,7 @@ struct DBGI_Shared
   U64 parse_thread_count;
   OS_Handle *parse_threads;
   U64 fuzzy_thread_count;
-  OS_Handle *fuzzy_threads;
+  DBGI_FuzzySearchThread *fuzzy_threads;
 };
 
 ////////////////////////////////
@@ -342,7 +347,7 @@ internal DBGI_Parse *dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_pat
 ////////////////////////////////
 //~ rjf: Fuzzy Search Cache Functions
 
-internal DBGI_FuzzySearchItemArray dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us);
+internal DBGI_FuzzySearchItemArray dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us, B32 *stale_out);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
@@ -358,8 +363,8 @@ internal void dbgi_parse_thread_entry_point(void *p);
 ////////////////////////////////
 //~ rjf: Fuzzy Searching Threads
 
-internal B32 dbgi_u2f_enqueue_req(U128 key, String8 exe_path, String8 query, U64 endt_us);
-internal void dbgi_u2f_dequeue_req(Arena *arena, U128 *key_out, String8 *exe_path_out, String8 *query_out);
+internal B32 dbgi_u2f_enqueue_req(U128 key, U64 endt_us);
+internal void dbgi_u2f_dequeue_req(Arena *arena, DBGI_FuzzySearchThread *thread, U128 *key_out);
 
 internal void dbgi_fuzzy_thread__entry_point(void *p);
 

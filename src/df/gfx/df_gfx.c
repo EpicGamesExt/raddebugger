@@ -10495,7 +10495,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
   return fancy_strings;
 }
 
-internal void
+internal UI_Box *
 df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -10503,6 +10503,7 @@ df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
   ui_box_equip_display_fancy_strings(box, &fancy_strings);
   scratch_end(scratch);
+  return box;
 }
 
 ////////////////////////////////

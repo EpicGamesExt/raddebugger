@@ -52,10 +52,10 @@ DF_DefaultBindingTable:
   //- rjf: focused panel changing
   { "next_panel"                  Comma     ctrl     0         0          }
   { "prev_panel"                  Comma     ctrl     shift     0          }
-  { "focus_panel_right"           Right     ctrl     shift     alt        }
-  { "focus_panel_left"            Left      ctrl     shift     alt        }
-  { "focus_panel_up"              Up        ctrl     shift     alt        }
-  { "focus_panel_down"            Down      ctrl     shift     alt        }
+  { "focus_panel_right"           Right     ctrl     0         alt        }
+  { "focus_panel_left"            Left      ctrl     0         alt        }
+  { "focus_panel_up"              Up        ctrl     0         alt        }
+  { "focus_panel_down"            Down      ctrl     0         alt        }
   
   //- rjf: undo/redo
   //{ "undo"                        Z         ctrl     0         0          }
@@ -76,8 +76,8 @@ DF_DefaultBindingTable:
   { "move_tab_right"              PageDown  ctrl     shift     0          }
   { "move_tab_left"               PageUp    ctrl     shift     0          }
   { "close_tab"                   W         ctrl     0         0          }
-  { "tab_bar_top"                 Up        ctrl     0         alt        }
-  { "tab_bar_bottom"              Down      ctrl     0         alt        }
+  { "tab_bar_top"                 Up        ctrl     shift     alt        }
+  { "tab_bar_bottom"              Down      ctrl     shift     alt        }
   
   //- rjf: files
   { "open"                        O         ctrl     0         0          }

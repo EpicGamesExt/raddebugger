@@ -2803,8 +2803,124 @@ DF_VIEW_CMD_FUNCTION_DEF(SymbolLister)
 
 DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
 {
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  DBGI_Scope *scope = dbgi_scope_open();
+  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
+  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
+  DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_rip_vaddr);
+  DF_Entity *binary = df_binary_file_from_module(module);
+  String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
   String8 query = str8(view->query_buffer, view->query_string_size);
+  TG_Graph *graph = tg_graph_begin(bit_size_from_arch(df_architecture_from_entity(thread))/8, 256);
   
+  //- rjf: grab state
+  typedef struct DF_SymbolListerViewState DF_SymbolListerViewState;
+  struct DF_SymbolListerViewState
+  {
+    Vec2S64 cursor;
+  };
+  DF_SymbolListerViewState *slv = df_view_user_state(view, DF_SymbolListerViewState);
+  
+  //- rjf: query -> raddbg, filtered items
+  U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
+  DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
+  RADDBG_Parsed *rdbg = &dbgi->rdbg;
+  B32 items_stale = 0;
+  DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, query, os_now_microseconds()+100, &items_stale);
+  if(items_stale)
+  {
+    df_gfx_request_frame();
+  }
+  
+  //- rjf: submit best match when hitting enter w/ no selection
+  if(slv->cursor.y == 0 && items.count != 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+  {
+    U64 procedure_idx = items.v[0].procedure_idx;
+    if(0 < procedure_idx && procedure_idx < rdbg->procedure_count)
+    {
+      RADDBG_Procedure *procedure = &rdbg->procedures[procedure_idx];
+      U64 name_size = 0;
+      U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+      String8 name = str8(name_base, name_size);
+      DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+      p.string = name;
+      df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
+    }
+  }
+  
+  //- rjf: build contents
+  Rng1S64 visible_row_range = {0};
+  UI_ScrollListParams scroll_list_params = {0};
+  {
+    Vec2F32 content_dim = dim_2f32(rect);
+    scroll_list_params.flags         = UI_ScrollListFlag_All;
+    scroll_list_params.row_height_px = row_height_px;
+    scroll_list_params.dim_px        = v2f32(content_dim.x, content_dim.y);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(0, items.count));
+    scroll_list_params.item_range    = r1s64(0, items.count);
+    scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
+  }
+  UI_ScrollListSignal scroll_list_sig = {0};
+  UI_Focus(UI_FocusKind_On)
+    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &slv->cursor, &visible_row_range, &scroll_list_sig)
+    UI_Focus(UI_FocusKind_Null)
+    UI_Font(df_font_from_slot(DF_FontSlot_Code))
+  {
+    //- rjf: build rows
+    for(U64 idx = visible_row_range.min;
+        idx <= visible_row_range.max && idx < items.count;
+        idx += 1)
+      UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
+    {
+      DBGI_FuzzySearchItem *item = &items.v[idx];
+      if(item->procedure_idx >= rdbg->procedure_count) { continue; }
+      RADDBG_Procedure *procedure = &rdbg->procedures[item->procedure_idx];
+      U64 name_size = 0;
+      U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+      String8 name = str8(name_base, name_size);
+      TG_Key type_key = tg_key_zero();
+      if(procedure->type_idx < rdbg->type_node_count)
+      {
+        RADDBG_TypeNode *type_node = &rdbg->type_nodes[procedure->type_idx];
+        type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), procedure->type_idx);
+      }
+      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                              UI_BoxFlag_DrawBackground|
+                                              UI_BoxFlag_DrawBorder|
+                                              UI_BoxFlag_DrawText|
+                                              UI_BoxFlag_DrawHotEffects|
+                                              UI_BoxFlag_DrawActiveEffects,
+                                              "###procedure_%I64x", item->procedure_idx);
+      UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 1))
+      {
+        UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
+        df_box_equip_fuzzy_match_range_list_vis(box, item->match_ranges);
+        if(!tg_key_match(tg_key_zero(), type_key))
+        {
+          String8 type_string = tg_string_from_key(scratch.arena, graph, rdbg, type_key);
+          df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_WeakText), type_string);
+        }
+      }
+      UI_Signal sig = ui_signal_from_box(box);
+      if(sig.clicked)
+      {
+        DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+        p.string = name;
+        df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+        df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
+      }
+    }
+  }
+  
+  dbgi_scope_close(scope);
+  scratch_end(scratch);
+  ProfEnd();
 }
 
 ////////////////////////////////

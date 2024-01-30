@@ -20,7 +20,7 @@ txti_init(void)
     txti_state->entity_map_stripes.v[idx].cv = os_condition_variable_alloc();
     txti_state->entity_map_stripes.v[idx].rw_mutex = os_rw_mutex_alloc();
   }
-  txti_state->mut_thread_count = Min(4, os_logical_core_count());
+  txti_state->mut_thread_count = Clamp(1, os_logical_core_count(), 4);
   txti_state->mut_threads = push_array(txti_state->arena, TXTI_MutThread, txti_state->mut_thread_count);
   for(U64 idx = 0; idx < txti_state->mut_thread_count; idx += 1)
   {

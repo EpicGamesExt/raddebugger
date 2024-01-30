@@ -1046,7 +1046,7 @@ internal B32 df_do_dasm_controls(DASM_Handle handle, U64 line_count_per_page, Tx
 internal UI_Signal df_error_label(String8 string);
 internal B32 df_help_label(String8 string);
 internal D_FancyStringList df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
-internal void df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
+internal UI_Box *df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Line Edit

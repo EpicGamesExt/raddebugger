@@ -24,11 +24,11 @@ fs_init(void)
   fs_shared->u2s_ring_base = push_array_no_zero(arena, U8, fs_shared->u2s_ring_size);
   fs_shared->u2s_ring_cv = os_condition_variable_alloc();
   fs_shared->u2s_ring_mutex = os_mutex_alloc();
-  fs_shared->streamer_count = Min(4, os_logical_core_count()-1);
+  fs_shared->streamer_count = Clamp(1, os_logical_core_count()-1, 4);
   fs_shared->streamers = push_array(arena, OS_Handle, 1);
   for(U64 idx = 0; idx < fs_shared->streamer_count; idx += 1)
   {
-    fs_shared->streamers[idx] = os_launch_thread(fs_streamer_thread__entry_point, &idx, 0);
+    fs_shared->streamers[idx] = os_launch_thread(fs_streamer_thread__entry_point, (void *)idx, 0);
   }
 }
 
