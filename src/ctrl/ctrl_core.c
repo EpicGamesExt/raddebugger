@@ -1770,6 +1770,7 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
       out_evt->entity     = ctrl_handle_from_demon(event->thread);
       out_evt->parent     = ctrl_handle_from_demon(event->process);
       out_evt->string     = event->string;
+      out_evt->entity_id  = event->code;
     }break;
   }
   ctrl_c2u_push_events(&evts);

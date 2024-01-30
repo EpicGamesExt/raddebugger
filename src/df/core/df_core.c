@@ -6731,7 +6731,14 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           String8 string = event->string;
           DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
-          df_entity_equip_name(0, thread, string);
+          if(event->entity_id != 0)
+          {
+            thread = df_entity_from_ctrl_id(event->machine_id, event->entity_id);
+          }
+          if(!df_entity_is_nil(thread))
+          {
+            df_entity_equip_name(0, thread, string);
+          }
         }break;
         
         //- rjf: memory

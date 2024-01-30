@@ -1124,6 +1124,10 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
                     }
                     e->kind = DEMON_EventKind_SetThreadName;
                     e->string = str8_list_join(arena, &thread_name_strings, 0);
+                    if(exception->NumberParameters > 2)
+                    {
+                      e->code = exception->ExceptionInformation[2];
+                    }
                   }
                 }break;
                 
