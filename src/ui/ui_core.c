@@ -1213,8 +1213,8 @@ ui_end_build(void)
             ClampBot(0, box->view_bounds.x - box->fixed_size.x),
             ClampBot(0, box->view_bounds.y - box->fixed_size.y),
           };
-          box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x);
-          box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y);
+          if(box->flags & UI_BoxFlag_ViewClampX) { box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x); }
+          if(box->flags & UI_BoxFlag_ViewClampY) { box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y); }
         }
         
         // rjf: animate view offset
@@ -2560,8 +2560,8 @@ ui_signal_from_box(UI_Box *box)
         ClampBot(0, box->view_bounds.x - box->fixed_size.x),
         ClampBot(0, box->view_bounds.y - box->fixed_size.y),
       };
-      box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x);
-      box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y);
+      if(box->flags & UI_BoxFlag_ViewClampX) { box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x); }
+      if(box->flags & UI_BoxFlag_ViewClampY) { box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y); }
     }
   }
   
