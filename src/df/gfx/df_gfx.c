@@ -4014,7 +4014,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_Focus((hover_eval_is_open && !ui_any_ctx_menu_is_open() && !query_is_open) ? UI_FocusKind_Null : UI_FocusKind_Off)
         {
           //- rjf: eval -> viz artifacts
-          F32 row_height = ui_top_font_size()*2.f;
+          F32 row_height = ui_top_font_size()*2.25f;
           DF_CfgTable cfg_table = {0};
           U64 expr_hash = df_hash_from_string(expr);
           DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
@@ -4102,7 +4102,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
                 }
-                UI_PrefWidth(ui_em(30.f, 1.f))
+                UI_PrefWidth(ui_em(40.f, 1.f))
                 {
                   UI_PrefWidth(ui_text_dim(10, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
                   ui_spacer(ui_em(1.5f, 1.f));
@@ -8893,6 +8893,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   DF_Entity *stopper_thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
   B32 ctrlified = (os_get_event_flags() & OS_EventFlag_Ctrl);
+  Vec4F32 code_line_bgs[] =
+  {
+    df_rgba_from_theme_color(DF_ThemeColor_LineInfo0),
+    df_rgba_from_theme_color(DF_ThemeColor_LineInfo1),
+    df_rgba_from_theme_color(DF_ThemeColor_LineInfo2),
+    df_rgba_from_theme_color(DF_ThemeColor_LineInfo3),
+  };
   
   //////////////////////////////
   //- rjf: build top-level container
@@ -9600,7 +9607,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //////////////////////////////
   //- rjf: mouse -> set global frontend hovered line info
   //
-  if(text_container_sig.mouse_over && contains_1s64(params->line_num_range, mouse_pt.line))
+  if(text_container_sig.hovering && contains_1s64(params->line_num_range, mouse_pt.line))
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
     if(params->line_src2dasm[line_slice_idx].first != 0)
@@ -9701,13 +9708,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       UI_FontSize(params->font_size)
       UI_CornerRadius(0)
     {
-      Vec4F32 code_line_bgs[] =
-      {
-        df_rgba_from_theme_color(DF_ThemeColor_LineInfo0),
-        df_rgba_from_theme_color(DF_ThemeColor_LineInfo1),
-        df_rgba_from_theme_color(DF_ThemeColor_LineInfo2),
-        df_rgba_from_theme_color(DF_ThemeColor_LineInfo3),
-      };
       U64 line_idx = 0;
       for(S64 line_num = params->line_num_range.min;
           line_num <= params->line_num_range.max;
@@ -9717,8 +9717,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         Vec4F32 bg_color = v4f32(0, 0, 0, 0);
         
         // rjf: line info on this line -> adjust bg color to visualize
+        B32 has_line_info = 0;
         {
-          B32 has_line_info = 0;
           S64 line_info_line_num = 0;
           F32 line_info_t = 0;
           DF_TextLineSrc2DasmInfoList *src2dasm_list = &params->line_src2dasm[line_idx];
@@ -9760,7 +9760,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         // rjf: build line num box
         ui_set_next_text_color(text_color);
         ui_set_next_background_color(bg_color);
-        ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%I64u##line_num", line_num);
+        ui_build_box_from_stringf(UI_BoxFlag_DrawText|(UI_BoxFlag_DrawBackground*!!has_line_info), "%I64u##line_num", line_num);
       }
     }
   }
@@ -10016,25 +10016,25 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         // rjf: extra rendering for lines with line-info that match the hovered
         {
           B32 matches = 0;
+          S64 line_info_line_num = 0;
           DF_TextLineSrc2DasmInfoList *src2dasm_list = &params->line_src2dasm[line_idx];
           DF_TextLineDasm2SrcInfoList *dasm2src_list = &params->line_dasm2src[line_idx];
           
           // rjf: check src2dasm
-#if 0
           if(src2dasm_list->first != 0)
           {
             for(DF_TextLineSrc2DasmInfoNode *n = src2dasm_list->first; n != 0; n = n->next)
             {
               if(n->v.remap_line == line_num &&
-                 n->v.dbg_info == hovered_line_debug_info &&
+                 n->v.binary == hovered_line_binary &&
                  n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
               {
                 matches = 1;
+                line_info_line_num = line_num;
                 break;
               }
             }
           }
-#endif
           
           // rjf: check dasm2src
           if(dasm2src_list->first != 0)
@@ -10046,6 +10046,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               {
                 if(n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
                 {
+                  line_info_line_num = n->v.pt.line;
                   matches = 1;
                   break;
                 }
@@ -10056,8 +10057,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           // rjf: matches => highlight background
           if(matches)
           {
-            Vec4F32 highlight_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-            highlight_color.w *= 0.1f;
+            Vec4F32 highlight_color = code_line_bgs[line_info_line_num % ArrayCount(code_line_bgs)];
+            highlight_color.w *= 0.25f;
             d_rect(line_box->rect, highlight_color, 0, 0, 0);
           }
         }
