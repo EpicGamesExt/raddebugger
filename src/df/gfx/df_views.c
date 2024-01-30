@@ -4142,6 +4142,10 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
               symbol = str8_lit("[external code]");
               ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
             }
+            else
+            {
+              ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_CodeFunction));
+            }
             UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, symbol);
             UI_Signal sig = ui_signal_from_box(box);
             if(sig.pressed)

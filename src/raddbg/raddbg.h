@@ -76,8 +76,6 @@
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
 //
-// [x] escaping in config files - breakpoint labels etc.
-//
 // [ ] visualize conversion failures
 //
 //  [ ] I was a little confused about what a profile file was. I understood
@@ -87,16 +85,6 @@
 //      sense once I use the debugger more, but I just thought I'd make a note
 //      to say that I was confused about it after reading the manual, so
 //      perhaps you could elaborate a little more on it in there.
-//
-// [ ] ** "Find Name" may not be working as advertised. In the description, it
-//     says you can jump to a file, but if I type in the complete filename of
-//     a file in the project and hit return, it just turns red and says it
-//     couldn't find it. This happens even if the file is already open in a
-//     tab.
-//   [ ] "Find Name" would be a lot more useful if you could type partial
-//       things, and it displayed a list, more like what happens in a
-//       traditional text editor. Typing the entire name of a function to jump
-//       to it is too laborious.
 //
 // [ ] Right-clicking on a thread in the Scheduler window pops up a context
 //     menu, but you can't actually see it because the tooltip for the thread
@@ -138,10 +126,6 @@
 //  [ ] I couldn't figure out how to affect the "dim" color in constants that
 //      have alternating bright/dim letters to show sections of a number. Is
 //      this in the theme colors somewhere?
-//
-//  [ ] For breakpoint-on-function, it would be great if it showed a list of
-//      (partial) matches as you type, so you can stop typing once it gets the
-//      right function instead of having to type the entire function name.
 //
 //  [ ] ** I couldn't figure out how to really view threads in the debugger.
 //      The only place I found a thread list was in "The Scheduler", but it
@@ -196,11 +180,6 @@
 //      it opens the context menu. However, if I left-click on a module, it
 //      opens the context window. It seems like maybe menus should be right,
 //      and left should do the default action, more consistently?
-//
-//  [x] Hovering over disassembly highlights blocks of instructions, which I
-//      assume correspond to source lines. But perhaps it should also highlight
-//      the source lines? The inverse hover works (you hover over source, and
-//      it highlights ASM), but ASM->source doesn't.
 //
 //  [ ] It wasn't clear to me how you save a user or profile file. I can see
 //      how to load them, but not how you save them. Obviously I can just copy
