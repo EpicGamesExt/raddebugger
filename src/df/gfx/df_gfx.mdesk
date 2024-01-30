@@ -308,62 +308,62 @@ DF_GfxViewRuleTable:
 ////////////////////////////////
 //~ rjf: Theme Color Codes
 
-@table(name                display_name               name_lower                    allow_zero_on_load)
+@table(name                display_name               name_lower)
 DF_ThemeTable:
 {
-  {Null                     "Null"                     null                          0}
-  {PlainText                "Plain Text"               plain_text                    0}
-  {PlainBackground          "Plain Background"         plain_background              0}
-  {PlainBorder              "Plain Border"             plain_border                  0}
-  {PlainOverlay             "Plain Overlay"            plain_overlay                 0}
-  {CodeDefault              "Code (Default)"           code_default                  0}
-  {CodeFunction             "Code (Function)"          code_function                 0}
-  {CodeType                 "Code (Type)"              code_type                     0}
-  {CodeLocal                "Code (Local)"             code_local                    0}
-  {CodeKeyword              "Code (Keyword)"           code_keyword                  0}
-  {CodeSymbol               "Code (Symbol)"            code_symbol                   0}
-  {CodeNumeric              "Code (Numeric)"           code_numeric                  0}
-  {CodeString               "Code (String)"            code_string                   0}
-  {CodeMeta                 "Code (Meta)"              code_meta                     0}
-  {CodeComment              "Code (Comment)"           code_comment                  0}
-  {LineInfo0                "Line Info (0)"            line_info_0                   0}
-  {LineInfo1                "Line Info (1)"            line_info_1                   0}
-  {LineInfo2                "Line Info (2)"            line_info_2                   0}
-  {LineInfo3                "Line Info (3)"            line_info_3                   0}
-  {AltText                  "Alt Text"                 alt_text                      0}
-  {AltBackground            "Alt Background"           alt_background                0}
-  {AltBorder                "Alt Border"               alt_border                    0}
-  {AltOverlay               "Alt Overlay"              alt_overlay                   0}
-  {TabInactive              "Inactive Tab"             tab_inactive                  0}
-  {TabActive                "Active Tab"               tab_active                    0}
-  {EntityBackground         "Entity Background"        entity_background             0}
-  {QueryBar                 "Query Bar"                query_bar                     0}
-  {WeakText                 "Weak Text"                weak_text                     0}
-  {TextSelection            "Text Selection"           text_selection                0}
-  {Cursor                   "Cursor"                   cursor                        0}
-  {Highlight0               "Highlight (0)"            highlight_0                   0}
-  {Highlight1               "Highlight (1)"            highlight_1                   0}
-  {SuccessText              "Success Text"             success_text                  0}
-  {SuccessBackground        "Success Background"       success_background            0}
-  {SuccessBorder            "Success Border"           success_border                0}
-  {FailureText              "Failure Text"             failure_text                  0}
-  {FailureBackground        "Failure Background"       failure_background            0}
-  {FailureBorder            "Failure Border"           failure_border                0}
-  {ActionText               "Action Text"              action_text                   0}
-  {ActionBackground         "Action Background"        action_background             0}
-  {ActionBorder             "Action Border"            action_border                 0}
-  {DropSiteOverlay          "Drop Site Overlay"        drop_site_overlay             0}
-  {Thread0                  "Thread (0)"               thread_0                      0}
-  {Thread1                  "Thread (1)"               thread_1                      0}
-  {Thread2                  "Thread (2)"               thread_2                      0}
-  {Thread3                  "Thread (3)"               thread_3                      0}
-  {Thread4                  "Thread (4)"               thread_4                      0}
-  {Thread5                  "Thread (5)"               thread_5                      0}
-  {Thread6                  "Thread (6)"               thread_6                      0}
-  {Thread7                  "Thread (7)"               thread_7                      0}
-  {ThreadUnwound            "Thread (Unwound)"         thread_unwound                0}
-  {InactivePanelOverlay     "Inactive Panel Overlay"   inactive_panel_overlay        1}
-  {DropShadow               "Drop Shadow"              drop_shadow                   1}
+  {Null                     "Null"                     null                          }
+  {PlainText                "Plain Text"               plain_text                    }
+  {PlainBackground          "Plain Background"         plain_background              }
+  {PlainBorder              "Plain Border"             plain_border                  }
+  {PlainOverlay             "Plain Overlay"            plain_overlay                 }
+  {CodeDefault              "Code (Default)"           code_default                  }
+  {CodeFunction             "Code (Function)"          code_function                 }
+  {CodeType                 "Code (Type)"              code_type                     }
+  {CodeLocal                "Code (Local)"             code_local                    }
+  {CodeKeyword              "Code (Keyword)"           code_keyword                  }
+  {CodeSymbol               "Code (Symbol)"            code_symbol                   }
+  {CodeNumeric              "Code (Numeric)"           code_numeric                  }
+  {CodeString               "Code (String)"            code_string                   }
+  {CodeMeta                 "Code (Meta)"              code_meta                     }
+  {CodeComment              "Code (Comment)"           code_comment                  }
+  {LineInfo0                "Line Info (0)"            line_info_0                   }
+  {LineInfo1                "Line Info (1)"            line_info_1                   }
+  {LineInfo2                "Line Info (2)"            line_info_2                   }
+  {LineInfo3                "Line Info (3)"            line_info_3                   }
+  {AltText                  "Alt Text"                 alt_text                      }
+  {AltBackground            "Alt Background"           alt_background                }
+  {AltBorder                "Alt Border"               alt_border                    }
+  {AltOverlay               "Alt Overlay"              alt_overlay                   }
+  {TabInactive              "Inactive Tab"             tab_inactive                  }
+  {TabActive                "Active Tab"               tab_active                    }
+  {EntityBackground         "Entity Background"        entity_background             }
+  {QueryBar                 "Query Bar"                query_bar                     }
+  {WeakText                 "Weak Text"                weak_text                     }
+  {TextSelection            "Text Selection"           text_selection                }
+  {Cursor                   "Cursor"                   cursor                        }
+  {Highlight0               "Highlight (0)"            highlight_0                   }
+  {Highlight1               "Highlight (1)"            highlight_1                   }
+  {SuccessText              "Success Text"             success_text                  }
+  {SuccessBackground        "Success Background"       success_background            }
+  {SuccessBorder            "Success Border"           success_border                }
+  {FailureText              "Failure Text"             failure_text                  }
+  {FailureBackground        "Failure Background"       failure_background            }
+  {FailureBorder            "Failure Border"           failure_border                }
+  {ActionText               "Action Text"              action_text                   }
+  {ActionBackground         "Action Background"        action_background             }
+  {ActionBorder             "Action Border"            action_border                 }
+  {DropSiteOverlay          "Drop Site Overlay"        drop_site_overlay             }
+  {Thread0                  "Thread (0)"               thread_0                      }
+  {Thread1                  "Thread (1)"               thread_1                      }
+  {Thread2                  "Thread (2)"               thread_2                      }
+  {Thread3                  "Thread (3)"               thread_3                      }
+  {Thread4                  "Thread (4)"               thread_4                      }
+  {Thread5                  "Thread (5)"               thread_5                      }
+  {Thread6                  "Thread (6)"               thread_6                      }
+  {Thread7                  "Thread (7)"               thread_7                      }
+  {ThreadUnwound            "Thread (Unwound)"         thread_unwound                }
+  {InactivePanelOverlay     "Inactive Panel Overlay"   inactive_panel_overlay        }
+  {DropShadow               "Drop Shadow"              drop_shadow                   }
 }
 
 ////////////////////////////////
@@ -645,7 +645,7 @@ df_g_gfx_view_kind_spec_info_table:
   @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_serialize_entity_path)*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_NameKind_$(a.name_kind), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name)), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME($(a.name)), DF_VIEW_CMD_FUNCTION_NAME($(a.name)), DF_VIEW_UI_FUNCTION_NAME($(a.name))},```;
 }
 
-//- rjf: theme color string tables
+//- rjf: theme color tables
 
 @table_gen_data(type: String8, fallback: `str8_lit_comp("")`)
 df_g_theme_color_display_string_table:

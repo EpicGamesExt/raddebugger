@@ -11476,6 +11476,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           }
           
           //- rjf: apply theme colors
+          B8 theme_color_hit[DF_ThemeColor_COUNT] = {0};
           MemoryCopy(df_gfx_state->cfg_theme_target.colors, df_g_theme_preset_colors__default_dark, sizeof(df_g_theme_preset_colors__default_dark));
           MemoryCopy(df_gfx_state->cfg_theme.colors, df_g_theme_preset_colors__default_dark, sizeof(df_g_theme_preset_colors__default_dark));
           DF_CfgVal *colors = df_cfg_val_from_string(table, str8_lit("colors"));
@@ -11499,6 +11500,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               }
               if(color_code != DF_ThemeColor_Null)
               {
+                theme_color_hit[color_code] = 1;
                 DF_CfgNode *hex_cfg = color->first;
                 String8 hex_string = hex_cfg->string;
                 U64 hex_val = 0;
@@ -11515,6 +11517,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           
           //- rjf: apply theme presets
           DF_CfgVal *color_preset = df_cfg_val_from_string(table, str8_lit("color_preset"));
+          B32 preset_applied = 0;
           if(color_preset != &df_g_nil_cfg_val)
           {
             String8 color_preset_name = color_preset->last->first->string;
@@ -11531,8 +11534,38 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
             }
             if(found_preset)
             {
+              preset_applied = 1;
               MemoryCopy(df_gfx_state->cfg_theme_target.colors, df_g_theme_preset_colors_table[preset], sizeof(df_g_theme_preset_colors__default_dark));
               MemoryCopy(df_gfx_state->cfg_theme.colors, df_g_theme_preset_colors_table[preset], sizeof(df_g_theme_preset_colors__default_dark));
+            }
+          }
+          
+          //- rjf: no preset -> autofill all missing colors from the preset with the most similar background
+          if(!preset_applied)
+          {
+            DF_ThemePreset closest_preset = DF_ThemePreset_DefaultDark;
+            F32 closest_preset_bg_distance = 100000000;
+            for(DF_ThemePreset p = (DF_ThemePreset)0; p < DF_ThemePreset_COUNT; p = (DF_ThemePreset)(p+1))
+            {
+              Vec4F32 cfg_bg = df_gfx_state->cfg_theme_target.colors[DF_ThemeColor_PlainBackground];
+              Vec4F32 pre_bg = df_g_theme_preset_colors_table[p][DF_ThemeColor_PlainBackground];
+              Vec4F32 diff = sub_4f32(cfg_bg, pre_bg);
+              Vec3F32 diff3 = diff.xyz;
+              F32 distance = length_3f32(diff3);
+              if(distance < closest_preset_bg_distance)
+              {
+                closest_preset = p;
+                closest_preset_bg_distance = distance;
+              }
+            }
+            for(DF_ThemeColor c = (DF_ThemeColor)(DF_ThemeColor_Null+1);
+                c < DF_ThemeColor_COUNT;
+                c = (DF_ThemeColor)(c+1))
+            {
+              if(!theme_color_hit[c])
+              {
+                df_gfx_state->cfg_theme_target.colors[c] = df_gfx_state->cfg_theme.colors[c] = df_g_theme_preset_colors_table[closest_preset][c];
+              }
             }
           }
           
