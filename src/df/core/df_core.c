@@ -7859,7 +7859,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
               if(symb_cfg != &df_g_nil_cfg_node)
               {
-                String8 symb_raw = df_cfg_raw_from_escaped_string(scratch.arena, symb_cfg->string);
+                String8 symb_raw = df_cfg_raw_from_escaped_string(scratch.arena, symb_cfg->first->string);
                 DF_Entity *symb = df_entity_alloc(0, bp_ent, DF_EntityKind_EntryPointName);
                 df_entity_equip_name(0, symb, symb_raw);
               }
