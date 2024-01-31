@@ -144,6 +144,7 @@ struct FuzzyMatchRangeList
   FuzzyMatchRangeNode *first;
   FuzzyMatchRangeNode *last;
   U64 count;
+  U64 total_dim;
 };
 
 ////////////////////////////////

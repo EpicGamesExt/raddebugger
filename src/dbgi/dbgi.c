@@ -54,7 +54,7 @@ dbgi_init(void)
   {
     dbgi_shared->parse_threads[idx] = os_launch_thread(dbgi_parse_thread_entry_point, (void *)idx, 0);
   }
-  dbgi_shared->fuzzy_thread_count = Clamp(1, os_logical_core_count()-1, 4);
+  dbgi_shared->fuzzy_thread_count = Clamp(1, os_logical_core_count()-1, 1);
   dbgi_shared->fuzzy_threads = push_array(arena, DBGI_FuzzySearchThread, dbgi_shared->fuzzy_thread_count);
   for(U64 idx = 0; idx < dbgi_shared->fuzzy_thread_count; idx += 1)
   {
@@ -436,7 +436,7 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
       // rjf: if stale -> request again
       if(stale) OS_MutexScopeRWPromote(stripe->rw_mutex)
       {
-        if(node->submit_gen <= node->gen + ArrayCount(node->buckets)-2)
+        if(node->gen <= node->submit_gen && node->submit_gen < node->gen + ArrayCount(node->buckets)-1)
         {
           node->submit_gen += 1;
           arena_clear(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena);
@@ -1069,6 +1069,29 @@ dbgi_u2f_dequeue_req(Arena *arena, DBGI_FuzzySearchThread *thread, U128 *key_out
   os_condition_variable_broadcast(thread->u2f_ring_cv);
 }
 
+internal int
+dbgi_qsort_compare_fuzzy_search_items(DBGI_FuzzySearchItem *a, DBGI_FuzzySearchItem *b)
+{
+  int result = 0;
+  if(a->match_ranges.count > b->match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->match_ranges.count < b->match_ranges.count)
+  {
+    result = +1;
+  }
+  else if(a->missed_size < b->missed_size)
+  {
+    result = -1;
+  }
+  else if(a->missed_size > b->missed_size)
+  {
+    result = +1;
+  }
+  return result;
+}
+
 internal void
 dbgi_fuzzy_thread__entry_point(void *p)
 {
@@ -1123,7 +1146,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
     DBGI_FuzzySearchItemChunkList items_list = {0};
     if(task_is_good)
     {
-      for(U64 procedure_idx = 0; task_is_good && procedure_idx < rdbg->procedure_count; procedure_idx += 1)
+      for(U64 procedure_idx = 1; task_is_good && procedure_idx < rdbg->procedure_count; procedure_idx += 1)
       {
         RADDBG_Procedure *procedure = &rdbg->procedures[procedure_idx];
         U64 name_size = 0;
@@ -1145,6 +1168,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
           }
           chunk->v[chunk->count].procedure_idx = procedure_idx;
           chunk->v[chunk->count].match_ranges = matches;
+          chunk->v[chunk->count].missed_size = (name_size > matches.total_dim) ? (name_size-matches.total_dim) : 0;
           chunk->count += 1;
           items_list.total_count += 1;
         }
@@ -1171,20 +1195,39 @@ dbgi_fuzzy_thread__entry_point(void *p)
       U64 idx = 0;
       for(DBGI_FuzzySearchItemChunk *chunk = items_list.first; chunk != 0; chunk = chunk->next)
       {
-        MemoryCopy(items.v+idx, chunk->v, sizeof(DBGI_FuzzySearchItemChunk)*chunk->count);
+        MemoryCopy(items.v+idx, chunk->v, sizeof(DBGI_FuzzySearchItem)*chunk->count);
         idx += chunk->count;
       }
     }
     
-    //- rjf: commit to cache
-    if(task_is_good) OS_MutexScopeW(stripe->rw_mutex)
+    //- rjf: sort item array
+    if(items.count != 0 && query.size != 0)
     {
-      for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
+      qsort(items.v, items.count, sizeof(DBGI_FuzzySearchItem), (int (*)(const void *, const void *))dbgi_qsort_compare_fuzzy_search_items);
+    }
+    
+    //- rjf: commit to cache - busyloop on scope touches
+    if(task_is_good)
+    {
+      for(B32 done = 0; !done;)
       {
-        if(u128_match(n->key, key))
+        B32 found = 0;
+        OS_MutexScopeW(stripe->rw_mutex) for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
         {
-          n->gen = initial_submit_gen;
-          n->gen_items = items;
+          if(u128_match(n->key, key))
+          {
+            if(n->scope_touch_count == 0)
+            {
+              n->gen = initial_submit_gen;
+              n->gen_items = items;
+              done = 1;
+            }
+            found = 1;
+            break;
+          }
+        }
+        if(!found)
+        {
           break;
         }
       }

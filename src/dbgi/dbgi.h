@@ -104,6 +104,7 @@ typedef struct DBGI_FuzzySearchItem DBGI_FuzzySearchItem;
 struct DBGI_FuzzySearchItem
 {
   U64 procedure_idx;
+  U64 missed_size;
   FuzzyMatchRangeList match_ranges;
 };
 
@@ -365,6 +366,8 @@ internal void dbgi_parse_thread_entry_point(void *p);
 
 internal B32 dbgi_u2f_enqueue_req(U128 key, U64 endt_us);
 internal void dbgi_u2f_dequeue_req(Arena *arena, DBGI_FuzzySearchThread *thread, U128 *key_out);
+
+internal int dbgi_qsort_compare_fuzzy_search_items(DBGI_FuzzySearchItem *a, DBGI_FuzzySearchItem *b);
 
 internal void dbgi_fuzzy_thread__entry_point(void *p);
 

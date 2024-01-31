@@ -1692,6 +1692,7 @@ fuzzy_match_find(Arena *arena, String8List needles, String8 haystack)
       n->range = range;
       SLLQueuePush(result.first, result.last, n);
       result.count += 1;
+      result.total_dim += dim_1u64(range);
     }
   }
   return result;

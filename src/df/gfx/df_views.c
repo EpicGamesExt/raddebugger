@@ -2915,6 +2915,26 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
         df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
       }
+      if(sig.hovering) UI_Tooltip
+      {
+        U64 binary_voff = df_voff_from_binary_symbol_name(binary, name);
+        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_binary_voff(binary, binary_voff);
+        String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
+        S64 line_num = dasm2src_info.pt.line;
+        df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
+        UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+          ui_labelf("Procedure #%I64u", item->procedure_idx);
+        if(!df_entity_is_nil(dasm2src_info.file))
+        {
+          UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            ui_labelf("%S:%I64d", file_path, line_num);
+        }
+        else
+        {
+          UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            ui_label(str8_lit("(No source code location found)"));
+        }
+      }
     }
   }
   
