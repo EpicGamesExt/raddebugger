@@ -756,6 +756,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       globals_block->visual_idx_range = globals_block->semantic_idx_range = r1u64(1, items.count);
       globals_block->parent_key = parent_key;
       globals_block->key = root_key;
+      globals_block->backing_search_items = items;
       blocks.count += 1;
       blocks.total_visual_row_count += dim_1u64(globals_block->visual_idx_range);
       blocks.total_semantic_row_count += dim_1u64(globals_block->semantic_idx_range);
@@ -820,6 +821,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
           next_globals_block->depth             = 0;
           next_globals_block->parent_key        = parent_key;
           next_globals_block->key               = root_key;
+          next_globals_block->backing_search_items = items;
           SLLQueuePush(blocks.first, blocks.last, next_globals_block);
           blocks.count += 1;
           globals_block = next_globals_block;
@@ -860,6 +862,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       tlocals_block->visual_idx_range = tlocals_block->semantic_idx_range = r1u64(1, items.count);
       tlocals_block->parent_key = parent_key;
       tlocals_block->key = root_key;
+      tlocals_block->backing_search_items = items;
       blocks.count += 1;
       blocks.total_visual_row_count += dim_1u64(tlocals_block->visual_idx_range);
       blocks.total_semantic_row_count += dim_1u64(tlocals_block->semantic_idx_range);
@@ -917,6 +920,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
           next_tlocals_block->depth             = 0;
           next_tlocals_block->parent_key        = parent_key;
           next_tlocals_block->key               = root_key;
+          next_tlocals_block->backing_search_items = items;
           SLLQueuePush(blocks.first, blocks.last, next_tlocals_block);
           blocks.count += 1;
           tlocals_block = next_tlocals_block;
@@ -957,6 +961,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       types_block->visual_idx_range = types_block->semantic_idx_range = r1u64(1, items.count);
       types_block->parent_key = parent_key;
       types_block->key = root_key;
+      types_block->backing_search_items = items;
       blocks.count += 1;
       blocks.total_visual_row_count += dim_1u64(types_block->visual_idx_range);
       blocks.total_semantic_row_count += dim_1u64(types_block->semantic_idx_range);
@@ -1014,6 +1019,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
           next_types_block->depth             = 0;
           next_types_block->parent_key        = parent_key;
           next_types_block->key               = root_key;
+          next_types_block->backing_search_items = items;
           SLLQueuePush(blocks.first, blocks.last, next_types_block);
           blocks.count += 1;
           types_block = next_types_block;
@@ -1092,6 +1098,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   U64 thread_ip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
+  String8 filter = {0};
+  if(view->is_filtering)
+  {
+    filter = str8(view->query_buffer, view->query_string_size);
+  }
   
   //////////////////////////////
   //- rjf: process * thread info -> parse_ctx
@@ -1413,6 +1424,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                     inherited_bg_color.w *= 0.2f;
                     ui_set_next_background_color(inherited_bg_color);
                   }
+                  FuzzyMatchRangeList matches = {0};
+                  if(filter.size != 0)
+                  {
+                    matches = fuzzy_match_find(scratch.arena, filter, row->expr);
+                  }
                   sig = df_line_editf((DF_LineEditFlag_CodeContents|
                                        DF_LineEditFlag_NoBackground*(!is_inherited)|
                                        DF_LineEditFlag_DisableEdit*(!can_edit_expr)|
@@ -1420,6 +1436,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                                        DF_LineEditFlag_ExpanderPlaceholder*(row->depth==0)|
                                        DF_LineEditFlag_ExpanderSpace*(row->depth!=0)),
                                       row->depth,
+                                      filter.size ? &matches : 0,
                                       &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, &next_expanded,
                                       row->expr,
                                       "###row_%I64x", row_hash);
@@ -1592,7 +1609,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 // rjf: simple values (editable)
                 if(value_is_simple)
                 {
-                  sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, 0, row->display_value, "%S###val_%I64x", row->display_value, row_hash);
+                  sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, 0, row->display_value, "%S###val_%I64x", row->display_value, row_hash);
                   edit_commit = (edit_commit || sig.commit);
                 }
               }
@@ -1665,7 +1682,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 UI_FocusActive((cell_selected && ewv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
               {
                 rule_editing_active = ui_is_focus_active();
-                sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, 0, view_rule, "###view_rule_%I64x", row_hash);
+                sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, 0, view_rule, "###view_rule_%I64x", row_hash);
                 edit_commit = edit_commit || sig.commit;
               }
               
@@ -1727,7 +1744,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               UI_FocusActive((cell_selected && ewv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
               expr_editing_active = ui_is_focus_active();
-              sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, 0, str8_lit(""), "###empty_row_expr");
+              sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, 0, str8_lit(""), "###empty_row_expr");
               edit_commit = edit_commit || sig.commit;
             }
             
@@ -3466,7 +3483,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
             UI_FocusHot(value_selected ? UI_FocusKind_On : UI_FocusKind_Off)
               UI_FocusActive((value_selected && tv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, &tv->input_cursor, &tv->input_mark, tv->input_buffer, sizeof(tv->input_buffer), &tv->input_size, 0, kv_info[idx].current_text, "###kv_editor_%i", (S32)idx);
+              sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &tv->input_cursor, &tv->input_mark, tv->input_buffer, sizeof(tv->input_buffer), &tv->input_size, 0, kv_info[idx].current_text, "###kv_editor_%i", (S32)idx);
               edit_commit = edit_commit || sig.commit;
             }
             
@@ -3919,7 +3936,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
           UI_FocusHot(value_selected ? UI_FocusKind_On : UI_FocusKind_Off)
             UI_FocusActive((value_selected && fpms->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
-            sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, &fpms->input_cursor, &fpms->input_mark, fpms->input_buffer, sizeof(fpms->input_buffer), &fpms->input_size, 0, map_src_path, "###src_editor_%p", map);
+            sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &fpms->input_cursor, &fpms->input_mark, fpms->input_buffer, sizeof(fpms->input_buffer), &fpms->input_size, 0, map_src_path, "###src_editor_%p", map);
             edit_commit = edit_commit || sig.commit;
           }
           
@@ -3993,7 +4010,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
           UI_FocusHot(value_selected ? UI_FocusKind_On : UI_FocusKind_Off)
             UI_FocusActive((value_selected && fpms->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
-            sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, &fpms->input_cursor, &fpms->input_mark, fpms->input_buffer, sizeof(fpms->input_buffer), &fpms->input_size, 0, map_dst_path, "###dst_editor_%p", map);
+            sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &fpms->input_cursor, &fpms->input_mark, fpms->input_buffer, sizeof(fpms->input_buffer), &fpms->input_size, 0, map_dst_path, "###dst_editor_%p", map);
             edit_commit = edit_commit || sig.commit;
           }
           
@@ -4758,7 +4775,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
                 UI_WidthFill
               {
                 UI_TextColor(!dbgi_is_valid ? df_rgba_from_theme_color(DF_ThemeColor_FailureBackground) : ui_top_text_color())
-                  sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, &mv->txt_cursor, &mv->txt_mark, mv->txt_buffer, sizeof(mv->txt_buffer), &mv->txt_size, 0, dbgi->dbg_path, "###dbg_path_%p", entity);
+                  sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &mv->txt_cursor, &mv->txt_mark, mv->txt_buffer, sizeof(mv->txt_buffer), &mv->txt_size, 0, dbgi->dbg_path, "###dbg_path_%p", entity);
                 edit_commit = (edit_commit || sig.commit);
               }
               
@@ -9128,7 +9145,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row UI_Font(df_font_from_slot(DF_FontSlot_Code))
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("Hex");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, hex_string, "###hex_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, hex_string, "###hex_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);
@@ -9141,7 +9158,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("R");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, r_string, "###r_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, r_string, "###r_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);
@@ -9153,7 +9170,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("G");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, g_string, "###g_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, g_string, "###g_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);
@@ -9165,7 +9182,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("B");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, b_string, "###b_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, b_string, "###b_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);
@@ -9178,7 +9195,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("H");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, h_string, "###h_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, h_string, "###h_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);
@@ -9189,7 +9206,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("S");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, s_string, "###s_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, s_string, "###s_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);
@@ -9200,7 +9217,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("V");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, v_string, "###v_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, v_string, "###v_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);
@@ -9212,7 +9229,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         UI_Row
         {
           UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("A");
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, a_string, "###a_edit");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, a_string, "###a_edit");
           if(sig.commit)
           {
             String8 string = str8(sv->txt_buffer, sv->txt_size);

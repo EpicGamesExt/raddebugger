@@ -1058,8 +1058,8 @@ internal UI_Box *df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 b
 ////////////////////////////////
 //~ rjf: UI Widgets: Line Edit
 
-internal UI_Signal df_line_edit(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
-internal UI_Signal df_line_editf(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
+internal UI_Signal df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
+internal UI_Signal df_line_editf(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests

@@ -719,6 +719,7 @@ struct DF_EvalVizBlock
   DF_ExpandKey key;
   Rng1U64 visual_idx_range;
   Rng1U64 semantic_idx_range;
+  DBGI_FuzzySearchItemArray backing_search_items;
   S32 depth;
 };
 

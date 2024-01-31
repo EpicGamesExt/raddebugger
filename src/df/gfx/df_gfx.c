@@ -3167,7 +3167,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         // rjf: name editor
         if(op_flags & DF_EntityOpFlag_Rename)
         {
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, entity->name, "%S###entity_name_edit_%p", df_g_entity_kind_name_label_table[entity->kind], entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, entity->name, "%S###entity_name_edit_%p", df_g_entity_kind_name_label_table[entity->kind], entity);
           if(sig.commit)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
@@ -3183,7 +3183,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         if(op_flags & DF_EntityOpFlag_Condition) UI_Font(df_font_from_slot(DF_FontSlot_Code))
         {
           DF_Entity *condition = df_entity_child_from_kind(entity, DF_EntityKind_Condition);
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, condition->name, "Condition###entity_cond_edit_%p", entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, condition->name, "Condition###entity_cond_edit_%p", entity);
           if(sig.commit)
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
@@ -3212,7 +3212,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         if(entity->kind == DF_EntityKind_Target)
         {
           DF_Entity *exe = df_entity_child_from_kind(entity, DF_EntityKind_Executable);
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, exe->name, "Executable###entity_exe_edit_%p", entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, exe->name, "Executable###entity_exe_edit_%p", entity);
           if(sig.commit)
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
@@ -3241,7 +3241,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         if(entity->kind == DF_EntityKind_Target)
         {
           DF_Entity *args = df_entity_child_from_kind(entity, DF_EntityKind_Arguments);
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, args->name, "Arguments###entity_args_edit_%p", entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, args->name, "Arguments###entity_args_edit_%p", entity);
           if(sig.commit)
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
@@ -4140,7 +4140,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                                                   DF_LineEditFlag_DisplayStringIsCode|
                                                   DF_LineEditFlag_PreferDisplayString|
                                                   DF_LineEditFlag_Border,
-                                                  0, &ws->hover_eval_txt_cursor, &ws->hover_eval_txt_mark, ws->hover_eval_txt_buffer, sizeof(ws->hover_eval_txt_buffer), &ws->hover_eval_txt_size, 0, row->edit_value, "%S###val_%I64x", row->display_value, row_hash);
+                                                  0, 0, &ws->hover_eval_txt_cursor, &ws->hover_eval_txt_mark, ws->hover_eval_txt_buffer, sizeof(ws->hover_eval_txt_buffer), &ws->hover_eval_txt_size, 0, row->edit_value, "%S###val_%I64x", row->display_value, row_hash);
                     if(sig.commit)
                     {
                       String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
@@ -5208,6 +5208,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|
                                          (DF_LineEditFlag_CodeContents * !!(query->flags & DF_CmdQueryFlag_CodeInput)),
                                          0,
+                                         0,
                                          &view->query_cursor,
                                          &view->query_mark,
                                          view->query_buffer,
@@ -5455,6 +5456,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
               }
               UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents,
+                                           0,
                                            0,
                                            &view->query_cursor,
                                            &view->query_mark,
@@ -7431,7 +7433,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
           // rjf: unpack global info
-          RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(parse_ctx->rdbg, global_variables, idx);
+          RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(parse_ctx->rdbg, global_variables, block->backing_search_items.v[idx].idx);
           RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, global_var->type_idx);
           U64 voff = global_var->voff;
           U64 vaddr = df_vaddr_from_voff(module, voff);
@@ -7526,7 +7528,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
           // rjf: unpack global info
-          RADDBG_ThreadVariable *thread_var = raddbg_element_from_idx(parse_ctx->rdbg, thread_variables, idx);
+          RADDBG_ThreadVariable *thread_var = raddbg_element_from_idx(parse_ctx->rdbg, thread_variables, block->backing_search_items.v[idx].idx);
           RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, thread_var->type_idx);
           U64 name_size = 0;
           U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, thread_var->name_string_idx, &name_size);
@@ -7614,7 +7616,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
           // rjf: unpack type info
-          RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, idx);
+          RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, block->backing_search_items.v[idx].idx);
           RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, udt->self_type_idx);
           U64 name_size = 0;
           U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, type_node->user_defined.name_string_idx, &name_size);
@@ -10947,7 +10949,7 @@ df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String
 //~ rjf: UI Widgets: Line Edit
 
 internal UI_Signal
-df_line_edit(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string)
+df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string)
 {
   //- rjf: unpack visual metrics
   F32 expander_size_px = ui_top_font_size()*1.3f;
@@ -11145,16 +11147,28 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *
       if(!(flags & DF_LineEditFlag_PreferDisplayString) && pre_edit_value.size != 0)
       {
         display_string = pre_edit_value;
-        df_code_label(1.f, 1, ui_top_text_color(), display_string);
+        UI_Box *box = df_code_label(1.f, 1, ui_top_text_color(), display_string);
+        if(matches != 0)
+        {
+          df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+        }
       }
       else if(flags & DF_LineEditFlag_DisplayStringIsCode)
       {
-        df_code_label(1.f, 1, ui_top_text_color(), display_string);
+        UI_Box *box = df_code_label(1.f, 1, ui_top_text_color(), display_string);
+        if(matches != 0)
+        {
+          df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+        }
       }
       else
       {
         ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
-        ui_label(display_string);
+        UI_Box *box = ui_label(display_string).box;
+        if(matches != 0)
+        {
+          df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+        }
       }
     }
     else if(!is_focus_active && !(flags & DF_LineEditFlag_CodeContents))
@@ -11168,7 +11182,11 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *
       {
         ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
       }
-      ui_label(display_string);
+      UI_Box *box = ui_label(display_string).box;
+      if(matches != 0)
+      {
+        df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+      }
     }
     else if(is_focus_active && flags & DF_LineEditFlag_CodeContents)
     {
@@ -11251,14 +11269,14 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *
 }
 
 internal UI_Signal
-df_line_editf(DF_LineEditFlags flags, S32 depth, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...)
+df_line_editf(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
   va_end(args);
-  UI_Signal sig = df_line_edit(flags, depth, cursor, mark, edit_buffer, edit_buffer_size, edit_string_size_out, expanded_out, pre_edit_value, string);
+  UI_Signal sig = df_line_edit(flags, depth, matches, cursor, mark, edit_buffer, edit_buffer_size, edit_string_size_out, expanded_out, pre_edit_value, string);
   scratch_end(scratch);
   return sig;
 }
