@@ -162,15 +162,6 @@ df_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
   Temp scratch = scratch_begin(&arena, 1);
   DF_CmdSpecList specs = df_push_cmd_spec_list(scratch.arena);
   DF_CmdListerItemList result = {0};
-  
-  //- rjf: get search needles
-  String8List search_needles = {0};
-  {
-    U8 splits[] = {' '};
-    search_needles = str8_split(scratch.arena, needle, splits, ArrayCount(splits), 0);
-  }
-  
-  //- rjf: build filtered list of commands
   for(DF_CmdSpecNode *n = specs.first; n != 0; n = n->next)
   {
     DF_CmdSpec *spec = n->spec;
@@ -179,13 +170,13 @@ df_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
       String8 cmd_display_name = spec->info.display_name;
       String8 cmd_desc = spec->info.description;
       String8 cmd_tags = spec->info.search_tags;
-      FuzzyMatchRangeList name_matches = fuzzy_match_find(arena, search_needles, cmd_display_name);
-      FuzzyMatchRangeList desc_matches = fuzzy_match_find(arena, search_needles, cmd_desc);
-      FuzzyMatchRangeList tags_matches = fuzzy_match_find(arena, search_needles, cmd_tags);
-      if(name_matches.count == search_needles.node_count ||
-         desc_matches.count == search_needles.node_count ||
+      FuzzyMatchRangeList name_matches = fuzzy_match_find(arena, needle, cmd_display_name);
+      FuzzyMatchRangeList desc_matches = fuzzy_match_find(arena, needle, cmd_desc);
+      FuzzyMatchRangeList tags_matches = fuzzy_match_find(arena, needle, cmd_tags);
+      if(name_matches.count == name_matches.needle_part_count ||
+         desc_matches.count == name_matches.needle_part_count ||
          tags_matches.count > 0 ||
-         search_needles.node_count == 0)
+         name_matches.needle_part_count == 0)
       {
         DF_CmdListerItemNode *node = push_array(arena, DF_CmdListerItemNode, 1);
         node->item.cmd_spec = spec;
@@ -199,7 +190,6 @@ df_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
       }
     }
   }
-  
   scratch_end(scratch);
   return result;
 }
@@ -247,10 +237,6 @@ df_process_info_list_from_query(Arena *arena, String8 query)
     }
   }
   
-  //- rjf: build needles
-  U8 splits[] = {' '};
-  String8List needles = str8_split(scratch.arena, query, splits, ArrayCount(splits), 0);;
-  
   //- rjf: build list
   DF_ProcessInfoList list = {0};
   {
@@ -277,18 +263,18 @@ df_process_info_list_from_query(Arena *arena, String8 query)
       
       // rjf: gather fuzzy matches
       FuzzyMatchRangeList attached_match_ranges = {0};
-      FuzzyMatchRangeList name_match_ranges     = fuzzy_match_find(arena, needles, info.name);
-      FuzzyMatchRangeList pid_match_ranges      = fuzzy_match_find(arena, needles, push_str8f(scratch.arena, "%i", info.pid));
+      FuzzyMatchRangeList name_match_ranges     = fuzzy_match_find(arena, query, info.name);
+      FuzzyMatchRangeList pid_match_ranges      = fuzzy_match_find(arena, query, push_str8f(scratch.arena, "%i", info.pid));
       if(is_attached)
       {
-        attached_match_ranges = fuzzy_match_find(arena, needles, str8_lit("[attached]"));
+        attached_match_ranges = fuzzy_match_find(arena, query, str8_lit("[attached]"));
       }
       
       // rjf: determine if this item is filtered out
       B32 matches_query = (query.size == 0 ||
-                           (attached_match_ranges.count >= needles.node_count) ||
-                           (name_match_ranges.count >= needles.node_count) ||
-                           (pid_match_ranges.count >= needles.node_count));
+                           (attached_match_ranges.count >= attached_match_ranges.needle_part_count) ||
+                           (name_match_ranges.count >= name_match_ranges.needle_part_count) ||
+                           (pid_match_ranges.count >= pid_match_ranges.needle_part_count));
       
       // rjf: push if unfiltered
       if(matches_query)
@@ -339,15 +325,6 @@ df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind, DF_Enti
 {
   Temp scratch = scratch_begin(&arena, 1);
   DF_EntityListerItemList result = {0};
-  
-  //- rjf: get search needles
-  String8List search_needles = {0};
-  {
-    U8 splits[] = {' '};
-    search_needles = str8_split(scratch.arena, needle, splits, ArrayCount(splits), 0);
-  }
-  
-  //- rjf: build filtered list
   DF_EntityList ent_list = df_query_cached_entity_list_with_kind(kind);
   for(DF_EntityNode *n = ent_list.first; n != 0; n = n->next)
   {
@@ -355,7 +332,7 @@ df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind, DF_Enti
     if(!(entity->flags & omit_flags))
     {
       String8 display_string = df_display_string_from_entity(scratch.arena, entity);
-      FuzzyMatchRangeList match_rngs = fuzzy_match_find(arena, search_needles, display_string);
+      FuzzyMatchRangeList match_rngs = fuzzy_match_find(arena, needle, display_string);
       if(match_rngs.count != 0 || needle.size == 0)
       {
         DF_EntityListerItemNode *item_n = push_array(arena, DF_EntityListerItemNode, 1);
@@ -366,7 +343,6 @@ df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind, DF_Enti
       }
     }
   }
-  
   scratch_end(scratch);
   return result;
 }
@@ -2376,13 +2352,6 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetCurrentPath));
     }
     
-    //- rjf: search => fuzzy needles
-    String8List search_needles = {0};
-    {
-      U8 splits[] = {' '};
-      search_needles = str8_split(scratch.arena, path_query.search, splits, ArrayCount(splits), 0);
-    }
-    
     //- rjf: get files, filtered
     U64 new_file_count = 0;
     DF_FileInfoNode *first_file = 0;
@@ -2391,8 +2360,8 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       OS_FileIter *it = os_file_iter_begin(scratch.arena, path_query.path, 0);
       for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
       {
-        FuzzyMatchRangeList match_ranges = fuzzy_match_find(fs->cached_files_arena, search_needles, info.name);
-        B32 fits_search = (search_needles.node_count == 0 || match_ranges.count == search_needles.node_count);
+        FuzzyMatchRangeList match_ranges = fuzzy_match_find(fs->cached_files_arena, path_query.search, info.name);
+        B32 fits_search = (path_query.search.size == 0 || match_ranges.count == match_ranges.needle_part_count);
         B32 fits_dir_only = !!(info.props.flags & FilePropertyFlag_IsFolder) || !dir_selection;
         if(fits_search && fits_dir_only)
         {

@@ -1134,10 +1134,6 @@ dbgi_fuzzy_thread__entry_point(void *p)
       }
     }
     
-    //- rjf: form space-separated search needles
-    U8 splits[] = {' '};
-    String8List query_needles = str8_split(scratch.arena, query, splits, ArrayCount(splits), 0);
-    
     //- rjf: exe_path -> dbgi_parse, raddbg
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
     RADDBG_Parsed *rdbg = &dbgi->rdbg;
@@ -1153,8 +1149,8 @@ dbgi_fuzzy_thread__entry_point(void *p)
         U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
         String8 name = str8(name_base, name_size);
         if(name.size == 0) { continue; }
-        FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query_needles, name);
-        if(matches.count == query_needles.node_count)
+        FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query, name);
+        if(matches.count == matches.needle_part_count)
         {
           DBGI_FuzzySearchItemChunk *chunk = items_list.last;
           if(chunk == 0 || chunk->count >= chunk->cap)

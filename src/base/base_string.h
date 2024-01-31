@@ -144,6 +144,7 @@ struct FuzzyMatchRangeList
   FuzzyMatchRangeNode *first;
   FuzzyMatchRangeNode *last;
   U64 count;
+  U64 needle_part_count;
   U64 total_dim;
 };
 
@@ -340,7 +341,7 @@ internal Vec4F32 rgba_from_hex_string_4f32(String8 hex_string);
 ////////////////////////////////
 //~ rjf: String Fuzzy Matching
 
-internal FuzzyMatchRangeList fuzzy_match_find(Arena *arena, String8List needles, String8 haystack);
+internal FuzzyMatchRangeList fuzzy_match_find(Arena *arena, String8 needle, String8 haystack);
 
 ////////////////////////////////
 //~ NOTE(allen): Serialization Helpers

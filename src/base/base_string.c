@@ -1661,9 +1661,12 @@ rgba_from_hex_string_4f32(String8 hex_string)
 //~ rjf: String Fuzzy Matching
 
 internal FuzzyMatchRangeList
-fuzzy_match_find(Arena *arena, String8List needles, String8 haystack)
+fuzzy_match_find(Arena *arena, String8 needle, String8 haystack)
 {
   FuzzyMatchRangeList result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List needles = str8_split(scratch.arena, needle, (U8*)" ", 1, 0);
+  result.needle_part_count = needles.node_count;
   for(String8Node *needle_n = needles.first; needle_n != 0; needle_n = needle_n->next)
   {
     U64 find_pos = 0;
@@ -1695,6 +1698,7 @@ fuzzy_match_find(Arena *arena, String8List needles, String8 haystack)
       result.total_dim += dim_1u64(range);
     }
   }
+  scratch_end(scratch);
   return result;
 }
 ////////////////////////////////

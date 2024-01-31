@@ -3776,13 +3776,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
         DF_Entity *binary = df_binary_file_from_module(module);
         
-        //- rjf: unpack query words
-        String8List search_needles = {0};
-        {
-          U8 splits[] = {' '};
-          search_needles = str8_split(scratch.arena, query, splits, ArrayCount(splits), 0);
-        }
-        
         //- rjf: gather lister items
         DF_AutoCompListerItemChunkList item_list = {0};
         {
@@ -3795,9 +3788,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 item.string      = n->string;
                 item.kind_string = str8_lit("Local");
-                item.matches     = fuzzy_match_find(scratch.arena, search_needles, n->string);
+                item.matches     = fuzzy_match_find(scratch.arena, query, n->string);
               }
-              if(search_needles.node_count == 0 || item.matches.count != 0)
+              if(query.size == 0 || item.matches.count != 0)
               {
                 df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
@@ -3818,9 +3811,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   item.string      = reg_names[idx];
                   item.kind_string = str8_lit("Register");
-                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, reg_names[idx]);
+                  item.matches     = fuzzy_match_find(scratch.arena, query, reg_names[idx]);
                 }
-                if(search_needles.node_count == 0 || item.matches.count != 0)
+                if(query.size == 0 || item.matches.count != 0)
                 {
                   df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
                 }
@@ -3834,9 +3827,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   item.string      = alias_names[idx];
                   item.kind_string = str8_lit("Reg. Alias");
-                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, alias_names[idx]);
+                  item.matches     = fuzzy_match_find(scratch.arena, query, alias_names[idx]);
                 }
-                if(search_needles.node_count == 0 || item.matches.count != 0)
+                if(query.size == 0 || item.matches.count != 0)
                 {
                   df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
                 }
@@ -3853,9 +3846,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 {
                   item.string      = spec->info.string;
                   item.kind_string = str8_lit("View Rule");
-                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, spec->info.string);
+                  item.matches     = fuzzy_match_find(scratch.arena, query, spec->info.string);
                 }
-                if(search_needles.node_count == 0 || item.matches.count != 0)
+                if(query.size == 0 || item.matches.count != 0)
                 {
                   df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
                 }
