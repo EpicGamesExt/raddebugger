@@ -1183,7 +1183,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
     if(task_is_good)
     {
       void *table_base = (U8*)rdbg + table_ptr_off;
-      for(U64 idx = 1; task_is_good && idx < rdbg->procedures_count; idx += 1)
+      for(U64 idx = 1; task_is_good && idx < element_count; idx += 1)
       {
         void *element = (U8 *)(*(void **)table_base) + element_size*idx;
         U32 *name_idx_ptr = (U32 *)((U8 *)element + element_name_idx_off);

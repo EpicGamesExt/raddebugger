@@ -753,7 +753,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_EvalVizBlock *globals_block = push_array(arena, DF_EvalVizBlock, 1);
       SLLQueuePush(blocks.first, blocks.last, globals_block);
       globals_block->kind = DF_EvalVizBlockKind_AllGlobals;
-      globals_block->visual_idx_range = globals_block->semantic_idx_range = r1u64(1, items.count);
+      globals_block->visual_idx_range = globals_block->semantic_idx_range = r1u64(0, items.count);
       globals_block->parent_key = parent_key;
       globals_block->key = root_key;
       globals_block->backing_search_items = items;
@@ -788,7 +788,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: unpack global
-        RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(parse_ctx->rdbg, global_variables, child_idx);
+        RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(parse_ctx->rdbg, global_variables, items.v[child_idx].idx);
         RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, global_var->type_idx);
         U64 voff = global_var->voff;
         U64 vaddr = df_vaddr_from_voff(module, voff);
@@ -859,7 +859,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_EvalVizBlock *tlocals_block = push_array(arena, DF_EvalVizBlock, 1);
       SLLQueuePush(blocks.first, blocks.last, tlocals_block);
       tlocals_block->kind = DF_EvalVizBlockKind_AllThreadLocals;
-      tlocals_block->visual_idx_range = tlocals_block->semantic_idx_range = r1u64(1, items.count);
+      tlocals_block->visual_idx_range = tlocals_block->semantic_idx_range = r1u64(0, items.count);
       tlocals_block->parent_key = parent_key;
       tlocals_block->key = root_key;
       tlocals_block->backing_search_items = items;
@@ -894,7 +894,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: unpack tlocal
-        RADDBG_ThreadVariable *thread_var = raddbg_element_from_idx(parse_ctx->rdbg, thread_variables, child_idx);
+        RADDBG_ThreadVariable *thread_var = raddbg_element_from_idx(parse_ctx->rdbg, thread_variables, items.v[child_idx].idx);
         RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, thread_var->type_idx);
         U64 name_size = 0;
         U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, thread_var->name_string_idx, &name_size);
@@ -958,7 +958,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_EvalVizBlock *types_block = push_array(arena, DF_EvalVizBlock, 1);
       SLLQueuePush(blocks.first, blocks.last, types_block);
       types_block->kind = DF_EvalVizBlockKind_AllTypes;
-      types_block->visual_idx_range = types_block->semantic_idx_range = r1u64(1, items.count);
+      types_block->visual_idx_range = types_block->semantic_idx_range = r1u64(0, items.count);
       types_block->parent_key = parent_key;
       types_block->key = root_key;
       types_block->backing_search_items = items;
@@ -993,7 +993,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: unpack types
-        RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, child_idx);
+        RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, items.v[child_idx].idx);
         RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, udt->self_type_idx);
         U64 name_size = 0;
         U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, type_node->user_defined.name_string_idx, &name_size);
