@@ -3071,7 +3071,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
   RADDBG_Parsed *rdbg = &dbgi->rdbg;
   B32 items_stale = 0;
-  DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, query, os_now_microseconds()+100, &items_stale);
+  DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, query, DBGI_FuzzySearchTarget_Procedures, os_now_microseconds()+100, &items_stale);
   if(items_stale)
   {
     df_gfx_request_frame();
@@ -3080,7 +3080,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   //- rjf: submit best match when hitting enter w/ no selection
   if(slv->cursor.y == 0 && items.count != 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
   {
-    RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, items.v[0].procedure_idx);
+    RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, items.v[0].idx);
     U64 name_size = 0;
     U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
     String8 name = str8(name_base, name_size);
@@ -3118,7 +3118,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
       DBGI_FuzzySearchItem *item = &items.v[idx];
-      RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, item->procedure_idx);
+      RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, item->idx);
       U64 name_size = 0;
       U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
@@ -3131,7 +3131,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
                                               UI_BoxFlag_DrawText|
                                               UI_BoxFlag_DrawHotEffects|
                                               UI_BoxFlag_DrawActiveEffects,
-                                              "###procedure_%I64x", item->procedure_idx);
+                                              "###procedure_%I64x", item->idx);
       UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 1))
       {
         UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
@@ -3158,7 +3158,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         S64 line_num = dasm2src_info.pt.line;
         df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
         UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-          ui_labelf("Procedure #%I64u", item->procedure_idx);
+          ui_labelf("Procedure #%I64u", item->idx);
         if(!df_entity_is_nil(dasm2src_info.file))
         {
           UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))

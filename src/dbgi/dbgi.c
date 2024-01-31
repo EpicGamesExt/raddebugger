@@ -385,7 +385,7 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
 //~ rjf: Fuzzy Search Cache Functions
 
 internal DBGI_FuzzySearchItemArray
-dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us, B32 *stale_out)
+dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, DBGI_FuzzySearchTarget target, U64 endt_us, B32 *stale_out)
 {
   Temp scratch = scratch_begin(0, 0);
   DBGI_FuzzySearchItemArray items = {0};
@@ -425,7 +425,9 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
       
       // rjf: try to grab last valid results for this key/query; determine if stale
       B32 stale = 1;
-      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, 0) && node->gen != 0)
+      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, 0) &&
+         target == node->buckets[node->gen%ArrayCount(node->buckets)].target &&
+         node->gen != 0)
       {
         dbgi_scope_touch_fuzzy_search__stripe_mutex_r_guarded(scope, node);
         items = node->gen_items;
@@ -442,6 +444,7 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
           arena_clear(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena);
           node->buckets[node->submit_gen%ArrayCount(node->buckets)].exe_path = push_str8_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, exe_path);
           node->buckets[node->submit_gen%ArrayCount(node->buckets)].query = push_str8_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, query);
+          node->buckets[node->submit_gen%ArrayCount(node->buckets)].target = target;
         }
         if((node->submit_gen > node->gen+1 || os_now_microseconds() >= node->last_time_submitted_us+100000) &&
            dbgi_u2f_enqueue_req(key, endt_us))
@@ -1117,6 +1120,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
     Arena *task_arena = 0;
     String8 exe_path = {0};
     String8 query = {0};
+    DBGI_FuzzySearchTarget target = DBGI_FuzzySearchTarget_Procedures;
     U64 initial_submit_gen = 0;
     OS_MutexScopeW(stripe->rw_mutex)
     {
@@ -1129,6 +1133,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
           task_arena = n->buckets[n->submit_gen%ArrayCount(n->buckets)].arena;
           exe_path = n->buckets[n->submit_gen%ArrayCount(n->buckets)].exe_path;
           query = n->buckets[n->submit_gen%ArrayCount(n->buckets)].query;
+          target = n->buckets[n->submit_gen%ArrayCount(n->buckets)].target;
           break;
         }
       }
@@ -1139,14 +1144,58 @@ dbgi_fuzzy_thread__entry_point(void *p)
     RADDBG_Parsed *rdbg = &dbgi->rdbg;
     
     //- rjf: rdbg * query -> item list
+    U64 table_ptr_off = 0;
+    U64 element_name_idx_off = 0;
+    U64 element_count = 0;
+    U64 element_size = 0;
+    switch(target)
+    {
+      // NOTE(rjf): no default!
+      case DBGI_FuzzySearchTarget_Procedures:
+      {
+        table_ptr_off = OffsetOf(RADDBG_Parsed, procedures);
+        element_name_idx_off = OffsetOf(RADDBG_Procedure, name_string_idx);
+        element_count = rdbg->procedures_count;
+        element_size = sizeof(RADDBG_Procedure);
+      }break;
+      case DBGI_FuzzySearchTarget_GlobalVariables:
+      {
+        table_ptr_off = OffsetOf(RADDBG_Parsed, global_variables);
+        element_name_idx_off = OffsetOf(RADDBG_GlobalVariable, name_string_idx);
+        element_count = rdbg->global_variables_count;
+        element_size = sizeof(RADDBG_GlobalVariable);
+      }break;
+      case DBGI_FuzzySearchTarget_ThreadVariables:
+      {
+        table_ptr_off = OffsetOf(RADDBG_Parsed, thread_variables);
+        element_name_idx_off = OffsetOf(RADDBG_ThreadVariable, name_string_idx);
+        element_count = rdbg->thread_variables_count;
+        element_size = sizeof(RADDBG_ThreadVariable);
+      }break;
+      case DBGI_FuzzySearchTarget_UDTs:
+      {
+        table_ptr_off = OffsetOf(RADDBG_Parsed, udts);
+        element_count = rdbg->udts_count;
+        element_size = sizeof(RADDBG_UDT);
+      }break;
+    }
     DBGI_FuzzySearchItemChunkList items_list = {0};
     if(task_is_good)
     {
-      for(U64 procedure_idx = 1; task_is_good && procedure_idx < rdbg->procedures_count; procedure_idx += 1)
+      void *table_base = (U8*)rdbg + table_ptr_off;
+      for(U64 idx = 1; task_is_good && idx < rdbg->procedures_count; idx += 1)
       {
-        RADDBG_Procedure *procedure = &rdbg->procedures[procedure_idx];
+        void *element = (U8 *)(*(void **)table_base) + element_size*idx;
+        U32 *name_idx_ptr = (U32 *)((U8 *)element + element_name_idx_off);
+        if(target == DBGI_FuzzySearchTarget_UDTs)
+        {
+          RADDBG_UDT *udt = (RADDBG_UDT *)element;
+          RADDBG_TypeNode *type_node = raddbg_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+          name_idx_ptr = &type_node->user_defined.name_string_idx;
+        }
+        U32 name_idx = *name_idx_ptr;
         U64 name_size = 0;
-        U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+        U8 *name_base = raddbg_string_from_idx(rdbg, name_idx, &name_size);
         String8 name = str8(name_base, name_size);
         if(name.size == 0) { continue; }
         FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query, name);
@@ -1162,13 +1211,13 @@ dbgi_fuzzy_thread__entry_point(void *p)
             SLLQueuePush(items_list.first, items_list.last, chunk);
             items_list.chunk_count += 1;
           }
-          chunk->v[chunk->count].procedure_idx = procedure_idx;
+          chunk->v[chunk->count].idx = idx;
           chunk->v[chunk->count].match_ranges = matches;
           chunk->v[chunk->count].missed_size = (name_size > matches.total_dim) ? (name_size-matches.total_dim) : 0;
           chunk->count += 1;
           items_list.total_count += 1;
         }
-        if(procedure_idx%100 == 99) OS_MutexScopeR(stripe->rw_mutex)
+        if(idx%100 == 99) OS_MutexScopeR(stripe->rw_mutex)
         {
           for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
           {

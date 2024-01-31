@@ -100,10 +100,20 @@ struct DBGI_BinaryStripe
 ////////////////////////////////
 //~ rjf: Fuzzy Search Cache Types
 
+typedef enum DBGI_FuzzySearchTarget
+{
+  DBGI_FuzzySearchTarget_Procedures,
+  DBGI_FuzzySearchTarget_GlobalVariables,
+  DBGI_FuzzySearchTarget_ThreadVariables,
+  DBGI_FuzzySearchTarget_UDTs,
+  DBGI_FuzzySearchTarget_COUNT
+}
+DBGI_FuzzySearchTarget;
+
 typedef struct DBGI_FuzzySearchItem DBGI_FuzzySearchItem;
 struct DBGI_FuzzySearchItem
 {
-  U64 procedure_idx;
+  U64 idx;
   U64 missed_size;
   FuzzyMatchRangeList match_ranges;
 };
@@ -139,6 +149,7 @@ struct DBGI_FuzzySearchBucket
   Arena *arena;
   String8 exe_path;
   String8 query;
+  DBGI_FuzzySearchTarget target;
 };
 
 typedef struct DBGI_FuzzySearchNode DBGI_FuzzySearchNode;
@@ -392,7 +403,7 @@ internal DBGI_Parse *dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_pat
 ////////////////////////////////
 //~ rjf: Fuzzy Search Cache Functions
 
-internal DBGI_FuzzySearchItemArray dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, U64 endt_us, B32 *stale_out);
+internal DBGI_FuzzySearchItemArray dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, DBGI_FuzzySearchTarget target, U64 endt_us, B32 *stale_out);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
