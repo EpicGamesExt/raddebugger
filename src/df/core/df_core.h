@@ -265,8 +265,6 @@ struct DF_Unwind
 ////////////////////////////////
 //~ rjf: Evaluation Types
 
-//- rjf: primary artifact from evaluation
-
 typedef struct DF_Eval DF_Eval;
 struct DF_Eval
 {
@@ -282,37 +280,6 @@ struct DF_Eval
     U64 imm_u128[2];
   };
   EVAL_ErrorList errors;
-};
-
-//- rjf: value history types
-
-typedef struct DF_EvalHistoryVal DF_EvalHistoryVal;
-struct DF_EvalHistoryVal
-{
-  EVAL_EvalMode mode;
-  U64 offset;
-  U64 imm_u128[2];
-};
-
-typedef struct DF_EvalHistoryCacheNode DF_EvalHistoryCacheNode;
-struct DF_EvalHistoryCacheNode
-{
-  DF_EvalHistoryCacheNode *lru_next;
-  DF_EvalHistoryCacheNode *lru_prev;
-  DF_EvalHistoryCacheNode *hash_next;
-  DF_EvalHistoryCacheNode *hash_prev;
-  DF_ExpandKey key;
-  U64 first_run_idx;
-  U64 last_run_idx;
-  U64 newest_val_idx;
-  DF_EvalHistoryVal values[64];
-};
-
-typedef struct DF_EvalHistoryCacheSlot DF_EvalHistoryCacheSlot;
-struct DF_EvalHistoryCacheSlot
-{
-  DF_EvalHistoryCacheNode *first;
-  DF_EvalHistoryCacheNode *last;
 };
 
 ////////////////////////////////
@@ -674,13 +641,6 @@ struct DF_EvalView
   // rjf: expansion state
   DF_ExpandTreeTable expand_tree_table;
   
-  // rjf: key -> value history cache
-  U64 history_cache_table_size;
-  U64 history_cache_table_num_active_nodes;
-  DF_EvalHistoryCacheSlot *history_cache_table;
-  DF_EvalHistoryCacheNode *history_cache_lru_first;
-  DF_EvalHistoryCacheNode *history_cache_lru_last;
-  
   // rjf: key -> view rule cache
   DF_EvalViewRuleCacheTable view_rule_table;
 };
@@ -747,7 +707,6 @@ struct DF_EvalVizBlock
 {
   DF_EvalVizBlock *next;
   DF_EvalVizBlockKind kind;
-  DF_EvalView *eval_view;
   DF_Eval eval;
   TG_Key link_member_type_key;
   U64 link_member_off;
@@ -792,8 +751,7 @@ struct DF_EvalVizRow
   DF_EvalVizRow *next;
   DF_EvalVizRowFlags flags;
   
-  // rjf: eval & eval view state
-  DF_EvalView *eval_view;
+  // rjf: evaluation artifacts
   DF_Eval eval;
   
   // rjf: basic visualization contents
@@ -1573,10 +1531,6 @@ internal B32 df_eval_view_key_match(DF_EvalViewKey a, DF_EvalViewKey b);
 
 //- rjf: cache lookup
 internal DF_EvalView *df_eval_view_from_key(DF_EvalViewKey key);
-
-//- rjf: key -> eval history
-internal DF_EvalHistoryCacheNode *df_eval_history_cache_node_from_key(DF_EvalView *eval_view, DF_ExpandKey key);
-internal B32 df_eval_view_record_history_val(DF_EvalView *eval_view, DF_ExpandKey key, DF_EvalHistoryVal val);
 
 //- rjf: key -> view rules
 internal void df_eval_view_set_key_rule(DF_EvalView *eval_view, DF_ExpandKey key, String8 view_rule_string);

@@ -485,7 +485,6 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
 {
   DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval_view                     = eval_view;
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
@@ -659,7 +658,6 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
 {
   DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval_view                     = eval_view;
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
@@ -768,7 +766,6 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
 {
   DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval_view                     = eval_view;
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
@@ -860,7 +857,6 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
 {
   DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval_view                     = eval_view;
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
@@ -1107,7 +1103,6 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo)
 {
   DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval_view                     = eval_view;
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;

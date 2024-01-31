@@ -783,6 +783,8 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   U64 thread_ip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
+  DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
+  DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   
   //////////////////////////////
   //- rjf: process * thread info -> parse_ctx
@@ -988,25 +990,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
     //- rjf: viz blocks -> rows
     DF_EvalVizWindowedRowList rows = {0};
     {
-      rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, default_radix, code_font, code_font_size, r1s64(visible_row_rng.min-1, visible_row_rng.max), &blocks);
-    }
-    
-    //- rjf: record history for windowed rows
-    if(!df_ctrl_targets_running())
-    {
-      for(DF_EvalVizRow *row = rows.first; row != 0; row = row->next)
-      {
-        DF_Eval row_eval = row->eval;
-        DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, row_eval);
-        if(value_eval.mode != EVAL_EvalMode_NULL)
-        {
-          DF_EvalHistoryVal val = zero_struct;
-          val.mode = value_eval.mode;
-          val.offset = value_eval.offset;
-          MemoryCopyArray(val.imm_u128, value_eval.imm_u128);
-          df_eval_view_record_history_val(row->eval_view, row->key, val);
-        }
-      }
+      rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, default_radix, code_font, code_font_size, r1s64(visible_row_rng.min-1, visible_row_rng.max), &blocks);
     }
     
     //- rjf: build table
@@ -1016,11 +1000,9 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       for(DF_EvalVizRow *row = rows.first; row != 0; row = row->next, semantic_idx += 1)
       {
         U64 row_hash = df_hash_from_expand_key(row->key);
-        DF_EvalView *eval_view = row->eval_view;
         df_expand_tree_table_animate(&eval_view->expand_tree_table, df_dt());
         B32 row_selected = ((semantic_idx+1) == cursor.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
-        DF_EvalHistoryCacheNode *history_cache_node = df_eval_history_cache_node_from_key(eval_view, row->key);
         
         //- rjf: determine if row's data is fresh
         B32 row_is_fresh = 0;
@@ -1048,21 +1030,6 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         if(row_selected)
         {
           commit_row = row;
-        }
-        
-        //- rjf: color changed rows
-        if(history_cache_node &&
-           history_cache_node->last_run_idx == df_ctrl_run_gen() &&
-           history_cache_node->last_run_idx != history_cache_node->first_run_idx &&
-           history_cache_node->values[history_cache_node->newest_val_idx].mode != EVAL_EvalMode_NULL)
-        {
-          F32 animation_time_max = 1.f;
-          F32 animation_time = 1.f;//ClampTop(animation_time_max, history_cache_node->seconds_since_change);
-          F32 animation_progress = animation_time / animation_time_max;
-          Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-          color.w *= 0.25f - (animation_progress * 0.15f);
-          ui_set_next_overlay_color(color);
-          ui_set_next_flags(UI_BoxFlag_DrawOverlay);
         }
         
         //- rjf: build canvas row
@@ -1581,8 +1548,6 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       //- rjf: committed on a valid row
       if(commit_row != 0)
       {
-        DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
-        DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
         switch(commit_column)
         {
           default:break;
@@ -1632,7 +1597,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           //- rjf: view rule commits
           case DF_EvalWatchViewColumnKind_ViewRule:
           {
-            df_eval_view_set_key_rule(commit_row->eval_view, commit_row->key, commit_string);
+            df_eval_view_set_key_rule(eval_view, commit_row->key, commit_string);
           }break;
         }
       }
@@ -1705,7 +1670,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       // rjf: go to parent on collapses
       if(found_block != 0)
       {
-        DF_ExpandNode *node = df_expand_node_from_key(&found_block->eval_view->expand_tree_table, found_block->parent_key);
+        DF_ExpandNode *node = df_expand_node_from_key(&eval_view->expand_tree_table, found_block->parent_key);
         if(node != 0)
         {
           for(DF_ExpandNode *n = node; n != 0; n = n->parent)

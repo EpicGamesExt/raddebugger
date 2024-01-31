@@ -4475,90 +4475,11 @@ df_eval_view_from_key(DF_EvalViewKey key)
       eval_view->key = key;
       eval_view->arena = arena_alloc();
       df_expand_tree_table_init(eval_view->arena, &eval_view->expand_tree_table, 256);
-      eval_view->history_cache_table_size = 64;
-      eval_view->history_cache_table = push_array(eval_view->arena, DF_EvalHistoryCacheSlot, eval_view->history_cache_table_size);
       eval_view->view_rule_table.slot_count = 64;
       eval_view->view_rule_table.slots = push_array(eval_view->arena, DF_EvalViewRuleCacheSlot, eval_view->view_rule_table.slot_count);
     }
   }
   return eval_view;
-}
-
-//- rjf: key -> eval history
-
-internal DF_EvalHistoryCacheNode *
-df_eval_history_cache_node_from_key(DF_EvalView *eval_view, DF_ExpandKey key)
-{
-  //- rjf: key -> hash * slot idx * slot
-  String8 key_string = str8_struct(&key);
-  U64 hash = df_hash_from_string(key_string);
-  U64 slot_idx = hash%eval_view->history_cache_table_size;
-  DF_EvalHistoryCacheSlot *slot = &eval_view->history_cache_table[slot_idx];
-  
-  //- rjf: slot idx -> existing node
-  DF_EvalHistoryCacheNode *existing_node = 0;
-  for(DF_EvalHistoryCacheNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(df_expand_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  return existing_node;
-}
-
-internal B32
-df_eval_view_record_history_val(DF_EvalView *eval_view, DF_ExpandKey key, DF_EvalHistoryVal val)
-{
-  B32 change = 0;
-  
-  //- rjf: key -> hash * slot idx * slot
-  String8 key_string = str8_struct(&key);
-  U64 hash = df_hash_from_string(key_string);
-  U64 slot_idx = hash%eval_view->history_cache_table_size;
-  DF_EvalHistoryCacheSlot *slot = &eval_view->history_cache_table[slot_idx];
-  
-  //- rjf: slot idx -> existing node
-  DF_EvalHistoryCacheNode *existing_node = 0;
-  for(DF_EvalHistoryCacheNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(df_expand_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  //- rjf: grab existing node - if there is none, we need to allocate one
-  DF_EvalHistoryCacheNode *node = existing_node;
-  if(node == 0)
-  {
-    // TODO(rjf): check lru cache, allocate from there, prevent too much growth
-    node = push_array(eval_view->arena, DF_EvalHistoryCacheNode, 1);
-    DLLPushBack_NP(slot->first, slot->last, node, hash_next, hash_prev);
-    node->key = key;
-    node->first_run_idx = node->last_run_idx = df_ctrl_run_gen();
-  }
-  
-  //- rjf: record value
-  if(node != 0)
-  {
-    DF_EvalHistoryVal *newest_val = &node->values[node->newest_val_idx];
-    if(newest_val->mode != val.mode ||
-       newest_val->imm_u128[0] != val.imm_u128[0] ||
-       newest_val->imm_u128[1] != val.imm_u128[1] ||
-       newest_val->offset != val.offset)
-    {
-      change = 1;
-      node->newest_val_idx = (node->newest_val_idx + 1) % ArrayCount(node->values);
-      node->values[node->newest_val_idx] = val;
-      node->last_run_idx = df_ctrl_run_gen();
-    }
-  }
-  
-  return change;
 }
 
 //- rjf: key -> view rules
@@ -5108,7 +5029,6 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   {
     block->kind                        = DF_EvalVizBlockKind_Root;
-    block->eval_view                   = eval_view;
     block->eval                        = eval;
     block->cfg_table                   = *cfg_table;
     block->string                      = push_str8_copy(arena, string);
@@ -5256,7 +5176,6 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     DF_EvalVizBlock *memblock = push_array(arena, DF_EvalVizBlock, 1);
     {
       memblock->kind                   = DF_EvalVizBlockKind_Members;
-      memblock->eval_view              = eval_view;
       memblock->eval                   = udt_eval;
       memblock->cfg_table              = *cfg_table;
       memblock->parent_key             = key;
@@ -5314,7 +5233,6 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       {
         DF_EvalVizBlock *next_memblock   = push_array(arena, DF_EvalVizBlock, 1);
         next_memblock->kind              = DF_EvalVizBlockKind_Members;
-        next_memblock->eval_view         = eval_view;
         next_memblock->eval              = udt_eval;
         next_memblock->cfg_table         = *cfg_table;
         next_memblock->parent_key        = key;
@@ -5373,7 +5291,6 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     DF_EvalVizBlock *linkblock = push_array(arena, DF_EvalVizBlock, 1);
     {
       linkblock->kind                 = DF_EvalVizBlockKind_Links;
-      linkblock->eval_view            = eval_view;
       linkblock->eval                 = udt_eval;
       linkblock->link_member_type_key = link_member->type_key;
       linkblock->link_member_off      = link_member->off;
@@ -5433,7 +5350,6 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       {
         DF_EvalVizBlock *next_linkblock = push_array(arena, DF_EvalVizBlock, 1);
         next_linkblock->kind                 = DF_EvalVizBlockKind_Links;
-        next_linkblock->eval_view            = eval_view;
         next_linkblock->eval                 = udt_eval;
         next_linkblock->link_member_type_key = link_member->type_key;
         next_linkblock->link_member_off      = link_member->off;
@@ -5467,7 +5383,6 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     DF_EvalVizBlock *elemblock = push_array(arena, DF_EvalVizBlock, 1);
     {
       elemblock->kind                  = DF_EvalVizBlockKind_Elements;
-      elemblock->eval_view             = eval_view;
       elemblock->eval                  = arr_eval;
       elemblock->cfg_table             = *cfg_table;
       elemblock->parent_key            = key;
@@ -5522,7 +5437,6 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       {
         DF_EvalVizBlock *next_elemblock = push_array(arena, DF_EvalVizBlock, 1);
         next_elemblock->kind                  = DF_EvalVizBlockKind_Elements;
-        next_elemblock->eval_view             = eval_view;
         next_elemblock->eval                  = arr_eval;
         next_elemblock->cfg_table             = *cfg_table;
         next_elemblock->parent_key            = key;
