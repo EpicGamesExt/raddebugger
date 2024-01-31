@@ -164,9 +164,11 @@ typedef DF_VIEW_UI_FUNCTION_SIG(DF_ViewUIFunctionType);
 typedef U32 DF_ViewSpecFlags;
 enum
 {
-  DF_ViewSpecFlag_ParameterizedByEntity   = (1<<0),
-  DF_ViewSpecFlag_CanSerialize            = (1<<1),
-  DF_ViewSpecFlag_CanSerializeEntityPath  = (1<<2),
+  DF_ViewSpecFlag_ParameterizedByEntity      = (1<<0),
+  DF_ViewSpecFlag_CanSerialize               = (1<<1),
+  DF_ViewSpecFlag_CanSerializeEntityPath     = (1<<2),
+  DF_ViewSpecFlag_CanFilter                  = (1<<3),
+  DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<4),
 };
 
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;
@@ -257,6 +259,10 @@ struct DF_View
   // rjf: view kind info
   DF_ViewSpec *spec;
   DF_Handle entity;
+  
+  // rjf: filter mode
+  B32 is_filtering;
+  F32 is_filtering_t;
   
   // rjf: query -> params data
   TxtPt query_cursor;

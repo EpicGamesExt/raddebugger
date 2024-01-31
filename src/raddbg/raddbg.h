@@ -70,8 +70,6 @@
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
-// [ ] Watch Window Type Evaluation
-// [ ] Globals, Thread-Locals, Types Views
 // [ ] Watch Window Filtering
 //
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not

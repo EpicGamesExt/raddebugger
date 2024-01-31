@@ -783,6 +783,8 @@ df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 
     MemoryZeroStruct(&view->scroll_pos);
     view->spec = spec;
     view->entity = df_handle_from_entity(entity);
+    view->is_filtering = 0;
+    view->is_filtering_t = 0;
     view_setup(view, cfg_root);
   }
 }
@@ -2719,6 +2721,38 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToAddress));
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(cursor_snap_kind));
             }
+          }
+        }break;
+        
+        //- rjf: filtering
+        case DF_CoreCmdKind_Filter:
+        {
+          DF_View *view = df_view_from_handle(params.view);
+          DF_Panel *panel = df_panel_from_handle(params.panel);
+          B32 view_is_tab = 0;
+          for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->next)
+          {
+            if(tab == view)
+            {
+              view_is_tab = 1;
+              break;
+            }
+          }
+          if(view_is_tab && view->spec->info.flags & DF_ViewSpecFlag_CanFilter)
+          {
+            view->is_filtering ^= 1;
+            view->query_cursor = txt_pt(1, 1+(S64)view->query_string_size);
+            view->query_mark = txt_pt(1, 1);
+          }
+        }break;
+        case DF_CoreCmdKind_ClearFilter:
+        {
+          DF_View *view = df_view_from_handle(params.view);
+          if(!df_view_is_nil(view))
+          {
+            view->query_string_size = 0;
+            view->is_filtering = 0;
+            view->query_cursor = view->query_mark = txt_pt(1, 1);
           }
         }break;
         
@@ -5364,14 +5398,81 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         F32 tab_bar_vheight = ui_top_font_size()*2.6f;
         F32 tab_bar_rv_diff = tab_bar_rheight - tab_bar_vheight;
         F32 tab_spacing = ui_top_font_size()*0.4f;
+        F32 filter_bar_height = ui_top_font_size()*3.f;
         Rng2F32 tab_bar_rect = r2f32p(panel_rect.x0, panel_rect.y0, panel_rect.x1, panel_rect.y0 + tab_bar_vheight);
         Rng2F32 content_rect = r2f32p(panel_rect.x0, panel_rect.y0+tab_bar_vheight, panel_rect.x1, panel_rect.y1);
+        Rng2F32 filter_rect = {0};
         if(panel->tab_side == Side_Max)
         {
           tab_bar_rect.y0 = panel_rect.y1 - tab_bar_vheight;
           tab_bar_rect.y1 = panel_rect.y1;
           content_rect.y0 = panel_rect.y0;
           content_rect.y1 = panel_rect.y1 - tab_bar_vheight;
+        }
+        {
+          DF_View *tab = df_view_from_handle(panel->selected_tab_view);
+          if(tab->is_filtering_t > 0.01f)
+          {
+            filter_rect.x0 = content_rect.x0;
+            filter_rect.y0 = content_rect.y0;
+            filter_rect.x1 = content_rect.x1;
+            content_rect.y0 += filter_bar_height*tab->is_filtering_t;
+            filter_rect.y1 = content_rect.y0;
+          }
+        }
+        
+        //////////////////////////
+        //- rjf: build filtering box
+        //
+        {
+          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          UI_Focus(UI_FocusKind_On) if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
+          {
+            DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+            for(UI_NavActionNode *n = ui_nav_actions()->first, *next = 0; n != 0; n = next)
+            {
+              next = n->next;
+              if(n->v.flags & UI_NavActionFlag_Paste)
+              {
+                ui_nav_eat_action_node(ui_nav_actions(), n);
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Paste));
+              }
+              else if(n->v.insertion.size != 0)
+              {
+                ui_nav_eat_action_node(ui_nav_actions(), n);
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
+                p.string = n->v.insertion;
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_InsertText));
+              }
+            }
+          }
+          if(view->is_filtering || view->is_filtering_t > 0.01f) UI_Focus(view->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
+          {
+            UI_Box *filter_box = &ui_g_nil_box;
+            UI_Rect(filter_rect)
+            {
+              filter_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, "filter_box_%p", view);
+            }
+            UI_Parent(filter_box) UI_WidthFill UI_HeightFill UI_Font(df_font_from_slot(DF_FontSlot_Code))
+            {
+              if(ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+              {
+                DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
+              }
+              UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents,
+                                           0,
+                                           &view->query_cursor,
+                                           &view->query_mark,
+                                           view->query_buffer,
+                                           sizeof(view->query_buffer),
+                                           &view->query_string_size,
+                                           0,
+                                           str8(view->query_buffer, view->query_string_size),
+                                           str8_lit("###filter_text_input"));
+            }
+          }
         }
         
         //////////////////////////
@@ -5965,7 +6066,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             if(abs_f32(view->loading_t_target - view->loading_t) > 0.01f ||
                abs_f32(0 - view->flash_t) > 0.01f ||
                abs_f32(view->scroll_pos.x.off) > 0.01f ||
-               abs_f32(view->scroll_pos.y.off) > 0.01f)
+               abs_f32(view->scroll_pos.y.off) > 0.01f ||
+               abs_f32(view->is_filtering_t - (F32)!!view->is_filtering))
             {
               df_gfx_request_frame();
             }
@@ -5975,6 +6077,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             view->loading_t += (view->loading_t_target - view->loading_t) * rate;
             view->flash_t += (0 - view->flash_t) * rate;
+            view->is_filtering_t += ((F32)!!view->is_filtering - view->is_filtering_t) * fast_rate;
             view->scroll_pos.x.off -= view->scroll_pos.x.off*fast_rate;
             view->scroll_pos.y.off -= view->scroll_pos.y.off*fast_rate;
             if(abs_f32(view->scroll_pos.x.off) < 0.01f)
@@ -5984,6 +6087,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             if(abs_f32(view->scroll_pos.y.off) < 0.01f)
             {
               view->scroll_pos.y.off = 0;
+            }
+            if(abs_f32(view->is_filtering_t - (F32)!!view->is_filtering) < 0.01f)
+            {
+              view->is_filtering_t = (F32)!!view->is_filtering;
             }
             if(view == df_view_from_handle(panel->selected_tab_view))
             {
