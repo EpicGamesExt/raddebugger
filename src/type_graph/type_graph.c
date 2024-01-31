@@ -331,7 +331,7 @@ tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg
       case TG_KeyKind_Ext:
       {
         U64 type_node_idx = key.u64[0];
-        if(0 <= type_node_idx && type_node_idx < rdbg->type_node_count)
+        if(0 <= type_node_idx && type_node_idx < rdbg->type_nodes_count)
         {
           RADDBG_TypeNode *rdbg_type = &rdbg->type_nodes[type_node_idx];
           TG_Kind kind = tg_kind_from_raddbg_type_kind(rdbg_type->kind);
@@ -348,12 +348,12 @@ tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg
             U32 members_count = 0;
             {
               U32 udt_idx = rdbg_type->user_defined.udt_idx;
-              if(0 <= udt_idx && udt_idx < rdbg->udt_count)
+              if(0 <= udt_idx && udt_idx < rdbg->udts_count)
               {
                 RADDBG_UDT *udt = &rdbg->udts[udt_idx];
                 members_count = udt->member_count;
                 members = push_array(arena, TG_Member, members_count);
-                if(members_count != 0 && 0 <= udt->member_first && udt->member_first+udt->member_count <= rdbg->member_count)
+                if(members_count != 0 && 0 <= udt->member_first && udt->member_first+udt->member_count <= rdbg->members_count)
                 {
                   for(U32 member_idx = udt->member_first;
                       member_idx < udt->member_first+udt->member_count;
@@ -361,7 +361,7 @@ tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg
                   {
                     RADDBG_Member *src = &rdbg->members[member_idx];
                     TG_Kind member_type_kind = TG_Kind_Null;
-                    if(src->type_idx < rdbg->type_node_count)
+                    if(src->type_idx < rdbg->type_nodes_count)
                     {
                       RADDBG_TypeNode *member_type = &rdbg->type_nodes[src->type_idx];
                       member_type_kind = tg_kind_from_raddbg_type_kind(member_type->kind);
@@ -406,12 +406,12 @@ tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg
             U32 enum_vals_count = 0;
             {
               U32 udt_idx = rdbg_type->user_defined.udt_idx;
-              if(0 <= udt_idx && udt_idx < rdbg->udt_count)
+              if(0 <= udt_idx && udt_idx < rdbg->udts_count)
               {
                 RADDBG_UDT *udt = &rdbg->udts[udt_idx];
                 enum_vals_count = udt->member_count;
                 enum_vals = push_array(arena, TG_EnumVal, enum_vals_count);
-                if(0 <= udt->member_first && udt->member_first+udt->member_count < rdbg->enum_member_count)
+                if(0 <= udt->member_first && udt->member_first+udt->member_count < rdbg->enum_members_count)
                 {
                   for(U32 member_idx = udt->member_first;
                       member_idx < udt->member_first+udt->member_count;

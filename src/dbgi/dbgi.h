@@ -307,7 +307,51 @@ struct DBGI_Shared
 
 global DBGI_Shared *dbgi_shared = 0;
 thread_static DBGI_ThreadCtx *dbgi_tctx = 0;
-global DBGI_Parse dbgi_parse_nil = {0};
+global DBGI_Parse dbgi_parse_nil =
+{
+  0,
+  0,
+  0,
+  {0},
+  {0},
+  0,
+  {0},
+  {0},
+  {
+    0,
+    0,
+    0,
+    0,
+    {0},
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    &raddbg_binary_section_nil, 1,
+    &raddbg_file_path_node_nil, 1,
+    &raddbg_source_file_nil, 1,
+    &raddbg_unit_nil, 1,
+    &raddbg_vmap_entry_nil, 1,
+    &raddbg_type_node_nil, 1,
+    &raddbg_udt_nil, 1,
+    &raddbg_member_nil, 1,
+    &raddbg_enum_member_nil, 1,
+    &raddbg_global_variable_nil, 1,
+    &raddbg_vmap_entry_nil, 1,
+    &raddbg_thread_variable_nil, 1,
+    &raddbg_procedure_nil, 1,
+    &raddbg_scope_nil, 1,
+    &raddbg_voff_nil, 1,
+    &raddbg_vmap_entry_nil, 1,
+    &raddbg_local_nil, 1,
+    &raddbg_location_block_nil, 1,
+    0, 0,
+    0, 0,
+  },
+};
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization

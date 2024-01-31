@@ -3376,15 +3376,15 @@ df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name)
         if(entity_num != 0) switch(name_map_kind)
         {
           default:{}break;
-          case RADDBG_NameMapKind_GlobalVariables: if(entity_num <= rdbg->global_variable_count)
+          case RADDBG_NameMapKind_GlobalVariables:
           {
-            RADDBG_GlobalVariable *global_var = &rdbg->global_variables[entity_num-1];
+            RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(rdbg, global_variables, entity_num-1);
             voff = global_var->voff;
           }break;
-          case RADDBG_NameMapKind_Procedures: if(entity_num <= rdbg->procedure_count)
+          case RADDBG_NameMapKind_Procedures:
           {
-            RADDBG_Procedure *procedure = &rdbg->procedures[entity_num-1];
-            RADDBG_Scope *scope = &rdbg->scopes[procedure->root_scope_idx];
+            RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, entity_num-1);
+            RADDBG_Scope *scope = raddbg_element_from_idx(rdbg, scopes, procedure->root_scope_idx);
             voff = rdbg->scope_voffs[scope->voff_range_first];
           }break;
         }
@@ -4374,21 +4374,14 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
             MemoryCopy(&vtable_vaddr, vtable_base_ptr_memory.str, addr_size);
             U64 vtable_voff = df_voff_from_vaddr(module, vtable_vaddr);
             U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, vtable_voff);
-            if(0 < global_idx && global_idx < rdbg->global_variable_count)
+            RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(rdbg, global_variables, global_idx);
+            if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped)
             {
-              RADDBG_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
-              if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped &&
-                 0 < global_var->container_idx && global_var->container_idx < rdbg->udt_count)
-              {
-                RADDBG_UDT *udt = &rdbg->udts[global_var->container_idx];
-                if(0 < udt->self_type_idx && udt->self_type_idx < rdbg->type_node_count)
-                {
-                  RADDBG_TypeNode *type = &rdbg->type_nodes[udt->self_type_idx];
-                  TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
-                  TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
-                  eval.type_key = ptr_to_derived_type_key;
-                }
-              }
+              RADDBG_UDT *udt = raddbg_element_from_idx(rdbg, udts, global_var->container_idx);
+              RADDBG_TypeNode *type = raddbg_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+              TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
+              TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
+              eval.type_key = ptr_to_derived_type_key;
             }
           }
         }

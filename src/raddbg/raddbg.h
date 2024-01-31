@@ -40,6 +40,7 @@
 //       always have the same color ordering?
 //
 //  [ ]  middle mouse button on tab should close it
+// [ ] pipe failure-to-launch errors back to frontend
 
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)

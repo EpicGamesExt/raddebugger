@@ -30,45 +30,45 @@ typedef struct RADDBG_Parsed{
   RADDBG_TopLevelInfo* top_level_info;
   
   RADDBG_BinarySection*  binary_sections;
-  RADDBG_U64             binary_section_count;
+  RADDBG_U64             binary_sections_count;
   RADDBG_FilePathNode*   file_paths;
-  RADDBG_U64             file_path_count;
+  RADDBG_U64             file_paths_count;
   RADDBG_SourceFile*     source_files;
-  RADDBG_U64             source_file_count;
+  RADDBG_U64             source_files_count;
   RADDBG_Unit*           units;
-  RADDBG_U64             unit_count;
+  RADDBG_U64             units_count;
   RADDBG_VMapEntry*      unit_vmap;
   RADDBG_U64             unit_vmap_count;
   RADDBG_TypeNode*       type_nodes;
-  RADDBG_U64             type_node_count;
+  RADDBG_U64             type_nodes_count;
   RADDBG_UDT*            udts;
-  RADDBG_U64             udt_count;
+  RADDBG_U64             udts_count;
   RADDBG_Member*         members;
-  RADDBG_U64             member_count;
+  RADDBG_U64             members_count;
   RADDBG_EnumMember*     enum_members;
-  RADDBG_U64             enum_member_count;
+  RADDBG_U64             enum_members_count;
   RADDBG_GlobalVariable* global_variables;
-  RADDBG_U64             global_variable_count;
+  RADDBG_U64             global_variables_count;
   RADDBG_VMapEntry*      global_vmap;
   RADDBG_U64             global_vmap_count;
   RADDBG_ThreadVariable* thread_variables;
-  RADDBG_U64             thread_variable_count;
+  RADDBG_U64             thread_variables_count;
   RADDBG_Procedure*      procedures;
-  RADDBG_U64             procedure_count;
+  RADDBG_U64             procedures_count;
   RADDBG_Scope*          scopes;
-  RADDBG_U64             scope_count;
+  RADDBG_U64             scopes_count;
   RADDBG_U64*            scope_voffs;
-  RADDBG_U64             scope_voff_count;
+  RADDBG_U64             scope_voffs_count;
   RADDBG_VMapEntry*      scope_vmap;
   RADDBG_U64             scope_vmap_count;
   RADDBG_Local*          locals;
-  RADDBG_U64             local_count;
+  RADDBG_U64             locals_count;
   RADDBG_LocationBlock*  location_blocks;
-  RADDBG_U64             location_block_count;
+  RADDBG_U64             location_blocks_count;
   RADDBG_U8*             location_data;
   RADDBG_U64             location_data_size;
   RADDBG_NameMap*        name_maps;
-  RADDBG_U64             name_map_count;
+  RADDBG_U64             name_maps_count;
   
   // other helpers
   
@@ -124,6 +124,27 @@ typedef struct RADDBG_ParsedNameMap{
   RADDBG_U64 node_count;
 } RADDBG_ParsedNameMap;
 
+////////////////////////////////
+//~ Global Nils
+
+#if !defined(RADDBG_DISABLE_NILS)
+static RADDBG_BinarySection raddbg_binary_section_nil = {0};
+static RADDBG_FilePathNode raddbg_file_path_node_nil = {0};
+static RADDBG_SourceFile raddbg_source_file_nil = {0};
+static RADDBG_Unit raddbg_unit_nil = {0};
+static RADDBG_VMapEntry raddbg_vmap_entry_nil = {0};
+static RADDBG_TypeNode raddbg_type_node_nil = {0};
+static RADDBG_UDT raddbg_udt_nil = {0};
+static RADDBG_Member raddbg_member_nil = {0};
+static RADDBG_EnumMember raddbg_enum_member_nil = {0};
+static RADDBG_GlobalVariable raddbg_global_variable_nil = {0};
+static RADDBG_ThreadVariable raddbg_thread_variable_nil = {0};
+static RADDBG_Procedure raddbg_procedure_nil = {0};
+static RADDBG_Scope raddbg_scope_nil = {0};
+static U64 raddbg_voff_nil = 0;
+static RADDBG_LocationBlock raddbg_location_block_nil = {0};
+static RADDBG_Local raddbg_local_nil = {0};
+#endif
 
 ////////////////////////////////
 //~ RADDBG Parse API
@@ -138,6 +159,8 @@ RADDBG_PROC RADDBG_U32*
 raddbg_idx_run_from_first_count(RADDBG_Parsed *parsed, RADDBG_U32 first, RADDBG_U32 raw_count,
                                 RADDBG_U32 *n_out);
 
+//- table lookups
+#define raddbg_element_from_idx(parsed, name, idx) ((0 <= (idx) && (idx) < (parsed)->name##_count) ? &(parsed)->name[idx] : (parsed)->name ? &(parsed)->name[0] : 0)
 
 //- line info
 RADDBG_PROC void

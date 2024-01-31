@@ -224,7 +224,7 @@ eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   if(tightest_scope != 0 && rdbg->procedures != 0)
   {
     U32 proc_idx = tightest_scope->proc_idx;
-    if(0 < proc_idx && proc_idx < rdbg->procedure_count)
+    if(0 < proc_idx && proc_idx < rdbg->procedures_count)
     {
       procedure = &rdbg->procedures[proc_idx];
     }
@@ -235,7 +235,7 @@ eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   if(procedure != 0 && rdbg->udts != 0 && procedure->link_flags & RADDBG_LinkFlag_TypeScoped)
   {
     U32 udt_idx = procedure->container_idx;
-    if(0 < udt_idx && udt_idx < rdbg->udt_count)
+    if(0 < udt_idx && udt_idx < rdbg->udts_count)
     {
       udt = &rdbg->udts[udt_idx];
     }
@@ -253,7 +253,7 @@ eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
         member_idx < udt->member_first+udt->member_count;
         member_idx += 1)
     {
-      if(member_idx < 1 || rdbg->member_count <= member_idx)
+      if(member_idx < 1 || rdbg->members_count <= member_idx)
       {
         break;
       }
@@ -515,13 +515,9 @@ eval_leaf_type_from_name(RADDBG_Parsed *rdbg, String8 name)
       U32 *matches = raddbg_matches_from_map_node(rdbg, node, &match_count);
       if(match_count != 0)
       {
-        U32 type_node_idx = matches[0];
-        if(type_node_idx < rdbg->type_node_count)
-        {
-          RADDBG_TypeNode *type_node = &rdbg->type_nodes[type_node_idx];
-          key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_node_idx);
-          found = 1;
-        }
+        RADDBG_TypeNode *type_node = raddbg_element_from_idx(rdbg, type_nodes, matches[0]);
+        found = type_node->kind != RADDBG_TypeKind_NULL;
+        key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)matches[0]);
       }
     }
   }
@@ -877,13 +873,13 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           if(mapped_identifier == 0)
           {
             U64 local_num = eval_num_from_string(ctx->locals_map, local_lookup_string);
-            if(local_num != 0 &&
-               ctx->rdbg->locals != 0 && (1 <= local_num && local_num <= ctx->rdbg->local_count) &&
-               ctx->rdbg->type_nodes != 0)
+            if(local_num != 0)
             {
               mapped_identifier = 1;
               identifier_type_is_possibly_dynamically_overridden = 1;
-              RADDBG_Local *local_var = &ctx->rdbg->locals[local_num-1];
+              RADDBG_Local *local_var = raddbg_element_from_idx(ctx->rdbg, locals, local_num-1);
+              RADDBG_TypeNode *type_node = raddbg_element_from_idx(ctx->rdbg, type_nodes, local_var->type_idx);
+              type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)local_var->type_idx);
               
               // rjf: grab location info
               for(U32 loc_block_idx = local_var->location_first;
@@ -926,14 +922,6 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                     }break;
                   }
                 }
-              }
-              
-              // rjf: get type
-              if(0 <= local_var->type_idx && local_var->type_idx < ctx->rdbg->type_node_count)
-              {
-                U32 type_idx = local_var->type_idx;
-                RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
-                type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_idx);
               }
             }
           }
@@ -994,7 +982,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                 loc_kind = RADDBG_LocationKind_AddrBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = global_var->type_idx;
-                if(type_idx < ctx->rdbg->type_node_count)
+                if(type_idx < ctx->rdbg->type_nodes_count)
                 {
                   RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
                   type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_idx);
@@ -1032,7 +1020,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                 loc_kind = RADDBG_LocationKind_AddrBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = thread_var->type_idx;
-                if(type_idx < ctx->rdbg->type_node_count)
+                if(type_idx < ctx->rdbg->type_nodes_count)
                 {
                   RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
                   type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_idx);
@@ -1072,7 +1060,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                 loc_kind = RADDBG_LocationKind_ValBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = procedure->type_idx;
-                if(type_idx < ctx->rdbg->type_node_count)
+                if(type_idx < ctx->rdbg->type_nodes_count)
                 {
                   RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
                   type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_idx);

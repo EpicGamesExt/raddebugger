@@ -958,7 +958,7 @@ dbgi_parse_thread_entry_point(void *p)
     }
     
     //- rjf: parse raddbg info
-    RADDBG_Parsed raddbg_parsed = {0};
+    RADDBG_Parsed raddbg_parsed = dbgi_parse_nil.rdbg;
     U64 arch_addr_size = 8;
     if(do_task)
     {
@@ -1146,7 +1146,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
     DBGI_FuzzySearchItemChunkList items_list = {0};
     if(task_is_good)
     {
-      for(U64 procedure_idx = 1; task_is_good && procedure_idx < rdbg->procedure_count; procedure_idx += 1)
+      for(U64 procedure_idx = 1; task_is_good && procedure_idx < rdbg->procedures_count; procedure_idx += 1)
       {
         RADDBG_Procedure *procedure = &rdbg->procedures[procedure_idx];
         U64 name_size = 0;

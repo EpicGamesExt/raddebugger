@@ -242,9 +242,8 @@ ctrl_append_resolved_module_user_bp_traps(Arena *arena, DEMON_Handle process, DE
         }
         
         // rjf: src_id * pt -> push
-        if(0 < src_id && src_id < rdbg->source_file_count)
         {
-          RADDBG_SourceFile *src = rdbg->source_files + src_id;
+          RADDBG_SourceFile *src = raddbg_element_from_idx(rdbg, source_files, src_id);
           RADDBG_ParsedLineMap line_map = {0};
           raddbg_line_map_from_source_file(rdbg, src, &line_map);
           U32 voff_count = 0;
@@ -1553,9 +1552,9 @@ ctrl_thread__next_demon_event(Arena *arena, CTRL_Msg *msg, DEMON_RunCtrls *run_c
                   {
                     U32 id_count = 0;
                     U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
-                    if(id_count > 0 && 0 < ids[0] && ids[0] < rdbg->global_variable_count)
+                    if(id_count > 0)
                     {
-                      RADDBG_GlobalVariable *global_var = &rdbg->global_variables[ids[0]];
+                      RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(rdbg, global_variables, ids[0]);
                       U64 global_var_voff = global_var->voff;
                       U64 global_var_vaddr = global_var->voff + demon_base_vaddr_from_module(ctrl_demon_handle_from_ctrl(module));
                       Architecture arch = demon_arch_from_object(ev->thread);

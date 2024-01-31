@@ -2839,13 +2839,12 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   //- rjf: submit best match when hitting enter w/ no selection
   if(slv->cursor.y == 0 && items.count != 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
   {
-    U64 procedure_idx = items.v[0].procedure_idx;
-    if(0 < procedure_idx && procedure_idx < rdbg->procedure_count)
+    RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, items.v[0].procedure_idx);
+    U64 name_size = 0;
+    U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+    String8 name = str8(name_base, name_size);
+    if(name.size != 0)
     {
-      RADDBG_Procedure *procedure = &rdbg->procedures[procedure_idx];
-      U64 name_size = 0;
-      U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
-      String8 name = str8(name_base, name_size);
       DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
       p.string = name;
       df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
@@ -2878,17 +2877,12 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
       DBGI_FuzzySearchItem *item = &items.v[idx];
-      if(item->procedure_idx >= rdbg->procedure_count) { continue; }
-      RADDBG_Procedure *procedure = &rdbg->procedures[item->procedure_idx];
+      RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, item->procedure_idx);
       U64 name_size = 0;
       U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
-      TG_Key type_key = tg_key_zero();
-      if(procedure->type_idx < rdbg->type_node_count)
-      {
-        RADDBG_TypeNode *type_node = &rdbg->type_nodes[procedure->type_idx];
-        type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), procedure->type_idx);
-      }
+      RADDBG_TypeNode *type_node = raddbg_element_from_idx(rdbg, type_nodes, procedure->type_idx);
+      TG_Key type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), procedure->type_idx);
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                               UI_BoxFlag_DrawBackground|
