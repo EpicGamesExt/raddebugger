@@ -6672,11 +6672,7 @@ DF_VIEW_UI_FUNCTION_DEF(Watch)
 ////////////////////////////////
 //~ rjf: Locals @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(Locals)
-{
-  DF_EvalThreadDerivedReadOnlyWatchViewState *ls = df_view_user_state(view, DF_EvalThreadDerivedReadOnlyWatchViewState);
-  df_eval_watch_view_init(&ls->ewv, view, DF_EvalWatchViewFillKind_Locals);
-}
+DF_VIEW_SETUP_FUNCTION_DEF(Locals) {}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(Locals) {}
 DF_VIEW_UI_FUNCTION_DEF(Locals)

@@ -318,28 +318,6 @@ struct DF_EvalWatchViewState
   DF_EvalRoot *first_free_root;
 };
 
-typedef struct DF_EvalThreadDerivedReadOnlyWatchViewState DF_EvalThreadDerivedReadOnlyWatchViewState;
-struct DF_EvalThreadDerivedReadOnlyWatchViewState
-{
-  Architecture cached_architecture;
-  DF_Handle cached_binary;
-  U64 cached_vaddr;
-  DF_EvalWatchViewState ewv;
-};
-
-typedef struct DF_RegistersViewArchState DF_RegistersViewArchState;
-struct DF_RegistersViewArchState
-{
-  B32 initialized;
-  DF_EvalWatchViewState ewv;
-};
-
-typedef struct DF_RegistersViewState DF_RegistersViewState;
-struct DF_RegistersViewState
-{
-  DF_RegistersViewArchState arch_state[Architecture_COUNT];
-};
-
 ////////////////////////////////
 //~ rjf: Code @view_types
 
