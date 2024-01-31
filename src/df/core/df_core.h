@@ -35,7 +35,6 @@ struct DF_HandleList
 typedef struct DF_ExpandKey DF_ExpandKey;
 struct DF_ExpandKey
 {
-  U64 uniquifier;
   U64 parent_hash;
   U64 child_num;
 };
@@ -1282,7 +1281,7 @@ internal void df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side)
 //~ rjf: Sparse Tree Expansion State Data Structure
 
 //- rjf: keys
-internal DF_ExpandKey df_expand_key_make(U64 uniquifier, U64 parent_hash, U64 child_num);
+internal DF_ExpandKey df_expand_key_make(U64 parent_hash, U64 child_num);
 internal DF_ExpandKey df_expand_key_zero(void);
 internal B32 df_expand_key_match(DF_ExpandKey a, DF_ExpandKey b);
 
@@ -1601,7 +1600,7 @@ internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *are
 
 //- rjf: watch tree visualization
 internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
-internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, String8 expr);
+internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, String8 expr, U64 num);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
 
 ////////////////////////////////

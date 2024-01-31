@@ -3991,7 +3991,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           U64 expr_hash = df_hash_from_string(expr);
           DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
           DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, expr);
+          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_num(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, expr, 1);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
@@ -4338,6 +4338,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_CoreCmdKind_Watch,
               DF_CoreCmdKind_Locals,
               DF_CoreCmdKind_Registers,
+              DF_CoreCmdKind_Globals,
+              DF_CoreCmdKind_ThreadLocals,
+              DF_CoreCmdKind_Types,
               DF_CoreCmdKind_Breakpoints,
               DF_CoreCmdKind_WatchPins,
               DF_CoreCmdKind_FilePathMap,
@@ -4356,6 +4359,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               'w',
               'l',
               'r',
+              0,
+              0,
+              0,
               'b',
               'h',
               'p',
@@ -7028,7 +7034,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           
           // rjf: get keys for this row
           DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = df_expand_key_make((U64)block->eval_view, df_hash_from_expand_key(parent_key), idx+1);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
           
           // rjf: get member eval
           DF_Eval member_eval = zero_struct;
@@ -7113,7 +7119,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         {
           // rjf: get keys for this row
           DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = df_expand_key_make((U64)block->eval_view, df_hash_from_expand_key(parent_key), idx+1);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
           
           // rjf: get eval for this element
           DF_Eval elem_eval = zero_struct;
@@ -7196,7 +7202,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         {
           // rjf: get keys for this row
           DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = df_expand_key_make((U64)block->eval_view, df_hash_from_expand_key(parent_key), idx+1);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
           
           // rjf: get link base
           DF_EvalLinkBase *link_base = &link_bases.v[idx];
@@ -7276,7 +7282,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       if(num_skipped_visual < block_num_visual_rows)
       {
         DF_ExpandKey parent_key = block->parent_key;
-        DF_ExpandKey key = df_expand_key_make((U64)block->eval_view, df_hash_from_expand_key(parent_key), 1);
+        DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
         DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
         row->flags               = DF_EvalVizRowFlag_Canvas;
         row->eval_view           = block->eval_view;
@@ -8654,7 +8660,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity)
       entity_color_weak = entity_color;
       entity_color_weak.w *= 0.5f;
     }
-    UI_TextColor(entity_color_weak)
+    UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
       UI_TextAlignment(UI_TextAlign_Center)
       UI_Font(df_font_from_slot(DF_FontSlot_Icons))
       UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))

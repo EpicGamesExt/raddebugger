@@ -200,75 +200,15 @@ DF_GfxViewTable:
   { Watch                  "watch"                  "Watch"                        Null                 Binoculars      0 1 0      1 "The familiar 'watch window' debugger interface. Allows the inputting of a number of expressions. Each expression in the table is evaluated within the context of the selected thread's selected call stack frame. If applicable (depending on visualization rules and the expression's type), these expressions may be hierarchically expanded, which displays children as more rows in the table. The values of these expressions may also be edited, and if possible, can be used to write to registers or memory in attached processes. Also contains a new *view rule* column, not found in other major debuggers, which allows per-row specification of various visualization rules. These view rules may be used to visualize and inspect the evaluation of expressions in a variety of ways. To learn more, read the 'View Rules' section."                                                        }
   { Locals                 "locals"                 "Locals"                       Null                 Binoculars      0 1 0      1 "Nearly identical to `Watch`, but automatically filled with local variables found within the selected call stack frame of the selected thread, according to the associated debug info. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
   { Registers              "registers"              "Registers"                    Null                 Binoculars      0 1 0      1 "Nearly identical to `Watch`, but automatically filled with all register names according to the selected thread's architecture. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  }
+  { Globals                "globals"                "Globals"                      Null                 Binoculars      0 1 0      1 "Nearly identical to `Watch`, but automatically filled with all global variables within the selected thread's module. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            }
+  { ThreadLocals           "thread_locals"          "Thread Locals"                Null                 Binoculars      0 1 0      1 "Nearly identical to `Watch`, but automatically filled with all thread local variables within the selected thread's module. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
+  { Types                  "types"                  "Types"                        Null                 Binoculars      0 1 0      1 "Nearly identical to `Watch`, but automatically filled with all types within the selected thread's module. View rules can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             }
   { Output                 "output"                 "Output"                       Null                 List            0 1 0      1 "Displays textual output from the selected thread's containing process."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
   { Memory                 "memory"                 "Memory"                       Null                 Grid            0 1 1      1 "A familiar hex-editor-like interface for viewing memory of attached processes."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
   { Breakpoints            "breakpoints"            "Breakpoints"                  Null                 CircleFilled    0 1 0      1 "Displays a table of all breakpoints, containing information about each breakpoint's name, location, and hit count. Also contains per-breakpoint controls for enabling, deleting, or editing each breakpoint. For more information on breakpoints and their features, read the 'Breakpoints' section."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     }
   { WatchPins              "watch_pins"             "Watch Pins"                   Null                 Pin             0 1 0      1 "Displays a table of all watch pins (watched expressions, like those found in `Watch`, but instead of being within a table, being pinned to some source code location, like breakpoints). This table contains each pin's name, location, and controls for editing or deleting each pin."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
   { ExceptionFilters       "exception_filters"      "Exception Filters"            Null                 Gear            0 1 0      1 "An interface which controls whether or not the debugger will halt attached processes upon encountering specific exception codes for the first time."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
   { Theme                  "theme"                  "Theme"                        Null                 Palette         0 1 0      1 "An interface for modifying the colors used in the debugger's UI. Allows selecting a theme preset, loading a theme from a file, and modifying individual colors within a theme."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
-}
-
-////////////////////////////////
-//~ rjf: Default Command -> View Map
-
-@table(cmd view entity_kind_lock)
-DF_CmdSpec2ViewSpecMap:
-{
-  {"launch_and_run"                    "entity_lister"     Target              }
-  {"launch_and_init"                   "entity_lister"     Target              }
-  {"kill"                              "entity_lister"     Process             }
-  {"detach"                            "entity_lister"     Process             }
-  {"select_thread"                     "entity_lister"     Thread              }
-  {"select_thread_window"              "entity_lister"     Thread              }
-  {"select_thread_view"                "entity_lister"     Thread              }
-  {"freeze_thread"                     "entity_lister"     Thread              }
-  {"thaw_thread"                       "entity_lister"     Thread              }
-  {"freeze_process"                    "entity_lister"     Process             }
-  {"thaw_process"                      "entity_lister"     Process             }
-  {"freeze_machine"                    "entity_lister"     Machine             }
-  {"thaw_machine"                      "entity_lister"     Machine             }
-  {"set_current_path"                  "file_system"       Null                }
-  {"open"                              "file_system"       Null                }
-  {"reload"                            "entity_lister"     File                }
-  {"switch"                            "entity_lister"     File                }
-  {"load_user"                         "file_system"       Null                }
-  {"load_profile"                      "file_system"       Null                }
-  {"find_thread"                       "entity_lister"     Thread              }
-  {"open_thread_disasm"                "entity_lister"     Thread              }
-  {"open_file_memory"                  "entity_lister"     File                }
-  {"open_process_memory"               "entity_lister"     Process             }
-  {"remove_breakpoint"                 "entity_lister"     Breakpoint          }
-  {"edit_breakpoint"                   "entity_lister"     Breakpoint          }
-  {"enable_breakpoint"                 "entity_lister"     Breakpoint          }
-  {"disable_breakpoint"                "entity_lister"     Breakpoint          }
-  {"edit_breakpoint"                   "entity_lister"     Breakpoint          }
-  {"add_target"                        "file_system"       Null                }
-  {"remove_target"                     "entity_lister"     Target              }
-  {"edit_target"                       "entity_lister"     Target              }
-  {"retry_ended_process"               "entity_lister"     EndedProcess        }
-  {"attach"                            "system_processes"  Null                }
-  {"commands"                          "commands"          Null                }
-  {"target_editor"                     "target"            Null                }
-  {"targets"                           "targets"           Null                }
-  {"file_path_map"                     "file_path_map"     Null                }
-  {"scheduler"                         "scheduler"         Null                }
-  {"call_stack"                        "call_stack"        Null                }
-  {"modules"                           "modules"           Null                }
-  {"pending_entity"                    "pending_entity"    Null                }
-  {"code"                              "code"              Null                }
-  {"watch"                             "watch"             Null                }
-  {"locals"                            "locals"            Null                }
-  {"registers"                         "registers"         Null                }
-  {"output"                            "output"            Null                }
-  {"memory"                            "memory"            Null                }
-  {"disassembly"                       "disassembly"       Null                }
-  {"breakpoints"                       "breakpoints"       Null                }
-  {"watch_pins"                        "watch_pins"        Null                }
-  {"exception_filters"                 "exception_filters" Null                }
-  {"theme"                             "theme"             Null                }
-  {"pick_file"                         "file_system"       Null                }
-  {"clear_diag_log"                    "entity_lister"     DiagLog             }
-  {"open_diag_log"                     "entity_lister"     DiagLog             }
 }
 
 ////////////////////////////////
@@ -556,20 +496,6 @@ df_g_theme_preset_colors__far_manager:
 df_g_theme_preset_colors_table:
 {
   @expand(DF_ThemePresetTable a) `df_g_theme_preset_colors__$(a.name_lower),`;
-}
-
-//- rjf: default cmd -> view tables
-
-@table_gen_data(type: String8, fallback:`{0}`)
-df_g_cmd2view_table_src:
-{
-  @expand(DF_CmdSpec2ViewSpecMap a) `str8_lit_comp("$(a.cmd)"),`
-}
-
-@table_gen_data(type: String8, fallback:`{0}`)
-df_g_cmd2view_table_dst:
-{
-  @expand(DF_CmdSpec2ViewSpecMap a) `str8_lit_comp("$(a.view)"),`
 }
 
 //- rjf: cmd param slot -> view spec tables

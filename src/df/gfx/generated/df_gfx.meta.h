@@ -27,6 +27,9 @@ DF_GfxViewKind_Disassembly,
 DF_GfxViewKind_Watch,
 DF_GfxViewKind_Locals,
 DF_GfxViewKind_Registers,
+DF_GfxViewKind_Globals,
+DF_GfxViewKind_ThreadLocals,
+DF_GfxViewKind_Types,
 DF_GfxViewKind_Output,
 DF_GfxViewKind_Memory,
 DF_GfxViewKind_Breakpoints,
@@ -127,6 +130,9 @@ DF_VIEW_SETUP_FUNCTION_DEF(Disassembly);
 DF_VIEW_SETUP_FUNCTION_DEF(Watch);
 DF_VIEW_SETUP_FUNCTION_DEF(Locals);
 DF_VIEW_SETUP_FUNCTION_DEF(Registers);
+DF_VIEW_SETUP_FUNCTION_DEF(Globals);
+DF_VIEW_SETUP_FUNCTION_DEF(ThreadLocals);
+DF_VIEW_SETUP_FUNCTION_DEF(Types);
 DF_VIEW_SETUP_FUNCTION_DEF(Output);
 DF_VIEW_SETUP_FUNCTION_DEF(Memory);
 DF_VIEW_SETUP_FUNCTION_DEF(Breakpoints);
@@ -152,6 +158,9 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Disassembly);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Registers);
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Globals);
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ThreadLocals);
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Types);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Output);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Memory);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Breakpoints);
@@ -177,6 +186,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly);
 DF_VIEW_CMD_FUNCTION_DEF(Watch);
 DF_VIEW_CMD_FUNCTION_DEF(Locals);
 DF_VIEW_CMD_FUNCTION_DEF(Registers);
+DF_VIEW_CMD_FUNCTION_DEF(Globals);
+DF_VIEW_CMD_FUNCTION_DEF(ThreadLocals);
+DF_VIEW_CMD_FUNCTION_DEF(Types);
 DF_VIEW_CMD_FUNCTION_DEF(Output);
 DF_VIEW_CMD_FUNCTION_DEF(Memory);
 DF_VIEW_CMD_FUNCTION_DEF(Breakpoints);
@@ -202,6 +214,9 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly);
 DF_VIEW_UI_FUNCTION_DEF(Watch);
 DF_VIEW_UI_FUNCTION_DEF(Locals);
 DF_VIEW_UI_FUNCTION_DEF(Registers);
+DF_VIEW_UI_FUNCTION_DEF(Globals);
+DF_VIEW_UI_FUNCTION_DEF(ThreadLocals);
+DF_VIEW_UI_FUNCTION_DEF(Types);
 DF_VIEW_UI_FUNCTION_DEF(Output);
 DF_VIEW_UI_FUNCTION_DEF(Memory);
 DF_VIEW_UI_FUNCTION_DEF(Breakpoints);
@@ -779,124 +794,6 @@ df_g_theme_preset_colors__four_coder,
 df_g_theme_preset_colors__far_manager,
 };
 
-String8 df_g_cmd2view_table_src[] =
-{
-str8_lit_comp("launch_and_run"),
-str8_lit_comp("launch_and_init"),
-str8_lit_comp("kill"),
-str8_lit_comp("detach"),
-str8_lit_comp("select_thread"),
-str8_lit_comp("select_thread_window"),
-str8_lit_comp("select_thread_view"),
-str8_lit_comp("freeze_thread"),
-str8_lit_comp("thaw_thread"),
-str8_lit_comp("freeze_process"),
-str8_lit_comp("thaw_process"),
-str8_lit_comp("freeze_machine"),
-str8_lit_comp("thaw_machine"),
-str8_lit_comp("set_current_path"),
-str8_lit_comp("open"),
-str8_lit_comp("reload"),
-str8_lit_comp("switch"),
-str8_lit_comp("load_user"),
-str8_lit_comp("load_profile"),
-str8_lit_comp("find_thread"),
-str8_lit_comp("open_thread_disasm"),
-str8_lit_comp("open_file_memory"),
-str8_lit_comp("open_process_memory"),
-str8_lit_comp("remove_breakpoint"),
-str8_lit_comp("edit_breakpoint"),
-str8_lit_comp("enable_breakpoint"),
-str8_lit_comp("disable_breakpoint"),
-str8_lit_comp("edit_breakpoint"),
-str8_lit_comp("add_target"),
-str8_lit_comp("remove_target"),
-str8_lit_comp("edit_target"),
-str8_lit_comp("retry_ended_process"),
-str8_lit_comp("attach"),
-str8_lit_comp("commands"),
-str8_lit_comp("target_editor"),
-str8_lit_comp("targets"),
-str8_lit_comp("file_path_map"),
-str8_lit_comp("scheduler"),
-str8_lit_comp("call_stack"),
-str8_lit_comp("modules"),
-str8_lit_comp("pending_entity"),
-str8_lit_comp("code"),
-str8_lit_comp("watch"),
-str8_lit_comp("locals"),
-str8_lit_comp("registers"),
-str8_lit_comp("output"),
-str8_lit_comp("memory"),
-str8_lit_comp("disassembly"),
-str8_lit_comp("breakpoints"),
-str8_lit_comp("watch_pins"),
-str8_lit_comp("exception_filters"),
-str8_lit_comp("theme"),
-str8_lit_comp("pick_file"),
-str8_lit_comp("clear_diag_log"),
-str8_lit_comp("open_diag_log"),
-};
-
-String8 df_g_cmd2view_table_dst[] =
-{
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("file_system"),
-str8_lit_comp("file_system"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("file_system"),
-str8_lit_comp("file_system"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("file_system"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("system_processes"),
-str8_lit_comp("commands"),
-str8_lit_comp("target"),
-str8_lit_comp("targets"),
-str8_lit_comp("file_path_map"),
-str8_lit_comp("scheduler"),
-str8_lit_comp("call_stack"),
-str8_lit_comp("modules"),
-str8_lit_comp("pending_entity"),
-str8_lit_comp("code"),
-str8_lit_comp("watch"),
-str8_lit_comp("locals"),
-str8_lit_comp("registers"),
-str8_lit_comp("output"),
-str8_lit_comp("memory"),
-str8_lit_comp("disassembly"),
-str8_lit_comp("breakpoints"),
-str8_lit_comp("watch_pins"),
-str8_lit_comp("exception_filters"),
-str8_lit_comp("theme"),
-str8_lit_comp("file_system"),
-str8_lit_comp("entity_lister"),
-str8_lit_comp("entity_lister"),
-};
-
 DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[] =
 {
 DF_CmdParamSlot_Entity,
@@ -1067,6 +964,9 @@ DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[] =
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("watch"), str8_lit_comp("Watch"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Watch), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Watch), DF_VIEW_CMD_FUNCTION_NAME(Watch), DF_VIEW_UI_FUNCTION_NAME(Watch)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("locals"), str8_lit_comp("Locals"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Locals), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Locals), DF_VIEW_CMD_FUNCTION_NAME(Locals), DF_VIEW_UI_FUNCTION_NAME(Locals)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("registers"), str8_lit_comp("Registers"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Registers), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Registers), DF_VIEW_CMD_FUNCTION_NAME(Registers), DF_VIEW_UI_FUNCTION_NAME(Registers)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("globals"), str8_lit_comp("Globals"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Globals), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Globals), DF_VIEW_CMD_FUNCTION_NAME(Globals), DF_VIEW_UI_FUNCTION_NAME(Globals)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("thread_locals"), str8_lit_comp("Thread Locals"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(ThreadLocals), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(ThreadLocals), DF_VIEW_CMD_FUNCTION_NAME(ThreadLocals), DF_VIEW_UI_FUNCTION_NAME(ThreadLocals)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("types"), str8_lit_comp("Types"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Types), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Types), DF_VIEW_CMD_FUNCTION_NAME(Types), DF_VIEW_UI_FUNCTION_NAME(Types)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("output"), str8_lit_comp("Output"), DF_NameKind_Null, DF_IconKind_List, DF_VIEW_SETUP_FUNCTION_NAME(Output), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Output), DF_VIEW_CMD_FUNCTION_NAME(Output), DF_VIEW_UI_FUNCTION_NAME(Output)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("memory"), str8_lit_comp("Memory"), DF_NameKind_Null, DF_IconKind_Grid, DF_VIEW_SETUP_FUNCTION_NAME(Memory), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Memory), DF_VIEW_CMD_FUNCTION_NAME(Memory), DF_VIEW_UI_FUNCTION_NAME(Memory)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("breakpoints"), str8_lit_comp("Breakpoints"), DF_NameKind_Null, DF_IconKind_CircleFilled, DF_VIEW_SETUP_FUNCTION_NAME(Breakpoints), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Breakpoints), DF_VIEW_CMD_FUNCTION_NAME(Breakpoints), DF_VIEW_UI_FUNCTION_NAME(Breakpoints)},

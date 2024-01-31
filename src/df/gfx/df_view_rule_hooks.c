@@ -489,7 +489,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
-  block->key                           = df_expand_key_make((U64)eval_view, df_hash_from_expand_key(key), 1);
+  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
   block->visual_idx_range              = r1u64(0, 8);
   block->semantic_idx_range            = r1u64(0, 1);
   block->depth                         = depth;
@@ -663,7 +663,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
-  block->key                           = df_expand_key_make((U64)eval_view, df_hash_from_expand_key(key), 1);
+  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
   block->visual_idx_range              = r1u64(0, 8);
   block->semantic_idx_range            = r1u64(0, 1);
   block->depth                         = depth;
@@ -772,7 +772,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
-  block->key                           = df_expand_key_make((U64)eval_view, df_hash_from_expand_key(key), 1);
+  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
   block->visual_idx_range              = r1u64(0, 8);
   block->semantic_idx_range            = r1u64(0, 1);
   block->depth                         = depth;
@@ -864,7 +864,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
-  block->key                           = df_expand_key_make((U64)eval_view, df_hash_from_expand_key(key), 1);
+  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
   block->visual_idx_range              = r1u64(0, 8);
   block->semantic_idx_range            = r1u64(0, 1);
   block->depth                         = depth;
@@ -1111,7 +1111,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo)
   block->eval                          = eval;
   block->cfg_table                     = *cfg_table;
   block->parent_key                    = key;
-  block->key                           = df_expand_key_make((U64)eval_view, df_hash_from_expand_key(key), 1);
+  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
   block->visual_idx_range              = r1u64(0, 16);
   block->semantic_idx_range            = r1u64(0, 1);
   block->depth                         = depth;

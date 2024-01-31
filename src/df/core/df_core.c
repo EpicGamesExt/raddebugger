@@ -204,11 +204,10 @@ df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side)
 //- rjf: keys
 
 internal DF_ExpandKey
-df_expand_key_make(U64 uniquifier, U64 parent_hash, U64 child_num)
+df_expand_key_make(U64 parent_hash, U64 child_num)
 {
   DF_ExpandKey key;
   {
-    key.uniquifier = uniquifier;
     key.parent_hash = parent_hash;
     key.child_num = child_num;
   }
@@ -233,7 +232,6 @@ df_hash_from_expand_key(DF_ExpandKey key)
 {
   U64 data[] =
   {
-    key.uniquifier,
     key.child_num,
   };
   U64 hash = df_hash_from_seed_string(key.parent_hash, str8((U8 *)data, sizeof(data)));
@@ -5262,7 +5260,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       memblock->eval                   = udt_eval;
       memblock->cfg_table              = *cfg_table;
       memblock->parent_key             = key;
-      memblock->key                    = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
+      memblock->key                    = df_expand_key_make(df_hash_from_expand_key(key), 0);
       memblock->visual_idx_range       = r1u64(0, filtered_data_members.count);
       memblock->semantic_idx_range     = r1u64(0, filtered_data_members.count);
       memblock->depth                  = depth+1;
@@ -5289,7 +5287,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       // rjf: build inheriting cfg table
       DF_CfgTable child_cfg = *cfg_table;
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), child_num));
+        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
         child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
         if(view_rule_string.size != 0)
         {
@@ -5320,7 +5318,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         next_memblock->eval              = udt_eval;
         next_memblock->cfg_table         = *cfg_table;
         next_memblock->parent_key        = key;
-        next_memblock->key               = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
+        next_memblock->key               = df_expand_key_make(df_hash_from_expand_key(key), 0);
         next_memblock->visual_idx_range  = r1u64(child_idx+1, filtered_data_members.count);
         next_memblock->semantic_idx_range= r1u64(child_idx+1, filtered_data_members.count);
         next_memblock->depth             = depth+1;
@@ -5381,7 +5379,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       linkblock->link_member_off      = link_member->off;
       linkblock->cfg_table            = *cfg_table;
       linkblock->parent_key           = key;
-      linkblock->key                  = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
+      linkblock->key                  = df_expand_key_make(df_hash_from_expand_key(key), 0);
       linkblock->visual_idx_range     = r1u64(0, link_bases.count);
       linkblock->semantic_idx_range   = r1u64(0, link_bases.count);
       linkblock->depth                = depth+1;
@@ -5408,7 +5406,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       // rjf: build inheriting cfg table
       DF_CfgTable child_cfg = *cfg_table;
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), child_num));
+        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
         child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
         if(view_rule_string.size != 0)
         {
@@ -5441,7 +5439,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         next_linkblock->link_member_off      = link_member->off;
         next_linkblock->cfg_table            = *cfg_table;
         next_linkblock->parent_key           = key;
-        next_linkblock->key                  = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
+        next_linkblock->key                  = df_expand_key_make(df_hash_from_expand_key(key), 0);
         next_linkblock->visual_idx_range     = r1u64(child_idx+1, link_bases.count);
         next_linkblock->semantic_idx_range   = r1u64(child_idx+1, link_bases.count);
         next_linkblock->depth                = depth+1;
@@ -5473,7 +5471,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       elemblock->eval                  = arr_eval;
       elemblock->cfg_table             = *cfg_table;
       elemblock->parent_key            = key;
-      elemblock->key                   = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
+      elemblock->key                   = df_expand_key_make(df_hash_from_expand_key(key), 0);
       elemblock->visual_idx_range      = r1u64(0, array_count);
       elemblock->semantic_idx_range    = r1u64(0, array_count);
       elemblock->depth                 = depth+1;
@@ -5500,7 +5498,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       // rjf: build inheriting cfg table
       DF_CfgTable child_cfg = *cfg_table;
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), child_num));
+        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
         child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
         if(view_rule_string.size != 0)
         {
@@ -5528,7 +5526,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         next_elemblock->eval                  = arr_eval;
         next_elemblock->cfg_table             = *cfg_table;
         next_elemblock->parent_key            = key;
-        next_elemblock->key                   = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
+        next_elemblock->key                   = df_expand_key_make(df_hash_from_expand_key(key), 0);
         next_elemblock->visual_idx_range      = r1u64(child_idx+1, array_count);
         next_elemblock->semantic_idx_range    = r1u64(child_idx+1, array_count);
         next_elemblock->depth                 = depth+1;
@@ -5546,7 +5544,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     ProfScope("build viz blocks for ptr-to-ptrs")
   {
     String8 subexpr = push_str8f(arena, "*(%S)", string);
-    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 1), subexpr, ptr_eval, cfg_table, depth+1, list_out);
+    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, df_expand_key_make(df_hash_from_expand_key(key), 1), subexpr, ptr_eval, cfg_table, depth+1, list_out);
   }
   
   scratch_end(scratch);
@@ -5554,13 +5552,13 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
 }
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_eval_view_expr(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, String8 expr)
+df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, String8 expr, U64 num)
 {
   ProfBeginFunction();
   DF_EvalVizBlockList blocks = {0};
   {
-    DF_ExpandKey start_parent_key = df_expand_key_make((U64)eval_view, 0, 0);
-    DF_ExpandKey start_key = df_expand_key_make((U64)eval_view, 5381, 1);
+    DF_ExpandKey start_parent_key = df_expand_key_make(5381, 0);
+    DF_ExpandKey start_key = df_expand_key_from_eval_view_root_expr_num(eval_view, expr, num);
     DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, expr);
     U64 expr_comma_pos = str8_find_needle(expr, 0, str8_lit(","), 0);
     String8List default_view_rules = {0};
