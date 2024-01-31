@@ -6535,6 +6535,49 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
 ////////////////////////////////
 //~ rjf: Eval Viz
 
+internal String8
+df_eval_escaped_from_raw_string(Arena *arena, String8 raw)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  U64 start_split_idx = 0;
+  for(U64 idx = 0; idx <= raw.size; idx += 1)
+  {
+    U8 byte = (idx < raw.size) ? raw.str[idx] : 0;
+    B32 split = 1;
+    String8 separator_replace = {0};
+    switch(byte)
+    {
+      default:{split = 0;}break;
+      case 0:    {}break;
+      case '\a': {separator_replace = str8_lit("\\a");}break;
+      case '\b': {separator_replace = str8_lit("\\b");}break;
+      case '\f': {separator_replace = str8_lit("\\f");}break;
+      case '\n': {separator_replace = str8_lit("\\n");}break;
+      case '\r': {separator_replace = str8_lit("\\r");}break;
+      case '\t': {separator_replace = str8_lit("\\t");}break;
+      case '\v': {separator_replace = str8_lit("\\v");}break;
+      case '\\': {separator_replace = str8_lit("\\\\");}break;
+      case '"':  {separator_replace = str8_lit("\\\"");}break;
+      case '?':  {separator_replace = str8_lit("\\?");}break;
+    }
+    if(split)
+    {
+      String8 substr = str8_substr(raw, r1u64(start_split_idx, idx));
+      start_split_idx = idx+1;
+      str8_list_push(scratch.arena, &parts, substr);
+      if(separator_replace.size != 0)
+      {
+        str8_list_push(scratch.arena, &parts, separator_replace);
+      }
+    }
+  }
+  StringJoin join = {0};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8List
 df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, DF_CfgTable *cfg_table)
 {
@@ -6626,7 +6669,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           U64 string_memory_addr = value_eval.imm_u64;
           CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, max_U64);
-          String8 text = text_slice.data;
+          String8 text = df_eval_escaped_from_raw_string(arena, text_slice.data);
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));
@@ -6702,7 +6745,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
           DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
           CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, max_U64);
-          String8 text = text_slice.data;
+          String8 text = df_eval_escaped_from_raw_string(arena, text_slice.data);
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));

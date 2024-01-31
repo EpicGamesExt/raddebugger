@@ -3,7 +3,7 @@
 
 #include <Windows.h>
 
-int main(void)
+int main(int argument_count, char **arguments)
 {
   for(int i = 0; i < 1000; i += 1)
   {
