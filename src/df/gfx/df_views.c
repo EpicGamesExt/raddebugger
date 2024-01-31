@@ -822,7 +822,84 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     //
     case DF_EvalWatchViewFillKind_ThreadLocals:
     {
-      // TODO(rjf)
+      // rjf: unpack
+      DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+      U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
+      DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
+      
+      // rjf: build block for all tlocals
+      DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+      DF_ExpandKey root_key = df_expand_key_make(df_hash_from_expand_key(parent_key), 0);
+      RADDBG_Parsed *rdbg = parse_ctx->rdbg;
+      DF_EvalVizBlock *tlocals_block = push_array(arena, DF_EvalVizBlock, 1);
+      SLLQueuePush(blocks.first, blocks.last, tlocals_block);
+      tlocals_block->kind = DF_EvalVizBlockKind_AllThreadLocals;
+      tlocals_block->visual_idx_range = tlocals_block->semantic_idx_range = r1u64(1, rdbg->thread_variables_count);
+      tlocals_block->parent_key = parent_key;
+      tlocals_block->key = root_key;
+      blocks.count += 1;
+      blocks.total_visual_row_count += dim_1u64(tlocals_block->visual_idx_range);
+      blocks.total_semantic_row_count += dim_1u64(tlocals_block->semantic_idx_range);
+      
+      // rjf: split tlocals block per-expansion
+      df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, df_expand_key_zero(), parent_key, 1);
+      DF_ExpandNode *root_node = df_expand_node_from_key(&eval_view->expand_tree_table, parent_key);
+      for(DF_ExpandNode *child = root_node->first; child != 0; child = child->next)
+      {
+        U64 child_num = child->key.child_num;
+        U64 child_idx = child_num-1;
+        if(child_idx >= rdbg->thread_variables_count)
+        {
+          continue;
+        }
+        
+        // rjf: truncate existing memblock
+        tlocals_block->visual_idx_range.max = child_idx;
+        tlocals_block->semantic_idx_range.max = child_idx;
+        
+        // rjf: build inheriting cfg table
+        DF_CfgTable child_cfg = {0};
+        {
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(parent_key), child_num));
+          if(view_rule_string.size != 0)
+          {
+            df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          }
+        }
+        
+        // rjf: unpack tlocal
+        RADDBG_ThreadVariable *thread_var = raddbg_element_from_idx(parse_ctx->rdbg, thread_variables, child_idx);
+        RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, thread_var->type_idx);
+        U64 name_size = 0;
+        U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, thread_var->name_string_idx, &name_size);
+        String8 name = str8(name_base, name_size);
+        
+        // rjf: produce eval for the expanded tlocal
+        DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
+        
+        // rjf: recurse for sub-block
+        {
+          blocks.total_visual_row_count -= 1;
+          blocks.total_semantic_row_count -= 1;
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, &child_cfg, 0, &blocks);
+        }
+        
+        // rjf: make new memblock for remainder (if any)
+        if(child_idx+1 < rdbg->thread_variables_count)
+        {
+          DF_EvalVizBlock *next_tlocals_block = push_array(arena, DF_EvalVizBlock, 1);
+          next_tlocals_block->kind              = DF_EvalVizBlockKind_AllThreadLocals;
+          next_tlocals_block->visual_idx_range  = r1u64(child_idx+1, rdbg->thread_variables_count);
+          next_tlocals_block->semantic_idx_range= r1u64(child_idx+1, rdbg->thread_variables_count);
+          next_tlocals_block->depth             = 0;
+          next_tlocals_block->parent_key        = parent_key;
+          next_tlocals_block->key               = root_key;
+          SLLQueuePush(blocks.first, blocks.last, next_tlocals_block);
+          blocks.count += 1;
+          tlocals_block = next_tlocals_block;
+        }
+      }
     }break;
     
     ////////////////////////////
@@ -6807,6 +6884,9 @@ DF_VIEW_CMD_FUNCTION_DEF(ThreadLocals) {}
 DF_VIEW_UI_FUNCTION_DEF(ThreadLocals)
 {
   ProfBeginFunction();
+  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
+  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_ThreadLocals);
+  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
