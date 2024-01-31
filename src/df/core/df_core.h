@@ -693,11 +693,14 @@ struct DF_EvalLinkBaseArray
 
 typedef enum DF_EvalVizBlockKind
 {
-  DF_EvalVizBlockKind_Root,
-  DF_EvalVizBlockKind_Members,
-  DF_EvalVizBlockKind_Elements,
-  DF_EvalVizBlockKind_Links,
-  DF_EvalVizBlockKind_Canvas,
+  DF_EvalVizBlockKind_Root,            // root of tree or subtree; possibly-expandable expression.
+  DF_EvalVizBlockKind_Members,         // members of struct, class, union
+  DF_EvalVizBlockKind_Elements,        // elements of array
+  DF_EvalVizBlockKind_Links,           // flattened nodes in a linked list
+  DF_EvalVizBlockKind_Canvas,          // escape hatch for arbitrary UI
+  DF_EvalVizBlockKind_AllGlobals,      // block of all binary globals
+  DF_EvalVizBlockKind_AllThreadLocals, // block of all binary thread-locals
+  DF_EvalVizBlockKind_AllTypes,        // block of all binary types
   DF_EvalVizBlockKind_COUNT,
 }
 DF_EvalVizBlockKind;

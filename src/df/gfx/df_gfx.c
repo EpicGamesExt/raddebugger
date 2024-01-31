@@ -6874,20 +6874,26 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
-  //- rjf: produce windowed rows
+  //////////////////////////////
+  //- rjf: produce windowed rows, per block
+  //
   U64 visual_idx_off = 0;
   U64 semantic_idx_off = 0;
   DF_EvalVizWindowedRowList list = {0};
   for(DF_EvalVizBlock *block = blocks->first; block != 0; block = block->next)
   {
+    //////////////////////////////
     //- rjf: extract block info
+    //
     U64 block_num_visual_rows     = dim_1u64(block->visual_idx_range);
     U64 block_num_semantic_rows   = dim_1u64(block->semantic_idx_range);
     Rng1S64 block_visual_range    = r1s64(visual_idx_off, visual_idx_off + block_num_visual_rows);
     Rng1S64 block_semantic_range  = r1s64(semantic_idx_off, semantic_idx_off + block_num_semantic_rows);
     TG_Kind block_type_kind = tg_kind_from_key(block->eval.type_key);
     
+    //////////////////////////////
     //- rjf: determine if view rules force expandability
+    //
     B32 expandability_required = 0;
     for(DF_CfgVal *val = block->cfg_table.first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
     {
@@ -6899,7 +6905,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       }
     }
     
+    //////////////////////////////
     //- rjf: grab default row ui view rule to use for this block
+    //
     DF_GfxViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
     DF_CfgNode *value_ui_rule_node= &df_g_nil_cfg_node;
     for(DF_CfgVal *val = block->cfg_table.first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
@@ -6913,7 +6921,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       }
     }
     
+    //////////////////////////////
     //- rjf: grab expand ui view rule to use for this block's rows
+    //
     DF_GfxViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
     DF_CfgNode *expand_ui_rule_node = &df_g_nil_cfg_node;
     for(DF_CfgVal *val = block->cfg_table.first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
@@ -6927,7 +6937,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       }
     }
     
+    //////////////////////////////
     //- rjf: get skip/chop of block's index range
+    //
     U64 num_skipped_visual = 0;
     U64 num_chopped_visual = 0;
     {
@@ -6943,14 +6955,18 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       }
     }
     
+    //////////////////////////////
     //- rjf: get visible idx range & invisible counts
+    //
     Rng1U64 visible_idx_range = block->visual_idx_range;
     {
       visible_idx_range.min += num_skipped_visual;
       visible_idx_range.max -= num_chopped_visual;
     }
     
+    //////////////////////////////
     //- rjf: sum & advance
+    //
     list.count_before_visual   += num_skipped_visual;
     if(block_num_visual_rows != 0)
     {
@@ -6959,12 +6975,16 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
     visual_idx_off += block_num_visual_rows;
     semantic_idx_off += block_num_semantic_rows;
     
+    //////////////////////////////
     //- rjf: produce rows, depending on block's kind
+    //
     switch(block->kind)
     {
       default:{}break;
       
+      //////////////////////////////
       //- rjf: root -> just a single row. possibly expandable.
+      //
       case DF_EvalVizBlockKind_Root:
       if(visible_idx_range.max > visible_idx_range.min)
       {
@@ -7018,7 +7038,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         list.count += 1;
       }break;
       
+      //////////////////////////////
       //- rjf: members -> produce rows for the visible range of members.
+      //
       case DF_EvalVizBlockKind_Members:
       if(block_type_kind != TG_Kind_Null)
       {
@@ -7104,7 +7126,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         }
       }break;
       
+      //////////////////////////////
       //- rjf: elements -> produce rows for the visible range of elements.
+      //
       case DF_EvalVizBlockKind_Elements:
       {
         TG_Key direct_type_key = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
@@ -7187,7 +7211,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         }
       }break;
       
+      //////////////////////////////
       //- rjf: links -> produce rows for the visible range of links in the linked-list chain.
+      //
       case DF_EvalVizBlockKind_Links:
       {
         DF_EvalLinkBaseChunkList link_base_chunks = df_eval_link_base_chunk_list_from_eval(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->link_member_type_key, block->link_member_off, ctrl_ctx, block->eval, 512);
@@ -7270,7 +7296,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         }
       }break;
       
+      //////////////////////////////
       //- rjf: canvas -> produce blank row, sized by the idx range specified in the block
+      //
       case DF_EvalVizBlockKind_Canvas:
       if(num_skipped_visual < block_num_visual_rows)
       {
@@ -7289,6 +7317,101 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         row->expand_ui_rule_spec = expand_ui_rule_spec;
         SLLQueuePush(list.first, list.last, row);
         list.count += 1;
+      }break;
+      
+      //////////////////////////////
+      //- rjf: all globals -> produce rows for visible range
+      //
+      case DF_EvalVizBlockKind_AllGlobals:
+      {
+        DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+        U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
+        DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
+        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
+        {
+          // rjf: unpack global info
+          RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(parse_ctx->rdbg, global_variables, idx);
+          RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, global_var->type_idx);
+          U64 voff = global_var->voff;
+          U64 vaddr = df_vaddr_from_voff(module, voff);
+          U64 name_size = 0;
+          U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, global_var->name_string_idx, &name_size);
+          String8 name = str8(name_base, name_size);
+          
+          // rjf: get keys for this row
+          DF_ExpandKey parent_key = block->parent_key;
+          DF_ExpandKey key = block->key;
+          key.child_num = idx+1;
+          
+          // rjf: get eval for this global
+          DF_Eval eval = zero_struct;
+          {
+            eval.type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)global_var->type_idx);
+            eval.mode     = EVAL_EvalMode_Addr;
+            eval.offset   = vaddr;
+          }
+          
+          // rjf: get view rules
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
+          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, &block->cfg_table);
+          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
+          
+          // rjf: apply view rules to eval
+          {
+            eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
+            eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
+          }
+          
+          // rjf: build row
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
+          DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+          row->eval = eval;
+          row->expr = name;
+          row->display_value = str8_list_join(arena, &display_strings, 0);
+          row->edit_value = str8_list_join(arena, &edit_strings, 0);
+          row->value_ui_rule_node = value_ui_rule_node;
+          row->value_ui_rule_spec = value_ui_rule_spec;
+          row->expand_ui_rule_node = expand_ui_rule_node;
+          row->expand_ui_rule_spec = expand_ui_rule_spec;
+          if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
+          {
+            for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+            {
+              TG_Kind kind = tg_kind_from_key(t);
+              if(kind == TG_Kind_Null)
+              {
+                break;
+              }
+              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
+              {
+                row->flags |= DF_EvalVizRowFlag_CanEditValue;
+              }
+              if(expandability_required ||
+                 kind == TG_Kind_Struct ||
+                 kind == TG_Kind_Union ||
+                 kind == TG_Kind_Class ||
+                 kind == TG_Kind_Array)
+              {
+                row->flags |= DF_EvalVizRowFlag_CanExpand;
+              }
+              if(row->flags & DF_EvalVizRowFlag_CanExpand)
+              {
+                break;
+              }
+              if(block->eval.mode == EVAL_EvalMode_NULL)
+              {
+                break;
+              }
+            }
+          }
+          row->depth = block->depth;
+          row->parent_key = parent_key;
+          row->key = key;
+          SLLQueuePush(list.first, list.last, row);
+          list.count += 1;
+        }
       }break;
     }
   }

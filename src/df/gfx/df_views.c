@@ -669,6 +669,9 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   switch(ews->fill_kind)
   {
+    ////////////////////////////
+    //- rjf: mutable watch fill -> build blocks from top-level mutable root expressions
+    //
     default:
     case DF_EvalWatchViewFillKind_Mutable:
     {
@@ -681,6 +684,10 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
       }
     }break;
+    
+    ////////////////////////////
+    //- rjf: registers fill -> build blocks via iterating all registers/aliases as root-level expressions
+    //
     case DF_EvalWatchViewFillKind_Registers:
     {
       DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
@@ -703,6 +710,10 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
       }
     }break;
+    
+    ////////////////////////////
+    //- rjf: locals fill -> build blocks via iterating all locals as root-level expressions
+    //
     case DF_EvalWatchViewFillKind_Locals:
     {
       U64 num = 1;
@@ -712,6 +723,114 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
         df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
       }
+    }break;
+    
+    ////////////////////////////
+    //- rjf: globals fill -> build split all-globals blocks
+    //
+    case DF_EvalWatchViewFillKind_Globals:
+    {
+      // rjf: unpack
+      DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+      U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
+      DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
+      
+      // rjf: build block for all globals
+      DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+      DF_ExpandKey root_key = df_expand_key_make(df_hash_from_expand_key(parent_key), 0);
+      RADDBG_Parsed *rdbg = parse_ctx->rdbg;
+      DF_EvalVizBlock *globals_block = push_array(arena, DF_EvalVizBlock, 1);
+      SLLQueuePush(blocks.first, blocks.last, globals_block);
+      globals_block->kind = DF_EvalVizBlockKind_AllGlobals;
+      globals_block->visual_idx_range = globals_block->semantic_idx_range = r1u64(1, rdbg->global_variables_count);
+      globals_block->parent_key = parent_key;
+      globals_block->key = root_key;
+      blocks.count += 1;
+      blocks.total_visual_row_count += dim_1u64(globals_block->visual_idx_range);
+      blocks.total_semantic_row_count += dim_1u64(globals_block->semantic_idx_range);
+      
+      // rjf: split globals block per-expansion
+      df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, df_expand_key_zero(), parent_key, 1);
+      DF_ExpandNode *root_node = df_expand_node_from_key(&eval_view->expand_tree_table, parent_key);
+      for(DF_ExpandNode *child = root_node->first; child != 0; child = child->next)
+      {
+        U64 child_num = child->key.child_num;
+        U64 child_idx = child_num-1;
+        if(child_idx >= rdbg->global_variables_count)
+        {
+          continue;
+        }
+        
+        // rjf: truncate existing memblock
+        globals_block->visual_idx_range.max = child_idx;
+        globals_block->semantic_idx_range.max = child_idx;
+        
+        // rjf: build inheriting cfg table
+        DF_CfgTable child_cfg = {0};
+        {
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(parent_key), child_num));
+          if(view_rule_string.size != 0)
+          {
+            df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          }
+        }
+        
+        // rjf: unpack global
+        RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(parse_ctx->rdbg, global_variables, child_idx);
+        RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, global_var->type_idx);
+        U64 voff = global_var->voff;
+        U64 vaddr = df_vaddr_from_voff(module, voff);
+        U64 name_size = 0;
+        U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, global_var->name_string_idx, &name_size);
+        String8 name = str8(name_base, name_size);
+        
+        // rjf: produce eval for the expanded global
+        DF_Eval eval = zero_struct;
+        {
+          eval.type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)global_var->type_idx);
+          eval.mode     = EVAL_EvalMode_Addr;
+          eval.offset   = vaddr;
+        }
+        
+        // rjf: recurse for sub-block
+        {
+          blocks.total_visual_row_count -= 1;
+          blocks.total_semantic_row_count -= 1;
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, &child_cfg, 0, &blocks);
+        }
+        
+        // rjf: make new memblock for remainder of globals (if any)
+        if(child_idx+1 < rdbg->global_variables_count)
+        {
+          DF_EvalVizBlock *next_globals_block = push_array(arena, DF_EvalVizBlock, 1);
+          next_globals_block->kind              = DF_EvalVizBlockKind_AllGlobals;
+          next_globals_block->visual_idx_range  = r1u64(child_idx+1, rdbg->global_variables_count);
+          next_globals_block->semantic_idx_range= r1u64(child_idx+1, rdbg->global_variables_count);
+          next_globals_block->depth             = 0;
+          next_globals_block->parent_key        = parent_key;
+          next_globals_block->key               = root_key;
+          SLLQueuePush(blocks.first, blocks.last, next_globals_block);
+          blocks.count += 1;
+          globals_block = next_globals_block;
+        }
+      }
+    }break;
+    
+    ////////////////////////////
+    //- rjf: thread-locals fill -> build split all-thread-locals blocks
+    //
+    case DF_EvalWatchViewFillKind_ThreadLocals:
+    {
+      // TODO(rjf)
+    }break;
+    
+    ////////////////////////////
+    //- rjf: types fill -> build split all-types blocks
+    //
+    case DF_EvalWatchViewFillKind_Types:
+    {
+      // TODO(rjf)
     }break;
   }
   return blocks;
@@ -6673,6 +6792,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Globals) {}
 DF_VIEW_UI_FUNCTION_DEF(Globals)
 {
   ProfBeginFunction();
+  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
+  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Globals);
+  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
