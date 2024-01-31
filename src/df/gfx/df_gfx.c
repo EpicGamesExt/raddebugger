@@ -4032,7 +4032,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           F32 corner_radius = ui_top_font_size()*0.25f;
           ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
           ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
-          ui_set_next_pref_width(ui_children_sum(1));
+          ui_set_next_pref_width(ui_em(70.f, 1.f));
           ui_set_next_pref_height(ui_px(hover_eval_container_height, 1.f));
           ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_AltBackground));
           ui_set_next_corner_radius_00(0);
@@ -4088,22 +4088,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
               
               //- rjf: build row
-              UI_PrefWidth(ui_children_sum(1)) UI_Row
+              UI_WidthFill UI_Row
               {
                 ui_spacer(ui_em(0.75f, 1.f));
                 ui_spacer(ui_em(1.5f*row->depth, 1.f));
                 U64 row_hash = df_hash_from_expand_key(row->key);
                 B32 row_is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
-                if(row->flags & DF_EvalVizRowFlag_CanExpand) UI_PrefWidth(ui_em(1.5f, 1)) if(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num).pressed)
+                if(row->flags & DF_EvalVizRowFlag_CanExpand)
+                  UI_PrefWidth(ui_em(1.5f, 1))
+                  if(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num).pressed)
                 {
                   df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
                 }
-                UI_PrefWidth(ui_em(50.f, 1.f))
+                UI_WidthFill
                 {
-                  UI_PrefWidth(ui_em(10.f, 1.f))
-                  {
-                    df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
-                  }
+                  UI_PrefWidth(ui_em(15.f, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
                   ui_spacer(ui_em(1.5f, 1.f));
                   if(row->flags & DF_EvalVizRowFlag_CanEditValue)
                   {
@@ -4144,10 +4143,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
                   }
                 }
-                ui_spacer(ui_em(0.75f, 1.f));
                 if(row == viz_rows.first)
                 {
-                  ui_spacer(ui_em(3.f, 1.f));
                   UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
                     UI_CornerRadius00(0)
                     UI_CornerRadius01(0)
