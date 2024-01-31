@@ -637,12 +637,18 @@ df_expand_key_from_eval_view_root_expr_num(DF_EvalView *view, String8 root_expr,
 //- rjf: windowed watch tree visualization (both single-line and multi-line)
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalWatchViewState *ews)
+df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_View *view, DF_EvalWatchViewState *ews)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   DF_EvalVizBlockList blocks = {0};
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ews);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
+  String8 filter = {0};
+  if(view->is_filtering)
+  {
+    filter = str8(view->query_buffer, view->query_string_size);
+  }
   switch(ews->fill_kind)
   {
     ////////////////////////////
@@ -655,9 +661,13 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       for(DF_EvalRoot *root = ews->first_root; root != 0; root = root->next, num += 1)
       {
         String8 root_expr_string = df_string_from_eval_root(root);
-        U64 root_expr_hash = df_hash_from_string(root_expr_string);
-        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
-        df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
+        if(matches.count == matches.needle_part_count)
+        {
+          U64 root_expr_hash = df_hash_from_string(root_expr_string);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
+          df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        }
       }
     }break;
     
@@ -676,14 +686,22 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       for(U64 reg_idx = 1; reg_idx < reg_count; reg_idx += 1, num += 1)
       {
         String8 root_expr_string = reg_strings[reg_idx];
-        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
-        df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
+        if(matches.count == matches.needle_part_count)
+        {
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
+          df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        }
       }
       for(U64 alias_idx = 1; alias_idx < alias_count; alias_idx += 1, num += 1)
       {
         String8 root_expr_string = alias_strings[alias_idx];
-        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
-        df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
+        if(matches.count == matches.needle_part_count)
+        {
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
+          df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        }
       }
     }break;
     
@@ -696,8 +714,12 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       for(EVAL_String2NumMapNode *n = parse_ctx->locals_map->first; n != 0; n = n->order_next, num += 1)
       {
         String8 root_expr_string = n->string;
-        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
-        df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
+        if(matches.count == matches.needle_part_count)
+        {
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
+          df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+        }
       }
     }break;
     
@@ -711,15 +733,27 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
       U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
       DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
+      DF_Entity *binary = df_binary_file_from_module(module);
+      String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
+      
+      // rjf: query all filtered globals from dbgi searching system
+      U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
+      DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
+      RADDBG_Parsed *rdbg = &dbgi->rdbg;
+      B32 items_stale = 0;
+      DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, DBGI_FuzzySearchTarget_GlobalVariables, os_now_microseconds()+100, &items_stale);
+      if(items_stale)
+      {
+        df_gfx_request_frame();
+      }
       
       // rjf: build block for all globals
       DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
       DF_ExpandKey root_key = df_expand_key_make(df_hash_from_expand_key(parent_key), 0);
-      RADDBG_Parsed *rdbg = parse_ctx->rdbg;
       DF_EvalVizBlock *globals_block = push_array(arena, DF_EvalVizBlock, 1);
       SLLQueuePush(blocks.first, blocks.last, globals_block);
       globals_block->kind = DF_EvalVizBlockKind_AllGlobals;
-      globals_block->visual_idx_range = globals_block->semantic_idx_range = r1u64(1, rdbg->global_variables_count);
+      globals_block->visual_idx_range = globals_block->semantic_idx_range = r1u64(1, items.count);
       globals_block->parent_key = parent_key;
       globals_block->key = root_key;
       blocks.count += 1;
@@ -733,7 +767,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       {
         U64 child_num = child->key.child_num;
         U64 child_idx = child_num-1;
-        if(child_idx >= rdbg->global_variables_count)
+        if(child_idx >= items.count)
         {
           continue;
         }
@@ -777,12 +811,12 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: make new memblock for remainder of globals (if any)
-        if(child_idx+1 < rdbg->global_variables_count)
+        if(child_idx+1 < items.count)
         {
           DF_EvalVizBlock *next_globals_block = push_array(arena, DF_EvalVizBlock, 1);
           next_globals_block->kind              = DF_EvalVizBlockKind_AllGlobals;
-          next_globals_block->visual_idx_range  = r1u64(child_idx+1, rdbg->global_variables_count);
-          next_globals_block->semantic_idx_range= r1u64(child_idx+1, rdbg->global_variables_count);
+          next_globals_block->visual_idx_range  = r1u64(child_idx+1, items.count);
+          next_globals_block->semantic_idx_range= r1u64(child_idx+1, items.count);
           next_globals_block->depth             = 0;
           next_globals_block->parent_key        = parent_key;
           next_globals_block->key               = root_key;
@@ -798,14 +832,32 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     //
     case DF_EvalWatchViewFillKind_ThreadLocals:
     {
+      // rjf: unpack
+      DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+      U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
+      DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
+      DF_Entity *binary = df_binary_file_from_module(module);
+      String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
+      
+      // rjf: query all filtered globals from dbgi searching system
+      U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
+      DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
+      RADDBG_Parsed *rdbg = &dbgi->rdbg;
+      B32 items_stale = 0;
+      DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, DBGI_FuzzySearchTarget_ThreadVariables, os_now_microseconds()+100, &items_stale);
+      if(items_stale)
+      {
+        df_gfx_request_frame();
+      }
+      
       // rjf: build block for all tlocals
       DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
       DF_ExpandKey root_key = df_expand_key_make(df_hash_from_expand_key(parent_key), 0);
-      RADDBG_Parsed *rdbg = parse_ctx->rdbg;
       DF_EvalVizBlock *tlocals_block = push_array(arena, DF_EvalVizBlock, 1);
       SLLQueuePush(blocks.first, blocks.last, tlocals_block);
       tlocals_block->kind = DF_EvalVizBlockKind_AllThreadLocals;
-      tlocals_block->visual_idx_range = tlocals_block->semantic_idx_range = r1u64(1, rdbg->thread_variables_count);
+      tlocals_block->visual_idx_range = tlocals_block->semantic_idx_range = r1u64(1, items.count);
       tlocals_block->parent_key = parent_key;
       tlocals_block->key = root_key;
       blocks.count += 1;
@@ -819,7 +871,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       {
         U64 child_num = child->key.child_num;
         U64 child_idx = child_num-1;
-        if(child_idx >= rdbg->thread_variables_count)
+        if(child_idx >= items.count)
         {
           continue;
         }
@@ -856,12 +908,12 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: make new memblock for remainder (if any)
-        if(child_idx+1 < rdbg->thread_variables_count)
+        if(child_idx+1 < items.count)
         {
           DF_EvalVizBlock *next_tlocals_block = push_array(arena, DF_EvalVizBlock, 1);
           next_tlocals_block->kind              = DF_EvalVizBlockKind_AllThreadLocals;
-          next_tlocals_block->visual_idx_range  = r1u64(child_idx+1, rdbg->thread_variables_count);
-          next_tlocals_block->semantic_idx_range= r1u64(child_idx+1, rdbg->thread_variables_count);
+          next_tlocals_block->visual_idx_range  = r1u64(child_idx+1, items.count);
+          next_tlocals_block->semantic_idx_range= r1u64(child_idx+1, items.count);
           next_tlocals_block->depth             = 0;
           next_tlocals_block->parent_key        = parent_key;
           next_tlocals_block->key               = root_key;
@@ -877,14 +929,32 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     //
     case DF_EvalWatchViewFillKind_Types:
     {
+      // rjf: unpack
+      DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+      U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
+      DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
+      DF_Entity *binary = df_binary_file_from_module(module);
+      String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
+      
+      // rjf: query all filtered globals from dbgi searching system
+      U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
+      DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
+      RADDBG_Parsed *rdbg = &dbgi->rdbg;
+      B32 items_stale = 0;
+      DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, DBGI_FuzzySearchTarget_UDTs, os_now_microseconds()+100, &items_stale);
+      if(items_stale)
+      {
+        df_gfx_request_frame();
+      }
+      
       // rjf: build block for all types
       DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
       DF_ExpandKey root_key = df_expand_key_make(df_hash_from_expand_key(parent_key), 0);
-      RADDBG_Parsed *rdbg = parse_ctx->rdbg;
       DF_EvalVizBlock *types_block = push_array(arena, DF_EvalVizBlock, 1);
       SLLQueuePush(blocks.first, blocks.last, types_block);
       types_block->kind = DF_EvalVizBlockKind_AllTypes;
-      types_block->visual_idx_range = types_block->semantic_idx_range = r1u64(1, rdbg->udts_count);
+      types_block->visual_idx_range = types_block->semantic_idx_range = r1u64(1, items.count);
       types_block->parent_key = parent_key;
       types_block->key = root_key;
       blocks.count += 1;
@@ -898,7 +968,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       {
         U64 child_num = child->key.child_num;
         U64 child_idx = child_num-1;
-        if(child_idx >= rdbg->udts_count)
+        if(child_idx >= items.count)
         {
           continue;
         }
@@ -935,12 +1005,12 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: make new memblock for remainder (if any)
-        if(child_idx+1 < rdbg->udts_count)
+        if(child_idx+1 < items.count)
         {
           DF_EvalVizBlock *next_types_block = push_array(arena, DF_EvalVizBlock, 1);
           next_types_block->kind              = DF_EvalVizBlockKind_AllTypes;
-          next_types_block->visual_idx_range  = r1u64(child_idx+1, rdbg->udts_count);
-          next_types_block->semantic_idx_range= r1u64(child_idx+1, rdbg->udts_count);
+          next_types_block->visual_idx_range  = r1u64(child_idx+1, items.count);
+          next_types_block->semantic_idx_range= r1u64(child_idx+1, items.count);
           next_types_block->depth             = 0;
           next_types_block->parent_key        = parent_key;
           next_types_block->key               = root_key;
@@ -951,7 +1021,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       }
     }break;
   }
-  return blocks;
+  scratch_end(scratch);
   ProfEnd();
   return blocks;
 }
@@ -1031,7 +1101,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //////////////////////////////
   //- rjf: state -> viz blocks
   //
-  DF_EvalVizBlockList blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, scope, &ctrl_ctx, &parse_ctx, ewv);
+  DF_EvalVizBlockList blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, scope, &ctrl_ctx, &parse_ctx, view, ewv);
   
   //////////////////////////////
   //- rjf: selection state * blocks -> 2D table coordinates
@@ -1862,7 +1932,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //
   if(edit_commit)
   {
-    blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, scope, &ctrl_ctx, &parse_ctx, ewv);
+    blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, scope, &ctrl_ctx, &parse_ctx, view, ewv);
   }
   
   //////////////////////////////
@@ -6860,7 +6930,7 @@ DF_VIEW_UI_FUNCTION_DEF(Watch)
 {
   ProfBeginFunction();
   DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_build(ws, panel, view, ewv, 1, 10, rect);
+  df_eval_watch_view_build(ws, panel, view, ewv, 1*!view->is_filtering, 10, rect);
   ProfEnd();
 }
 
