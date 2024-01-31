@@ -687,10 +687,29 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       Architecture arch = df_architecture_from_entity(thread);
       U64 reg_count = regs_reg_code_count_from_architecture(arch);
       String8 *reg_strings = regs_reg_code_string_table_from_architecture(arch);
-      for(U64 reg_idx = 1; reg_idx < reg_count; reg_idx += 1)
+      U64 alias_count = regs_alias_code_count_from_architecture(arch);
+      String8 *alias_strings = regs_alias_code_string_table_from_architecture(arch);
+      U64 num = 1;
+      for(U64 reg_idx = 1; reg_idx < reg_count; reg_idx += 1, num += 1)
       {
         String8 root_expr_string = reg_strings[reg_idx];
-        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, reg_idx);
+        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
+        df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+      }
+      for(U64 alias_idx = 1; alias_idx < alias_count; alias_idx += 1, num += 1)
+      {
+        String8 root_expr_string = alias_strings[alias_idx];
+        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
+        df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
+      }
+    }break;
+    case DF_EvalWatchViewFillKind_Locals:
+    {
+      U64 num = 1;
+      for(EVAL_String2NumMapNode *n = parse_ctx->locals_map->first; n != 0; n = n->order_next, num += 1)
+      {
+        String8 root_expr_string = n->string;
+        DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, eval_view, root_expr_string, num);
         df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
       }
     }break;
@@ -6663,64 +6682,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Locals) {}
 DF_VIEW_UI_FUNCTION_DEF(Locals)
 {
   ProfBeginFunction();
-  
-  // rjf: gather state
-  DF_EvalThreadDerivedReadOnlyWatchViewState *ls = df_view_user_state(view, DF_EvalThreadDerivedReadOnlyWatchViewState);
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-  DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
-  U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
-  DF_Entity *binary = df_binary_file_from_module(module);
-  Architecture thread_arch = df_architecture_from_entity(thread);
-  
-  // rjf: invalidated? -> gather
-  if(binary != df_entity_from_handle(ls->cached_binary) ||
-     thread_rip_vaddr != ls->cached_vaddr ||
-     thread_arch != ls->cached_architecture)
-  {
-    // rjf: record cached data's key
-    ls->cached_architecture = thread_arch;
-    ls->cached_binary = df_handle_from_entity(binary);
-    ls->cached_vaddr = thread_rip_vaddr;
-    
-    // rjf: get new locals map
-    EVAL_String2NumMap *locals = df_query_cached_locals_map_from_binary_voff(binary, thread_rip_voff);
-    
-    // rjf: eliminate roots which have disappeared
-    for(DF_EvalRoot *root = ls->ewv.first_root, *next = 0; root != 0; root = next)
-    {
-      next = root->next;
-      String8 root_string = str8(root->expr_buffer, root->expr_buffer_string_size);
-      U64 num = eval_num_from_string(locals, root_string);
-      if(num == 0)
-      {
-        df_eval_root_release(&ls->ewv, root);
-      }
-    }
-    
-    // rjf: add roots for missing locals
-    for(U64 slot_idx = 0; slot_idx < locals->slots_count; slot_idx += 1)
-    {
-      for(EVAL_String2NumMapNode *n = locals->slots[slot_idx].first;
-          n != 0;
-          n = n->next)
-      {
-        String8 string = n->string;
-        DF_EvalRoot *root = df_eval_root_from_string(&ls->ewv, string);
-        if(root == 0)
-        {
-          root = df_eval_root_alloc(view, &ls->ewv);
-          df_eval_root_equip_string(root, string);
-        }
-      }
-    }
-  }
-  
-  // rjf: build
-  df_eval_watch_view_build(ws, panel, view, &ls->ewv, 0, 10, rect);
-  
+  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
+  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Locals);
+  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -6733,52 +6697,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Registers) {}
 DF_VIEW_UI_FUNCTION_DEF(Registers)
 {
   ProfBeginFunction();
-  
   DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
   df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Registers);
   df_eval_watch_view_build(ws, panel, view, ewv, 0, 16, rect);
-  
-#if 0
-  // rjf: gather state
-  DF_RegistersViewState *rv = df_view_user_state(view, DF_RegistersViewState);
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-  Architecture arch = df_architecture_from_entity(thread);
-  DF_RegistersViewArchState *rva = &rv->arch_state[arch];
-  
-  // rjf: initialize arch-specific state
-  if(rva->initialized == 0)
-  {
-    rva->initialized = 1;
-    df_eval_watch_view_init(&rva->ewv, view, DF_EvalWatchViewFillKind_Locals);
-    
-    // rjf: get string tables
-    U64 reg_names_count = regs_reg_code_count_from_architecture(arch);
-    String8 *reg_names_base = regs_reg_code_string_table_from_architecture(arch);
-    String8Array reg_names = {reg_names_base, reg_names_count};
-    U64 alias_names_count = regs_alias_code_count_from_architecture(arch);
-    String8 *alias_names_base = regs_alias_code_string_table_from_architecture(arch);
-    String8Array alias_names = {alias_names_base, alias_names_count};
-    
-    // rjf: add roots
-    for(U64 idx = 1; idx < reg_names.count; idx += 1)
-    {
-      String8 reg_name = reg_names.strings[idx];
-      DF_EvalRoot *root = df_eval_root_alloc(view, &rva->ewv);
-      df_eval_root_equip_string(root, reg_name);
-    }
-    for(U64 idx = 1; idx < alias_names.count; idx += 1)
-    {
-      String8 alias_name = alias_names.strings[idx];
-      DF_EvalRoot *root = df_eval_root_alloc(view, &rva->ewv);
-      df_eval_root_equip_string(root, alias_name);
-    }
-  }
-  
-  // rjf: build
-  df_eval_watch_view_build(ws, panel, view, &rva->ewv, 0, 16, rect);
-#endif
-  
   ProfEnd();
 }
 
@@ -7885,32 +7806,29 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
       EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_rip_vaddr);
       RADDBG_Parsed *rdbg = parse_ctx.rdbg;
-      for(U64 idx = 0; idx < parse_ctx.locals_map->slots_count; idx += 1)
+      for(EVAL_String2NumMapNode *n = parse_ctx.locals_map->first; n != 0; n = n->order_next)
       {
-        for(EVAL_String2NumMapNode *n = parse_ctx.locals_map->slots[idx].first; n != 0; n = n->next)
+        String8 local_name = n->string;
+        DF_Eval local_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, local_name);
+        if(local_eval.mode == EVAL_EvalMode_Addr)
         {
-          String8 local_name = n->string;
-          DF_Eval local_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, local_name);
-          if(local_eval.mode == EVAL_EvalMode_Addr)
+          TG_Kind local_eval_type_kind = tg_kind_from_key(local_eval.type_key);
+          U64 local_eval_type_size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, rdbg, local_eval.type_key);
+          Rng1U64 vaddr_rng = r1u64(local_eval.offset, local_eval.offset+local_eval_type_size);
+          Rng1U64 vaddr_rng_in_visible = intersect_1u64(viz_range_bytes, vaddr_rng);
+          if(vaddr_rng_in_visible.max != vaddr_rng_in_visible.min)
           {
-            TG_Kind local_eval_type_kind = tg_kind_from_key(local_eval.type_key);
-            U64 local_eval_type_size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, rdbg, local_eval.type_key);
-            Rng1U64 vaddr_rng = r1u64(local_eval.offset, local_eval.offset+local_eval_type_size);
-            Rng1U64 vaddr_rng_in_visible = intersect_1u64(viz_range_bytes, vaddr_rng);
-            if(vaddr_rng_in_visible.max != vaddr_rng_in_visible.min)
+            Annotation *annotation = push_array(scratch.arena, Annotation, 1);
             {
-              Annotation *annotation = push_array(scratch.arena, Annotation, 1);
-              {
-                annotation->name_string = push_str8_copy(scratch.arena, local_name);
-                annotation->kind_string = str8_lit("Local");
-                annotation->type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, local_eval.type_key);
-                annotation->color = color_gen_table[(vaddr_rng.min/8)%ArrayCount(color_gen_table)];
-                annotation->vaddr_range = vaddr_rng;
-              }
-              for(U64 vaddr = vaddr_rng_in_visible.min; vaddr < vaddr_rng_in_visible.max; vaddr += 1)
-              {
-                SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, annotation);
-              }
+              annotation->name_string = push_str8_copy(scratch.arena, local_name);
+              annotation->kind_string = str8_lit("Local");
+              annotation->type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, local_eval.type_key);
+              annotation->color = color_gen_table[(vaddr_rng.min/8)%ArrayCount(color_gen_table)];
+              annotation->vaddr_range = vaddr_rng;
+            }
+            for(U64 vaddr = vaddr_rng_in_visible.min; vaddr < vaddr_rng_in_visible.max; vaddr += 1)
+            {
+              SLLQueuePushFront(visible_memory_annotations[vaddr-viz_range_bytes.min].first, visible_memory_annotations[vaddr-viz_range_bytes.min].last, annotation);
             }
           }
         }

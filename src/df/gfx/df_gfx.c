@@ -3755,20 +3755,17 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Locals)
           {
             EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, thread_rip_voff);
-            for(U64 slot_idx = 0; slot_idx < locals_map->slots_count; slot_idx += 1)
+            for(EVAL_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
             {
-              for(EVAL_String2NumMapNode *n = locals_map->slots[slot_idx].first; n != 0; n = n->next)
+              DF_AutoCompListerItem item = {0};
               {
-                DF_AutoCompListerItem item = {0};
-                {
-                  item.string      = n->string;
-                  item.kind_string = str8_lit("Local");
-                  item.matches     = fuzzy_match_find(scratch.arena, search_needles, n->string);
-                }
-                if(search_needles.node_count == 0 || item.matches.count != 0)
-                {
-                  df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-                }
+                item.string      = n->string;
+                item.kind_string = str8_lit("Local");
+                item.matches     = fuzzy_match_find(scratch.arena, search_needles, n->string);
+              }
+              if(search_needles.node_count == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
             }
           }

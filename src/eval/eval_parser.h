@@ -10,7 +10,8 @@
 typedef struct EVAL_String2NumMapNode EVAL_String2NumMapNode;
 struct EVAL_String2NumMapNode
 {
-  EVAL_String2NumMapNode *next;
+  EVAL_String2NumMapNode *order_next;
+  EVAL_String2NumMapNode *hash_next;
   String8 string;
   U64 num;
 };
@@ -27,6 +28,8 @@ struct EVAL_String2NumMap
 {
   U64 slots_count;
   EVAL_String2NumMapSlot *slots;
+  EVAL_String2NumMapNode *first;
+  EVAL_String2NumMapNode *last;
 };
 
 ////////////////////////////////

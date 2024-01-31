@@ -84,7 +84,7 @@ eval_string2num_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string
   U64 hash = eval_hash_from_string(string);
   U64 slot_idx = hash%map->slots_count;
   EVAL_String2NumMapNode *existing_node = 0;
-  for(EVAL_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->next)
+  for(EVAL_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
   {
     if(str8_match(node->string, string, 0) && node->num == num)
     {
@@ -95,7 +95,8 @@ eval_string2num_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string
   if(existing_node == 0)
   {
     EVAL_String2NumMapNode *node = push_array(arena, EVAL_String2NumMapNode, 1);
-    SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
+    SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
+    SLLQueuePush_N(map->first, map->last, node, order_next);
     node->string = push_str8_copy(arena, string);
     node->num = num;
   }
@@ -110,7 +111,7 @@ eval_num_from_string(EVAL_String2NumMap *map, String8 string)
     U64 hash = eval_hash_from_string(string);
     U64 slot_idx = hash%map->slots_count;
     EVAL_String2NumMapNode *existing_node = 0;
-    for(EVAL_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->next)
+    for(EVAL_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
     {
       if(str8_match(node->string, string, 0))
       {
