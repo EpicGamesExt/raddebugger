@@ -6,6 +6,7 @@
 
 internal EVAL_Result
 eval_interpret(EVAL_Machine *machine, String8 bytecode){
+  ProfBeginFunction();
   EVAL_Result result = {0};
   
   // TODO(allen): We could scan the bytecode and figure out the
@@ -626,5 +627,6 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
   }
   
   scratch_end(scratch);
+  ProfEnd();
   return(result);
 }

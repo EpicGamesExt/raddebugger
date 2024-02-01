@@ -232,6 +232,7 @@ internal TG_Key tg_ptee_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rd
 internal TG_Key tg_unwrapped_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal U64 tg_byte_size_from_graph_raddbg_key(TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_Kind tg_kind_from_key(TG_Key key);
+internal TG_Member *tg_member_copy(Arena *arena, TG_Member *src);
 internal TG_MemberArray tg_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal TG_MemberArray tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key);
 internal void tg_lhs_string_from_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key, String8List *out, U32 prec, B32 skip_return);

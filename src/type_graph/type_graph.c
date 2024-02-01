@@ -931,6 +931,16 @@ tg_kind_from_key(TG_Key key)
   return kind;
 }
 
+internal TG_Member *
+tg_member_copy(Arena *arena, TG_Member *src)
+{
+  TG_Member *dst = push_array(arena, TG_Member, 1);
+  MemoryCopyStruct(dst, src);
+  dst->name = push_str8_copy(arena, src->name);
+  dst->inheritance_key_chain = tg_key_list_copy(arena, &src->inheritance_key_chain);
+  return dst;
+}
+
 internal TG_MemberArray
 tg_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
 {

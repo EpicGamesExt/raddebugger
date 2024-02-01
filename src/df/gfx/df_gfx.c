@@ -6692,7 +6692,7 @@ df_eval_escaped_from_raw_string(Arena *arena, String8 raw)
 }
 
 internal String8List
-df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, DF_CfgTable *cfg_table)
+df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table)
 {
   ProfBeginFunction();
   String8List list = {0};
@@ -6701,7 +6701,16 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
   //- rjf: type path -> empty
   if(eval.mode == EVAL_EvalMode_NULL && !tg_key_match(tg_key_zero(), eval.type_key))
   {
-    str8_list_push(arena, &list, str8_lit("-"));
+    if(opt_member != 0)
+    {
+      U64 member_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, opt_member->type_key);
+      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u bytes)", opt_member->off, member_byte_size);
+    }
+    else
+    {
+      String8 basic_type_kind_string = tg_kind_basic_string_table[tg_kind_from_key(eval.type_key)];
+      str8_list_pushf(arena, &list, "%S (%I64u bytes)", basic_type_kind_string, tg_byte_size_from_graph_raddbg_key(graph, rdbg, eval.type_key));
+    }
   }
   
   //- rjf: non-type path: descend recursively & produce single-line value strings
@@ -6809,7 +6818,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             pted_eval.type_key = direct_type_key;
             pted_eval.mode     = EVAL_EvalMode_Addr;
             pted_eval.offset   = value_eval.imm_u64;
-            String8List pted_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, pted_eval, cfg_table);
+            String8List pted_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, pted_eval, opt_member, cfg_table);
             if(pted_strs.total_size == 0)
             {
               String8 unknown = str8_lit("???");
@@ -6887,7 +6896,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
               element_eval.mode     = eval.mode;
               element_eval.offset   = eval.offset + direct_type_byte_size*idx;
               MemoryCopyArray(element_eval.imm_u128, eval.imm_u128);
-              String8List element_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, element_eval, cfg_table);
+              String8List element_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, element_eval, opt_member, cfg_table);
               space_taken += f_dim_from_tag_size_string_list(font, font_size, element_strs).x;
               str8_list_concat_in_place(&list, &element_strs);
               if(idx+1 < array_count)
@@ -6945,7 +6954,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             member_eval.mode = eval.mode;
             member_eval.offset = eval.offset + mem->off;
             MemoryCopyArray(member_eval.imm_u128, eval.imm_u128);
-            String8List member_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, member_eval, cfg_table);
+            String8List member_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, member_eval, opt_member, cfg_table);
             space_taken += f_dim_from_tag_size_string_list(font, font_size, member_strs).x;
             str8_list_concat_in_place(&list, &member_strs);
             if(member_idx+1 < filtered_data_members.count)
@@ -7098,13 +7107,15 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_Root:
       if(visible_idx_range.max > visible_idx_range.min)
       {
-        String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, &block->cfg_table);
-        String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, &block->cfg_table);
+        String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
+        String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
+        String8 display_string = str8_list_join(arena, &display_strings, 0);
+        String8 edit_string = str8_list_join(arena, &edit_strings, 0);
         DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
         row->eval = block->eval;
         row->expr = block->string;
-        row->display_value = str8_list_join(arena, &display_strings, 0);
-        row->edit_value = str8_list_join(arena, &edit_strings, 0);
+        row->display_value = display_string;
+        row->edit_value = edit_string;
         row->value_ui_rule_node = value_ui_rule_node;
         row->value_ui_rule_spec = value_ui_rule_spec;
         row->expand_ui_rule_node = expand_ui_rule_node;
@@ -7185,8 +7196,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           }
           
           // rjf: build & push row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
           DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
           row->eval = member_eval;
           row->expr = push_str8_copy(arena, member->name);
@@ -7271,8 +7282,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           }
           
           // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
           DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
           row->eval = elem_eval;
           row->expr = push_str8f(arena, "[%I64u]", idx);
@@ -7356,8 +7367,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           TG_Kind link_type_kind = tg_kind_from_key(link_eval.type_key);
           
           // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
           DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
           row->eval = link_eval;
           row->expr = push_str8f(arena, "[%I64u]", idx);
@@ -7474,8 +7485,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           }
           
           // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
           DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
           row->eval = eval;
           row->expr = name;
@@ -7562,8 +7573,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           }
           
           // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
           DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
           row->eval = eval;
           row->expr = name;
@@ -7650,8 +7661,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           }
           
           // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
           DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
           row->eval = eval;
           row->expr = name;
@@ -9852,7 +9863,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           if(!tg_key_match(tg_key_zero(), eval.type_key))
           {
             DF_CfgTable cfg_table = {0};
-            String8List eval_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, 10, params->font, params->font_size, params->font_size*60.f, 0, eval, &cfg_table);
+            String8List eval_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, 10, params->font, params->font_size, params->font_size*60.f, 0, eval, 0, &cfg_table);
             eval_string = str8_list_join(scratch.arena, &eval_strings, 0);
           }
           ui_spacer(ui_em(1.5f, 1.f));

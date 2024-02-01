@@ -808,7 +808,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         {
           blocks.total_visual_row_count -= 1;
           blocks.total_semantic_row_count -= 1;
-          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, &child_cfg, 0, &blocks);
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, 0, &child_cfg, 0, &blocks);
         }
         
         // rjf: make new memblock for remainder of globals (if any)
@@ -907,7 +907,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         {
           blocks.total_visual_row_count -= 1;
           blocks.total_semantic_row_count -= 1;
-          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, &child_cfg, 0, &blocks);
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, 0, &child_cfg, 0, &blocks);
         }
         
         // rjf: make new memblock for remainder (if any)
@@ -1006,7 +1006,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         {
           blocks.total_visual_row_count -= 1;
           blocks.total_semantic_row_count -= 1;
-          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, &child_cfg, 0, &blocks);
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, 0, &child_cfg, 0, &blocks);
         }
         
         // rjf: make new memblock for remainder (if any)
@@ -1312,6 +1312,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
     }
     
     //- rjf: build table
+    ProfScope("build table")
     {
       //- rjf: build rows
       U64 semantic_idx = rows.count_before_semantic;
@@ -1351,7 +1352,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         }
         
         //- rjf: build canvas row
-        if(row->flags & DF_EvalVizRowFlag_Canvas) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+        if(row->flags & DF_EvalVizRowFlag_Canvas) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off) ProfScope("canvas row")
         {
           ui_set_next_flags(disabled_flags);
           ui_set_next_pref_width(ui_pct(1, 0));
@@ -1383,7 +1384,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         }
         
         //- rjf: build normal row
-        if(!(row->flags & DF_EvalVizRowFlag_Canvas))
+        if(!(row->flags & DF_EvalVizRowFlag_Canvas)) ProfScope("row")
         {
           ui_set_next_flags(disabled_flags|(row_is_fresh*UI_BoxFlag_DrawOverlay));
           if(row_is_fresh)
@@ -1393,6 +1394,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           UI_NamedTableVectorF("row_%I64x", row_hash)
           {
             //- rjf: expression
+            ProfScope("expr")
             {
               B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Expr);
               B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
@@ -1548,6 +1550,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             }
             
             //- rjf: value
+            ProfScope("value")
             {
               B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Value);
               B32 value_is_error   = (row->errors.count != 0);
@@ -1635,6 +1638,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             }
             
             //- rjf: type
+            ProfScope("type")
             {
               B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Type);
               UI_TableCell UI_Font(code_font)
@@ -1660,6 +1664,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             }
             
             //- rjf: view rule
+            ProfScope("view rule")
             {
               B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_ViewRule);
               String8 view_rule = df_eval_view_rule_from_key(eval_view, row->key);

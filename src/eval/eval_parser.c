@@ -316,6 +316,7 @@ eval_token_array_from_chunk_list(Arena *arena, EVAL_TokenChunkList *list)
 internal EVAL_TokenArray
 eval_token_array_from_text(Arena *arena, String8 text)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
   //- rjf: lex loop
@@ -486,6 +487,7 @@ eval_token_array_from_text(Arena *arena, String8 text)
   //- rjf: chunk list -> array & return
   EVAL_TokenArray array = eval_token_array_from_chunk_list(arena, &tokens);
   scratch_end(scratch);
+  ProfEnd();
   return array;
 }
 
@@ -663,6 +665,7 @@ eval_parse_type_from_text_tokens(Arena *arena, EVAL_ParseCtx *ctx, String8 text,
 internal EVAL_ParseResult
 eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8 text, EVAL_TokenArray *tokens, S64 max_precedence)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   EVAL_Token *it = tokens->v;
   EVAL_Token *it_opl = tokens->v + tokens->count;
@@ -1465,6 +1468,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
   result.last_token = it;
   result.expr = atom;
   scratch_end(scratch);
+  ProfEnd();
   return result;
 }
 

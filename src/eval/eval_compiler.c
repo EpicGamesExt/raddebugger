@@ -44,6 +44,7 @@ eval_error_list_concat_in_place(EVAL_ErrorList *dst, EVAL_ErrorList *to_push){
 
 internal String8
 eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
+  ProfBeginFunction();
   // allocate output
   U64 size = list->encoded_size;
   U8 *str = push_array_no_zero(arena, U8, size);
@@ -94,6 +95,7 @@ eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
   String8 result = {0};
   result.size = size;
   result.str = str;
+  ProfEnd();
   return(result);
 }
 
@@ -761,6 +763,7 @@ eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVA
 internal EVAL_IRTreeAndType
 eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout)
 {
+  ProfBeginFunction();
   EVAL_IRTreeAndType result = {0};
   result.tree = &eval_irtree_nil;
   
@@ -1535,11 +1538,13 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     }break;
   }
   
+  ProfEnd();
   return(result);
 }
 
 internal void
 eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
+  ProfBeginFunction();
   U32 op = tree->op;
   switch (op){
     case RADDBG_EvalOp_Stop:
@@ -1604,4 +1609,5 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
       }
     }break;
   }
+  ProfEnd();
 }

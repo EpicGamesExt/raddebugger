@@ -4327,6 +4327,7 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
 internal DF_Eval
 df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
   Architecture arch = df_architecture_from_entity(thread);
@@ -4387,6 +4388,7 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
     }
   }
   scratch_end(scratch);
+  ProfEnd();
   return eval;
 }
 
@@ -5000,7 +5002,7 @@ df_eval_link_base_array_from_chunk_list(Arena *arena, DF_EvalLinkBaseChunkList *
 //- rjf: watch tree visualization
 
 internal void
-df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *eval_view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
+df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *eval_view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -5037,6 +5039,10 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
     block->depth                       = depth;
+    if(opt_member != 0)
+    {
+      block->member = tg_member_copy(arena, opt_member);
+    }
     SLLQueuePush(list_out->first, list_out->last, block);
     list_out->count += 1;
     list_out->total_visual_row_count += 1;
@@ -5225,7 +5231,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         }
         list_out->total_visual_row_count -= 1;
         list_out->total_semantic_row_count -= 1;
-        df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, member->name, child_eval, &child_cfg, depth+1, list_out);
+        df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, member->name, child_eval, member, &child_cfg, depth+1, list_out);
       }
       
       // rjf: make new memblock for remainder of children (if any)
@@ -5343,7 +5349,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       }
       list_out->total_visual_row_count -= 1;
       list_out->total_semantic_row_count -= 1;
-      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, &child_cfg, depth+1, list_out);
+      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
       
       // rjf: make new elemblock for remainder of children (if any)
       if(child_idx+1 < link_bases.count)
@@ -5430,7 +5436,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       }
       list_out->total_visual_row_count -= 1;
       list_out->total_semantic_row_count -= 1;
-      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, &child_cfg, depth+1, list_out);
+      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
       
       // rjf: make new elemblock for remainder of children (if any)
       if(child_idx+1 < array_count)
@@ -5458,7 +5464,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     ProfScope("build viz blocks for ptr-to-ptrs")
   {
     String8 subexpr = push_str8f(arena, "*(%S)", string);
-    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, df_expand_key_make(df_hash_from_expand_key(key), 1), subexpr, ptr_eval, cfg_table, depth+1, list_out);
+    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, df_expand_key_make(df_hash_from_expand_key(key), 1), subexpr, ptr_eval, 0, cfg_table, depth+1, list_out);
   }
   
   scratch_end(scratch);
@@ -5504,7 +5510,7 @@ df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, 
       df_cfg_table_push_unparsed_string(arena, &view_rule_table, n->string, DF_CfgSrc_User);
     }
     df_cfg_table_push_unparsed_string(arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, start_parent_key, start_key, expr, eval, &view_rule_table, 0, &blocks);
+    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, start_parent_key, start_key, expr, eval, 0, &view_rule_table, 0, &blocks);
   }
   ProfEnd();
   return blocks;
