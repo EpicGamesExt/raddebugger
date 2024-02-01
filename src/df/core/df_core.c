@@ -204,6 +204,7 @@ df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side)
 //- rjf: keys
 
 internal DF_ExpandKey
+
 df_expand_key_make(U64 parent_hash, U64 child_num)
 {
   DF_ExpandKey key;

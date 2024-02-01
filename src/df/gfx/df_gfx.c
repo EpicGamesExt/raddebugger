@@ -3699,6 +3699,31 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
         }
         
+        // rjf: filter controls
+        if(view->spec->info.flags & DF_ViewSpecFlag_CanFilter)
+        {
+          if(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter)).clicked)
+          {
+            DF_CmdParams params = df_cmd_params_from_window(ws);
+            {
+              params.view = df_handle_from_view(view);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
+            }
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
+            ui_ctx_menu_close();
+          }
+          if(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter)).clicked)
+          {
+            DF_CmdParams params = df_cmd_params_from_window(ws);
+            {
+              params.view = df_handle_from_view(view);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
+            }
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
+            ui_ctx_menu_close();
+          }
+        }
+        
         // rjf: close tab
         if(df_icon_buttonf(DF_IconKind_X, "Close Tab").clicked)
         {
@@ -5431,47 +5456,55 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //
         {
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
-          if(view->is_filtering || view->is_filtering_t > 0.01f) UI_Focus(view->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
+          UI_Focus(UI_FocusKind_On)
           {
-            UI_Box *filter_box = &ui_g_nil_box;
-            UI_Rect(filter_rect)
+            if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
             {
-              ui_set_next_child_layout_axis(Axis2_X);
-              filter_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder, "filter_box_%p", view);
+              DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
             }
-            UI_Parent(filter_box) UI_WidthFill UI_HeightFill
+            if(view->is_filtering && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
             {
-              if(ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+              DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ApplyFilter));
+            }
+            if(view->is_filtering || view->is_filtering_t > 0.01f)
+            {
+              UI_Box *filter_box = &ui_g_nil_box;
+              UI_Rect(filter_rect)
               {
-                DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
+                ui_set_next_child_layout_axis(Axis2_X);
+                filter_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder, "filter_box_%p", view);
               }
-              if(ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+              UI_Parent(filter_box) UI_WidthFill UI_HeightFill
               {
-                DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ApplyFilter));
-              }
-              UI_PrefWidth(ui_em(2.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-                UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-                ui_label(df_g_icon_kind_text_table[DF_IconKind_Find]);
-              UI_PrefWidth(ui_text_dim(10, 1))
-              {
-                ui_label(str8_lit("Filter"));
-              }
-              ui_spacer(ui_em(0.5f, 1.f));
-              UI_Font(df_font_from_slot(DF_FontSlot_Code))
-              {
-                UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents,
-                                             0,
-                                             0,
-                                             &view->query_cursor,
-                                             &view->query_mark,
-                                             view->query_buffer,
-                                             sizeof(view->query_buffer),
-                                             &view->query_string_size,
-                                             0,
-                                             str8(view->query_buffer, view->query_string_size),
-                                             str8_lit("###filter_text_input"));
+                UI_PrefWidth(ui_em(2.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                  UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                  ui_label(df_g_icon_kind_text_table[DF_IconKind_Find]);
+                UI_PrefWidth(ui_text_dim(10, 1))
+                {
+                  ui_label(str8_lit("Filter"));
+                }
+                ui_spacer(ui_em(0.5f, 1.f));
+                UI_Font(df_font_from_slot(DF_FontSlot_Code))
+                {
+                  UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents,
+                                               0,
+                                               0,
+                                               &view->query_cursor,
+                                               &view->query_mark,
+                                               view->query_buffer,
+                                               sizeof(view->query_buffer),
+                                               &view->query_string_size,
+                                               0,
+                                               str8(view->query_buffer, view->query_string_size),
+                                               str8_lit("###filter_text_input"));
+                  if(sig.pressed)
+                  {
+                    DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+                    df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+                  }
+                }
               }
             }
           }
@@ -5837,7 +5870,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                       ui_label(df_g_icon_kind_text_table[icon_kind]);
                   }
                   UI_TextColor(df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText))
-                    UI_PrefWidth(ui_pct(1, 0))
+                    UI_WidthFill
                     ui_label(label);
                   UI_PrefWidth(ui_em(2.35f, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
                     UI_Font(df_font_from_slot(DF_FontSlot_Icons))
@@ -7471,192 +7504,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       }break;
       
       //////////////////////////////
-      //- rjf: all globals -> produce rows for visible range
-      //
-      case DF_EvalVizBlockKind_AllGlobals:
-      {
-        DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
-        DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
-        {
-          // rjf: unpack global info
-          RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(parse_ctx->rdbg, global_variables, block->backing_search_items.v[idx].idx);
-          RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, global_var->type_idx);
-          U64 voff = global_var->voff;
-          U64 vaddr = df_vaddr_from_voff(module, voff);
-          U64 name_size = 0;
-          U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, global_var->name_string_idx, &name_size);
-          String8 name = str8(name_base, name_size);
-          
-          // rjf: get keys for this row
-          DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = block->key;
-          key.child_num = idx+1;
-          
-          // rjf: get eval for this global
-          DF_Eval eval = zero_struct;
-          {
-            eval.type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)global_var->type_idx);
-            eval.mode     = EVAL_EvalMode_Addr;
-            eval.offset   = vaddr;
-          }
-          
-          // rjf: get view rules
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, &block->cfg_table);
-          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-          
-          // rjf: apply view rules to eval
-          {
-            eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
-            eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
-          }
-          
-          // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-          DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
-          row->eval = eval;
-          row->expr = name;
-          row->display_value = str8_list_join(arena, &display_strings, 0);
-          row->edit_value = str8_list_join(arena, &edit_strings, 0);
-          row->value_ui_rule_node = value_ui_rule_node;
-          row->value_ui_rule_spec = value_ui_rule_spec;
-          row->expand_ui_rule_node = expand_ui_rule_node;
-          row->expand_ui_rule_spec = expand_ui_rule_spec;
-          if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
-          {
-            for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
-            {
-              TG_Kind kind = tg_kind_from_key(t);
-              if(kind == TG_Kind_Null)
-              {
-                break;
-              }
-              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
-              {
-                row->flags |= DF_EvalVizRowFlag_CanEditValue;
-              }
-              if(expandability_required ||
-                 kind == TG_Kind_Struct ||
-                 kind == TG_Kind_Union ||
-                 kind == TG_Kind_Class ||
-                 kind == TG_Kind_Array)
-              {
-                row->flags |= DF_EvalVizRowFlag_CanExpand;
-              }
-              if(row->flags & DF_EvalVizRowFlag_CanExpand)
-              {
-                break;
-              }
-              if(block->eval.mode == EVAL_EvalMode_NULL)
-              {
-                break;
-              }
-            }
-          }
-          row->depth = block->depth;
-          row->parent_key = parent_key;
-          row->key = key;
-          SLLQueuePush(list.first, list.last, row);
-          list.count += 1;
-        }
-      }break;
-      
-      //////////////////////////////
-      //- rjf: all tlocals -> produce rows for visible range
-      //
-      case DF_EvalVizBlockKind_AllThreadLocals:
-      {
-        DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
-        DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
-        {
-          // rjf: unpack global info
-          RADDBG_ThreadVariable *thread_var = raddbg_element_from_idx(parse_ctx->rdbg, thread_variables, block->backing_search_items.v[idx].idx);
-          RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, thread_var->type_idx);
-          U64 name_size = 0;
-          U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, thread_var->name_string_idx, &name_size);
-          String8 name = str8(name_base, name_size);
-          
-          // rjf: get keys for this row
-          DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = block->key;
-          key.child_num = idx+1;
-          
-          // rjf: get eval for this tlocal
-          DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
-          
-          // rjf: get view rules
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, &block->cfg_table);
-          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-          
-          // rjf: apply view rules to eval
-          {
-            eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
-            eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
-          }
-          
-          // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-          DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
-          row->eval = eval;
-          row->expr = name;
-          row->display_value = str8_list_join(arena, &display_strings, 0);
-          row->edit_value = str8_list_join(arena, &edit_strings, 0);
-          row->value_ui_rule_node = value_ui_rule_node;
-          row->value_ui_rule_spec = value_ui_rule_spec;
-          row->expand_ui_rule_node = expand_ui_rule_node;
-          row->expand_ui_rule_spec = expand_ui_rule_spec;
-          if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
-          {
-            for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
-            {
-              TG_Kind kind = tg_kind_from_key(t);
-              if(kind == TG_Kind_Null)
-              {
-                break;
-              }
-              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
-              {
-                row->flags |= DF_EvalVizRowFlag_CanEditValue;
-              }
-              if(expandability_required ||
-                 kind == TG_Kind_Struct ||
-                 kind == TG_Kind_Union ||
-                 kind == TG_Kind_Class ||
-                 kind == TG_Kind_Array)
-              {
-                row->flags |= DF_EvalVizRowFlag_CanExpand;
-              }
-              if(row->flags & DF_EvalVizRowFlag_CanExpand)
-              {
-                break;
-              }
-              if(block->eval.mode == EVAL_EvalMode_NULL)
-              {
-                break;
-              }
-            }
-          }
-          row->depth = block->depth;
-          row->parent_key = parent_key;
-          row->key = key;
-          SLLQueuePush(list.first, list.last, row);
-          list.count += 1;
-        }
-      }break;
-      
-      //////////////////////////////
       //- rjf: all types -> produce rows for visible range
       //
-      case DF_EvalVizBlockKind_AllTypes:
+      case DF_EvalVizBlockKind_DebugInfoTable:
       {
         DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -11038,6 +10888,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   if(flags & DF_LineEditFlag_Expander) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Parent(box)
     UI_Flags(UI_BoxFlag_DrawSideLeft)
     UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    UI_Focus(UI_FocusKind_Off)
   {
     UI_Signal expander_sig = ui_expanderf(*expanded_out, "expander");
     if(expander_sig.pressed)
@@ -11047,7 +10898,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   }
   
   //- rjf: build expander placeholder
-  else if(flags & DF_LineEditFlag_ExpanderPlaceholder) UI_Parent(box) UI_PrefWidth(ui_px(expander_size_px, 1.f))
+  else if(flags & DF_LineEditFlag_ExpanderPlaceholder) UI_Parent(box) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Focus(UI_FocusKind_Off)
   {
     UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
       UI_Flags(UI_BoxFlag_DrawSideLeft)
@@ -11057,7 +10908,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   }
   
   //- rjf: build expander space
-  else if(flags & DF_LineEditFlag_ExpanderSpace) UI_Parent(box)
+  else if(flags & DF_LineEditFlag_ExpanderSpace) UI_Parent(box) UI_Focus(UI_FocusKind_Off)
   {
     UI_Flags(UI_BoxFlag_DrawSideLeft)
       UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
