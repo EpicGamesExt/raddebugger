@@ -1561,6 +1561,9 @@ internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *are
 internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
 internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, String8 expr, U64 num);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
+internal DF_ExpandKey df_key_from_viz_block_idx_off(DF_EvalVizBlock *block, U64 idx);
+internal B32 df_viz_block_contains_key(DF_EvalVizBlock *block, DF_ExpandKey key);
+internal U64 df_idx_off_from_viz_block_key(DF_EvalVizBlock *block, DF_ExpandKey key);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators

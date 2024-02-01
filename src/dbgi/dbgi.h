@@ -378,6 +378,7 @@ internal void dbgi_ensure_tctx_inited(void);
 //~ rjf: Helpers
 
 internal U64 dbgi_hash_from_string(String8 string);
+internal U64 dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemArray *array, U64 element_idx);
 
 ////////////////////////////////
 //~ rjf: Forced Override Cache Functions

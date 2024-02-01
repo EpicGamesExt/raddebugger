@@ -95,6 +95,21 @@ dbgi_hash_from_string(String8 string)
   return result;
 }
 
+internal U64
+dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemArray *array, U64 element_idx)
+{
+  U64 fuzzy_item_num = 0;
+  for(U64 idx = 0; idx < array->count; idx += 1)
+  {
+    if(array->v[idx].idx == element_idx)
+    {
+      fuzzy_item_num = idx+1;
+      break;
+    }
+  }
+  return fuzzy_item_num;
+}
+
 ////////////////////////////////
 //~ rjf: Forced Override Cache Functions
 
@@ -1151,6 +1166,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
     switch(target)
     {
       // NOTE(rjf): no default!
+      case DBGI_FuzzySearchTarget_COUNT:{}break;
       case DBGI_FuzzySearchTarget_Procedures:
       {
         table_ptr_off = OffsetOf(RADDBG_Parsed, procedures);

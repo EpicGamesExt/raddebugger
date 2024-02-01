@@ -644,11 +644,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
   DF_EvalVizBlockList blocks = {0};
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ews);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-  String8 filter = {0};
-  if(view->is_filtering)
-  {
-    filter = str8(view->query_buffer, view->query_string_size);
-  }
+  String8 filter = str8(view->query_buffer, view->query_string_size);
   switch(ews->fill_kind)
   {
     ////////////////////////////
@@ -940,11 +936,11 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
       DF_Entity *binary = df_binary_file_from_module(module);
       String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
-      
-      // rjf: query all filtered globals from dbgi searching system
-      U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
       DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
       RADDBG_Parsed *rdbg = &dbgi->rdbg;
+      
+      // rjf: query all filtered user-defined-types from dbgi searching system
+      U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
       B32 items_stale = 0;
       DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, DBGI_FuzzySearchTarget_UDTs, os_now_microseconds()+100, &items_stale);
       if(items_stale)
@@ -972,15 +968,16 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       for(DF_ExpandNode *child = root_node->first; child != 0; child = child->next)
       {
         U64 child_num = child->key.child_num;
-        U64 child_idx = child_num-1;
-        if(child_idx >= items.count)
+        U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&items, child_num);
+        if(item_num == 0 || !contains_1u64(types_block->semantic_idx_range, item_num-1))
         {
           continue;
         }
+        U64 item_idx = item_num-1;
         
         // rjf: truncate existing memblock
-        types_block->visual_idx_range.max = child_idx;
-        types_block->semantic_idx_range.max = child_idx;
+        types_block->visual_idx_range.max = item_idx;
+        types_block->semantic_idx_range.max = item_idx;
         
         // rjf: build inheriting cfg table
         DF_CfgTable child_cfg = {0};
@@ -993,7 +990,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: unpack types
-        RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, items.v[child_idx].idx);
+        RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, child_num);
         RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, udt->self_type_idx);
         U64 name_size = 0;
         U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, type_node->user_defined.name_string_idx, &name_size);
@@ -1010,12 +1007,12 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         }
         
         // rjf: make new memblock for remainder (if any)
-        if(child_idx+1 < items.count)
+        if(item_idx+1 < items.count)
         {
           DF_EvalVizBlock *next_types_block = push_array(arena, DF_EvalVizBlock, 1);
           next_types_block->kind              = DF_EvalVizBlockKind_AllTypes;
-          next_types_block->visual_idx_range  = r1u64(child_idx+1, items.count);
-          next_types_block->semantic_idx_range= r1u64(child_idx+1, items.count);
+          next_types_block->visual_idx_range  = r1u64(item_idx+1, items.count);
+          next_types_block->semantic_idx_range= r1u64(item_idx+1, items.count);
           next_types_block->depth             = 0;
           next_types_block->parent_key        = parent_key;
           next_types_block->key               = root_key;
@@ -1098,11 +1095,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   U64 thread_ip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-  String8 filter = {0};
-  if(view->is_filtering)
-  {
-    filter = str8(view->query_buffer, view->query_string_size);
-  }
+  String8 filter = str8(view->query_buffer, view->query_string_size);
   
   //////////////////////////////
   //- rjf: process * thread info -> parse_ctx
@@ -1136,11 +1129,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       {
         if(df_expand_key_match(block->parent_key, ewv->selected_parent_key) &&
            block->key.parent_hash == ewv->selected_key.parent_hash &&
-           block->semantic_idx_range.min+1 <= ewv->selected_key.child_num &&
-           ewv->selected_key.child_num < block->semantic_idx_range.max+1)
+           df_viz_block_contains_key(block, ewv->selected_key))
         {
           key_found = 1;
-          cursor.y += ewv->selected_key.child_num - (block->semantic_idx_range.min+1);
+          cursor.y += df_idx_off_from_viz_block_key(block, ewv->selected_key);
           break;
         }
         else
@@ -1990,7 +1982,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           block_before_found = prev;
           found_block = block;
           ewv->selected_parent_key = block->parent_key;
-          ewv->selected_key = df_expand_key_make(block->key.parent_hash, (cursor.y - scan_y) + block->semantic_idx_range.min + 1);
+          ewv->selected_key = df_key_from_viz_block_idx_off(block, cursor.y-scan_y);
           break;
         }
         scan_y += advance;
@@ -6952,7 +6944,7 @@ DF_VIEW_UI_FUNCTION_DEF(Watch)
 {
   ProfBeginFunction();
   DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_build(ws, panel, view, ewv, 1*!view->is_filtering, 10, rect);
+  df_eval_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
   ProfEnd();
 }
 

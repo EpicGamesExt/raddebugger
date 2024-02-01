@@ -2759,6 +2759,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             view->query_cursor = view->query_mark = txt_pt(1, 1);
           }
         }break;
+        case DF_CoreCmdKind_ApplyFilter:
+        {
+          DF_View *view = df_view_from_handle(params.view);
+          if(!df_view_is_nil(view))
+          {
+            view->is_filtering = 0;
+          }
+        }break;
         
         //- rjf: query completion
         case DF_CoreCmdKind_CompleteQuery:
@@ -5321,7 +5329,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           ui_set_next_hover_cursor(split_axis == Axis2_X ? OS_Cursor_LeftRight : OS_Cursor_UpDown);
           UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%p_%p", min_child, max_child);
           UI_Signal sig = ui_signal_from_box(box);
-          
           if(sig.double_clicked)
           {
             ui_kill_action();
@@ -5424,52 +5431,48 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //
         {
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
-          UI_Focus(UI_FocusKind_On) if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
-          {
-            DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-            for(UI_NavActionNode *n = ui_nav_actions()->first, *next = 0; n != 0; n = next)
-            {
-              next = n->next;
-              if(n->v.flags & UI_NavActionFlag_Paste)
-              {
-                ui_nav_eat_action_node(ui_nav_actions(), n);
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Paste));
-              }
-              else if(n->v.insertion.size != 0)
-              {
-                ui_nav_eat_action_node(ui_nav_actions(), n);
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
-                p.string = n->v.insertion;
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_InsertText));
-              }
-            }
-          }
           if(view->is_filtering || view->is_filtering_t > 0.01f) UI_Focus(view->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
           {
             UI_Box *filter_box = &ui_g_nil_box;
             UI_Rect(filter_rect)
             {
-              filter_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, "filter_box_%p", view);
+              ui_set_next_child_layout_axis(Axis2_X);
+              filter_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder, "filter_box_%p", view);
             }
-            UI_Parent(filter_box) UI_WidthFill UI_HeightFill UI_Font(df_font_from_slot(DF_FontSlot_Code))
+            UI_Parent(filter_box) UI_WidthFill UI_HeightFill
             {
               if(ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
               {
                 DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
               }
-              UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents,
-                                           0,
-                                           0,
-                                           &view->query_cursor,
-                                           &view->query_mark,
-                                           view->query_buffer,
-                                           sizeof(view->query_buffer),
-                                           &view->query_string_size,
-                                           0,
-                                           str8(view->query_buffer, view->query_string_size),
-                                           str8_lit("###filter_text_input"));
+              if(ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+              {
+                DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ApplyFilter));
+              }
+              UI_PrefWidth(ui_em(2.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                ui_label(df_g_icon_kind_text_table[DF_IconKind_Find]);
+              UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                ui_label(str8_lit("Filter"));
+              }
+              ui_spacer(ui_em(0.5f, 1.f));
+              UI_Font(df_font_from_slot(DF_FontSlot_Code))
+              {
+                UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents,
+                                             0,
+                                             0,
+                                             &view->query_cursor,
+                                             &view->query_mark,
+                                             view->query_buffer,
+                                             sizeof(view->query_buffer),
+                                             &view->query_string_size,
+                                             0,
+                                             str8(view->query_buffer, view->query_string_size),
+                                             str8_lit("###filter_text_input"));
+              }
             }
           }
         }
@@ -5630,9 +5633,36 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_Parent(view_container_box) if(!df_view_is_nil(df_view_from_handle(panel->selected_tab_view)))
           {
             DF_View *view = df_view_from_handle(panel->selected_tab_view);
-            DF_ViewSpec *view_spec = view->spec;
-            DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
+            DF_ViewUIFunctionType *build_view_ui_function = view->spec->info.ui_hook;
             build_view_ui_function(ws, panel, view, content_rect);
+          }
+        }
+        
+        //////////////////////////
+        //- rjf: take events to automatically start filtering, if applicable
+        //
+        {
+          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          UI_Focus(UI_FocusKind_On) if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
+          {
+            DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+            for(UI_NavActionNode *n = ui_nav_actions()->first, *next = 0; n != 0; n = next)
+            {
+              next = n->next;
+              if(n->v.flags & UI_NavActionFlag_Paste)
+              {
+                ui_nav_eat_action_node(ui_nav_actions(), n);
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Paste));
+              }
+              else if(n->v.insertion.size != 0)
+              {
+                ui_nav_eat_action_node(ui_nav_actions(), n);
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
+                p.string = n->v.insertion;
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_InsertText));
+              }
+            }
           }
         }
         
@@ -7644,7 +7674,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: get keys for this row
           DF_ExpandKey parent_key = block->parent_key;
           DF_ExpandKey key = block->key;
-          key.child_num = idx+1;
+          key.child_num = block->backing_search_items.v[idx].idx;
           
           // rjf: get eval for this type
           DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
