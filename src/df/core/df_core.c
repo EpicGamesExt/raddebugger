@@ -5024,6 +5024,7 @@ df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF
   continue_block->member = split_block->member;
   continue_block->visual_idx_range = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
   continue_block->backing_search_items = split_block->backing_search_items;
+  continue_block->dbgi_target = split_block->dbgi_target;
   continue_block->cfg_table = split_block->cfg_table;
   continue_block->link_member_type_key = split_block->link_member_type_key;
   continue_block->link_member_off = split_block->link_member_off;
