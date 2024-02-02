@@ -1699,6 +1699,23 @@ fuzzy_match_find(Arena *arena, String8 needle, String8 haystack)
   scratch_end(scratch);
   return result;
 }
+
+internal FuzzyMatchRangeList
+fuzzy_match_range_list_copy(Arena *arena, FuzzyMatchRangeList *src)
+{
+  FuzzyMatchRangeList dst = {0};
+  for(FuzzyMatchRangeNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  {
+    FuzzyMatchRangeNode *dst_n = push_array(arena, FuzzyMatchRangeNode, 1);
+    SLLQueuePush(dst.first, dst.last, dst_n);
+    dst_n->range = src_n->range;
+  }
+  dst.count = src->count;
+  dst.needle_part_count = src->needle_part_count;
+  dst.total_dim = src->total_dim;
+  return dst;
+}
+
 ////////////////////////////////
 //~ NOTE(allen): Serialization Helpers
 

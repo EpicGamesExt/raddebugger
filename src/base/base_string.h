@@ -342,6 +342,7 @@ internal Vec4F32 rgba_from_hex_string_4f32(String8 hex_string);
 //~ rjf: String Fuzzy Matching
 
 internal FuzzyMatchRangeList fuzzy_match_find(Arena *arena, String8 needle, String8 haystack);
+internal FuzzyMatchRangeList fuzzy_match_range_list_copy(Arena *arena, FuzzyMatchRangeList *src);
 
 ////////////////////////////////
 //~ NOTE(allen): Serialization Helpers

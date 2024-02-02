@@ -1965,8 +1965,8 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
           {
             desc_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##desc_%p", cmd_desc, item->cmd_spec);
           }
-          df_box_equip_fuzzy_match_range_list_vis(name_box, item->name_match_ranges);
-          df_box_equip_fuzzy_match_range_list_vis(desc_box, item->desc_match_ranges);
+          ui_box_equip_fuzzy_match_ranges(name_box, &item->name_match_ranges);
+          ui_box_equip_fuzzy_match_ranges(desc_box, &item->desc_match_ranges);
         }
         
         //- rjf: binding
@@ -2405,7 +2405,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
           UI_PrefWidth(ui_pct(1, 0))
           {
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##%p", file->filename, view);
-            df_box_equip_fuzzy_match_range_list_vis(box, file->match_ranges);
+            ui_box_equip_fuzzy_match_ranges(box, &file->match_ranges);
           }
         }
         
@@ -2579,14 +2579,14 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
         if(is_attached) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_Highlight1)) UI_PrefWidth(ui_text_dim(10, 1))
         {
           UI_Box *attached_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "[attached]##attached_label_%i", (int)info->info.pid);
-          df_box_equip_fuzzy_match_range_list_vis(attached_label, info->attached_match_ranges);
+          ui_box_equip_fuzzy_match_ranges(attached_label, &info->attached_match_ranges);
         }
         
         // rjf: process name
         UI_PrefWidth(ui_text_dim(10, 1))
         {
           UI_Box *name_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##name_label_%i", info->info.name, (int)info->info.pid);
-          df_box_equip_fuzzy_match_range_list_vis(name_label, info->name_match_ranges);
+          ui_box_equip_fuzzy_match_ranges(name_label, &info->name_match_ranges);
         }
         
         // rjf: process number
@@ -2594,7 +2594,7 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
         {
           ui_labelf("[PID: ");
           UI_Box *pid_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%i##pid_label", info->info.pid);
-          df_box_equip_fuzzy_match_range_list_vis(pid_label, info->pid_match_ranges);
+          ui_box_equip_fuzzy_match_ranges(pid_label, &info->pid_match_ranges);
           ui_labelf("]");
         }
       }
@@ -2748,7 +2748,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
           ui_set_next_text_color(color);
         }
         UI_Box *name_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##label_%p", display_string, ent);
-        df_box_equip_fuzzy_match_range_list_vis(name_label, item.name_match_ranges);
+        ui_box_equip_fuzzy_match_ranges(name_label, &item.name_match_ranges);
       }
       if(ui_signal_from_box(box).clicked)
       {
@@ -2880,7 +2880,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 1))
       {
         UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
-        df_box_equip_fuzzy_match_range_list_vis(box, item->match_ranges);
+        ui_box_equip_fuzzy_match_ranges(box, &item->match_ranges);
         if(!tg_key_match(tg_key_zero(), type_key))
         {
           String8 type_string = tg_string_from_key(scratch.arena, graph, rdbg, type_key);

@@ -235,7 +235,8 @@ typedef U64 UI_BoxFlags;
 # define UI_BoxFlag_DisableFocusViz           (UI_BoxFlags)(1ull<<44)
 # define UI_BoxFlag_RequireFocusBackground    (UI_BoxFlags)(1ull<<45)
 # define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<46)
-# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<47)
+# define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<47)
+# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<48)
 
 //- rjf: bundles
 # define UI_BoxFlag_Clickable          (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)
@@ -294,7 +295,7 @@ struct UI_Box
   Rng2F32 rect;
   Vec2F32 fixed_position_animated;
   Vec2F32 position_delta;
-  U64 num_focus_children;
+  FuzzyMatchRangeList fuzzy_match_ranges;
   
   //- rjf: persistent data
   U64 first_touched_build_index;
@@ -605,6 +606,7 @@ internal UI_Box *          ui_build_box_from_stringf(UI_BoxFlags flags, char *fm
 internal inline void       ui_box_equip_display_string(UI_Box *box, String8 string);
 internal inline void       ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings);
 internal inline void       ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, D_FancyRunList *runs);
+internal inline void       ui_box_equip_fuzzy_match_ranges(UI_Box *box, FuzzyMatchRangeList *matches);
 internal inline void       ui_box_equip_draw_bucket(UI_Box *box, D_Bucket *bucket);
 internal inline void       ui_box_equip_custom_draw(UI_Box *box, UI_BoxCustomDrawFunctionType *custom_draw, void *user_data);
 

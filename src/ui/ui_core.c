@@ -2195,6 +2195,13 @@ ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, D_FancyRunLi
   box->display_string_runs = d_fancy_run_list_copy(ui_build_arena(), runs);
 }
 
+internal inline void
+ui_box_equip_fuzzy_match_ranges(UI_Box *box, FuzzyMatchRangeList *matches)
+{
+  box->flags |= UI_BoxFlag_HasFuzzyMatchRanges;
+  box->fuzzy_match_ranges = fuzzy_match_range_list_copy(ui_build_arena(), matches);
+}
+
 internal void
 ui_box_equip_draw_bucket(UI_Box *box, D_Bucket *bucket)
 {

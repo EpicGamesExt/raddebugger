@@ -6472,6 +6472,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           ellipses_run = f_push_run_from_string(scratch.arena, box->font, box->font_size, 0, str8_lit("..."));
         }
         d_truncated_fancy_run_list(text_position, &box->display_string_runs, max_x, ellipses_run);
+        if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges)
+        {
+          Vec4F32 match_color = df_rgba_from_theme_color(DF_ThemeColor_Cursor);
+          match_color.w *= 0.25f;
+          d_truncated_fancy_run_fuzzy_matches(text_position, &box->display_string_runs, max_x, &box->fuzzy_match_ranges, match_color);
+        }
       }
       
       // rjf: draw focus viz
@@ -8388,38 +8394,6 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
   
   ProfEnd();
   return strs;
-}
-
-////////////////////////////////
-//~ rjf: UI Helpers
-
-internal void
-df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, FuzzyMatchRangeList range_list)
-{
-  UI_Parent(box)
-  {
-    String8 display_string = ui_box_display_string(box);
-    F_Metrics metrics = f_metrics_from_tag_size(box->font, box->font_size);
-    F32 line_height = f_line_height_from_metrics(&metrics);
-    for(FuzzyMatchRangeNode *match_n = range_list.first; match_n != 0; match_n = match_n->next)
-    {
-      Rng1F32 match_pixel_range =
-      {
-        f_dim_from_tag_size_string(box->font, box->font_size, str8_prefix(display_string, match_n->range.min)).x,
-        f_dim_from_tag_size_string(box->font, box->font_size, str8_prefix(display_string, match_n->range.max)).x,
-      };
-      ui_set_next_fixed_x(match_pixel_range.min + box->text_padding + 4.f);
-      ui_set_next_fixed_y(box->font_size/8.f);
-      ui_set_next_fixed_width(match_pixel_range.max-match_pixel_range.min);
-      ui_set_next_pref_height(ui_pct(1, 0));
-      ui_set_next_corner_radius_00(box->font_size/3.f);
-      ui_set_next_corner_radius_01(box->font_size/3.f);
-      ui_set_next_corner_radius_10(box->font_size/3.f);
-      ui_set_next_corner_radius_11(box->font_size/3.f);
-      ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_PlainOverlay));
-      ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY|UI_BoxFlag_DrawBackground, ui_key_zero());
-    }
-  }
 }
 
 ////////////////////////////////
@@ -10935,7 +10909,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
         UI_Box *box = df_code_label(1.f, 1, ui_top_text_color(), display_string);
         if(matches != 0)
         {
-          df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+          ui_box_equip_fuzzy_match_ranges(box, matches);
         }
       }
       else if(flags & DF_LineEditFlag_DisplayStringIsCode)
@@ -10943,7 +10917,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
         UI_Box *box = df_code_label(1.f, 1, ui_top_text_color(), display_string);
         if(matches != 0)
         {
-          df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+          ui_box_equip_fuzzy_match_ranges(box, matches);
         }
       }
       else
@@ -10952,7 +10926,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
         UI_Box *box = ui_label(display_string).box;
         if(matches != 0)
         {
-          df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+          ui_box_equip_fuzzy_match_ranges(box, matches);
         }
       }
     }
@@ -10970,7 +10944,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       UI_Box *box = ui_label(display_string).box;
       if(matches != 0)
       {
-        df_box_equip_fuzzy_match_range_list_vis(box, *matches);
+        ui_box_equip_fuzzy_match_ranges(box, matches);
       }
     }
     else if(is_focus_active && flags & DF_LineEditFlag_CodeContents)

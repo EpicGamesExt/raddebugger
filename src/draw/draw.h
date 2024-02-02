@@ -183,6 +183,7 @@ internal void d_sub_bucket(D_Bucket *bucket);
 
 //- rjf: text
 internal void d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run trailer_run);
+internal void d_truncated_fancy_run_fuzzy_matches(Vec2F32 p, D_FancyRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color);
 internal void d_text_run(Vec2F32 p, Vec4F32 color, F_Run run);
 internal void d_truncated_text_run(Vec2F32 p, Vec4F32 color, F32 max_x, F_Run text_run, F_Run trailer_run);
 internal void d_text(F_Tag font, F32 size, Vec2F32 p, Vec4F32 color, String8 string);

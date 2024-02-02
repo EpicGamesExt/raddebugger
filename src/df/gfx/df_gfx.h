@@ -1019,11 +1019,6 @@ internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
 internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source);
 
 ////////////////////////////////
-//~ rjf: UI Helpers
-
-internal void df_box_equip_fuzzy_match_range_list_vis(UI_Box *box, FuzzyMatchRangeList range_list);
-
-////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void df_cmd_binding_button(DF_CmdSpec *spec);
