@@ -5483,61 +5483,6 @@ df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBloc
   MemoryZeroStruct(to_push);
 }
 
-internal DF_ExpandKey
-df_key_from_viz_block_idx_off(DF_EvalVizBlock *block, U64 idx_off)
-{
-  DF_ExpandKey key = block->key;
-  if(block->backing_search_items.v != 0)
-  {
-    if(idx_off < dim_1u64(block->semantic_idx_range) &&
-       block->semantic_idx_range.min+idx_off < block->backing_search_items.count)
-    {
-      key.child_num = block->backing_search_items.v[block->semantic_idx_range.min+idx_off].idx;
-    }
-  }
-  else
-  {
-    key.child_num = block->semantic_idx_range.min+1+idx_off;
-  }
-  return key;
-}
-
-internal B32
-df_viz_block_contains_key(DF_EvalVizBlock *block, DF_ExpandKey key)
-{
-  B32 result = 0;
-  if(block->backing_search_items.v != 0)
-  {
-    U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&block->backing_search_items, key.child_num);
-    result = (item_num != 0 && contains_1u64(block->semantic_idx_range, item_num-1));
-  }
-  else
-  {
-    result = (block->semantic_idx_range.min+1 <= key.child_num && key.child_num < block->semantic_idx_range.max+1);
-  }
-  return result;
-}
-
-internal U64
-df_idx_off_from_viz_block_key(DF_EvalVizBlock *block, DF_ExpandKey key)
-{
-  U64 idx_off = 0;
-  if(block->backing_search_items.v != 0)
-  {
-    U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&block->backing_search_items, key.child_num);
-    if(item_num != 0 && contains_1u64(block->semantic_idx_range, item_num-1))
-    {
-      U64 item_idx = item_num-1;
-      idx_off = item_idx-block->semantic_idx_range.min;
-    }
-  }
-  else
-  {
-    idx_off = key.child_num - (block->semantic_idx_range.min+1);
-  }
-  return idx_off;
-}
-
 internal S64
 df_row_num_from_viz_block_list_key(DF_EvalVizBlockList *blocks, DF_ExpandKey key)
 {

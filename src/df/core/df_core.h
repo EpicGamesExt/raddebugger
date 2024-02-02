@@ -1587,9 +1587,6 @@ internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_num(Aren
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
 
 //- rjf: viz block list <-> table coordinates
-internal DF_ExpandKey df_key_from_viz_block_idx_off(DF_EvalVizBlock *block, U64 idx);
-internal B32 df_viz_block_contains_key(DF_EvalVizBlock *block, DF_ExpandKey key);
-internal U64 df_idx_off_from_viz_block_key(DF_EvalVizBlock *block, DF_ExpandKey key);
 internal S64 df_row_num_from_viz_block_list_key(DF_EvalVizBlockList *blocks, DF_ExpandKey key);
 internal DF_ExpandKey df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
 
