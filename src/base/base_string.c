@@ -406,13 +406,11 @@ push_str8_cat(Arena *arena, String8 s1, String8 s2){
 
 internal String8
 push_str8_copy(Arena *arena, String8 s){
-  //ProfBeginFunction();
   String8 str;
   str.size = s.size;
   str.str = push_array_no_zero(arena, U8, str.size + 1);
   MemoryCopy(str.str, s.str, s.size);
   str.str[str.size] = 0;
-  //ProfEnd();
   return(str);
 }
 

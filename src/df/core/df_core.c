@@ -204,7 +204,6 @@ df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side)
 //- rjf: keys
 
 internal DF_ExpandKey
-
 df_expand_key_make(U64 parent_hash, U64 child_num)
 {
   DF_ExpandKey key;
@@ -5000,7 +4999,46 @@ df_eval_link_base_array_from_chunk_list(Arena *arena, DF_EvalLinkBaseChunkList *
   return array;
 }
 
-//- rjf: watch tree visualization
+//- rjf: viz block collection building
+
+internal DF_EvalVizBlock *
+df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockKind kind, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth)
+{
+  DF_EvalVizBlockNode *n = push_array(arena, DF_EvalVizBlockNode, 1);
+  n->v.kind       = kind;
+  n->v.parent_key = parent_key;
+  n->v.key        = key;
+  n->v.depth      = depth;
+  return &n->v;
+}
+
+internal DF_EvalVizBlock *
+df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx)
+{
+  U64 total_count = split_block->semantic_idx_range.max;
+  split_block->visual_idx_range.max = split_block->semantic_idx_range.max = split_idx;
+  df_eval_viz_block_end(list, split_block);
+  DF_EvalVizBlock *continue_block = df_eval_viz_block_begin(arena, split_block->kind, split_block->parent_key, split_block->key, split_block->depth);
+  continue_block->eval = split_block->eval;
+  continue_block->string = split_block->string;
+  continue_block->member = split_block->member;
+  continue_block->visual_idx_range = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
+  continue_block->backing_search_items = split_block->backing_search_items;
+  continue_block->cfg_table = split_block->cfg_table;
+  continue_block->link_member_type_key = split_block->link_member_type_key;
+  continue_block->link_member_off = split_block->link_member_off;
+  return continue_block;
+}
+
+internal void
+df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block)
+{
+  DF_EvalVizBlockNode *n = CastFromMember(DF_EvalVizBlockNode, v, block);
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  list->total_visual_row_count += dim_1u64(block->visual_idx_range);
+  list->total_semantic_row_count += dim_1u64(block->semantic_idx_range);
+}
 
 internal void
 df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *eval_view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
@@ -5029,25 +5067,18 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   //////////////////////////////
   //- rjf: make and push block for root
   //
-  DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   {
-    block->kind                        = DF_EvalVizBlockKind_Root;
+    DF_EvalVizBlock *block = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Root, parent_key, key, depth);
     block->eval                        = eval;
     block->cfg_table                   = *cfg_table;
     block->string                      = push_str8_copy(arena, string);
-    block->parent_key                  = parent_key;
-    block->key                         = key;
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
-    block->depth                       = depth;
     if(opt_member != 0)
     {
       block->member = tg_member_copy(arena, opt_member);
     }
-    SLLQueuePush(list_out->first, list_out->last, block);
-    list_out->count += 1;
-    list_out->total_visual_row_count += 1;
-    list_out->total_semantic_row_count += 1;
+    df_eval_viz_block_end(list_out, block);
   }
   
   //////////////////////////////
@@ -5063,7 +5094,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   {
     TG_Key direct_type_key = tg_ptee_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, eval_type_key);
     TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
-    DF_Eval ptr_val_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, block->eval);
+    DF_Eval ptr_val_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
     
     // rjf: ptrs to udts
     if(parent_is_expanded &&
@@ -5175,30 +5206,20 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       udt_type_kind == TG_Kind_Class))
     ProfScope("build viz blocks for UDT members")
   {
-    // rjf: get members
+    //- rjf: type -> filtered data members
     TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
     TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
     
-    // rjf: make block for all members (assume no members are expanded)
-    DF_EvalVizBlock *memblock = push_array(arena, DF_EvalVizBlock, 1);
+    //- rjf: build blocks for all members, split by sub-expansions
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Members, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
     {
-      memblock->kind                   = DF_EvalVizBlockKind_Members;
-      memblock->eval                   = udt_eval;
-      memblock->cfg_table              = *cfg_table;
-      memblock->parent_key             = key;
-      memblock->key                    = df_expand_key_make(df_hash_from_expand_key(key), 0);
-      memblock->visual_idx_range       = r1u64(0, filtered_data_members.count);
-      memblock->semantic_idx_range     = r1u64(0, filtered_data_members.count);
-      memblock->depth                  = depth+1;
-      SLLQueuePush(list_out->first, list_out->last, memblock);
-      list_out->count += 1;
-      list_out->total_visual_row_count += filtered_data_members.count;
-      list_out->total_semantic_row_count += filtered_data_members.count;
+      last_vb->eval = udt_eval;
+      last_vb->cfg_table = *cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, filtered_data_members.count);
     }
-    
-    // rjf: split memblock by sub-expansions
     for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
     {
+      // rjf: unpack expansion info; skip out-of-bounds splits
       U64 child_num = child->key.child_num;
       U64 child_idx = child_num-1;
       if(child_idx >= filtered_data_members.count)
@@ -5206,23 +5227,20 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         continue;
       }
       
-      // rjf: truncate existing memblock
-      memblock->visual_idx_range.max = child_idx;
-      memblock->semantic_idx_range.max = child_idx;
+      // rjf: form split: truncate & complete last block; begin next block
+      last_vb = df_eval_viz_block_split_and_continue(arena, list_out, last_vb, child_idx);
       
-      // rjf: build inheriting cfg table
-      DF_CfgTable child_cfg = *cfg_table;
+      // rjf: recurse for sub-expansion
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
-        child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
-        if(view_rule_string.size != 0)
+        DF_CfgTable child_cfg = *cfg_table;
         {
-          df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
+          child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
+          if(view_rule_string.size != 0)
+          {
+            df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          }
         }
-      }
-      
-      // rjf: recurse for sub-block
-      {
         TG_Member *member = &filtered_data_members.v[child_idx];
         DF_Eval child_eval = zero_struct;
         {
@@ -5230,28 +5248,10 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
           child_eval.mode = udt_eval.mode;
           child_eval.offset = udt_eval.offset + member->off;
         }
-        list_out->total_visual_row_count -= 1;
-        list_out->total_semantic_row_count -= 1;
         df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, member->name, child_eval, member, &child_cfg, depth+1, list_out);
       }
-      
-      // rjf: make new memblock for remainder of children (if any)
-      if(child_idx+1 < filtered_data_members.count)
-      {
-        DF_EvalVizBlock *next_memblock   = push_array(arena, DF_EvalVizBlock, 1);
-        next_memblock->kind              = DF_EvalVizBlockKind_Members;
-        next_memblock->eval              = udt_eval;
-        next_memblock->cfg_table         = *cfg_table;
-        next_memblock->parent_key        = key;
-        next_memblock->key               = df_expand_key_make(df_hash_from_expand_key(key), 0);
-        next_memblock->visual_idx_range  = r1u64(child_idx+1, filtered_data_members.count);
-        next_memblock->semantic_idx_range= r1u64(child_idx+1, filtered_data_members.count);
-        next_memblock->depth             = depth+1;
-        SLLQueuePush(list_out->first, list_out->last, next_memblock);
-        list_out->count += 1;
-        memblock = next_memblock;
-      }
     }
+    df_eval_viz_block_end(list_out, last_vb);
   }
   
   //////////////////////////////
@@ -5263,11 +5263,10 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       udt_type_kind == TG_Kind_Class))
     ProfScope("(structs, unions, classes) descend to members & make block(s), with linked list view")
   {
-    // rjf: get members
+    //- rjf: type -> data members
     TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
-    TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
     
-    // rjf: find link member
+    //- rjf: find link member
     TG_Member *link_member = 0;
     TG_Kind link_member_type_kind = TG_Kind_Null;
     TG_Key link_member_ptee_type_key = zero_struct;
@@ -5283,96 +5282,73 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       }
     }
     
-    // rjf: invalid link member -> early-out!
+    //- rjf: check if link member is good
+    B32 link_member_is_good = 1;
     if(link_member == 0 ||
        link_member_type_kind != TG_Kind_Ptr ||
        !tg_key_match(link_member_ptee_type_key, udt_eval.type_key))
     {
-      goto end_linked_struct_expansion_build;
+      link_member_is_good = 0;
     }
     
-    // rjf: gather link bases
-    DF_EvalLinkBaseChunkList link_bases = df_eval_link_base_chunk_list_from_eval(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, link_member->type_key, link_member->off, ctrl_ctx, udt_eval, 512);
-    
-    // rjf: make block for all links (assume no members are expanded)
-    DF_EvalVizBlock *linkblock = push_array(arena, DF_EvalVizBlock, 1);
+    //- rjf: gather link bases
+    DF_EvalLinkBaseChunkList link_bases = {0};
+    if(link_member_is_good)
     {
-      linkblock->kind                 = DF_EvalVizBlockKind_Links;
-      linkblock->eval                 = udt_eval;
-      linkblock->link_member_type_key = link_member->type_key;
-      linkblock->link_member_off      = link_member->off;
-      linkblock->cfg_table            = *cfg_table;
-      linkblock->parent_key           = key;
-      linkblock->key                  = df_expand_key_make(df_hash_from_expand_key(key), 0);
-      linkblock->visual_idx_range     = r1u64(0, link_bases.count);
-      linkblock->semantic_idx_range   = r1u64(0, link_bases.count);
-      linkblock->depth                = depth+1;
-      SLLQueuePush(list_out->first, list_out->last, linkblock);
-      list_out->count += 1;
-      list_out->total_visual_row_count += link_bases.count;
-      list_out->total_semantic_row_count += link_bases.count;
+      link_bases = df_eval_link_base_chunk_list_from_eval(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, link_member->type_key, link_member->off, ctrl_ctx, udt_eval, 512);
     }
     
-    // rjf: split linkblock by sub-expansions
-    for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
+    //- rjf: build blocks for all links, split by sub-expansions
+    if(link_member_is_good)
     {
-      U64 child_num = child->key.child_num;
-      U64 child_idx = child_num-1;
-      if(child_idx >= link_bases.count)
+      DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Links, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
       {
-        continue;
+        last_vb->eval = udt_eval;
+        last_vb->cfg_table = *cfg_table;
+        last_vb->link_member_type_key = link_member->type_key;
+        last_vb->link_member_off = link_member->off;
+        last_vb->visual_idx_range     = r1u64(0, link_bases.count);
+        last_vb->semantic_idx_range   = r1u64(0, link_bases.count);
       }
-      
-      // rjf: truncate existing elemblock
-      linkblock->visual_idx_range.max = child_idx;
-      linkblock->semantic_idx_range.max = child_idx;
-      
-      // rjf: build inheriting cfg table
-      DF_CfgTable child_cfg = *cfg_table;
+      for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
-        child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
-        if(view_rule_string.size != 0)
+        // rjf: unpack expansion info; skip out-of-bounds splits
+        U64 child_num = child->key.child_num;
+        U64 child_idx = child_num-1;
+        if(child_idx >= link_bases.count)
         {
-          df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          continue;
+        }
+        
+        // rjf: form split: truncate & complete last block; begin next block
+        last_vb = df_eval_viz_block_split_and_continue(arena, list_out, last_vb, child_idx);
+        
+        // rjf: find mode/offset of this link
+        DF_EvalLinkBase link_base = df_eval_link_base_from_chunk_list_index(&link_bases, child_idx);
+        
+        // rjf: recurse for sub-expansion
+        {
+          DF_CfgTable child_cfg = *cfg_table;
+          {
+            String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
+            child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
+            if(view_rule_string.size != 0)
+            {
+              df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+            }
+          }
+          DF_Eval child_eval = zero_struct;
+          {
+            child_eval.type_key = udt_eval.type_key;
+            child_eval.mode     = link_base.mode;
+            child_eval.offset   = link_base.offset;
+          }
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
         }
       }
-      
-      // rjf: find mode/offset of this link
-      DF_EvalLinkBase link_base = df_eval_link_base_from_chunk_list_index(&link_bases, child_idx);
-      
-      // rjf: recurse for sub-block
-      DF_Eval child_eval = zero_struct;
-      {
-        child_eval.type_key = udt_eval.type_key;
-        child_eval.mode     = link_base.mode;
-        child_eval.offset   = link_base.offset;
-      }
-      list_out->total_visual_row_count -= 1;
-      list_out->total_semantic_row_count -= 1;
-      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
-      
-      // rjf: make new elemblock for remainder of children (if any)
-      if(child_idx+1 < link_bases.count)
-      {
-        DF_EvalVizBlock *next_linkblock = push_array(arena, DF_EvalVizBlock, 1);
-        next_linkblock->kind                 = DF_EvalVizBlockKind_Links;
-        next_linkblock->eval                 = udt_eval;
-        next_linkblock->link_member_type_key = link_member->type_key;
-        next_linkblock->link_member_off      = link_member->off;
-        next_linkblock->cfg_table            = *cfg_table;
-        next_linkblock->parent_key           = key;
-        next_linkblock->key                  = df_expand_key_make(df_hash_from_expand_key(key), 0);
-        next_linkblock->visual_idx_range     = r1u64(child_idx+1, link_bases.count);
-        next_linkblock->semantic_idx_range   = r1u64(child_idx+1, link_bases.count);
-        next_linkblock->depth                = depth+1;
-        SLLQueuePush(list_out->first, list_out->last, next_linkblock);
-        list_out->count += 1;
-        linkblock = next_linkblock;
-      }
+      df_eval_viz_block_end(list_out, last_vb);
     }
   }
-  end_linked_struct_expansion_build:;
   
   //////////////////////////////
   //- rjf: (arrays) descend to elements & make block(s), normally
@@ -5381,31 +5357,22 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
      arr_type_kind == TG_Kind_Array)
     ProfScope("(arrays) descend to elements & make block(s)")
   {
+    //- rjf: unpack array type info
     TG_Type *array_type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, arr_eval.type_key);
     U64 array_count = array_type->count;
     TG_Key element_type_key = array_type->direct_type_key;
     U64 element_type_byte_size = tg_byte_size_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, element_type_key);
     
-    // rjf: make block for all elements (assume no elements are expanded)
-    DF_EvalVizBlock *elemblock = push_array(arena, DF_EvalVizBlock, 1);
+    //- rjf: build blocks for all elements, split by sub-expansions
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
     {
-      elemblock->kind                  = DF_EvalVizBlockKind_Elements;
-      elemblock->eval                  = arr_eval;
-      elemblock->cfg_table             = *cfg_table;
-      elemblock->parent_key            = key;
-      elemblock->key                   = df_expand_key_make(df_hash_from_expand_key(key), 0);
-      elemblock->visual_idx_range      = r1u64(0, array_count);
-      elemblock->semantic_idx_range    = r1u64(0, array_count);
-      elemblock->depth                 = depth+1;
-      SLLQueuePush(list_out->first, list_out->last, elemblock);
-      list_out->count += 1;
-      list_out->total_visual_row_count += array_count;
-      list_out->total_semantic_row_count += array_count;
+      last_vb->eval = arr_eval;
+      last_vb->cfg_table = *cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, array_count);
     }
-    
-    // rjf: split elemblock by sub-expansions
     for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
     {
+      // rjf: unpack expansion info; skip out-of-bounds splits
       U64 child_num = child->key.child_num;
       U64 child_idx = child_num-1;
       if(child_idx >= array_count)
@@ -5413,49 +5380,30 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         continue;
       }
       
-      // rjf: truncate existing elemblock
-      elemblock->visual_idx_range.max = child_idx;
-      elemblock->semantic_idx_range.max = child_idx;
+      // rjf: form split: truncate & complete last block; begin next block
+      last_vb = df_eval_viz_block_split_and_continue(arena, list_out, last_vb, child_idx);
       
-      // rjf: build inheriting cfg table
-      DF_CfgTable child_cfg = *cfg_table;
+      // rjf: recurse for sub-expansion
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
-        child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
-        if(view_rule_string.size != 0)
+        DF_CfgTable child_cfg = *cfg_table;
         {
-          df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
+          child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
+          if(view_rule_string.size != 0)
+          {
+            df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          }
         }
-      }
-      
-      // rjf: recurse for sub-block
-      DF_Eval child_eval = zero_struct;
-      {
-        child_eval.type_key = element_type_key;
-        child_eval.mode     = arr_eval.mode;
-        child_eval.offset   = arr_eval.offset + child_idx*element_type_byte_size;
-      }
-      list_out->total_visual_row_count -= 1;
-      list_out->total_semantic_row_count -= 1;
-      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
-      
-      // rjf: make new elemblock for remainder of children (if any)
-      if(child_idx+1 < array_count)
-      {
-        DF_EvalVizBlock *next_elemblock = push_array(arena, DF_EvalVizBlock, 1);
-        next_elemblock->kind                  = DF_EvalVizBlockKind_Elements;
-        next_elemblock->eval                  = arr_eval;
-        next_elemblock->cfg_table             = *cfg_table;
-        next_elemblock->parent_key            = key;
-        next_elemblock->key                   = df_expand_key_make(df_hash_from_expand_key(key), 0);
-        next_elemblock->visual_idx_range      = r1u64(child_idx+1, array_count);
-        next_elemblock->semantic_idx_range    = r1u64(child_idx+1, array_count);
-        next_elemblock->depth                 = depth+1;
-        SLLQueuePush(list_out->first, list_out->last, next_elemblock);
-        list_out->count += 1;
-        elemblock = next_elemblock;
+        DF_Eval child_eval = zero_struct;
+        {
+          child_eval.type_key = element_type_key;
+          child_eval.mode     = arr_eval.mode;
+          child_eval.offset   = arr_eval.offset + child_idx*element_type_byte_size;
+        }
+        df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
       }
     }
+    df_eval_viz_block_end(list_out, last_vb);
   }
   
   //////////////////////////////
@@ -5479,7 +5427,7 @@ df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, 
   DF_EvalVizBlockList blocks = {0};
   {
     DF_ExpandKey start_parent_key = df_expand_key_make(5381, 0);
-    DF_ExpandKey start_key = df_expand_key_from_eval_view_root_expr_num(eval_view, expr, num);
+    DF_ExpandKey start_key = df_expand_key_make(df_hash_from_expand_key(start_parent_key), num);
     DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, expr);
     U64 expr_comma_pos = str8_find_needle(expr, 0, str8_lit(","), 0);
     String8List default_view_rules = {0};
@@ -5588,6 +5536,105 @@ df_idx_off_from_viz_block_key(DF_EvalVizBlock *block, DF_ExpandKey key)
     idx_off = key.child_num - (block->semantic_idx_range.min+1);
   }
   return idx_off;
+}
+
+internal S64
+df_row_num_from_viz_block_list_key(DF_EvalVizBlockList *blocks, DF_ExpandKey key)
+{
+  S64 row_num = 1;
+  B32 found = 0;
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
+  {
+    DF_EvalVizBlock *block = &n->v;
+    if(key.parent_hash == block->key.parent_hash)
+    {
+      B32 this_block_contains_this_key = 0;
+      {
+        if(block->backing_search_items.v != 0)
+        {
+          U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&block->backing_search_items, key.child_num);
+          this_block_contains_this_key = (item_num != 0 && contains_1u64(block->semantic_idx_range, item_num-1));
+        }
+        else
+        {
+          this_block_contains_this_key = (block->semantic_idx_range.min+1 <= key.child_num && key.child_num < block->semantic_idx_range.max+1);
+        }
+      }
+      if(this_block_contains_this_key)
+      {
+        found = 1;
+        if(block->backing_search_items.v != 0)
+        {
+          U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&block->backing_search_items, key.child_num);
+          row_num += item_num-1-block->semantic_idx_range.min;
+        }
+        else
+        {
+          row_num += key.child_num-1-block->semantic_idx_range.min;
+        }
+        break;
+      }
+    }
+    if(!found)
+    {
+      row_num += (S64)dim_1u64(block->semantic_idx_range);
+    }
+  }
+  if(!found)
+  {
+    row_num = 0;
+  }
+  return row_num;
+}
+
+internal DF_ExpandKey
+df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num)
+{
+  DF_ExpandKey key = {0};
+  S64 scan_y = 1;
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
+  {
+    DF_EvalVizBlock *vb = &n->v;
+    Rng1S64 vb_row_num_range = r1s64(scan_y, scan_y + (S64)dim_1u64(vb->semantic_idx_range));
+    if(contains_1s64(vb_row_num_range, row_num))
+    {
+      key = vb->key;
+      if(vb->backing_search_items.v != 0)
+      {
+        U64 item_idx = (U64)((row_num - vb_row_num_range.min) + vb->semantic_idx_range.min);
+        if(item_idx < vb->backing_search_items.count)
+        {
+          key.child_num = vb->backing_search_items.v[item_idx].idx;
+        }
+      }
+      else
+      {
+        key.child_num = vb->semantic_idx_range.min + (row_num - vb_row_num_range.min) + 1;
+      }
+      break;
+    }
+    scan_y += dim_1s64(vb_row_num_range);
+  }
+  return key;
+}
+
+internal DF_ExpandKey
+df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num)
+{
+  DF_ExpandKey key = {0};
+  S64 scan_y = 1;
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
+  {
+    DF_EvalVizBlock *vb = &n->v;
+    Rng1S64 vb_row_num_range = r1s64(scan_y, scan_y + (S64)dim_1u64(vb->semantic_idx_range));
+    if(contains_1s64(vb_row_num_range, row_num))
+    {
+      key = vb->parent_key;
+      break;
+    }
+    scan_y += dim_1s64(vb_row_num_range);
+  }
+  return key;
 }
 
 ////////////////////////////////

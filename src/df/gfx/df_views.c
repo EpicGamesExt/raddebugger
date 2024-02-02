@@ -569,6 +569,7 @@ df_eval_root_alloc(DF_View *view, DF_EvalWatchViewState *ews)
     result->expr_buffer = push_array_no_zero(view->arena, U8, result->expr_buffer_cap);
   }
   DLLPushBack(ews->first_root, ews->last_root, result);
+  ews->root_count += 1;
   return result;
 }
 
@@ -577,6 +578,7 @@ df_eval_root_release(DF_EvalWatchViewState *ews, DF_EvalRoot *root)
 {
   DLLRemove(ews->first_root, ews->last_root, root);
   SLLStackPush(ews->first_free_root, root);
+  ews->root_count -= 1;
 }
 
 internal void
@@ -606,12 +608,13 @@ internal DF_EvalRoot *
 df_eval_root_from_expand_key(DF_EvalWatchViewState *ews, DF_EvalView *eval_view, DF_ExpandKey expand_key)
 {
   DF_EvalRoot *root = 0;
+  DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+  U64 parent_key_hash = df_hash_from_expand_key(parent_key);
   U64 num = 1;
   for(DF_EvalRoot *r = ews->first_root; r != 0; r = r->next, num += 1)
   {
-    String8 r_expr = df_string_from_eval_root(r);
-    DF_ExpandKey r_key = df_expand_key_from_eval_view_root_expr_num(eval_view, r_expr, num);
-    if(df_expand_key_match(r_key, expand_key))
+    DF_ExpandKey key = df_expand_key_make(parent_key_hash, num);
+    if(df_expand_key_match(key, expand_key))
     {
       root = r;
       break;
@@ -625,13 +628,6 @@ df_string_from_eval_root(DF_EvalRoot *root)
 {
   String8 string = str8(root->expr_buffer, root->expr_buffer_string_size);
   return string;
-}
-
-internal DF_ExpandKey
-df_expand_key_from_eval_view_root_expr_num(DF_EvalView *view, String8 root_expr, U64 num)
-{
-  DF_ExpandKey key = df_expand_key_make(df_hash_from_string(root_expr), num);
-  return key;
 }
 
 //- rjf: windowed watch tree visualization (both single-line and multi-line)
@@ -725,7 +721,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     case DF_EvalWatchViewFillKind_ThreadLocals:
     case DF_EvalWatchViewFillKind_Types:
     {
-      // rjf: unpack
+      //- rjf: unpack context
       DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
       U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
@@ -735,7 +731,13 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
       RADDBG_Parsed *rdbg = &dbgi->rdbg;
       
-      // rjf: query all filtered items from dbgi searching system
+      //- rjf: calculate top-level keys, expand root-level, grab root expansion node
+      DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+      DF_ExpandKey root_key = df_expand_key_make(df_hash_from_expand_key(parent_key), 0);
+      df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, df_expand_key_zero(), parent_key, 1);
+      DF_ExpandNode *root_node = df_expand_node_from_key(&eval_view->expand_tree_table, parent_key);
+      
+      //- rjf: query all filtered items from dbgi searching system
       U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
       B32 items_stale = 0;
       DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, DBGI_FuzzySearchTarget_UDTs, os_now_microseconds()+100, &items_stale);
@@ -744,80 +746,100 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         df_gfx_request_frame();
       }
       
-      // rjf: build block for all
-      DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
-      DF_ExpandKey root_key = df_expand_key_make(df_hash_from_expand_key(parent_key), 0);
-      DF_EvalVizBlock *types_block = push_array(arena, DF_EvalVizBlock, 1);
-      SLLQueuePush(blocks.first, blocks.last, types_block);
-      types_block->kind = DF_EvalVizBlockKind_DebugInfoTable;
-      types_block->visual_idx_range = types_block->semantic_idx_range = r1u64(0, items.count);
-      types_block->parent_key = parent_key;
-      types_block->key = root_key;
-      types_block->backing_search_items = items;
-      blocks.count += 1;
-      blocks.total_visual_row_count += dim_1u64(types_block->visual_idx_range);
-      blocks.total_semantic_row_count += dim_1u64(types_block->semantic_idx_range);
-      
-      // rjf: split block per-expansion
-      df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, df_expand_key_zero(), parent_key, 1);
-      DF_ExpandNode *root_node = df_expand_node_from_key(&eval_view->expand_tree_table, parent_key);
-      for(DF_ExpandNode *child = root_node->first; child != 0; child = child->next)
+      //- rjf: gather unsorted child expansion keys
+      //
+      // Nodes are sorted in the underlying expansion tree data structure, but
+      // ONLY by THEIR ORDER IN THE UNDERLYING DEBUG INFO TABLE. This is
+      // because debug info watch rows use the DEBUG INFO TABLE INDEX to form
+      // their key - this provides more stable/predictable behavior as rows
+      // are reordered, filtered, and shuffled around, as the user filters.
+      //
+      // When we actually build viz blocks, however, we want to produce viz
+      // blocks BY THE ORDER OF SUB-EXPANSIONS IN THE FILTERED ITEM ARRAY
+      // SPACE, so that all of the expansions come out in the right order.
+      //
+      DF_ExpandKey *sub_expand_keys = 0;
+      U64 *sub_expand_item_idxs = 0;
+      U64 sub_expand_keys_count = 0;
       {
-        U64 child_num = child->key.child_num;
-        U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&items, child_num);
-        if(item_num == 0)
+        for(DF_ExpandNode *child = root_node->first; child != 0; child = child->next)
         {
-          continue;
+          sub_expand_keys_count += 1;
         }
-        U64 item_idx = item_num-1;
-        
-        // rjf: truncate existing memblock
-        types_block->visual_idx_range.max = item_idx;
-        types_block->semantic_idx_range.max = item_idx;
-        
-        // rjf: build inheriting cfg table
-        DF_CfgTable child_cfg = {0};
+        sub_expand_keys = push_array(scratch.arena, DF_ExpandKey, sub_expand_keys_count);
+        sub_expand_item_idxs = push_array(scratch.arena, U64, sub_expand_keys_count);
+        U64 idx = 0;
+        for(DF_ExpandNode *child = root_node->first; child != 0; child = child->next)
         {
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(parent_key), child_num));
-          if(view_rule_string.size != 0)
+          U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&items, child->key.child_num);
+          if(item_num != 0)
           {
-            df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+            sub_expand_keys[idx] = child->key;
+            sub_expand_item_idxs[idx] = item_num-1;
+            idx += 1;
+          }
+          else
+          {
+            sub_expand_keys_count -= 1;
           }
         }
+      }
+      
+      //- rjf: sort child expansion keys
+      {
+        for(U64 idx1 = 0; idx1 < sub_expand_keys_count; idx1 += 1)
+        {
+          U64 min_idx2 = 0;
+          U64 min_item_idx = sub_expand_item_idxs[idx1];
+          for(U64 idx2 = idx1+1; idx2 < sub_expand_keys_count; idx2 += 1)
+          {
+            if(sub_expand_item_idxs[idx2] < min_item_idx)
+            {
+              min_idx2 = idx2;
+              min_item_idx = sub_expand_item_idxs[idx2];
+            }
+          }
+          if(min_idx2 != 0)
+          {
+            Swap(DF_ExpandKey, sub_expand_keys[idx1], sub_expand_keys[min_idx2]);
+            Swap(U64, sub_expand_item_idxs[idx1], sub_expand_item_idxs[min_idx2]);
+          }
+        }
+      }
+      
+      //- rjf: build blocks for all table items, split by sorted sub-expansions
+      DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_DebugInfoTable, parent_key, root_key, 0);
+      {
+        last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, items.count);
+        last_vb->backing_search_items = items;
+      }
+      for(U64 sub_expand_idx = 0; sub_expand_idx < sub_expand_keys_count; sub_expand_idx += 1)
+      {
+        // rjf: form split: truncate & complete last block; begin next block
+        last_vb = df_eval_viz_block_split_and_continue(arena, &blocks, last_vb, sub_expand_item_idxs[sub_expand_idx]);
         
-        // rjf: unpack types
-        RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, child_num);
+        // rjf: grab name for the expanded row
+        RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, sub_expand_keys[sub_expand_idx].child_num);
         RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, udt->self_type_idx);
         U64 name_size = 0;
         U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, type_node->user_defined.name_string_idx, &name_size);
         String8 name = str8(name_base, name_size);
         
-        // rjf: produce eval for the expanded types
-        DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
-        
-        // rjf: recurse for sub-block
+        // rjf: recurse for sub-expansion
         {
-          blocks.total_visual_row_count -= 1;
-          blocks.total_semantic_row_count -= 1;
-          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, child->key, name, eval, 0, &child_cfg, 0, &blocks);
-        }
-        
-        // rjf: make new memblock for remainder (if any)
-        if(item_idx+1 < items.count)
-        {
-          DF_EvalVizBlock *next_types_block = push_array(arena, DF_EvalVizBlock, 1);
-          next_types_block->kind              = DF_EvalVizBlockKind_DebugInfoTable;
-          next_types_block->visual_idx_range  = r1u64(item_idx+1, items.count);
-          next_types_block->semantic_idx_range= r1u64(item_idx+1, items.count);
-          next_types_block->depth             = 0;
-          next_types_block->parent_key        = parent_key;
-          next_types_block->key               = root_key;
-          next_types_block->backing_search_items = items;
-          SLLQueuePush(blocks.first, blocks.last, next_types_block);
-          blocks.count += 1;
-          types_block = next_types_block;
+          DF_CfgTable child_cfg = {0};
+          {
+            String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(parent_key), sub_expand_keys[sub_expand_idx].child_num));
+            if(view_rule_string.size != 0)
+            {
+              df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+            }
+          }
+          DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, parent_key, sub_expand_keys[sub_expand_idx], name, eval, 0, &child_cfg, 0, &blocks);
         }
       }
+      df_eval_viz_block_end(&blocks, last_vb);
     }break;
   }
   scratch_end(scratch);
@@ -904,43 +926,24 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   DF_EvalVizBlockList blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, scope, &ctrl_ctx, &parse_ctx, view, ewv);
   
   //////////////////////////////
+  //- rjf: does this eval watch view allow mutation? -> add extra block for editable empty row
+  //
+  DF_ExpandKey empty_row_parent_key = df_expand_key_make(max_U64, max_U64);
+  DF_ExpandKey empty_row_key = df_expand_key_make(df_hash_from_expand_key(empty_row_parent_key), 0);
+  if(modifiable)
+  {
+    DF_EvalVizBlock *b = df_eval_viz_block_begin(scratch.arena, DF_EvalVizBlockKind_Null, empty_row_parent_key, empty_row_key, 0);
+    b->visual_idx_range = b->semantic_idx_range = r1u64(0, 1);
+    df_eval_viz_block_end(&blocks, b);
+  }
+  
+  //////////////////////////////
   //- rjf: selection state * blocks -> 2D table coordinates
   //
   Vec2S64 cursor = {0};
   {
     cursor.x = ewv->selected_column;
-    if(df_expand_key_match(df_expand_key_make(0, 0), ewv->selected_parent_key))
-    {
-      cursor.y = 0;
-    }
-    else if(df_expand_key_match(df_expand_key_make(1, 1), ewv->selected_parent_key))
-    {
-      cursor.y = blocks.total_semantic_row_count+1;
-    }
-    else
-    {
-      B32 key_found = 0;
-      cursor.y = 1;
-      for(DF_EvalVizBlock *block = blocks.first; block != 0; block = block->next)
-      {
-        if(df_expand_key_match(block->parent_key, ewv->selected_parent_key) &&
-           block->key.parent_hash == ewv->selected_key.parent_hash &&
-           df_viz_block_contains_key(block, ewv->selected_key))
-        {
-          key_found = 1;
-          cursor.y += df_idx_off_from_viz_block_key(block, ewv->selected_key);
-          break;
-        }
-        else
-        {
-          cursor.y += dim_1u64(block->semantic_idx_range);
-        }
-      }
-      if(key_found == 0)
-      {
-        cursor.y = 1*!!modifiable;
-      }
-    }
+    cursor.y = df_row_num_from_viz_block_list_key(&blocks, ewv->selected_key);
   }
   
   //////////////////////////////
@@ -1021,20 +1024,16 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
     scroll_list_params.flags         = UI_ScrollListFlag_All;
     scroll_list_params.row_height_px = floor_f32(ui_top_font_size()*2.5f);
     scroll_list_params.dim_px        = dim_2f32(rect);
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, blocks.total_semantic_row_count + 1*!!modifiable));
-    scroll_list_params.item_range    = r1s64(0, 1 + blocks.total_visual_row_count + 1*!!modifiable);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, blocks.total_semantic_row_count));
+    scroll_list_params.item_range    = r1s64(0, 1 + blocks.total_visual_row_count);
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
     UI_ScrollListRowBlockChunkList row_block_chunks = {0};
-    for(DF_EvalVizBlock *viz_block = blocks.first; viz_block != 0; viz_block = viz_block->next)
+    for(DF_EvalVizBlockNode *n = blocks.first; n != 0; n = n->next)
     {
+      DF_EvalVizBlock *vb = &n->v;
       UI_ScrollListRowBlock block = {0};
-      block.row_count = dim_1u64(viz_block->visual_idx_range);
-      block.item_count = dim_1u64(viz_block->semantic_idx_range);
-      ui_scroll_list_row_block_chunk_list_push(scratch.arena, &row_block_chunks, 256, &block);
-    }
-    if(modifiable)
-    {
-      UI_ScrollListRowBlock block = {1, 1};
+      block.row_count = dim_1u64(vb->visual_idx_range);
+      block.item_count = dim_1u64(vb->semantic_idx_range);
       ui_scroll_list_row_block_chunk_list_push(scratch.arena, &row_block_chunks, 256, &block);
     }
     scroll_list_params.row_blocks = ui_scroll_list_row_block_array_from_chunk_list(scratch.arena, &row_block_chunks);
@@ -1107,6 +1106,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       for(DF_EvalVizRow *row = rows.first; row != 0; row = row->next, semantic_idx += 1)
       {
         U64 row_hash = df_hash_from_expand_key(row->key);
+        U64 expr_hash = df_hash_from_string(row->expr);
         df_expand_tree_table_animate(&eval_view->expand_tree_table, df_dt());
         B32 row_selected = ((semantic_idx+1) == cursor.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
@@ -1179,7 +1179,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           {
             ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
           }
-          UI_NamedTableVectorF("row_%I64x", row_hash)
+          UI_NamedTableVectorF("row_%I64x_%I64x_%I64x", row_hash, expr_hash, ewv->root_count)
           {
             //- rjf: expression
             ProfScope("expr")
@@ -1342,7 +1342,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             {
               B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Value);
               B32 value_is_error   = (row->errors.count != 0);
-              B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec);
+              B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
               B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
               B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
               
@@ -1509,6 +1509,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       }
       
       //- rjf: empty row for edits
+#if 0
       if(visible_row_rng.max >= scroll_list_params.item_range.max-1) if(modifiable)
       {
         ui_set_next_flags(disabled_flags);
@@ -1621,6 +1622,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           }
         }
       }
+#endif
     }
   }
   
@@ -1647,76 +1649,65 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       {
         commit_string = edit_autocomplete_string;
       }
-      
-      //- rjf: committed on empty row -> create new
-      if(commit_row == 0 && commit_string.size != 0)
+      switch(commit_column)
       {
-        DF_EvalRoot *root = df_eval_root_alloc(view, ewv);
-        df_eval_root_equip_string(root, commit_string);
-        U64 root_expr_hash = df_hash_from_string(commit_string);
-        DF_EvalViewKey root_view_key = df_eval_view_key_make((U64)root, root_expr_hash);
-        DF_EvalView *root_view = df_eval_view_from_key(root_view_key);
-        DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
-        DF_ExpandKey key = df_expand_key_make(root_expr_hash, 1);
-        df_expand_set_expansion(root_view->arena, &root_view->expand_tree_table, parent_key, key, 0);
-        cursor.y += 1;
-      }
-      
-      //- rjf: committed on a valid row
-      if(commit_row != 0)
-      {
-        switch(commit_column)
+        default:break;
+        
+        //- rjf: expression commits
+        case DF_EvalWatchViewColumnKind_Expr: if(modifiable)
         {
-          default:break;
-          
-          //- rjf: expression commits
-          case DF_EvalWatchViewColumnKind_Expr: if(modifiable)
+          if(commit_string.size == 0)
           {
-            if(commit_string.size == 0)
+            DF_EvalRoot *root = df_eval_root_from_expand_key(ewv, eval_view, commit_row->key);
+            if(root != 0)
             {
-              DF_EvalRoot *root = df_eval_root_from_expand_key(ewv, eval_view, commit_row->key);
-              if(root != 0)
-              {
-                df_eval_root_release(ewv, root);
-              }
+              df_eval_root_release(ewv, root);
             }
-            else
+          }
+          else
+          {
+            DF_EvalRoot *root = df_eval_root_from_expand_key(ewv, eval_view, commit_row->key);
+            if(!root && df_expand_key_match(commit_row->key, empty_row_key))
             {
-              DF_EvalRoot *root = df_eval_root_from_expand_key(ewv, eval_view, commit_row->key);
-              if(root != 0)
-              {
-                df_eval_root_equip_string(root, commit_string);
-              }
+              root = df_eval_root_alloc(view, ewv);
             }
-          }break;
-          
-          //- rjf: value commits
-          case DF_EvalWatchViewColumnKind_Value:
-          {
-            Temp scratch = scratch_begin(0, 0);
-            DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, commit_string);
-            B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, commit_row->eval, write_eval);
-            if(success == 0)
+            if(root != 0)
             {
-              DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-              params.string = str8_lit("Could not commit value successfully.");
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-              df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+              df_eval_root_equip_string(root, commit_string);
             }
-            scratch_end(scratch);
-          }break;
-          
-          //- rjf: type commits
-          case DF_EvalWatchViewColumnKind_Type:
+          }
+        }break;
+        
+        //- rjf: value commits
+        case DF_EvalWatchViewColumnKind_Value:
+        {
+          Temp scratch = scratch_begin(0, 0);
+          DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, commit_string);
+          B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, commit_row->eval, write_eval);
+          if(success == 0)
           {
-          }break;
-          
-          //- rjf: view rule commits
-          case DF_EvalWatchViewColumnKind_ViewRule:
-          {
-            df_eval_view_set_key_rule(eval_view, commit_row->key, commit_string);
-          }break;
-        }
+            DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+            params.string = str8_lit("Could not commit value successfully.");
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+          }
+          scratch_end(scratch);
+        }break;
+        
+        //- rjf: type commits
+        case DF_EvalWatchViewColumnKind_Type:
+        {
+        }break;
+        
+        //- rjf: view rule commits
+        case DF_EvalWatchViewColumnKind_ViewRule:
+        {
+          df_eval_view_set_key_rule(eval_view, commit_row->key, commit_string);
+        }break;
+      }
+      if(edit_submit && commit_string.size != 0)
+      {
+        cursor.y += 1;
       }
     }
   }
@@ -1730,19 +1721,17 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   }
   
   //////////////////////////////
-  //- rjf: commit was submitted -> advance to next row
-  //
-  if(edit_submit)
-  {
-    cursor.y += 1;
-  }
-  
-  //////////////////////////////
   //- rjf: commits occurred -> re-compute blocks to adjust to new state
   //
   if(edit_commit)
   {
     blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, scope, &ctrl_ctx, &parse_ctx, view, ewv);
+    if(modifiable)
+    {
+      DF_EvalVizBlock *b = df_eval_viz_block_begin(scratch.arena, DF_EvalVizBlockKind_Null, empty_row_parent_key, empty_row_key, 0);
+      b->visual_idx_range = b->semantic_idx_range = r1u64(0, 1);
+      df_eval_viz_block_end(&blocks, b);
+    }
   }
   
   //////////////////////////////
@@ -1752,9 +1741,20 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
     DF_ExpandKey last_selected_key = ewv->selected_key;
     DF_ExpandKey last_selected_parent_key = ewv->selected_parent_key;
     ewv->selected_column = (DF_EvalWatchViewColumnKind)cursor.x;
+    ewv->selected_key = df_key_from_viz_block_list_row_num(&blocks, cursor.y);
+    ewv->selected_parent_key = df_parent_key_from_viz_block_list_row_num(&blocks, cursor.y);
+    if(df_expand_key_match(df_expand_key_zero(), ewv->selected_key))
+    {
+      ewv->selected_key = last_selected_parent_key;
+      DF_ExpandNode *node = df_expand_node_from_key(&eval_view->expand_tree_table, last_selected_parent_key);
+      for(DF_ExpandNode *n = node; n != 0; n = n->parent)
+      {
+        ewv->selected_key = n->key;
+      }
+    }
+#if 0
     ewv->selected_parent_key = df_expand_key_make(0, 0);
     ewv->selected_key = df_expand_key_make(0, 0);
-    S64 scan_y = 1;
     if(cursor.y == 0)
     {
       ewv->selected_parent_key = df_expand_key_make(0, 0);
@@ -1770,6 +1770,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       DF_EvalVizBlock *block_before_found = 0;
       DF_EvalVizBlock *found_block = 0;
       DF_EvalVizBlock *prev = 0;
+      S64 scan_y = 1;
       for(DF_EvalVizBlock *block = blocks.first; block != 0; prev = block, block = block->next)
       {
         S64 advance = (S64)dim_1u64(block->semantic_idx_range);
@@ -1807,6 +1808,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         }
       }
     }
+#endif
     if(!df_expand_key_match(ewv->selected_key, last_selected_key) ||
        !df_expand_key_match(ewv->selected_parent_key, last_selected_parent_key))
     {
@@ -6677,6 +6679,8 @@ DF_VIEW_SETUP_FUNCTION_DEF(Watch)
   
   // rjf: add roots for watches
   {
+    DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+    U64 parent_key_hash = df_hash_from_expand_key(parent_key);
     DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
     DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
     U64 num = 1;
@@ -6688,13 +6692,14 @@ DF_VIEW_SETUP_FUNCTION_DEF(Watch)
         df_eval_root_equip_string(root, expr->string);
         if(expr->first != &df_g_nil_cfg_node)
         {
-          DF_ExpandKey root_key = df_expand_key_from_eval_view_root_expr_num(eval_view, expr->string, num);
+          DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, num);
           String8 view_rule = expr->first->string;
           df_eval_view_set_key_rule(eval_view, root_key, view_rule);
         }
       }
     }
   }
+  
   ProfEnd();
 }
 
@@ -6706,12 +6711,14 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch)
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   {
+    DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+    U64 parent_key_hash = df_hash_from_expand_key(parent_key);
     U64 num = 1;
     for(DF_EvalRoot *root = ewv->first_root; root != 0; root = root->next, num += 1)
     {
       String8 string = df_string_from_eval_root(root);
       str8_list_pushf(arena, &strs, "\"%S\"", string);
-      DF_ExpandKey root_key = df_expand_key_from_eval_view_root_expr_num(eval_view, string, num);
+      DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, num);
       String8 view_rule = df_eval_view_rule_from_key(eval_view, root_key);
       if(view_rule.size != 0)
       {

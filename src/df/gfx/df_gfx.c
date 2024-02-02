@@ -7062,8 +7062,10 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
   U64 visual_idx_off = 0;
   U64 semantic_idx_off = 0;
   DF_EvalVizWindowedRowList list = {0};
-  for(DF_EvalVizBlock *block = blocks->first; block != 0; block = block->next)
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
   {
+    DF_EvalVizBlock *block = &n->v;
+    
     //////////////////////////////
     //- rjf: extract block info
     //
@@ -7149,7 +7151,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
     //////////////////////////////
     //- rjf: sum & advance
     //
-    list.count_before_visual   += num_skipped_visual;
+    list.count_before_visual += num_skipped_visual;
     if(block_num_visual_rows != 0)
     {
       list.count_before_semantic += block_num_semantic_rows * num_skipped_visual / block_num_visual_rows;
@@ -7163,6 +7165,19 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
     switch(block->kind)
     {
       default:{}break;
+      
+      //////////////////////////////
+      //- rjf: null -> empty row
+      //
+      case DF_EvalVizBlockKind_Null:
+      if(visible_idx_range.max > visible_idx_range.min)
+      {
+        DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+        SLLQueuePush(list.first, list.last, row);
+        list.count += 1;
+        row->key = block->key;
+        row->parent_key = block->parent_key;
+      }break;
       
       //////////////////////////////
       //- rjf: root -> just a single row. possibly expandable.

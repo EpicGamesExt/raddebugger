@@ -483,19 +483,12 @@ struct DF_ViewRuleHooks_RGBAState
 
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
 {
-  DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
-  block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval                          = eval;
-  block->cfg_table                     = *cfg_table;
-  block->parent_key                    = key;
-  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
-  block->visual_idx_range              = r1u64(0, 8);
-  block->semantic_idx_range            = r1u64(0, 1);
-  block->depth                         = depth;
-  SLLQueuePush(out->first, out->last, block);
-  out->count += 1;
-  out->total_visual_row_count += 8;
-  out->total_semantic_row_count += 1;
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->eval = eval;
+  vb->cfg_table = *cfg_table;
+  vb->visual_idx_range = r1u64(0, 8);
+  vb->semantic_idx_range = r1u64(0, 1);
+  df_eval_viz_block_end(out, vb);
 }
 
 DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
@@ -656,19 +649,12 @@ struct DF_ViewRuleHooks_TextState
 
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
 {
-  DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
-  block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval                          = eval;
-  block->cfg_table                     = *cfg_table;
-  block->parent_key                    = key;
-  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
-  block->visual_idx_range              = r1u64(0, 8);
-  block->semantic_idx_range            = r1u64(0, 1);
-  block->depth                         = depth;
-  SLLQueuePush(out->first, out->last, block);
-  out->count += 1;
-  out->total_visual_row_count += 8;
-  out->total_semantic_row_count += 1;
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->eval = eval;
+  vb->cfg_table = *cfg_table;
+  vb->visual_idx_range = r1u64(0, 8);
+  vb->semantic_idx_range = r1u64(0, 1);
+  df_eval_viz_block_end(out, vb);
 }
 
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
@@ -764,19 +750,12 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
 
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
 {
-  DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
-  block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval                          = eval;
-  block->cfg_table                     = *cfg_table;
-  block->parent_key                    = key;
-  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
-  block->visual_idx_range              = r1u64(0, 8);
-  block->semantic_idx_range            = r1u64(0, 1);
-  block->depth                         = depth;
-  SLLQueuePush(out->first, out->last, block);
-  out->count += 1;
-  out->total_visual_row_count += 8;
-  out->total_semantic_row_count += 1;
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->eval = eval;
+  vb->cfg_table = *cfg_table;
+  vb->visual_idx_range = r1u64(0, 8);
+  vb->semantic_idx_range = r1u64(0, 1);
+  df_eval_viz_block_end(out, vb);
 }
 
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
@@ -855,19 +834,12 @@ internal UI_BOX_CUSTOM_DRAW(df_view_rule_hooks__bitmap_zoom_draw)
 
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
 {
-  DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
-  block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval                          = eval;
-  block->cfg_table                     = *cfg_table;
-  block->parent_key                    = key;
-  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
-  block->visual_idx_range              = r1u64(0, 8);
-  block->semantic_idx_range            = r1u64(0, 1);
-  block->depth                         = depth;
-  SLLQueuePush(out->first, out->last, block);
-  out->count += 1;
-  out->total_visual_row_count += 8;
-  out->total_semantic_row_count += 1;
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->eval = eval;
+  vb->cfg_table = *cfg_table;
+  vb->visual_idx_range = r1u64(0, 8);
+  vb->semantic_idx_range = r1u64(0, 1);
+  df_eval_viz_block_end(out, vb);
 }
 
 DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(bitmap)
@@ -1101,19 +1073,12 @@ internal UI_BOX_CUSTOM_DRAW(df_view_rule_hooks__geo_box_draw)
 
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo)
 {
-  DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
-  block->kind                          = DF_EvalVizBlockKind_Canvas;
-  block->eval                          = eval;
-  block->cfg_table                     = *cfg_table;
-  block->parent_key                    = key;
-  block->key                           = df_expand_key_make(df_hash_from_expand_key(key), 1);
-  block->visual_idx_range              = r1u64(0, 16);
-  block->semantic_idx_range            = r1u64(0, 1);
-  block->depth                         = depth;
-  SLLQueuePush(out->first, out->last, block);
-  out->count += 1;
-  out->total_visual_row_count += 16;
-  out->total_semantic_row_count += 1;
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->eval = eval;
+  vb->cfg_table = *cfg_table;
+  vb->visual_idx_range = r1u64(0, 16);
+  vb->semantic_idx_range = r1u64(0, 1);
+  df_eval_viz_block_end(out, vb);
 }
 
 DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(geo)

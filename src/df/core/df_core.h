@@ -693,6 +693,7 @@ struct DF_EvalLinkBaseArray
 
 typedef enum DF_EvalVizBlockKind
 {
+  DF_EvalVizBlockKind_Null,              // empty
   DF_EvalVizBlockKind_Root,              // root of tree or subtree; possibly-expandable expression.
   DF_EvalVizBlockKind_Members,           // members of struct, class, union
   DF_EvalVizBlockKind_Elements,          // elements of array
@@ -706,27 +707,49 @@ DF_EvalVizBlockKind;
 typedef struct DF_EvalVizBlock DF_EvalVizBlock;
 struct DF_EvalVizBlock
 {
-  DF_EvalVizBlock *next;
+  // rjf: kind & keys
   DF_EvalVizBlockKind kind;
-  DF_Eval eval;
-  TG_Key link_member_type_key;
-  U64 link_member_off;
-  DF_CfgTable cfg_table;
-  String8 string;
   DF_ExpandKey parent_key;
   DF_ExpandKey key;
+  S32 depth;
+  
+  // rjf: evaluation info
+  DF_Eval eval;
+  String8 string;
+  TG_Member *member;
+  
+  // rjf: info about ranges that this block spans
   Rng1U64 visual_idx_range;
   Rng1U64 semantic_idx_range;
   DBGI_FuzzySearchItemArray backing_search_items;
-  TG_Member *member;
-  S32 depth;
+  
+  // rjf: visualization config extensions
+  DF_CfgTable cfg_table;
+  TG_Key link_member_type_key;
+  U64 link_member_off;
+};
+
+typedef struct DF_EvalVizBlockNode DF_EvalVizBlockNode;
+struct DF_EvalVizBlockNode
+{
+  DF_EvalVizBlockNode *next;
+  DF_EvalVizBlock v;
 };
 
 typedef struct DF_EvalVizBlockList DF_EvalVizBlockList;
 struct DF_EvalVizBlockList
 {
-  DF_EvalVizBlock *first;
-  DF_EvalVizBlock *last;
+  DF_EvalVizBlockNode *first;
+  DF_EvalVizBlockNode *last;
+  U64 count;
+  U64 total_visual_row_count;
+  U64 total_semantic_row_count;
+};
+
+typedef struct DF_EvalVizBlockArray DF_EvalVizBlockArray;
+struct DF_EvalVizBlockArray
+{
+  DF_EvalVizBlock *v;
   U64 count;
   U64 total_visual_row_count;
   U64 total_semantic_row_count;
@@ -1540,7 +1563,7 @@ internal void df_eval_view_set_key_rule(DF_EvalView *eval_view, DF_ExpandKey key
 internal String8 df_eval_view_rule_from_key(DF_EvalView *eval_view, DF_ExpandKey key);
 
 ////////////////////////////////
-//~ rjf: Evaluation View Visualization & Interaction
+//~ rjf: Evaluation Visualization
 
 //- rjf: evaluation value string builder helpers
 internal String8 df_string_from_ascii_value(Arena *arena, U8 val);
@@ -1555,13 +1578,20 @@ internal DF_EvalLinkBaseChunkList df_eval_link_base_chunk_list_from_eval(Arena *
 internal DF_EvalLinkBase df_eval_link_base_from_chunk_list_index(DF_EvalLinkBaseChunkList *list, U64 idx);
 internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *arena, DF_EvalLinkBaseChunkList *chunks);
 
-//- rjf: watch tree visualization
+//- rjf: viz block collection building
+internal DF_EvalVizBlock *df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockKind kind, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth);
+internal DF_EvalVizBlock *df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx);
+internal void df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block);
 internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
 internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, String8 expr, U64 num);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
+
+//- rjf: viz block list <-> table coordinates
 internal DF_ExpandKey df_key_from_viz_block_idx_off(DF_EvalVizBlock *block, U64 idx);
 internal B32 df_viz_block_contains_key(DF_EvalVizBlock *block, DF_ExpandKey key);
 internal U64 df_idx_off_from_viz_block_key(DF_EvalVizBlock *block, DF_ExpandKey key);
+internal S64 df_row_num_from_viz_block_list_key(DF_EvalVizBlockList *blocks, DF_ExpandKey key);
+internal DF_ExpandKey df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators
