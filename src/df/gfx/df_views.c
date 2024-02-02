@@ -1750,6 +1750,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       for(DF_ExpandNode *n = node; n != 0; n = n->parent)
       {
         ewv->selected_key = n->key;
+        if(n->expanded == 0)
+        {
+          break;
+        }
       }
     }
 #if 0
