@@ -802,9 +802,6 @@ struct DF_EvalVizRow
   // rjf: value area override view rule spec
   struct DF_GfxViewRuleSpec *value_ui_rule_spec;
   struct DF_CfgNode *value_ui_rule_node;
-  
-  // rjf: errors
-  EVAL_ErrorList errors;
 };
 
 typedef struct DF_EvalVizWindowedRowList DF_EvalVizWindowedRowList;
@@ -1593,7 +1590,7 @@ internal DF_ExpandKey df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *bl
 internal DF_ExpandKey df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
 
 //- rjf: viz row list building
-internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key);
+internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, DF_Eval eval);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators

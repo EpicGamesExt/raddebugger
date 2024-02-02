@@ -5586,14 +5586,51 @@ df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_n
 //- rjf: viz row list building
 
 internal DF_EvalVizRow *
-df_eval_viz_row_list_push_new(Arena *arena, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key)
+df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, DF_Eval eval)
 {
+  // rjf: push
   DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
   SLLQueuePush(rows->first, rows->last, row);
   rows->count += 1;
+  
+  // rjf: fill basics
   row->depth      = block->depth;
   row->parent_key = block->parent_key;
   row->key        = key;
+  row->eval       = eval;
+  
+  // rjf: determine exandability, editability
+  if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
+  {
+    for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+    {
+      TG_Kind kind = tg_kind_from_key(t);
+      if(kind == TG_Kind_Null)
+      {
+        break;
+      }
+      if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
+      {
+        row->flags |= DF_EvalVizRowFlag_CanEditValue;
+      }
+      if(kind == TG_Kind_Struct ||
+         kind == TG_Kind_Union ||
+         kind == TG_Kind_Class ||
+         kind == TG_Kind_Array)
+      {
+        row->flags |= DF_EvalVizRowFlag_CanExpand;
+      }
+      if(row->flags & DF_EvalVizRowFlag_CanExpand)
+      {
+        break;
+      }
+      if(block->eval.mode == EVAL_EvalMode_NULL)
+      {
+        break;
+      }
+    }
+  }
+  
   return row;
 }
 

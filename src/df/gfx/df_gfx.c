@@ -7172,7 +7172,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_Null:
       if(visible_idx_range.max > visible_idx_range.min)
       {
-        df_eval_viz_row_list_push_new(arena, &list, block, block->key);
+        DF_Eval eval = zero_struct;
+        df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, block->key, eval);
       }break;
       
       //////////////////////////////
@@ -7183,48 +7184,17 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       {
         String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
         String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
-        String8 display_string = str8_list_join(arena, &display_strings, 0);
-        String8 edit_string = str8_list_join(arena, &edit_strings, 0);
-        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, block->key);
-        row->eval = block->eval;
-        row->expr = block->string;
-        row->display_value = display_string;
-        row->edit_value = edit_string;
-        row->value_ui_rule_node = value_ui_rule_node;
-        row->value_ui_rule_spec = value_ui_rule_spec;
+        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, block->key, block->eval);
+        row->expr                = block->string;
+        row->display_value       = str8_list_join(arena, &display_strings, 0);
+        row->edit_value          = str8_list_join(arena, &edit_strings, 0);
+        row->value_ui_rule_node  = value_ui_rule_node;
+        row->value_ui_rule_spec  = value_ui_rule_spec;
         row->expand_ui_rule_node = expand_ui_rule_node;
         row->expand_ui_rule_spec = expand_ui_rule_spec;
-        row->errors = block->eval.errors;
-        if(block_type_kind != TG_Kind_Null)
+        if(expandability_required)
         {
-          for(TG_Key t = block->eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
-          {
-            TG_Kind kind = tg_kind_from_key(t);
-            if(kind == TG_Kind_Null)
-            {
-              break;
-            }
-            if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
-            {
-              row->flags |= DF_EvalVizRowFlag_CanEditValue;
-            }
-            if(expandability_required ||
-               kind == TG_Kind_Struct ||
-               kind == TG_Kind_Union ||
-               kind == TG_Kind_Class ||
-               kind == TG_Kind_Array)
-            {
-              row->flags |= DF_EvalVizRowFlag_CanExpand;
-            }
-            if(row->flags & DF_EvalVizRowFlag_CanExpand)
-            {
-              break;
-            }
-            if(block->eval.mode == EVAL_EvalMode_NULL)
-            {
-              break;
-            }
-          }
+          row->flags |= DF_EvalVizRowFlag_CanExpand;
         }
       }break;
       
@@ -7266,46 +7236,18 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: build & push row
           String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
           String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
-          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
-          row->eval = member_eval;
-          row->expr = push_str8_copy(arena, member->name);
-          row->display_value = str8_list_join(arena, &display_strings, 0);
-          row->edit_value = str8_list_join(arena, &edit_strings, 0);
-          row->inherited_type_key_chain = tg_key_list_copy(arena, &member->inheritance_key_chain);
-          row->value_ui_rule_node = value_ui_rule_node;
-          row->value_ui_rule_spec = value_ui_rule_spec;
+          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, member_eval);
+          row->expr                = push_str8_copy(arena, member->name);
+          row->display_value       = str8_list_join(arena, &display_strings, 0);
+          row->edit_value          = str8_list_join(arena, &edit_strings, 0);
+          row->value_ui_rule_node  = value_ui_rule_node;
+          row->value_ui_rule_spec  = value_ui_rule_spec;
           row->expand_ui_rule_node = expand_ui_rule_node;
           row->expand_ui_rule_spec = expand_ui_rule_spec;
-          if(tg_kind_from_key(member_eval.type_key) != TG_Kind_Null)
+          row->inherited_type_key_chain = tg_key_list_copy(arena, &member->inheritance_key_chain);
+          if(expandability_required)
           {
-            for(TG_Key t = member_eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
-            {
-              TG_Kind kind = tg_kind_from_key(t);
-              if(kind == TG_Kind_Null)
-              {
-                break;
-              }
-              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
-              {
-                row->flags |= DF_EvalVizRowFlag_CanEditValue;
-              }
-              if(expandability_required ||
-                 kind == TG_Kind_Struct ||
-                 kind == TG_Kind_Union ||
-                 kind == TG_Kind_Class ||
-                 kind == TG_Kind_Array)
-              {
-                row->flags |= DF_EvalVizRowFlag_CanExpand;
-              }
-              if(row->flags & DF_EvalVizRowFlag_CanExpand)
-              {
-                break;
-              }
-              if(block->eval.mode == EVAL_EvalMode_NULL)
-              {
-                break;
-              }
-            }
+            row->flags |= DF_EvalVizRowFlag_CanExpand;
           }
         }
       }break;
@@ -7346,45 +7288,17 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: build row
           String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
           String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
-          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
-          row->eval = elem_eval;
-          row->expr = push_str8f(arena, "[%I64u]", idx);
-          row->display_value = str8_list_join(arena, &display_strings, 0);
-          row->edit_value = str8_list_join(arena, &edit_strings, 0);
-          row->value_ui_rule_node = value_ui_rule_node;
-          row->value_ui_rule_spec = value_ui_rule_spec;
+          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, elem_eval);
+          row->expr                = push_str8f(arena, "[%I64u]", idx);
+          row->display_value       = str8_list_join(arena, &display_strings, 0);
+          row->edit_value          = str8_list_join(arena, &edit_strings, 0);
+          row->value_ui_rule_node  = value_ui_rule_node;
+          row->value_ui_rule_spec  = value_ui_rule_spec;
           row->expand_ui_rule_node = expand_ui_rule_node;
           row->expand_ui_rule_spec = expand_ui_rule_spec;
-          if(direct_type_kind != TG_Kind_Null)
+          if(expandability_required)
           {
-            for(TG_Key t = elem_eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
-            {
-              TG_Kind kind = tg_kind_from_key(t);
-              if(kind == TG_Kind_Null)
-              {
-                break;
-              }
-              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
-              {
-                row->flags |= DF_EvalVizRowFlag_CanEditValue;
-              }
-              if(expandability_required ||
-                 kind == TG_Kind_Struct ||
-                 kind == TG_Kind_Union ||
-                 kind == TG_Kind_Class ||
-                 kind == TG_Kind_Array)
-              {
-                row->flags |= DF_EvalVizRowFlag_CanExpand;
-              }
-              if(row->flags & DF_EvalVizRowFlag_CanExpand)
-              {
-                break;
-              }
-              if(block->eval.mode == EVAL_EvalMode_NULL)
-              {
-                break;
-              }
-            }
+            row->flags |= DF_EvalVizRowFlag_CanExpand;
           }
         }
       }break;
@@ -7425,45 +7339,17 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: build row
           String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
           String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
-          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
-          row->eval = link_eval;
-          row->expr = push_str8f(arena, "[%I64u]", idx);
-          row->display_value = str8_list_join(arena, &display_strings, 0);
-          row->edit_value = str8_list_join(arena, &edit_strings, 0);
-          row->value_ui_rule_node = value_ui_rule_node;
-          row->value_ui_rule_spec = value_ui_rule_spec;
+          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, link_eval);
+          row->expr                = push_str8f(arena, "[%I64u]", idx);
+          row->display_value       = str8_list_join(arena, &display_strings, 0);
+          row->edit_value          = str8_list_join(arena, &edit_strings, 0);
+          row->value_ui_rule_node  = value_ui_rule_node;
+          row->value_ui_rule_spec  = value_ui_rule_spec;
           row->expand_ui_rule_node = expand_ui_rule_node;
           row->expand_ui_rule_spec = expand_ui_rule_spec;
-          if(link_type_kind != TG_Kind_Null)
+          if(expandability_required)
           {
-            for(TG_Key t = link_eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
-            {
-              TG_Kind kind = tg_kind_from_key(t);
-              if(kind == TG_Kind_Null)
-              {
-                break;
-              }
-              if((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef)
-              {
-                row->flags |= DF_EvalVizRowFlag_CanEditValue;
-              }
-              if(expandability_required ||
-                 kind == TG_Kind_Struct ||
-                 kind == TG_Kind_Union ||
-                 kind == TG_Kind_Class ||
-                 kind == TG_Kind_Array)
-              {
-                row->flags |= DF_EvalVizRowFlag_CanExpand;
-              }
-              if(row->flags & DF_EvalVizRowFlag_CanExpand)
-              {
-                break;
-              }
-              if(block->eval.mode == EVAL_EvalMode_NULL)
-              {
-                break;
-              }
-            }
+            row->flags |= DF_EvalVizRowFlag_CanExpand;
           }
         }
       }break;
@@ -7475,9 +7361,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       if(num_skipped_visual < block_num_visual_rows)
       {
         DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), 1);
-        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
+        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, block->eval);
         row->flags               = DF_EvalVizRowFlag_Canvas;
-        row->eval                = block->eval;
         row->size_in_rows        = dim_1u64(intersect_1u64(visible_idx_range, r1u64(0, dim_1u64(block->visual_idx_range))));
         row->skipped_size_in_rows= (visible_idx_range.min > block->visual_idx_range.min) ? visible_idx_range.min - block->visual_idx_range.min : 0;
         row->chopped_size_in_rows= (visible_idx_range.max < block->visual_idx_range.max) ? block->visual_idx_range.max - visible_idx_range.max : 0;
@@ -7516,8 +7401,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         // rjf: build row
         String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
         String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
-        row->eval = eval;
+        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, eval);
         row->expr = name;
         row->display_value = str8_list_join(arena, &display_strings, 0);
         row->edit_value = str8_list_join(arena, &edit_strings, 0);
@@ -7525,37 +7409,6 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         row->value_ui_rule_spec = value_ui_rule_spec;
         row->expand_ui_rule_node = expand_ui_rule_node;
         row->expand_ui_rule_spec = expand_ui_rule_spec;
-        if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
-        {
-          for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
-          {
-            TG_Kind kind = tg_kind_from_key(t);
-            if(kind == TG_Kind_Null)
-            {
-              break;
-            }
-            if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
-            {
-              row->flags |= DF_EvalVizRowFlag_CanEditValue;
-            }
-            if(expandability_required ||
-               kind == TG_Kind_Struct ||
-               kind == TG_Kind_Union ||
-               kind == TG_Kind_Class ||
-               kind == TG_Kind_Array)
-            {
-              row->flags |= DF_EvalVizRowFlag_CanExpand;
-            }
-            if(row->flags & DF_EvalVizRowFlag_CanExpand)
-            {
-              break;
-            }
-            if(block->eval.mode == EVAL_EvalMode_NULL)
-            {
-              break;
-            }
-          }
-        }
       }break;
     }
   }

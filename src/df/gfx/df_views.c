@@ -1340,7 +1340,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             ProfScope("value")
             {
               B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Value);
-              B32 value_is_error   = (row->errors.count != 0);
+              B32 value_is_error   = (row->eval.errors.count != 0);
               B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
               B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
               B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
@@ -1365,7 +1365,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 if(value_is_error) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground)) UI_Font(df_font_from_slot(DF_FontSlot_Main))
                 {
                   String8List strings = {0};
-                  for(EVAL_Error *error = row->errors.first; error != 0; error = error->next)
+                  for(EVAL_Error *error = row->eval.errors.first; error != 0; error = error->next)
                   {
                     str8_list_push(scratch.arena, &strings, error->text);
                   }
