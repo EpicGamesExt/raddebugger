@@ -1045,7 +1045,7 @@ ui_table_cell_sized_begin(UI_Size size)
   ui_ts_cell_idx += 1;
   ui_set_next_pref_width(size);
   ui_set_next_child_layout_axis(Axis2_X);
-  UI_Box *cell = ui_build_box_from_stringf((column_idx > 0 ? UI_BoxFlag_DrawSideLeft : 0), "###tbl_cell_%p_%I64u", vector, vector->child_count);
+  UI_Box *cell = ui_build_box_from_stringf((column_idx > 0 ? UI_BoxFlag_DrawSideLeft : 0), "###tbl_cell_%p_%I64u", vector, ui_ts_cell_idx);
   ui_push_parent(cell);
   return cell;
 }

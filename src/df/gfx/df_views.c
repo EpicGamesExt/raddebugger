@@ -1196,7 +1196,8 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
                row->eval.errors.count == 0 &&
                row->eval.offset%64 != 0 &&
-               row->depth > 0)
+               row->depth > 0 &&
+               !row_expanded)
             {
               U64 next_off = (row->eval.offset + tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key));
               if(next_off%64 != 0 && row->eval.offset/64 < next_off/64)
