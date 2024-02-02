@@ -641,6 +641,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ews);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   String8 filter = str8(view->query_buffer, view->query_string_size);
+  DBGI_FuzzySearchTarget dbgi_target = DBGI_FuzzySearchTarget_UDTs;
   switch(ews->fill_kind)
   {
     ////////////////////////////
@@ -717,9 +718,10 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     ////////////////////////////
     //- rjf: debug info table fill -> build split debug info table blocks
     //
-    case DF_EvalWatchViewFillKind_Globals:
-    case DF_EvalWatchViewFillKind_ThreadLocals:
-    case DF_EvalWatchViewFillKind_Types:
+    case DF_EvalWatchViewFillKind_Globals:      dbgi_target = DBGI_FuzzySearchTarget_GlobalVariables; goto dbgi_table;
+    case DF_EvalWatchViewFillKind_ThreadLocals: dbgi_target = DBGI_FuzzySearchTarget_ThreadVariables; goto dbgi_table;
+    case DF_EvalWatchViewFillKind_Types:        dbgi_target = DBGI_FuzzySearchTarget_UDTs;            goto dbgi_table;
+    dbgi_table:;
     {
       //- rjf: unpack context
       DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
@@ -740,7 +742,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       //- rjf: query all filtered items from dbgi searching system
       U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
       B32 items_stale = 0;
-      DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, DBGI_FuzzySearchTarget_UDTs, os_now_microseconds()+100, &items_stale);
+      DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, dbgi_target, os_now_microseconds()+100, &items_stale);
       if(items_stale)
       {
         df_gfx_request_frame();
@@ -811,6 +813,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_DebugInfoTable, parent_key, root_key, 0);
       {
         last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, items.count);
+        last_vb->dbgi_target = dbgi_target;
         last_vb->backing_search_items = items;
       }
       for(U64 sub_expand_idx = 0; sub_expand_idx < sub_expand_keys_count; sub_expand_idx += 1)
@@ -819,11 +822,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         last_vb = df_eval_viz_block_split_and_continue(arena, &blocks, last_vb, sub_expand_item_idxs[sub_expand_idx]);
         
         // rjf: grab name for the expanded row
-        RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, sub_expand_keys[sub_expand_idx].child_num);
-        RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, udt->self_type_idx);
-        U64 name_size = 0;
-        U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, type_node->user_defined.name_string_idx, &name_size);
-        String8 name = str8(name_base, name_size);
+        String8 name = dbgi_fuzzy_item_string_from_rdbg_target_element_idx(&dbgi->rdbg, dbgi_target, sub_expand_keys[sub_expand_idx].child_num);
         
         // rjf: recurse for sub-expansion
         {

@@ -110,6 +110,47 @@ dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemAr
   return fuzzy_item_num;
 }
 
+internal String8
+dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBG_Parsed *rdbg, DBGI_FuzzySearchTarget target, U64 element_idx)
+{
+  String8 result = {0};
+  switch(target)
+  {
+    // NOTE(rjf): no default - warn if we miss a case
+    case DBGI_FuzzySearchTarget_Procedures:
+    {
+      RADDBG_Procedure *proc = raddbg_element_from_idx(rdbg, procedures, element_idx);
+      U64 name_size = 0;
+      U8 *name_base = raddbg_string_from_idx(rdbg, proc->name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+    case DBGI_FuzzySearchTarget_GlobalVariables:
+    {
+      RADDBG_GlobalVariable *gvar = raddbg_element_from_idx(rdbg, global_variables, element_idx);
+      U64 name_size = 0;
+      U8 *name_base = raddbg_string_from_idx(rdbg, gvar->name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+    case DBGI_FuzzySearchTarget_ThreadVariables:
+    {
+      RADDBG_ThreadVariable *tvar = raddbg_element_from_idx(rdbg, thread_variables, element_idx);
+      U64 name_size = 0;
+      U8 *name_base = raddbg_string_from_idx(rdbg, tvar->name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+    case DBGI_FuzzySearchTarget_UDTs:
+    {
+      RADDBG_UDT *udt = raddbg_element_from_idx(rdbg, udts, element_idx);
+      RADDBG_TypeNode *type_node = raddbg_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+      U64 name_size = 0;
+      U8 *name_base = raddbg_string_from_idx(rdbg, type_node->user_defined.name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+    case DBGI_FuzzySearchTarget_COUNT:{}break;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Forced Override Cache Functions
 

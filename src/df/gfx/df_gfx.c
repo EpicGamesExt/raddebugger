@@ -7529,12 +7529,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
-          // rjf: unpack type info
-          RADDBG_UDT *udt = raddbg_element_from_idx(parse_ctx->rdbg, udts, block->backing_search_items.v[idx].idx);
-          RADDBG_TypeNode *type_node = raddbg_element_from_idx(parse_ctx->rdbg, type_nodes, udt->self_type_idx);
-          U64 name_size = 0;
-          U8 *name_base = raddbg_string_from_idx(parse_ctx->rdbg, type_node->user_defined.name_string_idx, &name_size);
-          String8 name = str8(name_base, name_size);
+          // rjf: unpack info about this row
+          String8 name = dbgi_fuzzy_item_string_from_rdbg_target_element_idx(parse_ctx->rdbg, block->dbgi_target, block->backing_search_items.v[idx].idx);
           
           // rjf: get keys for this row
           DF_ExpandKey parent_key = block->parent_key;

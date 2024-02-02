@@ -721,6 +721,7 @@ struct DF_EvalVizBlock
   // rjf: info about ranges that this block spans
   Rng1U64 visual_idx_range;
   Rng1U64 semantic_idx_range;
+  DBGI_FuzzySearchTarget dbgi_target;
   DBGI_FuzzySearchItemArray backing_search_items;
   
   // rjf: visualization config extensions
