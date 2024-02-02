@@ -5583,6 +5583,20 @@ df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_n
   return key;
 }
 
+//- rjf: viz row list building
+
+internal DF_EvalVizRow *
+df_eval_viz_row_list_push_new(Arena *arena, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key)
+{
+  DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+  SLLQueuePush(rows->first, rows->last, row);
+  rows->count += 1;
+  row->depth      = block->depth;
+  row->parent_key = block->parent_key;
+  row->key        = key;
+  return row;
+}
+
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators
 

@@ -778,6 +778,11 @@ struct DF_EvalVizRow
   DF_EvalVizRow *next;
   DF_EvalVizRowFlags flags;
   
+  // rjf: block info
+  S32 depth;
+  DF_ExpandKey parent_key;
+  DF_ExpandKey key;
+  
   // rjf: evaluation artifacts
   DF_Eval eval;
   
@@ -800,11 +805,6 @@ struct DF_EvalVizRow
   
   // rjf: errors
   EVAL_ErrorList errors;
-  
-  // rjf: tree depth & keys
-  S32 depth;
-  DF_ExpandKey parent_key;
-  DF_ExpandKey key;
 };
 
 typedef struct DF_EvalVizWindowedRowList DF_EvalVizWindowedRowList;
@@ -1590,6 +1590,10 @@ internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, 
 //- rjf: viz block list <-> table coordinates
 internal S64 df_row_num_from_viz_block_list_key(DF_EvalVizBlockList *blocks, DF_ExpandKey key);
 internal DF_ExpandKey df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
+internal DF_ExpandKey df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
+
+//- rjf: viz row list building
+internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators

@@ -7172,11 +7172,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_Null:
       if(visible_idx_range.max > visible_idx_range.min)
       {
-        DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
-        SLLQueuePush(list.first, list.last, row);
-        list.count += 1;
-        row->key = block->key;
-        row->parent_key = block->parent_key;
+        df_eval_viz_row_list_push_new(arena, &list, block, block->key);
       }break;
       
       //////////////////////////////
@@ -7189,7 +7185,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
         String8 display_string = str8_list_join(arena, &display_strings, 0);
         String8 edit_string = str8_list_join(arena, &edit_strings, 0);
-        DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, block->key);
         row->eval = block->eval;
         row->expr = block->string;
         row->display_value = display_string;
@@ -7230,11 +7226,6 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
             }
           }
         }
-        row->depth = block->depth;
-        row->parent_key = block->parent_key;
-        row->key = block->key;
-        SLLQueuePush(list.first, list.last, row);
-        list.count += 1;
       }break;
       
       //////////////////////////////
@@ -7250,8 +7241,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           TG_Member *member = &filtered_data_members.v[idx];
           
           // rjf: get keys for this row
-          DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
           
           // rjf: get member eval
           DF_Eval member_eval = zero_struct;
@@ -7276,7 +7266,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: build & push row
           String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
           String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
-          DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
           row->eval = member_eval;
           row->expr = push_str8_copy(arena, member->name);
           row->display_value = str8_list_join(arena, &display_strings, 0);
@@ -7317,11 +7307,6 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
               }
             }
           }
-          row->depth = block->depth;
-          row->parent_key = parent_key;
-          row->key = key;
-          SLLQueuePush(list.first, list.last, row);
-          list.count += 1;
         }
       }break;
       
@@ -7336,8 +7321,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
           // rjf: get keys for this row
-          DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
           
           // rjf: get eval for this element
           DF_Eval elem_eval = zero_struct;
@@ -7362,7 +7346,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: build row
           String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
           String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
-          DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
           row->eval = elem_eval;
           row->expr = push_str8f(arena, "[%I64u]", idx);
           row->display_value = str8_list_join(arena, &display_strings, 0);
@@ -7402,11 +7386,6 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
               }
             }
           }
-          row->depth = block->depth;
-          row->parent_key = parent_key;
-          row->key = key;
-          SLLQueuePush(list.first, list.last, row);
-          list.count += 1;
         }
       }break;
       
@@ -7419,9 +7398,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         DF_EvalLinkBaseArray link_bases = df_eval_link_base_array_from_chunk_list(scratch.arena, &link_base_chunks);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
-          // rjf: get keys for this row
-          DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
+          // rjf: get key for this row
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
           
           // rjf: get link base
           DF_EvalLinkBase *link_base = &link_bases.v[idx];
@@ -7447,7 +7425,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: build row
           String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
           String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
-          DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
           row->eval = link_eval;
           row->expr = push_str8f(arena, "[%I64u]", idx);
           row->display_value = str8_list_join(arena, &display_strings, 0);
@@ -7487,11 +7465,6 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
               }
             }
           }
-          row->depth = block->depth;
-          row->parent_key = parent_key;
-          row->key = key;
-          SLLQueuePush(list.first, list.last, row);
-          list.count += 1;
         }
       }break;
       
@@ -7501,104 +7474,87 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_Canvas:
       if(num_skipped_visual < block_num_visual_rows)
       {
-        DF_ExpandKey parent_key = block->parent_key;
-        DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
-        DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+        DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), 1);
+        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
         row->flags               = DF_EvalVizRowFlag_Canvas;
         row->eval                = block->eval;
         row->size_in_rows        = dim_1u64(intersect_1u64(visible_idx_range, r1u64(0, dim_1u64(block->visual_idx_range))));
         row->skipped_size_in_rows= (visible_idx_range.min > block->visual_idx_range.min) ? visible_idx_range.min - block->visual_idx_range.min : 0;
         row->chopped_size_in_rows= (visible_idx_range.max < block->visual_idx_range.max) ? block->visual_idx_range.max - visible_idx_range.max : 0;
-        row->depth               = block->depth;
-        row->parent_key          = parent_key;
-        row->key                 = key;
         row->expand_ui_rule_node = expand_ui_rule_node;
         row->expand_ui_rule_spec = expand_ui_rule_spec;
-        SLLQueuePush(list.first, list.last, row);
-        list.count += 1;
       }break;
       
       //////////////////////////////
       //- rjf: all types -> produce rows for visible range
       //
       case DF_EvalVizBlockKind_DebugInfoTable:
+      for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
       {
-        DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
-        DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
+        // rjf: unpack info about this row
+        String8 name = dbgi_fuzzy_item_string_from_rdbg_target_element_idx(parse_ctx->rdbg, block->dbgi_target, block->backing_search_items.v[idx].idx);
+        
+        // rjf: get keys for this row
+        DF_ExpandKey parent_key = block->parent_key;
+        DF_ExpandKey key = block->key;
+        key.child_num = block->backing_search_items.v[idx].idx;
+        
+        // rjf: get eval for this row
+        DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
+        
+        // rjf: get view rules
+        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
+        DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, &block->cfg_table);
+        df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
+        
+        // rjf: apply view rules to eval
         {
-          // rjf: unpack info about this row
-          String8 name = dbgi_fuzzy_item_string_from_rdbg_target_element_idx(parse_ctx->rdbg, block->dbgi_target, block->backing_search_items.v[idx].idx);
-          
-          // rjf: get keys for this row
-          DF_ExpandKey parent_key = block->parent_key;
-          DF_ExpandKey key = block->key;
-          key.child_num = block->backing_search_items.v[idx].idx;
-          
-          // rjf: get eval for this type
-          DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
-          
-          // rjf: get view rules
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, &block->cfg_table);
-          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-          
-          // rjf: apply view rules to eval
+          eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
+          eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
+        }
+        
+        // rjf: build row
+        String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+        String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, &list, block, key);
+        row->eval = eval;
+        row->expr = name;
+        row->display_value = str8_list_join(arena, &display_strings, 0);
+        row->edit_value = str8_list_join(arena, &edit_strings, 0);
+        row->value_ui_rule_node = value_ui_rule_node;
+        row->value_ui_rule_spec = value_ui_rule_spec;
+        row->expand_ui_rule_node = expand_ui_rule_node;
+        row->expand_ui_rule_spec = expand_ui_rule_spec;
+        if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
+        {
+          for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
           {
-            eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
-            eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
-          }
-          
-          // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-          DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
-          row->eval = eval;
-          row->expr = name;
-          row->display_value = str8_list_join(arena, &display_strings, 0);
-          row->edit_value = str8_list_join(arena, &edit_strings, 0);
-          row->value_ui_rule_node = value_ui_rule_node;
-          row->value_ui_rule_spec = value_ui_rule_spec;
-          row->expand_ui_rule_node = expand_ui_rule_node;
-          row->expand_ui_rule_spec = expand_ui_rule_spec;
-          if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
-          {
-            for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+            TG_Kind kind = tg_kind_from_key(t);
+            if(kind == TG_Kind_Null)
             {
-              TG_Kind kind = tg_kind_from_key(t);
-              if(kind == TG_Kind_Null)
-              {
-                break;
-              }
-              if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
-              {
-                row->flags |= DF_EvalVizRowFlag_CanEditValue;
-              }
-              if(expandability_required ||
-                 kind == TG_Kind_Struct ||
-                 kind == TG_Kind_Union ||
-                 kind == TG_Kind_Class ||
-                 kind == TG_Kind_Array)
-              {
-                row->flags |= DF_EvalVizRowFlag_CanExpand;
-              }
-              if(row->flags & DF_EvalVizRowFlag_CanExpand)
-              {
-                break;
-              }
-              if(block->eval.mode == EVAL_EvalMode_NULL)
-              {
-                break;
-              }
+              break;
+            }
+            if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
+            {
+              row->flags |= DF_EvalVizRowFlag_CanEditValue;
+            }
+            if(expandability_required ||
+               kind == TG_Kind_Struct ||
+               kind == TG_Kind_Union ||
+               kind == TG_Kind_Class ||
+               kind == TG_Kind_Array)
+            {
+              row->flags |= DF_EvalVizRowFlag_CanExpand;
+            }
+            if(row->flags & DF_EvalVizRowFlag_CanExpand)
+            {
+              break;
+            }
+            if(block->eval.mode == EVAL_EvalMode_NULL)
+            {
+              break;
             }
           }
-          row->depth = block->depth;
-          row->parent_key = parent_key;
-          row->key = key;
-          SLLQueuePush(list.first, list.last, row);
-          list.count += 1;
         }
       }break;
     }
