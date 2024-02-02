@@ -323,6 +323,7 @@ eval_token_array_from_text(Arena *arena, String8 text)
   EVAL_TokenChunkList tokens = {0};
   U64 active_token_start_idx = 0;
   EVAL_TokenKind active_token_kind = EVAL_TokenKind_Null;
+  B32 active_token_kind_started_with_tick = 0;
   B32 escaped = 0;
   for(U64 idx = 0, advance = 0; idx <= text.size; idx += advance)
   {
@@ -337,10 +338,11 @@ eval_token_array_from_text(Arena *arena, String8 text)
       //- rjf: no active token -> seek token starter
       default:
       {
-        if(char_is_alpha(byte) || byte == '_')
+        if(char_is_alpha(byte) || byte == '_' || byte == '`')
         {
           active_token_kind = EVAL_TokenKind_Identifier;
           active_token_start_idx = idx;
+          active_token_kind_started_with_tick = (byte == '`');
         }
         else if(char_is_digit(byte, 10) || (byte == '.' && char_is_digit(byte_next, 10)))
         {
@@ -372,13 +374,47 @@ eval_token_array_from_text(Arena *arena, String8 text)
       //- rjf: active tokens -> seek enders
       case EVAL_TokenKind_Identifier:
       {
-        if(byte == ':' && byte_next == ':' && (char_is_alpha(byte_next2) || byte_next2 == '_'))
+        if(byte == ':' && byte_next == ':' && (char_is_alpha(byte_next2) || byte_next2 == '_' || byte_next2 == '<'))
         {
           // NOTE(rjf): encountering C++-style namespaces - skip over scope resolution symbol
           // & keep going.
           advance = 2;
         }
-        else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_')
+        else if((byte == '\'' || byte == '`') && active_token_kind_started_with_tick)
+        {
+          // NOTE(rjf): encountering ` -> ' or ` -> ` style identifier escapes
+          active_token_kind_started_with_tick = 0;
+          advance = 1;
+        }
+        else if(byte == '<')
+        {
+          // NOTE(rjf): encountering C++-style templates - try to find ender. if no ender found,
+          // assume this is an operator & just consume the identifier part.
+          S64 nest = 1;
+          for(U64 idx2 = idx+1; idx2 <= text.size; idx2 += 1)
+          {
+            if(idx2 < text.size && text.str[idx2] == '<')
+            {
+              nest += 1;
+            }
+            else if(idx2 < text.size && text.str[idx2] == '>')
+            {
+              nest -= 1;
+              if(nest == 0)
+              {
+                advance = (idx2+1-idx);
+                break;
+              }
+            }
+            else if(idx2 == text.size && nest != 0)
+            {
+              token_formed = 1;
+              advance = 0;
+              break;
+            }
+          }
+        }
+        else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && !active_token_kind_started_with_tick)
         {
           advance = 0;
           token_formed = 1;
