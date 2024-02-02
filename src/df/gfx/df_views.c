@@ -1180,6 +1180,37 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           }
           UI_NamedTableVectorF("row_%I64x_%I64x_%I64x", row_hash, expr_hash, ewv->root_count)
           {
+            //- rjf: draw start of cache lines in expansions
+            if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
+               row->eval.errors.count == 0 &&
+               row->eval.offset%64 == 0 && row->depth > 0)
+            {
+              ui_set_next_fixed_x(0);
+              ui_set_next_fixed_y(0);
+              ui_set_next_fixed_height(ui_top_font_size()*0.1f);
+              ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+              ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+            }
+            
+            //- rjf: draw mid-row cache line boundaries in expansions
+            if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
+               row->eval.errors.count == 0 &&
+               row->eval.offset%64 != 0 &&
+               row->depth > 0)
+            {
+              U64 next_off = (row->eval.offset + tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key));
+              if(next_off%64 != 0 && row->eval.offset/64 < next_off/64)
+              {
+                ui_set_next_fixed_x(0);
+                ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
+                ui_set_next_fixed_height(ui_top_font_size()*1.f);
+                Vec4F32 boundary_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+                boundary_color.w *= 0.25f;
+                ui_set_next_background_color(boundary_color);
+                ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+              }
+            }
+            
             //- rjf: expression
             ProfScope("expr")
             {

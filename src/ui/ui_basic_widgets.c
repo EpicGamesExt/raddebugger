@@ -846,6 +846,8 @@ ui_pane_end(void)
 
 thread_static U64 ui_ts_col_pct_count = 0;
 thread_static F32 *ui_ts_col_pcts_stable = 0;
+thread_static U64 ui_ts_vector_idx = 0;
+thread_static U64 ui_ts_cell_idx = 0;
 
 internal void
 ui_table_begin(U64 column_pct_count, F32 **column_pcts, String8 string)
@@ -957,6 +959,8 @@ ui_table_begin(U64 column_pct_count, F32 **column_pcts, String8 string)
   {
     ui_ts_col_pcts_stable[idx] = *column_pcts[idx];
   }
+  
+  ui_ts_vector_idx = 0;
 }
 
 internal void
@@ -983,6 +987,8 @@ ui_named_table_vector_begin(String8 string)
   ui_set_next_pref_width(ui_pct(1, 0));
   ui_set_next_child_layout_axis(Axis2_X);
   UI_Box *vector = ui_build_box_from_string(UI_BoxFlag_DrawSideBottom, string);
+  ui_ts_vector_idx += 1;
+  ui_ts_cell_idx = 0;
   ui_push_parent(vector);
   return vector;
 }
@@ -1004,7 +1010,7 @@ internal UI_Box *
 ui_table_vector_begin(void)
 {
   UI_Box *table = ui_top_parent();
-  UI_Box *vector = ui_named_table_vector_beginf("###tbl_vec_%p_%I64u", table, table->child_count);
+  UI_Box *vector = ui_named_table_vector_beginf("###tbl_vec_%p_%I64u", table, ui_ts_vector_idx);
   return vector;
 }
 
@@ -1019,7 +1025,7 @@ internal UI_Box *
 ui_table_cell_begin(void)
 {
   UI_Box *vector = ui_top_parent();
-  U64 column_idx = vector->child_count;
+  U64 column_idx = ui_ts_cell_idx;
   F32 width_pct = column_idx < ui_ts_col_pct_count ? ui_ts_col_pcts_stable[column_idx] : 1.f;
   return ui_table_cell_sized_begin(ui_pct(width_pct, 0));
 }
@@ -1035,7 +1041,8 @@ internal UI_Box *
 ui_table_cell_sized_begin(UI_Size size)
 {
   UI_Box *vector = ui_top_parent();
-  U64 column_idx = vector->child_count;
+  U64 column_idx = ui_ts_cell_idx;
+  ui_ts_cell_idx += 1;
   ui_set_next_pref_width(size);
   ui_set_next_child_layout_axis(Axis2_X);
   UI_Box *cell = ui_build_box_from_stringf((column_idx > 0 ? UI_BoxFlag_DrawSideLeft : 0), "###tbl_cell_%p_%I64u", vector, vector->child_count);
