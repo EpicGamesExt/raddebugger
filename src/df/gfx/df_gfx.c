@@ -7253,6 +7253,51 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       }break;
       
       //////////////////////////////
+      //- rjf: enum members -> produce rows for the visible range of enum members.
+      //
+      case DF_EvalVizBlockKind_EnumMembers:
+      if(block_type_kind == TG_Kind_Enum)
+      {
+        TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max && idx < type->count; idx += 1)
+        {
+          TG_EnumVal *enum_val = &type->enum_vals[idx];
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
+          
+          // rjf: produce eval for this enum member
+          DF_Eval eval = zero_struct;
+          {
+            eval.type_key = block->eval.type_key;
+            eval.mode     = EVAL_EvalMode_Value;
+            eval.imm_u64  = enum_val->val;
+          }
+          
+          // rjf: get view rules
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
+          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, &block->cfg_table);
+          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
+          
+          // rjf: apply view rules to eval
+          {
+            eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
+            eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
+          }
+          
+          // rjf: build & push row
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, eval);
+          row->expr                = push_str8_copy(arena, enum_val->name);
+          row->display_value       = str8_list_join(arena, &display_strings, 0);
+          row->edit_value          = str8_list_join(arena, &edit_strings, 0);
+          row->value_ui_rule_node  = value_ui_rule_node;
+          row->value_ui_rule_spec  = value_ui_rule_spec;
+          row->expand_ui_rule_node = expand_ui_rule_node;
+          row->expand_ui_rule_spec = expand_ui_rule_spec;
+        }
+      }break;
+      
+      //////////////////////////////
       //- rjf: elements -> produce rows for the visible range of elements.
       //
       case DF_EvalVizBlockKind_Elements:

@@ -5256,6 +5256,27 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   }
   
   //////////////////////////////
+  //- rjf: (enums) descend to members & make block(s)
+  //
+  if(parent_is_expanded && expand_rule == DF_EvalVizExpandRule_Default &&
+     udt_eval.mode == EVAL_EvalMode_NULL &&
+     udt_type_kind == TG_Kind_Enum)
+    ProfScope("build viz blocks for UDT type-eval enums")
+  {
+    //- rjf: type -> full type info
+    TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
+    
+    //- rjf: build block for all members (cannot be expanded)
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_EnumMembers, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    {
+      last_vb->eval = udt_eval;
+      last_vb->cfg_table = *cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, type->count);
+    }
+    df_eval_viz_block_end(list_out, last_vb);
+  }
+  
+  //////////////////////////////
   //- rjf: (structs, unions, classes) descend to members & make block(s), with linked list view
   //
   if(parent_is_expanded && expand_rule == DF_EvalVizExpandRule_List &&
@@ -5609,9 +5630,13 @@ df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalViz
       {
         break;
       }
-      if(block->eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
+      if(eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
       {
         row->flags |= DF_EvalVizRowFlag_CanEditValue;
+      }
+      if(eval.mode == EVAL_EvalMode_NULL && kind == TG_Kind_Enum)
+      {
+        row->flags |= DF_EvalVizRowFlag_CanExpand;
       }
       if(kind == TG_Kind_Struct ||
          kind == TG_Kind_Union ||
@@ -5624,7 +5649,7 @@ df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalViz
       {
         break;
       }
-      if(block->eval.mode == EVAL_EvalMode_NULL)
+      if(eval.mode == EVAL_EvalMode_NULL)
       {
         break;
       }

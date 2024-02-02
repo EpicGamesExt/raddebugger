@@ -696,6 +696,7 @@ typedef enum DF_EvalVizBlockKind
   DF_EvalVizBlockKind_Null,              // empty
   DF_EvalVizBlockKind_Root,              // root of tree or subtree; possibly-expandable expression.
   DF_EvalVizBlockKind_Members,           // members of struct, class, union
+  DF_EvalVizBlockKind_EnumMembers,       // members of enum
   DF_EvalVizBlockKind_Elements,          // elements of array
   DF_EvalVizBlockKind_Links,             // flattened nodes in a linked list
   DF_EvalVizBlockKind_Canvas,            // escape hatch for arbitrary UI
