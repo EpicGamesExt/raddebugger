@@ -3141,6 +3141,16 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     {
       Temp scratch = scratch_begin(&arena, 1);
       
+      //- rjf: auto-close entity ctx menu
+      if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key))
+      {
+        DF_Entity *entity = df_entity_from_handle(ws->entity_ctx_menu_entity);
+        if(df_entity_is_nil(entity))
+        {
+          ui_ctx_menu_close();
+        }
+      }
+      
       //- rjf: entity menu
       UI_CtxMenu(ws->entity_ctx_menu_key) UI_PrefWidth(ui_em(30.f, 1.f))
       {
@@ -3651,6 +3661,16 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             df_entity_equip_color_rgba(entity, v4f32(1, 1, 1, 1));
           }
+        }
+      }
+      
+      //- rjf: auto-close tab ctx menu
+      if(ui_ctx_menu_is_open(ws->tab_ctx_menu_key))
+      {
+        DF_View *tab = df_view_from_handle(ws->tab_ctx_menu_view);
+        if(df_view_is_nil(tab))
+        {
+          ui_ctx_menu_close();
         }
       }
       
@@ -10225,13 +10245,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           S64 column = cursor->column;
           Vec2F32 advance = f_dim_from_tag_size_string(line_box->font, line_box->font_size, str8_prefix(line_string, column-1));
           F32 cursor_off_pixels = advance.x;
-          F32 cursor_thickness = Max(params->font_size*0.3f, 4.f);
+          F32 cursor_thickness = ClampBot(4.f, line_box->font_size/6.f);
           Rng2F32 cursor_rect =
           {
             ui_box_text_position(line_box).x+cursor_off_pixels,
-            line_box->rect.y0-params->font_size*0.55f,
+            line_box->rect.y0-params->font_size*0.25f,
             ui_box_text_position(line_box).x+cursor_off_pixels+cursor_thickness,
-            line_box->rect.y1+params->font_size*0.55f,
+            line_box->rect.y1+params->font_size*0.25f,
           };
           Vec4F32 color = is_focused ? ui_top_text_cursor_color() : df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
           d_rect(cursor_rect, color, 1.f, 0, 1.f);

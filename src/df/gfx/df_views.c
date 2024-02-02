@@ -1183,7 +1183,8 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: draw start of cache lines in expansions
             if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
                row->eval.errors.count == 0 &&
-               row->eval.offset%64 == 0 && row->depth > 0)
+               row->eval.offset%64 == 0 && row->depth > 0 &&
+               !row_expanded)
             {
               ui_set_next_fixed_x(0);
               ui_set_next_fixed_y(0);
