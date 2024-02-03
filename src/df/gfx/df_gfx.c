@@ -6793,12 +6793,13 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
     if(opt_member != 0)
     {
       U64 member_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, opt_member->type_key);
-      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u bytes)", opt_member->off, member_byte_size);
+      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u byte%s)", opt_member->off, member_byte_size, member_byte_size > 1 ? "s" : "");
     }
     else
     {
       String8 basic_type_kind_string = tg_kind_basic_string_table[tg_kind_from_key(eval.type_key)];
-      str8_list_pushf(arena, &list, "%S (%I64u bytes)", basic_type_kind_string, tg_byte_size_from_graph_raddbg_key(graph, rdbg, eval.type_key));
+      U64 byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, eval.type_key);
+      str8_list_pushf(arena, &list, "%S (%I64u byte%s)", basic_type_kind_string, byte_size, byte_size > 1 ? "s" : "");
     }
   }
   
