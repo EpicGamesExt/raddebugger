@@ -4157,7 +4157,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   size = Min(size, 64);
                   Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
                   CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng);
-                  for(U64 idx = 0; idx < (size+63)/64; idx += 1)
+                  for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                   {
                     if(slice.byte_changed_flags[idx] != 0)
                     {

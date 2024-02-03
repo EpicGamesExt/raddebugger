@@ -901,8 +901,6 @@ internal CTRL_ProcessMemorySlice
 ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range)
 {
   CTRL_ProcessMemorySlice result = {0};
-  result.byte_bad_flags = push_array(arena, U64, (dim_1u64(range)+63)/64);
-  result.byte_changed_flags = push_array(arena, U64, (dim_1u64(range)+63)/64);
   if(range.max > range.min &&
      dim_1u64(range) <= MB(256) &&
      range.min <= 0x000FFFFFFFFFFFFFull &&
@@ -932,8 +930,8 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     
     //- rjf: setup output buffers
     void *read_out = push_array(arena, U8, dim_1u64(range));
-    U64 *byte_bad_flags = result.byte_bad_flags;
-    U64 *byte_changed_flags = result.byte_changed_flags;
+    U64 *byte_bad_flags = push_array(arena, U64, (dim_1u64(range)+63)/64);
+    U64 *byte_changed_flags = push_array(arena, U64, (dim_1u64(range)+63)/64);
     
     //- rjf: iterate pages, fill output
     {
