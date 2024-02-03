@@ -343,35 +343,33 @@ tg_type_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg
             String8 name = {0};
             name.str = raddbg_string_from_idx(rdbg, rdbg_type->user_defined.name_string_idx, &name.size);
             
+            // rjf: unpack UDT info
+            RADDBG_UDT *udt = raddbg_element_from_idx(rdbg, udts, rdbg_type->user_defined.udt_idx);
+            
             // rjf: unpack members
             TG_Member *members = 0;
             U32 members_count = 0;
             {
-              U32 udt_idx = rdbg_type->user_defined.udt_idx;
-              if(0 <= udt_idx && udt_idx < rdbg->udts_count)
+              members_count = udt->member_count;
+              members = push_array(arena, TG_Member, members_count);
+              if(members_count != 0 && 0 <= udt->member_first && udt->member_first+udt->member_count <= rdbg->members_count)
               {
-                RADDBG_UDT *udt = &rdbg->udts[udt_idx];
-                members_count = udt->member_count;
-                members = push_array(arena, TG_Member, members_count);
-                if(members_count != 0 && 0 <= udt->member_first && udt->member_first+udt->member_count <= rdbg->members_count)
+                for(U32 member_idx = udt->member_first;
+                    member_idx < udt->member_first+udt->member_count;
+                    member_idx += 1)
                 {
-                  for(U32 member_idx = udt->member_first;
-                      member_idx < udt->member_first+udt->member_count;
-                      member_idx += 1)
+                  RADDBG_Member *src = &rdbg->members[member_idx];
+                  TG_Kind member_type_kind = TG_Kind_Null;
+                  if(src->type_idx < rdbg->type_nodes_count)
                   {
-                    RADDBG_Member *src = &rdbg->members[member_idx];
-                    TG_Kind member_type_kind = TG_Kind_Null;
-                    if(src->type_idx < rdbg->type_nodes_count)
-                    {
-                      RADDBG_TypeNode *member_type = &rdbg->type_nodes[src->type_idx];
-                      member_type_kind = tg_kind_from_raddbg_type_kind(member_type->kind);
-                    }
-                    TG_Member *dst = &members[member_idx-udt->member_first];
-                    dst->kind     = tg_member_kind_from_raddbg_member_kind(src->kind);
-                    dst->type_key = tg_key_ext(member_type_kind, (U64)src->type_idx);
-                    dst->name.str = raddbg_string_from_idx(rdbg, src->name_string_idx, &dst->name.size);
-                    dst->off      = (U64)src->off;
+                    RADDBG_TypeNode *member_type = &rdbg->type_nodes[src->type_idx];
+                    member_type_kind = tg_kind_from_raddbg_type_kind(member_type->kind);
                   }
+                  TG_Member *dst = &members[member_idx-udt->member_first];
+                  dst->kind     = tg_member_kind_from_raddbg_member_kind(src->kind);
+                  dst->type_key = tg_key_ext(member_type_kind, (U64)src->type_idx);
+                  dst->name.str = raddbg_string_from_idx(rdbg, src->name_string_idx, &dst->name.size);
+                  dst->off      = (U64)src->off;
                 }
               }
             }
@@ -967,6 +965,8 @@ internal TG_MemberArray
 tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
 {
   Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: walk type tree; gather members list
   TG_MemberList members_list = {0};
   B32 members_need_offset_sort = 0;
   {
@@ -988,6 +988,7 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
       TG_Type *type = task->type;
       if(type->members != 0)
       {
+        U64 last_member_off = 0;
         for(U64 member_idx = 0; member_idx < type->count; member_idx += 1)
         {
           if(type->members[member_idx].kind == TG_MemberKind_DataField)
@@ -998,6 +999,8 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
             n->v.inheritance_key_chain = task->inheritance_chain;
             SLLQueuePush(members_list.first, members_list.last, n);
             members_list.count += 1;
+            members_need_offset_sort = members_need_offset_sort || (n->v.off < last_member_off);
+            last_member_off = n->v.off;
           }
           else if(type->members[member_idx].kind == TG_MemberKind_Base)
           {
@@ -1014,6 +1017,8 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
       }
     }
   }
+  
+  //- rjf: convert to array
   TG_MemberArray members = {0};
   {
     members.count = members_list.count;
@@ -1027,10 +1032,71 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
       idx += 1;
     }
   }
+  
+  //- rjf: sort array by offset if needed
   if(members_need_offset_sort)
   {
     qsort(members.v, members.count, sizeof(TG_Member), (int (*)(const void *, const void *))tg_qsort_compare_members_offset);
   }
+  
+  //- rjf: find all padding instances
+  typedef struct PaddingNode PaddingNode;
+  struct PaddingNode
+  {
+    PaddingNode *next;
+    U64 off;
+    U64 size;
+    U64 prev_member_idx;
+  };
+  PaddingNode *first_padding = 0;
+  PaddingNode *last_padding = 0;
+  U64 padding_count = 0;
+  for(U64 idx = 0; idx < members.count; idx += 1)
+  {
+    TG_Member *member = &members.v[idx];
+    if(idx+1 < members.count)
+    {
+      U64 member_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, member->type_key);
+      Rng1U64 member_byte_range = r1u64(member->off, member->off + member_byte_size);
+      if(member[1].off != member_byte_range.max)
+      {
+        PaddingNode *n = push_array(scratch.arena, PaddingNode, 1);
+        SLLQueuePush(first_padding, last_padding, n);
+        n->off = member_byte_range.max;
+        n->size = member[1].off - member_byte_range.max;
+        n->prev_member_idx = idx;
+        padding_count += 1;
+      }
+    }
+  }
+  
+  //- rjf: produce new members array, if we have any padding
+  if(padding_count != 0)
+  {
+    TG_MemberArray new_members = {0};
+    new_members.count = members.count + padding_count;
+    new_members.v = push_array(arena, TG_Member, new_members.count);
+    MemoryCopy(new_members.v, members.v, sizeof(TG_Member)*members.count);
+    U64 padding_idx = 0;
+    for(PaddingNode *n = first_padding; n != 0; n = n->next)
+    {
+      if(members.count+padding_idx > n->prev_member_idx+1)
+      {
+        MemoryCopy(new_members.v + n->prev_member_idx + 2,
+                   new_members.v + n->prev_member_idx + 1,
+                   sizeof(TG_Member) * (members.count + padding_idx - (n->prev_member_idx+1)));
+      }
+      TG_Member *padding_member = &new_members.v[n->prev_member_idx+1];
+      MemoryZeroStruct(padding_member);
+      padding_member->kind = TG_MemberKind_Padding;
+      padding_member->type_key = tg_cons_type_make(graph, TG_Kind_Array, tg_key_basic(TG_Kind_U8), n->size);
+      padding_member->off = n->off;
+      padding_member->name = str8_lit("[padding]");
+      padding_idx += 1;
+    }
+    members = new_members;
+  }
+  
   scratch_end(scratch);
   return members;
 }

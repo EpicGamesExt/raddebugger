@@ -771,6 +771,7 @@ enum
   DF_EvalVizRowFlag_CanExpand    = (1<<0),
   DF_EvalVizRowFlag_CanEditValue = (1<<1),
   DF_EvalVizRowFlag_Canvas       = (1<<2),
+  DF_EvalVizRowFlag_ExprIsSpecial= (1<<3),
 };
 
 typedef struct DF_EvalVizRow DF_EvalVizRow;

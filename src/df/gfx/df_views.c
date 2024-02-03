@@ -1238,7 +1238,9 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               {
                 B32 expr_editing_active = ui_is_focus_active();
                 B32 is_inherited = (row->inherited_type_key_chain.count != 0);
-                UI_Font(code_font) UI_TextColor(row->depth > 0 ? df_rgba_from_theme_color(DF_ThemeColor_WeakText) : ui_top_text_color())
+                UI_Font(code_font) UI_TextColor((row->flags & DF_EvalVizRowFlag_ExprIsSpecial) ?
+                                                df_rgba_from_theme_color(DF_ThemeColor_Highlight0) :
+                                                row->depth > 0 ? df_rgba_from_theme_color(DF_ThemeColor_WeakText) : ui_top_text_color())
                 {
                   if(is_inherited)
                   {
@@ -1251,7 +1253,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   {
                     matches = fuzzy_match_find(scratch.arena, filter, row->expr);
                   }
-                  sig = df_line_editf((DF_LineEditFlag_CodeContents|
+                  sig = df_line_editf((DF_LineEditFlag_CodeContents*(!(row->flags & DF_EvalVizRowFlag_ExprIsSpecial))|
                                        DF_LineEditFlag_NoBackground*(!is_inherited)|
                                        DF_LineEditFlag_DisableEdit*(!can_edit_expr)|
                                        DF_LineEditFlag_Expander*!!(row->flags & DF_EvalVizRowFlag_CanExpand)|

@@ -99,6 +99,7 @@ typedef enum TG_MemberKind
   TG_MemberKind_Base,
   TG_MemberKind_VirtualBase,
   TG_MemberKind_NestedType,
+  TG_MemberKind_Padding,
   TG_MemberKind_COUNT
 }
 TG_MemberKind;
