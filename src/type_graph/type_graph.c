@@ -965,6 +965,7 @@ internal TG_MemberArray
 tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key key)
 {
   Temp scratch = scratch_begin(&arena, 1);
+  TG_Kind root_type_kind = tg_kind_from_key(key);
   
   //- rjf: walk type tree; gather members list
   TG_MemberList members_list = {0};
@@ -1051,21 +1052,24 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
   PaddingNode *first_padding = 0;
   PaddingNode *last_padding = 0;
   U64 padding_count = 0;
-  for(U64 idx = 0; idx < members.count; idx += 1)
+  if(root_type_kind == TG_Kind_Struct || root_type_kind == TG_Kind_Class)
   {
-    TG_Member *member = &members.v[idx];
-    if(idx+1 < members.count)
+    for(U64 idx = 0; idx < members.count; idx += 1)
     {
-      U64 member_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, member->type_key);
-      Rng1U64 member_byte_range = r1u64(member->off, member->off + member_byte_size);
-      if(member[1].off != member_byte_range.max)
+      TG_Member *member = &members.v[idx];
+      if(idx+1 < members.count)
       {
-        PaddingNode *n = push_array(scratch.arena, PaddingNode, 1);
-        SLLQueuePush(first_padding, last_padding, n);
-        n->off = member_byte_range.max;
-        n->size = member[1].off - member_byte_range.max;
-        n->prev_member_idx = idx;
-        padding_count += 1;
+        U64 member_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, member->type_key);
+        Rng1U64 member_byte_range = r1u64(member->off, member->off + member_byte_size);
+        if(member[1].off != member_byte_range.max)
+        {
+          PaddingNode *n = push_array(scratch.arena, PaddingNode, 1);
+          SLLQueuePush(first_padding, last_padding, n);
+          n->off = member_byte_range.max;
+          n->size = member[1].off - member_byte_range.max;
+          n->prev_member_idx = idx;
+          padding_count += 1;
+        }
       }
     }
   }
