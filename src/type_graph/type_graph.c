@@ -1061,7 +1061,7 @@ tg_data_members_from_graph_raddbg_key(Arena *arena, TG_Graph *graph, RADDBG_Pars
       {
         U64 member_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, member->type_key);
         Rng1U64 member_byte_range = r1u64(member->off, member->off + member_byte_size);
-        if(member[1].off != member_byte_range.max)
+        if(member[1].off > member_byte_range.max)
         {
           PaddingNode *n = push_array(scratch.arena, PaddingNode, 1);
           SLLQueuePush(first_padding, last_padding, n);
