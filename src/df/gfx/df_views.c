@@ -1110,8 +1110,9 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         B32 row_selected = ((semantic_idx+1) == cursor.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
         
-        //- rjf: determine if row's data is fresh
+        //- rjf: determine if row's data is fresh and/or bad
         B32 row_is_fresh = 0;
+        B32 row_is_bad = 0;
         switch(row->eval.mode)
         {
           default:{}break;
@@ -1126,7 +1127,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               if(slice.byte_changed_flags[idx] != 0)
               {
                 row_is_fresh = 1;
-                break;
+              }
+              if(slice.byte_bad_flags[idx] != 0)
+              {
+                row_is_bad = 1;
               }
             }
           }break;
@@ -1177,11 +1181,6 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           {
             ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
             ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
-          }
-          else if(row->flags & DF_EvalVizRowFlag_ExprIsSpecial)
-          {
-            ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
-            ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground), v4f32(1, 1, 1, 0.2f)));
           }
           else
           {
@@ -1241,6 +1240,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               // rjf: build
               UI_Signal sig = {0};
               B32 next_expanded = row_expanded;
+              if(row->flags & DF_EvalVizRowFlag_ExprIsSpecial)
+              {
+                ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
+                ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground), v4f32(1, 1, 1, 0.2f)));
+              }
               UI_TableCell
                 UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_FocusActive((cell_selected && ewv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -1401,6 +1405,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               
               // rjf: build
               UI_Signal sig = {0};
+              if(row_is_bad)
+              {
+                ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
+                ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground), v4f32(1, 1, 1, 0.2f)));
+              }
               UI_TableCell UI_Font(code_font)
                 UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_FocusActive((cell_selected && ewv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -1446,6 +1455,12 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, 0, row->display_value, "%S###val_%I64x", row->display_value, row_hash);
                   edit_commit = (edit_commit || sig.commit);
                 }
+              }
+              
+              // rjf: bad & hovering -> display
+              if(row_is_bad && sig.hovering) UI_Tooltip
+              {
+                UI_PrefWidth(ui_children_sum(1)) df_error_label(str8_lit("Could not read process memory successfully."));
               }
               
               // rjf: press -> focus & commit if editing & not selected

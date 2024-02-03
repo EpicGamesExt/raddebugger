@@ -10519,7 +10519,7 @@ df_error_label(String8 string)
     ui_set_next_font(ui_icon_font());
     ui_set_next_text_alignment(UI_TextAlign_Center);
     UI_PrefWidth(ui_em(2.25f, 1.f)) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
-    ui_label(string);
+    UI_PrefWidth(ui_text_dim(10, 0)) ui_label(string);
   }
   return sig;
 }

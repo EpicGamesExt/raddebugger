@@ -958,6 +958,22 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
         // rjf: write this chunk
         MemoryCopy((U8*)read_out+write_off, in_range_data.str, in_range_data.size);
         
+        // rjf; if this page's data doesn't fill the entire range, mark
+        // missing bytes as bad
+        if(data.size < page_size)
+        {
+          for(U64 invalid_vaddr = data_vaddr_range.min+data.size;
+              invalid_vaddr < data_vaddr_range.min + page_size;
+              invalid_vaddr += 1)
+          {
+            if(contains_1u64(range, invalid_vaddr))
+            {
+              U64 idx_in_range = invalid_vaddr-range.min;
+              byte_bad_flags[idx_in_range/64] |= (1ull<<(idx_in_range%64));
+            }
+          }
+        }
+        
         // rjf: if this page's hash & last_hash don't match, diff each byte &
         // fill out changed flags
         if(!u128_match(page_hashes[page_idx], page_last_hashes[page_idx]))
