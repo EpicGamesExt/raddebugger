@@ -1173,10 +1173,19 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         //- rjf: build normal row
         if(!(row->flags & DF_EvalVizRowFlag_Canvas)) ProfScope("row")
         {
-          ui_set_next_flags(disabled_flags|(row_is_fresh*UI_BoxFlag_DrawOverlay));
           if(row_is_fresh)
           {
+            ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
             ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
+          }
+          else if(row->flags & DF_EvalVizRowFlag_ExprIsSpecial)
+          {
+            ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
+            ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground), v4f32(1, 1, 1, 0.2f)));
+          }
+          else
+          {
+            ui_set_next_flags(disabled_flags);
           }
           UI_NamedTableVectorF("row_%I64x_%I64x_%I64x", row_hash, expr_hash, ewv->root_count)
           {
