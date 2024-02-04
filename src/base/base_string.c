@@ -590,9 +590,9 @@ base16_from_data(U8 *dst, U8 *src, U64 src_size){
   U8 *opl = src + src_size;
   for (;src < opl;){
     U8 byte = *src;
-    *dst = integer_symbols[byte & 0xF];
-    dst += 1;
     *dst = integer_symbols[byte >> 4];
+    dst += 1;
+    *dst = integer_symbols[byte & 0xF];
     dst += 1;
     src += 1;
   }
