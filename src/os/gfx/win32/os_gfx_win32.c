@@ -429,6 +429,13 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         }
       }break;
       
+      case WM_MOUSEMOVE:
+      {
+        OS_Event *event = w32_push_event(OS_EventKind_MouseMove, window);
+        event->pos.x = (F32)LOWORD(lParam);
+        event->pos.y = (F32)HIWORD(lParam);
+      }break;
+      
       case WM_MOUSEWHEEL:
       {
         S16 wheel_delta = HIWORD(wParam);

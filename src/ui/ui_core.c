@@ -631,7 +631,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_actions, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_EventList *events, Vec2F32 mouse, OS_Handle window, UI_NavActionList *nav_actions, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -651,7 +651,7 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     ui_state->events = events;
     ui_state->window = window;
     ui_state->nav_actions = nav_actions;
-    ui_state->mouse = os_window_is_focused(window) ? os_mouse_from_window(window) : v2f32(-100, -100);
+    ui_state->mouse = mouse;
     ui_state->animation_dt = animation_dt;
     MemoryZeroStruct(&ui_state->icon_info);
     ui_state->icon_info.icon_font = icon_info->icon_font;
@@ -922,7 +922,6 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   }
   
   //- rjf: setup parent box for tooltip
-  Vec2F32 mouse = ui_state->mouse;
   UI_FixedX(mouse.x+15.f) UI_FixedY(mouse.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
   {
     ui_set_next_child_layout_axis(Axis2_Y);

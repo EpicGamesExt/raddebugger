@@ -2881,8 +2881,16 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         icon_info.icon_kind_text_map[UI_IconKind_CheckFilled]    = df_g_icon_kind_text_table[DF_IconKind_CheckFilled];
       }
       
+      // rjf: form mouse position used for passive UI mouse interaction
+      Vec2F32 mouse_ui = os_mouse_from_window(ws->os);
+      if(!os_window_is_focused(ws->os) &&
+         df_gfx_state->last_time_mousemoved_us+500000 <= os_now_microseconds())
+      {
+        mouse_ui = v2f32(-100, -100);
+      }
+      
       // rjf: begin & push initial stack values
-      ui_begin_build(events, ws->os, &nav_actions, &icon_info, df_dt(), df_dt());
+      ui_begin_build(events, mouse_ui, ws->os, &nav_actions, &icon_info, df_dt(), df_dt());
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_pref_width(ui_em(20.f, 1));
