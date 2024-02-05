@@ -513,6 +513,23 @@ struct DF_EntityRec
 };
 
 ////////////////////////////////
+//~ rjf: Entity Fuzzy Listing Types
+
+typedef struct DF_EntityFuzzyItem DF_EntityFuzzyItem;
+struct DF_EntityFuzzyItem
+{
+  DF_Entity *entity;
+  FuzzyMatchRangeList matches;
+};
+
+typedef struct DF_EntityFuzzyItemArray DF_EntityFuzzyItemArray;
+struct DF_EntityFuzzyItemArray
+{
+  DF_EntityFuzzyItem *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Text Slices (output type from data which can be used to produce readable text)
 
 //- rjf: text slice construction flags
@@ -1360,6 +1377,10 @@ internal DF_Entity *df_entity_child_from_name_and_kind(DF_Entity *parent, String
 internal void df_entity_list_push(Arena *arena, DF_EntityList *list, DF_Entity *entity);
 internal DF_EntityArray df_entity_array_from_list(Arena *arena, DF_EntityList *list);
 #define df_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &df_g_nil_entity)
+
+//- rjf: entity fuzzy list building
+internal DF_EntityFuzzyItemArray df_entity_fuzzy_item_array_from_entity_list_needle(Arena *arena, DF_EntityList *list, String8 needle);
+internal DF_EntityFuzzyItemArray df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray *array, String8 needle);
 
 //- rjf: entity -> text info
 internal TXTI_Handle df_txti_handle_from_entity(DF_Entity *entity);

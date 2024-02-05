@@ -8746,7 +8746,7 @@ df_entity_tooltips(DF_Entity *entity)
 }
 
 internal void
-df_entity_desc_button(DF_Window *ws, DF_Entity *entity)
+df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches)
 {
   Temp scratch = scratch_begin(0, 0);
   if(entity->kind == DF_EntityKind_Thread)
@@ -8850,7 +8850,13 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity)
     String8 label = df_display_string_from_entity(scratch.arena, entity);
     UI_TextColor(entity_color)
       UI_Font(kind_flags&DF_EntityKindFlag_NameIsCode ? df_font_from_slot(DF_FontSlot_Code) : ui_top_font())
-      ui_label(label);
+    {
+      UI_Signal label_sig = ui_label(label);
+      if(name_matches != 0)
+      {
+        ui_box_equip_fuzzy_match_ranges(label_sig.box, name_matches);
+      }
+    }
     if(entity->kind == DF_EntityKind_Target) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_FontSize(ui_top_font_size()*0.95f)
     {
       DF_Entity *args = df_entity_child_from_kind(entity, DF_EntityKind_Arguments);
@@ -9294,13 +9300,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_pref_height(ui_pct(1, 0));
             ui_set_next_text_color(color);
             ui_set_next_text_alignment(UI_TextAlign_Center);
-            UI_Box *thread_box = ui_build_box_from_stringf(UI_BoxFlag_DisableTextTrunc|
-                                                           UI_BoxFlag_Clickable|
-                                                           UI_BoxFlag_AnimatePosX|
-                                                           UI_BoxFlag_DrawText,
-                                                           "%S##ip_%p",
-                                                           df_g_icon_kind_text_table[DF_IconKind_RightArrow],
-                                                           thread);
+            UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
+            UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
+                                                       UI_BoxFlag_Clickable|
+                                                       UI_BoxFlag_AnimatePosX|
+                                                       UI_BoxFlag_DrawText,
+                                                       thread_box_key);
+            ui_box_equip_display_string(thread_box, df_g_icon_kind_text_table[DF_IconKind_RightArrow]);
             UI_Signal thread_sig = ui_signal_from_box(thread_box);
             
             // rjf: custom draw

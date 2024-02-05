@@ -1335,6 +1335,42 @@ df_entity_array_from_list(Arena *arena, DF_EntityList *list)
   return result;
 }
 
+//- rjf: entity fuzzy list building
+
+internal DF_EntityFuzzyItemArray
+df_entity_fuzzy_item_array_from_entity_list_needle(Arena *arena, DF_EntityList *list, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_EntityArray array = df_entity_array_from_list(scratch.arena, list);
+  DF_EntityFuzzyItemArray result = df_entity_fuzzy_item_array_from_entity_array_needle(arena, &array, needle);
+  return result;
+}
+
+internal DF_EntityFuzzyItemArray
+df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray *array, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_EntityFuzzyItemArray result = {0};
+  result.count = array->count;
+  result.v = push_array(arena, DF_EntityFuzzyItem, result.count);
+  U64 result_idx = 0;
+  for(U64 src_idx = 0; src_idx < array->count; src_idx += 1)
+  {
+    DF_Entity *entity = array->v[src_idx];
+    String8 display_string = df_display_string_from_entity(scratch.arena, entity);
+    FuzzyMatchRangeList matches = fuzzy_match_find(arena, needle, display_string);
+    if(matches.count >= matches.needle_part_count)
+    {
+      result.v[result_idx].entity = entity;
+      result.v[result_idx].matches = matches;
+      result_idx += 1;
+    }
+  }
+  result.count = result_idx;
+  scratch_end(scratch);
+  return result;
+}
+
 //- rjf: entity -> text info
 
 internal TXTI_Handle

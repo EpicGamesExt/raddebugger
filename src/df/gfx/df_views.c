@@ -3290,7 +3290,8 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DF_EntityList targets_list = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
-  DF_EntityArray targets = df_entity_array_from_list(scratch.arena, &targets_list);
+  String8 query = str8(view->query_buffer, view->query_string_size);
+  DF_EntityFuzzyItemArray targets = df_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &targets_list, query);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
   //- rjf: grab state
@@ -3313,7 +3314,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
     DF_Entity *selected_target = df_entity_from_handle(tv->selected_target_handle);
     for(U64 idx = 0; idx < targets.count; idx += 1)
     {
-      if(selected_target == targets.v[idx])
+      if(selected_target == targets.v[idx].entity)
       {
         cursor.y = (S64)idx+2;
         break;
@@ -3363,7 +3364,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
         row_idx += 1)
       UI_Row
     {
-      DF_Entity *target = targets.v[row_idx-1];
+      DF_Entity *target = targets.v[row_idx-1].entity;
       B32 row_selected = ((U64)cursor.y == row_idx+1);
       
       // rjf: enabled
@@ -3388,7 +3389,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
       // rjf: target name
       UI_WidthFill UI_FocusHot((row_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
       {
-        df_entity_desc_button(ws, target);
+        df_entity_desc_button(ws, target, &targets.v[row_idx-1].matches);
       }
       
       // rjf: controls
@@ -3434,7 +3435,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
   //- rjf: commit cursor to selection state
   {
     tv->selected_column = cursor.x;
-    tv->selected_target_handle = (1 < cursor.y && cursor.y < targets.count+2) ? df_handle_from_entity(targets.v[cursor.y-2]) : df_handle_zero();
+    tv->selected_target_handle = (1 < cursor.y && cursor.y < targets.count+2) ? df_handle_from_entity(targets.v[cursor.y-2].entity) : df_handle_zero();
     tv->selected_add = (cursor.y == 1);
   }
   
@@ -3794,6 +3795,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DBGI_Scope *scope = dbgi_scope_open();
+  String8 query = str8(view->query_buffer, view->query_string_size);
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   
   //- rjf: get state
@@ -3810,45 +3812,57 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
   DF_EntityList threads   = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
   
-  //- rjf: build flat array of entities, arranged into row order
-  DF_EntityArray entities = {0};
+  //- rjf: produce list of items; no query -> all entities, in tree; query -> only show threads
+  DF_EntityFuzzyItemArray items = {0};
+  if(query.size == 0)
   {
-    entities.count = machines.count+processes.count+threads.count;
-    entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
-    U64 idx = 0;
-    for(DF_EntityNode *machine_n = machines.first; machine_n != 0; machine_n = machine_n->next)
+    //- rjf: build flat array of entities, arranged into row order
+    DF_EntityArray entities = {0};
     {
-      DF_Entity *machine = machine_n->entity;
-      entities.v[idx] = machine;
-      idx += 1;
-      for(DF_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
+      entities.count = machines.count+processes.count+threads.count;
+      entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
+      U64 idx = 0;
+      for(DF_EntityNode *machine_n = machines.first; machine_n != 0; machine_n = machine_n->next)
       {
-        DF_Entity *process = process_n->entity;
-        if(df_entity_ancestor_from_kind(process, DF_EntityKind_Machine) != machine)
-        {
-          continue;
-        }
-        entities.v[idx] = process;
+        DF_Entity *machine = machine_n->entity;
+        entities.v[idx] = machine;
         idx += 1;
-        for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
+        for(DF_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
         {
-          DF_Entity *thread = thread_n->entity;
-          if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) != process)
+          DF_Entity *process = process_n->entity;
+          if(df_entity_ancestor_from_kind(process, DF_EntityKind_Machine) != machine)
           {
             continue;
           }
-          entities.v[idx] = thread;
+          entities.v[idx] = process;
           idx += 1;
+          for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
+          {
+            DF_Entity *thread = thread_n->entity;
+            if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) != process)
+            {
+              continue;
+            }
+            entities.v[idx] = thread;
+            idx += 1;
+          }
         }
       }
     }
+    
+    //- rjf: entities -> fuzzy-filtered entities
+    items = df_entity_fuzzy_item_array_from_entity_array_needle(scratch.arena, &entities, query);
+  }
+  else
+  {
+    items = df_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &threads, query);
   }
   
   //- rjf: selected column/entity -> selected cursor
   Vec2S64 cursor = {sv->selected_column};
-  for(U64 idx = 0; idx < entities.count; idx += 1)
+  for(U64 idx = 0; idx < items.count; idx += 1)
   {
-    if(entities.v[idx] == df_entity_from_handle(sv->selected_entity))
+    if(items.v[idx].entity == df_entity_from_handle(sv->selected_entity))
     {
       cursor.y = (S64)(idx+1);
       break;
@@ -3862,8 +3876,8 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
     scroll_list_params.flags         = UI_ScrollListFlag_All;
     scroll_list_params.row_height_px = floor_f32(ui_top_font_size()*2.5f);
     scroll_list_params.dim_px        = dim_2f32(rect);
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(4, entities.count));
-    scroll_list_params.item_range    = r1s64(0, entities.count);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(4, items.count));
+    scroll_list_params.item_range    = r1s64(0, items.count);
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
@@ -3874,13 +3888,13 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   {
     Vec2S64 next_cursor = cursor;
     for(U64 idx = visible_row_range.min;
-        idx <= visible_row_range.max && idx < entities.count;
+        idx <= visible_row_range.max && idx < items.count;
         idx += 1)
     {
-      DF_Entity *entity = entities.v[idx];
+      DF_Entity *entity = items.v[idx].entity;
       B32 row_is_selected = (cursor.y == (S64)(idx+1));
       F32 depth = 0.f;
-      switch(entity->kind)
+      if(query.size == 0) switch(entity->kind)
       {
         default:{}break;
         case DF_EntityKind_Machine:{depth = 0.f;}break;
@@ -3930,7 +3944,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
         UI_TableCellSized(ui_pct(1, 0))
           UI_FocusHot((row_is_selected && desc_col_rng.min <= cursor.x && cursor.x <= desc_col_rng.max) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          df_entity_desc_button(ws, entity);
+          df_entity_desc_button(ws, entity, &items.v[idx].matches);
         }
         switch(entity->kind)
         {
@@ -4001,7 +4015,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   
   //- rjf: selected num -> selected entity
   sv->selected_column = cursor.x;
-  sv->selected_entity = (1 <= cursor.y && cursor.y <= entities.count) ? df_handle_from_entity(entities.v[cursor.y-1]) : df_handle_zero();
+  sv->selected_entity = (1 <= cursor.y && cursor.y <= items.count) ? df_handle_from_entity(items.v[cursor.y-1].entity) : df_handle_zero();
   
   dbgi_scope_close(scope);
   scratch_end(scratch);
@@ -4154,7 +4168,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             }
             else
             {
-              df_entity_desc_button(ws, module);
+              df_entity_desc_button(ws, module, 0);
             }
           }
           
@@ -4286,6 +4300,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DBGI_Scope *scope = dbgi_scope_open();
+  String8 query = str8(view->query_buffer, view->query_string_size);
   
   //- rjf: get state
   DF_ModulesViewState *mv = df_view_user_state(view, DF_ModulesViewState);
@@ -4295,35 +4310,44 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
   DF_EntityList modules = df_query_cached_entity_list_with_kind(DF_EntityKind_Module);
   
-  //- rjf: build flat array of entities, arranged into row order
-  DF_EntityArray entities = {0};
+  //- rjf: make filtered item array
+  DF_EntityFuzzyItemArray items = {0};
+  if(query.size == 0)
   {
-    entities.count = processes.count+modules.count;
-    entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
-    U64 idx = 0;
-    for(DF_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
+    DF_EntityArray entities = {0};
     {
-      DF_Entity *process = process_n->entity;
-      entities.v[idx] = process;
-      idx += 1;
-      for(DF_EntityNode *module_n = modules.first; module_n != 0; module_n = module_n->next)
+      entities.count = processes.count+modules.count;
+      entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
+      U64 idx = 0;
+      for(DF_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
       {
-        DF_Entity *module = module_n->entity;
-        if(df_entity_ancestor_from_kind(module, DF_EntityKind_Process) != process)
-        {
-          continue;
-        }
-        entities.v[idx] = module;
+        DF_Entity *process = process_n->entity;
+        entities.v[idx] = process;
         idx += 1;
+        for(DF_EntityNode *module_n = modules.first; module_n != 0; module_n = module_n->next)
+        {
+          DF_Entity *module = module_n->entity;
+          if(df_entity_ancestor_from_kind(module, DF_EntityKind_Process) != process)
+          {
+            continue;
+          }
+          entities.v[idx] = module;
+          idx += 1;
+        }
       }
     }
+    items = df_entity_fuzzy_item_array_from_entity_array_needle(scratch.arena, &entities, query);
+  }
+  else
+  {
+    items = df_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &modules, query);
   }
   
   //- rjf: selected column/entity -> selected cursor
   Vec2S64 cursor = {mv->selected_column};
-  for(U64 idx = 0; idx < entities.count; idx += 1)
+  for(U64 idx = 0; idx < items.count; idx += 1)
   {
-    if(entities.v[idx] == df_entity_from_handle(mv->selected_entity))
+    if(items.v[idx].entity == df_entity_from_handle(mv->selected_entity))
     {
       cursor.y = (S64)(idx+1);
       break;
@@ -4377,8 +4401,8 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
     scroll_list_params.flags         = UI_ScrollListFlag_All;
     scroll_list_params.row_height_px = floor_f32(ui_top_font_size()*2.5f);
     scroll_list_params.dim_px        = dim_2f32(rect);
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, entities.count));
-    scroll_list_params.item_range    = r1s64(0, entities.count);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, items.count));
+    scroll_list_params.item_range    = r1s64(0, items.count);
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
@@ -4389,9 +4413,9 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   {
     Vec2S64 next_cursor = cursor;
     U64 idx_in_process = 0;
-    for(U64 idx = 0; idx < entities.count; idx += 1)
+    for(U64 idx = 0; idx < items.count; idx += 1)
     {
-      DF_Entity *entity = entities.v[idx];
+      DF_Entity *entity = items.v[idx].entity;
       B32 row_is_selected = (cursor.y == (S64)(idx+1));
       idx_in_process += (entity->kind == DF_EntityKind_Module);
       if(visible_row_range.min <= idx && idx <= visible_row_range.max)
@@ -4405,7 +4429,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
             {
               UI_TableCellSized(ui_pct(1, 0)) UI_FocusHot((row_is_selected) ? UI_FocusKind_On : UI_FocusKind_Off)
               {
-                df_entity_desc_button(ws, entity);
+                df_entity_desc_button(ws, entity, &items.v[idx].matches);
               }
             }
             idx_in_process = 0;
@@ -4419,7 +4443,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
             }
             UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              df_entity_desc_button(ws, entity);
+              df_entity_desc_button(ws, entity, &items.v[idx].matches);
             }
             UI_TableCell UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_FocusHot((row_is_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
@@ -4533,7 +4557,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   
   //- rjf: selected num -> selected entity
   mv->selected_column = cursor.x;
-  mv->selected_entity = (1 <= cursor.y && cursor.y <= entities.count) ? df_handle_from_entity(entities.v[cursor.y-1]) : df_handle_zero();
+  mv->selected_entity = (1 <= cursor.y && cursor.y <= items.count) ? df_handle_from_entity(items.v[cursor.y-1].entity) : df_handle_zero();
   
   dbgi_scope_close(scope);
   scratch_end(scratch);
@@ -8232,6 +8256,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Breakpoints) {}
 DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
 {
   Temp scratch = scratch_begin(0, 0);
+  String8 query = str8(view->query_buffer, view->query_string_size);
   
   //- rjf: get state
   typedef struct DF_BreakpointsViewState DF_BreakpointsViewState;
@@ -8260,13 +8285,13 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
   
   //- rjf: get entities
   DF_EntityList entities_list = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
-  DF_EntityArray entities = df_entity_array_from_list(scratch.arena, &entities_list);
+  DF_EntityFuzzyItemArray entities = df_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &entities_list, query);
   
   //- rjf: selected column/entity -> selected cursor
   Vec2S64 cursor = {bv->selected_column};
   for(U64 idx = 0; idx < entities.count; idx += 1)
   {
-    if(entities.v[idx] == df_entity_from_handle(bv->selected_entity))
+    if(entities.v[idx].entity == df_entity_from_handle(bv->selected_entity))
     {
       cursor.y = (S64)(idx+1);
       break;
@@ -8301,7 +8326,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
     Vec2S64 next_cursor = cursor;
     for(U64 idx = Max(1, visible_row_range.min); idx <= visible_row_range.max && idx <= entities.count; idx += 1)
     {
-      DF_Entity *entity = entities.v[idx-1];
+      DF_Entity *entity = entities.v[idx-1].entity;
       B32 row_is_selected = (cursor.y == (S64)(idx));
       UI_NamedTableVectorF("breakpoint_%p", entity)
       {
@@ -8314,7 +8339,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          df_entity_desc_button(ws, entity);
+          df_entity_desc_button(ws, entity, &entities.v[idx-1].matches);
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 2) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
@@ -8391,7 +8416,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
   
   //- rjf: selected num -> selected entity
   bv->selected_column = cursor.x;
-  bv->selected_entity = (1 <= cursor.y && cursor.y <= entities.count) ? df_handle_from_entity(entities.v[cursor.y-1]) : df_handle_zero();
+  bv->selected_entity = (1 <= cursor.y && cursor.y <= entities.count) ? df_handle_from_entity(entities.v[cursor.y-1].entity) : df_handle_zero();
   
   scratch_end(scratch);
 }
@@ -8405,6 +8430,7 @@ DF_VIEW_CMD_FUNCTION_DEF(WatchPins) {}
 DF_VIEW_UI_FUNCTION_DEF(WatchPins)
 {
   Temp scratch = scratch_begin(0, 0);
+  String8 query = str8(view->query_buffer, view->query_string_size);
   
   //- rjf: get state
   typedef struct DF_WatchPinsViewState DF_WatchPinsViewState;
@@ -8429,13 +8455,13 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
   
   //- rjf: get entities
   DF_EntityList entities_list = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
-  DF_EntityArray entities = df_entity_array_from_list(scratch.arena, &entities_list);
+  DF_EntityFuzzyItemArray entities = df_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &entities_list, query);
   
   //- rjf: selected column/entity -> selected cursor
   Vec2S64 cursor = {pv->selected_column};
   for(U64 idx = 0; idx < entities.count; idx += 1)
   {
-    if(entities.v[idx] == df_entity_from_handle(pv->selected_entity))
+    if(entities.v[idx].entity == df_entity_from_handle(pv->selected_entity))
     {
       cursor.y = (S64)(idx+1);
       break;
@@ -8468,13 +8494,13 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
     Vec2S64 next_cursor = cursor;
     for(U64 idx = Max(1, visible_row_range.min); idx <= visible_row_range.max && idx <= entities.count; idx += 1)
     {
-      DF_Entity *entity = entities.v[idx-1];
+      DF_Entity *entity = entities.v[idx-1].entity;
       B32 row_is_selected = (cursor.y == (S64)(idx));
       UI_NamedTableVectorF("pin_%p", entity)
       {
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          df_entity_desc_button(ws, entity);
+          df_entity_desc_button(ws, entity, &entities.v[idx-1].matches);
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
@@ -8520,7 +8546,7 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
   
   //- rjf: selected num -> selected entity
   pv->selected_column = cursor.x;
-  pv->selected_entity = (1 <= cursor.y && cursor.y <= entities.count) ? df_handle_from_entity(entities.v[cursor.y-1]) : df_handle_zero();
+  pv->selected_entity = (1 <= cursor.y && cursor.y <= entities.count) ? df_handle_from_entity(entities.v[cursor.y-1].entity) : df_handle_zero();
   
   scratch_end(scratch);
 }

@@ -1028,7 +1028,7 @@ internal void df_cmd_list_menu_buttons(DF_Window *ws, U64 count, DF_CoreCmdKind 
 internal UI_Signal df_icon_button(DF_IconKind kind, String8 string);
 internal UI_Signal df_icon_buttonf(DF_IconKind kind, char *fmt, ...);
 internal void df_entity_tooltips(DF_Entity *entity);
-internal void df_entity_desc_button(DF_Window *ws, DF_Entity *entity);
+internal void df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches);
 internal void df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt point);
 
 ////////////////////////////////
