@@ -1948,7 +1948,9 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
+  //////////////////////////////
   //- rjf: launch
+  //
   OS_LaunchOptions opts = {0};
   {
     opts.cmd_line    = msg->cmd_line_string_list;
@@ -1958,7 +1960,9 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
   }
   U32 id = demon_launch_process(&opts);
   
+  //////////////////////////////
   //- rjf: record start
+  //
   {
     CTRL_EventList evts = {0};
     CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
@@ -1966,14 +1970,13 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //////////////////////////////
   //- rjf: run to initialization (entry point)
+  //
   DEMON_Event *stop_event = 0;
   if(id != 0)
   {
     DEMON_Handle unfrozen_process[8] = {0};
-    DEMON_TrapChunkList demon_traps = {0};
-    U64 entry_vaddr = 0;
-    DEMON_Handle entry_vaddr_proc = 0;
     DEMON_RunCtrls run_ctrls = {0};
     run_ctrls.run_entities_are_unfrozen = 1;
     run_ctrls.run_entities_are_processes = 1;
@@ -1984,7 +1987,7 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
       {
         default:{}break;
         
-        // rjf: new process -> freeze process
+        //- rjf: new process -> freeze process
         case DEMON_EventKind_CreateProcess:
         if(run_ctrls.run_entity_count < ArrayCount(unfrozen_process))
         {
@@ -1993,22 +1996,32 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
           run_ctrls.run_entity_count += 1;
         }break;
         
-        // rjf: breakpoint -> if it's the entry point, we're done. otherwise, keep going
+        //- rjf: breakpoint -> if it's the entry point, we're done. otherwise, keep going
         case DEMON_EventKind_Breakpoint:
-        if(event->instruction_pointer == entry_vaddr)
         {
-          done = 1;
-          stop_event = event;
+          for(DEMON_TrapChunkNode *n = run_ctrls.traps.first; n != 0; n = n->next)
+          {
+            for(U64 idx = 0; idx < n->count; idx += 1)
+            {
+              if(n->v[idx].address == event->instruction_pointer)
+              {
+                done = 1;
+                stop_event = event;
+                goto end_look_for_entry_match;
+              }
+            }
+          }
+          end_look_for_entry_match:;
         }break;
         
-        // rjf: exception -> done
+        //- rjf: exception -> done
         case DEMON_EventKind_Exception:
         {
           done = 1;
           stop_event = event;
         }break;
         
-        // rjf: process ended? -> remove from unfrozen processes. zero processes -> done.
+        //- rjf: process ended? -> remove from unfrozen processes. zero processes -> done.
         case DEMON_EventKind_ExitProcess:
         {
           for(U64 idx = 0; idx < run_ctrls.run_entity_count; idx += 1)
@@ -2028,123 +2041,29 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
           }
         }break;
         
-        // rjf: done with handshake -> ready to find entry point. search launched processes
+        //- rjf: done with handshake -> ready to find entry point. search launched processes
         case DEMON_EventKind_HandshakeComplete:
         {
           DBGI_Scope *scope = dbgi_scope_open();
           
-          // rjf: find entry point vaddr
+          //- rjf: add traps for all possible entry points
           for(U64 process_idx = 0; process_idx < run_ctrls.run_entity_count; process_idx += 1)
           {
+            //- rjf: unpack first module info
             DEMON_HandleArray modules = demon_modules_from_process(scratch.arena, run_ctrls.run_entities[process_idx]);
             if(modules.count == 0) { continue; }
             DEMON_Handle module = modules.handles[0];
+            U64 module_base_vaddr = demon_base_vaddr_from_module(module);
             String8 exe_path = demon_full_path_from_module(scratch.arena, module);
             DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
             RADDBG_Parsed *rdbg = &dbgi->rdbg;
             RADDBG_NameMap *unparsed_map = raddbg_name_map_from_kind(rdbg, RADDBG_NameMapKind_Procedures);
             RADDBG_ParsedNameMap map = {0};
             raddbg_name_map_parse(rdbg, unparsed_map, &map);
-            String8 default_entry_points[] =
-            {
-              str8_lit("WinMain"),
-              str8_lit("wWinMain"),
-              str8_lit("main"),
-              str8_lit("wmain"),
-              str8_lit("WinMainCRTStartup"),
-              str8_lit("wWinMainCRTStartup"),
-              str8_lit("mainCRTStartup"),
-              str8_lit("wmainCRTStartup"),
-            };
             
-            // rjf: default to picking PE header's entry
-            B32 entry_is_user_defined = 0;
-            U64 entry_voff = dbgi->pe.entry_point;
-            if(rdbg->scope_vmap != 0 && rdbg->procedures != 0 &&
-               rdbg->unit_vmap != 0 && rdbg->units != 0 &&
-               rdbg->file_paths)
-            {
-              U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, entry_voff);
-              RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
-              U64 proc_idx = scope->proc_idx;
-              RADDBG_Procedure *procedure = &rdbg->procedures[proc_idx];
-              U64 name_size = 0;
-              U8 *name_base = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
-              String8 name = str8(name_base, name_size);
-              U64 unit_idx = raddbg_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, entry_voff);
-              RADDBG_Unit *unit = &rdbg->units[unit_idx];
-              RADDBG_ParsedLineInfo unit_line_info = {0};
-              raddbg_line_info_from_unit(rdbg, unit, &unit_line_info);
-              U64 line_info_idx = raddbg_line_info_idx_from_voff(&unit_line_info, entry_voff);
-              if(name_size != 0 && line_info_idx < unit_line_info.count)
-              {
-                String8 obj_path = {0};
-                {
-                  String8List obj_path_nodes = {0};
-                  for(U32 idx = unit->object_file_path_node; idx != 0; idx = rdbg->file_paths[idx].parent_path_node)
-                  {
-                    RADDBG_FilePathNode *n = &rdbg->file_paths[idx];
-                    U64 n_name_size = 0;
-                    U8 *n_name_base = raddbg_string_from_idx(rdbg, n->name_string_idx, &n_name_size);
-                    str8_list_push_front(scratch.arena, &obj_path_nodes, str8(n_name_base, n_name_size));
-                  }
-                  StringJoin join = {0};
-                  join.sep = str8_lit("/");
-                  obj_path = str8_list_join(scratch.arena, &obj_path_nodes, &join);
-                }
-                FileProperties props = os_properties_from_file_path(obj_path);
-                if(props.modified)
-                {
-                  entry_is_user_defined = 1;
-                }
-              }
-              B32 entry_point_matches_defaults = 0;
-              for(U64 idx = 0; idx < ArrayCount(default_entry_points); idx += 1)
-              {
-                if(str8_match(name, default_entry_points[idx], 0))
-                {
-                  entry_point_matches_defaults = 1;
-                }
-              }
-              if(!entry_point_matches_defaults && name.size != 0)
-              {
-                entry_is_user_defined = 1;
-              }
-            }
-            
-            // rjf: find voff for one of the default entry points
-            if(!entry_is_user_defined)
-            {
-              for(U64 idx = 0; idx < ArrayCount(default_entry_points); idx += 1)
-              {
-                U32 procedure_id = 0;
-                {
-                  String8 name = default_entry_points[idx];
-                  RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
-                  if(node != 0)
-                  {
-                    U32 id_count = 0;
-                    U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
-                    if(id_count > 0)
-                    {
-                      procedure_id = ids[0];
-                    }
-                  }
-                }
-                if(procedure_id != 0)
-                {
-                  U64 new_voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
-                  if(new_voff != 0)
-                  {
-                    entry_voff = new_voff;
-                    break;
-                  }
-                }
-              }
-            }
-            
-            // rjf: find voff for one of the custom entry points attached to this msg
-            if(rdbg->procedures != 0 && unparsed_map != 0)
+            //- rjf: add trap for user-specified entry point, if specified
+            B32 entries_found = 0;
+            if(!entries_found)
             {
               for(String8Node *n = msg->strings.first; n != 0; n = n->next)
               {
@@ -2152,30 +2071,25 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
                 {
                   String8 name = n->string;
                   RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
-                  if(node != 0)
+                  U32 id_count = 0;
+                  U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                  if(id_count > 0)
                   {
-                    U32 id_count = 0;
-                    U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
-                    if(id_count > 0)
-                    {
-                      procedure_id = ids[0];
-                    }
+                    procedure_id = ids[0];
                   }
                 }
-                if(procedure_id != 0)
+                U64 voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                if(voff != 0)
                 {
-                  U64 new_voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
-                  if(new_voff != 0)
-                  {
-                    entry_voff = new_voff;
-                    break;
-                  }
+                  entries_found = 1;
+                  DEMON_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
+                  demon_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
                 }
               }
             }
             
-            // rjf: find voff for one of the user's custom entry points
-            if(rdbg->procedures != 0 && unparsed_map != 0)
+            //- rjf: add traps for all custom user entry points
+            if(!entries_found)
             {
               for(String8Node *n = ctrl_state->user_entry_points.first; n != 0; n = n->next)
               {
@@ -2183,46 +2097,102 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
                 {
                   String8 name = n->string;
                   RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
-                  if(node != 0)
+                  U32 id_count = 0;
+                  U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                  if(id_count > 0)
                   {
-                    U32 id_count = 0;
-                    U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
-                    if(id_count > 0)
-                    {
-                      procedure_id = ids[0];
-                    }
+                    procedure_id = ids[0];
                   }
                 }
-                if(procedure_id != 0)
+                U64 voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                if(voff != 0)
                 {
-                  U64 new_voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
-                  if(new_voff != 0)
-                  {
-                    entry_voff = new_voff;
-                    break;
-                  }
+                  DEMON_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
+                  demon_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
+                  break;
                 }
               }
             }
             
-            // rjf: nonzero voff? => store
-            if(entry_voff != 0)
+            //- rjf: add traps for all high-level entry points
+            if(!entries_found)
             {
-              U64 base_vaddr = demon_base_vaddr_from_module(module);
-              entry_vaddr = base_vaddr + entry_voff;
-              entry_vaddr_proc = run_ctrls.run_entities[process_idx];
+              String8 hi_entry_points[] =
+              {
+                str8_lit("WinMain"),
+                str8_lit("wWinMain"),
+                str8_lit("main"),
+                str8_lit("wmain"),
+              };
+              for(U64 idx = 0; idx < ArrayCount(hi_entry_points); idx += 1)
+              {
+                U32 procedure_id = 0;
+                {
+                  String8 name = hi_entry_points[idx];
+                  RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
+                  U32 id_count = 0;
+                  U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                  if(id_count > 0)
+                  {
+                    procedure_id = ids[0];
+                  }
+                }
+                U64 voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                if(voff != 0)
+                {
+                  entries_found = 1;
+                  DEMON_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
+                  demon_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
+                }
+              }
             }
             
-            // rjf: found entry point -> insert into trap controls
-            if(entry_vaddr != 0)
+            //- rjf: add trap for PE header entry
+            if(!entries_found)
             {
-              DEMON_Trap trap = {entry_vaddr_proc, entry_vaddr};
-              demon_trap_chunk_list_push(scratch.arena, &demon_traps, 256, &trap);
-              run_ctrls.traps = demon_traps;
+              U64 voff = dbgi->pe.entry_point;
+              if(voff != 0)
+              {
+                DEMON_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
+                demon_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
+              }
             }
             
-            // rjf: no entry point found -> done
-            else
+            //- rjf: add traps for all low-level entry points
+            if(!entries_found)
+            {
+              String8 lo_entry_points[] =
+              {
+                str8_lit("WinMainCRTStartup"),
+                str8_lit("wWinMainCRTStartup"),
+                str8_lit("mainCRTStartup"),
+                str8_lit("wmainCRTStartup"),
+              };
+              for(U64 idx = 0; idx < ArrayCount(lo_entry_points); idx += 1)
+              {
+                U32 procedure_id = 0;
+                {
+                  String8 name = lo_entry_points[idx];
+                  RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, name.str, name.size);
+                  U32 id_count = 0;
+                  U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+                  if(id_count > 0)
+                  {
+                    procedure_id = ids[0];
+                  }
+                }
+                U64 voff = raddbg_first_voff_from_proc(rdbg, procedure_id);
+                if(voff != 0)
+                {
+                  entries_found = 1;
+                  DEMON_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
+                  demon_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
+                }
+              }
+            }
+            
+            //- rjf: no entry point found -> done
+            if(!entries_found)
             {
               done = 1;
               stop_event = event;
@@ -2235,7 +2205,9 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     }
   }
   
+  //////////////////////////////
   //- rjf: record bad stop
+  //
   if(stop_event == 0 && id == 0)
   {
     CTRL_EventList evts = {0};
@@ -2245,7 +2217,9 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //////////////////////////////
   //- rjf: record stop
+  //
   {
     CTRL_EventList evts = {0};
     CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
@@ -2264,7 +2238,9 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //////////////////////////////
   //- rjf: push request resolution event
+  //
   {
     CTRL_EventList evts = {0};
     CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);

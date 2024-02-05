@@ -541,64 +541,6 @@ try_s64_from_str8_c_rules(String8 string, S64 *x){
   return(is_integer);
 }
 
-//- rjf: string -> integer (base64 & base16)
-
-internal U64
-base64_size_from_data_size(U64 size_in_bytes){
-  U64 bits = size_in_bytes*8;
-  U64 base64_size = (bits + 5)/6;
-  return(base64_size);
-}
-
-internal U64
-base64_from_data(U8 *dst, U8 *src, U64 src_size){
-  U8 *dst_base = dst;
-  U8 *opl = src + src_size;
-  U32 bit_num = 0;
-  if (src < opl){
-    U8 byte = *src;
-    for (;;){
-      U32 x = 0;
-      for (U32 i = 0; i < 6; i += 1){
-        x |= ((byte >> bit_num) & 1) << i;
-        bit_num += 1;
-        if (bit_num == 8){
-          bit_num = 0;
-          src += 1;
-          byte = (src < opl)?(*src):0;
-        }
-      }
-      *dst = base64[x];
-      dst += 1;
-      if (src >= opl){
-        break;
-      }
-    }
-  }
-  return(dst - dst_base);
-}
-
-internal U64
-base16_size_from_data_size(U64 size_in_bytes){
-  U64 base16_size = size_in_bytes*2;
-  return(base16_size);
-}
-
-internal U64
-base16_from_data(U8 *dst, U8 *src, U64 src_size){
-  U8 *dst_base = dst;
-  U8 *opl = src + src_size;
-  for (;src < opl;){
-    U8 byte = *src;
-    *dst = integer_symbols[byte & 0xF];
-    dst += 1;
-    *dst = integer_symbols[byte >> 4];
-    dst += 1;
-    src += 1;
-  }
-  return(dst - dst_base);
-}
-
 //- rjf: integer -> string
 
 internal String8
