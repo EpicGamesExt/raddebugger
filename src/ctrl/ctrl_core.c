@@ -3232,6 +3232,14 @@ ctrl_mem_stream_thread__entry_point(void *p)
       take_task__break_all:;
     }
     
+    //- rjf: clamp range to be sensible
+    Rng1U64 vaddr_range_clamped = vaddr_range;
+    {
+      vaddr_range_clamped.max = Max(vaddr_range_clamped.max, vaddr_range_clamped.min);
+      U64 max_size_cap = Min(max_U64-vaddr_range_clamped.min, GB(1));
+      vaddr_range_clamped.max = Min(vaddr_range_clamped.max, vaddr_range_clamped.min+max_size_cap);
+    }
+    
     //- rjf: task was taken -> read memory
     U64 range_size = 0;
     Arena *range_arena = 0;
@@ -3240,31 +3248,38 @@ ctrl_mem_stream_thread__entry_point(void *p)
     U64 memgen_idx = ctrl_memgen_idx();
     if(got_task && memgen_idx != preexisting_memgen_idx)
     {
-      range_size = dim_1u64(vaddr_range);
+      range_size = dim_1u64(vaddr_range_clamped);
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, KB(64));
       range_arena = arena_alloc__sized(range_size+ARENA_HEADER_SIZE, range_size+ARENA_HEADER_SIZE);
-      range_base = push_array_no_zero(range_arena, U8, range_size);
-      U64 bytes_read = ctrl_process_read(machine_id, process, vaddr_range, range_base);
-      if(bytes_read == 0)
+      if(range_arena == 0)
       {
-        arena_release(range_arena);
-        range_base = 0;
         range_size = 0;
-        range_arena = 0;
       }
-      else if(bytes_read < range_size)
+      else
       {
-        MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
-      }
-      zero_terminated_size = range_size;
-      if(zero_terminated)
-      {
-        for(U64 idx = 0; idx < bytes_read; idx += 1)
+        range_base = push_array_no_zero(range_arena, U8, range_size);
+        U64 bytes_read = ctrl_process_read(machine_id, process, vaddr_range_clamped, range_base);
+        if(bytes_read == 0)
         {
-          if(((U8 *)range_base)[idx] == 0)
+          arena_release(range_arena);
+          range_base = 0;
+          range_size = 0;
+          range_arena = 0;
+        }
+        else if(bytes_read < range_size)
+        {
+          MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
+        }
+        zero_terminated_size = range_size;
+        if(zero_terminated)
+        {
+          for(U64 idx = 0; idx < bytes_read; idx += 1)
           {
-            zero_terminated_size = idx;
-            break;
+            if(((U8 *)range_base)[idx] == 0)
+            {
+              zero_terminated_size = idx;
+              break;
+            }
           }
         }
       }

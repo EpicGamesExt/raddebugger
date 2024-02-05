@@ -8,8 +8,8 @@ internal TEX_Topology
 tex_topology_make(Vec2S32 dim, R_Tex2DFormat fmt)
 {
   TEX_Topology top = {0};
-  top.dim.x = (S16)dim.x;
-  top.dim.y = (S16)dim.y;
+  top.dim.x = (S16)Clamp(0, dim.x, max_S32);
+  top.dim.y = (S16)Clamp(0, dim.y, max_S32);
   top.fmt = fmt;
   return top;
 }
@@ -352,7 +352,7 @@ tex_xfer_thread__entry_point(void *p)
     
     //- rjf: data * topology -> texture
     R_Handle texture = {0};
-    if(got_task && top.dim.x != 0 && top.dim.y != 0 && data.size >= (U64)top.dim.x*(U64)top.dim.y*r_tex2d_format_bytes_per_pixel_table[top.fmt])
+    if(got_task && top.dim.x > 0 && top.dim.y > 0 && data.size >= (U64)top.dim.x*(U64)top.dim.y*(U64)r_tex2d_format_bytes_per_pixel_table[top.fmt])
     {
       texture = r_tex2d_alloc(R_Tex2DKind_Static, v2s32(top.dim.x, top.dim.y), top.fmt, data.str);
     }

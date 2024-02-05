@@ -933,7 +933,11 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
           df_gfx_request_frame();
         }
       }
-      if(sig.hovering)
+      if(sig.hovering && r_handle_match(texture, r_handle_zero())) UI_Tooltip
+      {
+        ui_labelf("Texture not loaded.");
+      }
+      if(sig.hovering && !r_handle_match(texture, r_handle_zero()))
       {
         if(dim.y > (F32)topology_info.height)
         {
