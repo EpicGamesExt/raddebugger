@@ -1755,7 +1755,7 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
             UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
             UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
             UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
-            if(df_icon_buttonf(DF_IconKind_Add, "Add Target").clicked)
+            if(df_icon_buttonf(DF_IconKind_Add, 0, "Add Target").clicked)
           {
             DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
             params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddTarget);
@@ -1780,7 +1780,7 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
             UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
             UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
           {
-            if(df_icon_buttonf(DF_IconKind_Play, "Launch %S", target_name).clicked)
+            if(df_icon_buttonf(DF_IconKind_Play, 0, "Launch %S", target_name).clicked)
             {
               DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
               params.entity = df_handle_from_entity(target);
@@ -1788,7 +1788,7 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndRun));
             }
             ui_spacer(ui_em(1.5f, 1));
-            if(df_icon_buttonf(DF_IconKind_Play, "Step Into %S", target_name).clicked)
+            if(df_icon_buttonf(DF_IconKind_Play, 0, "Step Into %S", target_name).clicked)
             {
               DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
               params.entity = df_handle_from_entity(target);
@@ -3349,7 +3349,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
     {
       UI_Signal add_sig = {0};
       UI_FocusHot(cursor.y == 1 ? UI_FocusKind_On : UI_FocusKind_Off)
-        add_sig = df_icon_buttonf(DF_IconKind_Add, "Add New Target");
+        add_sig = df_icon_buttonf(DF_IconKind_Add, 0, "Add New Target");
       if(add_sig.clicked)
       {
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -3372,7 +3372,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
       UI_PrefWidth(ui_em(2.25f, 1))
         UI_FocusHot((row_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
       {
-        UI_Signal sig = df_icon_buttonf(target->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, "###ebl_%p", target);
+        UI_Signal sig = df_icon_buttonf(target->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", target);
         if(sig.clicked && sig.event_flags == 0)
         {
           DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
@@ -3414,7 +3414,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
           UI_Signal sig = {0};
           UI_FocusHot((row_selected && cursor.x == 2+ctrl_idx) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
-            sig = df_icon_buttonf(ctrls[ctrl_idx].icon, "###%p_ctrl_%i", target, (int)ctrl_idx);
+            sig = df_icon_buttonf(ctrls[ctrl_idx].icon, 0, "###%p_ctrl_%i", target, (int)ctrl_idx);
           }
           if(sig.hovering) UI_Tooltip
           {
@@ -3927,7 +3927,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
             {
               ui_set_next_background_color(frozen_in_solo_mode_color);
             }
-            sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, "###lock_%p", entity);
+            sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, 0, "###lock_%p", entity);
           }
           if(frozen_by_solo_mode && sig.hovering) UI_Tooltip
           {
@@ -3970,7 +3970,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
             }
             UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 3) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              if(df_icon_buttonf(DF_IconKind_Redo, "###retry").clicked)
+              if(df_icon_buttonf(DF_IconKind_Redo, 0, "###retry").clicked)
               {
                 DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                 df_handle_list_push(scratch.arena, &params.entity_list, df_handle_from_entity(entity));
@@ -3983,7 +3983,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
               UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureText))
                 UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBorder))
-                if(df_icon_buttonf(DF_IconKind_X, "###kill").clicked)
+                if(df_icon_buttonf(DF_IconKind_X, 0, "###kill").clicked)
               {
                 DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                 df_handle_list_push(scratch.arena, &params.entity_list, df_handle_from_entity(entity));
@@ -8348,7 +8348,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
       {
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          if(df_icon_buttonf(entity->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, "###ebl_%p", entity).clicked)
+          if(df_icon_buttonf(entity->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", entity).clicked)
           {
             df_entity_equip_b32(entity, !entity->b32);
           }
@@ -8420,7 +8420,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 4) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          if(df_icon_buttonf(DF_IconKind_Trash, "###del_%p", entity).clicked)
+          if(df_icon_buttonf(DF_IconKind_Trash, 0, "###del_%p", entity).clicked)
           {
             df_entity_mark_for_deletion(entity);
           }
@@ -8550,7 +8550,7 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 2) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          if(df_icon_buttonf(DF_IconKind_Trash, "###del_%p", entity).clicked)
+          if(df_icon_buttonf(DF_IconKind_Trash, 0, "###del_%p", entity).clicked)
           {
             df_entity_mark_for_deletion(entity);
           }
@@ -8578,6 +8578,7 @@ DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  String8 query = str8(view->query_buffer, view->query_string_size);
   
   //- rjf: get state
   typedef struct DF_ExceptionFiltersViewState DF_ExceptionFiltersViewState;
@@ -8592,6 +8593,7 @@ DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
   struct DF_ExceptionFiltersOption
   {
     String8 name;
+    FuzzyMatchRangeList matches;
     B32 is_enabled;
     CTRL_ExceptionCodeKind exception_code_kind;
   };
@@ -8623,19 +8625,25 @@ DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
       k = (CTRL_ExceptionCodeKind)(k+1))
   {
     DF_ExceptionFiltersOptionChunkNode *node = opts_list.last;
-    if(node == 0 || node->count >= node->cap)
+    String8 name = push_str8f(scratch.arena, "0x%x %S", ctrl_exception_code_kind_code_table[k], ctrl_exception_code_kind_display_string_table[k]);
+    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, query, name);
+    if(matches.count >= matches.needle_part_count)
     {
-      node = push_array(scratch.arena, DF_ExceptionFiltersOptionChunkNode, 1);
-      node->cap = 256;
-      node->v = push_array_no_zero(scratch.arena, DF_ExceptionFiltersOption, node->cap);
-      SLLQueuePush(opts_list.first, opts_list.last, node);
-      opts_list.node_count += 1;
+      if(node == 0 || node->count >= node->cap)
+      {
+        node = push_array(scratch.arena, DF_ExceptionFiltersOptionChunkNode, 1);
+        node->cap = 256;
+        node->v = push_array_no_zero(scratch.arena, DF_ExceptionFiltersOption, node->cap);
+        SLLQueuePush(opts_list.first, opts_list.last, node);
+        opts_list.node_count += 1;
+      }
+      node->v[node->count].name = name;
+      node->v[node->count].matches = matches;
+      node->v[node->count].is_enabled = !!(df_state->ctrl_exception_code_filters[k/64] & (1ull<<(k%64)));
+      node->v[node->count].exception_code_kind = k;
+      node->count += 1;
+      opts_list.option_count += 1;
     }
-    node->v[node->count].name = push_str8f(scratch.arena, "0x%x %S", ctrl_exception_code_kind_code_table[k], ctrl_exception_code_kind_display_string_table[k]);
-    node->v[node->count].is_enabled = !!(df_state->ctrl_exception_code_filters[k/64] & (1ull<<(k%64)));
-    node->v[node->count].exception_code_kind = k;
-    node->count += 1;
-    opts_list.option_count += 1;
   }
   DF_ExceptionFiltersOptionArray opts = {0};
   {
@@ -8670,7 +8678,7 @@ DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
       UI_FocusHot(sv->cursor.y == row+1 ? UI_FocusKind_On : UI_FocusKind_Off)
     {
       DF_ExceptionFiltersOption *opt = &opts.v[row];
-      UI_Signal sig = df_icon_buttonf(opt->is_enabled ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, "%S", opt->name);
+      UI_Signal sig = df_icon_buttonf(opt->is_enabled ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, &opt->matches, "%S", opt->name);
       if(sig.clicked)
       {
         if(opt->exception_code_kind != CTRL_ExceptionCodeKind_Null)
@@ -8985,7 +8993,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
     // rjf: preset selector
     UI_FocusHot((sv->cursor.y == 1 && sv->cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
-      UI_Signal preset_sig = df_icon_buttonf(DF_IconKind_Palette, "Apply Preset");
+      UI_Signal preset_sig = df_icon_buttonf(DF_IconKind_Palette, 0, "Apply Preset");
       if(preset_sig.clicked)
       {
         ui_ctx_menu_open(preset_ctx_menu_key, preset_sig.box->key, v2f32(0, dim_2f32(preset_sig.box->rect).y));
@@ -8995,7 +9003,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
     // rjf: load-from-file
     UI_FocusHot((sv->cursor.y == 1 && sv->cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
-      if(df_icon_buttonf(DF_IconKind_FileOutline, "Load From File").clicked)
+      if(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Load From File").clicked)
       {
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFile);

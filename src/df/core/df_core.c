@@ -1358,12 +1358,23 @@ df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray
   {
     DF_Entity *entity = array->v[src_idx];
     String8 display_string = df_display_string_from_entity(scratch.arena, entity);
+    String8 search_tags = df_search_tags_from_entity(scratch.arena, entity);
     FuzzyMatchRangeList matches = fuzzy_match_find(arena, needle, display_string);
     if(matches.count >= matches.needle_part_count)
     {
       result.v[result_idx].entity = entity;
       result.v[result_idx].matches = matches;
       result_idx += 1;
+    }
+    else if(search_tags.size != 0)
+    {
+      FuzzyMatchRangeList tag_matches = fuzzy_match_find(scratch.arena, needle, search_tags);
+      if(tag_matches.count >= tag_matches.needle_part_count)
+      {
+        result.v[result_idx].entity = entity;
+        result.v[result_idx].matches = matches;
+        result_idx += 1;
+      }
     }
   }
   result.count = result_idx;
@@ -1515,6 +1526,38 @@ df_display_string_from_entity(Arena *arena, DF_Entity *entity)
       result = push_str8_copy(arena, entity->name);
       result = str8_skip_last_slash(result);
     }break;
+  }
+  return result;
+}
+
+//- rjf: extra search tag strings for fuzzy filtering entities
+
+internal String8
+df_search_tags_from_entity(Arena *arena, DF_Entity *entity)
+{
+  String8 result = {0};
+  if(entity->kind == DF_EntityKind_Thread)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
+    CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
+    String8List strings = {0};
+    for(CTRL_UnwindFrame *f = unwind.last; f != 0; f = f->prev)
+    {
+      U64 rip_vaddr = f->rip;
+      DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
+      DF_Entity *binary = df_binary_file_from_module(module);
+      String8 procedure_name = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
+      if(procedure_name.size != 0)
+      {
+        str8_list_push(scratch.arena, &strings, procedure_name);
+      }
+    }
+    StringJoin join = {0};
+    join.sep = str8_lit(",");
+    result = str8_list_join(arena, &strings, &join);
+    scratch_end(scratch);
   }
   return result;
 }

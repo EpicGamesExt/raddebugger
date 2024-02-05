@@ -53,6 +53,7 @@ typedef struct CTRL_UnwindFrame CTRL_UnwindFrame;
 struct CTRL_UnwindFrame
 {
   CTRL_UnwindFrame *next;
+  CTRL_UnwindFrame *prev;
   U64 rip;
   void *regs;
 };

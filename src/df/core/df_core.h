@@ -1374,6 +1374,9 @@ internal String8 df_full_path_from_entity(Arena *arena, DF_Entity *entity);
 //- rjf: display string entities, for referencing entities in ui
 internal String8 df_display_string_from_entity(Arena *arena, DF_Entity *entity);
 
+//- rjf: extra search tag strings for fuzzy filtering entities
+internal String8 df_search_tags_from_entity(Arena *arena, DF_Entity *entity);
+
 //- rjf: entity -> color operations
 internal Vec4F32 df_hsva_from_entity(DF_Entity *entity);
 internal Vec4F32 df_rgba_from_entity(DF_Entity *entity);

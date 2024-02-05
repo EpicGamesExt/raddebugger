@@ -1284,7 +1284,7 @@ ctrl_unwind_from_process_thread(Arena *arena, CTRL_MachineID machine_id, CTRL_Ha
         frame->rip = rip;
         frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
         MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
-        SLLQueuePush(unwind.first, unwind.last, frame);
+        DLLPushBack(unwind.first, unwind.last, frame);
         unwind.count += 1;
         
         // rjf: unwind one step
