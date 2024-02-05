@@ -548,7 +548,7 @@ internal U64 ctrl_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, CTRL_Han
 internal CTRL_Handle ctrl_module_from_process_vaddr(CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr);
 
 //- rjf: unwinding
-internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle thread);
+internal CTRL_Unwind ctrl_unwind_from_process_thread(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, CTRL_Handle thread);
 
 //- rjf: name -> register/alias hash tables, for eval
 internal EVAL_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);

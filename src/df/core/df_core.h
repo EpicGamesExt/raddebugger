@@ -243,26 +243,6 @@ struct DF_CtrlFlowInfo
 };
 
 ////////////////////////////////
-//~ rjf: Unwind Types
-
-typedef struct DF_UnwindFrame DF_UnwindFrame;
-struct DF_UnwindFrame
-{
-  DF_UnwindFrame *next;
-  U64 rip;
-  void *regs;
-};
-
-typedef struct DF_Unwind DF_Unwind;
-struct DF_Unwind
-{
-  DF_UnwindFrame *first;
-  DF_UnwindFrame *last;
-  U64 count;
-  B32 error;
-};
-
-////////////////////////////////
 //~ rjf: Evaluation Types
 
 typedef struct DF_Eval DF_Eval;
@@ -958,7 +938,7 @@ struct DF_RunUnwindCacheNode
 {
   DF_RunUnwindCacheNode *hash_next;
   DF_Handle thread;
-  DF_Unwind unwind;
+  CTRL_Unwind unwind;
 };
 
 typedef struct DF_RunUnwindCacheSlot DF_RunUnwindCacheSlot;
@@ -1531,7 +1511,7 @@ internal DF_Entity *df_module_from_process_vaddr(DF_Entity *process, U64 vaddr);
 internal DF_Entity *df_module_from_thread(DF_Entity *thread);
 internal U64 df_tls_base_vaddr_from_thread(DF_Entity *thread);
 internal Architecture df_architecture_from_entity(DF_Entity *entity);
-internal DF_Unwind df_push_unwind_from_thread(Arena *arena, DF_Entity *thread);
+internal CTRL_Unwind df_push_unwind_from_thread(Arena *arena, DF_Entity *thread);
 internal U64 df_rip_from_thread(DF_Entity *thread);
 internal U64 df_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
 internal EVAL_String2NumMap *df_push_locals_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *binary, U64 voff);
@@ -1661,7 +1641,7 @@ internal DF_EntityList df_push_active_binary_list(Arena *arena);
 internal DF_EntityList df_push_active_target_list(Arena *arena);
 
 //- rjf: per-run caches
-internal DF_Unwind df_query_cached_unwind_from_thread(DF_Entity *thread);
+internal CTRL_Unwind df_query_cached_unwind_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
 internal EVAL_String2NumMap *df_query_cached_locals_map_from_binary_voff(DF_Entity *binary, U64 voff);

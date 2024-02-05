@@ -3498,9 +3498,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               if(df_icon_buttonf(DF_IconKind_Clipboard, "Copy Call Stack").clicked)
               {
                 DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
-                DF_Unwind unwind = df_query_cached_unwind_from_thread(entity);
+                CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
                 String8List lines = {0};
-                for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
+                for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
                 {
                   U64 rip_vaddr = frame->rip;
                   DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
@@ -8681,8 +8681,8 @@ df_entity_tooltips(DF_Entity *entity)
       }
       ui_spacer(ui_em(1.5f, 1.f));
       DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
-      DF_Unwind unwind = df_query_cached_unwind_from_thread(entity);
-      for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
+      CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
+      for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
       {
         U64 rip_vaddr = frame->rip;
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
@@ -8868,6 +8868,9 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     if(op_flags & DF_EntityOpFlag_Enable && entity->b32 == 0) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
     {
       ui_label(str8_lit("(Disabled)"));
+    }
+    if(entity->kind == DF_EntityKind_Thread)
+    {
     }
   }
   

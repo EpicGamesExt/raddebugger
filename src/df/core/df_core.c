@@ -3605,113 +3605,11 @@ df_architecture_from_entity(DF_Entity *entity)
   return entity->arch;
 }
 
-internal DF_Unwind
+internal CTRL_Unwind
 df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
 {
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  DBGI_Scope *scope = dbgi_scope_open();
-  Architecture arch = df_architecture_from_entity(thread);
-  U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
-  DF_Unwind unwind = {0};
-  unwind.error = 1;
-  switch(arch)
-  {
-    default:{}break;
-    case Architecture_x64:
-    {
-      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-      
-      // rjf: grab initial register block
-      void *regs_block = push_array(scratch.arena, U8, arch_reg_block_size);
-      B32 regs_block_good = 0;
-      {
-        void *regs_raw = ctrl_reg_block_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
-        if(regs_raw != 0)
-        {
-          MemoryCopy(regs_block, regs_raw, arch_reg_block_size);
-          regs_block_good = 1;
-        }
-      }
-      
-      // rjf: grab initial memory view
-      B32 stack_memview_good = 0;
-      UNW_MemView stack_memview = {0};
-      if(regs_block_good)
-      {
-        U64 stack_base_unrounded = thread->stack_base;
-        U64 stack_top_unrounded = regs_rsp_from_arch_block(arch, regs_block);
-        U64 stack_base = AlignPow2(stack_base_unrounded, KB(4));
-        U64 stack_top = AlignDownPow2(stack_top_unrounded, KB(4));
-        U64 stack_size = stack_base - stack_top;
-        if(stack_base >= stack_top)
-        {
-          String8 stack_memory = {0};
-          stack_memory.str = push_array_no_zero(scratch.arena, U8, stack_size);
-          stack_memory.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(stack_top, stack_top+stack_size), stack_memory.str);
-          if(stack_memory.size != 0)
-          {
-            stack_memview_good = 1;
-            stack_memview.data = stack_memory.str;
-            stack_memview.addr_first = stack_top;
-            stack_memview.addr_opl = stack_base;
-          }
-        }
-      }
-      
-      // rjf: loop & unwind
-      UNW_MemView memview = stack_memview;
-      if(stack_memview_good) for(;;)
-      {
-        unwind.error = 0;
-        
-        // rjf: regs -> rip*module*binary
-        U64 rip = regs_rip_from_arch_block(arch, regs_block);
-        DF_Entity *module = df_module_from_process_vaddr(process, rip);
-        DF_Entity *binary = df_binary_file_from_module(module);
-        
-        // rjf: cancel on 0 rip
-        if(rip == 0)
-        {
-          break;
-        }
-        
-        // rjf: binary -> all the binary info
-        String8 binary_full_path = df_full_path_from_entity(scratch.arena, binary);
-        DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
-        String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
-        
-        // rjf: valid step -> push frame
-        DF_UnwindFrame *frame = push_array(arena, DF_UnwindFrame, 1);
-        frame->rip = rip;
-        frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
-        MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
-        SLLQueuePush(unwind.first, unwind.last, frame);
-        unwind.count += 1;
-        
-        // rjf: unwind one step
-        UNW_Result unwind_step = unw_pe_x64(binary_data, &dbgi->pe, df_base_vaddr_from_module(module), &memview, (UNW_X64_Regs *)regs_block);
-        
-        // rjf: cancel on bad step
-        if(unwind_step.dead != 0)
-        {
-          break;
-        }
-        if(unwind_step.missed_read != 0)
-        {
-          unwind.error = 1;
-          break;
-        }
-        if(unwind_step.stack_pointer == 0)
-        {
-          break;
-        }
-      }
-    }break;
-  }
-  dbgi_scope_close(scope);
-  scratch_end(scratch);
-  ProfEnd();
+  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  CTRL_Unwind unwind = ctrl_unwind_from_process_thread(arena, thread->ctrl_machine_id, process->ctrl_handle, thread->ctrl_handle);
   return unwind;
 }
 
@@ -3729,9 +3627,9 @@ df_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count)
   U64 result = df_rip_from_thread(thread);
   if(unwind_count != 0)
   {
-    DF_Unwind unwind = df_push_unwind_from_thread(scratch.arena, thread);
+    CTRL_Unwind unwind = df_push_unwind_from_thread(scratch.arena, thread);
     U64 unwind_idx = 0;
-    for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
+    for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
     {
       if(unwind_count == unwind_idx)
       {
@@ -4186,14 +4084,14 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
   DF_Entity *process = thread->parent;
   U64 unwind_count = ctrl_ctx->unwind_count;
-  DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   Architecture arch = df_architecture_from_entity(thread);
   U64 reg_size = regs_block_size_from_architecture(arch);
   U64 thread_unwind_ip_vaddr = 0;
   void *thread_unwind_regs_block = push_array(scratch.arena, U8, reg_size);
   {
     U64 idx = 0;
-    for(DF_UnwindFrame *f = unwind.first; f != 0; f = f->next, idx += 1)
+    for(CTRL_UnwindFrame *f = unwind.first; f != 0; f = f->next, idx += 1)
     {
       if(idx == unwind_count)
       {
@@ -4339,11 +4237,11 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
       TG_Key type_key = eval.type_key;
       U64 type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, type_key);
       U64 reg_off = eval.offset;
-      DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+      CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
       if(unwind.first != 0)
       {
         U64 unwind_idx = 0;
-        for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
+        for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
         {
           if(unwind_idx == ctrl_ctx->unwind_count && frame->regs != 0)
           {
@@ -4858,7 +4756,7 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       }break;
       case EVAL_EvalMode_Reg:
       {
-        DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+        CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
         Architecture arch = df_architecture_from_entity(thread);
         U64 reg_block_size = regs_block_size_from_architecture(arch);
         if(unwind.first != 0 &&
@@ -6232,11 +6130,11 @@ df_push_active_target_list(Arena *arena)
 
 //- rjf: per-run caches
 
-internal DF_Unwind
+internal CTRL_Unwind
 df_query_cached_unwind_from_thread(DF_Entity *thread)
 {
   ProfBeginFunction();
-  DF_Unwind result = {0};
+  CTRL_Unwind result = {0};
   DF_RunUnwindCache *cache = &df_state->unwind_cache;
   if(cache->table_size != 0)
   {
@@ -6261,7 +6159,7 @@ internal U64
 df_query_cached_rip_from_thread(DF_Entity *thread)
 {
   U64 result = 0;
-  DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   if(unwind.first != 0)
   {
     result = unwind.first->rip;
@@ -6273,9 +6171,9 @@ internal U64
 df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count)
 {
   U64 result = 0;
-  DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   U64 unwind_idx = 0;
-  for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
+  for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
   {
     if(unwind_idx == unwind_count)
     {
@@ -7284,7 +7182,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               case DF_CoreCmdKind_StepOut:
               {
                 // rjf: thread => full unwind
-                DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+                CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
                 
                 // rjf: use first unwind frame to generate trap
                 if(unwind.first != 0 && unwind.first->next != 0)
@@ -7453,7 +7351,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_SelectUnwind:
         {
           DF_Entity *thread = df_entity_from_handle(df_state->ctrl_ctx.thread);
-          DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+          CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
           U64 max_unwind = unwind.count ? unwind.count-1 : 0;
           U64 index = Clamp(0, params.index, max_unwind);
           df_state->ctrl_ctx.unwind_count = index;

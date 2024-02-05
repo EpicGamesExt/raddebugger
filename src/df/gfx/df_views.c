@@ -4042,7 +4042,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   {
     thread_color = df_rgba_from_entity(thread);
   }
-  DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   
   //- rjf: grab state
   typedef struct DF_CallStackViewState DF_CallStackViewState;
@@ -4102,7 +4102,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
       
       //- rjf: frame rows
       U64 frame_idx = 0;
-      for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, frame_idx += 1)
+      for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, frame_idx += 1)
       {
         // rjf: out of range -> skip (TODO(rjf): this should be an array...)
         if(frame_idx+1 < visible_row_range.min || visible_row_range.max < frame_idx+1)
@@ -7751,13 +7751,13 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   };
   AnnotationList *visible_memory_annotations = push_array(scratch.arena, AnnotationList, visible_memory_size);
   {
-    DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+    CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
     
     //- rjf: fill unwind frame annotations
     if(unwind.first != 0)
     {
       U64 last_stack_top = regs_rsp_from_arch_block(thread->arch, unwind.first->regs);
-      for(DF_UnwindFrame *f = unwind.first->next; f != 0; f = f->next)
+      for(CTRL_UnwindFrame *f = unwind.first->next; f != 0; f = f->next)
       {
         U64 f_stack_top = regs_rsp_from_arch_block(thread->arch, f->regs);
         Rng1U64 frame_vaddr_range = r1u64(last_stack_top, f_stack_top);
