@@ -338,7 +338,7 @@ eval_token_array_from_text(Arena *arena, String8 text)
       //- rjf: no active token -> seek token starter
       default:
       {
-        if(char_is_alpha(byte) || byte == '_' || byte == '`')
+        if(char_is_alpha(byte) || byte == '_' || byte == '`' || byte == '$')
         {
           active_token_kind = EVAL_TokenKind_Identifier;
           active_token_start_idx = idx;
@@ -414,7 +414,7 @@ eval_token_array_from_text(Arena *arena, String8 text)
             }
           }
         }
-        else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && !active_token_kind_started_with_tick)
+        else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && !active_token_kind_started_with_tick && byte != '@')
         {
           advance = 0;
           token_formed = 1;
