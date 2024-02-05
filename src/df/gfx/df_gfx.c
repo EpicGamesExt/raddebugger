@@ -5478,11 +5478,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
           UI_Focus(UI_FocusKind_On)
           {
-            if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
-            {
-              DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
-            }
             if(view->is_filtering && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
             {
               DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
@@ -5692,11 +5687,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
         
         //////////////////////////
-        //- rjf: take events to automatically start filtering, if applicable
+        //- rjf: take events to automatically start/end filtering, if applicable
         //
+        UI_Focus(UI_FocusKind_On)
         {
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
-          UI_Focus(UI_FocusKind_On) if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
+          if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             for(UI_NavActionNode *n = ui_nav_actions()->first, *next = 0; n != 0; n = next)
@@ -5716,6 +5712,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_InsertText));
               }
             }
+          }
+          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+          {
+            DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
           }
         }
         
@@ -10858,7 +10859,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   
   //- rjf: take navigation actions for editing
   B32 changes_made = 0;
-  if(is_focus_active || focus_started)
+  if(!(flags & DF_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
   {
     Temp scratch = scratch_begin(0, 0);
     UI_NavActionList *nav_actions = ui_nav_actions();
