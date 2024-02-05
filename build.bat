@@ -84,6 +84,9 @@ pushd build
 %rc% /nologo /fo logo.res ..\data\logo.rc || exit /b 1
 popd
 
+:: --- Get Current Git Commit Id ----------------------------------------------
+for /f %%i in ('call git describe --always --dirty') do set compile=%compile% -DRADDBG_GIT=\"%%i\"
+
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]
 if not "%no_meta%"=="1" (
