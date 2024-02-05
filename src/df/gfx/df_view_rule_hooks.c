@@ -30,7 +30,7 @@ df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed 
       U64 array_total_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, type_key);
       U64 array_total_size_capped = ClampTop(array_total_size, 64);
       Rng1U64 array_memory_vaddr_rng = r1u64(eval.offset, eval.offset + array_total_size_capped);
-      CTRL_ProcessMemorySlice array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, array_memory_vaddr_rng);
+      CTRL_ProcessMemorySlice array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, array_memory_vaddr_rng, 0);
       String8 array_memory = array_slice.data;
       TG_Key element_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, raddbg, type_key);
       TG_Kind element_type_kind = tg_kind_from_key(element_type_key);
@@ -67,7 +67,7 @@ df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed 
       U64 struct_total_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, type_key);
       U64 struct_total_size_capped = ClampTop(struct_total_size, 64);
       Rng1U64 struct_memory_vaddr_rng = r1u64(eval.offset, eval.offset + struct_total_size_capped);
-      CTRL_ProcessMemorySlice struct_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, struct_memory_vaddr_rng);
+      CTRL_ProcessMemorySlice struct_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, struct_memory_vaddr_rng, 0);
       String8 struct_memory = struct_slice.data;
       TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, graph, raddbg, type_key);
       for(U64 element_idx = 0, member_idx = 0;
@@ -700,7 +700,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     }
     
     //- rjf: address range -> hash
-    U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1);
+    U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1, 0);
     
     //- rjf: hash -> data
     String8 data = hs_data_from_hash(hs_scope, hash);
@@ -891,7 +891,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   }
   
   //- rjf: address range -> hash
-  U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
+  U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0, 0);
   
   //- rjf: hash & topology -> texture
   TEX_Topology topology = tex_topology_make(v2s32((S32)topology_info.width, (S32)topology_info.height), topology_info.fmt);
@@ -1151,8 +1151,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
   }
   
   //- rjf: address range -> hash
-  U128 index_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, index_buffer_vaddr_range, 0);
-  U128 vertex_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vertex_buffer_vaddr_range, 0);
+  U128 index_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, index_buffer_vaddr_range, 0, 0);
+  U128 vertex_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vertex_buffer_vaddr_range, 0, 0);
   
   //- rjf: get gpu buffers
   R_Handle index_buffer = geo_buffer_from_key_hash(geo_scope, index_buffer_key, index_buffer_hash);

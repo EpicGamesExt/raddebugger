@@ -317,6 +317,7 @@ struct CTRL_ProcessMemoryRangeHashNode
   CTRL_ProcessMemoryRangeHashNode *next;
   Rng1U64 vaddr_range;
   B32 zero_terminated;
+  Rng1U64 vaddr_range_clamped;
   U128 hash;
   U64 memgen_idx;
   B32 is_taken;
@@ -352,6 +353,7 @@ typedef struct CTRL_ProcessMemoryCacheStripe CTRL_ProcessMemoryCacheStripe;
 struct CTRL_ProcessMemoryCacheStripe
 {
   OS_Handle rw_mutex;
+  OS_Handle cv;
 };
 
 typedef struct CTRL_ProcessMemoryCache CTRL_ProcessMemoryCache;
@@ -529,10 +531,10 @@ internal B32 ctrl_process_write(CTRL_MachineID machine_id, CTRL_Handle process, 
 
 //- rjf: process memory cache interaction
 internal U128 ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated);
-internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated);
+internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated, U64 endt_us);
 
 //- rjf: process memory cache reading helpers
-internal CTRL_ProcessMemorySlice ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range);
+internal CTRL_ProcessMemorySlice ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, U64 endt_us);
 internal CTRL_ProcessMemorySlice ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, U64 limit, U64 endt_us);
 
 //- rjf: register reading/writing

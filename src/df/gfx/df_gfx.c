@@ -4156,7 +4156,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
                   size = Min(size, 64);
                   Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
-                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng);
+                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
                   for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                   {
                     if(slice.byte_changed_flags[idx] != 0)
@@ -6880,7 +6880,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         if(!has_array && direct_type_is_string && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && eval.mode == EVAL_EvalMode_Addr)
         {
           U64 string_memory_addr = value_eval.imm_u64;
-          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, max_U64);
+          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, 0);
           String8 text = df_eval_escaped_from_raw_string(arena, text_slice.data);
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
@@ -6956,7 +6956,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           special_case = 1;
           DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
           DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, max_U64);
+          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, 0);
           String8 text = df_eval_escaped_from_raw_string(arena, text_slice.data);
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;

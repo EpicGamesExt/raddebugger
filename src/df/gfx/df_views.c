@@ -1121,7 +1121,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
             size = Min(size, 64);
             Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
-            CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng);
+            CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
             for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
             {
               if(slice.byte_changed_flags[idx] != 0)

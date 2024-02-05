@@ -35,6 +35,7 @@ ctrl_init(CTRL_WakeupFunctionType *wakeup_hook)
   for(U64 idx = 0; idx < ctrl_state->process_memory_cache.stripes_count; idx += 1)
   {
     ctrl_state->process_memory_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    ctrl_state->process_memory_cache.stripes[idx].cv = os_condition_variable_alloc();
   }
   ctrl_state->u2c_ring_size = KB(64);
   ctrl_state->u2c_ring_base = push_array_no_zero(arena, U8, ctrl_state->u2c_ring_size);
@@ -759,10 +760,71 @@ ctrl_process_write(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range
   ProfBeginFunction();
   U64 size = dim_1u64(range);
   B32 result = demon_write_memory(ctrl_demon_handle_from_ctrl(process), range.min, src, size);
+  
+  //- rjf: success -> increment memgen
   if(result)
   {
     ins_atomic_u64_inc_eval(&ctrl_state->memgen_idx);
   }
+  
+  //- rjf: success -> forcibly, synchronously update cache, for small regions
+  if(result)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    U64 endt_us = os_now_microseconds()+5000;
+    
+    //- rjf: gather tasks for all affected cached regions
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      CTRL_MachineID machine_id;
+      CTRL_Handle process;
+      Rng1U64 range;
+    };
+    Task *first_task = 0;
+    Task *last_task = 0;
+    CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
+    for(U64 slot_idx = 0; slot_idx < cache->slots_count; slot_idx += 1)
+    {
+      U64 stripe_idx = slot_idx%cache->stripes_count;
+      CTRL_ProcessMemoryCacheSlot *slot = &cache->slots[slot_idx];
+      CTRL_ProcessMemoryCacheStripe *stripe = &cache->stripes[stripe_idx];
+      OS_MutexScopeW(stripe->rw_mutex)
+      {
+        for(CTRL_ProcessMemoryCacheNode *proc_n = slot->first; proc_n != 0; proc_n = proc_n->next)
+        {
+          for(U64 range_hash_idx = 0; range_hash_idx < proc_n->range_hash_slots_count; range_hash_idx += 1)
+          {
+            CTRL_ProcessMemoryRangeHashSlot *range_slot = &proc_n->range_hash_slots[range_hash_idx];
+            for(CTRL_ProcessMemoryRangeHashNode *n = range_slot->first; n != 0; n = n->next)
+            {
+              Rng1U64 intersection_w_range = intersect_1u64(range, n->vaddr_range);
+              if(dim_1u64(intersection_w_range) != 0 && dim_1u64(n->vaddr_range) <= KB(64))
+              {
+                Task *task = push_array(scratch.arena, Task, 1);
+                task->machine_id = proc_n->machine_id;
+                task->process = proc_n->process;
+                task->range = n->vaddr_range;
+                SLLQueuePush(first_task, last_task, task);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    //- rjf: for all tasks, wait for up-to-date results
+    for(Task *task = first_task; task != 0; task = task->next)
+    {
+      Temp temp = temp_begin(scratch.arena);
+      ctrl_query_cached_data_from_process_vaddr_range(temp.arena, task->machine_id, task->process, task->range, endt_us);
+      temp_end(temp);
+    }
+    
+    scratch_end(scratch);
+  }
+  
   ProfEnd();
   return result;
 }
@@ -785,11 +847,11 @@ ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Han
 }
 
 internal U128
-ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated)
+ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, B32 zero_terminated, U64 endt_us)
 {
   U128 result = {0};
   U64 size = dim_1u64(range);
-  if(size != 0)
+  if(size != 0) for(;;)
   {
     CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
     U64 process_hash = ctrl_hash_from_string(str8_struct(&process));
@@ -804,23 +866,31 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle
     B32 is_stale = 0;
     OS_MutexScopeR(process_stripe->rw_mutex)
     {
-      for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+      for(;;)
       {
-        if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+        for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
         {
-          U64 range_slot_idx = range_hash%n->range_hash_slots_count;
-          CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
-          for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+          if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
           {
-            if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
+            U64 range_slot_idx = range_hash%n->range_hash_slots_count;
+            CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
+            for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
             {
-              result = range_n->hash;
-              is_good = 1;
-              is_stale = range_n->memgen_idx < ctrl_memgen_idx();
-              goto read_cache__break_all;
+              if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
+              {
+                result = range_n->hash;
+                is_good = 1;
+                is_stale = range_n->memgen_idx < ctrl_memgen_idx();
+                goto read_cache__break_all;
+              }
             }
           }
         }
+        if(os_now_microseconds() >= endt_us)
+        {
+          break;
+        }
+        os_condition_variable_wait_rw_r(process_stripe->cv, process_stripe->rw_mutex, endt_us);
       }
       read_cache__break_all:;
     }
@@ -879,6 +949,12 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle
               SLLQueuePush(range_slot->first, range_slot->last, range_n);
               range_n->vaddr_range = range;
               range_n->zero_terminated = zero_terminated;
+              range_n->vaddr_range_clamped = range;
+              {
+                range_n->vaddr_range_clamped.max = Max(range_n->vaddr_range_clamped.max, range_n->vaddr_range_clamped.min);
+                U64 max_size_cap = Min(max_U64-range_n->vaddr_range_clamped.min, GB(1));
+                range_n->vaddr_range_clamped.max = Min(range_n->vaddr_range_clamped.max, range_n->vaddr_range_clamped.min+max_size_cap);
+              }
               break;
             }
           }
@@ -889,7 +965,13 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle
     //- rjf: not good, or is stale -> submit hash request
     if(!is_good || is_stale)
     {
-      ctrl_u2ms_enqueue_req(machine_id, process, range, zero_terminated, 0);
+      ctrl_u2ms_enqueue_req(machine_id, process, range, zero_terminated, endt_us);
+    }
+    
+    //- rjf: out of time? -> exit
+    if(os_now_microseconds() >= endt_us)
+    {
+      break;
     }
   }
   return result;
@@ -898,7 +980,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, CTRL_Handle
 //- rjf: process memory cache reading helpers
 
 internal CTRL_ProcessMemorySlice
-ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range)
+ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range, U64 endt_us)
 {
   CTRL_ProcessMemorySlice result = {0};
   if(range.max > range.min &&
@@ -922,7 +1004,7 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     {
       U64 page_base_vaddr = page_range.min + page_idx*page_size;
       U128 page_key = ctrl_hash_store_key_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
-      U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
+      U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, endt_us);
       U128 page_last_hash = hs_hash_from_key(page_key, 1);
       page_hashes[page_idx] = page_hash;
       page_last_hashes[page_idx] = page_last_hash;
@@ -1023,7 +1105,7 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
 internal CTRL_ProcessMemorySlice
 ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, CTRL_Handle process, U64 vaddr, U64 limit, U64 endt_us)
 {
-  CTRL_ProcessMemorySlice result = ctrl_query_cached_data_from_process_vaddr_range(arena, machine_id, process, r1u64(vaddr, vaddr+limit));
+  CTRL_ProcessMemorySlice result = ctrl_query_cached_data_from_process_vaddr_range(arena, machine_id, process, r1u64(vaddr, vaddr+limit), endt_us);
   for(U64 idx = 0; idx < result.data.size; idx += 1)
   {
     if(result.data.str[idx] == 0)
@@ -3209,6 +3291,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     B32 got_task = 0;
     U64 preexisting_memgen_idx = 0;
     U128 preexisting_hash = {0};
+    Rng1U64 vaddr_range_clamped = {0};
     OS_MutexScopeW(process_stripe->rw_mutex)
     {
       for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
@@ -3224,20 +3307,13 @@ ctrl_mem_stream_thread__entry_point(void *p)
               got_task = !ins_atomic_u32_eval_cond_assign(&range_n->is_taken, 1, 0);
               preexisting_memgen_idx = range_n->memgen_idx;
               preexisting_hash = range_n->hash;
+              vaddr_range_clamped = range_n->vaddr_range_clamped;
               goto take_task__break_all;
             }
           }
         }
       }
       take_task__break_all:;
-    }
-    
-    //- rjf: clamp range to be sensible
-    Rng1U64 vaddr_range_clamped = vaddr_range;
-    {
-      vaddr_range_clamped.max = Max(vaddr_range_clamped.max, vaddr_range_clamped.min);
-      U64 max_size_cap = Min(max_U64-vaddr_range_clamped.min, GB(1));
-      vaddr_range_clamped.max = Min(vaddr_range_clamped.max, vaddr_range_clamped.min+max_size_cap);
     }
     
     //- rjf: task was taken -> read memory
@@ -3318,5 +3394,8 @@ ctrl_mem_stream_thread__entry_point(void *p)
       }
       commit__break_all:;
     }
+    
+    //- rjf: broadcast changes
+    os_condition_variable_broadcast(process_stripe->cv);
   }
 }
