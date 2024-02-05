@@ -2192,7 +2192,7 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
             }
             
             //- rjf: no entry point found -> done
-            if(!entries_found)
+            if(run_ctrls.traps.trap_count == 0)
             {
               done = 1;
               stop_event = event;
