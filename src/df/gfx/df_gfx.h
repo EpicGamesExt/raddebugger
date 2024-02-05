@@ -689,7 +689,6 @@ struct DF_GfxState
   
   // rjf: frame request state
   U64 num_frames_requested;
-  U64 last_time_mousemoved_us;
   
   // rjf: history cache
   DF_StateDeltaHistory *hist;

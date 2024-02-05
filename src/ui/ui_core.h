@@ -426,6 +426,7 @@ struct UI_State
   D_FancyRunList string_hover_fancy_runs;
   U64 string_hover_begin_us;
   U64 string_hover_build_index;
+  U64 last_time_mousemoved_us;
   
   //- rjf: tooltip state
   F32 tooltip_open_t;
@@ -560,7 +561,7 @@ internal UI_Box *          ui_box_from_key(UI_Key key);
 ////////////////////////////////
 //~ rjf: Top-Level Building API
 
-internal void ui_begin_build(OS_EventList *events, Vec2F32 mouse, OS_Handle window, UI_NavActionList *nav_actions, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt);
+internal void ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_actions, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt);
 internal void ui_end_build(void);
 internal void ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis);
 internal void ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis);

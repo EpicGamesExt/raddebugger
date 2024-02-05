@@ -69,14 +69,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     OS_EventList new_events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
     os_event_list_concat_in_place(&events, &leftover_events_copy);
     os_event_list_concat_in_place(&events, &new_events);
-    for(OS_Event *e = events.first; e != 0; e = e->next)
-    {
-      if(e->kind == OS_EventKind_MouseMove)
-      {
-        df_gfx_state->last_time_mousemoved_us = os_now_microseconds();
-        break;
-      }
-    }
   }
   
   //- rjf: enable txti change detection
