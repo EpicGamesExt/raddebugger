@@ -2267,6 +2267,31 @@ debug_string_tests(void)
 }
 
 ////////////////////////////////
+//~ rjf: Interrupt Stepping Tests
+
+#include <assert.h>
+
+static void
+interrupt_stepping_tests(void)
+{
+  for(int i = 0; i < 1000; i += 1)
+  {
+    if(i == 999)
+    {
+      __debugbreak();
+    }
+  }
+  for(int i = 0; i < 1000; i += 1)
+  {
+    if(i == 999)
+    {
+      assert(0);
+    }
+  }
+  int x = 0;
+}
+
+////////////////////////////////
 // NOTE(allen): Exception Stepping
 
 int *global_null_read_pointer = 0;
@@ -2560,6 +2585,8 @@ mule_main(int argc, char** argv){
   recursion_stepping_tests();
   
   debug_string_tests();
+  
+  interrupt_stepping_tests();
   
   exception_stepping_tests();
   

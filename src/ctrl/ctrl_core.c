@@ -767,7 +767,9 @@ ctrl_process_write(CTRL_MachineID machine_id, CTRL_Handle process, Rng1U64 range
     ins_atomic_u64_inc_eval(&ctrl_state->memgen_idx);
   }
   
-  //- rjf: success -> forcibly, synchronously update cache, for small regions
+  //- rjf: success -> wait for cache updates, for small regions - prefer relatively seamless
+  // writes within calling frame's "view" of the memory, at the expense of a small amount of
+  // time.
   if(result)
   {
     Temp scratch = scratch_begin(0, 0);

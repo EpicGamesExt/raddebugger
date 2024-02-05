@@ -144,11 +144,7 @@ demon_accel_read_regs(DEMON_Entity *thread){
   // update reg cache
   if (accel->reg_cache_time != demon_time){
     accel->reg_cache_time = demon_time;
-    B32 success = 0;
-    switch (thread->arch){
-      case Architecture_x86:{success = demon_os_read_regs_x86(thread, &accel->regs.x86);}break;
-      case Architecture_x64:{success = demon_os_read_regs_x64(thread, &accel->regs.x64);}break;
-    }
+    B32 success = demon_os_read_regs(thread, &accel->regs);
     if (!success){
       MemoryZeroStruct(&accel->regs);
     }

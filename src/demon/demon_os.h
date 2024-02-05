@@ -36,6 +36,12 @@ struct DEMON_OS_RunCtrls
 };
 
 ////////////////////////////////
+//~ rjf: Helpers
+
+internal B32 demon_os_read_regs(DEMON_Entity *thread, void *dst);
+internal B32 demon_os_write_regs(DEMON_Entity *thread, void *src);
+
+////////////////////////////////
 //~ rjf: @demon_os_hooks Main Layer Initialization
 
 internal void demon_os_init(void);
