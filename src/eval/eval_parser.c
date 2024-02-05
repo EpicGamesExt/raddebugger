@@ -414,7 +414,7 @@ eval_token_array_from_text(Arena *arena, String8 text)
             }
           }
         }
-        else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && !active_token_kind_started_with_tick && byte != '@')
+        else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && !active_token_kind_started_with_tick && byte != '@' && byte != '$')
         {
           advance = 0;
           token_formed = 1;
