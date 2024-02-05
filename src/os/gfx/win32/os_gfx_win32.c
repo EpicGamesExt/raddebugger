@@ -492,7 +492,9 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       }break;
       
       case WM_SYSCHAR:
-      {}break;
+      {
+        result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+      }break;
       
       case WM_CHAR:
       {

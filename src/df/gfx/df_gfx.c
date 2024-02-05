@@ -1032,7 +1032,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                             ws->hover_eval_string.size != 0 &&
                             ws->hover_eval_first_frame_idx+20 < ws->hover_eval_last_frame_idx &&
                             df_frame_index()-ws->hover_eval_last_frame_idx < 20);
-  if(!window_is_focused)
+  if(!window_is_focused || confirm_open)
   {
     ws->menu_bar_key_held = 0;
   }
