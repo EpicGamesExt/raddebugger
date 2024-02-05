@@ -282,6 +282,7 @@ typedef enum DF_EvalWatchViewFillKind
   DF_EvalWatchViewFillKind_Globals,
   DF_EvalWatchViewFillKind_ThreadLocals,
   DF_EvalWatchViewFillKind_Types,
+  DF_EvalWatchViewFillKind_Procedures,
   DF_EvalWatchViewFillKind_COUNT
 }
 DF_EvalWatchViewFillKind;

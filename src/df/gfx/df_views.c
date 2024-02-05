@@ -721,6 +721,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     case DF_EvalWatchViewFillKind_Globals:      dbgi_target = DBGI_FuzzySearchTarget_GlobalVariables; goto dbgi_table;
     case DF_EvalWatchViewFillKind_ThreadLocals: dbgi_target = DBGI_FuzzySearchTarget_ThreadVariables; goto dbgi_table;
     case DF_EvalWatchViewFillKind_Types:        dbgi_target = DBGI_FuzzySearchTarget_UDTs;            goto dbgi_table;
+    case DF_EvalWatchViewFillKind_Procedures:   dbgi_target = DBGI_FuzzySearchTarget_Procedures;      goto dbgi_table;
     dbgi_table:;
     {
       //- rjf: unpack context
@@ -4952,7 +4953,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
-  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.4f);
+  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_lit("H")).x;
   Vec2F32 panel_box_dim = dim_2f32(rect);
   Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_em(1.8f, 0).value};
@@ -6004,7 +6005,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
-  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.4f);
+  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_lit("H")).x;
   Vec2F32 panel_box_dim = dim_2f32(rect);
   Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_top_font_size()*1.8f};
@@ -6740,6 +6741,21 @@ DF_VIEW_UI_FUNCTION_DEF(Types)
 }
 
 ////////////////////////////////
+//~ rjf: Procedures @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(Procedures) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Procedures) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(Procedures) {}
+DF_VIEW_UI_FUNCTION_DEF(Procedures)
+{
+  ProfBeginFunction();
+  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
+  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Procedures);
+  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  ProfEnd();
+}
+
+////////////////////////////////
 //~ rjf: Output @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Output)
@@ -6842,7 +6858,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
-  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.4f);
+  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_lit("H")).x;
   Vec2F32 panel_box_dim = dim_2f32(rect);
   Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_top_font_size()*1.8f};

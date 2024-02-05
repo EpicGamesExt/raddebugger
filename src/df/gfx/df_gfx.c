@@ -4422,6 +4422,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_CoreCmdKind_Globals,
               DF_CoreCmdKind_ThreadLocals,
               DF_CoreCmdKind_Types,
+              DF_CoreCmdKind_Procedures,
               DF_CoreCmdKind_Breakpoints,
               DF_CoreCmdKind_WatchPins,
               DF_CoreCmdKind_FilePathMap,
@@ -4440,6 +4441,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               'w',
               'l',
               'r',
+              0,
               0,
               0,
               0,
@@ -5501,9 +5503,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   ui_label(str8_lit("Filter"));
                 }
                 ui_spacer(ui_em(0.5f, 1.f));
-                UI_Font(df_font_from_slot(DF_FontSlot_Code))
+                UI_Font(view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode ? df_font_from_slot(DF_FontSlot_Code) : df_font_from_slot(DF_FontSlot_Main)) UI_Focus(view->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
                 {
-                  UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents,
+                  UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|
+                                               DF_LineEditFlag_CodeContents*!!(view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode),
                                                0,
                                                0,
                                                &view->query_cursor,

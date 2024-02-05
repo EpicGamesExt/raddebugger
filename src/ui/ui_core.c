@@ -2252,7 +2252,7 @@ ui_box_text_position(UI_Box *box)
   F_Tag font = box->font;
   F32 font_size = box->font_size;
   F_Metrics font_metrics = f_metrics_from_tag_size(font, font_size);
-  result.y = ceilf((box->rect.p0.y + box->rect.p1.y)/2.f + (font_metrics.capital_height/2));
+  result.y = ceil_f32((box->rect.p0.y + box->rect.p1.y)/2.f + (font_metrics.capital_height/2) - font_metrics.line_gap/2);
   switch(box->text_align)
   {
     default:

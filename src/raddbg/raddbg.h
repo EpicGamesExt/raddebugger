@@ -4,9 +4,9 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
-// [ ] hover-eval when window is not focused - maybe just start directly
+// [x] hover-eval when window is not focused - maybe just start directly
 //     using mouse-move events here
-// [ ] CRT asserts - stepping over int 29 should work just like stepping over
+// [x] CRT asserts - stepping over int 29 should work just like stepping over
 //     an int3
 // [ ] committing needs to happen when navigating focus away for any reason
 //
