@@ -1028,7 +1028,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   B32 confirm_open = df_gfx_state->confirm_active;
   B32 query_is_open = !df_view_is_nil(ws->query_view_stack_top);
   B32 hover_eval_is_open = (!confirm_open &&
-                            !query_is_open &&
                             ws->hover_eval_string.size != 0 &&
                             ws->hover_eval_first_frame_idx+20 < ws->hover_eval_last_frame_idx &&
                             df_frame_index()-ws->hover_eval_last_frame_idx < 20);
@@ -1123,6 +1122,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             arena_clear(ws->query_cmd_arena);
             ws->query_cmd_spec   = df_cmd_spec_is_nil(spec) ? cmd->spec : spec;
             ws->query_cmd_params = df_cmd_params_copy(ws->query_cmd_arena, &params);
+            ws->query_view_selected = 1;
           }
         }break;
         
@@ -3999,312 +3999,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     }
     
     ////////////////////////////
-    //- rjf: build hover eval
-    //
-    ProfScope("build hover eval")
-    {
-      B32 build_hover_eval = hover_eval_is_open;
-      
-      // rjf: disable hover eval if queries are active
-      if(query_is_open)
-      {
-        build_hover_eval = 0;
-      }
-      
-      // rjf: disable hover eval if hovered view is actively scrolling
-      if(hover_eval_is_open)
-      {
-        for(DF_Panel *panel = ws->root_panel;
-            !df_panel_is_nil(panel);
-            panel = df_panel_rec_df_pre(panel).next)
-        {
-          if(!df_panel_is_nil(panel->first)) { continue; }
-          Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
-          if(!df_view_is_nil(view) &&
-             contains_2f32(panel_rect, ui_mouse()) &&
-             (abs_f32(view->scroll_pos.x.off) > 0.01f ||
-              abs_f32(view->scroll_pos.y.off) > 0.01f))
-          {
-            build_hover_eval = 0;
-            ws->hover_eval_first_frame_idx = df_frame_index();
-          }
-        }
-      }
-      
-      // rjf: reset open animation
-      if(ws->hover_eval_string.size == 0)
-      {
-        ws->hover_eval_open_t = 0;
-        ws->hover_eval_num_visible_rows_t = 0;
-      }
-      
-      // rjf: reset animation, but request frames if we're waiting to open
-      if(ws->hover_eval_string.size != 0 && !hover_eval_is_open && ws->hover_eval_last_frame_idx < ws->hover_eval_first_frame_idx+20 && df_frame_index()-ws->hover_eval_last_frame_idx < 50)
-      {
-        df_gfx_request_frame();
-        ws->hover_eval_num_visible_rows_t = 0;
-        ws->hover_eval_open_t = 0;
-      }
-      
-      // rjf: build hover eval
-      if(build_hover_eval && ws->hover_eval_string.size != 0 && hover_eval_is_open)
-        UI_Font(df_font_from_slot(DF_FontSlot_Code))
-        UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
-      {
-        Temp scratch = scratch_begin(&arena, 1);
-        DBGI_Scope *scope = dbgi_scope_open();
-        DF_CtrlCtx ctrl_ctx = ws->hover_eval_ctrl_ctx;
-        DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-        EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_unwind_rip_vaddr);
-        String8 expr = ws->hover_eval_string;
-        DF_Eval eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, expr);
-        
-        //- rjf: build if good
-        if(!tg_key_match(eval.type_key, tg_key_zero()) && !ui_any_ctx_menu_is_open())
-          UI_Focus((hover_eval_is_open && !ui_any_ctx_menu_is_open() && !query_is_open) ? UI_FocusKind_Null : UI_FocusKind_Off)
-        {
-          //- rjf: eval -> viz artifacts
-          F32 row_height = ui_top_font_size()*2.25f;
-          DF_CfgTable cfg_table = {0};
-          U64 expr_hash = df_hash_from_string(expr);
-          DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
-          DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_num(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, expr, 1);
-          DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
-          
-          //- rjf: animate
-          {
-            // rjf: animate height
-            {
-              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
-              F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
-              ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
-              if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
-              {
-                df_gfx_request_frame();
-              }
-              else
-              {
-                ws->hover_eval_num_visible_rows_t = hover_eval_container_height_target;
-              }
-            }
-            
-            // rjf: animate open
-            {
-              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
-              F32 diff = 1.f - ws->hover_eval_open_t;
-              ws->hover_eval_open_t += diff*fish_rate;
-              if(abs_f32(diff) < 0.01f)
-              {
-                ws->hover_eval_open_t = 1.f;
-              }
-              else
-              {
-                df_gfx_request_frame();
-              }
-            }
-          }
-          
-          //- rjf: build hover eval box
-          F32 hover_eval_container_height = ws->hover_eval_num_visible_rows_t;
-          F32 corner_radius = ui_top_font_size()*0.25f;
-          ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
-          ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
-          ui_set_next_pref_width(ui_em(70.f, 1.f));
-          ui_set_next_pref_height(ui_px(hover_eval_container_height, 1.f));
-          ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_AltBackground));
-          ui_set_next_corner_radius_00(0);
-          ui_set_next_corner_radius_01(corner_radius);
-          ui_set_next_corner_radius_10(corner_radius);
-          ui_set_next_corner_radius_11(corner_radius);
-          ui_set_next_child_layout_axis(Axis2_Y);
-          ui_set_next_squish(0.25f-0.25f*ws->hover_eval_open_t);
-          ui_set_next_transparency(1.f-ws->hover_eval_open_t);
-          UI_Focus(UI_FocusKind_On)
-          {
-            hover_eval_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|
-                                                       UI_BoxFlag_DrawBackground|
-                                                       UI_BoxFlag_DrawBackgroundBlur|
-                                                       UI_BoxFlag_DrawDropShadow|
-                                                       UI_BoxFlag_Clip|
-                                                       UI_BoxFlag_AllowOverflowY|
-                                                       UI_BoxFlag_ViewScroll|
-                                                       UI_BoxFlag_ViewClamp|
-                                                       UI_BoxFlag_Floating|
-                                                       UI_BoxFlag_AnimatePos|
-                                                       UI_BoxFlag_Clickable|
-                                                       UI_BoxFlag_DefaultFocusNav,
-                                                       "###hover_eval");
-          }
-          
-          //- rjf: build contents
-          UI_Parent(hover_eval_box) UI_PrefHeight(ui_px(row_height, 1.f))
-          {
-            //- rjf: build rows
-            for(DF_EvalVizRow *row = viz_rows.first; row != 0; row = row->next)
-            {
-              //- rjf: determine if row's data is fresh
-              B32 row_is_fresh = 0;
-              switch(row->eval.mode)
-              {
-                default:{}break;
-                case EVAL_EvalMode_Addr:
-                {
-                  U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
-                  size = Min(size, 64);
-                  Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
-                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
-                  for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
-                  {
-                    if(slice.byte_changed_flags[idx] != 0)
-                    {
-                      row_is_fresh = 1;
-                      break;
-                    }
-                  }
-                }break;
-              }
-              
-              //- rjf: build row
-              UI_WidthFill UI_Row
-              {
-                ui_spacer(ui_em(0.75f, 1.f));
-                ui_spacer(ui_em(1.5f*row->depth, 1.f));
-                U64 row_hash = df_hash_from_expand_key(row->key);
-                B32 row_is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
-                if(row->flags & DF_EvalVizRowFlag_CanExpand)
-                  UI_PrefWidth(ui_em(1.5f, 1))
-                  if(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num).pressed)
-                {
-                  df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
-                }
-                UI_WidthFill
-                {
-                  UI_PrefWidth(ui_em(15.f, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
-                  ui_spacer(ui_em(1.5f, 1.f));
-                  if(row->flags & DF_EvalVizRowFlag_CanEditValue)
-                  {
-                    if(row_is_fresh)
-                    {
-                      Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-                      rgba.w *= 0.2f;
-                      ui_set_next_background_color(rgba);
-                    }
-                    UI_Signal sig = df_line_editf(DF_LineEditFlag_CodeContents|
-                                                  DF_LineEditFlag_DisplayStringIsCode|
-                                                  DF_LineEditFlag_PreferDisplayString|
-                                                  DF_LineEditFlag_Border,
-                                                  0, 0, &ws->hover_eval_txt_cursor, &ws->hover_eval_txt_mark, ws->hover_eval_txt_buffer, sizeof(ws->hover_eval_txt_buffer), &ws->hover_eval_txt_size, 0, row->edit_value, "%S###val_%I64x", row->display_value, row_hash);
-                    if(sig.commit)
-                    {
-                      String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
-                      DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, commit_string);
-                      B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, row->eval, write_eval);
-                      if(success == 0)
-                      {
-                        DF_CmdParams params = df_cmd_params_from_window(ws);
-                        params.string = str8_lit("Could not commit value successfully.");
-                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-                        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
-                      }
-                    }
-                  }
-                  else
-                  {
-                    if(row_is_fresh)
-                    {
-                      Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-                      rgba.w *= 0.2f;
-                      ui_set_next_background_color(rgba);
-                      ui_set_next_flags(UI_BoxFlag_DrawBackground);
-                    }
-                    df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
-                  }
-                }
-                if(row == viz_rows.first)
-                {
-                  UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
-                    UI_CornerRadius00(0)
-                    UI_CornerRadius01(0)
-                    UI_CornerRadius10(0)
-                    UI_CornerRadius11(0)
-                  {
-                    UI_Signal watch_sig = df_icon_buttonf(DF_IconKind_List, 0, "###watch_hover_eval");
-                    if(watch_sig.hovering) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
-                    {
-                      ui_labelf("Add the hovered expression to an opened watch view.");
-                    }
-                    if(watch_sig.clicked)
-                    {
-                      DF_CmdParams params = df_cmd_params_from_window(ws);
-                      params.string = expr;
-                      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-                      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
-                    }
-                  }
-                  if(!df_entity_is_nil(df_entity_from_handle(ws->hover_eval_file)))
-                    UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
-                    UI_CornerRadius10(corner_radius)
-                    UI_CornerRadius11(corner_radius)
-                  {
-                    UI_Signal pin_sig = df_icon_buttonf(DF_IconKind_Pin, 0, "###pin_hover_eval");
-                    if(pin_sig.hovering) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
-                      UI_CornerRadius00(0)
-                      UI_CornerRadius01(0)
-                      UI_CornerRadius10(0)
-                      UI_CornerRadius11(0)
-                    {
-                      ui_labelf("Pin the hovered expression to this code location.");
-                    }
-                    if(pin_sig.clicked)
-                    {
-                      DF_CmdParams params = df_cmd_params_from_window(ws);
-                      if(ws->hover_eval_vaddr != 0)
-                      {
-                        params.vaddr = ws->hover_eval_vaddr;
-                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-                      }
-                      else
-                      {
-                        params.entity = ws->hover_eval_file;
-                        params.text_point = ws->hover_eval_file_pt;
-                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
-                      }
-                      params.string = expr;
-                      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-                      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchPin));
-                    }
-                  }
-                }
-              }
-            }
-            UI_PrefWidth(ui_px(0, 0)) ui_spacer(ui_px(hover_eval_container_height-row_height, 1.f));
-          }
-          
-          //- rjf: interact
-          {
-            UI_Signal hover_eval_sig = ui_signal_from_box(hover_eval_box);
-            if(hover_eval_sig.mouse_over)
-            {
-              ws->hover_eval_last_frame_idx = df_frame_index();
-            }
-            else if(ws->hover_eval_last_frame_idx+2 < df_frame_index())
-            {
-              df_gfx_request_frame();
-            }
-          }
-        }
-        
-        dbgi_scope_close(scope);
-        scratch_end(scratch);
-      }
-    }
-    
-    ////////////////////////////
     //- rjf: top bar
     //
     ProfScope("build top bar")
@@ -5334,6 +5028,306 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         UI_Rect(window_rect)
       {
         ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: build hover eval
+    //
+    ProfScope("build hover eval")
+    {
+      B32 build_hover_eval = hover_eval_is_open;
+      
+      // rjf: disable hover eval if hovered view is actively scrolling
+      if(hover_eval_is_open)
+      {
+        for(DF_Panel *panel = ws->root_panel;
+            !df_panel_is_nil(panel);
+            panel = df_panel_rec_df_pre(panel).next)
+        {
+          if(!df_panel_is_nil(panel->first)) { continue; }
+          Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          if(!df_view_is_nil(view) &&
+             contains_2f32(panel_rect, ui_mouse()) &&
+             (abs_f32(view->scroll_pos.x.off) > 0.01f ||
+              abs_f32(view->scroll_pos.y.off) > 0.01f))
+          {
+            build_hover_eval = 0;
+            ws->hover_eval_first_frame_idx = df_frame_index();
+          }
+        }
+      }
+      
+      // rjf: reset open animation
+      if(ws->hover_eval_string.size == 0)
+      {
+        ws->hover_eval_open_t = 0;
+        ws->hover_eval_num_visible_rows_t = 0;
+      }
+      
+      // rjf: reset animation, but request frames if we're waiting to open
+      if(ws->hover_eval_string.size != 0 && !hover_eval_is_open && ws->hover_eval_last_frame_idx < ws->hover_eval_first_frame_idx+20 && df_frame_index()-ws->hover_eval_last_frame_idx < 50)
+      {
+        df_gfx_request_frame();
+        ws->hover_eval_num_visible_rows_t = 0;
+        ws->hover_eval_open_t = 0;
+      }
+      
+      // rjf: build hover eval
+      if(build_hover_eval && ws->hover_eval_string.size != 0 && hover_eval_is_open)
+        UI_Font(df_font_from_slot(DF_FontSlot_Code))
+        UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        DBGI_Scope *scope = dbgi_scope_open();
+        DF_CtrlCtx ctrl_ctx = ws->hover_eval_ctrl_ctx;
+        DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+        U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
+        EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_unwind_rip_vaddr);
+        String8 expr = ws->hover_eval_string;
+        DF_Eval eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, expr);
+        
+        //- rjf: build if good
+        if(!tg_key_match(eval.type_key, tg_key_zero()) && !ui_any_ctx_menu_is_open())
+          UI_Focus((hover_eval_is_open && !ui_any_ctx_menu_is_open() && (!query_is_open || !ws->query_view_selected)) ? UI_FocusKind_Null : UI_FocusKind_Off)
+        {
+          //- rjf: eval -> viz artifacts
+          F32 row_height = ui_top_font_size()*2.25f;
+          DF_CfgTable cfg_table = {0};
+          U64 expr_hash = df_hash_from_string(expr);
+          DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
+          DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
+          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_num(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, expr, 1);
+          DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
+          
+          //- rjf: animate
+          {
+            // rjf: animate height
+            {
+              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
+              F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
+              ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
+              if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
+              {
+                df_gfx_request_frame();
+              }
+              else
+              {
+                ws->hover_eval_num_visible_rows_t = hover_eval_container_height_target;
+              }
+            }
+            
+            // rjf: animate open
+            {
+              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
+              F32 diff = 1.f - ws->hover_eval_open_t;
+              ws->hover_eval_open_t += diff*fish_rate;
+              if(abs_f32(diff) < 0.01f)
+              {
+                ws->hover_eval_open_t = 1.f;
+              }
+              else
+              {
+                df_gfx_request_frame();
+              }
+            }
+          }
+          
+          //- rjf: build hover eval box
+          F32 hover_eval_container_height = ws->hover_eval_num_visible_rows_t;
+          F32 corner_radius = ui_top_font_size()*0.25f;
+          ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
+          ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
+          ui_set_next_pref_width(ui_em(70.f, 1.f));
+          ui_set_next_pref_height(ui_px(hover_eval_container_height, 1.f));
+          ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_AltBackground));
+          ui_set_next_corner_radius_00(0);
+          ui_set_next_corner_radius_01(corner_radius);
+          ui_set_next_corner_radius_10(corner_radius);
+          ui_set_next_corner_radius_11(corner_radius);
+          ui_set_next_child_layout_axis(Axis2_Y);
+          ui_set_next_squish(0.25f-0.25f*ws->hover_eval_open_t);
+          ui_set_next_transparency(1.f-ws->hover_eval_open_t);
+          UI_Focus(UI_FocusKind_On)
+          {
+            hover_eval_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DrawBackgroundBlur|
+                                                       UI_BoxFlag_DrawDropShadow|
+                                                       UI_BoxFlag_Clip|
+                                                       UI_BoxFlag_AllowOverflowY|
+                                                       UI_BoxFlag_ViewScroll|
+                                                       UI_BoxFlag_ViewClamp|
+                                                       UI_BoxFlag_Floating|
+                                                       UI_BoxFlag_AnimatePos|
+                                                       UI_BoxFlag_Clickable|
+                                                       UI_BoxFlag_DefaultFocusNav,
+                                                       "###hover_eval");
+          }
+          
+          //- rjf: build contents
+          UI_Parent(hover_eval_box) UI_PrefHeight(ui_px(row_height, 1.f))
+          {
+            //- rjf: build rows
+            for(DF_EvalVizRow *row = viz_rows.first; row != 0; row = row->next)
+            {
+              //- rjf: determine if row's data is fresh
+              B32 row_is_fresh = 0;
+              switch(row->eval.mode)
+              {
+                default:{}break;
+                case EVAL_EvalMode_Addr:
+                {
+                  U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+                  size = Min(size, 64);
+                  Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
+                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
+                  for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
+                  {
+                    if(slice.byte_changed_flags[idx] != 0)
+                    {
+                      row_is_fresh = 1;
+                      break;
+                    }
+                  }
+                }break;
+              }
+              
+              //- rjf: build row
+              UI_WidthFill UI_Row
+              {
+                ui_spacer(ui_em(0.75f, 1.f));
+                ui_spacer(ui_em(1.5f*row->depth, 1.f));
+                U64 row_hash = df_hash_from_expand_key(row->key);
+                B32 row_is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
+                if(row->flags & DF_EvalVizRowFlag_CanExpand)
+                  UI_PrefWidth(ui_em(1.5f, 1))
+                  if(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num).pressed)
+                {
+                  df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
+                }
+                UI_WidthFill
+                {
+                  UI_PrefWidth(ui_em(15.f, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
+                  ui_spacer(ui_em(1.5f, 1.f));
+                  if(row->flags & DF_EvalVizRowFlag_CanEditValue)
+                  {
+                    if(row_is_fresh)
+                    {
+                      Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+                      rgba.w *= 0.2f;
+                      ui_set_next_background_color(rgba);
+                    }
+                    UI_Signal sig = df_line_editf(DF_LineEditFlag_CodeContents|
+                                                  DF_LineEditFlag_DisplayStringIsCode|
+                                                  DF_LineEditFlag_PreferDisplayString|
+                                                  DF_LineEditFlag_Border,
+                                                  0, 0, &ws->hover_eval_txt_cursor, &ws->hover_eval_txt_mark, ws->hover_eval_txt_buffer, sizeof(ws->hover_eval_txt_buffer), &ws->hover_eval_txt_size, 0, row->edit_value, "%S###val_%I64x", row->display_value, row_hash);
+                    if(sig.commit)
+                    {
+                      String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
+                      DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, commit_string);
+                      B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, row->eval, write_eval);
+                      if(success == 0)
+                      {
+                        DF_CmdParams params = df_cmd_params_from_window(ws);
+                        params.string = str8_lit("Could not commit value successfully.");
+                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+                        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+                      }
+                    }
+                  }
+                  else
+                  {
+                    if(row_is_fresh)
+                    {
+                      Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+                      rgba.w *= 0.2f;
+                      ui_set_next_background_color(rgba);
+                      ui_set_next_flags(UI_BoxFlag_DrawBackground);
+                    }
+                    df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
+                  }
+                }
+                if(row == viz_rows.first)
+                {
+                  UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
+                    UI_CornerRadius00(0)
+                    UI_CornerRadius01(0)
+                    UI_CornerRadius10(0)
+                    UI_CornerRadius11(0)
+                  {
+                    UI_Signal watch_sig = df_icon_buttonf(DF_IconKind_List, 0, "###watch_hover_eval");
+                    if(watch_sig.hovering) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                    {
+                      ui_labelf("Add the hovered expression to an opened watch view.");
+                    }
+                    if(watch_sig.clicked)
+                    {
+                      DF_CmdParams params = df_cmd_params_from_window(ws);
+                      params.string = expr;
+                      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+                      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
+                    }
+                  }
+                  if(!df_entity_is_nil(df_entity_from_handle(ws->hover_eval_file)))
+                    UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
+                    UI_CornerRadius10(corner_radius)
+                    UI_CornerRadius11(corner_radius)
+                  {
+                    UI_Signal pin_sig = df_icon_buttonf(DF_IconKind_Pin, 0, "###pin_hover_eval");
+                    if(pin_sig.hovering) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                      UI_CornerRadius00(0)
+                      UI_CornerRadius01(0)
+                      UI_CornerRadius10(0)
+                      UI_CornerRadius11(0)
+                    {
+                      ui_labelf("Pin the hovered expression to this code location.");
+                    }
+                    if(pin_sig.clicked)
+                    {
+                      DF_CmdParams params = df_cmd_params_from_window(ws);
+                      if(ws->hover_eval_vaddr != 0)
+                      {
+                        params.vaddr = ws->hover_eval_vaddr;
+                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
+                      }
+                      else
+                      {
+                        params.entity = ws->hover_eval_file;
+                        params.text_point = ws->hover_eval_file_pt;
+                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+                        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
+                      }
+                      params.string = expr;
+                      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+                      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchPin));
+                    }
+                  }
+                }
+              }
+            }
+            UI_PrefWidth(ui_px(0, 0)) ui_spacer(ui_px(hover_eval_container_height-row_height, 1.f));
+          }
+          
+          //- rjf: interact
+          {
+            UI_Signal hover_eval_sig = ui_signal_from_box(hover_eval_box);
+            if(hover_eval_sig.mouse_over)
+            {
+              ws->hover_eval_last_frame_idx = df_frame_index();
+            }
+            else if(ws->hover_eval_last_frame_idx+2 < df_frame_index())
+            {
+              df_gfx_request_frame();
+            }
+          }
+        }
+        
+        dbgi_scope_close(scope);
+        scratch_end(scratch);
       }
     }
     
@@ -9830,7 +9824,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //////////////////////////////
   //- rjf: mouse -> expression range info
   //
-  if(text_container_sig.mouse_over && contains_1s64(params->line_num_range, mouse_pt.line)) ProfScope("mouse -> expression range")
+  if(text_container_sig.hovering && contains_1s64(params->line_num_range, mouse_pt.line)) ProfScope("mouse -> expression range")
   {
     TxtRng selected_rng = txt_rng(*cursor, *mark);
     if(!txt_pt_match(*cursor, *mark) && cursor->line == mark->line &&
