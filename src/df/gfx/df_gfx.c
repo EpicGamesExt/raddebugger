@@ -5140,7 +5140,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           F32 corner_radius = ui_top_font_size()*0.25f;
           ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
           ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
-          ui_set_next_pref_width(ui_em(70.f, 1.f));
+          ui_set_next_pref_width(ui_em(80.f, 1.f));
           ui_set_next_pref_height(ui_px(hover_eval_container_height, 1.f));
           ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_AltBackground));
           ui_set_next_corner_radius_00(0);
@@ -5170,9 +5170,18 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           //- rjf: build contents
           UI_Parent(hover_eval_box) UI_PrefHeight(ui_px(row_height, 1.f))
           {
+            F32 expr_column_width_px = 0;
+            
             //- rjf: build rows
             for(DF_EvalVizRow *row = viz_rows.first; row != 0; row = row->next)
             {
+              //- rjf: calculate width of exp row
+              if(row == viz_rows.first)
+              {
+                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), row->expr).x + ui_top_font_size()*0.5f;
+                expr_column_width_px = Max(expr_column_width_px, ui_top_font_size()*10.f);
+              }
+              
               //- rjf: determine if row's data is fresh
               B32 row_is_fresh = 0;
               switch(row->eval.mode)
@@ -5203,14 +5212,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 U64 row_hash = df_hash_from_expand_key(row->key);
                 B32 row_is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
                 if(row->flags & DF_EvalVizRowFlag_CanExpand)
-                  UI_PrefWidth(ui_em(1.5f, 1))
+                  UI_PrefWidth(ui_em(1.5f, 1)) UI_Flags(UI_BoxFlag_DrawSideLeft*(row->depth>0))
                   if(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num).pressed)
                 {
                   df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
                 }
+                if(!(row->flags & DF_EvalVizRowFlag_CanExpand))
+                {
+                  UI_PrefWidth(ui_em(1.5f, 1))
+                    UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                    UI_Flags(UI_BoxFlag_DrawSideLeft*(row->depth>0))
+                    UI_Font(ui_icon_font())
+                    ui_label(df_g_icon_kind_text_table[DF_IconKind_Dot]);
+                }
                 UI_WidthFill
                 {
-                  UI_PrefWidth(ui_em(15.f, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
+                  UI_PrefWidth(ui_px(expr_column_width_px, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->expr);
                   ui_spacer(ui_em(1.5f, 1.f));
                   if(row->flags & DF_EvalVizRowFlag_CanEditValue)
                   {
