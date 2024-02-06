@@ -287,6 +287,14 @@ typedef enum DF_EvalWatchViewFillKind
 }
 DF_EvalWatchViewFillKind;
 
+typedef struct DF_EvalWatchViewPoint DF_EvalWatchViewPoint;
+struct DF_EvalWatchViewPoint
+{
+  DF_EvalWatchViewColumnKind column_kind;
+  DF_ExpandKey parent_key;
+  DF_ExpandKey key;
+};
+
 typedef struct DF_EvalWatchViewState DF_EvalWatchViewState;
 struct DF_EvalWatchViewState
 {
@@ -295,10 +303,9 @@ struct DF_EvalWatchViewState
   // rjf: fill kind (way that the contents of the watch view are computed)
   DF_EvalWatchViewFillKind fill_kind;
   
-  // rjf; selection state
-  DF_EvalWatchViewColumnKind selected_column;
-  DF_ExpandKey selected_parent_key;
-  DF_ExpandKey selected_key;
+  // rjf; table cursor state
+  DF_EvalWatchViewPoint cursor;
+  DF_EvalWatchViewPoint mark;
   
   // rjf: text input state
   TxtPt input_cursor;

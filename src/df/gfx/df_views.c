@@ -940,10 +940,13 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //////////////////////////////
   //- rjf: selection state * blocks -> 2D table coordinates
   //
-  Vec2S64 cursor = {0};
+  Vec2S64 cursor_tbl = {0};
+  Vec2S64 mark_tbl = {0};
   {
-    cursor.x = ewv->selected_column;
-    cursor.y = df_row_num_from_viz_block_list_key(&blocks, ewv->selected_key);
+    cursor_tbl.x = ewv->cursor.column_kind;
+    cursor_tbl.y = df_row_num_from_viz_block_list_key(&blocks, ewv->cursor.key);
+    mark_tbl.x = ewv->mark.column_kind;
+    mark_tbl.y = df_row_num_from_viz_block_list_key(&blocks, ewv->mark.key);
   }
   
   //////////////////////////////
@@ -1017,7 +1020,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   };
   B32 pressed = 0;
   DF_EvalVizRow *commit_row = 0;
-  Vec2S64 next_cursor = cursor;
+  Vec2S64 next_cursor_tbl = cursor_tbl;
   Rng1S64 visible_row_rng = {0};
   UI_ScrollListParams scroll_list_params = {0};
   {
@@ -1045,11 +1048,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, ewv->input_editing ? 0 : &cursor, &visible_row_rng, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, ewv->input_editing ? 0 : &cursor_tbl, &visible_row_rng, &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "table_header")
   {
-    next_cursor = cursor;
+    next_cursor_tbl = cursor_tbl;
     
     //- rjf: build table header
     if(visible_row_rng.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
@@ -1108,7 +1111,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         U64 row_hash = df_hash_from_expand_key(row->key);
         U64 expr_hash = df_hash_from_string(row->expr);
         df_expand_tree_table_animate(&eval_view->expand_tree_table, df_dt());
-        B32 row_selected = ((semantic_idx+1) == cursor.y);
+        B32 row_selected = ((semantic_idx+1) == cursor_tbl.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
         
         //- rjf: determine if row's data is fresh and/or bad
@@ -1170,7 +1173,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           if(sig.pressed)
           {
             edit_commit = edit_commit || (!row_selected && ewv->input_editing);
-            next_cursor = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
+            next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
             pressed = 1;
           }
         }
@@ -1225,7 +1228,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: expression
             ProfScope("expr")
             {
-              B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Expr);
+              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_Expr);
               B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
               
               // rjf: begin editing
@@ -1303,7 +1306,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 {
                   ui_labelf("Parent Key:   %I64x, %I64x", row->parent_key.parent_hash, row->parent_key.child_num);
                   ui_labelf("Hover Key:    %I64x, %I64x", row->key.parent_hash, row->key.child_num);
-                  ui_labelf("Cursor Key:   %I64x, %I64x", ewv->selected_key.parent_hash, ewv->selected_key.child_num);
+                  ui_labelf("Cursor Key:   %I64x, %I64x", ewv->cursor.key.parent_hash, ewv->cursor.key.child_num);
                 }
                 if(sig.hovering && row->depth == 0 && DEV_eval_compiler_tooltips) UI_Tooltip
                 {
@@ -1357,7 +1360,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               if(sig.pressed)
               {
                 edit_commit = edit_commit || (!cell_selected && ewv->input_editing);
-                next_cursor = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
+                next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
                 pressed = 1;
               }
               
@@ -1388,7 +1391,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: value
             ProfScope("value")
             {
-              B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Value);
+              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_Value);
               B32 value_is_error   = (row->eval.errors.count != 0);
               B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
               B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
@@ -1469,7 +1472,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               {
                 pressed = 1;
                 edit_commit = edit_commit || (ewv->input_editing && !cell_selected);
-                next_cursor = v2s64(DF_EvalWatchViewColumnKind_Value, (semantic_idx+1));
+                next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Value, (semantic_idx+1));
               }
               
               // rjf: double-click -> start editing
@@ -1487,7 +1490,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: type
             ProfScope("type")
             {
-              B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_Type);
+              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_Type);
               UI_TableCell UI_Font(code_font)
                 UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_FocusActive((cell_selected && ewv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -1505,7 +1508,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 {
                   pressed = 1;
                   edit_commit = edit_commit || (ewv->input_editing && !cell_selected);
-                  next_cursor = v2s64(DF_EvalWatchViewColumnKind_Type, (semantic_idx+1));
+                  next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Type, (semantic_idx+1));
                 }
               }
             }
@@ -1513,7 +1516,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: view rule
             ProfScope("view rule")
             {
-              B32 cell_selected = (row_selected && cursor.x == DF_EvalWatchViewColumnKind_ViewRule);
+              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_ViewRule);
               String8 view_rule = df_eval_view_rule_from_key(eval_view, row->key);
               
               // rjf: begin editing
@@ -1543,7 +1546,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               {
                 pressed = 1;
                 edit_commit = edit_commit || (ewv->input_editing && !cell_selected);
-                next_cursor = v2s64(DF_EvalWatchViewColumnKind_ViewRule, (semantic_idx+1));
+                next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_ViewRule, (semantic_idx+1));
               }
               
               // rjf: double-click -> begin editing
@@ -1582,8 +1585,8 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //- rjf: commit edits
   //
   {
-    DF_EvalWatchViewColumnKind commit_column = (DF_EvalWatchViewColumnKind)cursor.x;
-    cursor = next_cursor;
+    DF_EvalWatchViewColumnKind commit_column = (DF_EvalWatchViewColumnKind)cursor_tbl.x;
+    cursor_tbl = next_cursor_tbl;
     if(edit_commit)
     {
       ewv->input_editing = 0;
@@ -1650,7 +1653,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       }
       if(edit_submit && commit_string.size != 0)
       {
-        cursor.y += 1;
+        cursor_tbl.y += 1;
       }
     }
   }
@@ -1680,27 +1683,39 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //////////////////////////////
   //- rjf: convert new table coordinates back to selection state
   //
+  struct
   {
-    DF_ExpandKey last_selected_key = ewv->selected_key;
-    DF_ExpandKey last_selected_parent_key = ewv->selected_parent_key;
-    ewv->selected_column = (DF_EvalWatchViewColumnKind)cursor.x;
-    ewv->selected_key = df_key_from_viz_block_list_row_num(&blocks, cursor.y);
-    ewv->selected_parent_key = df_parent_key_from_viz_block_list_row_num(&blocks, cursor.y);
-    if(df_expand_key_match(df_expand_key_zero(), ewv->selected_key))
+    DF_EvalWatchViewPoint *pt_state;
+    Vec2S64 pt_tbl;
+  }
+  points[] =
+  {
+    {&ewv->cursor, cursor_tbl},
+    {&ewv->mark, mark_tbl},
+  };
+  for(U64 point_idx = 0; point_idx < ArrayCount(points); point_idx += 1)
+  {
+    DF_ExpandKey last_key = points[point_idx].pt_state->key;
+    DF_ExpandKey last_parent_key = points[point_idx].pt_state->parent_key;
+    points[point_idx].pt_state->column_kind= (DF_EvalWatchViewColumnKind)points[point_idx].pt_tbl.x;
+    points[point_idx].pt_state->key        = df_key_from_viz_block_list_row_num(&blocks, points[point_idx].pt_tbl.y);
+    points[point_idx].pt_state->parent_key = df_parent_key_from_viz_block_list_row_num(&blocks, points[point_idx].pt_tbl.y);
+    if(df_expand_key_match(df_expand_key_zero(), points[point_idx].pt_state->key))
     {
-      ewv->selected_key = last_selected_parent_key;
-      DF_ExpandNode *node = df_expand_node_from_key(&eval_view->expand_tree_table, last_selected_parent_key);
+      points[point_idx].pt_state->key = last_parent_key;
+      DF_ExpandNode *node = df_expand_node_from_key(&eval_view->expand_tree_table, last_parent_key);
       for(DF_ExpandNode *n = node; n != 0; n = n->parent)
       {
-        ewv->selected_key = n->key;
+        points[point_idx].pt_state->key = n->key;
         if(n->expanded == 0)
         {
           break;
         }
       }
     }
-    if(!df_expand_key_match(ewv->selected_key, last_selected_key) ||
-       !df_expand_key_match(ewv->selected_parent_key, last_selected_parent_key))
+    if(point_idx == 0 &&
+       (!df_expand_key_match(ewv->cursor.key, last_key) ||
+        !df_expand_key_match(ewv->cursor.parent_key, last_parent_key)))
     {
       ewv->input_editing = 0;
     }
