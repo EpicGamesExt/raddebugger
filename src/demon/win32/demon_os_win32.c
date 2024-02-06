@@ -432,6 +432,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
           DEMON_Event *e = demon_push_event(arena, &result, DEMON_EventKind_UnloadModule);
           e->process = demon_ent_handle_from_ptr(process);
           e->module = demon_ent_handle_from_ptr(child);
+          e->string = demon_os_full_path_from_module(arena, child);
         }
       }
       

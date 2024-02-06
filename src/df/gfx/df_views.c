@@ -272,9 +272,9 @@ df_process_info_list_from_query(Arena *arena, String8 query)
       
       // rjf: determine if this item is filtered out
       B32 matches_query = (query.size == 0 ||
-                           (attached_match_ranges.count >= attached_match_ranges.needle_part_count) ||
-                           (name_match_ranges.count >= name_match_ranges.needle_part_count) ||
-                           (pid_match_ranges.count >= pid_match_ranges.needle_part_count));
+                           (attached_match_ranges.needle_part_count != 0 && attached_match_ranges.count >= attached_match_ranges.needle_part_count) ||
+                           (name_match_ranges.count != 0 && name_match_ranges.count >= name_match_ranges.needle_part_count) ||
+                           (pid_match_ranges.count != 0 && pid_match_ranges.count >= pid_match_ranges.needle_part_count));
       
       // rjf: push if unfiltered
       if(matches_query)
@@ -4019,7 +4019,9 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
               {
                 DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                 params.entity = df_handle_from_entity(entity);
+                df_handle_list_push(scratch.arena, &params.entity_list, df_handle_from_entity(entity));
                 df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+                df_cmd_params_mark_slot(&params, DF_CmdParamSlot_EntityList);
                 df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Detach));
               }
             }
