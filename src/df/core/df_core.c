@@ -1358,7 +1358,6 @@ df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray
   {
     DF_Entity *entity = array->v[src_idx];
     String8 display_string = df_display_string_from_entity(scratch.arena, entity);
-    String8 search_tags = df_search_tags_from_entity(scratch.arena, entity);
     FuzzyMatchRangeList matches = fuzzy_match_find(arena, needle, display_string);
     if(matches.count >= matches.needle_part_count)
     {
@@ -1366,14 +1365,18 @@ df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray
       result.v[result_idx].matches = matches;
       result_idx += 1;
     }
-    else if(search_tags.size != 0)
+    else
     {
-      FuzzyMatchRangeList tag_matches = fuzzy_match_find(scratch.arena, needle, search_tags);
-      if(tag_matches.count >= tag_matches.needle_part_count)
+      String8 search_tags = df_search_tags_from_entity(scratch.arena, entity);
+      if(search_tags.size != 0)
       {
-        result.v[result_idx].entity = entity;
-        result.v[result_idx].matches = matches;
-        result_idx += 1;
+        FuzzyMatchRangeList tag_matches = fuzzy_match_find(scratch.arena, needle, search_tags);
+        if(tag_matches.count >= tag_matches.needle_part_count)
+        {
+          result.v[result_idx].entity = entity;
+          result.v[result_idx].matches = matches;
+          result_idx += 1;
+        }
       }
     }
   }
@@ -3532,6 +3535,7 @@ df_type_num_from_binary_name(DF_Entity *binary, String8 name)
 internal DF_Entity *
 df_module_from_process_vaddr(DF_Entity *process, U64 vaddr)
 {
+  ProfBeginFunction();
   DF_Entity *module = &df_g_nil_entity;
   for(DF_Entity *child = process->first; !df_entity_is_nil(child); child = child->next)
   {
@@ -3541,6 +3545,7 @@ df_module_from_process_vaddr(DF_Entity *process, U64 vaddr)
       break;
     }
   }
+  ProfEnd();
   return module;
 }
 
@@ -3553,15 +3558,15 @@ df_module_from_thread(DF_Entity *thread)
 }
 
 internal U64
-df_tls_base_vaddr_from_thread(DF_Entity *thread)
+df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr)
 {
+  ProfBeginFunction();
   U64 base_vaddr = 0;
   Temp scratch = scratch_begin(0, 0);
   DBGI_Scope *scope = dbgi_scope_open();
   
   //- rjf: unpack thread info
-  DF_Entity *module = df_module_from_thread(thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
   DF_Entity *binary = df_binary_file_from_module(module);
   DBGI_Parse *dbgi = df_dbgi_parse_from_binary_file(scope, binary);
   String8 bin_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
@@ -3573,7 +3578,6 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
   Rng1U64 tls_vaddr_range = pe_tls_rng_from_bin_base_vaddr(bin_data, bin, df_base_vaddr_from_module(module));
   
   //- rjf: read module's TLS index
-  // TODO(allen): migrate all of this logic into DEMON
   U64 tls_index = 0;
   {
     U64 bytes_read = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, &tls_index);
@@ -3586,7 +3590,7 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
   //- rjf: PE path
   if(bin_is_pe)
   {
-    U64 thread_info_addr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+    U64 thread_info_addr = root_vaddr;
     U64 tls_addr_off = tls_index*addr_size;
     U64 tls_addr_array = 0;
     CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
@@ -3639,6 +3643,7 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
   
   dbgi_scope_close(scope);
   scratch_end(scratch);
+  ProfEnd();
   return base_vaddr;
 }
 
@@ -4125,6 +4130,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   
   //- rjf: unpack arguments
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+  U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
   DF_Entity *process = thread->parent;
   U64 unwind_count = ctrl_ctx->unwind_count;
   CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
@@ -4148,7 +4154,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   //- rjf: unpack module info & produce eval machine
   DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_ip_vaddr);
   U64 module_base = df_base_vaddr_from_module(module);
-  U64 tls_base = df_tls_base_vaddr_from_thread(thread);
+  U64 tls_base = df_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, thread_unwind_ip_vaddr);
   EVAL_Machine machine = {0};
   machine.u = (void *)thread->parent;
   machine.arch = arch;
@@ -6227,6 +6233,44 @@ df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count)
   return result;
 }
 
+internal U64
+df_query_cached_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr)
+{
+  U64 result = 0;
+  {
+    DF_RunTLSBaseCache *cache = &df_state->tls_base_cache;
+    if(cache->slots_count == 0)
+    {
+      cache->slots_count = 256;
+      cache->slots = push_array(cache->arena, DF_RunTLSBaseCacheSlot, cache->slots_count);
+    }
+    DF_Handle handle = df_handle_from_entity(process);
+    U64 hash = df_hash_from_seed_string(df_hash_from_string(str8_struct(&handle)), str8_struct(&rip_vaddr));
+    U64 slot_idx = hash%cache->slots_count;
+    DF_RunTLSBaseCacheSlot *slot = &cache->slots[slot_idx];
+    DF_RunTLSBaseCacheNode *node = 0;
+    for(DF_RunTLSBaseCacheNode *n = slot->first; n != 0; n = n->hash_next)
+    {
+      if(df_handle_match(n->process, handle) && n->root_vaddr == root_vaddr && n->rip_vaddr == rip_vaddr)
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node == 0)
+    {
+      node = push_array(cache->arena, DF_RunTLSBaseCacheNode, 1);
+      SLLQueuePush_N(slot->first, slot->last, node, hash_next);
+      node->process = handle;
+      node->root_vaddr = root_vaddr;
+      node->rip_vaddr = rip_vaddr;
+      node->tls_base_vaddr = df_tls_base_vaddr_from_process_root_rip(process, root_vaddr, rip_vaddr);
+    }
+    result = node->tls_base_vaddr;
+  }
+  return result;
+}
+
 internal EVAL_String2NumMap *
 df_query_cached_locals_map_from_binary_voff(DF_Entity *binary, U64 voff)
 {
@@ -6385,6 +6429,7 @@ df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist
   
   // rjf: set up per-run caches
   df_state->unwind_cache.arena = arena_alloc();
+  df_state->tls_base_cache.arena = arena_alloc();
   df_state->locals_cache.arena = arena_alloc();
   df_state->member_cache.arena = arena_alloc();
   
@@ -6865,6 +6910,19 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       }
       df_state->unwind_cache_memgen_idx = new_memgen_idx;
       df_state->unwind_cache_reggen_idx = new_reggen_idx;
+    }
+    
+    //- rjf: clear tls base cache
+    if((df_state->tls_base_cache_reggen_idx != new_reggen_idx ||
+        df_state->tls_base_cache_memgen_idx != new_memgen_idx) &&
+       !df_ctrl_targets_running())
+    {
+      DF_RunTLSBaseCache *cache = &df_state->tls_base_cache;
+      arena_clear(cache->arena);
+      cache->slots_count = 0;
+      cache->slots = 0;
+      df_state->tls_base_cache_reggen_idx = new_reggen_idx;
+      df_state->tls_base_cache_memgen_idx = new_memgen_idx;
     }
     
     //- rjf: clear locals cache

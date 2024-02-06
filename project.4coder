@@ -81,6 +81,15 @@ commands =
     .save_dirty_files = true,
     .cursor_at_end = false,
   },
+  .build_raddbg_release_telemetry =
+  {
+    .win = "build raddbg release telemetry",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
   .build_raddbg_from_pdb =
   {
     .win = "build raddbg_from_pdb",

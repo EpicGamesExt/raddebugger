@@ -939,6 +939,7 @@ struct DF_RunUnwindCacheNode
   DF_RunUnwindCacheNode *hash_next;
   DF_Handle thread;
   CTRL_Unwind unwind;
+  U64 tls_base_vaddr;
 };
 
 typedef struct DF_RunUnwindCacheSlot DF_RunUnwindCacheSlot;
@@ -954,6 +955,33 @@ struct DF_RunUnwindCache
   Arena *arena;
   U64 table_size;
   DF_RunUnwindCacheSlot *table;
+};
+
+//- rjf: per-run tls-base-vaddr cache
+
+typedef struct DF_RunTLSBaseCacheNode DF_RunTLSBaseCacheNode;
+struct DF_RunTLSBaseCacheNode
+{
+  DF_RunTLSBaseCacheNode *hash_next;
+  DF_Handle process;
+  U64 root_vaddr;
+  U64 rip_vaddr;
+  U64 tls_base_vaddr;
+};
+
+typedef struct DF_RunTLSBaseCacheSlot DF_RunTLSBaseCacheSlot;
+struct DF_RunTLSBaseCacheSlot
+{
+  DF_RunTLSBaseCacheNode *first;
+  DF_RunTLSBaseCacheNode *last;
+};
+
+typedef struct DF_RunTLSBaseCache DF_RunTLSBaseCache;
+struct DF_RunTLSBaseCache
+{
+  Arena *arena;
+  U64 slots_count;
+  DF_RunTLSBaseCacheSlot *slots;
 };
 
 //- rjf: per-run locals cache
@@ -1108,6 +1136,9 @@ struct DF_State
   U64 unwind_cache_reggen_idx;
   U64 unwind_cache_memgen_idx;
   DF_RunUnwindCache unwind_cache;
+  U64 tls_base_cache_reggen_idx;
+  U64 tls_base_cache_memgen_idx;
+  DF_RunTLSBaseCache tls_base_cache;
   U64 locals_cache_reggen_idx;
   DF_RunLocalsCache locals_cache;
   U64 member_cache_reggen_idx;
@@ -1512,7 +1543,7 @@ internal U64 df_type_num_from_binary_name(DF_Entity *binary, String8 name);
 //- rjf: thread info extraction helpers
 internal DF_Entity *df_module_from_process_vaddr(DF_Entity *process, U64 vaddr);
 internal DF_Entity *df_module_from_thread(DF_Entity *thread);
-internal U64 df_tls_base_vaddr_from_thread(DF_Entity *thread);
+internal U64 df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal Architecture df_architecture_from_entity(DF_Entity *entity);
 internal CTRL_Unwind df_push_unwind_from_thread(Arena *arena, DF_Entity *thread);
 internal U64 df_rip_from_thread(DF_Entity *thread);
@@ -1647,6 +1678,7 @@ internal DF_EntityList df_push_active_target_list(Arena *arena);
 internal CTRL_Unwind df_query_cached_unwind_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
+internal U64 df_query_cached_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal EVAL_String2NumMap *df_query_cached_locals_map_from_binary_voff(DF_Entity *binary, U64 voff);
 internal EVAL_String2NumMap *df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff);
 

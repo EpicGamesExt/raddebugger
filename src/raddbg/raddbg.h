@@ -281,6 +281,7 @@
 // [ ] Fancy View Rules
 //  [ ] table column boundaries should be checked against *AFTER* table
 //      contents, not before
+//  [ ] `array:(x, y)` - multidimensional array
 //  [ ] `text[:lang]` - interpret memory as text, in lang `lang`
 //  [ ] `disasm:arch` - interpret memory as machine code for isa `arch`
 //  [ ] `memory` - view memory in usual memory hex-editor view
@@ -306,6 +307,7 @@
 //
 // [ ] @feature processor/data breakpoints
 // [ ] @feature automatically snap to search matches when searching source files
+// [ ] automatically start search query with selected text
 // [ ] @feature entity views: filtering & reordering
 
 ////////////////////////////////

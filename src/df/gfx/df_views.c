@@ -3390,7 +3390,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
       // rjf: target name
       UI_WidthFill UI_FocusHot((row_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
       {
-        df_entity_desc_button(ws, target, &targets.v[row_idx-1].matches);
+        df_entity_desc_button(ws, target, &targets.v[row_idx-1].matches, query);
       }
       
       // rjf: controls
@@ -3815,48 +3815,51 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   
   //- rjf: produce list of items; no query -> all entities, in tree; query -> only show threads
   DF_EntityFuzzyItemArray items = {0};
-  if(query.size == 0)
+  ProfScope("query -> entities")
   {
-    //- rjf: build flat array of entities, arranged into row order
-    DF_EntityArray entities = {0};
+    if(query.size == 0)
     {
-      entities.count = machines.count+processes.count+threads.count;
-      entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
-      U64 idx = 0;
-      for(DF_EntityNode *machine_n = machines.first; machine_n != 0; machine_n = machine_n->next)
+      //- rjf: build flat array of entities, arranged into row order
+      DF_EntityArray entities = {0};
       {
-        DF_Entity *machine = machine_n->entity;
-        entities.v[idx] = machine;
-        idx += 1;
-        for(DF_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
+        entities.count = machines.count+processes.count+threads.count;
+        entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
+        U64 idx = 0;
+        for(DF_EntityNode *machine_n = machines.first; machine_n != 0; machine_n = machine_n->next)
         {
-          DF_Entity *process = process_n->entity;
-          if(df_entity_ancestor_from_kind(process, DF_EntityKind_Machine) != machine)
-          {
-            continue;
-          }
-          entities.v[idx] = process;
+          DF_Entity *machine = machine_n->entity;
+          entities.v[idx] = machine;
           idx += 1;
-          for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
+          for(DF_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
           {
-            DF_Entity *thread = thread_n->entity;
-            if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) != process)
+            DF_Entity *process = process_n->entity;
+            if(df_entity_ancestor_from_kind(process, DF_EntityKind_Machine) != machine)
             {
               continue;
             }
-            entities.v[idx] = thread;
+            entities.v[idx] = process;
             idx += 1;
+            for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
+            {
+              DF_Entity *thread = thread_n->entity;
+              if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) != process)
+              {
+                continue;
+              }
+              entities.v[idx] = thread;
+              idx += 1;
+            }
           }
         }
       }
+      
+      //- rjf: entities -> fuzzy-filtered entities
+      items = df_entity_fuzzy_item_array_from_entity_array_needle(scratch.arena, &entities, query);
     }
-    
-    //- rjf: entities -> fuzzy-filtered entities
-    items = df_entity_fuzzy_item_array_from_entity_array_needle(scratch.arena, &entities, query);
-  }
-  else
-  {
-    items = df_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &threads, query);
+    else
+    {
+      items = df_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &threads, query);
+    }
   }
   
   //- rjf: selected column/entity -> selected cursor
@@ -3945,7 +3948,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
         UI_TableCellSized(ui_pct(1, 0))
           UI_FocusHot((row_is_selected && desc_col_rng.min <= cursor.x && cursor.x <= desc_col_rng.max) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          df_entity_desc_button(ws, entity, &items.v[idx].matches);
+          df_entity_desc_button(ws, entity, &items.v[idx].matches, query);
         }
         switch(entity->kind)
         {
@@ -4169,7 +4172,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             }
             else
             {
-              df_entity_desc_button(ws, module, 0);
+              df_entity_desc_button(ws, module, 0, str8_zero());
             }
           }
           
@@ -4430,7 +4433,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
             {
               UI_TableCellSized(ui_pct(1, 0)) UI_FocusHot((row_is_selected) ? UI_FocusKind_On : UI_FocusKind_Off)
               {
-                df_entity_desc_button(ws, entity, &items.v[idx].matches);
+                df_entity_desc_button(ws, entity, &items.v[idx].matches, query);
               }
             }
             idx_in_process = 0;
@@ -4444,7 +4447,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
             }
             UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              df_entity_desc_button(ws, entity, &items.v[idx].matches);
+              df_entity_desc_button(ws, entity, &items.v[idx].matches, query);
             }
             UI_TableCell UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_FocusHot((row_is_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
@@ -8355,7 +8358,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          df_entity_desc_button(ws, entity, &entities.v[idx-1].matches);
+          df_entity_desc_button(ws, entity, &entities.v[idx-1].matches, query);
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 2) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
@@ -8516,7 +8519,7 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
       {
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          df_entity_desc_button(ws, entity, &entities.v[idx-1].matches);
+          df_entity_desc_button(ws, entity, &entities.v[idx-1].matches, query);
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
         {

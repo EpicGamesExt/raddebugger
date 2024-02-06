@@ -8750,8 +8750,9 @@ df_entity_tooltips(DF_Entity *entity)
 }
 
 internal void
-df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches)
+df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   if(entity->kind == DF_EntityKind_Thread)
   {
@@ -8875,8 +8876,9 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
       CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
       DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
       U64 idx = 0;
+      U64 limit = 3;
       ui_spacer(ui_em(1.f, 1.f));
-      for(CTRL_UnwindFrame *f = unwind.last; f != 0 && idx < 3; f = f->prev)
+      for(CTRL_UnwindFrame *f = unwind.last; f != 0 && idx < limit; f = f->prev)
       {
         U64 rip_vaddr = f->rip;
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
@@ -8885,12 +8887,25 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
         String8 procedure_name = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
         if(procedure_name.size != 0)
         {
+          FuzzyMatchRangeList fuzzy_matches = {0};
+          if(fuzzy_query.size != 0)
+          {
+            fuzzy_matches = fuzzy_match_find(scratch.arena, fuzzy_query, procedure_name);
+          }
           if(idx != 0)
           {
             UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(2.f, 1.f)) ui_label(str8_lit(">"));
           }
-          UI_PrefWidth(ui_text_dim(10.f, 0.f)) ui_label(procedure_name);
+          UI_PrefWidth(ui_text_dim(10.f, 0.f))
+          {
+            UI_Box *label_box = ui_label(procedure_name).box;
+            ui_box_equip_fuzzy_match_ranges(label_box, &fuzzy_matches);
+          }
           idx += 1;
+          if(idx == limit)
+          {
+            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_text_dim(10.f, 1.f)) ui_label(str8_lit("> ..."));
+          }
         }
       }
     }
@@ -8938,6 +8953,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     }
   }
   scratch_end(scratch);
+  ProfEnd();
 }
 
 internal void
