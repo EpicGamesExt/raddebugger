@@ -6650,20 +6650,19 @@ DF_VIEW_SETUP_FUNCTION_DEF(Watch)
   
   // rjf: add roots for watches
   {
-    DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
-    U64 parent_key_hash = df_hash_from_expand_key(parent_key);
     DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
     DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-    U64 num = 1;
-    for(DF_CfgNode *expr = cfg_root->first; expr != &df_g_nil_cfg_node; expr = expr->next, num += 1)
+    for(DF_CfgNode *expr = cfg_root->first; expr != &df_g_nil_cfg_node; expr = expr->next)
     {
       if(expr->flags & DF_CfgNodeFlag_StringLiteral)
       {
         DF_EvalRoot *root = df_eval_root_alloc(view, ewv);
+        DF_ExpandKey parent_key = df_expand_key_make(5381, (U64)root);
+        U64 parent_key_hash = df_hash_from_expand_key(parent_key);
         df_eval_root_equip_string(root, expr->string);
         if(expr->first != &df_g_nil_cfg_node)
         {
-          DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, num);
+          DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, df_hash_from_string(expr->string));
           String8 view_rule = expr->first->string;
           df_eval_view_set_key_rule(eval_view, root_key, view_rule);
         }
@@ -6682,14 +6681,13 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch)
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   {
-    DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
-    U64 parent_key_hash = df_hash_from_expand_key(parent_key);
-    U64 num = 1;
-    for(DF_EvalRoot *root = ewv->first_root; root != 0; root = root->next, num += 1)
+    for(DF_EvalRoot *root = ewv->first_root; root != 0; root = root->next)
     {
+      DF_ExpandKey parent_key = df_expand_key_make(5381, (U64)root);
+      U64 parent_key_hash = df_hash_from_expand_key(parent_key);
       String8 string = df_string_from_eval_root(root);
       str8_list_pushf(arena, &strs, "\"%S\"", string);
-      DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, num);
+      DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, df_hash_from_string(string));
       String8 view_rule = df_eval_view_rule_from_key(eval_view, root_key);
       if(view_rule.size != 0)
       {
