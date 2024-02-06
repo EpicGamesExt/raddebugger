@@ -608,12 +608,11 @@ internal DF_EvalRoot *
 df_eval_root_from_expand_key(DF_EvalWatchViewState *ews, DF_EvalView *eval_view, DF_ExpandKey expand_key)
 {
   DF_EvalRoot *root = 0;
-  DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
-  U64 parent_key_hash = df_hash_from_expand_key(parent_key);
-  U64 num = 1;
-  for(DF_EvalRoot *r = ews->first_root; r != 0; r = r->next, num += 1)
+  for(DF_EvalRoot *r = ews->first_root; r != 0; r = r->next)
   {
-    DF_ExpandKey key = df_expand_key_make(parent_key_hash, num);
+    DF_ExpandKey parent_key = df_expand_key_make(5381, (U64)r);
+    U64 parent_key_hash = df_hash_from_expand_key(parent_key);
+    DF_ExpandKey key = df_expand_key_make(parent_key_hash, df_hash_from_string(df_string_from_eval_root(r)));
     if(df_expand_key_match(key, expand_key))
     {
       root = r;
@@ -650,14 +649,13 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     default:
     case DF_EvalWatchViewFillKind_Mutable:
     {
-      U64 num = 1;
-      for(DF_EvalRoot *root = ews->first_root; root != 0; root = root->next, num += 1)
+      for(DF_EvalRoot *root = ews->first_root; root != 0; root = root->next)
       {
         String8 root_expr_string = df_string_from_eval_root(root);
         FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
         if(matches.count == matches.needle_part_count)
         {
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, num);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, (U64)root);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }

@@ -5431,8 +5431,8 @@ df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, 
   ProfBeginFunction();
   DF_EvalVizBlockList blocks = {0};
   {
-    DF_ExpandKey start_parent_key = df_expand_key_make(5381, 0);
-    DF_ExpandKey start_key = df_expand_key_make(df_hash_from_expand_key(start_parent_key), num);
+    DF_ExpandKey start_parent_key = df_expand_key_make(5381, num);
+    DF_ExpandKey start_key = df_expand_key_make(df_hash_from_expand_key(start_parent_key), df_hash_from_string(expr));
     DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, macro_map, expr);
     U64 expr_comma_pos = str8_find_needle(expr, 0, str8_lit(","), 0);
     String8List default_view_rules = {0};
