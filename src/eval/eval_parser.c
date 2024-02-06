@@ -48,84 +48,10 @@ global read_only struct {EVAL_ExprKind kind; String8 string; S64 precedence;} ev
   { EVAL_ExprKind_BitOr,  str8_lit_comp("|"),  10 },
   { EVAL_ExprKind_LogAnd, str8_lit_comp("&&"), 11 },
   { EVAL_ExprKind_LogOr,  str8_lit_comp("||"), 12 },
+  { EVAL_ExprKind_Define, str8_lit_comp("="),  13 },
 };
 
 global read_only S64 eval_g_max_precedence = 15;
-
-////////////////////////////////
-//~ rjf: Basic Functions
-
-internal U64
-eval_hash_from_string(String8 string)
-{
-  U64 result = 5381;
-  for(U64 i = 0; i < string.size; i += 1)
-  {
-    result = ((result << 5) + result) + string.str[i];
-  }
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Map Functions
-
-internal EVAL_String2NumMap
-eval_string2num_map_make(Arena *arena, U64 slot_count)
-{
-  EVAL_String2NumMap map = {0};
-  map.slots_count = slot_count;
-  map.slots = push_array(arena, EVAL_String2NumMapSlot, map.slots_count);
-  return map;
-}
-
-internal void
-eval_string2num_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string, U64 num)
-{
-  U64 hash = eval_hash_from_string(string);
-  U64 slot_idx = hash%map->slots_count;
-  EVAL_String2NumMapNode *existing_node = 0;
-  for(EVAL_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
-  {
-    if(str8_match(node->string, string, 0) && node->num == num)
-    {
-      existing_node = node;
-      break;
-    }
-  }
-  if(existing_node == 0)
-  {
-    EVAL_String2NumMapNode *node = push_array(arena, EVAL_String2NumMapNode, 1);
-    SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
-    SLLQueuePush_N(map->first, map->last, node, order_next);
-    node->string = push_str8_copy(arena, string);
-    node->num = num;
-  }
-}
-
-internal U64
-eval_num_from_string(EVAL_String2NumMap *map, String8 string)
-{
-  U64 num = 0;
-  if(map->slots_count != 0)
-  {
-    U64 hash = eval_hash_from_string(string);
-    U64 slot_idx = hash%map->slots_count;
-    EVAL_String2NumMapNode *existing_node = 0;
-    for(EVAL_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
-    {
-      if(str8_match(node->string, string, 0))
-      {
-        existing_node = node;
-        break;
-      }
-    }
-    if(existing_node != 0)
-    {
-      num = existing_node->num;
-    }
-  }
-  return num;
-}
 
 ////////////////////////////////
 //~ rjf: Map Building Fast Paths
@@ -1210,10 +1136,10 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             }
           }
           
-          // rjf: error on map failure
-          if(mapped_identifier == 0)
+          //- rjf: map failure -> attach as leaf identifier, to be resolved later
+          if(!mapped_identifier)
           {
-            eval_errorf(arena, &result.errors, EVAL_ErrorKind_ResolutionFailure, token_string.str, "Unknown identifier \"%S\".", token_string);
+            atom = eval_expr_leaf_ident(arena, token_string.str, token_string);
             it += 1;
           }
         }break;

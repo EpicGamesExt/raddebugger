@@ -1159,6 +1159,7 @@ ui_end_build(void)
                                                                          box->first_touched_build_index == box->first_disabled_build_index);
         B32 is_focus_hot      = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
         B32 is_focus_active   = !!(box->flags & UI_BoxFlag_FocusActive) && !(box->flags & UI_BoxFlag_FocusActiveDisabled);
+        B32 is_focus_active_disabled = !!(box->flags & UI_BoxFlag_FocusActiveDisabled);
         
         // rjf: determine rates
         F32 hot_rate      = fast_rate;
@@ -1173,15 +1174,16 @@ ui_end_build(void)
         box_is_animating = (box_is_animating || abs_f32((F32)is_disabled     - box->disabled_t) > 0.01f);
         box_is_animating = (box_is_animating || abs_f32((F32)is_focus_hot    - box->focus_hot_t) > 0.01f);
         box_is_animating = (box_is_animating || abs_f32((F32)is_focus_active - box->focus_active_t) > 0.01f);
+        box_is_animating = (box_is_animating || abs_f32((F32)is_focus_active_disabled - box->focus_active_disabled_t) > 0.01f);
         box_is_animating = (box_is_animating || abs_f32(box->view_off_target.x - box->view_off.x) > 0.5f);
         box_is_animating = (box_is_animating || abs_f32(box->view_off_target.y - box->view_off.y) > 0.5f);
         if(box->flags & UI_BoxFlag_AnimatePosX)
         {
-          box_is_animating = (box_is_animating || fabsf(box->fixed_position_animated.x - box->fixed_position.x) > 0.5f);
+          box_is_animating = (box_is_animating || abs_f32(box->fixed_position_animated.x - box->fixed_position.x) > 0.5f);
         }
         if(box->flags & UI_BoxFlag_AnimatePosY)
         {
-          box_is_animating = (box_is_animating || fabsf(box->fixed_position_animated.y - box->fixed_position.y) > 0.5f);
+          box_is_animating = (box_is_animating || abs_f32(box->fixed_position_animated.y - box->fixed_position.y) > 0.5f);
         }
         ui_state->is_animating = (ui_state->is_animating || box_is_animating);
 #if 0 // NOTE(rjf): enable to debug animation-causing-frames (or not)
@@ -1193,21 +1195,22 @@ ui_end_build(void)
 #endif
         
         // rjf: animate interaction transition states
-        box->hot_t          += hot_rate      * ((F32)is_hot - box->hot_t);
-        box->active_t       += active_rate   * ((F32)is_active - box->active_t);
-        box->disabled_t     += disabled_rate * ((F32)is_disabled - box->disabled_t);
-        box->focus_hot_t    += focus_rate    * ((F32)is_focus_hot - box->focus_hot_t);
-        box->focus_active_t += focus_rate    * ((F32)is_focus_active - box->focus_active_t);
+        box->hot_t                   += hot_rate      * ((F32)is_hot - box->hot_t);
+        box->active_t                += active_rate   * ((F32)is_active - box->active_t);
+        box->disabled_t              += disabled_rate * ((F32)is_disabled - box->disabled_t);
+        box->focus_hot_t             += focus_rate    * ((F32)is_focus_hot - box->focus_hot_t);
+        box->focus_active_t          += focus_rate    * ((F32)is_focus_active - box->focus_active_t);
+        box->focus_active_disabled_t += focus_rate    * ((F32)is_focus_active_disabled - box->focus_active_disabled_t);
         
         // rjf: animate positions
         {
           box->fixed_position_animated.x += fast_rate * (box->fixed_position.x - box->fixed_position_animated.x);
           box->fixed_position_animated.y += fast_rate * (box->fixed_position.y - box->fixed_position_animated.y);
-          if(fabsf(box->fixed_position.x - box->fixed_position_animated.x) < 1)
+          if(abs_f32(box->fixed_position.x - box->fixed_position_animated.x) < 1)
           {
             box->fixed_position_animated.x = box->fixed_position.x;
           }
-          if(fabsf(box->fixed_position.y - box->fixed_position_animated.y) < 1)
+          if(abs_f32(box->fixed_position.y - box->fixed_position_animated.y) < 1)
           {
             box->fixed_position_animated.y = box->fixed_position.y;
           }
@@ -1229,11 +1232,11 @@ ui_end_build(void)
         {
           box->view_off.x += fast_rate * (box->view_off_target.x - box->view_off.x);
           box->view_off.y += fast_rate * (box->view_off_target.y - box->view_off.y);
-          if(fabsf(box->view_off.x - box->view_off_target.x) < 2)
+          if(abs_f32(box->view_off.x - box->view_off_target.x) < 2)
           {
             box->view_off.x = box->view_off_target.x;
           }
-          if(fabsf(box->view_off.y - box->view_off_target.y) < 2)
+          if(abs_f32(box->view_off.y - box->view_off_target.y) < 2)
           {
             box->view_off.y = box->view_off_target.y;
           }
@@ -1310,6 +1313,8 @@ ui_end_build(void)
   }
   
   //- rjf: hovering possibly-truncated drawn text -> store text
+  if(ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Min]) &&
+     ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Max]))
   {
     B32 found = 0;
     for(UI_Box *box = ui_state->root, *next = 0; !ui_box_is_nil(box); box = next)

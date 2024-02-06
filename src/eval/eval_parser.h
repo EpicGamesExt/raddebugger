@@ -1,36 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef EVAL2_PARSER_H
-#define EVAL2_PARSER_H
-
-////////////////////////////////
-//~ rjf: Maps
-
-typedef struct EVAL_String2NumMapNode EVAL_String2NumMapNode;
-struct EVAL_String2NumMapNode
-{
-  EVAL_String2NumMapNode *order_next;
-  EVAL_String2NumMapNode *hash_next;
-  String8 string;
-  U64 num;
-};
-
-typedef struct EVAL_String2NumMapSlot EVAL_String2NumMapSlot;
-struct EVAL_String2NumMapSlot
-{
-  EVAL_String2NumMapNode *first;
-  EVAL_String2NumMapNode *last;
-};
-
-typedef struct EVAL_String2NumMap EVAL_String2NumMap;
-struct EVAL_String2NumMap
-{
-  U64 slots_count;
-  EVAL_String2NumMapSlot *slots;
-  EVAL_String2NumMapNode *first;
-  EVAL_String2NumMapNode *last;
-};
+#ifndef EVAL_PARSER_H
+#define EVAL_PARSER_H
 
 ////////////////////////////////
 //~ rjf: Token Types
@@ -107,19 +79,8 @@ struct EVAL_ParseCtx
 //~ rjf: Globals
 
 read_only global EVAL_String2NumMap eval_string2num_map_nil = {0};
+read_only global EVAL_String2ExprMap eval_string2expr_map_nil = {0};
 global read_only EVAL_ParseResult eval_parse_result_nil = {0, &eval_expr_nil};
-
-////////////////////////////////
-//~ rjf: Basic Functions
-
-internal U64 eval_hash_from_string(String8 string);
-
-////////////////////////////////
-//~ rjf: Map Functions
-
-internal EVAL_String2NumMap eval_string2num_map_make(Arena *arena, U64 slot_count);
-internal void eval_string2num_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string, U64 num);
-internal U64 eval_num_from_string(EVAL_String2NumMap *map, String8 string);
 
 ////////////////////////////////
 //~ rjf: Debug-Info-Driven Map Building Fast Paths
@@ -145,4 +106,4 @@ internal EVAL_ParseResult eval_parse_type_from_text_tokens(Arena *arena, EVAL_Pa
 internal EVAL_ParseResult eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8 text, EVAL_TokenArray *tokens, S64 max_precedence);
 internal EVAL_ParseResult eval_parse_expr_from_text_tokens(Arena *arena, EVAL_ParseCtx *ctx, String8 text, EVAL_TokenArray *tokens);
 
-#endif // EVAL2_PARSER_H
+#endif // EVAL_PARSER_H

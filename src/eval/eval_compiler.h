@@ -5,129 +5,6 @@
 #define EVAL_COMPILER_H
 
 ////////////////////////////////
-//~ allen: EVAL Error Types
-
-typedef enum EVAL_ErrorKind
-{
-  EVAL_ErrorKind_Null,
-  EVAL_ErrorKind_MalformedInput,
-  EVAL_ErrorKind_MissingInfo,
-  EVAL_ErrorKind_ResolutionFailure,
-  EVAL_ErrorKind_COUNT
-}
-EVAL_ErrorKind;
-
-typedef struct EVAL_Error EVAL_Error;
-struct EVAL_Error{
-  EVAL_Error *next;
-  EVAL_ErrorKind kind;
-  void *location;
-  String8 text;
-};
-
-typedef struct EVAL_ErrorList EVAL_ErrorList;
-struct EVAL_ErrorList{
-  EVAL_Error *first;
-  EVAL_Error *last;
-  EVAL_ErrorKind max_kind;
-  U64 count;
-};
-
-////////////////////////////////
-//~ allen: EVAL Op List Types
-
-enum{
-  EVAL_IRExtKind_Bytecode = RADDBG_EvalOp_COUNT,
-  EVAL_IRExtKind_COUNT
-};
-
-typedef struct EVAL_Op EVAL_Op;
-struct EVAL_Op{
-  EVAL_Op *next;
-  RADDBG_EvalOp opcode;
-  union{
-    U64 p;
-    String8 bytecode;
-  };
-};
-
-typedef struct EVAL_OpList EVAL_OpList;
-struct EVAL_OpList{
-  EVAL_Op *first_op;
-  EVAL_Op *last_op;
-  U32 op_count;
-  U32 encoded_size;
-};
-
-////////////////////////////////
-//- allen: EVAL Expression Types
-
-#include "eval/generated/eval.meta.h"
-
-typedef enum EVAL_EvalMode{
-  EVAL_EvalMode_NULL,
-  EVAL_EvalMode_Value,
-  EVAL_EvalMode_Addr,
-  EVAL_EvalMode_Reg
-}
-EVAL_EvalMode;
-
-typedef struct EVAL_Expr EVAL_Expr;
-struct EVAL_Expr{
-  EVAL_ExprKind kind;
-  void *location;
-  union{
-    EVAL_Expr *children[3];
-    U32 u32;
-    U64 u64;
-    F32 f32;
-    F64 f64;
-    struct{
-      EVAL_Expr *child;
-      U64 u64;
-    } child_and_constant;
-    String8 name;
-    struct{
-      TG_Key type_key;
-      String8 bytecode;
-      EVAL_EvalMode mode;
-    };
-  };
-};
-
-global read_only EVAL_Expr eval_expr_nil = {0};
-
-////////////////////////////////
-//~ allen: EVAL Compiler Types
-
-typedef struct EVAL_IRTree EVAL_IRTree;
-struct EVAL_IRTree{
-  RADDBG_EvalOp op;
-  EVAL_IRTree *children[3];
-  union{
-    U64 p;
-    String8 bytecode;
-  };
-};
-
-global read_only EVAL_IRTree eval_irtree_nil = {0};
-
-typedef struct EVAL_IRTreeAndType EVAL_IRTreeAndType;
-struct EVAL_IRTreeAndType{
-  EVAL_IRTree *tree;
-  TG_Key type_key;
-  EVAL_EvalMode mode;
-};
-
-
-////////////////////////////////
-//~ allen: Eval Error Helpers
-
-internal void eval_error(Arena *arena, EVAL_ErrorList *list, EVAL_ErrorKind kind, void *location, String8 text);
-internal void eval_errorf(Arena *arena, EVAL_ErrorList *list, EVAL_ErrorKind kind, void *location, char *fmt, ...);
-internal void eval_error_list_concat_in_place(EVAL_ErrorList *dst, EVAL_ErrorList *to_push);
-
-////////////////////////////////
 //~ allen: EVAL Bytecode Helpers
 
 internal String8 eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list);
@@ -155,6 +32,7 @@ internal EVAL_Expr* eval_expr_f64(Arena *arena, void *location, F64 f64);
 internal EVAL_Expr* eval_expr_f32(Arena *arena, void *location, F32 f32);
 internal EVAL_Expr* eval_expr_child_and_u64(Arena *arena, EVAL_ExprKind kind, void *location, EVAL_Expr *child, U64 u64);
 internal EVAL_Expr* eval_expr_leaf_member(Arena *arena, void *location, String8 name);
+internal EVAL_Expr* eval_expr_leaf_ident(Arena *arena, void *location, String8 name);
 internal EVAL_Expr* eval_expr_leaf_bytecode(Arena *arena, void *location, TG_Key type_key, String8 bytecode, EVAL_EvalMode mode);
 internal EVAL_Expr* eval_expr_leaf_op_list(Arena *arena, void *location, TG_Key type_key, EVAL_OpList *ops, EVAL_EvalMode mode);
 internal EVAL_Expr* eval_expr_leaf_type(Arena *arena, void *location, TG_Key type_key);
@@ -196,8 +74,9 @@ internal EVAL_IRTree* eval_irtree_resolve_to_value(Arena *arena, TG_Graph *graph
 ////////////////////////////////
 //~ allen: EVAL Compiler Phases
 
+internal void eval_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, EVAL_String2ExprMap *map, EVAL_Expr *expr, EVAL_ErrorList *eout);
 internal TG_Key eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout);
-internal EVAL_IRTreeAndType eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout);
+internal EVAL_IRTreeAndType eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVAL_String2ExprMap *leaf_ident_expr_map, EVAL_Expr *expr, EVAL_ErrorList *eout);
 internal void eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out);
 
 #endif //EVAL_COMPILER_H

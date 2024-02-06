@@ -455,7 +455,7 @@ internal DF_EvalRoot *  df_eval_root_from_expand_key(DF_EvalWatchViewState *ews,
 internal String8        df_string_from_eval_root(DF_EvalRoot *root);
 
 //- rjf: windowed watch tree visualization
-internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_View *view, DF_EvalWatchViewState *ews);
+internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_EvalWatchViewState *ews);
 
 //- rjf: eval/watch views main hooks
 internal void df_eval_watch_view_init(DF_EvalWatchViewState *ewv, DF_View *view, DF_EvalWatchViewFillKind fill_kind);

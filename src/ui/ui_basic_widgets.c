@@ -174,6 +174,8 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   ui_push_focus_active(is_auto_focus_active ? UI_FocusKind_On : UI_FocusKind_Null);
   B32 is_focus_hot    = ui_is_focus_hot();
   B32 is_focus_active = ui_is_focus_active();
+  B32 is_focus_hot_disabled = (!is_focus_hot && ui_top_focus_hot() == UI_FocusKind_On);
+  B32 is_focus_active_disabled = (!is_focus_active && ui_top_focus_active() == UI_FocusKind_On);
   
   //- rjf: build top-level box
   ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_HandPoint);
@@ -183,7 +185,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
                                       UI_BoxFlag_ClickToFocus|
                                       ((is_auto_focus_hot || is_auto_focus_active)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_DrawHotEffects|
-                                      is_focus_active*(UI_BoxFlag_Clip|UI_BoxFlag_AllowOverflowX|UI_BoxFlag_ViewClamp),
+                                      (is_focus_active || is_focus_active_disabled)*(UI_BoxFlag_Clip|UI_BoxFlag_AllowOverflowX|UI_BoxFlag_ViewClamp),
                                       key);
   
   //- rjf: take navigation actions for editing
@@ -240,7 +242,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   UI_Parent(box)
   {
     String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
-    if(!is_focus_active)
+    if(!is_focus_active && !is_focus_active_disabled)
     {
       String8 display_string = ui_display_part_from_key_string(string);
       if(pre_edit_value.size != 0)

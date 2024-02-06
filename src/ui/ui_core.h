@@ -306,6 +306,7 @@ struct UI_Box
   F32 disabled_t;
   F32 focus_hot_t;
   F32 focus_active_t;
+  F32 focus_active_disabled_t;
   Vec2F32 view_off;
   Vec2F32 view_off_target;
   Vec2F32 view_bounds;

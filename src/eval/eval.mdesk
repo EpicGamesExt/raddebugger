@@ -39,16 +39,19 @@ EVAL_ExprKindTable:
   
   { Ternary             3         "? "           }
   
-  { LeafBytecode 0                "bytecode"     }
+  { LeafBytecode        0         "bytecode"     }
   { LeafMember          0         "member"       }
   { LeafU64             0         "U64"          }
   { LeafF64             0         "F64"          }
   { LeafF32             0         "F32"          }
   
-  { TypeIdent 0                   "type_ident"   }
+  { TypeIdent           0         "type_ident"   }
   { Ptr                 1         "ptr"          }
   { Array               2         "array"        }
   { Func                1         "function"     }
+  
+  { Define              2         "="            }
+  { LeafIdent           0         "leaf_ident"   }
 }
 
 @table_gen

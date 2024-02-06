@@ -2117,7 +2117,10 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
               break;
             }
           }
-          run_ctrls.run_entity_count -= 1;
+          if(run_ctrls.run_entity_count > 0)
+          {
+            run_ctrls.run_entity_count -= 1;
+          }
           if(run_ctrls.run_entity_count == 0)
           {
             done = 1;
@@ -2886,7 +2889,7 @@ ctrl_thread__run(CTRL_Msg *msg)
               EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
               if(parse_has_expr && errors.count == 0)
               {
-                ir_tree_and_type = eval_irtree_and_type_from_expr(temp.arena, parse_ctx.type_graph, rdbg, parse.expr, &errors);
+                ir_tree_and_type = eval_irtree_and_type_from_expr(temp.arena, parse_ctx.type_graph, rdbg, &eval_string2expr_map_nil, parse.expr, &errors);
               }
               EVAL_OpList op_list = {0};
               if(parse_has_expr && ir_tree_and_type.tree != &eval_irtree_nil)

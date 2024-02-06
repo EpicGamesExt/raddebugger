@@ -1,3 +1,6 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 ////////////////////////////////
 //~ rjf: Includes
 
@@ -29,9 +32,7 @@
 #include "type_graph/type_graph.h"
 #include "dbgi/dbgi.h"
 #include "demon/demon_inc.h"
-#include "eval/eval_compiler.h"
-#include "eval/eval_machine.h"
-#include "eval/eval_parser.h"
+#include "eval/eval_inc.h"
 #include "unwind/unwind.h"
 #include "ctrl/ctrl_inc.h"
 #include "dasm/dasm.h"
@@ -72,9 +73,7 @@
 #include "type_graph/type_graph.c"
 #include "dbgi/dbgi.c"
 #include "demon/demon_inc.c"
-#include "eval/eval_compiler.c"
-#include "eval/eval_machine.c"
-#include "eval/eval_parser.c"
+#include "eval/eval_inc.c"
 #include "unwind/unwind.c"
 #include "ctrl/ctrl_inc.c"
 #include "dasm/dasm.c"
@@ -276,7 +275,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
       }
     }
   }
-
+  
   buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nVersion: %S%S", RADDBG_VERSION_STRING_LITERAL, RADDBG_GIT_STR);
   
   TASKDIALOGCONFIG dialog = {0};

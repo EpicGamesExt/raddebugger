@@ -1515,7 +1515,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             if(df_panel_is_nil(panel->first))
             {
-              ws->focused_panel = panel;
+              DF_CmdParams p = df_cmd_params_from_window(ws);
+              p.panel = df_handle_from_panel(panel);
+              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
               break;
             }
           }
@@ -1569,7 +1571,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 break;
               }
             }
-            ws->focused_panel = dst_panel;
+            DF_CmdParams p = df_cmd_params_from_window(ws);
+            p.panel = df_handle_from_panel(dst_panel);
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
           }
         }break;
         
@@ -4941,6 +4945,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       //- rjf: build query text input
       UI_Parent(query_container_box)
         UI_WidthFill UI_PrefHeight(ui_px(query_line_edit_height, 1.f))
+        UI_Focus(UI_FocusKind_On)
       {
         ui_set_next_flags(UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBorder);
         UI_Row
@@ -5086,8 +5091,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
         U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
         EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_unwind_rip_vaddr);
+        EVAL_String2ExprMap *macro_map = &eval_string2expr_map_nil;
         String8 expr = ws->hover_eval_string;
-        DF_Eval eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, expr);
+        DF_Eval eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
         
         //- rjf: build if good
         if(!tg_key_match(eval.type_key, tg_key_zero()) && !ui_any_ctx_menu_is_open())
@@ -5099,8 +5105,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           U64 expr_hash = df_hash_from_string(expr);
           DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
           DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_num(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, expr, 1);
-          DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, eval_view, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
+          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_num(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, expr, 1);
+          DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
           {
@@ -5245,7 +5251,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     if(sig.commit)
                     {
                       String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
-                      DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, commit_string);
+                      DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, commit_string);
                       B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, row->eval, write_eval);
                       if(success == 0)
                       {
@@ -5553,6 +5559,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           panel_box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
                                             UI_BoxFlag_Clip|
                                             UI_BoxFlag_DrawBorder|
+                                            ((ws->focused_panel != panel)*UI_BoxFlag_DisableFocusViz)|
                                             ((ws->focused_panel != panel)*UI_BoxFlag_DrawOverlay),
                                             panel_key);
         }
@@ -6647,6 +6654,16 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
+          // rjf: draw focus active disabled vis
+          if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusViz) && b->focus_active_disabled_t > 0.01f)
+          {
+            Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
+            color.w *= b->focus_active_disabled_t;
+            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1.f), color, 0, 2.f, 1.f);
+            inst->colors[Corner_10] = inst->colors[Corner_01] = inst->colors[Corner_11] = v4f32(color.x, color.y, color.z, color.w/3.f);
+            MemoryCopyArray(inst->corner_radii, b->corner_radii);
+          }
+          
           // rjf: draw overlay
           if(b->flags & UI_BoxFlag_DrawOverlay && b->overlay_color.w > 0.05f)
           {
@@ -7093,7 +7110,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
 }
 
 internal DF_EvalVizWindowedRowList
-df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks)
+df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -7276,7 +7293,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: apply view rules to eval
           {
             member_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, member_eval);
-            member_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, member_eval, &view_rule_table);
+            member_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, member_eval, &view_rule_table);
           }
           
           // rjf: build & push row
@@ -7330,7 +7347,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: apply view rules to eval
           {
             eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
-            eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
+            eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval, &view_rule_table);
           }
           
           // rjf: build & push row
@@ -7377,7 +7394,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           // rjf: apply view rules to eval
           {
             elem_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, elem_eval);
-            elem_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, elem_eval, &view_rule_table);
+            elem_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, elem_eval, &view_rule_table);
           }
           
           // rjf: build row
@@ -7428,7 +7445,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           
           // rjf: apply view rules to eval
           link_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, link_eval);
-          link_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, link_eval, &view_rule_table);
+          link_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, link_eval, &view_rule_table);
           TG_Kind link_type_kind = tg_kind_from_key(link_eval.type_key);
           
           // rjf: build row
@@ -7480,7 +7497,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         key.child_num = block->backing_search_items.v[idx].idx;
         
         // rjf: get eval for this row
-        DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, name);
+        DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, macro_map, name);
         
         // rjf: get view rules
         String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
@@ -7490,7 +7507,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         // rjf: apply view rules to eval
         {
           eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
-          eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, &view_rule_table);
+          eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval, &view_rule_table);
         }
         
         // rjf: build row
@@ -9665,7 +9682,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         {
           DF_Entity *pin = n->entity;
           String8 pin_expr = pin->name;
-          DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, parse_ctx, pin_expr);
+          DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, parse_ctx, &eval_string2expr_map_nil, pin_expr);
           String8 eval_string = {0};
           if(!tg_key_match(tg_key_zero(), eval.type_key))
           {
@@ -10790,9 +10807,11 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   if(is_auto_focus_active) { ui_push_focus_active(UI_FocusKind_On); }
   B32 is_focus_hot    = ui_is_focus_hot();
   B32 is_focus_active = ui_is_focus_active();
+  B32 is_focus_hot_disabled = (!is_focus_hot && ui_top_focus_hot() == UI_FocusKind_On);
+  B32 is_focus_active_disabled = (!is_focus_active && ui_top_focus_active() == UI_FocusKind_On);
   
   //- rjf: build top-level box
-  if(is_focus_active)
+  if(is_focus_active || is_focus_active_disabled)
   {
     ui_set_next_hover_cursor(OS_Cursor_IBar);
   }
@@ -10802,7 +10821,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
                                       (!(flags & DF_LineEditFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
                                       (!!(flags & DF_LineEditFlag_Border)*UI_BoxFlag_DrawBorder)|
                                       ((is_auto_focus_hot || is_auto_focus_active)*UI_BoxFlag_KeyboardClickable)|
-                                      is_focus_active*(UI_BoxFlag_Clip),
+                                      (is_focus_active || is_focus_active_disabled)*(UI_BoxFlag_Clip),
                                       key);
   
   //- rjf: build indent
@@ -10968,7 +10987,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   F32 cursor_off = 0;
   UI_Parent(scrollable_box)
   {
-    if(!is_focus_active && flags & DF_LineEditFlag_CodeContents)
+    if(!is_focus_active && !is_focus_active_disabled && flags & DF_LineEditFlag_CodeContents)
     {
       String8 display_string = ui_display_part_from_key_string(string);
       if(!(flags & DF_LineEditFlag_PreferDisplayString) && pre_edit_value.size != 0)
@@ -10998,7 +11017,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
         }
       }
     }
-    else if(!is_focus_active && !(flags & DF_LineEditFlag_CodeContents))
+    else if(!is_focus_active && !is_focus_active_disabled && !(flags & DF_LineEditFlag_CodeContents))
     {
       String8 display_string = ui_display_part_from_key_string(string);
       if(!(flags & DF_LineEditFlag_PreferDisplayString) && pre_edit_value.size != 0)
@@ -11015,7 +11034,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
         ui_box_equip_fuzzy_match_ranges(box, matches);
       }
     }
-    else if(is_focus_active && flags & DF_LineEditFlag_CodeContents)
+    else if((is_focus_active || is_focus_active_disabled) && flags & DF_LineEditFlag_CodeContents)
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       Temp scratch = scratch_begin(0, 0);
@@ -11029,14 +11048,14 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = *cursor;
       draw_data->mark = *mark;
-      draw_data->cursor_color = ui_top_text_cursor_color();
+      draw_data->cursor_color = is_focus_active ? ui_top_text_cursor_color() : df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
       draw_data->select_color = ui_top_text_select_color();
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
       cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), str8_prefix(edit_string, cursor->column-1)).x;
       scratch_end(scratch);
     }
-    else if(is_focus_active && !(flags & DF_LineEditFlag_CodeContents))
+    else if((is_focus_active || is_focus_active_disabled) && !(flags & DF_LineEditFlag_CodeContents))
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), edit_string).x;
@@ -11047,7 +11066,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = *cursor;
       draw_data->mark = *mark;
-      draw_data->cursor_color = ui_top_text_cursor_color();
+      draw_data->cursor_color = is_focus_active ? ui_top_text_cursor_color() : df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
       draw_data->select_color = ui_top_text_select_color();
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
@@ -11064,6 +11083,10 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       *mark = mouse_pt;
     }
     *cursor = mouse_pt;
+  }
+  if(!is_focus_active && is_focus_active_disabled && sig.pressed)
+  {
+    *cursor = *mark = mouse_pt;
   }
   
   //- rjf: focus cursor
@@ -11082,7 +11105,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       scrollable_box->view_off_target.x += min_delta;
       scrollable_box->view_off_target.x += max_delta;
     }
-    if(!is_focus_active)
+    if(!is_focus_active && !is_focus_active_disabled)
     {
       scrollable_box->view_off_target.x = scrollable_box->view_off.x = 0;
     }
