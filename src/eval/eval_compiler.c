@@ -706,11 +706,7 @@ eval_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, EVAL_String2ExprMap
     {
       EVAL_Expr *exprl = expr->children[0];
       EVAL_Expr *exprr = expr->children[1];
-      if(exprl->kind != EVAL_ExprKind_LeafIdent)
-      {
-        eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, "Left side of assignment must be an identifier.");
-      }
-      else
+      if(exprl->kind == EVAL_ExprKind_LeafIdent)
       {
         eval_string2expr_map_insert(arena, map, exprl->name, exprr);
       }
@@ -1540,6 +1536,10 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     
     case EVAL_ExprKind_Define:
     {
+      if(expr->children[0]->kind != EVAL_ExprKind_LeafIdent)
+      {
+        eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, "Left side of assignment must be an identifier.");
+      }
       result = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, expr->children[1], eout);
     }break;
     case EVAL_ExprKind_LeafIdent:
@@ -1552,7 +1552,9 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       }
       else
       {
-        result = eval_irtree_and_type_from_expr(arena, graph, rdbg, &eval_string2expr_map_nil, leaf_ident_expr, eout);
+        eval_string2expr_map_inc_poison(leaf_ident_expr_map, name);
+        result = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, leaf_ident_expr, eout);
+        eval_string2expr_map_dec_poison(leaf_ident_expr_map, name);
       }
     }break;
   }

@@ -153,6 +153,40 @@ eval_string2expr_map_insert(Arena *arena, EVAL_String2ExprMap *map, String8 stri
   existing_node->expr = expr;
 }
 
+internal void
+eval_string2expr_map_inc_poison(EVAL_String2ExprMap *map, String8 string)
+{
+  U64 hash = eval_hash_from_string(string);
+  U64 slot_idx = hash%map->slots_count;
+  for(EVAL_String2ExprMapNode *node = map->slots[slot_idx].first;
+      node != 0;
+      node = node->hash_next)
+  {
+    if(str8_match(node->string, string, 0))
+    {
+      node->poison_count += 1;
+      break;
+    }
+  }
+}
+
+internal void
+eval_string2expr_map_dec_poison(EVAL_String2ExprMap *map, String8 string)
+{
+  U64 hash = eval_hash_from_string(string);
+  U64 slot_idx = hash%map->slots_count;
+  for(EVAL_String2ExprMapNode *node = map->slots[slot_idx].first;
+      node != 0;
+      node = node->hash_next)
+  {
+    if(str8_match(node->string, string, 0) && node->poison_count > 0)
+    {
+      node->poison_count -= 1;
+      break;
+    }
+  }
+}
+
 internal EVAL_Expr *
 eval_expr_from_string(EVAL_String2ExprMap *map, String8 string)
 {
@@ -164,7 +198,7 @@ eval_expr_from_string(EVAL_String2ExprMap *map, String8 string)
     EVAL_String2ExprMapNode *existing_node = 0;
     for(EVAL_String2ExprMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
     {
-      if(str8_match(node->string, string, 0))
+      if(str8_match(node->string, string, 0) && node->poison_count == 0)
       {
         existing_node = node;
         break;
