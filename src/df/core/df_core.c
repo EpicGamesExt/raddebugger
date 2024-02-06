@@ -3939,6 +3939,9 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_TrapList *run_traps)
   df_state->ctrl_last_run_traps = ctrl_trap_list_copy(df_state->ctrl_last_run_arena, &run_traps_copy);
   df_state->ctrl_is_running = 1;
   
+  // rjf: set control context to top unwind
+  df_state->ctrl_ctx.unwind_count = 0;
+  
   scratch_end(scratch);
   dbgi_scope_close(scope);
 }
