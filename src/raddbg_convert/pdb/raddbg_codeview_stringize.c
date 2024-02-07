@@ -2330,21 +2330,26 @@ cv_stringize_leaf_array(Arena *arena, String8List *out,
 
 static void
 cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13){
-  for (CV_C13SubSectionNode *node = c13->first_sub_section;
-       node != 0;
-       node = node->next){
+  for(CV_C13SubSectionNode *node = c13->first_sub_section;
+      node != 0;
+      node = node->next)
+  {
     String8 kind_str = cv_string_from_c13_sub_section_kind(node->kind);
     str8_list_pushf(arena, out, "C13 Sub Section [%llx] (%.*s):\n",
                     node->off, str8_varg(kind_str));
     
-    switch (node->kind){
+    switch(node->kind)
+    {
       case CV_C13_SubSectionKind_Lines:
       {
-        CV_C13LinesParsed *lines = node->lines;
-        if (lines == 0){
+        if (node->lines_first == 0)
+        {
           str8_list_push(arena, out, str8_lit(" failed to extract info\n"));
         }
-        else{
+        else for(CV_C13LinesParsedNode *n = node->lines_first; n != 0; n = n->next)
+        {
+          CV_C13LinesParsed *lines = &n->v;
+          
           str8_list_pushf(arena, out, " section:    %u\n", lines->sec_idx);
           str8_list_pushf(arena, out, " file off:   %u\n", lines->file_off);
           str8_list_pushf(arena, out, " file name:  %.*s\n", str8_varg(lines->file_name));

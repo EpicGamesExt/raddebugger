@@ -3419,10 +3419,15 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         // unit's line info
         for (CV_C13SubSectionNode *node = unit_c13->first_sub_section;
              node != 0;
-             node = node->next){
-          if (node->kind == CV_C13_SubSectionKind_Lines){
-            CV_C13LinesParsed *lines = node->lines;
-            if (lines != 0){
+             node = node->next)
+        {
+          if(node->kind == CV_C13_SubSectionKind_Lines)
+          {
+            for(CV_C13LinesParsedNode *lines_n = node->lines_first;
+                lines_n != 0;
+                lines_n = lines_n->next)
+            {
+              CV_C13LinesParsed *lines = &lines_n->v;
               CONS_LineSequence seq = {0};
               seq.file_name  = lines->file_name;
               seq.voffs      = lines->voffs;

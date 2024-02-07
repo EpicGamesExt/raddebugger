@@ -2977,14 +2977,20 @@ typedef struct CV_C13LinesParsed{
   U32 line_count;
 } CV_C13LinesParsed;
 
+typedef struct CV_C13LinesParsedNode CV_C13LinesParsedNode;
+struct CV_C13LinesParsedNode
+{
+  CV_C13LinesParsedNode *next;
+  CV_C13LinesParsed v;
+};
+
 typedef struct CV_C13SubSectionNode{
   struct CV_C13SubSectionNode *next;
   CV_C13_SubSectionKind kind;
   U32 off;
   U32 size;
-  union{
-    CV_C13LinesParsed *lines;
-  };
+  CV_C13LinesParsedNode *lines_first;
+  CV_C13LinesParsedNode *lines_last;
 } CV_C13SubSectionNode;
 
 typedef struct CV_C13Parsed{

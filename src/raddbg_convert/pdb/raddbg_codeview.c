@@ -399,76 +399,90 @@ cv_c13_from_data(Arena *arena, String8 c13_data,
       {
         // read header
         if (sizeof(CV_C13_SubSecLinesHeader) <= cap){
-          CV_C13_SubSecLinesHeader *hdr = (CV_C13_SubSecLinesHeader*)first;
+          U32 read_off = 0;
+          U64 read_off_opl = node->size;
+          CV_C13_SubSecLinesHeader *hdr = (CV_C13_SubSecLinesHeader*)(first + read_off);
+          read_off += sizeof(*hdr);
           
-          // read file
-          U32 file_info_off = sizeof(*hdr);
-          if (file_info_off + sizeof(CV_C13_File) <= cap){
-            CV_C13_File *file = (CV_C13_File*)(first + file_info_off);
+          // extract top level info
+          U32 sec_idx = hdr->sec;
+          B32 has_cols = !!(hdr->flags & CV_C13_SubSecLinesFlag_HasColumns);
+          U64 secrel_off = hdr->sec_off;
+          U64 secrel_opl = secrel_off + hdr->len;
+          U64 sec_base_off = sections->sections[sec_idx - 1].voff;
+          
+          // rjf: bad section index -> skip
+          if(sec_idx < 1 || sections->count < sec_idx)
+          {
+            continue;
+          }
+          
+          // read files
+          for(;read_off+sizeof(CV_C13_File) <= read_off_opl;)
+          {
+            // rjf: grab next file header
+            CV_C13_File *file = (CV_C13_File*)(first + read_off);
+            U32 file_off = file->file_off;
+            U32 line_count_unclamped = file->num_lines;
+            U32 block_size = file->block_size;
             
-            // extract top level info
-            U32 sec_idx = hdr->sec;
-            if (1 <= sec_idx && sec_idx <= sections->count){
-              B32 has_cols = !!(hdr->flags & CV_C13_SubSecLinesFlag_HasColumns);
-              U64 secrel_off = hdr->sec_off;
-              U64 secrel_opl = secrel_off + hdr->len;
-              
-              U64 sec_base_off = sections->sections[sec_idx - 1].voff;
-              
-              U32 file_off = file->file_off;
-              U32 line_count_unclamped = file->num_lines;
-              U32 block_size = file->block_size;
-              
-              // file_name from file_off
-              String8 file_name = {0};
-              if (file_off + sizeof(CV_C13_Checksum) <= file_chksms->size){
-                CV_C13_Checksum *checksum = (CV_C13_Checksum*)(c13_data.str + file_chksms->off + file_off);
-                U32 name_off = checksum->name_off;
-                file_name = pdb_strtbl_string_from_off(strtbl, name_off);
-              }
-              
-              // array layouts
-              U32 line_item_size = sizeof(CV_C13_Line);
-              if (has_cols){
-                line_item_size += sizeof(CV_C13_Column);
-              }
-              
-              U32 line_array_off = file_info_off + sizeof(*file);
-              U32 line_count_max = (cap - line_array_off)/line_item_size;
-              U32 line_count = ClampTop(line_count_unclamped, line_count_max);
-              
-              U32 col_array_off = line_array_off + line_count*sizeof(CV_C13_Line);
-              
-              // parse lines
-              U64 *voffs = push_array_no_zero(arena, U64, line_count + 1);
-              U32 *line_nums = push_array_no_zero(arena, U32, line_count);
-              
-              {
-                CV_C13_Line *line_ptr = (CV_C13_Line*)(first + line_array_off);
-                CV_C13_Line *line_opl = line_ptr + line_count;
-                
-                // TODO(allen): check order correctness here
-                
-                U32 i = 0;
-                for (; line_ptr < line_opl; line_ptr += 1, i += 1){
-                  voffs[i] = line_ptr->off + secrel_off + sec_base_off;
-                  line_nums[i] = CV_C13_LineFlags_ExtractLineNumber(line_ptr->flags);
-                }
-                voffs[i] = secrel_opl + sec_base_off;
-              }
-              
-              // emit parsed lines
-              CV_C13LinesParsed *lines_parsed = push_array(arena, CV_C13LinesParsed, 1);
-              lines_parsed->sec_idx = sec_idx;
-              lines_parsed->file_off = file_off;
-              lines_parsed->secrel_base_off = secrel_off;
-              lines_parsed->file_name = file_name;
-              lines_parsed->voffs  = voffs;
-              lines_parsed->line_nums = line_nums;
-              lines_parsed->line_count = line_count;
-              
-              node->lines = lines_parsed;
+            // file_name from file_off
+            String8 file_name = {0};
+            if (file_off + sizeof(CV_C13_Checksum) <= file_chksms->size){
+              CV_C13_Checksum *checksum = (CV_C13_Checksum*)(c13_data.str + file_chksms->off + file_off);
+              U32 name_off = checksum->name_off;
+              file_name = pdb_strtbl_string_from_off(strtbl, name_off);
             }
+            
+            // array layouts
+            U32 line_item_size = sizeof(CV_C13_Line);
+            if (has_cols){
+              line_item_size += sizeof(CV_C13_Column);
+            }
+            
+            U32 line_array_off = read_off + sizeof(*file);
+            U32 line_count_max = (read_off_opl - line_array_off) / line_item_size;
+            U32 line_count = ClampTop(line_count_unclamped, line_count_max);
+            
+            U32 col_array_off = line_array_off + line_count*sizeof(CV_C13_Line);
+            
+            // parse lines
+            U64 *voffs = push_array_no_zero(arena, U64, line_count + 1);
+            U32 *line_nums = push_array_no_zero(arena, U32, line_count);
+            
+            {
+              CV_C13_Line *line_ptr = (CV_C13_Line*)(first + line_array_off);
+              CV_C13_Line *line_opl = line_ptr + line_count;
+              
+              // TODO(allen): check order correctness here
+              
+              U32 i = 0;
+              for (; line_ptr < line_opl; line_ptr += 1, i += 1){
+                voffs[i] = line_ptr->off + secrel_off + sec_base_off;
+                if(voffs[i] == 0x0002318c)
+                {
+                  int x = 0;
+                }
+                line_nums[i] = CV_C13_LineFlags_ExtractLineNumber(line_ptr->flags);
+              }
+              voffs[i] = secrel_opl + sec_base_off;
+            }
+            
+            // emit parsed lines
+            CV_C13LinesParsedNode *lines_parsed_node = push_array(arena, CV_C13LinesParsedNode, 1);
+            CV_C13LinesParsed *lines_parsed = &lines_parsed_node->v;
+            lines_parsed->sec_idx = sec_idx;
+            lines_parsed->file_off = file_off;
+            lines_parsed->secrel_base_off = secrel_off;
+            lines_parsed->file_name = file_name;
+            lines_parsed->voffs  = voffs;
+            lines_parsed->line_nums = line_nums;
+            lines_parsed->line_count = line_count;
+            SLLQueuePush(node->lines_first, node->lines_last, lines_parsed_node);
+            
+            // rjf: advance
+            read_off += sizeof(*file);
+            read_off += line_item_size*line_count;
           }
         }
       }break;
