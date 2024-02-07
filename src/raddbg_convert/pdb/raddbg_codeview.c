@@ -459,10 +459,6 @@ cv_c13_from_data(Arena *arena, String8 c13_data,
               U32 i = 0;
               for (; line_ptr < line_opl; line_ptr += 1, i += 1){
                 voffs[i] = line_ptr->off + secrel_off + sec_base_off;
-                if(voffs[i] == 0x0002318c)
-                {
-                  int x = 0;
-                }
                 line_nums[i] = CV_C13_LineFlags_ExtractLineNumber(line_ptr->flags);
               }
               voffs[i] = secrel_opl + sec_base_off;
