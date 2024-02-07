@@ -610,9 +610,7 @@ df_eval_root_from_expand_key(DF_EvalWatchViewState *ews, DF_EvalView *eval_view,
   DF_EvalRoot *root = 0;
   for(DF_EvalRoot *r = ews->first_root; r != 0; r = r->next)
   {
-    DF_ExpandKey parent_key = df_expand_key_make(5381, (U64)r);
-    U64 parent_key_hash = df_hash_from_expand_key(parent_key);
-    DF_ExpandKey key = df_expand_key_make(parent_key_hash, df_hash_from_string(df_string_from_eval_root(r)));
+    DF_ExpandKey key = df_expand_key_from_eval_root(r);
     if(df_expand_key_match(key, expand_key))
     {
       root = r;
@@ -627,6 +625,21 @@ df_string_from_eval_root(DF_EvalRoot *root)
 {
   String8 string = str8(root->expr_buffer, root->expr_buffer_string_size);
   return string;
+}
+
+internal DF_ExpandKey
+df_parent_expand_key_from_eval_root(DF_EvalRoot *root)
+{
+  DF_ExpandKey parent_key = df_expand_key_make(5381, (U64)root);
+  return parent_key;
+}
+
+internal DF_ExpandKey
+df_expand_key_from_eval_root(DF_EvalRoot *root)
+{
+  DF_ExpandKey parent_key = df_parent_expand_key_from_eval_root(root);
+  DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), (U64)root);
+  return key;
 }
 
 //- rjf: windowed watch tree visualization (both single-line and multi-line)
@@ -655,7 +668,9 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
         if(matches.count == matches.needle_part_count)
         {
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, (U64)root);
+          DF_ExpandKey parent_key = df_parent_expand_key_from_eval_root(root);
+          DF_ExpandKey key = df_expand_key_from_eval_root(root);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -679,7 +694,9 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
         if(matches.count == matches.needle_part_count)
         {
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, num);
+          DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -689,7 +706,9 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
         if(matches.count == matches.needle_part_count)
         {
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, num);
+          DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -707,7 +726,9 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
         if(matches.count == matches.needle_part_count)
         {
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_num(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, num);
+          DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -1624,7 +1645,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   {
     DF_EvalWatchViewColumnKind commit_column = (DF_EvalWatchViewColumnKind)cursor_tbl.x;
     cursor_tbl = next_cursor_tbl;
-    if(edit_commit)
+    if(commit_row != 0 && edit_commit)
     {
       ewv->input_editing = 0;
       String8 commit_string = str8(ewv->input_buffer, ewv->input_size);
@@ -1653,6 +1674,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             if(!root && df_expand_key_match(commit_row->key, empty_row_key))
             {
               root = df_eval_root_alloc(view, ewv);
+              DF_ExpandKey parent_key = df_parent_expand_key_from_eval_root(root);
+              DF_ExpandKey key = df_expand_key_from_eval_root(root);
+              df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, parent_key, key, 0);
+              df_eval_view_set_key_rule(eval_view, key, str8_lit(""));
             }
             if(root != 0)
             {
@@ -6650,6 +6675,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Watch)
   
   // rjf: add roots for watches
   {
+    Temp scratch = scratch_begin(0, 0);
     DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
     DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
     for(DF_CfgNode *expr = cfg_root->first; expr != &df_g_nil_cfg_node; expr = expr->next)
@@ -6657,17 +6683,17 @@ DF_VIEW_SETUP_FUNCTION_DEF(Watch)
       if(expr->flags & DF_CfgNodeFlag_StringLiteral)
       {
         DF_EvalRoot *root = df_eval_root_alloc(view, ewv);
-        DF_ExpandKey parent_key = df_expand_key_make(5381, (U64)root);
-        U64 parent_key_hash = df_hash_from_expand_key(parent_key);
-        df_eval_root_equip_string(root, expr->string);
+        DF_ExpandKey key = df_expand_key_from_eval_root(root);
+        String8 expr_raw = df_cfg_raw_from_escaped_string(scratch.arena, expr->string);
+        df_eval_root_equip_string(root, expr_raw);
         if(expr->first != &df_g_nil_cfg_node)
         {
-          DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, df_hash_from_string(expr->string));
-          String8 view_rule = expr->first->string;
-          df_eval_view_set_key_rule(eval_view, root_key, view_rule);
+          String8 view_rule_raw = df_cfg_raw_from_escaped_string(scratch.arena, expr->first->string);
+          df_eval_view_set_key_rule(eval_view, key, view_rule_raw);
         }
       }
     }
+    scratch_end(scratch);
   }
   
   ProfEnd();
@@ -6683,15 +6709,15 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch)
   {
     for(DF_EvalRoot *root = ewv->first_root; root != 0; root = root->next)
     {
-      DF_ExpandKey parent_key = df_expand_key_make(5381, (U64)root);
-      U64 parent_key_hash = df_hash_from_expand_key(parent_key);
+      DF_ExpandKey key = df_expand_key_from_eval_root(root);
       String8 string = df_string_from_eval_root(root);
-      str8_list_pushf(arena, &strs, "\"%S\"", string);
-      DF_ExpandKey root_key = df_expand_key_make(parent_key_hash, df_hash_from_string(string));
-      String8 view_rule = df_eval_view_rule_from_key(eval_view, root_key);
-      if(view_rule.size != 0)
+      String8 string_escaped = df_cfg_escaped_from_raw_string(scratch.arena, string);
+      str8_list_pushf(arena, &strs, "\"%S\"", string_escaped);
+      String8 view_rule = df_eval_view_rule_from_key(eval_view, key);
+      String8 view_rule_escaped = df_cfg_escaped_from_raw_string(scratch.arena, view_rule);
+      if(view_rule_escaped.size != 0)
       {
-        str8_list_pushf(arena, &strs, ":{\"%S\"}", view_rule);
+        str8_list_pushf(arena, &strs, ":{\"%S\"}", view_rule_escaped);
       }
       if(root->next != 0)
       {

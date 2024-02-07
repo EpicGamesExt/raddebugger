@@ -5429,13 +5429,11 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
 }
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, String8 expr, U64 num)
+df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key)
 {
   ProfBeginFunction();
   DF_EvalVizBlockList blocks = {0};
   {
-    DF_ExpandKey start_parent_key = df_expand_key_make(5381, num);
-    DF_ExpandKey start_key = df_expand_key_make(df_hash_from_expand_key(start_parent_key), df_hash_from_string(expr));
     DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, macro_map, expr);
     U64 expr_comma_pos = str8_find_needle(expr, 0, str8_lit(","), 0);
     String8List default_view_rules = {0};
@@ -5460,14 +5458,14 @@ df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, 
         str8_list_pushf(arena, &default_view_rules, "array:{%S}", expr_extension);
       }
     }
-    String8 view_rule_string = df_eval_view_rule_from_key(eval_view, start_key);
+    String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
     DF_CfgTable view_rule_table = {0};
     for(String8Node *n = default_view_rules.first; n != 0; n = n->next)
     {
       df_cfg_table_push_unparsed_string(arena, &view_rule_table, n->string, DF_CfgSrc_User);
     }
     df_cfg_table_push_unparsed_string(arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, macro_map, start_parent_key, start_key, expr, eval, 0, &view_rule_table, 0, &blocks);
+    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, macro_map, parent_key, key, expr, eval, 0, &view_rule_table, 0, &blocks);
   }
   ProfEnd();
   return blocks;

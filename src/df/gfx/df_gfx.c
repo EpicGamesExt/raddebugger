@@ -5105,7 +5105,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           U64 expr_hash = df_hash_from_string(expr);
           DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
           DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_num(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, expr, 1);
+          DF_ExpandKey parent_key = df_expand_key_make(5381, 1);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
+          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, expr, parent_key, key);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
