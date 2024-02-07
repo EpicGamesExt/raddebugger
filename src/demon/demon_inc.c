@@ -4,6 +4,7 @@
 #include "demon_core.c"
 #include "demon_common.c"
 #include "demon_accel.c"
+#include "demon_os.c"
 
 #if OS_WINDOWS
 # include "win32/demon_os_win32.c"

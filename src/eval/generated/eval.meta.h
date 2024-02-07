@@ -46,6 +46,8 @@ EVAL_ExprKind_TypeIdent,
 EVAL_ExprKind_Ptr,
 EVAL_ExprKind_Array,
 EVAL_ExprKind_Func,
+EVAL_ExprKind_Define,
+EVAL_ExprKind_LeafIdent,
 EVAL_ExprKind_COUNT
 };
 
@@ -88,6 +90,8 @@ U8 eval_expr_kind_child_counts[] =
 1,
 2,
 1,
+2,
+0,
 };
 
 String8 eval_expr_kind_strings[] =
@@ -129,6 +133,8 @@ str8_lit_comp("TypeIdent"),
 str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
 str8_lit_comp("Func"),
+str8_lit_comp("Define"),
+str8_lit_comp("LeafIdent"),
 };
 
 String8 eval_expr_op_strings[] =
@@ -170,6 +176,8 @@ str8_lit_comp("type_ident"),
 str8_lit_comp("ptr"),
 str8_lit_comp("array"),
 str8_lit_comp("function"),
+str8_lit_comp("="),
+str8_lit_comp("leaf_ident"),
 };
 
 

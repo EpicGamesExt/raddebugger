@@ -10,44 +10,44 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
   ProfBeginFunction();
   Assert(ARENA_HEADER_SIZE < init_cmt && init_cmt <= init_res);
   
-  void *memory;
-  U64 res;
-  U64 cmt;
-  
+  void *memory = 0;
+  U64 res = 0;
+  U64 cmt = 0;
   B32 large_pages = os_large_pages_enabled();
-  if (large_pages) {
+  if(large_pages)
+  {
     U64 page_size = os_large_page_size();
     res = AlignPow2(init_res, page_size);
-    
 #if OS_WINDOWS
     cmt = res;
 #else
     cmt = AlignPow2(init_cmt, page_size);
 #endif
-    
     memory = os_reserve_large(res);
-    if (!os_commit_large(memory, cmt)) {
-      memory = 0;
-      os_release(memory, res);
-    }
-  } else {
-    U64 page_size = os_page_size();
-    res = AlignPow2(init_res, page_size);
-    cmt = AlignPow2(init_cmt, page_size);
-    
-    memory = os_reserve(res);
-    if (!os_commit(memory, cmt)) {
+    if(!os_commit_large(memory, cmt))
+    {
       memory = 0;
       os_release(memory, res);
     }
   }
-  Assert(memory);
-  
-  AsanPoisonMemoryRegion(memory, cmt);
-  AsanUnpoisonMemoryRegion(memory, ARENA_HEADER_SIZE);
+  else
+  {
+    U64 page_size = os_page_size();
+    res = AlignPow2(init_res, page_size);
+    cmt = AlignPow2(init_cmt, page_size);
+    memory = os_reserve(res);
+    if(!os_commit(memory, cmt))
+    {
+      memory = 0;
+      os_release(memory, res);
+    }
+  }
   
   Arena *arena = (Arena*)memory;
-  if (arena) {
+  if(arena)
+  {
+    AsanPoisonMemoryRegion(memory, cmt);
+    AsanUnpoisonMemoryRegion(memory, ARENA_HEADER_SIZE);
     arena->prev        = 0;
     arena->current     = arena;
     arena->base_pos    = 0;
@@ -148,7 +148,6 @@ arena_push__impl(Arena *arena, U64 size)
       cmt_new_size    = cmt_new_clamped - current->cmt;
       is_cmt_ok       = os_commit((U8*)current + current->cmt, cmt_new_size);
     }
-    Assert(is_cmt_ok);
     
     if (is_cmt_ok) {
       current->cmt = cmt_new_clamped;

@@ -4,17 +4,20 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [x] hover-eval when window is not focused - maybe just start directly
+//     using mouse-move events here
+// [x] CRT asserts - stepping over int 29 should work just like stepping over
+//     an int3
+// [ ] committing needs to happen when navigating focus away for any reason
+//
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
 // [ ] drag/drop tab cleanup
 // [ ] target/breakpoint/watch-pin reordering
 // [ ] watch window reordering
-// [x] query views, cleanup & floating - maybe merge "applies to view" vs. not
 // [ ] standard way to filter
 // [ ] visualize remapped files (via path map)
-// [ ] hovering truncated string for a short time -> tooltip with full wrapped
-//     string
 // [ ] theme lister -> fonts & font sizes
 // [ ] font lister
 // [ ] per-panel font size overrides
@@ -34,8 +37,6 @@
 //
 //  [ ]  it would be nice to have "show in explorer" for right click on source
 //       file tab (opens explorer & selects the file)
-//  [x]  it would be nice if Alt+o in source file would switch between .h and
-//       .c/cpp file (just look for same name in same folder)
 //
 //  [ ]  what's up with decimal number coloring where every group of 3 are in
 //       different color? can I turn it off? And why sometimes digits in number
@@ -43,9 +44,12 @@
 //       always have the same color ordering?
 //
 //  [ ]  middle mouse button on tab should close it
+// [ ] pipe failure-to-launch errors back to frontend
 
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
+//
+// [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
 //
@@ -72,17 +76,10 @@
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
-// [ ] Watch Window Type Evaluation
-// [ ] Globals, Thread-Locals, Types Views
 // [ ] Watch Window Filtering
 //
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
-//
-// [ ] escaping in config files - breakpoint labels etc.
-// [ ] focus changing between query bar & panel content via mouse
-//
-// [ ] ** while typing, "Alt" Windows menu things should not happen
 //
 // [ ] visualize conversion failures
 //
@@ -93,16 +90,6 @@
 //      sense once I use the debugger more, but I just thought I'd make a note
 //      to say that I was confused about it after reading the manual, so
 //      perhaps you could elaborate a little more on it in there.
-//
-// [ ] ** "Find Name" may not be working as advertised. In the description, it
-//     says you can jump to a file, but if I type in the complete filename of
-//     a file in the project and hit return, it just turns red and says it
-//     couldn't find it. This happens even if the file is already open in a
-//     tab.
-//   [ ] "Find Name" would be a lot more useful if you could type partial
-//       things, and it displayed a list, more like what happens in a
-//       traditional text editor. Typing the entire name of a function to jump
-//       to it is too laborious.
 //
 // [ ] Right-clicking on a thread in the Scheduler window pops up a context
 //     menu, but you can't actually see it because the tooltip for the thread
@@ -145,14 +132,6 @@
 //      have alternating bright/dim letters to show sections of a number. Is
 //      this in the theme colors somewhere?
 //
-//  [ ] For breakpoint-on-function, it would be great if it showed a list of
-//      (partial) matches as you type, so you can stop typing once it gets the
-//      right function instead of having to type the entire function name.
-//
-//  [ ] Hovering over a source tab that is clipped should probably display the
-//      full thing that was in that tab (like the whole filename, etc.). Right
-//      now, hovering does nothing AFAICT.
-//
 //  [ ] ** I couldn't figure out how to really view threads in the debugger.
 //      The only place I found a thread list was in "The Scheduler", but it
 //      only lists threads by ID, which is hard to use. I can hover over them
@@ -185,18 +164,6 @@
 //  [ ] I had to go into the user file to change the font. That should probably
 //      be in the theme window?
 //
-//  [ ] The way the "commands" view worked was idiosyncratic. All the other
-//      views stay up, but that one goes away whenever I select a command for
-//      some reason.
-//   [ ] Also, I could not move the commands window anywhere AFAICT. It seems
-//       to just pop up over whatever window I currently have selected. This
-//       would make sense for a hotkey (which I assume is the way it was
-//       designed), but it seems like it should be permanent if you can select
-//       it from the View menu.
-//  [ ] If the command window is not wide enough, you cannot read the
-//      description of a command because it doesn't word-wrap, nor can you
-//      hover over it to get the description in a tooltip (AFAICT).
-//
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
 //
@@ -219,19 +186,12 @@
 //      opens the context window. It seems like maybe menus should be right,
 //      and left should do the default action, more consistently?
 //
-//  [ ] Hovering over disassembly highlights blocks of instructions, which I
-//      assume correspond to source lines. But perhaps it should also highlight
-//      the source lines? The inverse hover works (you hover over source, and
-//      it highlights ASM), but ASM->source doesn't.
-//
 //  [ ] It wasn't clear to me how you save a user or profile file. I can see
 //      how to load them, but not how you save them. Obviously I can just copy
 //      the files myself in the shell, but it seemed weird that there was no
 //      "save" option in the menus.
 //
 // [ ] @cleanup @feature double & triple click select in source views
-// [ ] @feature hovering truncated text in UI for some amount of time -> show
-//     tooltip with full text
 // [ ] @feature disasm keyboard navigation & copy/paste
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
@@ -239,14 +199,10 @@
 //     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
 //
-// [ ] C++ single & multi inheritance member visualization in watch window
+// [ ] C++ virtual inheritance member visualization in watch window
 
 ////////////////////////////////
 //~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
-//
-//  [ ] ** Directory picking is kind of busted, as it goes through the same
-//      path as file picking, and this doesn't give the user a clean path to
-//      actually pick a folder, just navigate with them
 //
 //  [ ] ** In the call stack, I would like to be able to click quickly and move
 //      around the stack. Right now, you can do that with the first and third
@@ -325,6 +281,7 @@
 // [ ] Fancy View Rules
 //  [ ] table column boundaries should be checked against *AFTER* table
 //      contents, not before
+//  [ ] `array:(x, y)` - multidimensional array
 //  [ ] `text[:lang]` - interpret memory as text, in lang `lang`
 //  [ ] `disasm:arch` - interpret memory as machine code for isa `arch`
 //  [ ] `memory` - view memory in usual memory hex-editor view
@@ -350,6 +307,7 @@
 //
 // [ ] @feature processor/data breakpoints
 // [ ] @feature automatically snap to search matches when searching source files
+// [ ] automatically start search query with selected text
 // [ ] @feature entity views: filtering & reordering
 
 ////////////////////////////////
@@ -446,13 +404,19 @@
 
 #define RADDBG_VERSION_MAJOR 0
 #define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 6
+#define RADDBG_VERSION_PATCH 8
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
 #if defined(NDEBUG)
-# define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ ""
+# define RADDBG_BUILD_STR ""
 #else
-# define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ " [Debug]"
+# define RADDBG_BUILD_STR " [Debug]"
 #endif
+#if defined(RADDBG_GIT)
+# define RADDBG_GIT_STR " [" RADDBG_GIT "]"
+#else
+# define RADDBG_GIT_STR ""
+#endif
+#define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ "" RADDBG_GIT_STR RADDBG_BUILD_STR
 #define RADDBG_GITHUB_ISSUES "https://github.com/EpicGames/raddebugger/issues"
 
 ////////////////////////////////

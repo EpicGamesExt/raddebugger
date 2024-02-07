@@ -406,13 +406,11 @@ push_str8_cat(Arena *arena, String8 s1, String8 s2){
 
 internal String8
 push_str8_copy(Arena *arena, String8 s){
-  //ProfBeginFunction();
   String8 str;
   str.size = s.size;
   str.str = push_array_no_zero(arena, U8, str.size + 1);
   MemoryCopy(str.str, s.str, s.size);
   str.str[str.size] = 0;
-  //ProfEnd();
   return(str);
 }
 
@@ -541,64 +539,6 @@ try_s64_from_str8_c_rules(String8 string, S64 *x){
   B32 is_integer = try_u64_from_str8_c_rules(string_tail, &x_u64);
   *x = x_u64*sign;
   return(is_integer);
-}
-
-//- rjf: string -> integer (base64 & base16)
-
-internal U64
-base64_size_from_data_size(U64 size_in_bytes){
-  U64 bits = size_in_bytes*8;
-  U64 base64_size = (bits + 5)/6;
-  return(base64_size);
-}
-
-internal U64
-base64_from_data(U8 *dst, U8 *src, U64 src_size){
-  U8 *dst_base = dst;
-  U8 *opl = src + src_size;
-  U32 bit_num = 0;
-  if (src < opl){
-    U8 byte = *src;
-    for (;;){
-      U32 x = 0;
-      for (U32 i = 0; i < 6; i += 1){
-        x |= ((byte >> bit_num) & 1) << i;
-        bit_num += 1;
-        if (bit_num == 8){
-          bit_num = 0;
-          src += 1;
-          byte = (src < opl)?(*src):0;
-        }
-      }
-      *dst = base64[x];
-      dst += 1;
-      if (src >= opl){
-        break;
-      }
-    }
-  }
-  return(dst - dst_base);
-}
-
-internal U64
-base16_size_from_data_size(U64 size_in_bytes){
-  U64 base16_size = size_in_bytes*2;
-  return(base16_size);
-}
-
-internal U64
-base16_from_data(U8 *dst, U8 *src, U64 src_size){
-  U8 *dst_base = dst;
-  U8 *opl = src + src_size;
-  for (;src < opl;){
-    U8 byte = *src;
-    *dst = integer_symbols[byte & 0xF];
-    dst += 1;
-    *dst = integer_symbols[byte >> 4];
-    dst += 1;
-    src += 1;
-  }
-  return(dst - dst_base);
 }
 
 //- rjf: integer -> string
@@ -1341,7 +1281,7 @@ utf16_decode(U16 *str, U64 max){
   result.codepoint = str[0];
   result.inc = 1;
   if (max > 1 && 0xD800 <= str[0] && str[0] < 0xDC00 && 0xDC00 <= str[1] && str[1] < 0xE000){
-    result.codepoint = ((str[0] - 0xD800) << 10) | (str[1] - 0xDC00);
+    result.codepoint = ((str[0] - 0xD800) << 10) | (str[1] - 0xDC00) + 0x10000;
     result.inc = 2;
   }
   return(result);
@@ -1655,6 +1595,67 @@ rgba_from_hex_string_4f32(String8 hex_string)
   }
   Vec4F32 rgba = v4f32(byte_vals[0]/255.f, byte_vals[1]/255.f, byte_vals[2]/255.f, byte_vals[3]/255.f);
   return rgba;
+}
+
+////////////////////////////////
+//~ rjf: String Fuzzy Matching
+
+internal FuzzyMatchRangeList
+fuzzy_match_find(Arena *arena, String8 needle, String8 haystack)
+{
+  FuzzyMatchRangeList result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List needles = str8_split(scratch.arena, needle, (U8*)" ", 1, 0);
+  result.needle_part_count = needles.node_count;
+  for(String8Node *needle_n = needles.first; needle_n != 0; needle_n = needle_n->next)
+  {
+    U64 find_pos = 0;
+    for(;find_pos < haystack.size;)
+    {
+      find_pos = str8_find_needle(haystack, find_pos, needle_n->string, StringMatchFlag_CaseInsensitive);
+      B32 is_in_gathered_ranges = 0;
+      for(FuzzyMatchRangeNode *n = result.first; n != 0; n = n->next)
+      {
+        if(n->range.min <= find_pos && find_pos < n->range.max)
+        {
+          is_in_gathered_ranges = 1;
+          find_pos = n->range.max;
+          break;
+        }
+      }
+      if(!is_in_gathered_ranges)
+      {
+        break;
+      }
+    }
+    if(find_pos < haystack.size)
+    {
+      Rng1U64 range = r1u64(find_pos, find_pos+needle_n->string.size);
+      FuzzyMatchRangeNode *n = push_array(arena, FuzzyMatchRangeNode, 1);
+      n->range = range;
+      SLLQueuePush(result.first, result.last, n);
+      result.count += 1;
+      result.total_dim += dim_1u64(range);
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal FuzzyMatchRangeList
+fuzzy_match_range_list_copy(Arena *arena, FuzzyMatchRangeList *src)
+{
+  FuzzyMatchRangeList dst = {0};
+  for(FuzzyMatchRangeNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  {
+    FuzzyMatchRangeNode *dst_n = push_array(arena, FuzzyMatchRangeNode, 1);
+    SLLQueuePush(dst.first, dst.last, dst_n);
+    dst_n->range = src_n->range;
+  }
+  dst.count = src->count;
+  dst.needle_part_count = src->needle_part_count;
+  dst.total_dim = src->total_dim;
+  return dst;
 }
 
 ////////////////////////////////

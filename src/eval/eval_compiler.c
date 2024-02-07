@@ -2,48 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ allen: Eval Errors
-
-internal void
-eval_error(Arena *arena, EVAL_ErrorList *list, EVAL_ErrorKind kind, void *location, String8 text){
-  EVAL_Error *error = push_array_no_zero(arena, EVAL_Error, 1);
-  SLLQueuePush(list->first, list->last, error);
-  list->count += 1;
-  list->max_kind = Max(kind, list->max_kind);
-  error->kind = kind;
-  error->location = location;
-  error->text = text;
-}
-
-internal void
-eval_errorf(Arena *arena, EVAL_ErrorList *list, EVAL_ErrorKind kind, void *location, char *fmt, ...){
-  va_list args;
-  va_start(args, fmt);
-  String8 text = push_str8fv(arena, fmt, args);
-  va_end(args);
-  eval_error(arena, list, kind, location, text);
-}
-
-internal void
-eval_error_list_concat_in_place(EVAL_ErrorList *dst, EVAL_ErrorList *to_push){
-  if (dst->last != 0){
-    if (to_push->last != 0){
-      dst->last->next = to_push->first;
-      dst->last = to_push->last;
-      dst->count += to_push->count;
-    }
-  }
-  else{
-    *dst = *to_push;
-  }
-  MemoryZeroStruct(to_push);
-}
-
-////////////////////////////////
 //~ allen: EVAL Bytecode Helpers
 
 internal String8
 eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
+  ProfBeginFunction();
   // allocate output
   U64 size = list->encoded_size;
   U8 *str = push_array_no_zero(arena, U8, size);
@@ -94,6 +57,7 @@ eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
   String8 result = {0};
   result.size = size;
   result.str = str;
+  ProfEnd();
   return(result);
 }
 
@@ -278,6 +242,16 @@ eval_expr_leaf_member(Arena *arena, void *location, String8 name){
   EVAL_Expr *result = push_array(arena, EVAL_Expr, 1);
   result->location = location;
   result->kind = EVAL_ExprKind_LeafMember;
+  result->name = name;
+  return(result);
+}
+
+internal EVAL_Expr*
+eval_expr_leaf_ident(Arena *arena, void *location, String8 name)
+{
+  EVAL_Expr *result = push_array(arena, EVAL_Expr, 1);
+  result->location = location;
+  result->kind = EVAL_ExprKind_LeafIdent;
   result->name = name;
   return(result);
 }
@@ -715,6 +689,31 @@ eval_irtree_resolve_to_value(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg,
 ////////////////////////////////
 //~ allen: EVAL Compiler Phases
 
+internal void
+eval_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, EVAL_String2ExprMap *map, EVAL_Expr *expr, EVAL_ErrorList *eout)
+{
+  switch(expr->kind)
+  {
+    default:
+    {
+      U64 children_count = eval_expr_kind_child_counts[expr->kind];
+      for(U64 idx = 0; idx < children_count; idx += 1)
+      {
+        eval_push_leaf_ident_exprs_from_expr__in_place(arena, map, expr->children[idx], eout);
+      }
+    }break;
+    case EVAL_ExprKind_Define:
+    {
+      EVAL_Expr *exprl = expr->children[0];
+      EVAL_Expr *exprr = expr->children[1];
+      if(exprl->kind == EVAL_ExprKind_LeafIdent)
+      {
+        eval_string2expr_map_insert(arena, map, exprl->name, exprr);
+      }
+    }break;
+  }
+}
+
 internal TG_Key
 eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout){
   TG_Key result = zero_struct;
@@ -759,8 +758,9 @@ eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVA
 }
 
 internal EVAL_IRTreeAndType
-eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout)
+eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, EVAL_String2ExprMap *leaf_ident_expr_map, EVAL_Expr *expr, EVAL_ErrorList *eout)
 {
+  ProfBeginFunction();
   EVAL_IRTreeAndType result = {0};
   result.tree = &eval_irtree_nil;
   
@@ -777,8 +777,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_Expr *exprl = expr->children[0];
       EVAL_Expr *exprr = expr->children[1];
       
-      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprl, eout);
-      EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprr, eout);
+      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprl, eout);
+      EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprr, eout);
       
       if (l.tree->op != 0 && r.tree->op != 0){      
         TG_Key l_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l.type_key);
@@ -857,7 +857,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_Expr *exprl = expr->children[0];
       EVAL_Expr *exprr = expr->children[1];
       
-      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprl, eout);
+      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprl, eout);
       
       if (l.tree->op != 0 && !tg_key_match(tg_key_zero(), l.type_key)){
         TG_Key l_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l.type_key);
@@ -975,7 +975,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     {
       EVAL_Expr *exprc = expr->children[0];
       
-      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
+      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
       
       if (c.tree->op != 0){
         TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
@@ -1032,7 +1032,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     case EVAL_ExprKind_Address:
     {
       EVAL_Expr *exprc = expr->children[0];
-      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
+      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
       if(c.tree->op != 0 && !tg_key_match(c.type_key, tg_key_zero()))
       {
         TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
@@ -1066,7 +1066,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       
       TG_Key cast_type_key = eval_type_from_type_expr(arena, graph, rdbg, exprl, eout);
       TG_Kind cast_type_kind = tg_kind_from_key(cast_type_key);
-      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprr, eout);
+      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprr, eout);
       
       if(cast_type_kind != TG_Kind_Null && c.tree->op != 0)
       {
@@ -1132,7 +1132,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
         // size of value expression
         default:
         {
-          EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
+          EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
           type_key = c.type_key;
         }break;
       }
@@ -1160,7 +1160,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     {
       EVAL_Expr *exprc = expr->children[0];
       
-      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
+      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
       if (c.tree->op != 0){
         TG_Key c_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, c.type_key);
         TG_Key p_type = eval_type_promote(graph, rdbg, c_restype);
@@ -1214,8 +1214,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_Expr *exprl = expr->children[0];
       EVAL_Expr *exprr = expr->children[1];
       
-      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprl, eout);
-      EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprr, eout);
+      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprl, eout);
+      EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprr, eout);
       
       if (l.tree->op != 0 && r.tree->op != 0){
         TG_Key l_restype = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, l.type_key);
@@ -1404,9 +1404,9 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
       EVAL_Expr *exprl = expr->children[1];
       EVAL_Expr *exprr = expr->children[2];
       
-      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprc, eout);
-      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprl, eout);
-      EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, exprr, eout);
+      EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
+      EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprl, eout);
+      EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprr, eout);
       
       if (l.tree->op != 0 && r.tree->op != 0 && c.tree->op != 0){
         
@@ -1533,13 +1533,39 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdb
     {
       eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, "Type expression not expected.");
     }break;
+    
+    case EVAL_ExprKind_Define:
+    {
+      if(expr->children[0]->kind != EVAL_ExprKind_LeafIdent)
+      {
+        eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, "Left side of assignment must be an identifier.");
+      }
+      result = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, expr->children[1], eout);
+    }break;
+    case EVAL_ExprKind_LeafIdent:
+    {
+      String8 name = expr->name;
+      EVAL_Expr *leaf_ident_expr = eval_expr_from_string(leaf_ident_expr_map, name);
+      if(leaf_ident_expr == &eval_expr_nil)
+      {
+        eval_errorf(arena, eout, EVAL_ErrorKind_ResolutionFailure, expr->location, "\"%S\" could not be found.", name);
+      }
+      else
+      {
+        eval_string2expr_map_inc_poison(leaf_ident_expr_map, name);
+        result = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, leaf_ident_expr, eout);
+        eval_string2expr_map_dec_poison(leaf_ident_expr_map, name);
+      }
+    }break;
   }
   
+  ProfEnd();
   return(result);
 }
 
 internal void
 eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
+  ProfBeginFunction();
   U32 op = tree->op;
   switch (op){
     case RADDBG_EvalOp_Stop:
@@ -1604,4 +1630,5 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
       }
     }break;
   }
+  ProfEnd();
 }

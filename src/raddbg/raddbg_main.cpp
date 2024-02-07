@@ -1,3 +1,6 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 ////////////////////////////////
 //~ rjf: Includes
 
@@ -6,6 +9,7 @@
 #include "os/os_inc.h"
 #include "mdesk/mdesk.h"
 #include "hash_store/hash_store.h"
+#include "file_stream/file_stream.h"
 #include "text_cache/text_cache.h"
 #include "path/path.h"
 #include "txti/txti.h"
@@ -28,9 +32,7 @@
 #include "type_graph/type_graph.h"
 #include "dbgi/dbgi.h"
 #include "demon/demon_inc.h"
-#include "eval/eval_compiler.h"
-#include "eval/eval_machine.h"
-#include "eval/eval_parser.h"
+#include "eval/eval_inc.h"
 #include "unwind/unwind.h"
 #include "ctrl/ctrl_inc.h"
 #include "dasm/dasm.h"
@@ -49,6 +51,7 @@
 #include "os/os_inc.c"
 #include "mdesk/mdesk.c"
 #include "hash_store/hash_store.c"
+#include "file_stream/file_stream.c"
 #include "text_cache/text_cache.c"
 #include "path/path.c"
 #include "txti/txti.c"
@@ -70,9 +73,7 @@
 #include "type_graph/type_graph.c"
 #include "dbgi/dbgi.c"
 #include "demon/demon_inc.c"
-#include "eval/eval_compiler.c"
-#include "eval/eval_machine.c"
-#include "eval/eval_parser.c"
+#include "eval/eval_inc.c"
 #include "unwind/unwind.c"
 #include "ctrl/ctrl_inc.c"
 #include "dasm/dasm.c"
@@ -130,7 +131,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   int buflen = 0;
   
   DWORD exception_code = exception_ptrs->ExceptionRecord->ExceptionCode;
-  buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"A fatal exception (code 0x%x) occurred. The process is terminating.\n", exception_code);
+  buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"A fatal exception (code 0x%x) occurred. The process is terminating.\n", exception_code);
   
   // load dbghelp dynamically just in case if it is missing
   HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
@@ -211,7 +212,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
             const U32 max_frames = 32;
             if(idx == max_frames)
             {
-              buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"...");
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"...");
               break;
             }
             
@@ -228,13 +229,13 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
             
             if(idx==0)
             {
-              buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen,
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen,
                                    L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue in\n"
                                    L"<a href=\"%S\">%S</a>\n\n", RADDBG_GITHUB_ISSUES, RADDBG_GITHUB_ISSUES);
-              buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"Call stack:\n");
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"Call stack:\n");
             }
             
-            buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"%u. [0x%I64x]", idx, address);
+            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"%u. [0x%I64x]", idx + 1, address);
             
             struct {
               SYMBOL_INFOW info;
@@ -247,7 +248,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
             DWORD64 displacement = 0;
             if(dbg_SymFromAddrW(process, address, &displacement, &symbol.info))
             {
-              buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L" %s +%u", symbol.info.Name, (DWORD)displacement);
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L" %s +%u", symbol.info.Name, (DWORD)displacement);
               
               IMAGEHLP_LINEW64 line = {0};
               line.SizeOfStruct = sizeof(line);
@@ -255,7 +256,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
               DWORD line_displacement = 0;
               if(dbg_SymGetLineFromAddrW64(process, address, &line_displacement, &line))
               {
-                buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L", %s line %u", PathFindFileNameW(line.FileName), line.LineNumber);
+                buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L", %s line %u", PathFindFileNameW(line.FileName), line.LineNumber);
               }
             }
             else
@@ -264,19 +265,18 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
               module.SizeOfStruct = sizeof(module);
               if(dbg_SymGetModuleInfoW64(process, address, &module))
               {
-                buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L" %s", module.ModuleName);
+                buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L" %s", module.ModuleName);
               }
             }
             
-            buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen, L"\n");
+            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\n");
           }
         }
       }
     }
   }
   
-  // remove last newline
-  buffer[buflen] = 0;
+  buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nVersion: %S%S", RADDBG_VERSION_STRING_LITERAL, RADDBG_GIT_STR);
   
   TASKDIALOGCONFIG dialog = {0};
   dialog.cbSize = sizeof(dialog);

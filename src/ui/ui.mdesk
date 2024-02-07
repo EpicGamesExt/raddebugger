@@ -29,12 +29,16 @@ UI_StackTable:
   { FastpathCodepoint                  fastpath_codepoint            U32            0                  }
   
   //- rjf: colors
+  { Transparency                       transparency                  F32            0                  }
   { BackgroundColor                    background_color              Vec4F32        `v4f32(1, 0, 1, 1)`}
   { TextColor                          text_color                    Vec4F32        `v4f32(1, 0, 1, 1)`}
   { BorderColor                        border_color                  Vec4F32        `v4f32(1, 0, 1, 1)`}
   { OverlayColor                       overlay_color                 Vec4F32        `v4f32(1, 0, 1, 1)`}
   { TextSelectColor                    text_select_color             Vec4F32        `v4f32(1, 0, 1, 1)`}
   { TextCursorColor                    text_cursor_color             Vec4F32        `v4f32(1, 0, 1, 1)`}
+  
+  //- rjf: squish
+  { Squish                             squish                        F32            0                  }
   
   //- rjf: hover cursor
   { HoverCursor                        hover_cursor                  OS_Cursor      OS_Cursor_Pointer  }

@@ -204,11 +204,10 @@ df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side)
 //- rjf: keys
 
 internal DF_ExpandKey
-df_expand_key_make(U64 uniquifier, U64 parent_hash, U64 child_num)
+df_expand_key_make(U64 parent_hash, U64 child_num)
 {
   DF_ExpandKey key;
   {
-    key.uniquifier = uniquifier;
     key.parent_hash = parent_hash;
     key.child_num = child_num;
   }
@@ -233,7 +232,6 @@ df_hash_from_expand_key(DF_ExpandKey key)
 {
   U64 data[] =
   {
-    key.uniquifier,
     key.child_num,
   };
   U64 hash = df_hash_from_seed_string(key.parent_hash, str8((U8 *)data, sizeof(data)));
@@ -1084,7 +1082,7 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
       U64 vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
       EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, vaddr);
-      DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, &parse_ctx, query);
+      DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, query);
       if(eval.errors.count == 0)
       {
         TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, eval.type_key));
@@ -1337,6 +1335,56 @@ df_entity_array_from_list(Arena *arena, DF_EntityList *list)
   return result;
 }
 
+//- rjf: entity fuzzy list building
+
+internal DF_EntityFuzzyItemArray
+df_entity_fuzzy_item_array_from_entity_list_needle(Arena *arena, DF_EntityList *list, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_EntityArray array = df_entity_array_from_list(scratch.arena, list);
+  DF_EntityFuzzyItemArray result = df_entity_fuzzy_item_array_from_entity_array_needle(arena, &array, needle);
+  return result;
+}
+
+internal DF_EntityFuzzyItemArray
+df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray *array, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_EntityFuzzyItemArray result = {0};
+  result.count = array->count;
+  result.v = push_array(arena, DF_EntityFuzzyItem, result.count);
+  U64 result_idx = 0;
+  for(U64 src_idx = 0; src_idx < array->count; src_idx += 1)
+  {
+    DF_Entity *entity = array->v[src_idx];
+    String8 display_string = df_display_string_from_entity(scratch.arena, entity);
+    FuzzyMatchRangeList matches = fuzzy_match_find(arena, needle, display_string);
+    if(matches.count >= matches.needle_part_count)
+    {
+      result.v[result_idx].entity = entity;
+      result.v[result_idx].matches = matches;
+      result_idx += 1;
+    }
+    else
+    {
+      String8 search_tags = df_search_tags_from_entity(scratch.arena, entity);
+      if(search_tags.size != 0)
+      {
+        FuzzyMatchRangeList tag_matches = fuzzy_match_find(scratch.arena, needle, search_tags);
+        if(tag_matches.count >= tag_matches.needle_part_count)
+        {
+          result.v[result_idx].entity = entity;
+          result.v[result_idx].matches = matches;
+          result_idx += 1;
+        }
+      }
+    }
+  }
+  result.count = result_idx;
+  scratch_end(scratch);
+  return result;
+}
+
 //- rjf: entity -> text info
 
 internal TXTI_Handle
@@ -1485,6 +1533,38 @@ df_display_string_from_entity(Arena *arena, DF_Entity *entity)
   return result;
 }
 
+//- rjf: extra search tag strings for fuzzy filtering entities
+
+internal String8
+df_search_tags_from_entity(Arena *arena, DF_Entity *entity)
+{
+  String8 result = {0};
+  if(entity->kind == DF_EntityKind_Thread)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
+    CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
+    String8List strings = {0};
+    for(CTRL_UnwindFrame *f = unwind.last; f != 0; f = f->prev)
+    {
+      U64 rip_vaddr = f->rip;
+      DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
+      DF_Entity *binary = df_binary_file_from_module(module);
+      String8 procedure_name = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
+      if(procedure_name.size != 0)
+      {
+        str8_list_push(scratch.arena, &strings, procedure_name);
+      }
+    }
+    StringJoin join = {0};
+    join.sep = str8_lit(",");
+    result = str8_list_join(arena, &strings, &join);
+    scratch_end(scratch);
+  }
+  return result;
+}
+
 //- rjf: entity -> color operations
 
 internal Vec4F32
@@ -1621,7 +1701,7 @@ df_entity_notify_mutation(DF_Entity *entity)
       DF_CmdParams p = {0};
       df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
     }
-    if(e == entity && flags & DF_EntityKindFlag_LeafMutationSoftHalt)
+    if(e == entity && flags & DF_EntityKindFlag_LeafMutationSoftHalt && df_ctrl_targets_running())
     {
       df_state->entities_mut_soft_halt = 1;
     }
@@ -1629,7 +1709,7 @@ df_entity_notify_mutation(DF_Entity *entity)
     {
       df_state->entities_mut_dbg_info_map = 1;
     }
-    if(flags & DF_EntityKindFlag_TreeMutationSoftHalt)
+    if(flags & DF_EntityKindFlag_TreeMutationSoftHalt && df_ctrl_targets_running())
     {
       df_state->entities_mut_soft_halt = 1;
     }
@@ -2796,6 +2876,19 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     }
   }
   
+  // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
+  //
+  // MSVC exports line info at these line numbers when /JMC (Just My Code) debugging
+  // is enabled. This is enabled by default normally.
+  {
+    U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_binary_voff(binary, opl_line_voff_rng);
+    if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
+    {
+      line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
+    }
+  }
+  
   // rjf: line vaddr range => did we find anything successfully?
   B32 good_line_info = (line_vaddr_rng.max != 0);
   
@@ -2905,6 +2998,19 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
     if(line_voff_rng.max != 0)
     {
       line_vaddr_rng = df_vaddr_range_from_voff_range(module, line_voff_rng);
+    }
+  }
+  
+  // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
+  //
+  // MSVC exports line info at these line numbers when /JMC (Just My Code) debugging
+  // is enabled. This is enabled by default normally.
+  {
+    U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_binary_voff(binary, opl_line_voff_rng);
+    if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
+    {
+      line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
     }
   }
   
@@ -3350,15 +3456,15 @@ df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name)
         if(entity_num != 0) switch(name_map_kind)
         {
           default:{}break;
-          case RADDBG_NameMapKind_GlobalVariables: if(entity_num <= rdbg->global_variable_count)
+          case RADDBG_NameMapKind_GlobalVariables:
           {
-            RADDBG_GlobalVariable *global_var = &rdbg->global_variables[entity_num-1];
+            RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(rdbg, global_variables, entity_num-1);
             voff = global_var->voff;
           }break;
-          case RADDBG_NameMapKind_Procedures: if(entity_num <= rdbg->procedure_count)
+          case RADDBG_NameMapKind_Procedures:
           {
-            RADDBG_Procedure *procedure = &rdbg->procedures[entity_num-1];
-            RADDBG_Scope *scope = &rdbg->scopes[procedure->root_scope_idx];
+            RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, entity_num-1);
+            RADDBG_Scope *scope = raddbg_element_from_idx(rdbg, scopes, procedure->root_scope_idx);
             voff = rdbg->scope_voffs[scope->voff_range_first];
           }break;
         }
@@ -3429,6 +3535,7 @@ df_type_num_from_binary_name(DF_Entity *binary, String8 name)
 internal DF_Entity *
 df_module_from_process_vaddr(DF_Entity *process, U64 vaddr)
 {
+  ProfBeginFunction();
   DF_Entity *module = &df_g_nil_entity;
   for(DF_Entity *child = process->first; !df_entity_is_nil(child); child = child->next)
   {
@@ -3438,6 +3545,7 @@ df_module_from_process_vaddr(DF_Entity *process, U64 vaddr)
       break;
     }
   }
+  ProfEnd();
   return module;
 }
 
@@ -3450,15 +3558,15 @@ df_module_from_thread(DF_Entity *thread)
 }
 
 internal U64
-df_tls_base_vaddr_from_thread(DF_Entity *thread)
+df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr)
 {
+  ProfBeginFunction();
   U64 base_vaddr = 0;
   Temp scratch = scratch_begin(0, 0);
   DBGI_Scope *scope = dbgi_scope_open();
   
   //- rjf: unpack thread info
-  DF_Entity *module = df_module_from_thread(thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
   DF_Entity *binary = df_binary_file_from_module(module);
   DBGI_Parse *dbgi = df_dbgi_parse_from_binary_file(scope, binary);
   String8 bin_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
@@ -3470,7 +3578,6 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
   Rng1U64 tls_vaddr_range = pe_tls_rng_from_bin_base_vaddr(bin_data, bin, df_base_vaddr_from_module(module));
   
   //- rjf: read module's TLS index
-  // TODO(allen): migrate all of this logic into DEMON
   U64 tls_index = 0;
   {
     U64 bytes_read = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, &tls_index);
@@ -3483,15 +3590,17 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
   //- rjf: PE path
   if(bin_is_pe)
   {
-    U64 thread_info_addr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+    U64 thread_info_addr = root_vaddr;
     U64 tls_addr_off = tls_index*addr_size;
     U64 tls_addr_array = 0;
-    String8 tls_addr_array_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size));
+    CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
+    String8 tls_addr_array_data = tls_addr_array_slice.data;
     if(tls_addr_array_data.size >= 8)
     {
       MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
     }
-    String8 result_data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size));
+    CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0);
+    String8 result_data = result_slice.data;
     if(result_data.size >= 8)
     {
       MemoryCopy(&base_vaddr, result_data.str, sizeof(U64));
@@ -3534,6 +3643,7 @@ df_tls_base_vaddr_from_thread(DF_Entity *thread)
   
   dbgi_scope_close(scope);
   scratch_end(scratch);
+  ProfEnd();
   return base_vaddr;
 }
 
@@ -3543,113 +3653,11 @@ df_architecture_from_entity(DF_Entity *entity)
   return entity->arch;
 }
 
-internal DF_Unwind
+internal CTRL_Unwind
 df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
 {
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  DBGI_Scope *scope = dbgi_scope_open();
-  Architecture arch = df_architecture_from_entity(thread);
-  U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
-  DF_Unwind unwind = {0};
-  unwind.error = 1;
-  switch(arch)
-  {
-    default:{}break;
-    case Architecture_x64:
-    {
-      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-      
-      // rjf: grab initial register block
-      void *regs_block = push_array(scratch.arena, U8, arch_reg_block_size);
-      B32 regs_block_good = 0;
-      {
-        void *regs_raw = ctrl_reg_block_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
-        if(regs_raw != 0)
-        {
-          MemoryCopy(regs_block, regs_raw, arch_reg_block_size);
-          regs_block_good = 1;
-        }
-      }
-      
-      // rjf: grab initial memory view
-      B32 stack_memview_good = 0;
-      UNW_MemView stack_memview = {0};
-      if(regs_block_good)
-      {
-        U64 stack_base_unrounded = thread->stack_base;
-        U64 stack_top_unrounded = regs_rsp_from_arch_block(arch, regs_block);
-        U64 stack_base = AlignPow2(stack_base_unrounded, KB(4));
-        U64 stack_top = AlignDownPow2(stack_top_unrounded, KB(4));
-        U64 stack_size = stack_base - stack_top;
-        if(stack_base >= stack_top)
-        {
-          String8 stack_memory = {0};
-          stack_memory.str = push_array_no_zero(scratch.arena, U8, stack_size);
-          stack_memory.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(stack_top, stack_top+stack_size), stack_memory.str);
-          if(stack_memory.size != 0)
-          {
-            stack_memview_good = 1;
-            stack_memview.data = stack_memory.str;
-            stack_memview.addr_first = stack_top;
-            stack_memview.addr_opl = stack_base;
-          }
-        }
-      }
-      
-      // rjf: loop & unwind
-      UNW_MemView memview = stack_memview;
-      if(stack_memview_good) for(;;)
-      {
-        unwind.error = 0;
-        
-        // rjf: regs -> rip*module*binary
-        U64 rip = regs_rip_from_arch_block(arch, regs_block);
-        DF_Entity *module = df_module_from_process_vaddr(process, rip);
-        DF_Entity *binary = df_binary_file_from_module(module);
-        
-        // rjf: cancel on 0 rip
-        if(rip == 0)
-        {
-          break;
-        }
-        
-        // rjf: binary -> all the binary info
-        String8 binary_full_path = df_full_path_from_entity(scratch.arena, binary);
-        DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
-        String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
-        
-        // rjf: valid step -> push frame
-        DF_UnwindFrame *frame = push_array(arena, DF_UnwindFrame, 1);
-        frame->rip = rip;
-        frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
-        MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
-        SLLQueuePush(unwind.first, unwind.last, frame);
-        unwind.count += 1;
-        
-        // rjf: unwind one step
-        UNW_Result unwind_step = unw_pe_x64(binary_data, &dbgi->pe, df_base_vaddr_from_module(module), &memview, (UNW_X64_Regs *)regs_block);
-        
-        // rjf: cancel on bad step
-        if(unwind_step.dead != 0)
-        {
-          break;
-        }
-        if(unwind_step.missed_read != 0)
-        {
-          unwind.error = 1;
-          break;
-        }
-        if(unwind_step.stack_pointer == 0)
-        {
-          break;
-        }
-      }
-    }break;
-  }
-  dbgi_scope_close(scope);
-  scratch_end(scratch);
-  ProfEnd();
+  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  CTRL_Unwind unwind = ctrl_unwind_from_process_thread(arena, thread->ctrl_machine_id, process->ctrl_handle, thread->ctrl_handle);
   return unwind;
 }
 
@@ -3667,9 +3675,9 @@ df_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count)
   U64 result = df_rip_from_thread(thread);
   if(unwind_count != 0)
   {
-    DF_Unwind unwind = df_push_unwind_from_thread(scratch.arena, thread);
+    CTRL_Unwind unwind = df_push_unwind_from_thread(scratch.arena, thread);
     U64 unwind_idx = 0;
-    for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
+    for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
     {
       if(unwind_count == unwind_idx)
       {
@@ -3931,6 +3939,9 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_TrapList *run_traps)
   df_state->ctrl_last_run_traps = ctrl_trap_list_copy(df_state->ctrl_last_run_arena, &run_traps_copy);
   df_state->ctrl_is_running = 1;
   
+  // rjf: set control context to top unwind
+  df_state->ctrl_ctx.unwind_count = 0;
+  
   scratch_end(scratch);
   dbgi_scope_close(scope);
 }
@@ -3953,7 +3964,8 @@ df_eval_memory_read(void *u, void *out, U64 addr, U64 size)
   Assert(process->kind == DF_EntityKind_Process);
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
-  String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size));
+  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(addr, addr+size), 0);
+  String8 data = slice.data;
   if(data.size == size)
   {
     result = 1;
@@ -4114,23 +4126,24 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
 }
 
 internal DF_Eval
-df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, String8 string)
+df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, String8 string)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
   //- rjf: unpack arguments
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+  U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
   DF_Entity *process = thread->parent;
   U64 unwind_count = ctrl_ctx->unwind_count;
-  DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   Architecture arch = df_architecture_from_entity(thread);
   U64 reg_size = regs_block_size_from_architecture(arch);
   U64 thread_unwind_ip_vaddr = 0;
   void *thread_unwind_regs_block = push_array(scratch.arena, U8, reg_size);
   {
     U64 idx = 0;
-    for(DF_UnwindFrame *f = unwind.first; f != 0; f = f->next, idx += 1)
+    for(CTRL_UnwindFrame *f = unwind.first; f != 0; f = f->next, idx += 1)
     {
       if(idx == unwind_count)
       {
@@ -4144,7 +4157,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   //- rjf: unpack module info & produce eval machine
   DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_ip_vaddr);
   U64 module_base = df_base_vaddr_from_module(module);
-  U64 tls_base = df_tls_base_vaddr_from_thread(thread);
+  U64 tls_base = df_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, thread_unwind_ip_vaddr);
   EVAL_Machine machine = {0};
   machine.u = (void *)thread->parent;
   machine.arch = arch;
@@ -4165,7 +4178,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
   if(parse_has_expr && errors.count == 0)
   {
-    ir_tree_and_type = eval_irtree_and_type_from_expr(arena, parse_ctx->type_graph, parse_ctx->rdbg, parse.expr, &errors);
+    ir_tree_and_type = eval_irtree_and_type_from_expr(arena, parse_ctx->type_graph, parse_ctx->rdbg, macro_map, parse.expr, &errors);
   }
   
   //- rjf: get list of ops
@@ -4251,7 +4264,8 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
         Rng1U64 vaddr_range = r1u64(eval.offset, eval.offset + type_byte_size);
         if(dim_1u64(vaddr_range) == type_byte_size)
         {
-          String8 data = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range);
+          CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
+          String8 data = slice.data;
           MemoryZeroArray(eval.imm_u128);
           MemoryCopy(eval.imm_u128, data.str, Min(data.size, sizeof(U64)*2));
           eval.mode = EVAL_EvalMode_Value;
@@ -4275,11 +4289,11 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
       TG_Key type_key = eval.type_key;
       U64 type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, type_key);
       U64 reg_off = eval.offset;
-      DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+      CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
       if(unwind.first != 0)
       {
         U64 unwind_idx = 0;
-        for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
+        for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
         {
           if(unwind_idx == ctrl_ctx->unwind_count && frame->regs != 0)
           {
@@ -4299,6 +4313,7 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
 internal DF_Eval
 df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
   Architecture arch = df_architecture_from_entity(thread);
@@ -4328,35 +4343,30 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
       {
         U64 ptr_vaddr = eval.offset;
         U64 addr_size = bit_size_from_arch(arch)/8;
-        String8 ptr_value_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                   r1u64(ptr_vaddr, ptr_vaddr+addr_size));
+        CTRL_ProcessMemorySlice ptr_value_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                  r1u64(ptr_vaddr, ptr_vaddr+addr_size), 0);
+        String8 ptr_value_memory = ptr_value_slice.data;
         if(ptr_value_memory.size >= addr_size)
         {
           U64 class_base_vaddr = 0;
           MemoryCopy(&class_base_vaddr, ptr_value_memory.str, addr_size);
-          String8 vtable_base_ptr_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
-                                                                                           r1u64(class_base_vaddr, class_base_vaddr+addr_size));
+          CTRL_ProcessMemorySlice vtable_base_ptr_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle,
+                                                                                                          r1u64(class_base_vaddr, class_base_vaddr+addr_size), 0);
+          String8 vtable_base_ptr_memory = vtable_base_ptr_slice.data;
           if(vtable_base_ptr_memory.size >= addr_size)
           {
             U64 vtable_vaddr = 0;
             MemoryCopy(&vtable_vaddr, vtable_base_ptr_memory.str, addr_size);
             U64 vtable_voff = df_voff_from_vaddr(module, vtable_vaddr);
             U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, vtable_voff);
-            if(0 < global_idx && global_idx < rdbg->global_variable_count)
+            RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(rdbg, global_variables, global_idx);
+            if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped)
             {
-              RADDBG_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
-              if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped &&
-                 0 < global_var->container_idx && global_var->container_idx < rdbg->udt_count)
-              {
-                RADDBG_UDT *udt = &rdbg->udts[global_var->container_idx];
-                if(0 < udt->self_type_idx && udt->self_type_idx < rdbg->type_node_count)
-                {
-                  RADDBG_TypeNode *type = &rdbg->type_nodes[udt->self_type_idx];
-                  TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
-                  TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
-                  eval.type_key = ptr_to_derived_type_key;
-                }
-              }
+              RADDBG_UDT *udt = raddbg_element_from_idx(rdbg, udts, global_var->container_idx);
+              RADDBG_TypeNode *type = raddbg_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+              TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
+              TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
+              eval.type_key = ptr_to_derived_type_key;
             }
           }
         }
@@ -4364,11 +4374,12 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
     }
   }
   scratch_end(scratch);
+  ProfEnd();
   return eval;
 }
 
 internal DF_Eval
-df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_Eval eval, DF_CfgTable *cfg)
+df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_Eval eval, DF_CfgTable *cfg)
 {
   ProfBeginFunction();
   
@@ -4378,7 +4389,7 @@ df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ct
     DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
     if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_EvalResolution)
     {
-      eval = spec->info.eval_resolution(arena, scope, ctrl_ctx, parse_ctx, eval, val);
+      eval = spec->info.eval_resolution(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval, val);
       goto end_resolve;
     }
   }
@@ -4452,90 +4463,11 @@ df_eval_view_from_key(DF_EvalViewKey key)
       eval_view->key = key;
       eval_view->arena = arena_alloc();
       df_expand_tree_table_init(eval_view->arena, &eval_view->expand_tree_table, 256);
-      eval_view->history_cache_table_size = 64;
-      eval_view->history_cache_table = push_array(eval_view->arena, DF_EvalHistoryCacheSlot, eval_view->history_cache_table_size);
       eval_view->view_rule_table.slot_count = 64;
       eval_view->view_rule_table.slots = push_array(eval_view->arena, DF_EvalViewRuleCacheSlot, eval_view->view_rule_table.slot_count);
     }
   }
   return eval_view;
-}
-
-//- rjf: key -> eval history
-
-internal DF_EvalHistoryCacheNode *
-df_eval_history_cache_node_from_key(DF_EvalView *eval_view, DF_ExpandKey key)
-{
-  //- rjf: key -> hash * slot idx * slot
-  String8 key_string = str8_struct(&key);
-  U64 hash = df_hash_from_string(key_string);
-  U64 slot_idx = hash%eval_view->history_cache_table_size;
-  DF_EvalHistoryCacheSlot *slot = &eval_view->history_cache_table[slot_idx];
-  
-  //- rjf: slot idx -> existing node
-  DF_EvalHistoryCacheNode *existing_node = 0;
-  for(DF_EvalHistoryCacheNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(df_expand_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  return existing_node;
-}
-
-internal B32
-df_eval_view_record_history_val(DF_EvalView *eval_view, DF_ExpandKey key, DF_EvalHistoryVal val)
-{
-  B32 change = 0;
-  
-  //- rjf: key -> hash * slot idx * slot
-  String8 key_string = str8_struct(&key);
-  U64 hash = df_hash_from_string(key_string);
-  U64 slot_idx = hash%eval_view->history_cache_table_size;
-  DF_EvalHistoryCacheSlot *slot = &eval_view->history_cache_table[slot_idx];
-  
-  //- rjf: slot idx -> existing node
-  DF_EvalHistoryCacheNode *existing_node = 0;
-  for(DF_EvalHistoryCacheNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(df_expand_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  //- rjf: grab existing node - if there is none, we need to allocate one
-  DF_EvalHistoryCacheNode *node = existing_node;
-  if(node == 0)
-  {
-    // TODO(rjf): check lru cache, allocate from there, prevent too much growth
-    node = push_array(eval_view->arena, DF_EvalHistoryCacheNode, 1);
-    DLLPushBack_NP(slot->first, slot->last, node, hash_next, hash_prev);
-    node->key = key;
-    node->first_run_idx = node->last_run_idx = df_ctrl_run_gen();
-  }
-  
-  //- rjf: record value
-  if(node != 0)
-  {
-    DF_EvalHistoryVal *newest_val = &node->values[node->newest_val_idx];
-    if(newest_val->mode != val.mode ||
-       newest_val->imm_u128[0] != val.imm_u128[0] ||
-       newest_val->imm_u128[1] != val.imm_u128[1] ||
-       newest_val->offset != val.offset)
-    {
-      change = 1;
-      node->newest_val_idx = (node->newest_val_idx + 1) % ArrayCount(node->values);
-      node->values[node->newest_val_idx] = val;
-      node->last_run_idx = df_ctrl_run_gen();
-    }
-  }
-  
-  return change;
 }
 
 //- rjf: key -> view rules
@@ -4872,11 +4804,11 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
       default:{}break;
       case EVAL_EvalMode_Addr:
       {
-        ctrl_process_write_data(process->ctrl_machine_id, process->ctrl_handle, dst_eval.offset, commit_data);
+        ctrl_process_write(process->ctrl_machine_id, process->ctrl_handle, r1u64(dst_eval.offset, dst_eval.offset+commit_data.size), commit_data.str);
       }break;
       case EVAL_EvalMode_Reg:
       {
-        DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+        CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
         Architecture arch = df_architecture_from_entity(thread);
         U64 reg_block_size = regs_block_size_from_architecture(arch);
         if(unwind.first != 0 &&
@@ -5053,10 +4985,50 @@ df_eval_link_base_array_from_chunk_list(Arena *arena, DF_EvalLinkBaseChunkList *
   return array;
 }
 
-//- rjf: watch tree visualization
+//- rjf: viz block collection building
+
+internal DF_EvalVizBlock *
+df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockKind kind, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth)
+{
+  DF_EvalVizBlockNode *n = push_array(arena, DF_EvalVizBlockNode, 1);
+  n->v.kind       = kind;
+  n->v.parent_key = parent_key;
+  n->v.key        = key;
+  n->v.depth      = depth;
+  return &n->v;
+}
+
+internal DF_EvalVizBlock *
+df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx)
+{
+  U64 total_count = split_block->semantic_idx_range.max;
+  split_block->visual_idx_range.max = split_block->semantic_idx_range.max = split_idx;
+  df_eval_viz_block_end(list, split_block);
+  DF_EvalVizBlock *continue_block = df_eval_viz_block_begin(arena, split_block->kind, split_block->parent_key, split_block->key, split_block->depth);
+  continue_block->eval = split_block->eval;
+  continue_block->string = split_block->string;
+  continue_block->member = split_block->member;
+  continue_block->visual_idx_range = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
+  continue_block->backing_search_items = split_block->backing_search_items;
+  continue_block->dbgi_target = split_block->dbgi_target;
+  continue_block->cfg_table = split_block->cfg_table;
+  continue_block->link_member_type_key = split_block->link_member_type_key;
+  continue_block->link_member_off = split_block->link_member_off;
+  return continue_block;
+}
 
 internal void
-df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *eval_view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
+df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block)
+{
+  DF_EvalVizBlockNode *n = CastFromMember(DF_EvalVizBlockNode, v, block);
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  list->total_visual_row_count += dim_1u64(block->visual_idx_range);
+  list->total_semantic_row_count += dim_1u64(block->semantic_idx_range);
+}
+
+internal void
+df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *eval_view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -5071,7 +5043,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   //- rjf: apply view rules & resolve eval
   //
   eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
-  eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, eval, cfg_table);
+  eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval, cfg_table);
   
   //////////////////////////////
   //- rjf: unpack eval
@@ -5082,22 +5054,18 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   //////////////////////////////
   //- rjf: make and push block for root
   //
-  DF_EvalVizBlock *block = push_array(arena, DF_EvalVizBlock, 1);
   {
-    block->kind                        = DF_EvalVizBlockKind_Root;
-    block->eval_view                   = eval_view;
+    DF_EvalVizBlock *block = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Root, parent_key, key, depth);
     block->eval                        = eval;
     block->cfg_table                   = *cfg_table;
     block->string                      = push_str8_copy(arena, string);
-    block->parent_key                  = parent_key;
-    block->key                         = key;
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
-    block->depth                       = depth;
-    SLLQueuePush(list_out->first, list_out->last, block);
-    list_out->count += 1;
-    list_out->total_visual_row_count += 1;
-    list_out->total_semantic_row_count += 1;
+    if(opt_member != 0)
+    {
+      block->member = tg_member_copy(arena, opt_member);
+    }
+    df_eval_viz_block_end(list_out, block);
   }
   
   //////////////////////////////
@@ -5113,7 +5081,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   {
     TG_Key direct_type_key = tg_ptee_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, eval_type_key);
     TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
-    DF_Eval ptr_val_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, block->eval);
+    DF_Eval ptr_val_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
     
     // rjf: ptrs to udts
     if(parent_is_expanded &&
@@ -5213,7 +5181,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
      expand_view_rule_cfg != &df_g_nil_cfg_val)
     ProfScope("build viz blocks for lens")
   {
-    expand_view_rule_spec->info.viz_block_prod(arena, scope, ctrl_ctx, parse_ctx, eval_view, eval, cfg_table, parent_key, key, depth+1, expand_view_rule_cfg->last, list_out);
+    expand_view_rule_spec->info.viz_block_prod(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, eval, cfg_table, parent_key, key, depth+1, expand_view_rule_cfg->last, list_out);
   }
   
   //////////////////////////////
@@ -5225,31 +5193,20 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       udt_type_kind == TG_Kind_Class))
     ProfScope("build viz blocks for UDT members")
   {
-    // rjf: get members
+    //- rjf: type -> filtered data members
     TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
     TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
     
-    // rjf: make block for all members (assume no members are expanded)
-    DF_EvalVizBlock *memblock = push_array(arena, DF_EvalVizBlock, 1);
+    //- rjf: build blocks for all members, split by sub-expansions
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Members, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
     {
-      memblock->kind                   = DF_EvalVizBlockKind_Members;
-      memblock->eval_view              = eval_view;
-      memblock->eval                   = udt_eval;
-      memblock->cfg_table              = *cfg_table;
-      memblock->parent_key             = key;
-      memblock->key                    = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
-      memblock->visual_idx_range       = r1u64(0, filtered_data_members.count);
-      memblock->semantic_idx_range     = r1u64(0, filtered_data_members.count);
-      memblock->depth                  = depth+1;
-      SLLQueuePush(list_out->first, list_out->last, memblock);
-      list_out->count += 1;
-      list_out->total_visual_row_count += filtered_data_members.count;
-      list_out->total_semantic_row_count += filtered_data_members.count;
+      last_vb->eval = udt_eval;
+      last_vb->cfg_table = *cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, filtered_data_members.count);
     }
-    
-    // rjf: split memblock by sub-expansions
     for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
     {
+      // rjf: unpack expansion info; skip out-of-bounds splits
       U64 child_num = child->key.child_num;
       U64 child_idx = child_num-1;
       if(child_idx >= filtered_data_members.count)
@@ -5257,23 +5214,20 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         continue;
       }
       
-      // rjf: truncate existing memblock
-      memblock->visual_idx_range.max = child_idx;
-      memblock->semantic_idx_range.max = child_idx;
+      // rjf: form split: truncate & complete last block; begin next block
+      last_vb = df_eval_viz_block_split_and_continue(arena, list_out, last_vb, child_idx);
       
-      // rjf: build inheriting cfg table
-      DF_CfgTable child_cfg = *cfg_table;
+      // rjf: recurse for sub-expansion
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), child_num));
-        child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
-        if(view_rule_string.size != 0)
+        DF_CfgTable child_cfg = *cfg_table;
         {
-          df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
+          child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
+          if(view_rule_string.size != 0)
+          {
+            df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          }
         }
-      }
-      
-      // rjf: recurse for sub-block
-      {
         TG_Member *member = &filtered_data_members.v[child_idx];
         DF_Eval child_eval = zero_struct;
         {
@@ -5281,29 +5235,31 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
           child_eval.mode = udt_eval.mode;
           child_eval.offset = udt_eval.offset + member->off;
         }
-        list_out->total_visual_row_count -= 1;
-        list_out->total_semantic_row_count -= 1;
-        df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, member->name, child_eval, &child_cfg, depth+1, list_out);
-      }
-      
-      // rjf: make new memblock for remainder of children (if any)
-      if(child_idx+1 < filtered_data_members.count)
-      {
-        DF_EvalVizBlock *next_memblock   = push_array(arena, DF_EvalVizBlock, 1);
-        next_memblock->kind              = DF_EvalVizBlockKind_Members;
-        next_memblock->eval_view         = eval_view;
-        next_memblock->eval              = udt_eval;
-        next_memblock->cfg_table         = *cfg_table;
-        next_memblock->parent_key        = key;
-        next_memblock->key               = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
-        next_memblock->visual_idx_range  = r1u64(child_idx+1, filtered_data_members.count);
-        next_memblock->semantic_idx_range= r1u64(child_idx+1, filtered_data_members.count);
-        next_memblock->depth             = depth+1;
-        SLLQueuePush(list_out->first, list_out->last, next_memblock);
-        list_out->count += 1;
-        memblock = next_memblock;
+        df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, macro_map, key, child->key, member->name, child_eval, member, &child_cfg, depth+1, list_out);
       }
     }
+    df_eval_viz_block_end(list_out, last_vb);
+  }
+  
+  //////////////////////////////
+  //- rjf: (enums) descend to members & make block(s)
+  //
+  if(parent_is_expanded && expand_rule == DF_EvalVizExpandRule_Default &&
+     udt_eval.mode == EVAL_EvalMode_NULL &&
+     udt_type_kind == TG_Kind_Enum)
+    ProfScope("build viz blocks for UDT type-eval enums")
+  {
+    //- rjf: type -> full type info
+    TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
+    
+    //- rjf: build block for all members (cannot be expanded)
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_EnumMembers, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    {
+      last_vb->eval = udt_eval;
+      last_vb->cfg_table = *cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, type->count);
+    }
+    df_eval_viz_block_end(list_out, last_vb);
   }
   
   //////////////////////////////
@@ -5315,11 +5271,10 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       udt_type_kind == TG_Kind_Class))
     ProfScope("(structs, unions, classes) descend to members & make block(s), with linked list view")
   {
-    // rjf: get members
+    //- rjf: type -> data members
     TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
-    TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
     
-    // rjf: find link member
+    //- rjf: find link member
     TG_Member *link_member = 0;
     TG_Kind link_member_type_kind = TG_Kind_Null;
     TG_Key link_member_ptee_type_key = zero_struct;
@@ -5335,98 +5290,73 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       }
     }
     
-    // rjf: invalid link member -> early-out!
+    //- rjf: check if link member is good
+    B32 link_member_is_good = 1;
     if(link_member == 0 ||
        link_member_type_kind != TG_Kind_Ptr ||
        !tg_key_match(link_member_ptee_type_key, udt_eval.type_key))
     {
-      goto end_linked_struct_expansion_build;
+      link_member_is_good = 0;
     }
     
-    // rjf: gather link bases
-    DF_EvalLinkBaseChunkList link_bases = df_eval_link_base_chunk_list_from_eval(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, link_member->type_key, link_member->off, ctrl_ctx, udt_eval, 512);
-    
-    // rjf: make block for all links (assume no members are expanded)
-    DF_EvalVizBlock *linkblock = push_array(arena, DF_EvalVizBlock, 1);
+    //- rjf: gather link bases
+    DF_EvalLinkBaseChunkList link_bases = {0};
+    if(link_member_is_good)
     {
-      linkblock->kind                 = DF_EvalVizBlockKind_Links;
-      linkblock->eval_view            = eval_view;
-      linkblock->eval                 = udt_eval;
-      linkblock->link_member_type_key = link_member->type_key;
-      linkblock->link_member_off      = link_member->off;
-      linkblock->cfg_table            = *cfg_table;
-      linkblock->parent_key           = key;
-      linkblock->key                  = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
-      linkblock->visual_idx_range     = r1u64(0, link_bases.count);
-      linkblock->semantic_idx_range   = r1u64(0, link_bases.count);
-      linkblock->depth                = depth+1;
-      SLLQueuePush(list_out->first, list_out->last, linkblock);
-      list_out->count += 1;
-      list_out->total_visual_row_count += link_bases.count;
-      list_out->total_semantic_row_count += link_bases.count;
+      link_bases = df_eval_link_base_chunk_list_from_eval(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, link_member->type_key, link_member->off, ctrl_ctx, udt_eval, 512);
     }
     
-    // rjf: split linkblock by sub-expansions
-    for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
+    //- rjf: build blocks for all links, split by sub-expansions
+    if(link_member_is_good)
     {
-      U64 child_num = child->key.child_num;
-      U64 child_idx = child_num-1;
-      if(child_idx >= link_bases.count)
+      DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Links, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
       {
-        continue;
+        last_vb->eval = udt_eval;
+        last_vb->cfg_table = *cfg_table;
+        last_vb->link_member_type_key = link_member->type_key;
+        last_vb->link_member_off = link_member->off;
+        last_vb->visual_idx_range     = r1u64(0, link_bases.count);
+        last_vb->semantic_idx_range   = r1u64(0, link_bases.count);
       }
-      
-      // rjf: truncate existing elemblock
-      linkblock->visual_idx_range.max = child_idx;
-      linkblock->semantic_idx_range.max = child_idx;
-      
-      // rjf: build inheriting cfg table
-      DF_CfgTable child_cfg = *cfg_table;
+      for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), child_num));
-        child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
-        if(view_rule_string.size != 0)
+        // rjf: unpack expansion info; skip out-of-bounds splits
+        U64 child_num = child->key.child_num;
+        U64 child_idx = child_num-1;
+        if(child_idx >= link_bases.count)
         {
-          df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          continue;
+        }
+        
+        // rjf: form split: truncate & complete last block; begin next block
+        last_vb = df_eval_viz_block_split_and_continue(arena, list_out, last_vb, child_idx);
+        
+        // rjf: find mode/offset of this link
+        DF_EvalLinkBase link_base = df_eval_link_base_from_chunk_list_index(&link_bases, child_idx);
+        
+        // rjf: recurse for sub-expansion
+        {
+          DF_CfgTable child_cfg = *cfg_table;
+          {
+            String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
+            child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
+            if(view_rule_string.size != 0)
+            {
+              df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+            }
+          }
+          DF_Eval child_eval = zero_struct;
+          {
+            child_eval.type_key = udt_eval.type_key;
+            child_eval.mode     = link_base.mode;
+            child_eval.offset   = link_base.offset;
+          }
+          df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, macro_map, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
         }
       }
-      
-      // rjf: find mode/offset of this link
-      DF_EvalLinkBase link_base = df_eval_link_base_from_chunk_list_index(&link_bases, child_idx);
-      
-      // rjf: recurse for sub-block
-      DF_Eval child_eval = zero_struct;
-      {
-        child_eval.type_key = udt_eval.type_key;
-        child_eval.mode     = link_base.mode;
-        child_eval.offset   = link_base.offset;
-      }
-      list_out->total_visual_row_count -= 1;
-      list_out->total_semantic_row_count -= 1;
-      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, &child_cfg, depth+1, list_out);
-      
-      // rjf: make new elemblock for remainder of children (if any)
-      if(child_idx+1 < link_bases.count)
-      {
-        DF_EvalVizBlock *next_linkblock = push_array(arena, DF_EvalVizBlock, 1);
-        next_linkblock->kind                 = DF_EvalVizBlockKind_Links;
-        next_linkblock->eval_view            = eval_view;
-        next_linkblock->eval                 = udt_eval;
-        next_linkblock->link_member_type_key = link_member->type_key;
-        next_linkblock->link_member_off      = link_member->off;
-        next_linkblock->cfg_table            = *cfg_table;
-        next_linkblock->parent_key           = key;
-        next_linkblock->key                  = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
-        next_linkblock->visual_idx_range     = r1u64(child_idx+1, link_bases.count);
-        next_linkblock->semantic_idx_range   = r1u64(child_idx+1, link_bases.count);
-        next_linkblock->depth                = depth+1;
-        SLLQueuePush(list_out->first, list_out->last, next_linkblock);
-        list_out->count += 1;
-        linkblock = next_linkblock;
-      }
+      df_eval_viz_block_end(list_out, last_vb);
     }
   }
-  end_linked_struct_expansion_build:;
   
   //////////////////////////////
   //- rjf: (arrays) descend to elements & make block(s), normally
@@ -5435,32 +5365,22 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
      arr_type_kind == TG_Kind_Array)
     ProfScope("(arrays) descend to elements & make block(s)")
   {
+    //- rjf: unpack array type info
     TG_Type *array_type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, arr_eval.type_key);
     U64 array_count = array_type->count;
     TG_Key element_type_key = array_type->direct_type_key;
     U64 element_type_byte_size = tg_byte_size_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, element_type_key);
     
-    // rjf: make block for all elements (assume no elements are expanded)
-    DF_EvalVizBlock *elemblock = push_array(arena, DF_EvalVizBlock, 1);
+    //- rjf: build blocks for all elements, split by sub-expansions
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
     {
-      elemblock->kind                  = DF_EvalVizBlockKind_Elements;
-      elemblock->eval_view             = eval_view;
-      elemblock->eval                  = arr_eval;
-      elemblock->cfg_table             = *cfg_table;
-      elemblock->parent_key            = key;
-      elemblock->key                   = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
-      elemblock->visual_idx_range      = r1u64(0, array_count);
-      elemblock->semantic_idx_range    = r1u64(0, array_count);
-      elemblock->depth                 = depth+1;
-      SLLQueuePush(list_out->first, list_out->last, elemblock);
-      list_out->count += 1;
-      list_out->total_visual_row_count += array_count;
-      list_out->total_semantic_row_count += array_count;
+      last_vb->eval = arr_eval;
+      last_vb->cfg_table = *cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, array_count);
     }
-    
-    // rjf: split elemblock by sub-expansions
     for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
     {
+      // rjf: unpack expansion info; skip out-of-bounds splits
       U64 child_num = child->key.child_num;
       U64 child_idx = child_num-1;
       if(child_idx >= array_count)
@@ -5468,50 +5388,30 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
         continue;
       }
       
-      // rjf: truncate existing elemblock
-      elemblock->visual_idx_range.max = child_idx;
-      elemblock->semantic_idx_range.max = child_idx;
+      // rjf: form split: truncate & complete last block; begin next block
+      last_vb = df_eval_viz_block_split_and_continue(arena, list_out, last_vb, child_idx);
       
-      // rjf: build inheriting cfg table
-      DF_CfgTable child_cfg = *cfg_table;
+      // rjf: recurse for sub-expansion
       {
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), child_num));
-        child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
-        if(view_rule_string.size != 0)
+        DF_CfgTable child_cfg = *cfg_table;
         {
-          df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, df_expand_key_make(df_hash_from_expand_key(key), child_num));
+          child_cfg = df_cfg_table_from_inheritance(arena, cfg_table);
+          if(view_rule_string.size != 0)
+          {
+            df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
+          }
         }
-      }
-      
-      // rjf: recurse for sub-block
-      DF_Eval child_eval = zero_struct;
-      {
-        child_eval.type_key = element_type_key;
-        child_eval.mode     = arr_eval.mode;
-        child_eval.offset   = arr_eval.offset + child_idx*element_type_byte_size;
-      }
-      list_out->total_visual_row_count -= 1;
-      list_out->total_semantic_row_count -= 1;
-      df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, &child_cfg, depth+1, list_out);
-      
-      // rjf: make new elemblock for remainder of children (if any)
-      if(child_idx+1 < array_count)
-      {
-        DF_EvalVizBlock *next_elemblock = push_array(arena, DF_EvalVizBlock, 1);
-        next_elemblock->kind                  = DF_EvalVizBlockKind_Elements;
-        next_elemblock->eval_view             = eval_view;
-        next_elemblock->eval                  = arr_eval;
-        next_elemblock->cfg_table             = *cfg_table;
-        next_elemblock->parent_key            = key;
-        next_elemblock->key                   = df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 0);
-        next_elemblock->visual_idx_range      = r1u64(child_idx+1, array_count);
-        next_elemblock->semantic_idx_range    = r1u64(child_idx+1, array_count);
-        next_elemblock->depth                 = depth+1;
-        SLLQueuePush(list_out->first, list_out->last, next_elemblock);
-        list_out->count += 1;
-        elemblock = next_elemblock;
+        DF_Eval child_eval = zero_struct;
+        {
+          child_eval.type_key = element_type_key;
+          child_eval.mode     = arr_eval.mode;
+          child_eval.offset   = arr_eval.offset + child_idx*element_type_byte_size;
+        }
+        df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, macro_map, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
       }
     }
+    df_eval_viz_block_end(list_out, last_vb);
   }
   
   //////////////////////////////
@@ -5521,7 +5421,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     ProfScope("build viz blocks for ptr-to-ptrs")
   {
     String8 subexpr = push_str8f(arena, "*(%S)", string);
-    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, key, df_expand_key_make(key.uniquifier, df_hash_from_expand_key(key), 1), subexpr, ptr_eval, cfg_table, depth+1, list_out);
+    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, macro_map, key, df_expand_key_make(df_hash_from_expand_key(key), 1), subexpr, ptr_eval, 0, cfg_table, depth+1, list_out);
   }
   
   scratch_end(scratch);
@@ -5529,14 +5429,14 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
 }
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_eval_view_expr(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalView *eval_view, String8 expr)
+df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, String8 expr, U64 num)
 {
   ProfBeginFunction();
   DF_EvalVizBlockList blocks = {0};
   {
-    DF_ExpandKey start_parent_key = df_expand_key_make((U64)eval_view, 0, 0);
-    DF_ExpandKey start_key = df_expand_key_make((U64)eval_view, 5381, 1);
-    DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, expr);
+    DF_ExpandKey start_parent_key = df_expand_key_make(5381, num);
+    DF_ExpandKey start_key = df_expand_key_make(df_hash_from_expand_key(start_parent_key), df_hash_from_string(expr));
+    DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, macro_map, expr);
     U64 expr_comma_pos = str8_find_needle(expr, 0, str8_lit(","), 0);
     String8List default_view_rules = {0};
     if(expr_comma_pos < expr.size)
@@ -5567,7 +5467,7 @@ df_eval_viz_block_list_from_eval_view_expr(Arena *arena, DBGI_Scope *scope, DF_C
       df_cfg_table_push_unparsed_string(arena, &view_rule_table, n->string, DF_CfgSrc_User);
     }
     df_cfg_table_push_unparsed_string(arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, start_parent_key, start_key, expr, eval, &view_rule_table, 0, &blocks);
+    df_append_viz_blocks_for_parent__rec(arena, scope, eval_view, ctrl_ctx, parse_ctx, macro_map, start_parent_key, start_key, expr, eval, 0, &view_rule_table, 0, &blocks);
   }
   ProfEnd();
   return blocks;
@@ -5589,6 +5489,160 @@ df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBloc
     dst->total_semantic_row_count += to_push->total_semantic_row_count;
   }
   MemoryZeroStruct(to_push);
+}
+
+internal S64
+df_row_num_from_viz_block_list_key(DF_EvalVizBlockList *blocks, DF_ExpandKey key)
+{
+  S64 row_num = 1;
+  B32 found = 0;
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
+  {
+    DF_EvalVizBlock *block = &n->v;
+    if(key.parent_hash == block->key.parent_hash)
+    {
+      B32 this_block_contains_this_key = 0;
+      {
+        if(block->backing_search_items.v != 0)
+        {
+          U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&block->backing_search_items, key.child_num);
+          this_block_contains_this_key = (item_num != 0 && contains_1u64(block->semantic_idx_range, item_num-1));
+        }
+        else
+        {
+          this_block_contains_this_key = (block->semantic_idx_range.min+1 <= key.child_num && key.child_num < block->semantic_idx_range.max+1);
+        }
+      }
+      if(this_block_contains_this_key)
+      {
+        found = 1;
+        if(block->backing_search_items.v != 0)
+        {
+          U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&block->backing_search_items, key.child_num);
+          row_num += item_num-1-block->semantic_idx_range.min;
+        }
+        else
+        {
+          row_num += key.child_num-1-block->semantic_idx_range.min;
+        }
+        break;
+      }
+    }
+    if(!found)
+    {
+      row_num += (S64)dim_1u64(block->semantic_idx_range);
+    }
+  }
+  if(!found)
+  {
+    row_num = 0;
+  }
+  return row_num;
+}
+
+internal DF_ExpandKey
+df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num)
+{
+  DF_ExpandKey key = {0};
+  S64 scan_y = 1;
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
+  {
+    DF_EvalVizBlock *vb = &n->v;
+    Rng1S64 vb_row_num_range = r1s64(scan_y, scan_y + (S64)dim_1u64(vb->semantic_idx_range));
+    if(contains_1s64(vb_row_num_range, row_num))
+    {
+      key = vb->key;
+      if(vb->backing_search_items.v != 0)
+      {
+        U64 item_idx = (U64)((row_num - vb_row_num_range.min) + vb->semantic_idx_range.min);
+        if(item_idx < vb->backing_search_items.count)
+        {
+          key.child_num = vb->backing_search_items.v[item_idx].idx;
+        }
+      }
+      else
+      {
+        key.child_num = vb->semantic_idx_range.min + (row_num - vb_row_num_range.min) + 1;
+      }
+      break;
+    }
+    scan_y += dim_1s64(vb_row_num_range);
+  }
+  return key;
+}
+
+internal DF_ExpandKey
+df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num)
+{
+  DF_ExpandKey key = {0};
+  S64 scan_y = 1;
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
+  {
+    DF_EvalVizBlock *vb = &n->v;
+    Rng1S64 vb_row_num_range = r1s64(scan_y, scan_y + (S64)dim_1u64(vb->semantic_idx_range));
+    if(contains_1s64(vb_row_num_range, row_num))
+    {
+      key = vb->parent_key;
+      break;
+    }
+    scan_y += dim_1s64(vb_row_num_range);
+  }
+  return key;
+}
+
+//- rjf: viz row list building
+
+internal DF_EvalVizRow *
+df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, DF_Eval eval)
+{
+  // rjf: push
+  DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
+  SLLQueuePush(rows->first, rows->last, row);
+  rows->count += 1;
+  
+  // rjf: fill basics
+  row->depth      = block->depth;
+  row->parent_key = block->parent_key;
+  row->key        = key;
+  row->eval       = eval;
+  
+  // rjf: determine exandability, editability
+  if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
+  {
+    for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+    {
+      TG_Kind kind = tg_kind_from_key(t);
+      if(kind == TG_Kind_Null)
+      {
+        break;
+      }
+      if(eval.mode != EVAL_EvalMode_NULL && ((TG_Kind_FirstBasic <= kind && kind <= TG_Kind_LastBasic) || kind == TG_Kind_Ptr || kind == TG_Kind_LRef || kind == TG_Kind_RRef))
+      {
+        row->flags |= DF_EvalVizRowFlag_CanEditValue;
+      }
+      if(eval.mode == EVAL_EvalMode_NULL && kind == TG_Kind_Enum)
+      {
+        row->flags |= DF_EvalVizRowFlag_CanExpand;
+      }
+      if(kind == TG_Kind_Struct ||
+         kind == TG_Kind_Union ||
+         kind == TG_Kind_Class ||
+         kind == TG_Kind_Array)
+      {
+        row->flags |= DF_EvalVizRowFlag_CanExpand;
+      }
+      if(row->flags & DF_EvalVizRowFlag_CanExpand)
+      {
+        break;
+      }
+      if(eval.mode == EVAL_EvalMode_NULL)
+      {
+        break;
+      }
+    }
+  }
+  
+  return row;
 }
 
 ////////////////////////////////
@@ -5684,6 +5738,64 @@ df_cfg_table(void)
 
 //- rjf: config serialization
 
+internal String8
+df_cfg_escaped_from_raw_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  U64 split_start_idx = 0;
+  for(U64 idx = 0; idx <= string.size; idx += 1)
+  {
+    U8 byte = (idx < string.size ? string.str[idx] : 0);
+    if(byte == 0 || byte == '\"')
+    {
+      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
+      str8_list_push(scratch.arena, &parts, part);
+      switch(byte)
+      {
+        default:{}break;
+        case '\"':{str8_list_push(scratch.arena, &parts, str8_lit("\\\""));}break;
+      }
+      split_start_idx = idx+1;
+    }
+  }
+  StringJoin join = {0};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+df_cfg_raw_from_escaped_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  U64 split_start_idx = 0;
+  U64 extra_advance = 0;
+  for(U64 idx = 0; idx <= string.size; ((idx += 1+extra_advance), extra_advance=0))
+  {
+    U8 byte = (idx < string.size ? string.str[idx] : 0);
+    if(byte == 0 || byte == '\\')
+    {
+      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
+      str8_list_push(scratch.arena, &parts, part);
+      if(byte == '\\' && idx+1 < string.size)
+      {
+        switch(string.str[idx+1])
+        {
+          default:{}break;
+          case '"':{extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\""));}break;
+        }
+      }
+      split_start_idx = idx+1+extra_advance;
+    }
+  }
+  StringJoin join = {0};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8List
 df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
 {
@@ -5718,18 +5830,21 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         String8 wdir_normalized = path_normalized_from_string(scratch.arena, wdir);
         String8 wdir_normalized_rel = path_relative_dst_from_absolute_dst_src(scratch.arena, wdir_normalized, root_path);
         String8 entry_point_name = entr__ent->name;
+        String8 label_escaped = df_cfg_escaped_from_raw_string(arena, label);
+        String8 args_escaped = df_cfg_escaped_from_raw_string(arena, args__ent->name);
+        String8 entry_escaped = df_cfg_escaped_from_raw_string(arena, entry_point_name);
         str8_list_push (arena, &strs,  str8_lit("target:\n"));
         str8_list_push (arena, &strs,  str8_lit("{\n"));
         if(label.size != 0)
         {
-          str8_list_pushf(arena, &strs,          "  label:             \"%S\"\n", label);
+          str8_list_pushf(arena, &strs,          "  label:             \"%S\"\n", label_escaped);
         }
         str8_list_pushf(arena, &strs,           "  exe:               \"%S\"\n", exe_normalized_rel);
-        str8_list_pushf(arena, &strs,           "  arguments:         \"%S\"\n", args__ent->name);
+        str8_list_pushf(arena, &strs,           "  arguments:         \"%S\"\n", args_escaped);
         str8_list_pushf(arena, &strs,           "  working_directory: \"%S\"\n", wdir_normalized_rel);
         if(entry_point_name.size != 0)
         {
-          str8_list_pushf(arena, &strs,          "  entry_point:       \"%S\"\n", entry_point_name);
+          str8_list_pushf(arena, &strs,          "  entry_point:       \"%S\"\n", entry_escaped);
         }
         str8_list_pushf(arena, &strs,           "  active:            %i\n", (int)target->b32);
         if(target->flags & DF_EntityFlag_HasColor)
@@ -5806,7 +5921,8 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         // rjf: function name breakpoints
         else if(!df_entity_is_nil(symb) && symb->name.size != 0)
         {
-          str8_list_pushf(arena, &strs, "  symbol: \"%S\"\n", symb->name);
+          String8 symb_escaped = df_cfg_escaped_from_raw_string(arena, symb->name);
+          str8_list_pushf(arena, &strs, "  symbol: \"%S\"\n", symb_escaped);
         }
         
         // rjf: address breakpoints
@@ -5818,13 +5934,15 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         // rjf: conditions
         if(!df_entity_is_nil(cond))
         {
-          str8_list_pushf(arena, &strs, "  condition: \"%S\"\n", cond->name);
+          String8 cond_escaped = df_cfg_escaped_from_raw_string(arena, cond->name);
+          str8_list_pushf(arena, &strs, "  condition: \"%S\"\n", cond_escaped);
         }
         
         // rjf: universal options
         str8_list_pushf(arena, &strs, "  enabled: %i\n", (int)bp->b32);
         if(bp->name.size != 0)
         {
+          String8 label_escaped = df_cfg_escaped_from_raw_string(arena, bp->name);
           str8_list_pushf(arena, &strs, "  label: \"%S\"\n", bp->name);
         }
         if(bp->flags & DF_EntityFlag_HasColor)
@@ -5858,7 +5976,8 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         // rjf: write
         str8_list_push(arena, &strs, str8_lit("watch_pin:\n"));
         str8_list_push(arena, &strs, str8_lit("{\n"));
-        str8_list_pushf(arena, &strs, "  expression: \"%S\"\n", pin->name);
+        String8 expr_escaped = df_cfg_escaped_from_raw_string(arena, pin->name);
+        str8_list_pushf(arena, &strs, "  expression: \"%S\"\n", expr_escaped);
         DF_Entity *file = df_entity_ancestor_from_kind(pin, DF_EntityKind_File);
         if(pin->flags & DF_EntityFlag_HasTextPoint && !df_entity_is_nil(file))
         {
@@ -6063,11 +6182,11 @@ df_push_active_target_list(Arena *arena)
 
 //- rjf: per-run caches
 
-internal DF_Unwind
+internal CTRL_Unwind
 df_query_cached_unwind_from_thread(DF_Entity *thread)
 {
   ProfBeginFunction();
-  DF_Unwind result = {0};
+  CTRL_Unwind result = {0};
   DF_RunUnwindCache *cache = &df_state->unwind_cache;
   if(cache->table_size != 0)
   {
@@ -6092,7 +6211,7 @@ internal U64
 df_query_cached_rip_from_thread(DF_Entity *thread)
 {
   U64 result = 0;
-  DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   if(unwind.first != 0)
   {
     result = unwind.first->rip;
@@ -6104,15 +6223,53 @@ internal U64
 df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count)
 {
   U64 result = 0;
-  DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   U64 unwind_idx = 0;
-  for(DF_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
+  for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
   {
     if(unwind_idx == unwind_count)
     {
       result = frame->rip;
       break;
     }
+  }
+  return result;
+}
+
+internal U64
+df_query_cached_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr)
+{
+  U64 result = 0;
+  {
+    DF_RunTLSBaseCache *cache = &df_state->tls_base_cache;
+    if(cache->slots_count == 0)
+    {
+      cache->slots_count = 256;
+      cache->slots = push_array(cache->arena, DF_RunTLSBaseCacheSlot, cache->slots_count);
+    }
+    DF_Handle handle = df_handle_from_entity(process);
+    U64 hash = df_hash_from_seed_string(df_hash_from_string(str8_struct(&handle)), str8_struct(&rip_vaddr));
+    U64 slot_idx = hash%cache->slots_count;
+    DF_RunTLSBaseCacheSlot *slot = &cache->slots[slot_idx];
+    DF_RunTLSBaseCacheNode *node = 0;
+    for(DF_RunTLSBaseCacheNode *n = slot->first; n != 0; n = n->hash_next)
+    {
+      if(df_handle_match(n->process, handle) && n->root_vaddr == root_vaddr && n->rip_vaddr == rip_vaddr)
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node == 0)
+    {
+      node = push_array(cache->arena, DF_RunTLSBaseCacheNode, 1);
+      SLLQueuePush_N(slot->first, slot->last, node, hash_next);
+      node->process = handle;
+      node->root_vaddr = root_vaddr;
+      node->rip_vaddr = rip_vaddr;
+      node->tls_base_vaddr = df_tls_base_vaddr_from_process_root_rip(process, root_vaddr, rip_vaddr);
+    }
+    result = node->tls_base_vaddr;
   }
   return result;
 }
@@ -6275,6 +6432,7 @@ df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist
   
   // rjf: set up per-run caches
   df_state->unwind_cache.arena = arena_alloc();
+  df_state->tls_base_cache.arena = arena_alloc();
   df_state->locals_cache.arena = arena_alloc();
   df_state->member_cache.arena = arena_alloc();
   
@@ -6440,6 +6598,23 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_CmdParams params = df_cmd_params_zero();
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
           }
+          
+          // rjf: kill all entities which are marked to die on stop
+          {
+            DF_Entity *request = df_entity_from_id(event->msg_id);
+            if(df_entity_is_nil(request))
+            {
+              for(DF_Entity *entity = df_entity_root();
+                  !df_entity_is_nil(entity);
+                  entity = df_entity_rec_df_pre(entity, df_entity_root()).next)
+              {
+                if(entity->flags & DF_EntityFlag_DiesOnRunStop)
+                {
+                  df_entity_mark_for_deletion(entity);
+                }
+              }
+            }
+          }
         }break;
         
         //- rjf: entity creation/deletion
@@ -6483,6 +6658,25 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           df_entity_equip_stack_base(entity, event->stack_base);
           df_entity_equip_tls_root(entity, event->tls_root);
           df_entity_equip_vaddr(entity, event->rip_vaddr);
+          if(event->string.size != 0)
+          {
+            df_entity_equip_name(0, entity, event->string);
+          }
+          
+          // rjf: find any pending thread names correllating with this TID -> equip name if found match
+          {
+            DF_EntityList pending_thread_names = df_query_cached_entity_list_with_kind(DF_EntityKind_PendingThreadName);
+            for(DF_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
+            {
+              DF_Entity *pending_thread_name = n->entity;
+              if(event->machine_id == pending_thread_name->ctrl_machine_id && event->entity_id == pending_thread_name->ctrl_id)
+              {
+                df_entity_mark_for_deletion(pending_thread_name);
+                df_entity_equip_name(0, entity, pending_thread_name->name);
+                break;
+              }
+            }
+          }
           
           // rjf: determine index in process
           U64 thread_idx_in_process = 0;
@@ -6616,8 +6810,26 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case CTRL_EventKind_ThreadName:
         {
           String8 string = event->string;
-          DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
-          df_entity_equip_name(0, thread, string);
+          DF_Entity *entity = df_entity_from_ctrl_handle(event->machine_id, event->entity);
+          if(event->entity_id != 0)
+          {
+            entity = df_entity_from_ctrl_id(event->machine_id, event->entity_id);
+          }
+          if(df_entity_is_nil(entity))
+          {
+            DF_Entity *process = df_entity_from_ctrl_handle(event->machine_id, event->parent);
+            if(!df_entity_is_nil(process))
+            {
+              entity = df_entity_alloc(0, process, DF_EntityKind_PendingThreadName);
+              df_entity_equip_name(0, entity, string);
+              df_entity_equip_ctrl_machine_id(entity, event->machine_id);
+              df_entity_equip_ctrl_id(entity, event->entity_id);
+            }
+          }
+          if(!df_entity_is_nil(entity))
+          {
+            df_entity_equip_name(0, entity, string);
+          }
         }break;
         
         //- rjf: memory
@@ -6701,6 +6913,19 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       }
       df_state->unwind_cache_memgen_idx = new_memgen_idx;
       df_state->unwind_cache_reggen_idx = new_reggen_idx;
+    }
+    
+    //- rjf: clear tls base cache
+    if((df_state->tls_base_cache_reggen_idx != new_reggen_idx ||
+        df_state->tls_base_cache_memgen_idx != new_memgen_idx) &&
+       !df_ctrl_targets_running())
+    {
+      DF_RunTLSBaseCache *cache = &df_state->tls_base_cache;
+      arena_clear(cache->arena);
+      cache->slots_count = 0;
+      cache->slots = 0;
+      df_state->tls_base_cache_reggen_idx = new_reggen_idx;
+      df_state->tls_base_cache_memgen_idx = new_memgen_idx;
     }
     
     //- rjf: clear locals cache
@@ -6877,14 +7102,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       String8 string = str8_substr(args, r1u64(start_split_idx, idx));
                       if(string.size > 0)
                       {
-                        if(str8_match(str8_prefix(string, 1), str8_lit("\""), 0))
-                        {
-                          string = str8_skip(string, 1);
-                        }
-                        if(str8_match(str8_postfix(string, 1), str8_lit("\""), 0))
-                        {
-                          string = str8_chop(string, 1);
-                        }
                         str8_list_push(scratch.arena, &cmdln_strings, string);
                       }
                       start_split_idx = idx+1;
@@ -7036,7 +7253,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_StepIntoLine:
         case DF_CoreCmdKind_StepOverLine:
         case DF_CoreCmdKind_StepOut:
-        case DF_CoreCmdKind_RunToAddress:
         {
           DF_Entity *thread = df_entity_from_handle(params.entity);
           if(df_ctrl_targets_running())
@@ -7070,7 +7286,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               case DF_CoreCmdKind_StepOut:
               {
                 // rjf: thread => full unwind
-                DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+                CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
                 
                 // rjf: use first unwind frame to generate trap
                 if(unwind.first != 0 && unwind.first->next != 0)
@@ -7087,11 +7303,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                   df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
                   good = 0;
                 }
-              }break;
-              case DF_CoreCmdKind_RunToAddress:
-              {
-                CTRL_Trap trap = {CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck, params.vaddr};
-                ctrl_trap_list_push(scratch.arena, &traps, &trap);
               }break;
             }
             if(good && traps.count != 0)
@@ -7127,6 +7338,30 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: high-level composite target control operations
+        case DF_CoreCmdKind_RunToLine:
+        {
+          DF_Entity *file = df_entity_from_handle(params.entity);
+          TxtPt point = params.text_point;
+          if(file->kind == DF_EntityKind_File)
+          {
+            DF_Entity *bp = df_entity_alloc(0, file, DF_EntityKind_Breakpoint);
+            bp->flags |= DF_EntityFlag_DiesOnRunStop;
+            df_entity_equip_b32(bp, 1);
+            df_entity_equip_txt_pt(bp, point);
+            df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+            DF_CmdParams p = df_cmd_params_zero();
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
+          }
+        }break;
+        case DF_CoreCmdKind_RunToAddress:
+        {
+          DF_Entity *bp = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Breakpoint);
+          bp->flags |= DF_EntityFlag_DiesOnRunStop;
+          df_entity_equip_vaddr(bp, params.vaddr);
+          df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+          DF_CmdParams p = df_cmd_params_zero();
+          df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
+        }break;
         case DF_CoreCmdKind_Run:
         {
           DF_CmdParams params = df_cmd_params_zero();
@@ -7220,7 +7455,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_SelectUnwind:
         {
           DF_Entity *thread = df_entity_from_handle(df_state->ctrl_ctx.thread);
-          DF_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+          CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
           U64 max_unwind = unwind.count ? unwind.count-1 : 0;
           U64 index = Clamp(0, params.index, max_unwind);
           df_state->ctrl_ctx.unwind_count = index;
@@ -7321,8 +7556,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: config path saving/loading/applying
-        case DF_CoreCmdKind_LoadUser:
-        case DF_CoreCmdKind_LoadProfile:
+        case DF_CoreCmdKind_OpenUser:
+        case DF_CoreCmdKind_OpenProfile:
         {
           B32 load_cfg[DF_CfgSrc_COUNT] = {0};
           for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
@@ -7530,46 +7765,66 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           
           //- rjf: apply targets
           DF_CfgVal *targets = df_cfg_val_from_string(table, str8_lit("target"));
-          for(DF_CfgNode *target = targets->first;
-              target != &df_g_nil_cfg_node;
-              target = target->next)
           {
-            if(target->source == src)
+            B32 cmd_line_target_present = 0;
             {
-              DF_CfgNode *label_cfg  = df_cfg_node_child_from_string(target, str8_lit("label"),             StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *exe_cfg    = df_cfg_node_child_from_string(target, str8_lit("exe"),               StringMatchFlag_CaseInsensitive);
-              if(exe_cfg == &df_g_nil_cfg_node)
+              DF_EntityList existing_target_entities = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
+              for(DF_EntityNode *n = existing_target_entities.first; n != 0; n = n->next)
               {
-                exe_cfg = df_cfg_node_child_from_string(target, str8_lit("name"), StringMatchFlag_CaseInsensitive);
+                DF_Entity *target = n->entity;
+                if(target->cfg_src == DF_CfgSrc_CommandLine && target->b32)
+                {
+                  cmd_line_target_present = 1;
+                }
               }
-              DF_CfgNode *args_cfg   = df_cfg_node_child_from_string(target, str8_lit("arguments"),         StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *wdir_cfg   = df_cfg_node_child_from_string(target, str8_lit("working_directory"), StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *entry_cfg  = df_cfg_node_child_from_string(target, str8_lit("entry_point"),       StringMatchFlag_CaseInsensitive);
-              DF_CfgNode *active_cfg = df_cfg_node_child_from_string(target, str8_lit("active"),            StringMatchFlag_CaseInsensitive);
-              Vec4F32 hsva = df_hsva_from_cfg_node(target);
-              U64 is_active_u64 = 0;
-              try_u64_from_str8_c_rules(active_cfg->first->string, &is_active_u64);
-              DF_Entity *target__ent = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Target);
-              DF_Entity *exe__ent    = df_entity_alloc(0, target__ent, DF_EntityKind_Executable);
-              DF_Entity *args__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_Arguments);
-              DF_Entity *path__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_ExecutionPath);
-              DF_Entity *entry__ent  = df_entity_alloc(0, target__ent, DF_EntityKind_EntryPointName);
-              String8 saved_label = label_cfg->first->string;
-              String8 saved_exe = exe_cfg->first->string;
-              String8 saved_exe_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_exe, cfg_folder);
-              String8 saved_wdir = wdir_cfg->first->string;
-              String8 saved_wdir_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_wdir, cfg_folder);
-              String8 saved_entry_point = entry_cfg->first->string;
-              df_entity_equip_b32(target__ent, active_cfg != &df_g_nil_cfg_node ? !!is_active_u64 : 1);
-              df_entity_equip_name(0, target__ent, saved_label);
-              df_entity_equip_name(0, exe__ent,    saved_exe_absolute);
-              df_entity_equip_name(0, args__ent,   args_cfg->first->string);
-              df_entity_equip_name(0, path__ent,   saved_wdir_absolute);
-              df_entity_equip_name(0, entry__ent,  saved_entry_point);
-              df_entity_equip_cfg_src(target__ent, src);
-              if(!memory_is_zero(&hsva, sizeof(hsva)))
+            }
+            for(DF_CfgNode *target = targets->first;
+                target != &df_g_nil_cfg_node;
+                target = target->next)
+            {
+              if(target->source == src)
               {
-                df_entity_equip_color_hsva(target__ent, hsva);
+                DF_CfgNode *label_cfg  = df_cfg_node_child_from_string(target, str8_lit("label"),             StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *exe_cfg    = df_cfg_node_child_from_string(target, str8_lit("exe"),               StringMatchFlag_CaseInsensitive);
+                if(exe_cfg == &df_g_nil_cfg_node)
+                {
+                  exe_cfg = df_cfg_node_child_from_string(target, str8_lit("name"), StringMatchFlag_CaseInsensitive);
+                }
+                DF_CfgNode *args_cfg   = df_cfg_node_child_from_string(target, str8_lit("arguments"),         StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *wdir_cfg   = df_cfg_node_child_from_string(target, str8_lit("working_directory"), StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *entry_cfg  = df_cfg_node_child_from_string(target, str8_lit("entry_point"),       StringMatchFlag_CaseInsensitive);
+                DF_CfgNode *active_cfg = df_cfg_node_child_from_string(target, str8_lit("active"),            StringMatchFlag_CaseInsensitive);
+                Vec4F32 hsva = df_hsva_from_cfg_node(target);
+                U64 is_active_u64 = 0;
+                if(!cmd_line_target_present)
+                {
+                  try_u64_from_str8_c_rules(active_cfg->first->string, &is_active_u64);
+                }
+                DF_Entity *target__ent = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Target);
+                DF_Entity *exe__ent    = df_entity_alloc(0, target__ent, DF_EntityKind_Executable);
+                DF_Entity *args__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_Arguments);
+                DF_Entity *path__ent   = df_entity_alloc(0, target__ent, DF_EntityKind_ExecutionPath);
+                DF_Entity *entry__ent  = df_entity_alloc(0, target__ent, DF_EntityKind_EntryPointName);
+                String8 saved_label = label_cfg->first->string;
+                String8 saved_exe = exe_cfg->first->string;
+                String8 saved_exe_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_exe, cfg_folder);
+                String8 saved_wdir = wdir_cfg->first->string;
+                String8 saved_wdir_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, saved_wdir, cfg_folder);
+                String8 saved_entry_point = entry_cfg->first->string;
+                String8 saved_label_raw = df_cfg_raw_from_escaped_string(scratch.arena, saved_label);
+                String8 saved_entry_raw = df_cfg_raw_from_escaped_string(scratch.arena, saved_entry_point);
+                String8 saved_args_raw = df_cfg_raw_from_escaped_string(scratch.arena, args_cfg->first->string);
+                df_entity_equip_b32(target__ent, active_cfg != &df_g_nil_cfg_node ? !!is_active_u64 : 1);
+                df_entity_equip_name(0, target__ent, saved_label_raw);
+                df_entity_equip_name(0, exe__ent,    saved_exe_absolute);
+                df_entity_equip_name(0, args__ent,   saved_args_raw);
+                df_entity_equip_name(0, path__ent,   saved_wdir_absolute);
+                df_entity_equip_name(0, entry__ent,  saved_entry_raw);
+                df_entity_equip_cfg_src(target__ent, src);
+                if(!memory_is_zero(&hsva, sizeof(hsva)))
+                {
+                  df_entity_equip_color_hsva(target__ent, hsva);
+                }
               }
             }
           }
@@ -7678,12 +7933,14 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
               if(symb_cfg != &df_g_nil_cfg_node)
               {
+                String8 symb_raw = df_cfg_raw_from_escaped_string(scratch.arena, symb_cfg->first->string);
                 DF_Entity *symb = df_entity_alloc(0, bp_ent, DF_EntityKind_EntryPointName);
-                df_entity_equip_name(0, symb, symb_cfg->first->string);
+                df_entity_equip_name(0, symb, symb_raw);
               }
               if(labl_cfg->string.size != 0)
               {
-                df_entity_equip_name(0, bp_ent, labl_cfg->first->string);
+                String8 label_raw = df_cfg_raw_from_escaped_string(scratch.arena, labl_cfg->string);
+                df_entity_equip_name(0, bp_ent, label_raw);
               }
               if(!memory_is_zero(&hsva, sizeof(hsva)))
               {
@@ -7691,8 +7948,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
               if(cond_cfg->string.size != 0)
               {
+                String8 cond_raw = df_cfg_raw_from_escaped_string(scratch.arena, cond_cfg->string);
                 DF_Entity *cond = df_entity_alloc(0, bp_ent, DF_EntityKind_Condition);
-                df_entity_equip_name(0, cond, cond_cfg->first->string);
+                df_entity_equip_name(0, cond, cond_raw);
               }
             }
           }
@@ -7709,6 +7967,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             Vec4F32 hsva = df_hsva_from_cfg_node(pin);
             String8 string = df_string_from_cfg_node_key(pin, str8_lit("expression"), StringMatchFlag_CaseInsensitive);
+            String8 string_raw = df_cfg_raw_from_escaped_string(scratch.arena, string);
             DF_CfgNode *line_cfg = df_cfg_node_child_from_string(pin, str8_lit("line"), StringMatchFlag_CaseInsensitive);
             DF_CfgNode *addr_cfg = df_cfg_node_child_from_string(pin, str8_lit("addr"), StringMatchFlag_CaseInsensitive);
             DF_Entity *pin_parent_ent = df_entity_root();
@@ -7735,7 +7994,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             DF_Entity *pin_ent = df_entity_alloc(0, pin_parent_ent, DF_EntityKind_WatchPin);
             df_entity_equip_cfg_src(pin_ent, src);
-            df_entity_equip_name(0, pin_ent, string);
+            df_entity_equip_name(0, pin_ent, string_raw);
             if(!memory_is_zero(&hsva, sizeof(hsva)))
             {
               df_entity_equip_color_hsva(pin_ent, hsva);
@@ -7930,6 +8189,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         //- rjf: general entity operations
         case DF_CoreCmdKind_EnableEntity:
         case DF_CoreCmdKind_EnableBreakpoint:
+        case DF_CoreCmdKind_EnableTarget:
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
           df_state_delta_history_push_batch(df_state->hist, &entity->generation);
@@ -7938,6 +8198,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_DisableEntity:
         case DF_CoreCmdKind_DisableBreakpoint:
+        case DF_CoreCmdKind_DisableTarget:
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
           df_state_delta_history_push_batch(df_state->hist, &entity->generation);
@@ -8155,7 +8416,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           // rjf: build target
           df_state_delta_history_push_batch(df_state_delta_history(), 0);
           DF_Entity *entity = df_entity_alloc(df_state_delta_history(), df_entity_root(), DF_EntityKind_Target);
-          df_entity_equip_b32(entity, 1);
           df_entity_equip_cfg_src(entity, DF_CfgSrc_Profile);
           DF_Entity *exe = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_Executable);
           df_entity_equip_name(df_state_delta_history(), exe, params.file_path);
@@ -8170,6 +8430,25 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           p.entity = df_handle_from_entity(entity);
           df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
           df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_EditTarget));
+          df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectTarget));
+        }break;
+        case DF_CoreCmdKind_SelectTarget:
+        {
+          DF_Entity *entity = df_entity_from_handle(params.entity);
+          if(entity->kind == DF_EntityKind_Target)
+          {
+            DF_EntityList all_targets = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
+            B32 is_selected = entity->b32;
+            for(DF_EntityNode *n = all_targets.first; n != 0; n = n->next)
+            {
+              DF_Entity *target = n->entity;
+              df_entity_equip_b32(target, 0);
+            }
+            if(!is_selected)
+            {
+              df_entity_equip_b32(entity, 1);
+            }
+          }
         }break;
         
         //- rjf: ended processes

@@ -65,7 +65,7 @@ commands =
   },
   .rjf_f3 =
   {
-    .win = "pushd build && raddbg.exe && popd",
+    .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --profile:local_dev.raddbg_profile && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -75,6 +75,15 @@ commands =
   .build_raddbg =
   {
     .win = "build raddbg",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .build_raddbg_release_telemetry =
+  {
+    .win = "build raddbg release telemetry",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,

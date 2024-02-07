@@ -429,6 +429,13 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         }
       }break;
       
+      case WM_MOUSEMOVE:
+      {
+        OS_Event *event = w32_push_event(OS_EventKind_MouseMove, window);
+        event->pos.x = (F32)LOWORD(lParam);
+        event->pos.y = (F32)HIWORD(lParam);
+      }break;
+      
       case WM_MOUSEWHEEL:
       {
         S16 wheel_delta = HIWORD(wParam);
@@ -485,7 +492,9 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       }break;
       
       case WM_SYSCHAR:
-      {}break;
+      {
+        result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+      }break;
       
       case WM_CHAR:
       {
@@ -493,6 +502,10 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         if(character >= 32 && character != 127)
         {
           OS_Event *event = w32_push_event(OS_EventKind_Text, window);
+          if(lParam & bit29)
+          {
+            event->flags |= OS_EventFlag_Alt;
+          }
           event->character = character;
         }
       }break;

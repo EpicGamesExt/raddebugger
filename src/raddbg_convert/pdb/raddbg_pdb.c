@@ -846,6 +846,36 @@ pdb_tpi_itypes_from_name(Arena *arena, PDB_TpiHashParsed *tpi_hash, CV_LeafParse
               }
             }break;
             
+            case CV_LeafKind_CLASS2:
+            case CV_LeafKind_STRUCT2:
+            {
+              if (sizeof(CV_LeafStruct2) <= cap){
+                CV_LeafStruct2 *lf_struct = (CV_LeafStruct2*)first;
+                
+                if (!(lf_struct->props & CV_TypeProp_FwdRef)){
+                  // size
+                  U8 *numeric_ptr = (U8*)(lf_struct + 1);
+                  CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, first + cap);
+                  
+                  // name
+                  U8 *name_ptr = numeric_ptr + size.encoded_size;
+                  String8 name = str8_cstring_capped((char*)name_ptr, (char *)(first + cap));
+                  
+                  // unique name
+                  if (compare_unique_name){
+                    if (lf_struct->props & CV_TypeProp_HasUniqueName) {
+                      U8 *unique_name_ptr = name_ptr + name.size + 1;
+                      String8 unique_name = str8_cstring_capped((char*)unique_name_ptr, (char *)(first + cap));
+                      extracted_name = unique_name;
+                    }
+                  }
+                  else{
+                    extracted_name = name;
+                  }
+                }
+              }
+            }break;
+            
             case CV_LeafKind_UNION:
             {
               if (sizeof(CV_LeafUnion) <= cap){

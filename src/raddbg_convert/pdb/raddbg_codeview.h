@@ -2709,7 +2709,7 @@ typedef struct CV_LeafVFPath{
   // CV_TypeId[count] base;
 } CV_LeafVFPath;
 
-//   (LeafKind: CLASS2, CLASS2)
+//   (LeafKind: CLASS2, STRUCT2)
 typedef struct CV_LeafStruct2{
   // NOTE: still reverse engineering this - if you find docs please help!
   CV_TypeProps props;
@@ -2718,11 +2718,10 @@ typedef struct CV_LeafStruct2{
   CV_TypeId derived_itype;
   CV_TypeId vshape_itype;
   U16 unknown2;
-  U16 size;
+  // CV_Numeric size
   // U8[] name (null terminated)
   // U8[] unique_name (null terminated)
 } CV_LeafStruct2;
-
 
 //   (LeafIDKind: FUNC_ID)
 typedef struct CV_LeafFuncId{

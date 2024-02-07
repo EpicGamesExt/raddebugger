@@ -432,6 +432,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
           DEMON_Event *e = demon_push_event(arena, &result, DEMON_EventKind_UnloadModule);
           e->process = demon_ent_handle_from_ptr(process);
           e->module = demon_ent_handle_from_ptr(child);
+          e->string = demon_os_full_path_from_module(arena, child);
         }
       }
       
@@ -571,25 +572,56 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
       }
     }
     
-    // prep threads that will be allowed to run
-    for (DEMON_W32_EntityNode *node = first_run_thread;
-         node != 0;
-         node = node->next){
+    // prep suspension state of threads that will be allowed to run
+    for(DEMON_W32_EntityNode *node = first_run_thread;
+        node != 0;
+        node = node->next)
+    {
       DEMON_Entity *thread = node->entity;
       DEMON_W32_Ext *thread_ext = demon_w32_ext(thread);
       DWORD resume_result = ResumeThread(thread_ext->thread.handle);
-      if (resume_result == max_U32){
+      if(resume_result == max_U32)
+      {
         // TODO(allen): Error. Unknown cause (do GetLastError, FromatMessage)
       }
-      else{
+      else
+      {
         DWORD desired_counter = 0;
         DWORD current_counter = resume_result - 1;
-        if (current_counter != desired_counter){
+        if(current_counter != desired_counter)
+        {
           // NOTE(rjf): Warning. The user has manually suspended this thread,
           // so even though from Demon's perspective it thinks this thread
           // should run, it will not, because the user has manually called
           // SuspendThread or used CREATE_SUSPENDED or whatever.
         }
+      }
+    }
+    
+    // rjf: if run threads are marked as having reported an explicit trap
+    // on their last run, shift their RIPs past that trap instruction, so
+    // that they may continue
+    for(DEMON_W32_EntityNode *node = first_run_thread;
+        node != 0;
+        node = node->next)
+    {
+      DEMON_Entity *thread = node->entity;
+      DEMON_W32_Ext *thread_ext = demon_w32_ext(thread);
+      if(thread_ext->thread.last_run_reported_trap)
+      {
+        Temp temp = temp_begin(scratch.arena);
+        U64 regs_block_size = regs_block_size_from_architecture(thread->arch);
+        void *regs_block = push_array(temp.arena, U8, regs_block_size);
+        B32 good = demon_os_read_regs(thread, regs_block);
+        U64 pre_rip = regs_rip_from_arch_block(thread->arch, regs_block);
+        if(good && pre_rip == thread_ext->thread.last_run_reported_trap_pre_rip)
+        {
+          regs_arch_block_write_rip(thread->arch, regs_block, thread_ext->thread.last_run_reported_trap_post_rip);
+          demon_os_write_regs(thread, regs_block);
+        }
+        temp_end(temp);
+        thread_ext->thread.last_run_reported_trap = 0;
+        thread_ext->thread.last_run_reported_trap_post_rip = 0;
       }
     }
     
@@ -988,27 +1020,22 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
             }
             
             // rjf: determine whether to roll back instruction pointer
-            B32 rollback = (is_trap && !hit_explicit_trap);
+            B32 rollback = (is_trap);
             
             // rjf: roll back
-            if (rollback){
-              // TODO(allen): possibly buggy
-              switch (thread->arch){
-                case Architecture_x86:
-                {
-                  REGS_RegBlockX86 regs = {0};
-                  demon_os_read_regs_x86(thread, &regs);
-                  regs.eip.u32 = instruction_pointer;
-                  demon_os_write_regs_x86(thread, &regs);
-                }break;
-                case Architecture_x64:
-                {
-                  REGS_RegBlockX64 regs = {0};
-                  demon_os_read_regs_x64(thread, &regs);
-                  regs.rip.u64 = instruction_pointer;
-                  demon_os_write_regs_x64(thread, &regs);
-                }break;
+            U64 post_trap_rip = 0;
+            if(rollback)
+            {
+              Temp temp = temp_begin(scratch.arena);
+              U64 regs_block_size = regs_block_size_from_architecture(thread->arch);
+              void *regs_block = push_array(scratch.arena, U8, regs_block_size);
+              if(demon_os_read_regs(thread, regs_block))
+              {
+                post_trap_rip = regs_rip_from_arch_block(thread->arch, regs_block);
+                regs_arch_block_write_rip(thread->arch, regs_block, instruction_pointer);
+                demon_os_write_regs(thread, regs_block);
               }
+              temp_end(temp);
             }
             
             // allen: if this is not a user trap or explicit trap it's a previous trap
@@ -1018,7 +1045,9 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
             B32 skip_event = (hit_previous_trap);
             
             // emit event
-            if (!skip_event){
+            if(!skip_event)
+            {
+              // rjf: fill top-level info
               DEMON_Event *e = demon_push_event(arena, &result, DEMON_EventKind_Exception);
               e->process = demon_ent_handle_from_ptr(process);
               e->thread = demon_ent_handle_from_ptr(thread);
@@ -1026,6 +1055,16 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
               e->flags = exception->ExceptionFlags;
               e->instruction_pointer = (U64)exception->ExceptionAddress;
               
+              // rjf: explicit trap -> mark this thread as having reported this trap
+              if(hit_explicit_trap)
+              {
+                DEMON_W32_Ext *thread_ext = demon_w32_ext(thread);
+                thread_ext->thread.last_run_reported_trap = 1;
+                thread_ext->thread.last_run_reported_trap_pre_rip = instruction_pointer;
+                thread_ext->thread.last_run_reported_trap_post_rip = post_trap_rip;
+              }
+              
+              // rjf: fill by exception code
               switch (exception->ExceptionCode){
                 case DEMON_W32_EXCEPTION_BREAKPOINT:
                 {
@@ -1124,6 +1163,10 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
                     }
                     e->kind = DEMON_EventKind_SetThreadName;
                     e->string = str8_list_join(arena, &thread_name_strings, 0);
+                    if(exception->NumberParameters > 2)
+                    {
+                      e->code = exception->ExceptionInformation[2];
+                    }
                   }
                 }break;
                 

@@ -51,15 +51,15 @@ TG_KindTable:
   {Function                  ""                    0    }
   {Method                    ""                    0    }
   {MemberPtr                 ""                    0    }
-  {Struct                    ""                    0    }
-  {Class                     ""                    0    }
-  {Union                     ""                    0    }
-  {Enum                      ""                    0    }
-  {Alias                     ""                    0    }
-  {IncompleteStruct          ""                    0    }
-  {IncompleteUnion           ""                    0    }
-  {IncompleteClass           ""                    0    }
-  {IncompleteEnum            ""                    0    }
+  {Struct                    "struct"              0    }
+  {Class                     "class"               0    }
+  {Union                     "union"               0    }
+  {Enum                      "enum"                0    }
+  {Alias                     "typedef"             0    }
+  {IncompleteStruct          "struct"              0    }
+  {IncompleteUnion           "union"               0    }
+  {IncompleteClass           "class"               0    }
+  {IncompleteEnum            "enum"                0    }
   {Bitfield                  ""                    0    }
   {Variadic                  ""                    0    }
 }

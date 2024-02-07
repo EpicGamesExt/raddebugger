@@ -20,7 +20,7 @@ txti_init(void)
     txti_state->entity_map_stripes.v[idx].cv = os_condition_variable_alloc();
     txti_state->entity_map_stripes.v[idx].rw_mutex = os_rw_mutex_alloc();
   }
-  txti_state->mut_thread_count = Min(4, os_logical_core_count());
+  txti_state->mut_thread_count = Clamp(1, os_logical_core_count(), 4);
   txti_state->mut_threads = push_array(txti_state->arena, TXTI_MutThread, txti_state->mut_thread_count);
   for(U64 idx = 0; idx < txti_state->mut_thread_count; idx += 1)
   {
@@ -821,13 +821,15 @@ txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, S
           default:{}break;
           case TXTI_TokenKind_Symbol:
           {
+            B32 is_scope_resolution = str8_match(wb_token_string, str8_lit("::"), 0);
             B32 is_dot = str8_match(wb_token_string, str8_lit("."), 0);
             B32 is_arrow = str8_match(wb_token_string, str8_lit("->"), 0);
             B32 is_open_bracket = str8_match(wb_token_string, str8_lit("["), 0);
             B32 is_close_bracket = str8_match(wb_token_string, str8_lit("]"), 0);
             nest -= !!(is_open_bracket);
             nest += !!(is_close_bracket);
-            if(is_dot ||
+            if(is_scope_resolution ||
+               is_dot ||
                is_arrow ||
                is_open_bracket||
                is_close_bracket)
@@ -980,7 +982,7 @@ txti_mut_thread_entry_point(void *p)
       String8 file_contents = {0};
       TXTI_LangKind lang_kind = TXTI_LangKind_Null;
       U64 timestamp = 0;
-      if(msg->kind == TXTI_MsgKind_Reload)
+      if(msg->kind == TXTI_MsgKind_Reload) ProfScope("reload file")
       {
         FileProperties pre_load_props = os_properties_from_file_path(msg->string);
         OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, msg->string);
@@ -1036,7 +1038,7 @@ txti_mut_thread_entry_point(void *p)
       
       //- rjf: obtain initial buffer_apply_gen, reset byte processing counters
       U64 initial_buffer_apply_gen = 0;
-      if(load_valid) OS_MutexScopeR(stripe->rw_mutex)
+      ProfScope("obtain initial buffer_apply_gen") OS_MutexScopeR(stripe->rw_mutex)
       {
         TXTI_Entity *entity = 0;
         for(TXTI_Entity *e = slot->first; e != 0; e = e->next)
@@ -1059,17 +1061,19 @@ txti_mut_thread_entry_point(void *p)
       }
       
       //- rjf: apply edits
+      ProfScope("apply edits") 
       {
         for(U64 buffer_apply_idx = 0;
             buffer_apply_idx < TXTI_ENTITY_BUFFER_COUNT;
             buffer_apply_idx += 1)
+          ProfScope("apply edit #%i", (int)buffer_apply_idx) 
         {
           // rjf: last buffer we're going to edit? -> bump buffer_apply_gen,
           // so that before we touch this last buffer, all readers of this
           // entity will get the already-modified buffers.
           if(buffer_apply_idx == TXTI_ENTITY_BUFFER_COUNT-1)
           {
-            OS_MutexScopeW(stripe->rw_mutex)
+            ProfScope("exclusive lock -> buffer swap") OS_MutexScopeW(stripe->rw_mutex)
             {
               TXTI_Entity *entity = 0;
               for(TXTI_Entity *e = slot->first; e != 0; e = e->next)
@@ -1107,7 +1111,7 @@ txti_mut_thread_entry_point(void *p)
           // exclusive lock to bump the buffer_apply_gen (to change the
           // actively viewable buffer).
           //
-          OS_MutexScopeR(stripe->rw_mutex)
+          ProfScope("apply edit") OS_MutexScopeR(stripe->rw_mutex)
           {
             TXTI_Entity *entity = 0;
             for(TXTI_Entity *e = slot->first; e != 0; e = e->next)
@@ -1162,6 +1166,7 @@ txti_mut_thread_entry_point(void *p)
               }
               
               // rjf: parse & store line range info
+              ProfScope("parse & store line range info")
               {
                 // rjf: count # of lines
                 U64 line_count = 1;
@@ -1184,31 +1189,34 @@ txti_mut_thread_entry_point(void *p)
                 }
                 
                 // rjf: allocate & store line ranges
-                buffer->lines_count = line_count;
-                buffer->lines_ranges = push_array_no_zero(buffer->analysis_arena, Rng1U64, buffer->lines_count);
-                U64 line_idx = 0;
-                U64 line_start_idx = 0;
-                for(U64 idx = 0; idx <= buffer->data.size; idx += 1)
+                ProfScope("allocate & store line ranges")
                 {
-                  if(idx == buffer->data.size || buffer->data.str[idx] == '\n' || buffer->data.str[idx] == '\r')
+                  buffer->lines_count = line_count;
+                  buffer->lines_ranges = push_array_no_zero(buffer->analysis_arena, Rng1U64, buffer->lines_count);
+                  U64 line_idx = 0;
+                  U64 line_start_idx = 0;
+                  for(U64 idx = 0; idx <= buffer->data.size; idx += 1)
                   {
-                    Rng1U64 line_range = r1u64(line_start_idx, idx);
-                    U64 line_size = dim_1u64(line_range);
-                    buffer->lines_ranges[line_idx] = line_range;
-                    buffer->lines_max_size = Max(buffer->lines_max_size, line_size);
-                    line_idx += 1;
-                    line_start_idx = idx+1;
-                    if(idx < buffer->data.size && buffer->data.str[idx] == '\r')
+                    if(idx == buffer->data.size || buffer->data.str[idx] == '\n' || buffer->data.str[idx] == '\r')
                     {
-                      line_start_idx += 1;
-                      idx += 1;
+                      Rng1U64 line_range = r1u64(line_start_idx, idx);
+                      U64 line_size = dim_1u64(line_range);
+                      buffer->lines_ranges[line_idx] = line_range;
+                      buffer->lines_max_size = Max(buffer->lines_max_size, line_size);
+                      line_idx += 1;
+                      line_start_idx = idx+1;
+                      if(idx < buffer->data.size && buffer->data.str[idx] == '\r')
+                      {
+                        line_start_idx += 1;
+                        idx += 1;
+                      }
                     }
                   }
                 }
               }
               
               // rjf: lex file contents
-              if(lex_function != 0)
+              if(lex_function != 0) ProfScope("lex text")
               {
                 buffer->tokens = lex_function(buffer->analysis_arena, buffer_apply_idx == 0 ? &entity->bytes_processed : 0, buffer->data);
               }

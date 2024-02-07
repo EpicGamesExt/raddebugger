@@ -502,6 +502,16 @@ f_piece_array_from_chunk_list(Arena *arena, F_PieceChunkList *list)
   return array;
 }
 
+internal F_PieceArray
+f_piece_array_copy(Arena *arena, F_PieceArray *src)
+{
+  F_PieceArray dst = {0};
+  dst.count = src->count;
+  dst.v = push_array_no_zero(arena, F_Piece, dst.count);
+  MemoryCopy(dst.v, src->v, sizeof(F_Piece)*dst.count);
+  return dst;
+}
+
 ////////////////////////////////
 //~ rjf: Rasterization Cache
 

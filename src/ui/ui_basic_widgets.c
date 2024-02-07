@@ -141,18 +141,19 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   TxtPt mark = draw_data->mark;
   F32 cursor_pixel_off = f_dim_from_tag_size_string(font, font_size, str8_prefix(edited_string, cursor.column-1)).x + font_size/8.f;
   F32 mark_pixel_off   = f_dim_from_tag_size_string(font, font_size, str8_prefix(edited_string, mark.column-1)).x + font_size/8.f;
+  F32 cursor_thickness = ClampBot(4.f, font_size/6.f);
   Rng2F32 cursor_rect =
   {
-    text_position.x-ClampBot(2.f, font_size/4.f) + cursor_pixel_off,
+    text_position.x-cursor_thickness*0.40f + cursor_pixel_off,
     box->rect.y0+4.f,
-    text_position.x+ClampBot(2.f, font_size/4.f) + cursor_pixel_off,
+    text_position.x+cursor_thickness*0.60f + cursor_pixel_off,
     box->rect.y1-4.f,
   };
   Rng2F32 mark_rect =
   {
-    text_position.x-2.f + mark_pixel_off,
+    text_position.x-cursor_thickness*0.40f + mark_pixel_off,
     box->rect.y0+2.f,
-    text_position.x+2.f + mark_pixel_off,
+    text_position.x+cursor_thickness*0.60f + mark_pixel_off,
     box->rect.y1-2.f,
   };
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
@@ -173,6 +174,8 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   ui_push_focus_active(is_auto_focus_active ? UI_FocusKind_On : UI_FocusKind_Null);
   B32 is_focus_hot    = ui_is_focus_hot();
   B32 is_focus_active = ui_is_focus_active();
+  B32 is_focus_hot_disabled = (!is_focus_hot && ui_top_focus_hot() == UI_FocusKind_On);
+  B32 is_focus_active_disabled = (!is_focus_active && ui_top_focus_active() == UI_FocusKind_On);
   
   //- rjf: build top-level box
   ui_set_next_hover_cursor(is_focus_active ? OS_Cursor_IBar : OS_Cursor_HandPoint);
@@ -182,7 +185,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
                                       UI_BoxFlag_ClickToFocus|
                                       ((is_auto_focus_hot || is_auto_focus_active)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_DrawHotEffects|
-                                      is_focus_active*(UI_BoxFlag_Clip|UI_BoxFlag_AllowOverflowX|UI_BoxFlag_ViewClamp),
+                                      (is_focus_active || is_focus_active_disabled)*(UI_BoxFlag_Clip|UI_BoxFlag_AllowOverflowX|UI_BoxFlag_ViewClamp),
                                       key);
   
   //- rjf: take navigation actions for editing
@@ -239,7 +242,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   UI_Parent(box)
   {
     String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
-    if(!is_focus_active)
+    if(!is_focus_active && !is_focus_active_disabled)
     {
       String8 display_string = ui_display_part_from_key_string(string);
       if(pre_edit_value.size != 0)
@@ -525,19 +528,17 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
   // rjf: hue => rgb
   Vec3F32 hue_rgb = rgb_from_hsv(v3f32(data->hue, 1, 1));
   
-  // rjf: value
+  // rjf: white -> rgb background
   {
-    R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 1), 4.f, 0, 1.f);
-    inst->colors[Corner_00] = inst->colors[Corner_10] = v4f32(1, 1, 1, 1);
+    R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1), 4.f, 0, 1.f);
+    inst->colors[Corner_00] = inst->colors[Corner_01] = v4f32(1, 1, 1, 1);
   }
   
-  // rjf: saturation
+  // rjf: black gradient overlay
   {
     R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
-    inst->colors[Corner_00] = v4f32(1, 1, 1, 1);
-    inst->colors[Corner_01] = v4f32(0, 0, 0, 0);
-    inst->colors[Corner_10] = v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1);
-    inst->colors[Corner_11] = v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 0);
+    inst->colors[Corner_01] = v4f32(0, 0, 0, 1);
+    inst->colors[Corner_11] = v4f32(0, 0, 0, 1);
   }
   
   // rjf: indicator
@@ -848,6 +849,8 @@ ui_pane_end(void)
 
 thread_static U64 ui_ts_col_pct_count = 0;
 thread_static F32 *ui_ts_col_pcts_stable = 0;
+thread_static U64 ui_ts_vector_idx = 0;
+thread_static U64 ui_ts_cell_idx = 0;
 
 internal void
 ui_table_begin(U64 column_pct_count, F32 **column_pcts, String8 string)
@@ -959,6 +962,8 @@ ui_table_begin(U64 column_pct_count, F32 **column_pcts, String8 string)
   {
     ui_ts_col_pcts_stable[idx] = *column_pcts[idx];
   }
+  
+  ui_ts_vector_idx = 0;
 }
 
 internal void
@@ -985,6 +990,8 @@ ui_named_table_vector_begin(String8 string)
   ui_set_next_pref_width(ui_pct(1, 0));
   ui_set_next_child_layout_axis(Axis2_X);
   UI_Box *vector = ui_build_box_from_string(UI_BoxFlag_DrawSideBottom, string);
+  ui_ts_vector_idx += 1;
+  ui_ts_cell_idx = 0;
   ui_push_parent(vector);
   return vector;
 }
@@ -1006,7 +1013,7 @@ internal UI_Box *
 ui_table_vector_begin(void)
 {
   UI_Box *table = ui_top_parent();
-  UI_Box *vector = ui_named_table_vector_beginf("###tbl_vec_%p_%I64u", table, table->child_count);
+  UI_Box *vector = ui_named_table_vector_beginf("###tbl_vec_%p_%I64u", table, ui_ts_vector_idx);
   return vector;
 }
 
@@ -1021,7 +1028,7 @@ internal UI_Box *
 ui_table_cell_begin(void)
 {
   UI_Box *vector = ui_top_parent();
-  U64 column_idx = vector->child_count;
+  U64 column_idx = ui_ts_cell_idx;
   F32 width_pct = column_idx < ui_ts_col_pct_count ? ui_ts_col_pcts_stable[column_idx] : 1.f;
   return ui_table_cell_sized_begin(ui_pct(width_pct, 0));
 }
@@ -1037,10 +1044,11 @@ internal UI_Box *
 ui_table_cell_sized_begin(UI_Size size)
 {
   UI_Box *vector = ui_top_parent();
-  U64 column_idx = vector->child_count;
+  U64 column_idx = ui_ts_cell_idx;
+  ui_ts_cell_idx += 1;
   ui_set_next_pref_width(size);
   ui_set_next_child_layout_axis(Axis2_X);
-  UI_Box *cell = ui_build_box_from_stringf((column_idx > 0 ? UI_BoxFlag_DrawSideLeft : 0), "###tbl_cell_%p_%I64u", vector, vector->child_count);
+  UI_Box *cell = ui_build_box_from_stringf((column_idx > 0 ? UI_BoxFlag_DrawSideLeft : 0), "###tbl_cell_%p_%I64u", vector, ui_ts_cell_idx);
   ui_push_parent(cell);
   return cell;
 }

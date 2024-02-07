@@ -2054,7 +2054,7 @@ cv_stringize_leaf_range(Arena *arena, String8List *out,
           str8_list_pushf(arena, out, " derived_itype=%u\n", struct2->derived_itype);
           str8_list_pushf(arena, out, " vshape_itype=%u\n", struct2->vshape_itype);
           str8_list_pushf(arena, out, " unknown2=0x%x\n", struct2->unknown2);
-          str8_list_pushf(arena, out, " size=%u\n", struct2->size);
+          //str8_list_pushf(arena, out, " size=%u\n", struct2->size);
           
           String8 name = str8_cstring_capped((U8*)(struct2 + 1), first + cap);
           str8_list_pushf(arena, out, " name='%.*s'\n", str8_varg(name));

@@ -241,6 +241,7 @@ internal void f_atlas_region_release(F_Atlas *atlas, Rng2S16 region);
 internal F_Piece *f_piece_chunk_list_push_new(Arena *arena, F_PieceChunkList *list, U64 cap);
 internal void f_piece_chunk_list_push(Arena *arena, F_PieceChunkList *list, U64 cap, F_Piece *piece);
 internal F_PieceArray f_piece_array_from_chunk_list(Arena *arena, F_PieceChunkList *list);
+internal F_PieceArray f_piece_array_copy(Arena *arena, F_PieceArray *src);
 
 ////////////////////////////////
 //~ rjf: Rasterization Cache

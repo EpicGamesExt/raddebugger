@@ -412,7 +412,7 @@ txt_init(void)
   txt_shared->u2p_ring_base = push_array_no_zero(arena, U8, txt_shared->u2p_ring_size);
   txt_shared->u2p_ring_cv = os_condition_variable_alloc();
   txt_shared->u2p_ring_mutex = os_mutex_alloc();
-  txt_shared->parse_thread_count = Min(4, os_logical_core_count()-1);
+  txt_shared->parse_thread_count = Clamp(1, os_logical_core_count()-1, 4);
   txt_shared->parse_threads = push_array(arena, OS_Handle, txt_shared->parse_thread_count);
   for(U64 idx = 0; idx < txt_shared->parse_thread_count; idx += 1)
   {

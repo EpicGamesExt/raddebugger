@@ -90,6 +90,22 @@ d_fancy_run_list_from_fancy_string_list(Arena *arena, D_FancyStringList *strs)
   return run_list;
 }
 
+internal D_FancyRunList
+d_fancy_run_list_copy(Arena *arena, D_FancyRunList *src)
+{
+  D_FancyRunList dst = {0};
+  for(D_FancyRunNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  {
+    D_FancyRunNode *dst_n = push_array(arena, D_FancyRunNode, 1);
+    SLLQueuePush(dst.first, dst.last, dst_n);
+    MemoryCopyStruct(&dst_n->v, &src_n->v);
+    dst_n->v.run.pieces = f_piece_array_copy(arena, &src_n->v.run.pieces);
+    dst.node_count += 1;
+  }
+  dst.dim = src->dim;
+  return dst;
+}
+
 ////////////////////////////////
 //~ rjf: Top-Level API
 //
@@ -423,16 +439,14 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
 {
   ProfBeginFunction();
   
-  // rjf: grab total advance
-  F32 run_list_total_advance = list->dim.x;
+  //- rjf: total advance > max? -> enable trailer
+  B32 trailer_enabled = (list->dim.x >= max_x && trailer_run.dim.x < max_x);
   
-  // rjf: total advance > max? -> enable trailer
-  B32 trailer_enabled = (run_list_total_advance >= max_x && trailer_run.dim.x < max_x);
-  
-  // rjf: draw runs
+  //- rjf: draw runs
   F32 advance = 0;
   B32 trailer_found = 0;
   Vec4F32 last_color = {0};
+  U64 byte_off = 0;
   for(D_FancyRunNode *n = list->first; n != 0; n = n->next)
   {
     D_FancyRun *fr = &n->v;
@@ -463,6 +477,7 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
       if(!r_handle_match(texture, r_handle_zero()))
       {
         d_img(dst, src, texture, fr->color, 0, 0, 0);
+        //d_rect(dst, v4f32(1, 0, 0, 1), 0, 1.f, 0.f);
       }
       advance += piece->advance;
     }
@@ -485,7 +500,7 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
   }
   end_draw:;
   
-  // rjf: draw trailer
+  //- rjf: draw trailer
   if(trailer_found)
   {
     F_Piece *piece_first = trailer_run.pieces.v;
@@ -513,6 +528,54 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
   }
   
   ProfEnd();
+}
+
+internal void
+d_truncated_fancy_run_fuzzy_matches(Vec2F32 p, D_FancyRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color)
+{
+  for(FuzzyMatchRangeNode *match_n = ranges->first; match_n != 0; match_n = match_n->next)
+  {
+    Rng1U64 byte_range = match_n->range;
+    Rng1F32 pixel_range = {0};
+    {
+      pixel_range.min = 100000;
+      pixel_range.max = 0;
+    }
+    F32 last_piece_end_pad = 0;
+    U64 byte_off = 0;
+    F32 advance = 0;
+    F32 ascent = 0;
+    F32 descent = 0;
+    for(D_FancyRunNode *fr_n = list->first; fr_n != 0; fr_n = fr_n->next)
+    {
+      D_FancyRun *fr = &fr_n->v;
+      F_Run *run = &fr->run;
+      ascent = run->ascent;
+      descent = run->descent;
+      for(U64 piece_idx = 0; piece_idx < run->pieces.count; piece_idx += 1)
+      {
+        F_Piece *piece = &run->pieces.v[piece_idx];
+        if(contains_1u64(byte_range, byte_off))
+        {
+          F32 pre_advance  = advance+piece->offset.x;
+          F32 post_advance = advance+piece->advance;
+          last_piece_end_pad = ((F32)piece->offset.x+(F32)dim_2s16(piece->subrect).x) - piece->advance;
+          pixel_range.min = Min(pre_advance,  pixel_range.min);
+          pixel_range.max = Max(post_advance, pixel_range.max);
+        }
+        byte_off += piece->decode_size;
+        advance += piece->advance;
+      }
+    }
+    if(pixel_range.min < pixel_range.max)
+    {
+      Rng2F32 rect = r2f32p(p.x + pixel_range.min, p.y - descent - ascent,
+                            p.x + pixel_range.max + last_piece_end_pad/2, p.y - descent - ascent + list->dim.y);
+      rect.x0 = Min(rect.x0, p.x+max_x);
+      rect.x1 = Min(rect.x1, p.x+max_x);
+      d_rect(rect, color, (descent+ascent)/4.f, 0, 1.f);
+    }
+  }
 }
 
 internal void

@@ -30,8 +30,8 @@ struct DEMON_Entity
   DEMON_Entity *first;
   DEMON_Entity *last;
   
-  U16 kind;
-  U16 arch;
+  DEMON_EntityKind kind;
+  Architecture arch;
   U32 gen;
   U64 id;
   U64 addr_range_dim;

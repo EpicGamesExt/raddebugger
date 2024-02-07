@@ -194,61 +194,6 @@ struct R_PassList
 };
 
 ////////////////////////////////
-//~ rjf: 2D Rendering Types
-
-typedef enum R2_CmdKind
-{
-  R2_CmdKind_Null,
-  R2_CmdKind_Rects,
-  R2_CmdKind_COUNT
-}
-R2_CmdKind;
-
-typedef struct R2_CmdInst_Rect R2_CmdInst_Rect;
-struct R2_CmdInst_Rect
-{
-  Rng2F32 dst;
-  Rng2F32 src;
-  Vec4F32 colors[Corner_COUNT];
-  F32 corner_radii[Corner_COUNT];
-  F32 border_thickness;
-  F32 edge_softness;
-  F32 white_texture_override;
-  F32 _unused_[1];
-};
-
-typedef struct R2_Cmd R2_Cmd;
-struct R2_Cmd
-{
-  R2_CmdKind kind;
-  R_Handle texture;
-  Rng2F32 clip;
-  Vec2F32 translate;
-  F32 transparency;
-  U64 count;
-  union
-  {
-    void *data;
-    R2_CmdInst_Rect *data__rect;
-  };
-};
-
-typedef struct R2_CmdNode R2_CmdNode;
-struct R2_CmdNode
-{
-  R2_CmdNode *next;
-  R2_Cmd cmd;
-};
-
-typedef struct R2_CmdList R2_CmdList;
-struct R2_CmdList
-{
-  R2_CmdNode *first;
-  R2_CmdNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Handle Type Functions
 
 internal R_Handle r_handle_zero(void);

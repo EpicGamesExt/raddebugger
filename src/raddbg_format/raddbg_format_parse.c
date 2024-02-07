@@ -121,16 +121,16 @@ raddbg_parse(RADDBG_U8 *data, RADDBG_U64 size, RADDBG_Parsed *out){
       out->top_level_info = tli;
     }
     
-    raddbg_parse__extract_primary(out, out->binary_sections, &out->binary_section_count,
+    raddbg_parse__extract_primary(out, out->binary_sections, &out->binary_sections_count,
                                   RADDBG_DataSectionTag_BinarySections);
     
-    raddbg_parse__extract_primary(out, out->file_paths, &out->file_path_count,
+    raddbg_parse__extract_primary(out, out->file_paths, &out->file_paths_count,
                                   RADDBG_DataSectionTag_FilePathNodes);
     
-    raddbg_parse__extract_primary(out, out->source_files, &out->source_file_count,
+    raddbg_parse__extract_primary(out, out->source_files, &out->source_files_count,
                                   RADDBG_DataSectionTag_SourceFiles);
     
-    raddbg_parse__extract_primary(out, out->units, &out->unit_count,
+    raddbg_parse__extract_primary(out, out->units, &out->units_count,
                                   RADDBG_DataSectionTag_Units);
     
     raddbg_parse__extract_primary(out, out->unit_vmap, &out->unit_vmap_count,
@@ -139,60 +139,81 @@ raddbg_parse(RADDBG_U8 *data, RADDBG_U64 size, RADDBG_Parsed *out){
     raddbg_parse__extract_primary(out, out->unit_vmap, &out->unit_vmap_count,
                                   RADDBG_DataSectionTag_UnitVmap);
     
-    raddbg_parse__extract_primary(out, out->type_nodes, &out->type_node_count,
+    raddbg_parse__extract_primary(out, out->type_nodes, &out->type_nodes_count,
                                   RADDBG_DataSectionTag_TypeNodes);
     
-    raddbg_parse__extract_primary(out, out->udts, &out->udt_count,
+    raddbg_parse__extract_primary(out, out->udts, &out->udts_count,
                                   RADDBG_DataSectionTag_UDTs);
     
-    raddbg_parse__extract_primary(out, out->members, &out->member_count,
+    raddbg_parse__extract_primary(out, out->members, &out->members_count,
                                   RADDBG_DataSectionTag_Members);
     
-    raddbg_parse__extract_primary(out, out->enum_members, &out->enum_member_count,
+    raddbg_parse__extract_primary(out, out->enum_members, &out->enum_members_count,
                                   RADDBG_DataSectionTag_EnumMembers);
     
-    raddbg_parse__extract_primary(out, out->global_variables, &out->global_variable_count,
+    raddbg_parse__extract_primary(out, out->global_variables, &out->global_variables_count,
                                   RADDBG_DataSectionTag_GlobalVariables);
     
     raddbg_parse__extract_primary(out, out->global_vmap, &out->global_vmap_count,
                                   RADDBG_DataSectionTag_GlobalVmap);
     
-    raddbg_parse__extract_primary(out, out->thread_variables, &out->thread_variable_count,
+    raddbg_parse__extract_primary(out, out->thread_variables, &out->thread_variables_count,
                                   RADDBG_DataSectionTag_ThreadVariables);
     
-    raddbg_parse__extract_primary(out, out->procedures, &out->procedure_count,
+    raddbg_parse__extract_primary(out, out->procedures, &out->procedures_count,
                                   RADDBG_DataSectionTag_Procedures);
     
-    raddbg_parse__extract_primary(out, out->scopes, &out->scope_count,
+    raddbg_parse__extract_primary(out, out->scopes, &out->scopes_count,
                                   RADDBG_DataSectionTag_Scopes);
     
-    raddbg_parse__extract_primary(out, out->scope_voffs, &out->scope_voff_count,
+    raddbg_parse__extract_primary(out, out->scope_voffs, &out->scope_voffs_count,
                                   RADDBG_DataSectionTag_ScopeVoffData);
     
     raddbg_parse__extract_primary(out, out->scope_vmap, &out->scope_vmap_count,
                                   RADDBG_DataSectionTag_ScopeVmap);
     
-    raddbg_parse__extract_primary(out, out->locals, &out->local_count,
+    raddbg_parse__extract_primary(out, out->locals, &out->locals_count,
                                   RADDBG_DataSectionTag_Locals);
     
-    raddbg_parse__extract_primary(out, out->location_blocks, &out->location_block_count,
+    raddbg_parse__extract_primary(out, out->location_blocks, &out->location_blocks_count,
                                   RADDBG_DataSectionTag_LocationBlocks);
     
     raddbg_parse__extract_primary(out, out->location_data, &out->location_data_size,
                                   RADDBG_DataSectionTag_LocationData);
     
     {
-      raddbg_parse__extract_primary(out, out->name_maps, &out->name_map_count,
+      raddbg_parse__extract_primary(out, out->name_maps, &out->name_maps_count,
                                     RADDBG_DataSectionTag_NameMaps);
       
       RADDBG_NameMap *name_map_ptr = out->name_maps;
-      RADDBG_NameMap *name_map_opl = out->name_maps + out->name_map_count;
+      RADDBG_NameMap *name_map_opl = out->name_maps + out->name_maps_count;
       for (; name_map_ptr < name_map_opl; name_map_ptr += 1){
         if (out->name_maps_by_kind[name_map_ptr->kind] == 0){
           out->name_maps_by_kind[name_map_ptr->kind] = name_map_ptr;
         }
       }
     }
+    
+#if !defined(RADDBG_DISABLE_NILS)
+    if(out->binary_sections == 0)                { out->binary_sections        = &raddbg_binary_section_nil;           out->binary_sections_count = 1; }
+    if(out->file_paths == 0)                     { out->file_paths             = &raddbg_file_path_node_nil;           out->file_paths_count = 1; }
+    if(out->source_files == 0)                   { out->source_files           = &raddbg_source_file_nil;              out->source_files_count = 1; }
+    if(out->units == 0)                          { out->units                  = &raddbg_unit_nil;                     out->units_count = 1; }
+    if(out->unit_vmap == 0)                      { out->unit_vmap              = &raddbg_vmap_entry_nil;               out->unit_vmap_count = 1; }
+    if(out->type_nodes == 0)                     { out->type_nodes             = &raddbg_type_node_nil;                out->type_nodes_count = 1; }
+    if(out->udts == 0)                           { out->udts                   = &raddbg_udt_nil;                      out->udts_count = 1; }
+    if(out->members == 0)                        { out->members                = &raddbg_member_nil;                   out->members_count = 1; }
+    if(out->enum_members == 0)                   { out->enum_members           = &raddbg_enum_member_nil;              out->enum_members_count = 1; }
+    if(out->global_variables == 0)               { out->global_variables       = &raddbg_global_variable_nil;          out->global_variables_count = 1; }
+    if(out->global_vmap == 0)                    { out->global_vmap            = &raddbg_vmap_entry_nil;               out->global_vmap_count = 1; }
+    if(out->thread_variables == 0)               { out->thread_variables       = &raddbg_thread_variable_nil;          out->thread_variables_count = 1; }
+    if(out->procedures == 0)                     { out->procedures             = &raddbg_procedure_nil;                out->procedures_count = 1; }
+    if(out->scopes == 0)                         { out->scopes                 = &raddbg_scope_nil;                    out->scopes_count = 1; }
+    if(out->scope_voffs == 0)                    { out->scope_voffs            = &raddbg_voff_nil;                     out->scope_voffs_count = 1; }
+    if(out->scope_vmap == 0)                     { out->scope_vmap             = &raddbg_vmap_entry_nil;               out->scope_vmap_count = 1; }
+    if(out->locals == 0)                         { out->locals                 = &raddbg_local_nil;                    out->locals_count = 1; }
+    if(out->location_blocks == 0)                { out->location_blocks        = &raddbg_location_block_nil;           out->location_blocks_count = 1; }
+#endif
     
   }
   
@@ -495,13 +516,13 @@ raddbg_matches_from_map_node(RADDBG_Parsed *p, RADDBG_NameMapNode *node,
 RADDBG_PROC RADDBG_U64
 raddbg_first_voff_from_proc(RADDBG_Parsed *p, RADDBG_U32 proc_id){
   RADDBG_U64 result = 0;
-  if (0 < proc_id && proc_id < p->procedure_count){
+  if (0 < proc_id && proc_id < p->procedures_count){
     RADDBG_Procedure *proc = p->procedures + proc_id;
     RADDBG_U32 scope_id = proc->root_scope_idx;
-    if (0 < scope_id && scope_id < p->scope_count){
+    if (0 < scope_id && scope_id < p->scopes_count){
       RADDBG_Scope *scope = p->scopes + scope_id;
       if (scope->voff_range_first < scope->voff_range_opl &&
-          scope->voff_range_first < p->scope_voff_count){
+          scope->voff_range_first < p->scope_voffs_count){
         result = p->scope_voffs[scope->voff_range_first];
       }
     }

@@ -22,7 +22,7 @@ struct DF_FileInfo
 {
   String8 filename;
   FileProperties props;
-  DF_FuzzyMatchRangeList match_ranges;
+  FuzzyMatchRangeList match_ranges;
 };
 
 typedef struct DF_FileInfoNode DF_FileInfoNode;
@@ -66,9 +66,9 @@ struct DF_CmdListerItem
   DF_CmdSpec *cmd_spec;
   U64 registrar_idx;
   U64 ordering_idx;
-  DF_FuzzyMatchRangeList name_match_ranges;
-  DF_FuzzyMatchRangeList desc_match_ranges;
-  DF_FuzzyMatchRangeList tags_match_ranges;
+  FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList desc_match_ranges;
+  FuzzyMatchRangeList tags_match_ranges;
 };
 
 typedef struct DF_CmdListerItemNode DF_CmdListerItemNode;
@@ -113,7 +113,7 @@ typedef struct DF_EntityListerItem DF_EntityListerItem;
 struct DF_EntityListerItem
 {
   DF_Entity *entity;
-  DF_FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList name_match_ranges;
 };
 
 typedef struct DF_EntityListerItemNode DF_EntityListerItemNode;
@@ -146,9 +146,9 @@ struct DF_ProcessInfo
 {
   DEMON_ProcessInfo info;
   B32 is_attached;
-  DF_FuzzyMatchRangeList attached_match_ranges;
-  DF_FuzzyMatchRangeList name_match_ranges;
-  DF_FuzzyMatchRangeList pid_match_ranges;
+  FuzzyMatchRangeList attached_match_ranges;
+  FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList pid_match_ranges;
 };
 
 typedef struct DF_ProcessInfoNode DF_ProcessInfoNode;
@@ -274,15 +274,38 @@ typedef enum DF_EvalWatchViewColumnKind
 }
 DF_EvalWatchViewColumnKind;
 
+typedef enum DF_EvalWatchViewFillKind
+{
+  DF_EvalWatchViewFillKind_Mutable,
+  DF_EvalWatchViewFillKind_Registers,
+  DF_EvalWatchViewFillKind_Locals,
+  DF_EvalWatchViewFillKind_Globals,
+  DF_EvalWatchViewFillKind_ThreadLocals,
+  DF_EvalWatchViewFillKind_Types,
+  DF_EvalWatchViewFillKind_Procedures,
+  DF_EvalWatchViewFillKind_COUNT
+}
+DF_EvalWatchViewFillKind;
+
+typedef struct DF_EvalWatchViewPoint DF_EvalWatchViewPoint;
+struct DF_EvalWatchViewPoint
+{
+  DF_EvalWatchViewColumnKind column_kind;
+  DF_ExpandKey parent_key;
+  DF_ExpandKey key;
+};
+
 typedef struct DF_EvalWatchViewState DF_EvalWatchViewState;
 struct DF_EvalWatchViewState
 {
   B32 initialized;
   
-  // rjf; selection state
-  DF_EvalWatchViewColumnKind selected_column;
-  DF_ExpandKey selected_parent_key;
-  DF_ExpandKey selected_key;
+  // rjf: fill kind (way that the contents of the watch view are computed)
+  DF_EvalWatchViewFillKind fill_kind;
+  
+  // rjf; table cursor state
+  DF_EvalWatchViewPoint cursor;
+  DF_EvalWatchViewPoint mark;
   
   // rjf: text input state
   TxtPt input_cursor;
@@ -297,33 +320,11 @@ struct DF_EvalWatchViewState
   F32 type_column_pct;
   F32 view_rule_column_pct;
   
-  // rjf: top-level expression state
+  // rjf: mutable fill-kind root expression state
   DF_EvalRoot *first_root;
   DF_EvalRoot *last_root;
   DF_EvalRoot *first_free_root;
   U64 root_count;
-};
-
-typedef struct DF_EvalThreadDerivedReadOnlyWatchViewState DF_EvalThreadDerivedReadOnlyWatchViewState;
-struct DF_EvalThreadDerivedReadOnlyWatchViewState
-{
-  Architecture cached_architecture;
-  DF_Handle cached_binary;
-  U64 cached_vaddr;
-  DF_EvalWatchViewState ewv;
-};
-
-typedef struct DF_RegistersViewArchState DF_RegistersViewArchState;
-struct DF_RegistersViewArchState
-{
-  B32 initialized;
-  DF_EvalWatchViewState ewv;
-};
-
-typedef struct DF_RegistersViewState DF_RegistersViewState;
-struct DF_RegistersViewState
-{
-  DF_RegistersViewArchState arch_state[Architecture_COUNT];
 };
 
 ////////////////////////////////
@@ -442,20 +443,22 @@ internal TXTI_TokenArray df_txti_token_array_from_dasm_arch_string(Arena *arena,
 ////////////////////////////////
 //~ rjf: Eval/Watch Views
 
+//- rjf: eval watch view instance -> eval view key
+internal DF_EvalViewKey df_eval_view_key_from_eval_watch_view(DF_EvalWatchViewState *ewv);
+
 //- rjf: root allocation/deallocation/mutation
 internal DF_EvalRoot *  df_eval_root_alloc(DF_View *view, DF_EvalWatchViewState *ews);
 internal void           df_eval_root_release(DF_EvalWatchViewState *ews, DF_EvalRoot *root);
 internal void           df_eval_root_equip_string(DF_EvalRoot *root, String8 string);
 internal DF_EvalRoot *  df_eval_root_from_string(DF_EvalWatchViewState *ews, String8 string);
-internal DF_EvalRoot *  df_eval_root_from_expand_key(DF_EvalWatchViewState *ews, DF_ExpandKey expand_key);
+internal DF_EvalRoot *  df_eval_root_from_expand_key(DF_EvalWatchViewState *ews, DF_EvalView *eval_view, DF_ExpandKey expand_key);
 internal String8        df_string_from_eval_root(DF_EvalRoot *root);
-internal DF_ExpandKey   df_expand_key_from_eval_root(DF_EvalRoot *root);
 
 //- rjf: windowed watch tree visualization
-internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_EvalWatchViewState *ews);
+internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_EvalWatchViewState *ews);
 
 //- rjf: eval/watch views main hooks
-internal void df_eval_watch_view_init(DF_EvalWatchViewState *ewv, DF_View *view);
+internal void df_eval_watch_view_init(DF_EvalWatchViewState *ewv, DF_View *view, DF_EvalWatchViewFillKind fill_kind);
 internal void df_eval_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalWatchViewState *ewv, DF_CmdList *cmds);
 internal void df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalWatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect);
 

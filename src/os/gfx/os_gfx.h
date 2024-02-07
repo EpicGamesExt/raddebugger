@@ -40,6 +40,7 @@ typedef enum OS_EventKind
   OS_EventKind_Null,
   OS_EventKind_Press,
   OS_EventKind_Release,
+  OS_EventKind_MouseMove,
   OS_EventKind_Text,
   OS_EventKind_Scroll,
   OS_EventKind_WindowLoseFocus,

@@ -507,6 +507,7 @@ internal Vec4S32 mix_4s32(Vec4S32 a, Vec4S32 b, F32 t);
 
 internal Mat3x3F32 mat_3x3f32(F32 diagonal);
 internal Mat3x3F32 make_translate_3x3f32(Vec2F32 delta);
+internal Mat3x3F32 make_scale_3x3f32(Vec2F32 scale);
 internal Mat3x3F32 mul_3x3f32(Mat3x3F32 a, Mat3x3F32 b);
 
 internal Mat4x4F32 mat_4x4f32(F32 diagonal);
