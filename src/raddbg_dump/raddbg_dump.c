@@ -196,7 +196,7 @@ main(int argc, char **argv){
     if (raddbg->binary_sections != 0 && params->dump_binary_sections){
       str8_list_pushf(arena, &dump, "# BINARY SECTIONS:\n");
       RADDBG_BinarySection *ptr = raddbg->binary_sections;
-      for (U32 i = 0; i < raddbg->binary_section_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->binary_sections_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " section[%u]:\n", i);
         raddbg_stringize_binary_section(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -209,12 +209,12 @@ main(int argc, char **argv){
       RADDBG_FilePathBundle file_path_bundle = {0};
       {
         file_path_bundle.file_paths = raddbg->file_paths;
-        file_path_bundle.file_path_count = raddbg->file_path_count;
+        file_path_bundle.file_path_count = raddbg->file_paths_count;
       }
       
       str8_list_pushf(arena, &dump, "# FILE PATHS\n");
       RADDBG_FilePathNode *ptr = raddbg->file_paths;
-      for (U32 i = 0; i < raddbg->file_path_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->file_paths_count; i += 1, ptr += 1){
         if (ptr->parent_path_node == 0){
           raddbg_stringize_file_path(arena, &dump, raddbg, &file_path_bundle, ptr, 1);
         }
@@ -226,7 +226,7 @@ main(int argc, char **argv){
     if (raddbg->source_files != 0 && params->dump_source_files){
       str8_list_pushf(arena, &dump, "# SOURCE FILES\n");
       RADDBG_SourceFile *ptr = raddbg->source_files;
-      for (U32 i = 0; i < raddbg->source_file_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->source_files_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " source_file[%u]:\n", i);
         raddbg_stringize_source_file(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -238,7 +238,7 @@ main(int argc, char **argv){
     if (raddbg->units != 0 && params->dump_units){
       str8_list_pushf(arena, &dump, "# UNITS\n");
       RADDBG_Unit *ptr = raddbg->units;
-      for (U32 i = 0; i < raddbg->unit_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->units_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " unit[%u]:\n", i);
         raddbg_stringize_unit(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -260,7 +260,7 @@ main(int argc, char **argv){
     if (raddbg->type_nodes != 0 && params->dump_type_nodes){
       str8_list_pushf(arena, &dump, "# TYPE NODES:\n");
       RADDBG_TypeNode *ptr = raddbg->type_nodes;
-      for (U32 i = 0; i < raddbg->type_node_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->type_nodes_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " type[%u]:\n", i);
         raddbg_stringize_type_node(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -274,13 +274,13 @@ main(int argc, char **argv){
       {
         member_bundle.members = raddbg->members;
         member_bundle.enum_members = raddbg->enum_members;
-        member_bundle.member_count = raddbg->member_count;
-        member_bundle.enum_member_count = raddbg->enum_member_count;
+        member_bundle.member_count = raddbg->members_count;
+        member_bundle.enum_member_count = raddbg->enum_members_count;
       }
       
       str8_list_pushf(arena, &dump, "# UDTS:\n");
       RADDBG_UDT *ptr = raddbg->udts;
-      for (U32 i = 0; i < raddbg->udt_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->udts_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " udt[%u]:\n", i);
         raddbg_stringize_udt(arena, &dump, raddbg, &member_bundle, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -292,7 +292,7 @@ main(int argc, char **argv){
     if (raddbg->global_variables != 0 && params->dump_global_variables){
       str8_list_pushf(arena, &dump, "# GLOBAL VARIABLES:\n");
       RADDBG_GlobalVariable *ptr = raddbg->global_variables;
-      for (U32 i = 0; i < raddbg->global_variable_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->global_variables_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " global_variable[%u]:\n", i);
         raddbg_stringize_global_variable(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -314,7 +314,7 @@ main(int argc, char **argv){
     if (raddbg->thread_variables != 0 && params->dump_thread_variables){
       str8_list_pushf(arena, &dump, "# THREAD VARIABLES:\n");
       RADDBG_ThreadVariable *ptr = raddbg->thread_variables;
-      for (U32 i = 0; i < raddbg->thread_variable_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->thread_variables_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " thread_variable[%u]:\n", i);
         raddbg_stringize_thread_variable(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -326,7 +326,7 @@ main(int argc, char **argv){
     if (raddbg->procedures != 0 && params->dump_procedures){
       str8_list_pushf(arena, &dump, "# PROCEDURES:\n");
       RADDBG_Procedure *ptr = raddbg->procedures;
-      for (U32 i = 0; i < raddbg->procedure_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->procedures_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " procedure[%u]:\n", i);
         raddbg_stringize_procedure(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
@@ -339,20 +339,20 @@ main(int argc, char **argv){
       RADDBG_ScopeBundle scope_bundle = {0};
       {
         scope_bundle.scopes = raddbg->scopes;
-        scope_bundle.scope_count = raddbg->scope_count;
+        scope_bundle.scope_count = raddbg->scopes_count;
         scope_bundle.scope_voffs = raddbg->scope_voffs;
-        scope_bundle.scope_voff_count = raddbg->scope_voff_count;
+        scope_bundle.scope_voff_count = raddbg->scope_voffs_count;
         scope_bundle.locals = raddbg->locals;
-        scope_bundle.local_count = raddbg->local_count;
+        scope_bundle.local_count = raddbg->locals_count;
         scope_bundle.location_blocks = raddbg->location_blocks;
-        scope_bundle.location_block_count = raddbg->location_block_count;
+        scope_bundle.location_block_count = raddbg->location_blocks_count;
         scope_bundle.location_data = raddbg->location_data;
         scope_bundle.location_data_size = raddbg->location_data_size;
       }
       
       str8_list_pushf(arena, &dump, "# SCOPES:\n");
       RADDBG_Scope *ptr = raddbg->scopes;
-      for (U32 i = 0; i < raddbg->scope_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->scopes_count; i += 1, ptr += 1){
         if (ptr->parent_scope_idx == 0){
           raddbg_stringize_scope(arena, &dump, raddbg, &scope_bundle, ptr, 1);
           str8_list_push(arena, &dump, str8_lit("\n"));
@@ -375,7 +375,7 @@ main(int argc, char **argv){
     if (raddbg->name_maps != 0 && params->dump_name_map){
       str8_list_pushf(arena, &dump, "# NAME MAP:\n");
       RADDBG_NameMap *ptr = raddbg->name_maps;
-      for (U32 i = 0; i < raddbg->name_map_count; i += 1, ptr += 1){
+      for (U32 i = 0; i < raddbg->name_maps_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " name_map[%u]:\n", i);
         
         RADDBG_ParsedNameMap name_map = {0};
