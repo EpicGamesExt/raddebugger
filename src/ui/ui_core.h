@@ -32,6 +32,18 @@ struct UI_IconInfo
 };
 
 ////////////////////////////////
+//~ rjf: Mouse Button Kinds
+
+typedef enum UI_MouseButtonKind
+{
+  UI_MouseButtonKind_Left,
+  UI_MouseButtonKind_Middle,
+  UI_MouseButtonKind_Right,
+  UI_MouseButtonKind_COUNT
+}
+UI_MouseButtonKind;
+
+////////////////////////////////
 //~ rjf: Focus Types
 
 typedef enum UI_FocusKind
@@ -415,10 +427,10 @@ struct UI_State
   
   //- rjf: user interaction state
   UI_Key hot_box_key;
-  UI_Key active_box_key[Side_COUNT];
+  UI_Key active_box_key[UI_MouseButtonKind_COUNT];
   UI_Key clipboard_copy_key;
-  F32 time_since_last_click[Side_COUNT];
-  UI_Key last_click_key[Side_COUNT];
+  F32 time_since_last_click[UI_MouseButtonKind_COUNT];
+  UI_Key last_click_key[UI_MouseButtonKind_COUNT];
   Vec2F32 drag_start_mouse;
   Arena *drag_state_arena;
   String8 drag_state_data;
@@ -551,7 +563,7 @@ internal D_FancyRunList    ui_string_hover_runs(Arena *arena);
 
 //- rjf: interaction keys
 internal UI_Key            ui_hot_key(void);
-internal UI_Key            ui_active_key(Side side);
+internal UI_Key            ui_active_key(UI_MouseButtonKind button_kind);
 
 //- rjf: controls over interaction
 internal void              ui_kill_action(void);

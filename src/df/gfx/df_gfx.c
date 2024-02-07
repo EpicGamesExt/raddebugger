@@ -7537,7 +7537,10 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
 internal void
 df_set_hover_eval(DF_Window *ws, Vec2F32 pos, DF_CtrlCtx ctrl_ctx, DF_Entity *file, TxtPt pt, U64 vaddr, String8 string)
 {
-  if(ws->hover_eval_last_frame_idx+1 < df_frame_index() && ui_key_match(ui_active_key(Side_Min), ui_key_zero()) && ui_key_match(ui_active_key(Side_Max), ui_key_zero()))
+  if(ws->hover_eval_last_frame_idx+1 < df_frame_index() &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero()) &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()))
   {
     B32 is_new_string = !str8_match(ws->hover_eval_string, string, 0);
     if(is_new_string)

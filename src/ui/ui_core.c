@@ -591,9 +591,9 @@ ui_hot_key(void)
 }
 
 internal UI_Key
-ui_active_key(Side side)
+ui_active_key(UI_MouseButtonKind button_kind)
 {
-  return ui_state->active_box_key[side];
+  return ui_state->active_box_key[button_kind];
 }
 
 //- rjf: controls over interaction
@@ -601,7 +601,10 @@ ui_active_key(Side side)
 internal void
 ui_kill_action(void)
 {
-  ui_state->active_box_key[Side_Min] = ui_state->active_box_key[Side_Max] = ui_key_zero();
+  for(EachEnumVal(UI_MouseButtonKind, k))
+  {
+    ui_state->active_box_key[k] = ui_key_zero();
+  }
 }
 
 //- rjf: box cache lookup
@@ -958,32 +961,41 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   }
   
   //- rjf: reset hot if we don't have an active widget
-  if(ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) &&
-     ui_key_match(ui_state->active_box_key[Side_Max], ui_key_zero()))
   {
-    ui_state->hot_box_key = ui_key_zero();
+    B32 has_active = 0;
+    for(EachEnumVal(UI_MouseButtonKind, k))
+    {
+      if(!ui_key_match(ui_state->active_box_key[k], ui_key_zero()))
+      {
+        has_active = 1;
+      }
+    }
+    if(!has_active)
+    {
+      ui_state->hot_box_key = ui_key_zero();
+    }
   }
   
   //- rjf: reset active if our active box is disabled
-  for(Side side = (Side)0; side < Side_COUNT; side = (Side)(side+1))
+  for(EachEnumVal(UI_MouseButtonKind, k))
   {
-    if(!ui_key_match(ui_state->active_box_key[side], ui_key_zero()))
+    if(!ui_key_match(ui_state->active_box_key[k], ui_key_zero()))
     {
-      UI_Box *box = ui_box_from_key(ui_state->active_box_key[side]);
+      UI_Box *box = ui_box_from_key(ui_state->active_box_key[k]);
       if(!ui_box_is_nil(box) && box->flags & UI_BoxFlag_Disabled)
       {
-        ui_state->active_box_key[side] = ui_key_zero();
+        ui_state->active_box_key[k] = ui_key_zero();
       }
     }
   }
   
   //- rjf: reset active keys if they have been pruned
-  for(Side side = Side_Min; side < Side_COUNT; side = (Side)(side + 1))
+  for(EachEnumVal(UI_MouseButtonKind, k))
   {
-    UI_Box *box = ui_box_from_key(ui_state->active_box_key[side]);
+    UI_Box *box = ui_box_from_key(ui_state->active_box_key[k]);
     if(ui_box_is_nil(box))
     {
-      ui_state->active_box_key[side] = ui_key_zero();
+      ui_state->active_box_key[k] = ui_key_zero();
     }
   }
   
@@ -993,9 +1005,9 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     if((event->kind == OS_EventKind_Press || event->kind == OS_EventKind_Release) &&
        !os_handle_match(event->window, window))
     {
-      for(Side side = Side_Min; side < Side_COUNT; side = (Side)(side + 1))
+      for(EachEnumVal(UI_MouseButtonKind, k))
       {
-        ui_state->active_box_key[side] = ui_key_zero();
+        ui_state->active_box_key[k] = ui_key_zero();
       }
       break;
     }
@@ -1154,7 +1166,7 @@ ui_end_build(void)
       {
         // rjf: grab states informing animation
         B32 is_hot            = ui_key_match(box->key, ui_state->hot_box_key);
-        B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[Side_Min]);
+        B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[UI_MouseButtonKind_Left]);
         B32 is_disabled       = !!(box->flags & UI_BoxFlag_Disabled) && (box->first_disabled_build_index+10 < ui_state->build_index ||
                                                                          box->first_touched_build_index == box->first_disabled_build_index);
         B32 is_focus_hot      = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
@@ -1273,7 +1285,7 @@ ui_end_build(void)
   //- rjf: hover cursor
   {
     UI_Box *hot = ui_box_from_key(ui_state->hot_box_key);
-    UI_Box *active = ui_box_from_key(ui_state->active_box_key[Side_Min]);
+    UI_Box *active = ui_box_from_key(ui_state->active_box_key[UI_MouseButtonKind_Left]);
     UI_Box *box = ui_box_is_nil(active) ? hot : active;
     OS_Cursor cursor = box->hover_cursor;
     if(box->flags & UI_BoxFlag_Disabled && box->flags & UI_BoxFlag_Clickable)
@@ -1313,58 +1325,68 @@ ui_end_build(void)
   }
   
   //- rjf: hovering possibly-truncated drawn text -> store text
-  if(ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Min]) &&
-     ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Max]))
   {
-    B32 found = 0;
-    for(UI_Box *box = ui_state->root, *next = 0; !ui_box_is_nil(box); box = next)
+    B32 inactive = 1;
+    for(EachEnumVal(UI_MouseButtonKind, k))
     {
-      UI_BoxRec rec = ui_box_rec_df_pre(box, ui_state->root);
-      next = rec.next;
-      S32 pop_idx = 0;
-      for(UI_Box *b = box; !ui_box_is_nil(b) && pop_idx <= rec.pop_count; b = b->parent, pop_idx += 1)
+      if(!ui_key_match(ui_key_zero(), ui_state->active_box_key[k]))
       {
-        if(b->flags & UI_BoxFlag_DrawText && !(b->flags & UI_BoxFlag_DisableTextTrunc))
+        inactive = 0;
+        break;
+      }
+    }
+    if(inactive)
+    {
+      B32 found = 0;
+      for(UI_Box *box = ui_state->root, *next = 0; !ui_box_is_nil(box); box = next)
+      {
+        UI_BoxRec rec = ui_box_rec_df_pre(box, ui_state->root);
+        next = rec.next;
+        S32 pop_idx = 0;
+        for(UI_Box *b = box; !ui_box_is_nil(b) && pop_idx <= rec.pop_count; b = b->parent, pop_idx += 1)
         {
-          String8 box_display_string = ui_box_display_string(b);
-          Vec2F32 text_pos = ui_box_text_position(b);
-          Vec2F32 drawn_text_dim = b->display_string_runs.dim;
-          B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > b->rect.x1);
-          B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
-                                                       b->rect.y0,
-                                                       Min(text_pos.x+drawn_text_dim.x, b->rect.x1),
-                                                       b->rect.y1),
-                                                ui_state->mouse);
-          if(text_is_truncated && mouse_is_hovering)
+          if(b->flags & UI_BoxFlag_DrawText && !(b->flags & UI_BoxFlag_DisableTextTrunc))
           {
-            if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+            String8 box_display_string = ui_box_display_string(b);
+            Vec2F32 text_pos = ui_box_text_position(b);
+            Vec2F32 drawn_text_dim = b->display_string_runs.dim;
+            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > b->rect.x1);
+            B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
+                                                         b->rect.y0,
+                                                         Min(text_pos.x+drawn_text_dim.x, b->rect.x1),
+                                                         b->rect.y1),
+                                                  ui_state->mouse);
+            if(text_is_truncated && mouse_is_hovering)
             {
-              arena_clear(ui_state->string_hover_arena);
-              ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
-              ui_state->string_hover_fancy_runs = d_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
-              ui_state->string_hover_begin_us = os_now_microseconds();
+              if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+              {
+                arena_clear(ui_state->string_hover_arena);
+                ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
+                ui_state->string_hover_fancy_runs = d_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
+                ui_state->string_hover_begin_us = os_now_microseconds();
+              }
+              ui_state->string_hover_build_index = ui_state->build_index;
+              found = 1;
+              goto break_all_hover_string;
             }
-            ui_state->string_hover_build_index = ui_state->build_index;
-            found = 1;
+          }
+          if(b != box && contains_2f32(b->rect, ui_state->mouse) && b->flags & UI_BoxFlag_DrawText)
+          {
             goto break_all_hover_string;
           }
         }
-        if(b != box && contains_2f32(b->rect, ui_state->mouse) && b->flags & UI_BoxFlag_DrawText)
-        {
-          goto break_all_hover_string;
-        }
       }
-    }
-    break_all_hover_string:;
-    if(!found)
-    {
-      arena_clear(ui_state->string_hover_arena);
-      ui_state->string_hover_build_index = 0;
-      MemoryZeroStruct(&ui_state->string_hover_string);
-    }
-    if(found && !ui_string_hover_active())
-    {
-      ui_state->is_animating = 1;
+      break_all_hover_string:;
+      if(!found)
+      {
+        arena_clear(ui_state->string_hover_arena);
+        ui_state->string_hover_build_index = 0;
+        MemoryZeroStruct(&ui_state->string_hover_string);
+      }
+      if(found && !ui_string_hover_active())
+      {
+        ui_state->is_animating = 1;
+      }
     }
   }
   
@@ -2449,8 +2471,8 @@ ui_signal_from_box(UI_Box *box)
   if(box->flags & UI_BoxFlag_MouseClickable && !ui_key_match(ui_key_zero(), box->key)) ProfScope("clickability")
   {
     // rjf: hot management
-    if((ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Min]) &&
-        ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Max])) &&
+    if((ui_key_match(ui_key_zero(), ui_state->active_box_key[UI_MouseButtonKind_Left]) &&
+        ui_key_match(ui_key_zero(), ui_state->active_box_key[UI_MouseButtonKind_Right])) &&
        ui_key_match(ui_key_zero(), ui_state->hot_box_key) &&
        mouse_is_over)
     {
@@ -2458,8 +2480,8 @@ ui_signal_from_box(UI_Box *box)
     }
     else if(ui_key_match(ui_state->hot_box_key, box->key) &&
             !mouse_is_over &&
-            !ui_key_match(ui_state->active_box_key[Side_Min], box->key) &&
-            !ui_key_match(ui_state->active_box_key[Side_Max], box->key))
+            !ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key) &&
+            !ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Right], box->key))
     {
       ui_state->hot_box_key = ui_key_zero();
     }
@@ -2467,48 +2489,48 @@ ui_signal_from_box(UI_Box *box)
     // rjf: active management (left click)
     if(!disabled &&
        ui_key_match(ui_state->hot_box_key, box->key) &&
-       ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) &&
+       ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) &&
        left_press != 0)
     {
       os_eat_event(ui_state->events, left_press);
       result.pressed = 1;
-      ui_state->active_box_key[Side_Min] = box->key;
+      ui_state->active_box_key[UI_MouseButtonKind_Left] = box->key;
     }
     else if(!disabled &&
-            ui_key_match(ui_state->active_box_key[Side_Min], box->key) &&
+            ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key) &&
             left_release != 0)
     {
       os_eat_event(ui_state->events, left_release);
       result.released = 1;
       result.clicked = mouse_is_over;
       ui_state->hot_box_key = mouse_is_over ? box->key : ui_key_zero();
-      ui_state->active_box_key[Side_Min] = ui_key_zero();
+      ui_state->active_box_key[UI_MouseButtonKind_Left] = ui_key_zero();
     }
     
     // rjf: active management (right click)
     if(!disabled &&
        ui_key_match(ui_state->hot_box_key, box->key) &&
-       ui_key_match(ui_state->active_box_key[Side_Max], ui_key_zero()) &&
+       ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Right], ui_key_zero()) &&
        right_press != 0)
     {
       os_eat_event(ui_state->events, right_press);
       // NOTE(rjf): Add this in if it ever needs to exist:
       // result.right_pressed = 1;
-      ui_state->active_box_key[Side_Max] = box->key;
+      ui_state->active_box_key[UI_MouseButtonKind_Right] = box->key;
     }
     else if(!disabled &&
-            ui_key_match(ui_state->active_box_key[Side_Max], box->key) &&
+            ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Right], box->key) &&
             right_release != 0)
     {
       os_eat_event(ui_state->events, right_release);
       // NOTE(rjf): Add this in if it ever needs to exist:
       // result.right_released = 1;
       result.right_clicked = mouse_is_over;
-      ui_state->active_box_key[Side_Max] = ui_key_zero();
+      ui_state->active_box_key[UI_MouseButtonKind_Right] = ui_key_zero();
     }
     
     // rjf: dragging
-    if(ui_key_match(ui_state->active_box_key[Side_Min], box->key))
+    if(ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key))
     {
       result.dragging = 1;
       if(result.pressed)
@@ -2700,8 +2722,8 @@ ui_signal_from_box(UI_Box *box)
   //- rjf: set hovering status
   result.hovering = mouse_is_over && ((ui_key_match(ui_state->hot_box_key, ui_key_zero()) ||
                                        ui_key_match(ui_state->hot_box_key, box->key)) &&
-                                      (ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) ||
-                                       ui_key_match(ui_state->active_box_key[Side_Min], box->key)));
+                                      (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) ||
+                                       ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key)));
   result.mouse_over = mouse_is_over;
   
   //- rjf: clicking in default nav -> set navigation state to this box
