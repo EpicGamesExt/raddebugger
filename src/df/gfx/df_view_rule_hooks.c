@@ -546,7 +546,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
   
   //- rjf: hover color box -> show components
   UI_Signal sig = ui_signal_from_box(color_box);
-  if(sig.hovering)
+  if(ui_hovering(sig))
   {
     ui_do_color_tooltip_hsva(hsva);
   }
@@ -587,12 +587,12 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
     UI_PrefWidth(ui_px(dim.y, 1.f))
     {
       UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
-      commit = commit || sv_sig.released;
+      commit = commit || ui_released(sv_sig);
     }
     UI_PrefWidth(ui_em(3.f, 1.f))
     {
       UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
-      commit = commit || h_sig.released;
+      commit = commit || ui_released(h_sig);
     }
     UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
     {
@@ -916,7 +916,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
       draw_data->texture = texture;
       draw_data->src = r2f32(v2f32(0, 0), v2f32((F32)topology_info.width, (F32)topology_info.height));
       draw_data->loaded_t = state->loaded_t;
-      draw_data->hovered = sig.hovering;
+      draw_data->hovered = ui_hovering(sig);
       draw_data->mouse_px = mouse_bitmap_px_off;
       draw_data->ui_per_bmp_px = ui_per_bmp_px;
       ui_box_equip_custom_draw(box, df_view_rule_hooks__bitmap_box_draw, draw_data);
@@ -933,11 +933,11 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
           df_gfx_request_frame();
         }
       }
-      if(sig.hovering && r_handle_match(texture, r_handle_zero())) UI_Tooltip
+      if(ui_hovering(sig) && r_handle_match(texture, r_handle_zero())) UI_Tooltip
       {
         ui_labelf("Texture not loaded.");
       }
-      if(sig.hovering && !r_handle_match(texture, r_handle_zero()))
+      if(ui_hovering(sig) && !r_handle_match(texture, r_handle_zero()))
       {
         if(dim.y > (F32)topology_info.height)
         {
@@ -1169,9 +1169,9 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
     {
       UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "geo_box");
       UI_Signal sig = ui_signal_from_box(box);
-      if(sig.dragging)
+      if(ui_dragging(sig))
       {
-        if(sig.pressed)
+        if(ui_pressed(sig))
         {
           Vec2F32 data = v2f32(state->yaw_target, state->pitch_target);
           ui_store_drag_struct(&data);

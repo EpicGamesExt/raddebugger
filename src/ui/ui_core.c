@@ -1012,12 +1012,6 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
       break;
     }
   }
-  
-  //- rjf: tick click timers
-  for(Side side = (Side)0; side < Side_COUNT; side = (Side)(side + 1))
-  {
-    ui_state->time_since_last_click[side] += real_dt;
-  }
 }
 
 internal void
@@ -2378,8 +2372,321 @@ internal UI_Signal
 ui_signal_from_box(UI_Box *box)
 {
   ProfBeginFunction();
-  UI_Signal result = {0};
-  result.box = box;
+  B32 is_focus_hot = box->flags & UI_BoxFlag_FocusHot && !(box->flags & UI_BoxFlag_FocusHotDisabled);
+  UI_Signal sig = {box};
+  sig.event_flags |= os_get_event_flags();
+  
+  //////////////////////////////
+  //- rjf: calculate possibly-clipped box rectangle
+  //
+  Rng2F32 rect = box->rect;
+  for(UI_Box *b = box->parent; !ui_box_is_nil(b); b = b->parent)
+  {
+    if(b->flags & UI_BoxFlag_Clip)
+    {
+      rect = intersect_2f32(rect, b->rect);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: determine if we're under the context menu or not
+  //
+  B32 ctx_menu_is_ancestor = 0;
+  ProfScope("check context menu ancestor")
+  {
+    for(UI_Box *parent = box; !ui_box_is_nil(parent); parent = parent->parent)
+    {
+      if(parent == ui_state->ctx_menu_root)
+      {
+        ctx_menu_is_ancestor = 1;
+        break;
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: calculate blacklist rectangles
+  //
+  Rng2F32 blacklist_rect = {0};
+  if(!ctx_menu_is_ancestor && ui_state->ctx_menu_open)
+  {
+    blacklist_rect = ui_state->ctx_menu_root->rect;
+  }
+  
+  //////////////////////////////
+  //- rjf: process events related to this box
+  //
+  B32 view_scrolled = 0;
+  for(OS_Event *evt = ui_state->events->first, *next = 0;
+      evt != 0;
+      evt = next)
+  {
+    B32 taken = 0;
+    next = evt->next;
+    
+    //- rjf: skip disqualified events
+    if(!os_handle_match(evt->window, ui_state->window)) {continue;}
+    
+    //- rjf: unpack event
+    Vec2F32 evt_mouse = evt->pos;
+    B32 evt_mouse_in_bounds = !contains_2f32(blacklist_rect, evt_mouse) && contains_2f32(rect, evt_mouse);
+    UI_MouseButtonKind evt_mouse_button_kind = (evt->key == OS_Key_LeftMouseButton   ? UI_MouseButtonKind_Left :
+                                                evt->key == OS_Key_MiddleMouseButton ? UI_MouseButtonKind_Middle :
+                                                evt->key == OS_Key_RightMouseButton  ? UI_MouseButtonKind_Right :
+                                                UI_MouseButtonKind_Left);
+    B32 evt_key_is_mouse = (evt->key == OS_Key_LeftMouseButton ||
+                            evt->key == OS_Key_MiddleMouseButton ||
+                            evt->key == OS_Key_RightMouseButton);
+    sig.event_flags |= evt->flags;
+    
+    //- rjf: mouse presses in box -> set hot/active; mark signal accordingly
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       evt->kind == OS_EventKind_Press &&
+       evt_mouse_in_bounds &&
+       evt_key_is_mouse)
+    {
+      ui_state->hot_box_key = box->key;
+      ui_state->active_box_key[evt_mouse_button_kind] = box->key;
+      sig.f |= (UI_SignalFlag_LeftPressed<<evt_mouse_button_kind);
+      ui_state->drag_start_mouse = evt->pos;
+      if(ui_key_match(box->key, ui_state->last_press_key[evt_mouse_button_kind]) &&
+         evt->timestamp_us-ui_state->last_press_timestamp_us[evt_mouse_button_kind] <= 1000000*os_double_click_time())
+      {
+        sig.f |= (UI_SignalFlag_LeftDoubleClicked<<evt_mouse_button_kind);
+      }
+      ui_state->last_press_key[evt_mouse_button_kind] = box->key;
+      ui_state->last_press_timestamp_us[evt_mouse_button_kind] = evt->timestamp_us;
+      taken = 1;
+    }
+    
+    //- rjf: mouse releases in active box -> unset active; mark signal accordingly
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       evt->kind == OS_EventKind_Release &&
+       ui_key_match(ui_state->active_box_key[evt_mouse_button_kind], box->key) &&
+       evt_mouse_in_bounds &&
+       evt_key_is_mouse)
+    {
+      ui_state->active_box_key[evt_mouse_button_kind] = ui_key_zero();
+      sig.f |= (UI_SignalFlag_LeftReleased<<evt_mouse_button_kind);
+      sig.f |= (UI_SignalFlag_LeftClicked<<evt_mouse_button_kind);
+      taken = 1;
+    }
+    
+    //- rjf: mouse releases outside active box -> unset hot/active
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       evt->kind == OS_EventKind_Release &&
+       ui_key_match(ui_state->active_box_key[evt_mouse_button_kind], box->key) &&
+       !evt_mouse_in_bounds &&
+       evt_key_is_mouse)
+    {
+      ui_state->hot_box_key = ui_key_zero();
+      ui_state->active_box_key[evt_mouse_button_kind] = ui_key_zero();
+      sig.f |= (UI_SignalFlag_LeftReleased<<evt_mouse_button_kind);
+      taken = 1;
+    }
+    
+    //- rjf: focus is hot & keyboard click -> mark signal
+    if(box->flags & UI_BoxFlag_KeyboardClickable &&
+       is_focus_hot &&
+       evt->kind == OS_EventKind_Press &&
+       evt->key == OS_Key_Return)
+    {
+      sig.f |= UI_SignalFlag_KeyboardPressed;
+      taken = 1;
+    }
+    
+    //- rjf: scrolling
+    if(box->flags & UI_BoxFlag_Scroll &&
+       evt->kind == OS_EventKind_Scroll &&
+       evt->flags != OS_EventFlag_Ctrl &&
+       evt_mouse_in_bounds)
+    {
+      Vec2F32 delta = evt->delta;
+      if(evt->flags & OS_EventFlag_Shift)
+      {
+        Swap(F32, delta.x, delta.y);
+      }
+      sig.scroll.x += (S16)(delta.x/30.f);
+      sig.scroll.y += (S16)(delta.y/30.f);
+      taken = 1;
+    }
+    
+    //- rjf: view scrolling
+    if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
+       evt->kind == OS_EventKind_Scroll &&
+       evt->flags != OS_EventFlag_Ctrl &&
+       evt_mouse_in_bounds)
+    {
+      Vec2F32 delta = evt->delta;
+      if(evt->flags & OS_EventFlag_Shift)
+      {
+        Swap(F32, delta.x, delta.y);
+      }
+      if(!(box->flags & UI_BoxFlag_ViewScrollX))
+      {
+        delta.x = 0;
+      }
+      if(!(box->flags & UI_BoxFlag_ViewScrollY))
+      {
+        delta.y = 0;
+      }
+      os_eat_event(ui_state->events, evt);
+      box->view_off_target.x += delta.x;
+      box->view_off_target.y += delta.y;
+      view_scrolled = 1;
+      taken = 1;
+    }
+    
+    //- rjf: taken -> eat event
+    if(taken)
+    {
+      os_eat_event(ui_state->events, evt);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: process nav actions related to this box
+  //
+  {
+    for(UI_NavActionNode *n = ui_state->nav_actions->first, *next = 0;
+        n != 0;
+        n = next)
+    {
+      next = n->next;
+      UI_NavAction *action = &n->v;
+      B32 taken = 0;
+      if(is_focus_hot && box->flags & UI_BoxFlag_KeyboardClickable && action->flags & UI_NavActionFlag_Copy)
+      {
+        ui_state->clipboard_copy_key = box->key;
+        taken = 1;
+      }
+      if(box->flags & UI_BoxFlag_Clickable && box->fastpath_codepoint != 0)
+      {
+        B32 ancestor_is_focused = 0;
+        for(UI_Box *parent = box->parent; !ui_box_is_nil(parent); parent = parent->parent)
+        {
+          if(parent->flags & UI_BoxFlag_FocusActive)
+          {
+            ancestor_is_focused = 1;
+            if(parent->flags & UI_BoxFlag_FocusActiveDisabled ||
+               !ui_key_match(parent->default_nav_focus_active_key, ui_key_zero()))
+            {
+              ancestor_is_focused = 0;
+              break;
+            }
+          }
+        }
+        if(ancestor_is_focused && action->insertion.size != 0)
+        {
+          Temp scratch = scratch_begin(0, 0);
+          String32 insertion32 = str32_from_8(scratch.arena, action->insertion);
+          if(insertion32.size == 1 && insertion32.str[0] == box->fastpath_codepoint)
+          {
+            taken = 1;
+            sig.f |= UI_SignalFlag_Clicked|UI_SignalFlag_Pressed;
+          }
+          scratch_end(scratch);
+        }
+      }
+      if(taken)
+      {
+        ui_nav_eat_action_node(ui_nav_actions(), n);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: clamp view scrolling
+  //
+  if(view_scrolled && box->flags & UI_BoxFlag_ViewClamp)
+  {
+    Vec2F32 max_view_off_target =
+    {
+      ClampBot(0, box->view_bounds.x - box->fixed_size.x),
+      ClampBot(0, box->view_bounds.y - box->fixed_size.y),
+    };
+    if(box->flags & UI_BoxFlag_ViewClampX) { box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x); }
+    if(box->flags & UI_BoxFlag_ViewClampY) { box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y); }
+  }
+  
+  //////////////////////////////
+  //- rjf: active -> dragging
+  //
+  for(EachEnumVal(UI_MouseButtonKind, k))
+  {
+    if(ui_key_match(ui_state->active_box_key[k], box->key))
+    {
+      sig.f |= (UI_SignalFlag_LeftDragging<<k);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse is over this box's rect -> always mark mouse-over
+  //
+  {
+    if(contains_2f32(rect, ui_state->mouse) &&
+       !contains_2f32(blacklist_rect, ui_state->mouse))
+    {
+      sig.f |= UI_SignalFlag_MouseOver;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse is over this box's rect, no other hot key? -> set hot key, mark hovering
+  //
+  {
+    if(contains_2f32(rect, ui_state->mouse) &&
+       !contains_2f32(blacklist_rect, ui_state->mouse) &&
+       (ui_key_match(ui_state->hot_box_key, ui_key_zero()) || ui_key_match(ui_state->hot_box_key, box->key)) &&
+       (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key)) &&
+       (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Middle], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Middle], box->key)) &&
+       (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Right], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Right], box->key)))
+    {
+      ui_state->hot_box_key = box->key;
+      sig.f |= UI_SignalFlag_Hovering;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: clicking on something outside the context menu kills the context menu
+  //
+  if(!ctx_menu_is_ancestor && sig.f & (UI_SignalFlag_LeftPressed|UI_SignalFlag_RightPressed|UI_SignalFlag_MiddlePressed))
+  {
+    ui_ctx_menu_close();
+  }
+  
+  //////////////////////////////
+  //- rjf: get default nav ancestor
+  //
+  UI_Box *default_nav_parent = &ui_g_nil_box;
+  for(UI_Box *p = ui_top_parent(); !ui_box_is_nil(p); p = p->parent)
+  {
+    if(p->flags & UI_BoxFlag_DefaultFocusNav)
+    {
+      default_nav_parent = p;
+      break;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: clicking in default nav -> set navigation state to this box
+  //
+  if(box->flags & UI_BoxFlag_ClickToFocus && sig.f&UI_SignalFlag_Pressed && !ui_box_is_nil(default_nav_parent))
+  {
+    default_nav_parent->default_nav_focus_next_hot_key = box->key;
+    if(!ui_key_match(default_nav_parent->default_nav_focus_active_key, box->key))
+    {
+      default_nav_parent->default_nav_focus_next_active_key = ui_key_zero();
+    }
+  }
+  
+  
+  ProfEnd();
+  return sig;
+  
+#if 0
+  ProfBeginFunction();
+  UI_Signal result = {box};
   result.event_flags = os_get_event_flags();
   B32 disabled = !!(box->flags & UI_BoxFlag_Disabled);
   B32 is_focused = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
@@ -2745,6 +3052,7 @@ ui_signal_from_box(UI_Box *box)
   
   ProfEnd();
   return result;
+#endif
 }
 
 ////////////////////////////////
