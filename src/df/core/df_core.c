@@ -4227,6 +4227,10 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
       }break;
     }
     result.errors = errors;
+    if(EVAL_ResultCode_Good < eval.code && eval.code < EVAL_ResultCode_COUNT)
+    {
+      eval_error(arena, &result.errors, EVAL_ErrorKind_InterpretationError, 0, eval_result_code_display_strings[eval.code]);
+    }
   }
   
   //- rjf: apply dynamic type overrides

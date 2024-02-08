@@ -54,6 +54,22 @@ EVAL_ExprKindTable:
   { LeafIdent           0         "leaf_ident"   }
 }
 
+@table(name display_string)
+EVAL_ResultCodeTable:
+{
+  { Good                    "" }
+  { DivideByZero            "Cannot divide by zero." }
+  { BadOp                   "Invalid operation." }
+  { BadOpTypes              "Invalid operation types." }
+  { BadMemRead              "Failed memory read." }
+  { BadRegRead              "Failed register read." }
+  { BadFrameBase            "Invalid frame base address." }
+  { BadModuleBase           "Invalid module base address." }
+  { BadTLSBase              "Invalid thread-local storage base address." }
+  { InsufficientStackSpace  "Insufficient evaluation machine stack space." }
+  { MalformedBytecode       "Malformed bytecode." }
+}
+
 @table_gen
 {
   `typedef U32 EVAL_ExprKind;`;
@@ -63,6 +79,12 @@ EVAL_ExprKindTable:
     `EVAL_ExprKind_COUNT`;
     `};`;
   ``;
+}
+
+@table_gen_enum EVAL_ResultCode:
+{
+  @expand(EVAL_ResultCodeTable a) `EVAL_ResultCode_$(a.name),`;
+  EVAL_ResultCode_COUNT
 }
 
 @table_gen_data(type:U8, fallback:0)
@@ -75,6 +97,12 @@ eval_expr_kind_child_counts:
 eval_expr_kind_strings:
 {
   @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.name)"),`;
+}
+
+@table_gen_data(type:String8, fallback:`{0}`)
+eval_result_code_display_strings:
+{
+  @expand(EVAL_ResultCodeTable a) `str8_lit_comp("$(a.display_string)"),`;
 }
 
 @table_gen_data(type:String8, fallback:`{0}`)

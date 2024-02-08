@@ -5,7 +5,8 @@
 //~ allen: Eval Machine Functions
 
 internal EVAL_Result
-eval_interpret(EVAL_Machine *machine, String8 bytecode){
+eval_interpret(EVAL_Machine *machine, String8 bytecode)
+{
   ProfBeginFunction();
   EVAL_Result result = {0};
   
@@ -23,7 +24,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
     // consume opcode
     RADDBG_EvalOp op = (RADDBG_EvalOp)*ptr;
     if (op >= RADDBG_EvalOp_COUNT){
-      result.bad_eval = 1;
+      result.code = EVAL_ResultCode_BadOp;
       goto done;
     }
     U8 ctrlbits = raddbg_eval_opcode_ctrlbits[op];
@@ -35,7 +36,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
       U32 decode_size = RADDBG_DECODEN_FROM_CTRLBITS(ctrlbits);
       U8 *next_ptr = ptr + decode_size;
       if (next_ptr > opl){
-        result.bad_eval = 1;
+        result.code = EVAL_ResultCode_BadOp;
         goto done;
       }
       // TODO(allen): to improve this:
@@ -55,7 +56,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
     {
       U32 pop_count = RADDBG_POPN_FROM_CTRLBITS(ctrlbits);
       if (pop_count > stack_count){
-        result.bad_eval = 1;
+        result.code = EVAL_ResultCode_BadOp;
         goto done;
       }
       if (pop_count <= stack_count){
@@ -99,7 +100,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           good_read = 1;
         }
         if (!good_read){
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadMemRead;
           goto done;
         }
       }break;
@@ -117,7 +118,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           MemoryCopy(&nval, (U8*)machine->reg_data + off, size);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadRegRead;
           goto done;
         }
       }break;
@@ -130,7 +131,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           MemoryCopy(&nval, (U8*)machine->reg_data + off, size);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadRegRead;
           goto done;
         }
       }break;
@@ -141,7 +142,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = *machine->frame_base + imm;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadFrameBase;
           goto done;
         }
       }break;
@@ -152,7 +153,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = *machine->module_base + imm;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadModuleBase;
           goto done;
         }
       }break;
@@ -163,7 +164,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = *machine->tls_base + imm;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadTLSBase;
           goto done;
         }
       }break;
@@ -256,10 +257,20 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           if (svals[1].f32 != 0.f){
             nval.f32 = svals[0].f32/svals[1].f32;
           }
+          else
+          {
+            result.code = EVAL_ResultCode_DivideByZero;
+            goto done;
+          }
         }
         else if (imm == RADDBG_EvalTypeGroup_F64){
           if (svals[1].f64 != 0.){
             nval.f64 = svals[0].f64/svals[1].f64;
+          }
+          else
+          {
+            result.code = EVAL_ResultCode_DivideByZero;
+            goto done;
           }
         }
         else if (imm == RADDBG_EvalTypeGroup_U ||
@@ -267,9 +278,14 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           if (svals[1].u64 != 0){
             nval.u64 = svals[0].u64/svals[1].u64;
           }
+          else
+          {
+            result.code = EVAL_ResultCode_DivideByZero;
+            goto done;
+          }
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -283,7 +299,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           }
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -295,7 +311,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = svals[0].u64 << svals[1].u64;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -309,7 +325,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = svals[0].s64 >> svals[1].u64;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -321,7 +337,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = svals[0].u64&svals[1].u64;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -333,7 +349,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = svals[0].u64|svals[1].u64;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -345,7 +361,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = svals[0].u64^svals[1].u64;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -357,7 +373,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = ~svals[0].u64;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -369,7 +385,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = (svals[0].u64 && svals[1].u64);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -381,7 +397,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = (svals[0].u64 || svals[1].u64);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -393,7 +409,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = (!svals[0].u64);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -423,7 +439,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = (svals[0].s64 <= svals[1].s64);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -443,7 +459,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = (svals[0].s64 >= svals[1].s64);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -463,7 +479,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = (svals[0].s64 < svals[1].s64);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -483,7 +499,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval.u64 = (svals[0].s64 > svals[1].s64);
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -573,7 +589,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           nval = stack[stack_count - imm - 1];
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOp;
           goto done;
         }
       }break;
@@ -595,7 +611,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           }
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_BadOp;
           goto done;
         }
       }break;
@@ -610,7 +626,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
           stack_count += 1;
         }
         else{
-          result.bad_eval = 1;
+          result.code = EVAL_ResultCode_InsufficientStackSpace;
           goto done;
         }
       }
@@ -622,8 +638,8 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode){
   if (stack_count == 1){
     result.value = stack[0];
   }
-  else{
-    result.bad_eval = 1;
+  else if(result.code == EVAL_ResultCode_Good){
+    result.code = EVAL_ResultCode_MalformedBytecode;
   }
   
   scratch_end(scratch);

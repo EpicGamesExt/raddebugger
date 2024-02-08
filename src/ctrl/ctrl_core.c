@@ -2916,7 +2916,7 @@ ctrl_thread__run(CTRL_Msg *msg)
                 machine.tls_base = &tls_base;
                 eval = eval_interpret(&machine, bytecode);
               }
-              if(eval.bad_eval == 0 && eval.value.u64 == 0)
+              if(eval.code == EVAL_ResultCode_Good && eval.value.u64 == 0)
               {
                 hit_user_bp = 0;
                 hit_conditional_bp_but_filtered = 1;

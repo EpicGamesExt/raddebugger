@@ -6,6 +6,22 @@
 #ifndef EVAL_META_H
 #define EVAL_META_H
 
+typedef enum EVAL_ResultCode
+{
+EVAL_ResultCode_Good,
+EVAL_ResultCode_DivideByZero,
+EVAL_ResultCode_BadOp,
+EVAL_ResultCode_BadOpTypes,
+EVAL_ResultCode_BadMemRead,
+EVAL_ResultCode_BadRegRead,
+EVAL_ResultCode_BadFrameBase,
+EVAL_ResultCode_BadModuleBase,
+EVAL_ResultCode_BadTLSBase,
+EVAL_ResultCode_InsufficientStackSpace,
+EVAL_ResultCode_MalformedBytecode,
+EVAL_ResultCode_COUNT
+} EVAL_ResultCode;
+
 typedef U32 EVAL_ExprKind;
 enum
 {
@@ -135,6 +151,21 @@ str8_lit_comp("Array"),
 str8_lit_comp("Func"),
 str8_lit_comp("Define"),
 str8_lit_comp("LeafIdent"),
+};
+
+String8 eval_result_code_display_strings[] =
+{
+str8_lit_comp(""),
+str8_lit_comp("Cannot divide by zero."),
+str8_lit_comp("Invalid operation."),
+str8_lit_comp("Invalid operation types."),
+str8_lit_comp("Failed memory read."),
+str8_lit_comp("Failed register read."),
+str8_lit_comp("Invalid frame base address."),
+str8_lit_comp("Invalid module base address."),
+str8_lit_comp("Invalid thread-local storage base address."),
+str8_lit_comp("Insufficient evaluation machine stack space."),
+str8_lit_comp("Malformed bytecode."),
 };
 
 String8 eval_expr_op_strings[] =

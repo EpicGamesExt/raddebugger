@@ -13,6 +13,7 @@ typedef enum EVAL_ErrorKind
   EVAL_ErrorKind_MalformedInput,
   EVAL_ErrorKind_MissingInfo,
   EVAL_ErrorKind_ResolutionFailure,
+  EVAL_ErrorKind_InterpretationError,
   EVAL_ErrorKind_COUNT
 }
 EVAL_ErrorKind;
