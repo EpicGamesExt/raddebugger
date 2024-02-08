@@ -2614,7 +2614,8 @@ ui_signal_from_box(UI_Box *box)
   //
   for(EachEnumVal(UI_MouseButtonKind, k))
   {
-    if(ui_key_match(ui_state->active_box_key[k], box->key))
+    if(ui_key_match(ui_state->active_box_key[k], box->key) ||
+       sig.f & (UI_SignalFlag_LeftPressed<<k))
     {
       sig.f |= (UI_SignalFlag_LeftDragging<<k);
     }
