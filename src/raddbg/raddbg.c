@@ -65,10 +65,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   OS_EventList events = {0};
   if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
-    OS_EventList leftover_events_copy = os_event_list_copy(scratch.arena, &leftover_events);
-    OS_EventList new_events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
-    os_event_list_concat_in_place(&events, &leftover_events_copy);
-    os_event_list_concat_in_place(&events, &new_events);
+    events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
   }
   
   //- rjf: enable txti change detection
@@ -321,26 +318,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
-  //- rjf: gather leftover events for subsequent frame
-  // TODO(rjf): need to prevent spurious unconsumed events in UI layer & other event handling paths
-  if(events.count != 0 && 0)
-  {
-    arena_clear(leftover_events_arena);
-    leftover_events = os_event_list_copy(leftover_events_arena, &events);
-    for(OS_Event *ev = leftover_events.first, *next = 0; ev != 0; ev = next)
-    {
-      next = ev->next;
-      if(ev->timestamp_us+1000000 < os_now_microseconds() ||
-         ev->kind == OS_EventKind_Text ||
-         (ev->kind == OS_EventKind_Press && ev->key != OS_Key_LeftMouseButton && ev->key != OS_Key_RightMouseButton && ev->key != OS_Key_MiddleMouseButton) ||
-         (ev->kind == OS_EventKind_Release && ev->key != OS_Key_LeftMouseButton && ev->key != OS_Key_RightMouseButton && ev->key != OS_Key_MiddleMouseButton) ||
-         (ev->kind == OS_EventKind_Scroll))
-      {
-        os_eat_event(&leftover_events, ev);
-      }
-    }
-  }
-  
   //- rjf: determine frame time, record into history
   U64 end_time_us = os_now_microseconds();
   U64 frame_time_us = end_time_us-begin_time_us;
@@ -448,9 +425,6 @@ entry_point(int argc, char **argv)
       OS_Handle ipc_semaphore = os_semaphore_alloc(1, 1, ipc_semaphore_name);
       IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
       ipc_info->msg_size = 0;
-      
-      //- rjf: set up leftover event arena
-      leftover_events_arena = arena_alloc();
       
       //- rjf: initialize stuff we depend on
       {

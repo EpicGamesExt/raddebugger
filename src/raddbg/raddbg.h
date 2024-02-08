@@ -446,8 +446,6 @@ read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_sha
 read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
 global U64 frame_time_us_history[64] = {0};
 global U64 frame_time_us_history_idx = 0;
-global Arena *leftover_events_arena = 0;
-global OS_EventList leftover_events = {0};
 
 ////////////////////////////////
 //~ rjf: Frontend Entry Points
