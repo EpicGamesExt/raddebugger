@@ -191,7 +191,7 @@ pdb_strtbl_from_data(Arena *arena, String8 data){
       result->strblock_min = strblock_off;
       result->strblock_max = strblock_off + strblock_size;
       result->buckets_min = bucket_array_off;
-      result->buckets_min = bucket_array_off + bucket_array_size;
+      result->buckets_max = bucket_array_off + bucket_array_size;
     }
   }
   
