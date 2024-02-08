@@ -1249,6 +1249,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_View *watch = &df_g_nil_view;
           DF_View *locals = &df_g_nil_view;
           DF_View *regs = &df_g_nil_view;
+          DF_View *globals = &df_g_nil_view;
+          DF_View *tlocals = &df_g_nil_view;
+          DF_View *types = &df_g_nil_view;
+          DF_View *procs = &df_g_nil_view;
           DF_View *callstack = &df_g_nil_view;
           DF_View *breakpoints = &df_g_nil_view;
           DF_View *watch_pins = &df_g_nil_view;
@@ -1271,18 +1275,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               switch(view_kind)
               {
                 default:{}break;
-                case DF_GfxViewKind_Watch:      {if(df_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
-                case DF_GfxViewKind_Locals:     {if(df_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
-                case DF_GfxViewKind_Registers:  {if(df_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
-                case DF_GfxViewKind_CallStack:  {if(df_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
-                case DF_GfxViewKind_Breakpoints:{if(df_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
-                case DF_GfxViewKind_WatchPins:  {if(df_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
-                case DF_GfxViewKind_Output:     {if(df_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
-                case DF_GfxViewKind_Targets:    {if(df_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
-                case DF_GfxViewKind_Scheduler:  {if(df_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
-                case DF_GfxViewKind_Modules:    {if(df_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
-                case DF_GfxViewKind_Disassembly:{if(df_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
-                case DF_GfxViewKind_Memory:     {if(df_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
+                case DF_GfxViewKind_Watch:       {if(df_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
+                case DF_GfxViewKind_Locals:      {if(df_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
+                case DF_GfxViewKind_Registers:   {if(df_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
+                case DF_GfxViewKind_Globals:     {if(df_view_is_nil(globals))             { needs_delete = 0; globals = view;} }break;
+                case DF_GfxViewKind_ThreadLocals:{if(df_view_is_nil(tlocals))             { needs_delete = 0; tlocals = view;} }break;
+                case DF_GfxViewKind_Types:       {if(df_view_is_nil(types))               { needs_delete = 0; types = view;} }break;
+                case DF_GfxViewKind_Procedures:  {if(df_view_is_nil(procs))               { needs_delete = 0; procs = view;} }break;
+                case DF_GfxViewKind_CallStack:   {if(df_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
+                case DF_GfxViewKind_Breakpoints: {if(df_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
+                case DF_GfxViewKind_WatchPins:   {if(df_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
+                case DF_GfxViewKind_Output:      {if(df_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
+                case DF_GfxViewKind_Targets:     {if(df_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
+                case DF_GfxViewKind_Scheduler:   {if(df_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
+                case DF_GfxViewKind_Modules:     {if(df_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
+                case DF_GfxViewKind_Disassembly: {if(df_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
+                case DF_GfxViewKind_Memory:      {if(df_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
                 case DF_GfxViewKind_Code:
                 {
                   needs_delete = 0;
@@ -1327,6 +1335,26 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             regs = df_view_alloc();
             df_view_equip_spec(regs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Registers), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(globals))
+          {
+            globals = df_view_alloc();
+            df_view_equip_spec(globals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Globals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(tlocals))
+          {
+            tlocals = df_view_alloc();
+            df_view_equip_spec(tlocals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_ThreadLocals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(types))
+          {
+            types = df_view_alloc();
+            df_view_equip_spec(types, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Types), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(procs))
+          {
+            procs = df_view_alloc();
+            df_view_equip_spec(procs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Procedures), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(callstack))
           {
@@ -1442,6 +1470,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, globals);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, tlocals);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, types);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, procs);
           root_0_1_0->selected_tab_view = df_handle_from_view(watch);
           root_0_1_0->tab_side = Side_Max;
           df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, callstack);
