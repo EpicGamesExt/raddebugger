@@ -801,7 +801,8 @@ typedef struct CONS__SrcLineMapVoffBlock{
 } CONS__SrcLineMapVoffBlock;
 
 typedef struct CONS__SrcLineMapBucket{
-  struct CONS__SrcLineMapBucket *next;
+  struct CONS__SrcLineMapBucket *order_next;
+  struct CONS__SrcLineMapBucket *hash_next;
   U32 line_num;
   CONS__SrcLineMapVoffBlock *first_voff_block;
   CONS__SrcLineMapVoffBlock *last_voff_block;

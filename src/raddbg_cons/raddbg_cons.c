@@ -2435,6 +2435,8 @@ cons__source_combine_lines(Arena *arena, CONS__LineMapFragment *first){
   // gather line number map
   CONS__SrcLineMapBucket *first_bucket = 0;
   CONS__SrcLineMapBucket *last_bucket = 0;
+  U64 line_hash_slots_count = 1024;
+  CONS__SrcLineMapBucket **line_hash_slots = push_array(scratch.arena, CONS__SrcLineMapBucket *, line_hash_slots_count);
   U64 line_count = 0;
   U64 voff_count = 0;
   U64 max_line_num = 0;
@@ -2442,7 +2444,8 @@ cons__source_combine_lines(Arena *arena, CONS__LineMapFragment *first){
   {
     for (CONS__LineMapFragment *map_fragment = first;
          map_fragment != 0;
-         map_fragment = map_fragment->next){
+         map_fragment = map_fragment->next)
+    {
       CONS_LineSequence *sequence = &map_fragment->sequence->line_seq;
       
       U64 *seq_voffs = sequence->voffs;
@@ -2451,6 +2454,7 @@ cons__source_combine_lines(Arena *arena, CONS__LineMapFragment *first){
       for (U64 i = 0; i < seq_line_count; i += 1){
         U32 line_num = seq_line_nums[i];
         U64 voff = seq_voffs[i];
+        U64 line_hash_slot_idx = line_num%line_hash_slots_count;
         
         // update unique voff counter & max line number
         voff_count += 1;
@@ -2458,19 +2462,22 @@ cons__source_combine_lines(Arena *arena, CONS__LineMapFragment *first){
         
         // find match
         CONS__SrcLineMapBucket *match = 0;
-        for (CONS__SrcLineMapBucket *node = first_bucket;
-             node != 0;
-             node = node->next){
-          if (node->line_num == line_num){
-            match = node;
-            break;
+        {
+          for (CONS__SrcLineMapBucket *node = line_hash_slots[line_hash_slot_idx];
+               node != 0;
+               node = node->hash_next){
+            if (node->line_num == line_num){
+              match = node;
+              break;
+            }
           }
         }
         
         // introduce new line if no match
         if (match == 0){
           match = push_array(scratch.arena, CONS__SrcLineMapBucket, 1);
-          SLLQueuePush(first_bucket, last_bucket, match);
+          SLLQueuePush_N(first_bucket, last_bucket, match, order_next);
+          SLLStackPush_N(line_hash_slots[line_hash_slot_idx], match, hash_next);
           match->line_num = line_num;
           line_count += 1;
         }
@@ -2493,7 +2500,7 @@ cons__source_combine_lines(Arena *arena, CONS__LineMapFragment *first){
     CONS__SortKey *key_ptr = keys;
     for (CONS__SrcLineMapBucket *node = first_bucket;
          node != 0;
-         node = node->next, key_ptr += 1){
+         node = node->order_next, key_ptr += 1){
       key_ptr->key = node->line_num;
       key_ptr->val = node;
     }
