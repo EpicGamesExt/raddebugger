@@ -56,7 +56,7 @@ commands =
   },
   .rjf_f2 =
   {
-    .win = "build raddbg_from_pdb",
+    .win = "build raddbg_from_pdb telemetry",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -66,6 +66,24 @@ commands =
   .rjf_f3 =
   {
     .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --profile:local_dev.raddbg_profile && popd",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .rjf_f4 =
+  {
+    .win = "build raddbg_from_pdb release telemetry && pushd build && raddbg_from_pdb.exe --exe:mule_main.exe --pdb:mule_main.pdb --out:mule_main.raddbg --capture && popd",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
+  .rjf_f5 =
+  {
+    .win = "pushd build && raddbg_from_pdb.exe --exe:mule_main.exe --pdb:mule_main.pdb --out:mule_main.raddbg --capture && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -141,5 +159,7 @@ fkey_command_override =
     .F1 = "rjf_f1",
     .F2 = "rjf_f2",
     .F3 = "rjf_f3",
+    .F4 = "rjf_f4",
+    .F5 = "rjf_f5",
   },
 };

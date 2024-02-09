@@ -151,6 +151,14 @@ pdbconv_types_and_symbols(PDBCONV_TypesSymbolsParams *params, CONS_Root *out_roo
   pdb_ctx->section_count = params->sections->count;
   pdb_ctx->root = out_root;
   pdb_ctx->temp_arena = arena_alloc();
+  pdb_ctx->fwd_map.buckets_count = 16384;
+  pdb_ctx->fwd_map.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_FwdNode *, pdb_ctx->fwd_map.buckets_count);
+  pdb_ctx->frame_proc_map.buckets_count = 16384;
+  pdb_ctx->frame_proc_map.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_FrameProcNode *, pdb_ctx->frame_proc_map.buckets_count);
+  pdb_ctx->known_globals.buckets_count = 16384;
+  pdb_ctx->known_globals.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_KnownGlobalNode *, pdb_ctx->known_globals.buckets_count);
+  pdb_ctx->link_names.buckets_count = 16384;
+  pdb_ctx->link_names.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_LinkNameNode *, pdb_ctx->link_names.buckets_count);
   
   // convert types
   pdbconv_type_cons_main_passes(pdb_ctx);
@@ -1733,7 +1741,7 @@ pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name){
 
 static void
 pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map, CV_TypeId key, CV_TypeId val){
-  U64 bucket_idx = key%ArrayCount(map->buckets);
+  U64 bucket_idx = key%map->buckets_count;
   
   // search for an existing match
   PDBCONV_FwdNode *match = 0;
@@ -1751,6 +1759,7 @@ pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map, CV_TypeId key, CV_Ty
     match = push_array(arena, PDBCONV_FwdNode, 1);
     SLLStackPush(map->buckets[bucket_idx], match);
     match->key = key;
+    map->pair_count += 1;
   }
   
   // set node's val
@@ -1760,7 +1769,7 @@ pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map, CV_TypeId key, CV_Ty
 static CV_TypeId
 pdbconv_type_fwd_map_get(PDBCONV_FwdMap *map, CV_TypeId key){
   ProfBeginFunction();
-  U64 bucket_idx = key%ArrayCount(map->buckets);
+  U64 bucket_idx = key%map->buckets_count;
   
   // search for an existing match
   PDBCONV_FwdNode *match = 0;
@@ -1880,6 +1889,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         default:break;
         
         case CV_SymKind_END:
+        ProfScope("CV_SymKind_END")
         {
           // pop scope stack
           pdbconv_symbol_pop_scope(ctx);
@@ -1888,6 +1898,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_FRAMEPROC:
+        ProfScope("CV_SymKind_FRAMEPROC")
         {
           if (sizeof(CV_SymFrameproc) > cap){
             // TODO(allen): error
@@ -1898,6 +1909,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_BLOCK32:
+        ProfScope("CV_SymKind_BLOCK32")
         {
           if (sizeof(CV_SymBlock32) > cap){
             // TODO(allen): error
@@ -1923,6 +1935,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         
         case CV_SymKind_LDATA32:
         case CV_SymKind_GDATA32:
+        ProfScope("CV_SymKind_LDATA32/CV_SymKind_GDATA32")
         {
           if (sizeof(CV_SymData32) > cap){
             // TODO(allen): error
@@ -1984,6 +1997,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         
         case CV_SymKind_LPROC32:
         case CV_SymKind_GPROC32:
+        ProfScope("CV_SymKind_LPROC32/CV_SymKind_GPROC32")
         {
           if (sizeof(CV_SymProc32) > cap){
             // TODO(allen): error
@@ -2061,6 +2075,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_REGREL32:
+        ProfScope("CV_SymKind_REGREL32")
         {
           if (sizeof(CV_SymRegrel32) > cap){
             // TODO(allen): error
@@ -2159,6 +2174,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         
         case CV_SymKind_LTHREAD32:
         case CV_SymKind_GTHREAD32:
+        ProfScope("CV_SymKind_LTHREAD32/CV_SymKind_GTHREAD32")
         {
           if (sizeof(CV_SymThread32) > cap){
             // TODO(allen): error
@@ -2210,6 +2226,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_LOCAL:
+        ProfScope("CV_SymKind_LOCAL")
         {
           if (sizeof(CV_SymLocal) > cap){
             // TODO(allen): error
@@ -2264,6 +2281,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_REGISTER:
+        ProfScope("CV_SymKind_DEFRANGE_REGISTER")
         {
           if (sizeof(CV_SymDefrangeRegister) > cap){
             // TODO(allen): error
@@ -2296,6 +2314,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL:
+        ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL")
         {
           if (sizeof(CV_SymDefrangeFramepointerRel) > cap){
             // TODO(allen): error
@@ -2335,6 +2354,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_SUBFIELD_REGISTER:
+        ProfScope("CV_SymKind_DEFRANGE_SUBFIELD_REGISTER")
         {
           if (sizeof(CV_SymDefrangeSubfieldRegister) > cap){
             // TODO(allen): error
@@ -2371,6 +2391,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE:
+        ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE")
         {
           if (sizeof(CV_SymDefrangeFramepointerRelFullScope) > cap){
             // TODO(allen): error
@@ -2406,6 +2427,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_REGISTER_REL:
+        ProfScope("CV_SymKind_DEFRANGE_REGISTER_REL")
         {
           if (sizeof(CV_SymDefrangeRegisterRel) > cap){
             // TODO(allen): error
@@ -2447,6 +2469,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_FILESTATIC:
+        ProfScope("CV_SymKind_FILESTATIC")
         {
           if (sizeof(CV_SymFileStatic) > cap){
             // TODO(allen): error
@@ -2541,9 +2564,10 @@ pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym){
 
 static void
 pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,CONS_Symbol *key,PDBCONV_FrameProcData *data){
+  ProfBeginFunction();
   U64 key_int = IntFromPtr(key);
   PDBCONV_FrameProcMap *map = &ctx->frame_proc_map;
-  U32 bucket_idx = key_int%ArrayCount(map->buckets);
+  U32 bucket_idx = key_int%map->buckets_count;
   
   // find match
   PDBCONV_FrameProcNode *match = 0;
@@ -2567,14 +2591,17 @@ pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,CONS_Symbol *key,PDBCONV_FrameP
     SLLStackPush(map->buckets[bucket_idx], match);
     match->key = key;
     MemoryCopyStruct(&match->data, data);
+    map->pair_count += 1;
   }
+  ProfEnd();
 }
 
 static PDBCONV_FrameProcData*
 pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, CONS_Symbol *key){
+  ProfBeginFunction();
   U64 key_int = IntFromPtr(key);
   PDBCONV_FrameProcMap *map = &ctx->frame_proc_map;
-  U32 bucket_idx = key_int%ArrayCount(map->buckets);
+  U32 bucket_idx = key_int%map->buckets_count;
   
   // find match
   PDBCONV_FrameProcData *result = 0;
@@ -2587,6 +2614,7 @@ pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, CONS_Symbol *key){
     }
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -2661,8 +2689,9 @@ pdbconv_known_global_hash(String8 name, U64 voff){
 
 static B32
 pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff){
+  ProfBeginFunction();
   U64 hash = pdbconv_known_global_hash(name, voff);
-  U64 bucket_idx = hash%ArrayCount(set->buckets);
+  U64 bucket_idx = hash%set->buckets_count;
   
   PDBCONV_KnownGlobalNode *match = 0;
   for (PDBCONV_KnownGlobalNode *node = set->buckets[bucket_idx];
@@ -2677,13 +2706,15 @@ pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff)
   }
   
   B32 result = (match != 0);
+  ProfEnd();
   return(result);
 }
 
 static void
 pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 name, U64 voff){
+  ProfBeginFunction();
   U64 hash = pdbconv_known_global_hash(name, voff);
-  U64 bucket_idx = hash%ArrayCount(set->buckets);
+  U64 bucket_idx = hash%set->buckets_count;
   
   PDBCONV_KnownGlobalNode *match = 0;
   for (PDBCONV_KnownGlobalNode *node = set->buckets[bucket_idx];
@@ -2703,7 +2734,9 @@ pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 n
     node->key_name = push_str8_copy(arena, name);
     node->key_voff = voff;
     node->hash = hash;
+    set->global_count += 1;
   }
+  ProfEnd();
 }
 
 // location info helpers
@@ -2843,18 +2876,20 @@ pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
 static void
 pdbconv_link_name_save(Arena *arena, PDBCONV_LinkNameMap *map, U64 voff, String8 name){
   U64 hash = (voff >> 3) ^ ((7 & voff) << 6);
-  U64 bucket_idx = hash%ArrayCount(map->buckets);
+  U64 bucket_idx = hash%map->buckets_count;
   
   PDBCONV_LinkNameNode *node = push_array(arena, PDBCONV_LinkNameNode, 1);
   SLLStackPush(map->buckets[bucket_idx], node);
   node->voff = voff;
   node->name = push_str8_copy(arena, name);
+  map->link_name_count += 1;
 }
 
 static String8
 pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff){
+  ProfBeginFunction();
   U64 hash = (voff >> 3) ^ ((7 & voff) << 6);
-  U64 bucket_idx = hash%ArrayCount(map->buckets);
+  U64 bucket_idx = hash%map->buckets_count;
   
   String8 result = {0};
   for (PDBCONV_LinkNameNode *node = map->buckets[bucket_idx];
@@ -2866,6 +2901,7 @@ pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff){
     }
   }
   
+  ProfEnd();
   return(result);
 }
 

@@ -53,7 +53,9 @@ typedef struct PDBCONV_FwdNode{
 } PDBCONV_FwdNode;
 
 typedef struct PDBCONV_FwdMap{
-  PDBCONV_FwdNode *buckets[1<<24];
+  PDBCONV_FwdNode **buckets;
+  U64 buckets_count;
+  U64 pair_count;
 } PDBCONV_FwdMap;
 
 typedef struct PDBCONV_TypeRev{
@@ -74,7 +76,9 @@ typedef struct PDBCONV_FrameProcNode{
 } PDBCONV_FrameProcNode;
 
 typedef struct PDBCONV_FrameProcMap{
-  PDBCONV_FrameProcNode *buckets[1<<24];
+  PDBCONV_FrameProcNode **buckets;
+  U64 buckets_count;
+  U64 pair_count;
 } PDBCONV_FrameProcMap;
 
 typedef struct PDBCONV_ScopeNode{
@@ -91,7 +95,9 @@ typedef struct PDBCONV_KnownGlobalNode{
 } PDBCONV_KnownGlobalNode;
 
 typedef struct PDBCONV_KnownGlobalSet{
-  PDBCONV_KnownGlobalNode *buckets[1<<24];
+  PDBCONV_KnownGlobalNode **buckets;
+  U64 buckets_count;
+  U64 global_count;
 } PDBCONV_KnownGlobalSet;
 
 typedef struct PDBCONV_TypesSymbolsParams{
@@ -111,7 +117,9 @@ typedef struct PDBCONV_LinkNameNode{
 } PDBCONV_LinkNameNode;
 
 typedef struct PDBCONV_LinkNameMap{
-  PDBCONV_LinkNameNode *buckets[1<<24];
+  PDBCONV_LinkNameNode **buckets;
+  U64 buckets_count;
+  U64 link_name_count;
 } PDBCONV_LinkNameMap;
 
 typedef struct PDBCONV_Ctx{
