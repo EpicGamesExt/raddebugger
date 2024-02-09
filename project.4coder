@@ -74,7 +74,7 @@ commands =
   },
   .rjf_f4 =
   {
-    .win = "build raddbg_from_pdb release telemetry && pushd build && raddbg_from_pdb.exe --exe:mule_main.exe --pdb:mule_main.pdb --out:mule_main.raddbg --capture && popd",
+    .win = "build raddbg_from_pdb release telemetry && pushd build && raddbg_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --capture && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -83,7 +83,7 @@ commands =
   },
   .rjf_f5 =
   {
-    .win = "pushd build && raddbg_from_pdb.exe --exe:mule_main.exe --pdb:mule_main.pdb --out:mule_main.raddbg --capture && popd",
+    .win = "pushd build && raddbg_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --capture && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,

@@ -136,32 +136,40 @@ pdb_convert_params_from_cmd_line(Arena *arena, CmdLine *cmdline){
 ////////////////////////////////
 //~ PDB Type & Symbol Info Translation Helpers
 
-//- pdb types and symbols
+//- rjf: pdb conversion context creation
 
-static void
-pdbconv_types_and_symbols(PDBCONV_TypesSymbolsParams *params, CONS_Root *out_root){
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  
-  // setup a pdb conversion context
-  PDBCONV_Ctx *pdb_ctx = push_array(scratch.arena, PDBCONV_Ctx, 1);
-  pdb_ctx->arch = params->architecture;
-  // TODO(allen): actually infer addr_size from arch
-  pdb_ctx->addr_size = 8;
+static PDBCONV_Ctx *
+pdbconv_ctx_alloc(PDBCONV_CtxParams *params, CONS_Root *out_root)
+{
+  Arena *arena = arena_alloc();
+  PDBCONV_Ctx *pdb_ctx = push_array(arena, PDBCONV_Ctx, 1);
+  pdb_ctx->arena = arena;
+  pdb_ctx->arch = params->arch;
+  pdb_ctx->addr_size = raddbg_addr_size_from_arch(pdb_ctx->arch);
   pdb_ctx->hash = params->tpi_hash;
   pdb_ctx->leaf = params->tpi_leaf;
   pdb_ctx->sections = params->sections->sections;
   pdb_ctx->section_count = params->sections->count;
   pdb_ctx->root = out_root;
-  pdb_ctx->temp_arena = arena_alloc();
-  pdb_ctx->fwd_map.buckets_count = 16384;
-  pdb_ctx->fwd_map.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_FwdNode *, pdb_ctx->fwd_map.buckets_count);
-  pdb_ctx->frame_proc_map.buckets_count = 16384;
-  pdb_ctx->frame_proc_map.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_FrameProcNode *, pdb_ctx->frame_proc_map.buckets_count);
-  pdb_ctx->known_globals.buckets_count = 16384;
-  pdb_ctx->known_globals.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_KnownGlobalNode *, pdb_ctx->known_globals.buckets_count);
-  pdb_ctx->link_names.buckets_count = 16384;
-  pdb_ctx->link_names.buckets = push_array(pdb_ctx->temp_arena, PDBCONV_LinkNameNode *, pdb_ctx->link_names.buckets_count);
+#define BKTCOUNT(x) ((x)?(u64_up_to_pow2(x)):(4096))
+  pdb_ctx->fwd_map.buckets_count        = BKTCOUNT(params->fwd_map_bucket_count);
+  pdb_ctx->frame_proc_map.buckets_count = BKTCOUNT(params->frame_proc_map_bucket_count);
+  pdb_ctx->known_globals.buckets_count  = BKTCOUNT(params->known_global_map_bucket_count);
+  pdb_ctx->link_names.buckets_count     = BKTCOUNT(params->link_name_map_bucket_count);
+#undef BKTCOUNT
+  pdb_ctx->fwd_map.buckets = push_array(pdb_ctx->arena, PDBCONV_FwdNode *, pdb_ctx->fwd_map.buckets_count);
+  pdb_ctx->frame_proc_map.buckets = push_array(pdb_ctx->arena, PDBCONV_FrameProcNode *, pdb_ctx->frame_proc_map.buckets_count);
+  pdb_ctx->known_globals.buckets = push_array(pdb_ctx->arena, PDBCONV_KnownGlobalNode *, pdb_ctx->known_globals.buckets_count);
+  pdb_ctx->link_names.buckets = push_array(pdb_ctx->arena, PDBCONV_LinkNameNode *, pdb_ctx->link_names.buckets_count);
+  return pdb_ctx;
+}
+
+//- pdb types and symbols
+
+static void
+pdbconv_types_and_symbols(PDBCONV_Ctx *pdb_ctx, PDBCONV_TypesSymbolsParams *params)
+{
+  ProfBeginFunction();
   
   // convert types
   pdbconv_type_cons_main_passes(pdb_ctx);
@@ -175,7 +183,6 @@ pdbconv_types_and_symbols(PDBCONV_TypesSymbolsParams *params, CONS_Root *out_roo
     pdbconv_symbol_cons(pdb_ctx, unit_sym, 1 + i);
   }
   
-  scratch_end(scratch);
   ProfEnd();
 }
 
@@ -259,6 +266,7 @@ pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx){
 
 static CV_TypeId
 pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype){
+  ProfBeginFunction();
   Assert(ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl);
   
   CV_TypeId result = 0;
@@ -399,9 +407,10 @@ pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype){
   
   // save in map
   if (result != 0){
-    pdbconv_type_fwd_map_set(ctx->temp_arena, &ctx->fwd_map, itype, result);
+    pdbconv_type_fwd_map_set(ctx->arena, &ctx->fwd_map, itype, result);
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -1394,7 +1403,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             
             // remember to revisit this for members
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->temp_arena, PDBCONV_TypeRev, 1);
+              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_struct->field_itype;
               SLLQueuePush(ctx->member_revisit_first, ctx->member_revisit_last, rev);
@@ -1447,7 +1456,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             
             // remember to revisit this for members
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->temp_arena, PDBCONV_TypeRev, 1);
+              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_struct->field_itype;
               SLLQueuePush(ctx->member_revisit_first, ctx->member_revisit_last, rev);
@@ -1487,7 +1496,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             
             // remember to revisit this for members
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->temp_arena, PDBCONV_TypeRev, 1);
+              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_union->field_itype;
               SLLQueuePush(ctx->member_revisit_first, ctx->member_revisit_last, rev);
@@ -1522,7 +1531,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             
             // remember to revisit this for enumerates
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->temp_arena, PDBCONV_TypeRev, 1);
+              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_enum->field_itype;
               SLLQueuePush(ctx->enum_revisit_first, ctx->enum_revisit_last, rev);
@@ -1763,6 +1772,7 @@ pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map, CV_TypeId key, CV_Ty
     SLLStackPush(map->buckets[bucket_idx], match);
     match->key = key;
     map->pair_count += 1;
+    map->bucket_collision_count += (match->next != 0);
   }
   
   // set node's val
@@ -1958,7 +1968,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             // * different symbol streams so we deduplicate across the
             // * entire translation context.
             if (!pdbconv_known_global_lookup(&ctx->known_globals, name, voff)){
-              pdbconv_known_global_insert(ctx->temp_arena, &ctx->known_globals, name, voff);
+              pdbconv_known_global_insert(ctx->arena, &ctx->known_globals, name, voff);
               
               // type of variable
               CONS_Type *type = pdbconv_type_resolve_itype(ctx, data32->itype);
@@ -2555,7 +2565,7 @@ pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym){
           }
           
           // save link name
-          pdbconv_link_name_save(ctx->temp_arena, &ctx->link_names, voff, name);
+          pdbconv_link_name_save(ctx->arena, &ctx->link_names, voff, name);
         }
       }break;
     }
@@ -2590,11 +2600,12 @@ pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,CONS_Symbol *key,PDBCONV_FrameP
   
   // insert new association if no match
   if (match == 0){
-    match = push_array(ctx->temp_arena, PDBCONV_FrameProcNode, 1);
+    match = push_array(ctx->arena, PDBCONV_FrameProcNode, 1);
     SLLStackPush(map->buckets[bucket_idx], match);
     match->key = key;
     MemoryCopyStruct(&match->data, data);
     map->pair_count += 1;
+    map->bucket_collision_count += (match->next != 0);
   }
   ProfEnd();
 }
@@ -2626,7 +2637,7 @@ static void
 pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, CONS_Scope *scope, CONS_Symbol *symbol){
   PDBCONV_ScopeNode *node = ctx->scope_node_free;
   if (node == 0){
-    node = push_array(ctx->temp_arena, PDBCONV_ScopeNode, 1);
+    node = push_array(ctx->arena, PDBCONV_ScopeNode, 1);
   }
   else{
     SLLStackPop(ctx->scope_node_free);
@@ -2738,6 +2749,7 @@ pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 n
     node->key_voff = voff;
     node->hash = hash;
     set->global_count += 1;
+    set->bucket_collision_count += (node->next != 0);
   }
   ProfEnd();
 }
@@ -2751,6 +2763,7 @@ pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
                                    U32 reg_byte_pos,
                                    S64 offset,
                                    B32 extra_indirection){
+  ProfBeginFunction();
   CONS_Location *result = 0;
   if (0 <= offset && offset <= (S64)max_U16){
     if (extra_indirection){
@@ -2761,7 +2774,7 @@ pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
     }
   }
   else{
-    Arena *arena = ctx->temp_arena;
+    Arena *arena = ctx->arena;
     
     CONS_EvalBytecode bytecode = {0};
     U32 regread_param = RADDBG_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
@@ -2775,6 +2788,7 @@ pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
     result = cons_location_addr_bytecode_stream(ctx->root, &bytecode);
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -2886,6 +2900,7 @@ pdbconv_link_name_save(Arena *arena, PDBCONV_LinkNameMap *map, U64 voff, String8
   node->voff = voff;
   node->name = push_str8_copy(arena, name);
   map->link_name_count += 1;
+  map->bucket_collision_count += (node->next != 0);
 }
 
 static String8
@@ -3132,6 +3147,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
   }
   
   // output generation
+  PDBCONV_Ctx *pdbconv_ctx = 0;
   if (params->output_name.size > 0){
     
     // determine arch
@@ -3190,6 +3206,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     root_params.bucket_count_scopes = symbol_count_prediction;
     root_params.bucket_count_locals = symbol_count_prediction;
     root_params.bucket_count_types = tpi->itype_opl;
+    root_params.bucket_count_type_constructs = tpi->itype_opl;
     
     CONS_Root *root = cons_root_new(&root_params);
     out->root = root;
@@ -3324,21 +3341,30 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
       }
     }
     
+    // rjf: produce pdb conversion context
+    {
+      PDBCONV_CtxParams p = {0};
+      {
+        p.arch = architecture;
+        p.tpi_hash = tpi_hash;
+        p.tpi_leaf = tpi_leaf;
+        p.sections = coff_sections;
+        p.fwd_map_bucket_count          = tpi->itype_opl/10;
+        p.frame_proc_map_bucket_count   = symbol_count_prediction;
+        p.known_global_map_bucket_count = symbol_count_prediction;
+        p.link_name_map_bucket_count    = symbol_count_prediction;
+      }
+      pdbconv_ctx = pdbconv_ctx_alloc(&p, root);
+    }
     
     // types & symbols
     {
-      PDBCONV_TypesSymbolsParams pdb_params = {0};
-      pdb_params.architecture = architecture;
-      pdb_params.sym = sym;
-      pdb_params.sym_for_unit = sym_for_unit;
-      pdb_params.unit_count = comp_unit_count;
-      pdb_params.tpi_hash = tpi_hash;
-      pdb_params.tpi_leaf = tpi_leaf;
-      pdb_params.sections = coff_sections;
-      
-      pdbconv_types_and_symbols(&pdb_params, root);
+      PDBCONV_TypesSymbolsParams p = {0};
+      p.sym = sym;
+      p.sym_for_unit = sym_for_unit;
+      p.unit_count = comp_unit_count;
+      pdbconv_types_and_symbols(pdbconv_ctx, &p);
     }
-    
     
     // conversion errors
     if (!params->hide_errors.converting){
@@ -3530,22 +3556,29 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         String8 name;
         U64 bucket_count;
         U64 value_count;
+        U64 collision_count;
       }
       table_info[] =
       {
-        {str8_lit("unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count          },
-        {str8_lit("symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count        },
-        {str8_lit("scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count         },
-        {str8_lit("local_map"),        out->root->local_map.buckets_count,         out->root->local_map.pair_count         },
-        {str8_lit("type_from_id_map"), out->root->type_from_id_map.buckets_count,  out->root->type_from_id_map.pair_count  },
-        {str8_lit("construct_map"),    out->root->construct_map.buckets_count,     out->root->construct_map.pair_count     },
+        {str8_lit("pdbconv_ctx fwd_map"),        pdbconv_ctx?pdbconv_ctx->fwd_map.buckets_count:0,         pdbconv_ctx?pdbconv_ctx->fwd_map.pair_count:0,         pdbconv_ctx?pdbconv_ctx->fwd_map.bucket_collision_count:0},
+        {str8_lit("pdbconv_ctx frame_proc_map"), pdbconv_ctx?pdbconv_ctx->frame_proc_map.buckets_count:0,  pdbconv_ctx?pdbconv_ctx->frame_proc_map.pair_count:0,  pdbconv_ctx?pdbconv_ctx->frame_proc_map.bucket_collision_count:0},
+        {str8_lit("pdbconv_ctx known_globals"),  pdbconv_ctx?pdbconv_ctx->known_globals.buckets_count:0,   pdbconv_ctx?pdbconv_ctx->known_globals.global_count:0, pdbconv_ctx?pdbconv_ctx->known_globals.bucket_collision_count:0},
+        {str8_lit("pdbconv_ctx link_names"),     pdbconv_ctx?pdbconv_ctx->link_names.buckets_count:0,      pdbconv_ctx?pdbconv_ctx->link_names.link_name_count:0, pdbconv_ctx?pdbconv_ctx->link_names.bucket_collision_count:0},
+        {str8_lit("cons_root unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count,          out->root->unit_map.bucket_collision_count},
+        {str8_lit("cons_root symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count,        out->root->symbol_map.bucket_collision_count},
+        {str8_lit("cons_root scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count,         out->root->scope_map.bucket_collision_count},
+        {str8_lit("cons_root local_map"),        out->root->local_map.buckets_count,         out->root->local_map.pair_count,         out->root->local_map.bucket_collision_count},
+        {str8_lit("cons_root type_from_id_map"), out->root->type_from_id_map.buckets_count,  out->root->type_from_id_map.pair_count,  out->root->type_from_id_map.bucket_collision_count},
+        {str8_lit("cons_root construct_map"),    out->root->construct_map.buckets_count,     out->root->construct_map.pair_count,     out->root->construct_map.bucket_collision_count},
       };
       for(U64 idx = 0; idx < ArrayCount(table_info); idx += 1)
       {
-        str8_list_pushf(arena, &dump, "%S: %I64u buckets, %I64u values\n",
+        str8_list_pushf(arena, &dump, "%S: %I64u values in %I64u buckets, with %I64u collisions (%f fill)\n",
                         table_info[idx].name,
+                        table_info[idx].value_count,
                         table_info[idx].bucket_count,
-                        table_info[idx].value_count);
+                        table_info[idx].collision_count,
+                        (F64)table_info[idx].value_count / (F64)table_info[idx].bucket_count);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }

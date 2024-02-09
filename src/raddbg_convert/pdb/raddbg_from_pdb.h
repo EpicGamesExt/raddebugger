@@ -56,6 +56,7 @@ typedef struct PDBCONV_FwdNode{
 typedef struct PDBCONV_FwdMap{
   PDBCONV_FwdNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U64 pair_count;
 } PDBCONV_FwdMap;
 
@@ -79,6 +80,7 @@ typedef struct PDBCONV_FrameProcNode{
 typedef struct PDBCONV_FrameProcMap{
   PDBCONV_FrameProcNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U64 pair_count;
 } PDBCONV_FrameProcMap;
 
@@ -98,17 +100,27 @@ typedef struct PDBCONV_KnownGlobalNode{
 typedef struct PDBCONV_KnownGlobalSet{
   PDBCONV_KnownGlobalNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U64 global_count;
 } PDBCONV_KnownGlobalSet;
 
-typedef struct PDBCONV_TypesSymbolsParams{
-  RADDBG_Arch architecture;
-  CV_SymParsed *sym;
-  CV_SymParsed **sym_for_unit;
-  U64 unit_count;
+typedef struct PDBCONV_CtxParams PDBCONV_CtxParams;
+struct PDBCONV_CtxParams
+{
+  RADDBG_Arch arch;
   PDB_TpiHashParsed *tpi_hash;
   CV_LeafParsed *tpi_leaf;
   PDB_CoffSectionArray *sections;
+  U64 fwd_map_bucket_count;
+  U64 frame_proc_map_bucket_count;
+  U64 known_global_map_bucket_count;
+  U64 link_name_map_bucket_count;
+};
+
+typedef struct PDBCONV_TypesSymbolsParams{
+  CV_SymParsed *sym;
+  CV_SymParsed **sym_for_unit;
+  U64 unit_count;
 } PDBCONV_TypesSymbolsParams;
 
 typedef struct PDBCONV_LinkNameNode{
@@ -120,10 +132,13 @@ typedef struct PDBCONV_LinkNameNode{
 typedef struct PDBCONV_LinkNameMap{
   PDBCONV_LinkNameNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U64 link_name_count;
 } PDBCONV_LinkNameMap;
 
 typedef struct PDBCONV_Ctx{
+  Arena *arena;
+  
   // INPUT data
   RADDBG_Arch arch;
   U64 addr_size;
@@ -136,7 +151,6 @@ typedef struct PDBCONV_Ctx{
   CONS_Root *root;
   
   // TEMPORARY STATE
-  Arena *temp_arena;
   PDBCONV_FwdMap fwd_map;
   PDBCONV_TypeRev *member_revisit_first;
   PDBCONV_TypeRev *member_revisit_last;
@@ -149,8 +163,11 @@ typedef struct PDBCONV_Ctx{
   PDBCONV_LinkNameMap link_names;
 } PDBCONV_Ctx;
 
+//- rjf: pdb conversion context creation
+static PDBCONV_Ctx *pdbconv_ctx_alloc(PDBCONV_CtxParams *params, CONS_Root *out_root);
+
 //- pdb types and symbols
-static void pdbconv_types_and_symbols(PDBCONV_TypesSymbolsParams *params, CONS_Root *out_root);
+static void pdbconv_types_and_symbols(PDBCONV_Ctx *pdb_ctx, PDBCONV_TypesSymbolsParams *params);
 
 //- decoding helpers
 static U32 pdbconv_u32_from_numeric(PDBCONV_Ctx *ctx, CV_NumericParsed *num);

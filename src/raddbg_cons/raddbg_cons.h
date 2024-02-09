@@ -57,6 +57,7 @@ typedef struct CONS_RootParams{
   U32 bucket_count_scopes;
   U32 bucket_count_locals;
   U32 bucket_count_types;
+  U64 bucket_count_type_constructs;
 } CONS_RootParams;
 
 static CONS_Root* cons_root_new(CONS_RootParams *params);
@@ -485,6 +486,7 @@ typedef struct CONS__NameMapNode{
 typedef struct CONS__NameMap{
   CONS__NameMapNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   CONS__NameMapNode *first;
   CONS__NameMapNode *last;
   U64 name_count;
@@ -505,6 +507,7 @@ typedef struct CONS__U64ToPtrNode{
 typedef struct CONS__U64ToPtrMap{
   CONS__U64ToPtrNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U64 pair_count;
 } CONS__U64ToPtrMap;
 
@@ -533,6 +536,7 @@ typedef struct CONS__Str8ToPtrNode{
 typedef struct CONS__Str8ToPtrMap{
   CONS__Str8ToPtrNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U64 pair_count;
 } CONS__Str8ToPtrMap;
 
@@ -647,6 +651,7 @@ typedef struct CONS__Strings{
   CONS__StringNode *order_last;
   CONS__StringNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U32 count;
 } CONS__Strings;
 
@@ -665,6 +670,7 @@ typedef struct CONS__IdxRuns{
   CONS__IdxRunNode *order_last;
   CONS__IdxRunNode **buckets;
   U64 buckets_count;
+  U64 bucket_collision_count;
   U32 count;
   U32 idx_count;
 } CONS__IdxRuns;
