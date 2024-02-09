@@ -32,6 +32,7 @@ typedef struct PDBCONV_Params{
   B8 dump_leaf;
   B8 dump_c13;
   B8 dump_contributions;
+  B8 dump_table_diagnostics;
   B8 dump__last;
   
   String8List errors;

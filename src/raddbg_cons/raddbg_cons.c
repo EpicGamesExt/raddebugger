@@ -1794,13 +1794,13 @@ static void
 cons__u64toptr_init(Arena *arena, CONS__U64ToPtrMap *map, U64 bucket_count){
   Assert(IsPow2OrZero(bucket_count) && bucket_count > 0);
   map->buckets = push_array(arena, CONS__U64ToPtrNode*, bucket_count);
-  map->bucket_count = bucket_count;
+  map->buckets_count = bucket_count;
 }
 
 static void
 cons__u64toptr_lookup(CONS__U64ToPtrMap *map, U64 key, CONS__U64ToPtrLookup *lookup_out){
   ProfBeginFunction();
-  U64 bucket_idx = key&(map->bucket_count - 1);
+  U64 bucket_idx = key&(map->buckets_count - 1);
   CONS__U64ToPtrNode *check_node = map->buckets[bucket_idx];
   for (;check_node != 0; check_node = check_node->next){
     for (U32 k = 0; k < ArrayCount(check_node->key); k += 1){
@@ -1828,7 +1828,7 @@ cons__u64toptr_insert(Arena *arena, CONS__U64ToPtrMap *map, U64 key,
     node->ptr[k] = ptr;
   }
   else{
-    U64 bucket_idx = key&(map->bucket_count - 1);
+    U64 bucket_idx = key&(map->buckets_count - 1);
     
     CONS__U64ToPtrNode *node = push_array(arena, CONS__U64ToPtrNode, 1);
     SLLStackPush(map->buckets[bucket_idx], node);
@@ -1837,6 +1837,8 @@ cons__u64toptr_insert(Arena *arena, CONS__U64ToPtrMap *map, U64 key,
     
     lookup->fill_node = node;
     lookup->fill_k = 0;
+    
+    map->pair_count += 1;
   }
 }
 

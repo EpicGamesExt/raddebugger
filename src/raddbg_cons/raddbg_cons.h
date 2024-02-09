@@ -504,7 +504,8 @@ typedef struct CONS__U64ToPtrNode{
 
 typedef struct CONS__U64ToPtrMap{
   CONS__U64ToPtrNode **buckets;
-  U64 bucket_count;
+  U64 buckets_count;
+  U64 pair_count;
 } CONS__U64ToPtrMap;
 
 typedef struct CONS__U64ToPtrLookup{

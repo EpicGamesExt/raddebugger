@@ -123,6 +123,9 @@ pdb_convert_params_from_cmd_line(Arena *arena, CmdLine *cmdline){
         else if (str8_match(node->string, str8_lit("contributions"), 0)){
           result->dump_contributions = 1;
         }
+        else if (str8_match(node->string, str8_lit("table_diagnostics"), 0)){
+          result->dump_table_diagnostics = 1;
+        }
       }
     }
   }
@@ -3128,177 +3131,6 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     exe_hash = raddbg_hash(params->input_exe_data.str, params->input_exe_data.size);
   }
   
-  // dump
-  if (params->dump) ProfScope("dump"){
-    String8List dump = {0};
-    
-    // EXE
-    if (out->good_parse){
-      str8_list_push(arena, &dump,
-                     str8_lit("################################"
-                              "################################\n"
-                              "EXE INFO:\n"));
-      {
-        str8_list_pushf(arena, &dump, "HASH: %016llX\n", exe_hash);
-      }
-      str8_list_push(arena, &dump, str8_lit("\n"));
-    }
-    
-    // MSF
-    if (params->dump_msf){
-      if (msf != 0){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "MSF:\n"));
-        
-        str8_list_pushf(arena, &dump, " block_size=%llu\n", msf->block_size);
-        str8_list_pushf(arena, &dump, " block_count=%llu\n", msf->block_count);
-        str8_list_pushf(arena, &dump, " stream_count=%llu\n", msf->stream_count);
-        
-        String8 *stream_ptr = msf->streams;
-        U64 stream_count = msf->stream_count;
-        for (U64 i = 0; i < stream_count; i += 1, stream_ptr += 1){
-          str8_list_pushf(arena, &dump, "  stream[%u].size=%llu\n",
-                          i, stream_ptr->size);
-        }
-        
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
-    }
-    
-    // DBI
-    if (params->dump_sym){
-      if (sym != 0){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "DBI SYM:\n"));
-        cv_stringize_sym_parsed(arena, &dump, sym);
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
-    }
-    
-    // TPI
-    if (params->dump_tpi_hash){
-      if (tpi_hash != 0){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "TPI HASH:\n"));
-        pdb_stringize_tpi_hash(arena, &dump, tpi_hash);
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
-      
-      if (ipi_hash != 0){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "IPI HASH:\n"));
-        pdb_stringize_tpi_hash(arena, &dump, ipi_hash);
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
-    }
-    
-    // LEAF
-    if (params->dump_leaf){
-      if (tpi_leaf != 0){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "TPI LEAF:\n"));
-        cv_stringize_leaf_parsed(arena, &dump, tpi_leaf);
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
-      
-      if (ipi_leaf != 0){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "IPI LEAF:\n"));
-        cv_stringize_leaf_parsed(arena, &dump, ipi_leaf);
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
-    }
-    
-    // BINARY SECTIONS
-    if (params->dump_coff_sections){
-      if (coff_sections != 0){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "COFF SECTIONS:\n"));
-        COFF_SectionHeader *section_ptr = coff_sections->sections;
-        for (U64 i = 0; i < coff_section_count; i += 1, section_ptr += 1){
-          // TODO(allen): probably should pull this out into a separate stringize path
-          // for the coff section type
-          char *first = (char*)section_ptr->name;
-          char *opl   = first + sizeof(section_ptr->name);
-          String8 name = str8_cstring_capped(first, opl);
-          str8_list_pushf(arena, &dump, " %.*s:\n", str8_varg(name));
-          str8_list_pushf(arena, &dump, "  vsize=%u\n", section_ptr->vsize);
-          str8_list_pushf(arena, &dump, "  voff =0x%x\n", section_ptr->voff);
-          str8_list_pushf(arena, &dump, "  fsize=%u\n", section_ptr->fsize);
-          str8_list_pushf(arena, &dump, "  foff =0x%x\n", section_ptr->foff);
-          str8_list_pushf(arena, &dump, "  relocs_foff=0x%x\n", section_ptr->relocs_foff);
-          str8_list_pushf(arena, &dump, "  lines_foff =0x%x\n", section_ptr->lines_foff);
-          str8_list_pushf(arena, &dump, "  reloc_count=%u\n", section_ptr->reloc_count);
-          str8_list_pushf(arena, &dump, "  line_count =%u\n", section_ptr->line_count);
-          // TODO(allen): better flags
-          str8_list_pushf(arena, &dump, "  flags=%x\n", section_ptr->flags);
-          str8_list_push(arena, &dump, str8_lit("\n"));
-        }
-      }
-    }
-    
-    // UNITS
-    if (comp_units != 0){
-      B32 dump_sym = params->dump_sym;
-      B32 dump_c13 = params->dump_c13;
-      
-      B32 dump_units = (dump_sym || dump_c13);
-      
-      if (dump_units){
-        PDB_CompUnit **unit_ptr = comp_units->units;
-        for (U64 i = 0; i < comp_unit_count; i += 1, unit_ptr += 1){
-          str8_list_push(arena, &dump,
-                         str8_lit("################################"
-                                  "################################\n"));
-          String8 name = (*unit_ptr)->obj_name;
-          String8 group_name = (*unit_ptr)->group_name;
-          str8_list_pushf(arena, &dump, "[%llu] %.*s\n(%.*s):\n",
-                          i, str8_varg(name), str8_varg(group_name));
-          if (dump_sym){
-            cv_stringize_sym_parsed(arena, &dump, sym_for_unit[i]);
-          }
-          if (dump_c13){
-            cv_stringize_c13_parsed(arena, &dump, c13_for_unit[i]);
-          }
-          str8_list_push(arena, &dump, str8_lit("\n"));
-        }
-      }
-    }
-    
-    // UNIT CONTRIBUTIONS
-    if (comp_unit_contributions != 0){
-      if (params->dump_contributions){
-        str8_list_push(arena, &dump,
-                       str8_lit("################################"
-                                "################################\n"
-                                "UNIT CONTRIBUTIONS:\n"));
-        PDB_CompUnitContribution *contrib_ptr = comp_unit_contributions->contributions;
-        for (U64 i = 0; i < comp_unit_contribution_count; i += 1, contrib_ptr += 1){
-          str8_list_pushf(arena, &dump,
-                          " { mod = %5u; voff_first = %08llx; voff_opl = %08llx; }\n",
-                          contrib_ptr->mod, contrib_ptr->voff_first, contrib_ptr->voff_opl);
-        }
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
-    }
-    
-    out->dump = dump;
-  }
-  
   // output generation
   if (params->output_name.size > 0){
     
@@ -3516,6 +3348,209 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         str8_list_push(arena, &out->errors, error->msg);
       }
     }
+  }
+  
+  // dump
+  if (params->dump) ProfScope("dump"){
+    String8List dump = {0};
+    
+    // EXE
+    if (out->good_parse){
+      str8_list_push(arena, &dump,
+                     str8_lit("################################"
+                              "################################\n"
+                              "EXE INFO:\n"));
+      {
+        str8_list_pushf(arena, &dump, "HASH: %016llX\n", exe_hash);
+      }
+      str8_list_push(arena, &dump, str8_lit("\n"));
+    }
+    
+    // MSF
+    if (params->dump_msf){
+      if (msf != 0){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "MSF:\n"));
+        
+        str8_list_pushf(arena, &dump, " block_size=%llu\n", msf->block_size);
+        str8_list_pushf(arena, &dump, " block_count=%llu\n", msf->block_count);
+        str8_list_pushf(arena, &dump, " stream_count=%llu\n", msf->stream_count);
+        
+        String8 *stream_ptr = msf->streams;
+        U64 stream_count = msf->stream_count;
+        for (U64 i = 0; i < stream_count; i += 1, stream_ptr += 1){
+          str8_list_pushf(arena, &dump, "  stream[%u].size=%llu\n",
+                          i, stream_ptr->size);
+        }
+        
+        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+    }
+    
+    // DBI
+    if (params->dump_sym){
+      if (sym != 0){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "DBI SYM:\n"));
+        cv_stringize_sym_parsed(arena, &dump, sym);
+        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+    }
+    
+    // TPI
+    if (params->dump_tpi_hash){
+      if (tpi_hash != 0){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "TPI HASH:\n"));
+        pdb_stringize_tpi_hash(arena, &dump, tpi_hash);
+        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+      
+      if (ipi_hash != 0){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "IPI HASH:\n"));
+        pdb_stringize_tpi_hash(arena, &dump, ipi_hash);
+        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+    }
+    
+    // LEAF
+    if (params->dump_leaf){
+      if (tpi_leaf != 0){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "TPI LEAF:\n"));
+        cv_stringize_leaf_parsed(arena, &dump, tpi_leaf);
+        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+      
+      if (ipi_leaf != 0){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "IPI LEAF:\n"));
+        cv_stringize_leaf_parsed(arena, &dump, ipi_leaf);
+        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+    }
+    
+    // BINARY SECTIONS
+    if (params->dump_coff_sections){
+      if (coff_sections != 0){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "COFF SECTIONS:\n"));
+        COFF_SectionHeader *section_ptr = coff_sections->sections;
+        for (U64 i = 0; i < coff_section_count; i += 1, section_ptr += 1){
+          // TODO(allen): probably should pull this out into a separate stringize path
+          // for the coff section type
+          char *first = (char*)section_ptr->name;
+          char *opl   = first + sizeof(section_ptr->name);
+          String8 name = str8_cstring_capped(first, opl);
+          str8_list_pushf(arena, &dump, " %.*s:\n", str8_varg(name));
+          str8_list_pushf(arena, &dump, "  vsize=%u\n", section_ptr->vsize);
+          str8_list_pushf(arena, &dump, "  voff =0x%x\n", section_ptr->voff);
+          str8_list_pushf(arena, &dump, "  fsize=%u\n", section_ptr->fsize);
+          str8_list_pushf(arena, &dump, "  foff =0x%x\n", section_ptr->foff);
+          str8_list_pushf(arena, &dump, "  relocs_foff=0x%x\n", section_ptr->relocs_foff);
+          str8_list_pushf(arena, &dump, "  lines_foff =0x%x\n", section_ptr->lines_foff);
+          str8_list_pushf(arena, &dump, "  reloc_count=%u\n", section_ptr->reloc_count);
+          str8_list_pushf(arena, &dump, "  line_count =%u\n", section_ptr->line_count);
+          // TODO(allen): better flags
+          str8_list_pushf(arena, &dump, "  flags=%x\n", section_ptr->flags);
+          str8_list_push(arena, &dump, str8_lit("\n"));
+        }
+      }
+    }
+    
+    // UNITS
+    if (comp_units != 0){
+      B32 dump_sym = params->dump_sym;
+      B32 dump_c13 = params->dump_c13;
+      
+      B32 dump_units = (dump_sym || dump_c13);
+      
+      if (dump_units){
+        PDB_CompUnit **unit_ptr = comp_units->units;
+        for (U64 i = 0; i < comp_unit_count; i += 1, unit_ptr += 1){
+          str8_list_push(arena, &dump,
+                         str8_lit("################################"
+                                  "################################\n"));
+          String8 name = (*unit_ptr)->obj_name;
+          String8 group_name = (*unit_ptr)->group_name;
+          str8_list_pushf(arena, &dump, "[%llu] %.*s\n(%.*s):\n",
+                          i, str8_varg(name), str8_varg(group_name));
+          if (dump_sym){
+            cv_stringize_sym_parsed(arena, &dump, sym_for_unit[i]);
+          }
+          if (dump_c13){
+            cv_stringize_c13_parsed(arena, &dump, c13_for_unit[i]);
+          }
+          str8_list_push(arena, &dump, str8_lit("\n"));
+        }
+      }
+    }
+    
+    // UNIT CONTRIBUTIONS
+    if (comp_unit_contributions != 0){
+      if (params->dump_contributions){
+        str8_list_push(arena, &dump,
+                       str8_lit("################################"
+                                "################################\n"
+                                "UNIT CONTRIBUTIONS:\n"));
+        PDB_CompUnitContribution *contrib_ptr = comp_unit_contributions->contributions;
+        for (U64 i = 0; i < comp_unit_contribution_count; i += 1, contrib_ptr += 1){
+          str8_list_pushf(arena, &dump,
+                          " { mod = %5u; voff_first = %08llx; voff_opl = %08llx; }\n",
+                          contrib_ptr->mod, contrib_ptr->voff_first, contrib_ptr->voff_opl);
+        }
+        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+    }
+    
+    // rjf: dump table diagnostics
+    if(params->dump_table_diagnostics)
+    {
+      str8_list_push(arena, &dump,
+                     str8_lit("################################"
+                              "################################\n"
+                              "TABLE DIAGNOSTICS:\n"));
+      struct
+      {
+        String8 name;
+        U64 bucket_count;
+        U64 value_count;
+      }
+      table_info[] =
+      {
+        {str8_lit("unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count          },
+        {str8_lit("symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count        },
+        {str8_lit("scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count         },
+        {str8_lit("local_map"),        out->root->local_map.buckets_count,         out->root->local_map.pair_count         },
+        {str8_lit("type_from_id_map"), out->root->type_from_id_map.buckets_count,  out->root->type_from_id_map.pair_count  },
+        {str8_lit("construct_map"),    out->root->construct_map.buckets_count,     out->root->construct_map.pair_count     },
+      };
+      for(U64 idx = 0; idx < ArrayCount(table_info); idx += 1)
+      {
+        str8_list_pushf(arena, &dump, "%S: %I64u buckets, %I64u values\n",
+                        table_info[idx].name,
+                        table_info[idx].bucket_count,
+                        table_info[idx].value_count);
+      }
+      str8_list_push(arena, &dump, str8_lit("\n"));
+    }
+    
+    out->dump = dump;
   }
   
   return out;
