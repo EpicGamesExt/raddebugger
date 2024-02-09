@@ -417,8 +417,8 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             event->key = OS_Key_RightMouseButton;
           }break;
         }
-        event->pos.x = (F32)LOWORD(lParam);
-        event->pos.y = (F32)HIWORD(lParam);
+        event->pos.x = (F32)(S16)LOWORD(lParam);
+        event->pos.y = (F32)(S16)HIWORD(lParam);
         if(release)
         {
           ReleaseCapture();
@@ -432,8 +432,8 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_MOUSEMOVE:
       {
         OS_Event *event = w32_push_event(OS_EventKind_MouseMove, window);
-        event->pos.x = (F32)LOWORD(lParam);
-        event->pos.y = (F32)HIWORD(lParam);
+        event->pos.x = (F32)(S16)LOWORD(lParam);
+        event->pos.y = (F32)(S16)HIWORD(lParam);
       }break;
       
       case WM_MOUSEWHEEL:
@@ -441,8 +441,8 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         S16 wheel_delta = HIWORD(wParam);
         OS_Event *event = w32_push_event(OS_EventKind_Scroll, window);
         POINT p;
-        p.x = (S32)LOWORD(lParam);
-        p.y = (S32)HIWORD(lParam);
+        p.x = (S32)(S16)LOWORD(lParam);
+        p.y = (S32)(S16)HIWORD(lParam);
         ScreenToClient(window->hwnd, &p);
         event->pos.x = (F32)p.x;
         event->pos.y = (F32)p.y;
@@ -454,8 +454,8 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         S16 wheel_delta = HIWORD(wParam);
         OS_Event *event = w32_push_event(OS_EventKind_Scroll, window);
         POINT p;
-        p.x = (S32)LOWORD(lParam);
-        p.y = (S32)HIWORD(lParam);
+        p.x = (S32)(S16)LOWORD(lParam);
+        p.y = (S32)(S16)HIWORD(lParam);
         ScreenToClient(window->hwnd, &p);
         event->pos.x = (F32)p.x;
         event->pos.y = (F32)p.y;
