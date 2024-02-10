@@ -1479,7 +1479,7 @@ cons_scope_add_voff_range(CONS_Root *root, CONS_Scope *scope, U64 voff_first, U6
 static CONS_Local*
 cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id){
   CONS__U64ToPtrLookup lookup = {0};
-  U64 local_hash = raddbg_hash((U8*)&local_user_id, sizeof(local_user_id));
+  U64 local_hash = (local_user_id<<4) ^ (local_user_id>>3) ^ (((local_user_id&0xffffffff00000000ull)>>32));
   cons__u64toptr_lookup(&root->local_map, local_user_id, local_hash, &lookup);
   
   CONS_Local *result = 0;
