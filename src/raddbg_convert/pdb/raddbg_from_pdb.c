@@ -1898,8 +1898,9 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
       }
       
       CV_SymKind kind = rec_range->hdr.kind; 
-      switch (kind){
-        default:break;
+      switch(kind)
+      {
+        default:{}break;
         
         case CV_SymKind_END:
         ProfScope("CV_SymKind_END")
@@ -2278,13 +2279,15 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               // emit local
               U64 user_id = user_id_base + off;
               CONS_Local *local_var = cons_local_handle_from_user_id(ctx->root, user_id);
+              local_var->kind = local_kind;
+              local_var->name = name;
+              local_var->type = type;
               
               CONS_LocalInfo info = {0};
               info.kind = local_kind;
               info.scope = current_scope;
               info.name = name;
               info.type = type;
-              
               cons_local_set_basic_info(ctx->root, local_var, &info);
               
               defrange_target = cons_location_set_from_local(ctx->root, local_var);

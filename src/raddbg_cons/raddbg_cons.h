@@ -500,8 +500,9 @@ static void           cons__name_map_add_pair(CONS_Root *root, CONS__NameMap *ma
 // u64 to ptr map
 typedef struct CONS__U64ToPtrNode{
   struct CONS__U64ToPtrNode *next;
-  U64 key[3];
-  void *ptr[3];
+  U64 _padding_;
+  U64 key[1];
+  void *ptr[1];
 } CONS__U64ToPtrNode;
 
 typedef struct CONS__U64ToPtrMap{
@@ -519,8 +520,8 @@ typedef struct CONS__U64ToPtrLookup{
 
 static void cons__u64toptr_init(Arena *arena, CONS__U64ToPtrMap *map, U64 bucket_count);
 
-static void cons__u64toptr_lookup(CONS__U64ToPtrMap *map, U64 key, CONS__U64ToPtrLookup *lookup_out);
-static void cons__u64toptr_insert(Arena *arena, CONS__U64ToPtrMap *map, U64 key,
+static void cons__u64toptr_lookup(CONS__U64ToPtrMap *map, U64 key, U64 hash, CONS__U64ToPtrLookup *lookup_out);
+static void cons__u64toptr_insert(Arena *arena, CONS__U64ToPtrMap *map, U64 key, U64 hash,
                                   CONS__U64ToPtrLookup *lookup, void *ptr);
 
 
