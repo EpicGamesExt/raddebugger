@@ -728,11 +728,18 @@ typedef struct CONS__BakeCtx{
   CONS__PathTree *tree;
 } CONS__BakeCtx;
 
+typedef struct CONS__BakeParams CONS__BakeParams;
+struct CONS__BakeParams
+{
+  U64 strings_bucket_count;
+  U64 idx_runs_bucket_count;
+};
+
 //- cons intermediate functions
 static U32 cons__dsection(Arena *arena, CONS__DSections *dss,
                           void *data, U64 size, RADDBG_DataSectionTag tag);
 
-static CONS__BakeCtx* cons__bake_ctx_begin(void);
+static CONS__BakeCtx* cons__bake_ctx_begin(CONS__BakeParams *params);
 static void           cons__bake_ctx_release(CONS__BakeCtx *bake_ctx);
 
 static U32 cons__string(CONS__BakeCtx *bctx, String8 str);
@@ -908,4 +915,4 @@ typedef struct CONS__NameMapBaked{
 
 static CONS__NameMapBaked* cons__name_map_bake(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx, CONS__NameMap *map);
 
-#endif //RADDBG_CONS_H
+#endif // RADDBG_CONS_H

@@ -72,7 +72,12 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out){
   CONS__DSections dss = {0};
   cons__dsection(arena, &dss, 0, 0, RADDBG_DataSectionTag_NULL);
   
-  CONS__BakeCtx *bctx = cons__bake_ctx_begin();
+  CONS__BakeParams bctx_params = {0};
+  {
+    bctx_params.strings_bucket_count  = u64_up_to_pow2(root->symbol_map.pair_count*8);
+    bctx_params.idx_runs_bucket_count = u64_up_to_pow2(root->symbol_map.pair_count*8);
+  }
+  CONS__BakeCtx *bctx = cons__bake_ctx_begin(&bctx_params);
   
   ////////////////////////////////
   // MAIN PART: allocating and filling out sections of the file
@@ -1896,13 +1901,16 @@ cons__dsection(Arena *arena, CONS__DSections *dss, void *data, U64 size, RADDBG_
 }
 
 static CONS__BakeCtx*
-cons__bake_ctx_begin(void){
+cons__bake_ctx_begin(CONS__BakeParams *params)
+{
   Arena *arena = arena_alloc();
   CONS__BakeCtx *result = push_array(arena, CONS__BakeCtx, 1);
   result->arena = arena;
-  result->strs.buckets_count = 16384;
+#define BKTCOUNT(x) ((x)?(u64_up_to_pow2(x)):(16384))
+  result->strs.buckets_count = BKTCOUNT(params->strings_bucket_count);
+  result->idxs.buckets_count = BKTCOUNT(params->idx_runs_bucket_count);
+#undef BKTCOUNT
   result->strs.buckets = push_array(arena, CONS__StringNode *, result->strs.buckets_count);
-  result->idxs.buckets_count = 16384;
   result->idxs.buckets = push_array(arena, CONS__IdxRunNode *, result->idxs.buckets_count);
   
   cons__string(result, str8_lit(""));
