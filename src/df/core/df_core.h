@@ -430,6 +430,7 @@ struct DF_Entity
   DF_EntityFlags flags;
   DF_EntityID id;
   U64 generation;
+  U64 alloc_time_us;
   B32 deleted;
   F32 alive_t;
   
@@ -1220,6 +1221,7 @@ read_only global DF_Entity df_g_nil_entity =
   
   // rjf: metadata
   DF_EntityKind_Nil,
+  0,
   0,
   0,
   0,

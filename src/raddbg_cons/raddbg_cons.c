@@ -1322,7 +1322,6 @@ cons_type_list_push(Arena *arena, CONS_TypeList *list, CONS_Type *type){
 
 static CONS_Symbol*
 cons_symbol_handle_from_user_id(CONS_Root *root, U64 symbol_user_id, U64 symbol_user_id_hash){
-  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
   cons__u64toptr_lookup(&root->symbol_map, symbol_user_id, symbol_user_id_hash, &lookup);
   
@@ -1337,13 +1336,11 @@ cons_symbol_handle_from_user_id(CONS_Root *root, U64 symbol_user_id, U64 symbol_
     cons__u64toptr_insert(root->arena, &root->symbol_map, symbol_user_id, symbol_user_id_hash, &lookup, result);
   }
   
-  ProfEnd();
   return(result);
 }
 
 static void
 cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_SymbolInfo *info){
-  ProfBeginFunction();
   CONS_SymbolKind kind = info->kind;
   
   if (symbol->kind != CONS_SymbolKind_NULL){
@@ -1416,7 +1413,7 @@ cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_SymbolInfo *info
           map = cons__name_map_for_kind(root, RADDBG_NameMapKind_Procedures);
         }break;
       }
-      if(map != 0) ProfScope("save name map")
+      if(map != 0)
       {
         cons__name_map_add_pair(root, map, symbol->name, symbol->idx);
       }
@@ -1428,14 +1425,12 @@ cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_SymbolInfo *info
       cons__name_map_add_pair(root, map, symbol->link_name, symbol->idx);
     }
   }
-  ProfEnd();
 }
 
 // scopes
 
 static CONS_Scope*
 cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id, U64 scope_user_id_hash){
-  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
   cons__u64toptr_lookup(&root->scope_map, scope_user_id, scope_user_id_hash, &lookup);
   
@@ -1451,7 +1446,6 @@ cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id, U64 scope_use
     cons__u64toptr_insert(root->arena, &root->scope_map, scope_user_id, scope_user_id_hash, &lookup, result);
   }
   
-  ProfEnd();
   return(result);
 }
 
@@ -1485,7 +1479,6 @@ cons_scope_add_voff_range(CONS_Root *root, CONS_Scope *scope, U64 voff_first, U6
 
 static CONS_Local*
 cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id, U64 local_user_id_hash){
-  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
   cons__u64toptr_lookup(&root->local_map, local_user_id, local_user_id_hash, &lookup);
   
@@ -1498,7 +1491,6 @@ cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id, U64 local_use
     cons__u64toptr_insert(root->arena, &root->local_map, local_user_id, local_user_id_hash, &lookup, result);
   }
   
-  ProfEnd();
   return(result);
 }
 
@@ -1711,14 +1703,12 @@ cons__type_udt_from_record_type(CONS_Root *root, CONS_Type *type){
 
 static void
 cons__scope_recursive_set_symbol(CONS_Scope *scope, CONS_Symbol *symbol){
-  ProfBeginFunction();
   scope->symbol = symbol;
   for (CONS_Scope *node = scope->first_child;
        node != 0;
        node = node->next_sibling){
     cons__scope_recursive_set_symbol(node, symbol);
   }
-  ProfEnd();
 }
 
 // name maps
@@ -1739,7 +1729,6 @@ cons__name_map_for_kind(CONS_Root *root, RADDBG_NameMapKind kind){
 
 static void
 cons__name_map_add_pair(CONS_Root *root, CONS__NameMap *map, String8 string, U32 idx){
-  ProfBeginFunction();
   
   // hash
   U64 hash = raddbg_hash(string.str, string.size);
@@ -1796,7 +1785,6 @@ cons__name_map_add_pair(CONS_Root *root, CONS__NameMap *map, String8 string, U32
     match->idx_count += 1;
   }
   
-  ProfEnd();
 }
 
 // u64 to ptr map
@@ -1830,7 +1818,6 @@ cons__u64toptr_lookup(CONS__U64ToPtrMap *map, U64 key, U64 hash, CONS__U64ToPtrL
 static void
 cons__u64toptr_insert(Arena *arena, CONS__U64ToPtrMap *map, U64 key, U64 hash,
                       CONS__U64ToPtrLookup *lookup, void *ptr){
-  ProfBeginFunction();
   if (lookup->fill_node != 0){
     CONS__U64ToPtrNode *node = lookup->fill_node;
     U32 k = lookup->fill_k;
@@ -1851,7 +1838,6 @@ cons__u64toptr_insert(Arena *arena, CONS__U64ToPtrMap *map, U64 key, U64 hash,
     map->pair_count += 1;
     map->bucket_collision_count += (node->next != 0);
   }
-  ProfEnd();
 }
 
 // str8 to ptr map
@@ -1865,7 +1851,6 @@ cons__str8toptr_init(Arena *arena, CONS__Str8ToPtrMap *map, U64 bucket_count)
 
 static void*
 cons__str8toptr_lookup(CONS__Str8ToPtrMap *map, String8 key, U64 hash){
-  ProfBeginFunction();
   void *result = 0;
   U64 bucket_idx = hash%map->buckets_count;
   for (CONS__Str8ToPtrNode *node = map->buckets[bucket_idx];
@@ -1876,13 +1861,11 @@ cons__str8toptr_lookup(CONS__Str8ToPtrMap *map, String8 key, U64 hash){
       break;
     }
   }
-  ProfEnd();
   return(result);
 }
 
 static void
 cons__str8toptr_insert(Arena *arena, CONS__Str8ToPtrMap *map, String8 key, U64 hash, void *ptr){
-  ProfBeginFunction();
   U64 bucket_idx = hash%map->buckets_count;
   
   CONS__Str8ToPtrNode *node = push_array(arena, CONS__Str8ToPtrNode, 1);
@@ -1893,7 +1876,6 @@ cons__str8toptr_insert(Arena *arena, CONS__Str8ToPtrMap *map, String8 key, U64 h
   node->ptr = ptr;
   map->bucket_collision_count += (node->next != 0);
   map->pair_count += 1;
-  ProfEnd();
 }
 
 

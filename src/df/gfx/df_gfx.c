@@ -4408,17 +4408,20 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           for(DF_EntityNode *n = tasks.first; n != 0; n = n->next)
           {
             DF_Entity *task = n->entity;
-            String8 raddbg_path = task->name;
-            String8 raddbg_name = str8_skip_last_slash(raddbg_path);
-            String8 task_text = push_str8f(scratch.arena, "Creating %S...", raddbg_name);
-            UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
-            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
-            UI_Signal sig = ui_signal_from_box(box);
-            if(ui_hovering(sig)) UI_Tooltip
+            if(task->alloc_time_us + 500000 < os_now_microseconds())
             {
-              ui_label(raddbg_path);
+              String8 raddbg_path = task->name;
+              String8 raddbg_name = str8_skip_last_slash(raddbg_path);
+              String8 task_text = push_str8f(scratch.arena, "Creating %S...", raddbg_name);
+              UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
+              UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
+              UI_Signal sig = ui_signal_from_box(box);
+              if(ui_hovering(sig)) UI_Tooltip
+              {
+                ui_label(raddbg_path);
+              }
+              ui_box_equip_display_string(box, task_text);
             }
-            ui_box_equip_display_string(box, task_text);
           }
           scratch_end(scratch);
         }

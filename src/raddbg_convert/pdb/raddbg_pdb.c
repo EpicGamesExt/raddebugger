@@ -777,8 +777,6 @@ pdb_leaf_data_from_tpi(PDB_TpiParsed *tpi){
 static CV_TypeIdArray
 pdb_tpi_itypes_from_name(Arena *arena, PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *leaf,
                          String8 name, B32 compare_unique_name, U32 output_cap){
-  ProfBegin("pdb_tpi_itypes_from_name");
-  
   U32 hash = pdb_string_hash1(name);
   U32 bucket_idx = ((tpi_hash->bucket_mask != 0) ?
                     hash&tpi_hash->bucket_mask :
@@ -964,16 +962,12 @@ pdb_tpi_itypes_from_name(Arena *arena, PDB_TpiHashParsed *tpi_hash, CV_LeafParse
   
   scratch_end(scratch);
   
-  ProfEnd();
-  
   return(result);
 }
 
 static CV_TypeId
 pdb_tpi_first_itype_from_name(PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *tpi_leaf,
                               String8 name, B32 compare_unique_name){
-  ProfBegin("pdb_tpi_first_itype_from_name");
-  
   Temp scratch = scratch_begin(0, 0);
   CV_TypeIdArray array = pdb_tpi_itypes_from_name(scratch.arena, tpi_hash, tpi_leaf,
                                                   name, compare_unique_name, 1);
@@ -983,8 +977,6 @@ pdb_tpi_first_itype_from_name(PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *tpi_le
   }
   
   scratch_end(scratch);
-  ProfEnd();
-  
   return(result);
 }
 

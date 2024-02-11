@@ -416,11 +416,10 @@ pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype){
 
 static CONS_Type*
 pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
-  ProfBeginFunction();
   B32 is_basic = (itype < 0x1000);
   
   // convert fwd references to real types
-  if(is_basic) ProfScope("fwd map get")
+  if(is_basic)
   {
     CV_TypeId resolved_itype = pdbconv_type_fwd_map_get(&ctx->fwd_map, itype);
     if(resolved_itype != 0)
@@ -430,19 +429,16 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
   }
   
   // type handle from id
-  ProfBegin("id -> handle");
   CONS_Type *result = cons_type_from_id(ctx->root, itype, itype);
-  ProfEnd();
   
   // basic type
-  if(result == 0 && is_basic) ProfScope("basic type")
+  if(result == 0 && is_basic)
   {
     result = pdbconv_type_cons_basic(ctx, itype);
   }
   
   // leaf decode
   if(result == 0 && (ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl))
-    ProfScope("leaf decode")
   {
     result = pdbconv_type_cons_leaf_record(ctx, itype);
   }
@@ -453,7 +449,6 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
     result = cons_type_nil(ctx->root);
   }
   
-  ProfEnd();
   return(result);
 }
 
@@ -1197,8 +1192,6 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
     switch (range->hdr.kind){
       case CV_LeafKind_MODIFIER:
       {
-        ProfBegin("CV_LeafKind_MODIFIER");
-        
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafModifier) <= cap){
           CV_LeafModifier *modifier = (CV_LeafModifier*)first;
@@ -1219,14 +1212,10 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             result = direct_type;
           }
         }
-        
-        ProfEnd();
       }break;
       
       case CV_LeafKind_POINTER:
       {
-        ProfBegin("CV_LeafKind_POINTER");
-        
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafPointer) <= cap){
           CV_LeafPointer *pointer = (CV_LeafPointer*)first;
@@ -1269,14 +1258,10 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             result = cons_type_modifier(ctx->root, ptr_type, modifier_flags);
           }
         }
-        
-        ProfEnd();
       }break;
       
       case CV_LeafKind_PROCEDURE:
       {
-        ProfBegin("CV_LeafKind_PROCEDURE");
-        
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafProcedure) <= cap){
           CV_LeafProcedure *procedure = (CV_LeafProcedure*)first;
@@ -1294,14 +1279,10 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           
           scratch_end(scratch);
         }
-        
-        ProfEnd();
       }break;
       
       case CV_LeafKind_MFUNCTION:
       {
-        ProfBegin("CV_LeafKind_MFUNCTION");
-        
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafMFunction) <= cap){
           CV_LeafMFunction *mfunction = (CV_LeafMFunction*)first;
@@ -1327,25 +1308,20 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           
           scratch_end(scratch);
         }
-        
-        ProfEnd();
       }break;
       
       case CV_LeafKind_BITFIELD:
       {
-        ProfBegin("CV_LeafKind_BITFIELD");
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafBitField) <= cap){
           CV_LeafBitField *bit_field = (CV_LeafBitField*)first;
           CONS_Type *direct_type = pdbconv_type_resolve_and_check(ctx, bit_field->itype);
           result = cons_type_bitfield(ctx->root, direct_type, bit_field->pos, bit_field->len);
         }
-        ProfEnd();
       }break;
       
       case CV_LeafKind_ARRAY:
       {
-        ProfBegin("CV_LeafKind_ARRAY");
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafArray) <= cap){
           CV_LeafArray *array = (CV_LeafArray*)first;
@@ -1365,14 +1341,11 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           // build type
           result = cons_type_array(ctx->root, direct_type, count);
         }
-        ProfEnd();
       }break;
       
       case CV_LeafKind_CLASS:
       case CV_LeafKind_STRUCTURE:
       {
-        ProfBegin("CV_LeafKind_CLASS/CV_LeafKind_STRUCTURE");
-        
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafStruct) <= cap){
           CV_LeafStruct *lf_struct = (CV_LeafStruct*)first;
@@ -1414,13 +1387,11 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             }
           }
         }
-        ProfEnd();
       }break;
       
       case CV_LeafKind_CLASS2:
       case CV_LeafKind_STRUCT2:
       {
-        ProfBegin("CV_LeafKind_CLASS2/CV_LeafKind_STRUCT2");
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafStruct2) <= cap){
           CV_LeafStruct2 *lf_struct = (CV_LeafStruct2*)first;
@@ -1467,12 +1438,10 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             }
           }
         }
-        ProfEnd();
       }break;
       
       case CV_LeafKind_UNION:
       {
-        ProfBegin("CV_LeafKind_UNION");
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafUnion) <= cap){
           CV_LeafUnion *lf_union = (CV_LeafUnion*)first;
@@ -1507,12 +1476,10 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             }
           }
         }
-        ProfEnd();
       }break;
       
       case CV_LeafKind_ENUM:
       {
-        ProfBegin("CV_LeafKind_ENUM");
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafEnum) <= cap){
           CV_LeafEnum *lf_enum = (CV_LeafEnum*)first;
@@ -1542,7 +1509,6 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             }
           }
         }
-        ProfEnd();
       }break;
       
       // discard cases - we currently discard these these intentionally
@@ -1922,7 +1888,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
       // current state
       CONS_Scope *current_scope = pdbconv_symbol_current_scope(ctx);
       CONS_Symbol *current_procedure = 0;
-      if (current_scope != 0){
+      if(current_scope != 0)
+      {
         current_procedure = current_scope->symbol;
       }
       
@@ -1932,7 +1899,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         default:{}break;
         
         case CV_SymKind_END:
-        ProfScope("CV_SymKind_END")
+        //ProfScope("CV_SymKind_END")
         {
           // pop scope stack
           pdbconv_symbol_pop_scope(ctx);
@@ -1941,7 +1908,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_FRAMEPROC:
-        ProfScope("CV_SymKind_FRAMEPROC")
+        //ProfScope("CV_SymKind_FRAMEPROC")
         {
           if (sizeof(CV_SymFrameproc) > cap){
             // TODO(allen): error
@@ -1952,7 +1919,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_BLOCK32:
-        ProfScope("CV_SymKind_BLOCK32")
+        //ProfScope("CV_SymKind_BLOCK32")
         {
           if (sizeof(CV_SymBlock32) > cap){
             // TODO(allen): error
@@ -1980,7 +1947,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         
         case CV_SymKind_LDATA32:
         case CV_SymKind_GDATA32:
-        ProfScope("CV_SymKind_LDATA32/CV_SymKind_GDATA32")
+        //ProfScope("CV_SymKind_LDATA32/CV_SymKind_GDATA32")
         {
           if (sizeof(CV_SymData32) > cap){
             // TODO(allen): error
@@ -2043,7 +2010,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         
         case CV_SymKind_LPROC32:
         case CV_SymKind_GPROC32:
-        ProfScope("CV_SymKind_LPROC32/CV_SymKind_GPROC32")
+        //ProfScope("CV_SymKind_LPROC32/CV_SymKind_GPROC32")
         {
           if (sizeof(CV_SymProc32) > cap){
             // TODO(allen): error
@@ -2225,7 +2192,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         
         case CV_SymKind_LTHREAD32:
         case CV_SymKind_GTHREAD32:
-        ProfScope("CV_SymKind_LTHREAD32/CV_SymKind_GTHREAD32")
+        //ProfScope("CV_SymKind_LTHREAD32/CV_SymKind_GTHREAD32")
         {
           if (sizeof(CV_SymThread32) > cap){
             // TODO(allen): error
@@ -2278,7 +2245,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_LOCAL:
-        ProfScope("CV_SymKind_LOCAL")
+        //ProfScope("CV_SymKind_LOCAL")
         {
           if (sizeof(CV_SymLocal) > cap){
             // TODO(allen): error
@@ -2337,7 +2304,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_REGISTER:
-        ProfScope("CV_SymKind_DEFRANGE_REGISTER")
+        //ProfScope("CV_SymKind_DEFRANGE_REGISTER")
         {
           if (sizeof(CV_SymDefrangeRegister) > cap){
             // TODO(allen): error
@@ -2370,7 +2337,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL:
-        ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL")
+        //ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL")
         {
           if (sizeof(CV_SymDefrangeFramepointerRel) > cap){
             // TODO(allen): error
@@ -2410,7 +2377,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_SUBFIELD_REGISTER:
-        ProfScope("CV_SymKind_DEFRANGE_SUBFIELD_REGISTER")
+        //ProfScope("CV_SymKind_DEFRANGE_SUBFIELD_REGISTER")
         {
           if (sizeof(CV_SymDefrangeSubfieldRegister) > cap){
             // TODO(allen): error
@@ -2447,7 +2414,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE:
-        ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE")
+        //ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE")
         {
           if (sizeof(CV_SymDefrangeFramepointerRelFullScope) > cap){
             // TODO(allen): error
@@ -2483,7 +2450,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_DEFRANGE_REGISTER_REL:
-        ProfScope("CV_SymKind_DEFRANGE_REGISTER_REL")
+        //ProfScope("CV_SymKind_DEFRANGE_REGISTER_REL")
         {
           if (sizeof(CV_SymDefrangeRegisterRel) > cap){
             // TODO(allen): error
@@ -2525,7 +2492,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         }break;
         
         case CV_SymKind_FILESTATIC:
-        ProfScope("CV_SymKind_FILESTATIC")
+        //ProfScope("CV_SymKind_FILESTATIC")
         {
           if (sizeof(CV_SymFileStatic) > cap){
             // TODO(allen): error
@@ -2656,7 +2623,6 @@ pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,CONS_Symbol *key,PDBCONV_FrameP
 
 static PDBCONV_FrameProcData*
 pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, CONS_Symbol *key){
-  ProfBeginFunction();
   U64 key_int = IntFromPtr(key);
   PDBCONV_FrameProcMap *map = &ctx->frame_proc_map;
   U32 bucket_idx = key_int%map->buckets_count;
@@ -2672,7 +2638,6 @@ pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, CONS_Symbol *key){
     }
   }
   
-  ProfEnd();
   return(result);
 }
 
@@ -2747,7 +2712,6 @@ pdbconv_known_global_hash(String8 name, U64 voff){
 
 static B32
 pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff){
-  ProfBeginFunction();
   U64 hash = pdbconv_known_global_hash(name, voff);
   U64 bucket_idx = hash%set->buckets_count;
   
@@ -2764,13 +2728,11 @@ pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff)
   }
   
   B32 result = (match != 0);
-  ProfEnd();
   return(result);
 }
 
 static void
 pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 name, U64 voff){
-  ProfBeginFunction();
   U64 hash = pdbconv_known_global_hash(name, voff);
   U64 bucket_idx = hash%set->buckets_count;
   
@@ -2795,7 +2757,6 @@ pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 n
     set->global_count += 1;
     set->bucket_collision_count += (node->next != 0);
   }
-  ProfEnd();
 }
 
 // location info helpers
@@ -2807,7 +2768,6 @@ pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
                                    U32 reg_byte_pos,
                                    S64 offset,
                                    B32 extra_indirection){
-  ProfBeginFunction();
   CONS_Location *result = 0;
   if (0 <= offset && offset <= (S64)max_U16){
     if (extra_indirection){
@@ -2832,7 +2792,6 @@ pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
     result = cons_location_addr_bytecode_stream(ctx->root, &bytecode);
   }
   
-  ProfEnd();
   return(result);
 }
 
@@ -2949,7 +2908,6 @@ pdbconv_link_name_save(Arena *arena, PDBCONV_LinkNameMap *map, U64 voff, String8
 
 static String8
 pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff){
-  ProfBeginFunction();
   U64 hash = (voff >> 3) ^ ((7 & voff) << 6);
   U64 bucket_idx = hash%map->buckets_count;
   
@@ -2963,7 +2921,6 @@ pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff){
     }
   }
   
-  ProfEnd();
   return(result);
 }
 

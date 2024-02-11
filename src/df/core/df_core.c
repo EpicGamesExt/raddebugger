@@ -1802,6 +1802,7 @@ df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kin
   df_state->entities_id_gen += 1;
   entity->id = df_state->entities_id_gen;
   entity->generation += 1;
+  entity->alloc_time_us = os_now_microseconds();
   
   // rjf: dirtify caches
   df_state->kind_alloc_gens[kind] += 1;
