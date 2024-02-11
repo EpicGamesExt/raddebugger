@@ -101,7 +101,7 @@ static void cons_add_binary_section(CONS_Root *root,
 
 
 // units
-static CONS_Unit* cons_unit_handle_from_user_id(CONS_Root *root, U64 unit_user_id);
+static CONS_Unit* cons_unit_handle_from_user_id(CONS_Root *root, U64 unit_user_id, U64 unit_user_id_hash);
 
 typedef struct CONS_UnitInfo{
   String8 unit_name;
@@ -130,8 +130,8 @@ static void cons_unit_vmap_add_range(CONS_Root *root, CONS_Unit *unit, U64 first
 
 
 // types
-static CONS_Type*        cons_type_from_id(CONS_Root *root, U64 type_user_id);
-static CONS_Reservation* cons_type_reserve_id(CONS_Root *root, U64 type_user_id);
+static CONS_Type*        cons_type_from_id(CONS_Root *root, U64 type_user_id, U64 type_user_id_hash);
+static CONS_Reservation* cons_type_reserve_id(CONS_Root *root, U64 type_user_id, U64 type_user_id_hash);
 static void              cons_type_fill_id(CONS_Root *root, CONS_Reservation *res, CONS_Type *type);
 
 static B32        cons_type_is_unhandled_nil(CONS_Root *root, CONS_Type *type);
@@ -190,7 +190,7 @@ static void cons_type_set_source_coordinates(CONS_Root *root, CONS_Type *defined
 static void cons_type_list_push(Arena *arena, CONS_TypeList *list, CONS_Type *type);
 
 // symbols
-static CONS_Symbol* cons_symbol_handle_from_user_id(CONS_Root *root, U64 symbol_user_id);
+static CONS_Symbol* cons_symbol_handle_from_user_id(CONS_Root *root, U64 symbol_user_id, U64 symbol_user_id_hash);
 
 typedef enum{
   CONS_SymbolKind_NULL,
@@ -216,13 +216,13 @@ typedef struct CONS_SymbolInfo{
 static void cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_SymbolInfo *info);
 
 // scopes
-static CONS_Scope *cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id);
+static CONS_Scope *cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id, U64 scope_user_id_hash);
 
 static void cons_scope_set_parent(CONS_Root *root, CONS_Scope *scope, CONS_Scope *parent);
 static void cons_scope_add_voff_range(CONS_Root *root, CONS_Scope *scope, U64 voff_first, U64 voff_opl);
 
 // locals
-static CONS_Local* cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id);
+static CONS_Local* cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id, U64 local_user_id_hash);
 
 typedef struct CONS_LocalInfo{
   RADDBG_LocalKind kind;

@@ -212,6 +212,7 @@ static CV_TypeId pdbconv_type_fwd_map_get(PDBCONV_FwdMap *map, CV_TypeId key);
 //- symbol info
 
 // symbol info construction
+static U64 pdbconv_hash_from_symbol_user_id(U64 user_id);
 static void pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id);
 static void pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym);
 

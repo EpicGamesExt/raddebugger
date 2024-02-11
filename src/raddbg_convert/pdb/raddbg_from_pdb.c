@@ -220,7 +220,7 @@ pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx){
   ProfScope("setup variadic itype -> node")
   {
     CONS_Type *variadic_type = cons_type_variadic(ctx->root);
-    CONS_Reservation *res = cons_type_reserve_id(ctx->root, CV_TypeId_Variadic);
+    CONS_Reservation *res = cons_type_reserve_id(ctx->root, CV_TypeId_Variadic, CV_TypeId_Variadic);
     cons_type_fill_id(ctx->root, res, variadic_type);
   }
   
@@ -419,27 +419,35 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
   ProfBeginFunction();
   
   // convert fwd references to real types
+  ProfBegin("fwd map get");
   CV_TypeId resolved_itype = pdbconv_type_fwd_map_get(&ctx->fwd_map, itype);
   if (resolved_itype != 0){
     itype = resolved_itype;
   }
+  ProfEnd();
   
   // type handle from id
-  CONS_Type *result = cons_type_from_id(ctx->root, itype);
+  ProfBegin("id -> handle");
+  CONS_Type *result = cons_type_from_id(ctx->root, itype, itype);
+  ProfEnd();
   
   // basic type
+  ProfBegin("basic type");
   if (result == 0){
     if (itype < 0x1000){
       result = pdbconv_type_cons_basic(ctx, itype);
     }
   }
+  ProfEnd();
   
   // leaf decode
+  ProfBegin("leaf decode");
   if (result == 0){
     if (ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl){
       result = pdbconv_type_cons_leaf_record(ctx, itype);
     }
   }
+  ProfEnd();
   
   // never return null, return "nil" instead
   if (result == 0){
@@ -967,13 +975,12 @@ pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId
 
 static CONS_Type*
 pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype){
-  ProfBeginFunction();
   Assert(itype < 0x1000);
   
   CV_BasicPointerKind basic_ptr_kind = CV_BasicPointerKindFromTypeId(itype);
   CV_BasicType basic_type_code = CV_BasicTypeFromTypeId(itype);
   
-  CONS_Reservation *basic_res = cons_type_reserve_id(ctx->root, basic_type_code);
+  CONS_Reservation *basic_res = cons_type_reserve_id(ctx->root, basic_type_code, basic_type_code);
   
   CONS_Type *basic_type = 0;
   switch (basic_type_code){
@@ -1147,7 +1154,7 @@ pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype){
   // wrap in constructed type
   CONS_Type *constructed_type = 0;
   if (basic_ptr_kind != 0 && basic_type != 0){
-    CONS_Reservation *constructed_res = cons_type_reserve_id(ctx->root, itype);
+    CONS_Reservation *constructed_res = cons_type_reserve_id(ctx->root, itype, itype);
     
     switch (basic_ptr_kind){
       case CV_BasicPointerKind_16BIT:
@@ -1171,16 +1178,14 @@ pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype){
     result = constructed_type;
   }
   
-  ProfEnd();
   return(result);
 }
 
 static CONS_Type*
 pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
-  ProfBeginFunction();
   Assert(ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl);
   
-  CONS_Reservation *res = cons_type_reserve_id(ctx->root, itype);
+  CONS_Reservation *res = cons_type_reserve_id(ctx->root, itype, itype);
   
   CV_RecRange *range = &ctx->leaf->leaf_ranges.ranges[itype - ctx->leaf->itype_first];
   String8 data = ctx->leaf->data;
@@ -1696,7 +1701,6 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
   
   cons_type_fill_id(ctx->root, res, result);
   
-  ProfEnd();
   return(result);
 }
 
@@ -1747,7 +1751,7 @@ static CONS_Type*
 pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name){
   // TODO(rjf): no idea if this is correct
   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(ctx->hash, ctx->leaf, name, 0);
-  CONS_Type *result = cons_type_from_id(ctx->root, cv_type_id);
+  CONS_Type *result = cons_type_from_id(ctx->root, cv_type_id, cv_type_id);
   return(result);
 }
 
@@ -1807,6 +1811,13 @@ pdbconv_type_fwd_map_get(PDBCONV_FwdMap *map, CV_TypeId key){
 
 //- symbols
 
+static U64
+pdbconv_hash_from_symbol_user_id(U64 user_id)
+{
+  U64 hash = user_id;
+  return hash;
+}
+
 static void
 pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
   ProfBeginFunction();
@@ -1815,6 +1826,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
   // extract important values from parameters
   String8 data = sym->data;
   U64 user_id_base = (((U64)sym_unique_id) << 32);
+  U64 sym_unique_id_hash = raddbg_hash((U8*)&sym_unique_id, sizeof(sym_unique_id));
   
   // PASS 1: map out data associations
   ProfScope("map out data associations")
@@ -1825,7 +1837,9 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
     // loop
     CV_RecRange *rec_range = sym->sym_ranges.ranges;
     CV_RecRange *opl = rec_range + sym->sym_ranges.count;
-    for (;rec_range < opl; rec_range += 1){
+    U64 symbol_num = 1;
+    for(;rec_range < opl; rec_range += 1)
+    {
       // symbol data range
       U64 opl_off_raw = rec_range->off + rec_range->hdr.size;
       U64 opl_off = ClampTop(opl_off_raw, data.size);
@@ -1863,7 +1877,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         case CV_SymKind_GPROC32:
         {
           U64 user_id = user_id_base + off;
-          current_proc = cons_symbol_handle_from_user_id(ctx->root, user_id);
+          current_proc = cons_symbol_handle_from_user_id(ctx->root, user_id, user_id);
+          symbol_num += 1;
         }break;
       }
     }
@@ -1879,7 +1894,11 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
     // loop
     CV_RecRange *rec_range = sym->sym_ranges.ranges;
     CV_RecRange *opl = rec_range + sym->sym_ranges.count;
-    for (;rec_range < opl; rec_range += 1){
+    U64 symbol_num = 1;
+    U64 local_num = 1;
+    U64 scope_num = 1;
+    for(;rec_range < opl; rec_range += 1)
+    {
       // symbol data range
       U64 opl_off_raw = rec_range->off + rec_range->hdr.size;
       U64 opl_off = ClampTop(opl_off_raw, data.size);
@@ -1933,7 +1952,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             
             // scope
             U64 user_id = user_id_base + off;
-            CONS_Scope *block_scope = cons_scope_handle_from_user_id(ctx->root, user_id);
+            scope_num += 1;
+            CONS_Scope *block_scope = cons_scope_handle_from_user_id(ctx->root, user_id, user_id);
             cons_scope_set_parent(ctx->root, block_scope, current_scope);
             pdbconv_symbol_push_scope(ctx, block_scope, current_procedure);
             
@@ -1993,7 +2013,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               
               // cons this symbol
               U64 user_id = user_id_base + off;
-              CONS_Symbol *symbol = cons_symbol_handle_from_user_id(ctx->root, user_id);
+              CONS_Symbol *symbol = cons_symbol_handle_from_user_id(ctx->root, user_id, user_id);
+              symbol_num += 1;
               
               CONS_SymbolInfo info = zero_struct;
               info.kind = CONS_SymbolKind_GlobalVariable;
@@ -2040,8 +2061,9 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             }
             
             // get this symbol handle
-            U64 user_id = user_id_base + off;
-            CONS_Symbol *proc_symbol = cons_symbol_handle_from_user_id(ctx->root, user_id);
+            U64 proc_id = user_id_base + off;
+            CONS_Symbol *proc_symbol = cons_symbol_handle_from_user_id(ctx->root, proc_id, proc_id);
+            symbol_num += 1;
             
             // scope
             
@@ -2050,8 +2072,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             //       it here because these scopes refer to the ranges of code that make up a
             //       procedure *not* the namespaces, so a procedure's root scope always has
             //       no parent.
-            CONS_Scope *root_scope = cons_scope_handle_from_user_id(ctx->root, user_id);
+            U64 scope_id = user_id_base + off;
+            CONS_Scope *root_scope = cons_scope_handle_from_user_id(ctx->root, scope_id, scope_id);
             pdbconv_symbol_push_scope(ctx, root_scope, proc_symbol);
+            scope_num += 1;
             
             // set voff range
             U64 voff = 0;
@@ -2136,15 +2160,16 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             }
             
             // emit local
-            U64 user_id = user_id_base + off;
-            CONS_Local *local_var = cons_local_handle_from_user_id(ctx->root, user_id);
+            U64 local_id = user_id_base + local_num;;
+            U64 local_id_hash = local_id ^ sym_unique_id_hash<<1 ^ sym_unique_id_hash<<4;
+            CONS_Local *local_var = cons_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
+            local_num += 1;
             
             CONS_LocalInfo info = {0};
             info.kind = local_kind;
             info.scope = current_scope;
             info.name = name;
             info.type = type;
-            
             cons_local_set_basic_info(ctx->root, local_var, &info);
             
             // add location to local
@@ -2224,7 +2249,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             
             // setup symbol
             U64 user_id = user_id_base + off;
-            CONS_Symbol *symbol = cons_symbol_handle_from_user_id(ctx->root, user_id);
+            CONS_Symbol *symbol = cons_symbol_handle_from_user_id(ctx->root, user_id, user_id);
+            symbol_num += 1;
             
             CONS_SymbolInfo info = zero_struct;
             info.kind = CONS_SymbolKind_ThreadVariable;
@@ -2277,8 +2303,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               }
               
               // emit local
-              U64 user_id = user_id_base + off;
-              CONS_Local *local_var = cons_local_handle_from_user_id(ctx->root, user_id);
+              U64 local_id = user_id_base + local_num;
+              U64 local_id_hash = local_id ^ sym_unique_id_hash<<1 ^ sym_unique_id_hash<<4;
+              CONS_Local *local_var = cons_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
+              local_num += 1;
               local_var->kind = local_kind;
               local_var->name = name;
               local_var->type = type;
@@ -2512,7 +2540,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
     // if scope stack isn't empty emit an error
     {
       CONS_Scope* scope = pdbconv_symbol_current_scope(ctx);
-      if (scope != 0){
+      if(scope != 0)
+      {
         // TODO(allen): emit error
       }
     }
@@ -3207,7 +3236,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     root_params.bucket_count_units = comp_unit_count;
     root_params.bucket_count_symbols = symbol_count_prediction;
     root_params.bucket_count_scopes = symbol_count_prediction;
-    root_params.bucket_count_locals = symbol_count_prediction;
+    root_params.bucket_count_locals = symbol_count_prediction*2;
     root_params.bucket_count_types = tpi->itype_opl;
     root_params.bucket_count_type_constructs = tpi->itype_opl;
     
@@ -3293,7 +3322,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         RADDBG_Language lang = raddbg_language_from_cv_language(sym->info.language);
         
         // basic per unit info
-        CONS_Unit *unit_handle = cons_unit_handle_from_user_id(root, i);
+        CONS_Unit *unit_handle = cons_unit_handle_from_user_id(root, i, i);
         
         CONS_UnitInfo info = {0};
         info.unit_name = unit_name;
@@ -3336,7 +3365,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
       PDB_CompUnitContribution *contrib_opl = contrib_ptr + comp_unit_contribution_count;
       for (;contrib_ptr < contrib_opl; contrib_ptr += 1){
         if (contrib_ptr->mod < root->unit_count){
-          CONS_Unit *unit_handle = cons_unit_handle_from_user_id(root, contrib_ptr->mod);
+          CONS_Unit *unit_handle = cons_unit_handle_from_user_id(root, contrib_ptr->mod, contrib_ptr->mod);
           cons_unit_vmap_add_range(root, unit_handle,
                                    contrib_ptr->voff_first,
                                    contrib_ptr->voff_opl);

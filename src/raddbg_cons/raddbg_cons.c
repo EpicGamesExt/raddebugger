@@ -516,9 +516,10 @@ cons_add_binary_section(CONS_Root *root, String8 name, RADDBG_BinarySectionFlags
 // units
 
 static CONS_Unit*
-cons_unit_handle_from_user_id(CONS_Root *root, U64 unit_user_id){
+cons_unit_handle_from_user_id(CONS_Root *root, U64 unit_user_id, U64 unit_user_id_hash){
+  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
-  cons__u64toptr_lookup(&root->unit_map, unit_user_id, unit_user_id, &lookup);
+  cons__u64toptr_lookup(&root->unit_map, unit_user_id, unit_user_id_hash, &lookup);
   
   CONS_Unit *result = 0;
   if (lookup.match != 0){
@@ -532,6 +533,7 @@ cons_unit_handle_from_user_id(CONS_Root *root, U64 unit_user_id){
     cons__u64toptr_insert(root->arena, &root->unit_map, unit_user_id, unit_user_id, &lookup, result);
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -588,26 +590,28 @@ cons_unit_vmap_add_range(CONS_Root *root, CONS_Unit *unit, U64 first, U64 opl){
 // types
 
 static CONS_Type*
-cons_type_from_id(CONS_Root *root, U64 type_user_id){
+cons_type_from_id(CONS_Root *root, U64 type_user_id, U64 type_user_id_hash){
   CONS__U64ToPtrLookup lookup = {0};
-  cons__u64toptr_lookup(&root->type_from_id_map, type_user_id, type_user_id, &lookup);
+  cons__u64toptr_lookup(&root->type_from_id_map, type_user_id, type_user_id_hash, &lookup);
   
   CONS_Type *result = (CONS_Type*)lookup.match;
   return(result);
 }
 
 static CONS_Reservation*
-cons_type_reserve_id(CONS_Root *root, U64 type_user_id){
+cons_type_reserve_id(CONS_Root *root, U64 type_user_id, U64 type_user_id_hash){
+  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
-  cons__u64toptr_lookup(&root->type_from_id_map, type_user_id, type_user_id, &lookup);
+  cons__u64toptr_lookup(&root->type_from_id_map, type_user_id, type_user_id_hash, &lookup);
   
   CONS_Reservation *result = 0;
   if (lookup.match == 0){
-    cons__u64toptr_insert(root->arena, &root->type_from_id_map, type_user_id, type_user_id, &lookup, root->nil_type);
+    cons__u64toptr_insert(root->arena, &root->type_from_id_map, type_user_id, type_user_id_hash, &lookup, root->nil_type);
     void **slot = &lookup.fill_node->ptr[lookup.fill_k];
     result = (CONS_Reservation*)slot;
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -1317,10 +1321,10 @@ cons_type_list_push(Arena *arena, CONS_TypeList *list, CONS_Type *type){
 // symbols
 
 static CONS_Symbol*
-cons_symbol_handle_from_user_id(CONS_Root *root, U64 symbol_user_id){
+cons_symbol_handle_from_user_id(CONS_Root *root, U64 symbol_user_id, U64 symbol_user_id_hash){
+  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
-  U64 symbol_hash = raddbg_hash((U8 *)&symbol_user_id, sizeof(symbol_user_id));
-  cons__u64toptr_lookup(&root->symbol_map, symbol_user_id, symbol_hash, &lookup);
+  cons__u64toptr_lookup(&root->symbol_map, symbol_user_id, symbol_user_id_hash, &lookup);
   
   CONS_Symbol *result = 0;
   if (lookup.match != 0){
@@ -1330,9 +1334,10 @@ cons_symbol_handle_from_user_id(CONS_Root *root, U64 symbol_user_id){
     result = push_array(root->arena, CONS_Symbol, 1);
     SLLQueuePush_N(root->first_symbol, root->last_symbol, result, next_order);
     root->symbol_count += 1;
-    cons__u64toptr_insert(root->arena, &root->symbol_map, symbol_user_id, symbol_hash, &lookup, result);
+    cons__u64toptr_insert(root->arena, &root->symbol_map, symbol_user_id, symbol_user_id_hash, &lookup, result);
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -1429,9 +1434,10 @@ cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_SymbolInfo *info
 // scopes
 
 static CONS_Scope*
-cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id){
+cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id, U64 scope_user_id_hash){
+  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
-  cons__u64toptr_lookup(&root->scope_map, scope_user_id, scope_user_id, &lookup);
+  cons__u64toptr_lookup(&root->scope_map, scope_user_id, scope_user_id_hash, &lookup);
   
   CONS_Scope *result = 0;
   if (lookup.match != 0){
@@ -1442,9 +1448,10 @@ cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id){
     result->idx = root->scope_count;
     SLLQueuePush_N(root->first_scope, root->last_scope, result, next_order);
     root->scope_count += 1;
-    cons__u64toptr_insert(root->arena, &root->scope_map, scope_user_id, scope_user_id, &lookup, result);
+    cons__u64toptr_insert(root->arena, &root->scope_map, scope_user_id, scope_user_id_hash, &lookup, result);
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -1477,10 +1484,10 @@ cons_scope_add_voff_range(CONS_Root *root, CONS_Scope *scope, U64 voff_first, U6
 // locals
 
 static CONS_Local*
-cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id){
+cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id, U64 local_user_id_hash){
+  ProfBeginFunction();
   CONS__U64ToPtrLookup lookup = {0};
-  U64 local_hash = (local_user_id<<4) ^ (local_user_id>>3) ^ (((local_user_id&0xffffffff00000000ull)>>32));
-  cons__u64toptr_lookup(&root->local_map, local_user_id, local_hash, &lookup);
+  cons__u64toptr_lookup(&root->local_map, local_user_id, local_user_id_hash, &lookup);
   
   CONS_Local *result = 0;
   if (lookup.match != 0){
@@ -1488,9 +1495,10 @@ cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id){
   }
   else{
     result = push_array(root->arena, CONS_Local, 1);
-    cons__u64toptr_insert(root->arena, &root->local_map, local_user_id, local_hash, &lookup, result);
+    cons__u64toptr_insert(root->arena, &root->local_map, local_user_id, local_user_id_hash, &lookup, result);
   }
   
+  ProfEnd();
   return(result);
 }
 
@@ -1802,7 +1810,6 @@ cons__u64toptr_init(Arena *arena, CONS__U64ToPtrMap *map, U64 bucket_count){
 
 static void
 cons__u64toptr_lookup(CONS__U64ToPtrMap *map, U64 key, U64 hash, CONS__U64ToPtrLookup *lookup_out){
-  ProfBeginFunction();
   U64 bucket_idx = hash&(map->buckets_count - 1);
   CONS__U64ToPtrNode *check_node = map->buckets[bucket_idx];
   for (;check_node != 0; check_node = check_node->next){
@@ -1818,7 +1825,6 @@ cons__u64toptr_lookup(CONS__U64ToPtrMap *map, U64 key, U64 hash, CONS__U64ToPtrL
       }
     }
   }
-  ProfEnd();
 }
 
 static void

@@ -41,7 +41,7 @@ main(int argc, char **argv){
   local_persist TCTX main_thread_tctx = {0};
   tctx_init_and_equip(&main_thread_tctx);
 #if PROFILE_TELEMETRY
-  U64 tm_data_size = MB(128);
+  U64 tm_data_size = MB(512);
   U8 *tm_data = os_reserve(tm_data_size);
   os_commit(tm_data, tm_data_size);
   tmLoadLibrary(TM_RELEASE);
