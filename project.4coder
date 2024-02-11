@@ -56,7 +56,7 @@ commands =
   },
   .rjf_f2 =
   {
-    .win = "build raddbg_from_pdb telemetry",
+    .win = "build raddbg_from_pdb telemetry release",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -74,7 +74,7 @@ commands =
   },
   .rjf_f4 =
   {
-    .win = "build raddbg_from_pdb telemetry && pushd build && raddbg_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --capture && popd",
+    .win = "build raddbg_from_pdb && pushd build && raddbg_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --dump:table_diagnostics && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
