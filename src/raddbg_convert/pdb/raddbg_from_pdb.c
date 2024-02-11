@@ -419,7 +419,7 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
   B32 is_basic = (itype < 0x1000);
   
   // convert fwd references to real types
-  if(is_basic)
+  if(!is_basic)
   {
     CV_TypeId resolved_itype = pdbconv_type_fwd_map_get(&ctx->fwd_map, itype);
     if(resolved_itype != 0)
