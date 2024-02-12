@@ -27,47 +27,47 @@ struct CONS_ErrorList
 
 //- rjf: u64 -> pointer map
 
-typedef struct CONS__U64ToPtrNode CONS__U64ToPtrNode;
-struct CONS__U64ToPtrNode
+typedef struct CONS_U64ToPtrNode CONS_U64ToPtrNode;
+struct CONS_U64ToPtrNode
 {
-  CONS__U64ToPtrNode *next;
+  CONS_U64ToPtrNode *next;
   U64 _padding_;
   U64 key[1];
   void *ptr[1];
 };
 
-typedef struct CONS__U64ToPtrMap CONS__U64ToPtrMap;
-struct CONS__U64ToPtrMap
+typedef struct CONS_U64ToPtrMap CONS_U64ToPtrMap;
+struct CONS_U64ToPtrMap
 {
-  CONS__U64ToPtrNode **buckets;
+  CONS_U64ToPtrNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U64 pair_count;
 };
 
-typedef struct CONS__U64ToPtrLookup CONS__U64ToPtrLookup;
-struct CONS__U64ToPtrLookup
+typedef struct CONS_U64ToPtrLookup CONS_U64ToPtrLookup;
+struct CONS_U64ToPtrLookup
 {
   void *match;
-  CONS__U64ToPtrNode *fill_node;
+  CONS_U64ToPtrNode *fill_node;
   U32 fill_k;
 };
 
 //- rjf: string8 -> pointer map
 
-typedef struct CONS__Str8ToPtrNode CONS__Str8ToPtrNode;
-struct CONS__Str8ToPtrNode
+typedef struct CONS_Str8ToPtrNode CONS_Str8ToPtrNode;
+struct CONS_Str8ToPtrNode
 {
-  struct CONS__Str8ToPtrNode *next;
+  struct CONS_Str8ToPtrNode *next;
   String8 key;
   U64 hash;
   void *ptr;
 };
 
-typedef struct CONS__Str8ToPtrMap CONS__Str8ToPtrMap;
-struct CONS__Str8ToPtrMap
+typedef struct CONS_Str8ToPtrMap CONS_Str8ToPtrMap;
+struct CONS_Str8ToPtrMap
 {
-  CONS__Str8ToPtrNode **buckets;
+  CONS_Str8ToPtrNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U64 pair_count;
@@ -75,17 +75,17 @@ struct CONS__Str8ToPtrMap
 
 //- rjf: sortable range data structure
 
-typedef struct CONS__SortKey CONS__SortKey;
-struct CONS__SortKey
+typedef struct CONS_SortKey CONS_SortKey;
+struct CONS_SortKey
 {
   U64 key;
   void *val;
 };
 
-typedef struct CONS__OrderedRange CONS__OrderedRange;
-struct CONS__OrderedRange
+typedef struct CONS_OrderedRange CONS_OrderedRange;
+struct CONS_OrderedRange
 {
-  CONS__OrderedRange *next;
+  CONS_OrderedRange *next;
   U64 first;
   U64 opl;
 };
@@ -314,10 +314,10 @@ struct CONS_Local
   struct CONS_LocationSet *locset;
 };
 
-typedef struct CONS__VOffRange CONS__VOffRange;
-struct CONS__VOffRange
+typedef struct CONS_VOffRange CONS_VOffRange;
+struct CONS_VOffRange
 {
-  CONS__VOffRange *next;
+  CONS_VOffRange *next;
   U64 voff_first;
   U64 voff_opl;
 };
@@ -332,8 +332,8 @@ struct CONS_Scope
   CONS_Scope *last_child;
   CONS_Scope *next_sibling;
   U64 voff_base;
-  CONS__VOffRange *first_range;
-  CONS__VOffRange *last_range;
+  CONS_VOffRange *first_range;
+  CONS_VOffRange *last_range;
   U32 range_count;
   U32 idx;
   CONS_Local *first_local;
@@ -371,10 +371,10 @@ struct CONS_Location
   CONS_EvalBytecode bytecode;
 };
 
-typedef struct CONS__LocationCase CONS__LocationCase;
-struct CONS__LocationCase
+typedef struct CONS_LocationCase CONS_LocationCase;
+struct CONS_LocationCase
 {
-  CONS__LocationCase *next;
+  CONS_LocationCase *next;
   U64 voff_first;
   U64 voff_opl;
   CONS_Location *location;
@@ -383,40 +383,40 @@ struct CONS__LocationCase
 typedef struct CONS_LocationSet CONS_LocationSet;
 struct CONS_LocationSet
 {
-  CONS__LocationCase *first_location_case;
-  CONS__LocationCase *last_location_case;
+  CONS_LocationCase *first_location_case;
+  CONS_LocationCase *last_location_case;
   U64 location_case_count;
 };
 
 ////////////////////////////////
 //~ rjf: Name Map Types
 
-typedef struct CONS__NameMapIdxNode CONS__NameMapIdxNode;
-struct CONS__NameMapIdxNode
+typedef struct CONS_NameMapIdxNode CONS_NameMapIdxNode;
+struct CONS_NameMapIdxNode
 {
-  CONS__NameMapIdxNode *next;
+  CONS_NameMapIdxNode *next;
   U32 idx[8];
 };
 
-typedef struct CONS__NameMapNode CONS__NameMapNode;
-struct CONS__NameMapNode
+typedef struct CONS_NameMapNode CONS_NameMapNode;
+struct CONS_NameMapNode
 {
-  CONS__NameMapNode *bucket_next;
-  CONS__NameMapNode *order_next;
+  CONS_NameMapNode *bucket_next;
+  CONS_NameMapNode *order_next;
   String8 string;
-  CONS__NameMapIdxNode *idx_first;
-  CONS__NameMapIdxNode *idx_last;
+  CONS_NameMapIdxNode *idx_first;
+  CONS_NameMapIdxNode *idx_last;
   U64 idx_count;
 };
 
-typedef struct CONS__NameMap CONS__NameMap;
-struct CONS__NameMap
+typedef struct CONS_NameMap CONS_NameMap;
+struct CONS_NameMap
 {
-  CONS__NameMapNode **buckets;
+  CONS_NameMapNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
-  CONS__NameMapNode *first;
-  CONS__NameMapNode *last;
+  CONS_NameMapNode *first;
+  CONS_NameMapNode *last;
   U64 name_count;
 };
 
@@ -513,16 +513,16 @@ struct CONS_Root
   U64 location_count;
   
   // name maps
-  CONS__NameMap *name_maps[RADDBGI_NameMapKind_COUNT];
+  CONS_NameMap *name_maps[RADDBGI_NameMapKind_COUNT];
   
   //////// Handle Relationship Maps
   
-  CONS__U64ToPtrMap unit_map;
-  CONS__U64ToPtrMap symbol_map;
-  CONS__U64ToPtrMap scope_map;
-  CONS__U64ToPtrMap local_map;
-  CONS__U64ToPtrMap type_from_id_map;
-  CONS__Str8ToPtrMap construct_map;
+  CONS_U64ToPtrMap unit_map;
+  CONS_U64ToPtrMap symbol_map;
+  CONS_U64ToPtrMap scope_map;
+  CONS_U64ToPtrMap local_map;
+  CONS_U64ToPtrMap type_from_id_map;
+  CONS_Str8ToPtrMap construct_map;
 };
 
 ////////////////////////////////
@@ -530,41 +530,41 @@ struct CONS_Root
 
 //- rjf: bake data section data structure
 
-typedef struct CONS__DSectionNode CONS__DSectionNode;
-struct CONS__DSectionNode
+typedef struct CONS_DSectionNode CONS_DSectionNode;
+struct CONS_DSectionNode
 {
-  CONS__DSectionNode *next;
+  CONS_DSectionNode *next;
   void *data;
   U64 size;
   RADDBGI_DataSectionTag tag;
 };
 
-typedef struct CONS__DSections CONS__DSections;
-struct CONS__DSections
+typedef struct CONS_DSections CONS_DSections;
+struct CONS_DSections
 {
-  CONS__DSectionNode *first;
-  CONS__DSectionNode *last;
+  CONS_DSectionNode *first;
+  CONS_DSectionNode *last;
   U32 count;
 };
 
 //- rjf: bake string data structure
 
-typedef struct CONS__StringNode CONS__StringNode;
-struct CONS__StringNode
+typedef struct CONS_StringNode CONS_StringNode;
+struct CONS_StringNode
 {
-  CONS__StringNode *order_next;
-  CONS__StringNode *bucket_next;
+  CONS_StringNode *order_next;
+  CONS_StringNode *bucket_next;
   String8 str;
   U64 hash;
   U32 idx;
 };
 
-typedef struct CONS__Strings CONS__Strings;
-struct CONS__Strings
+typedef struct CONS_Strings CONS_Strings;
+struct CONS_Strings
 {
-  CONS__StringNode *order_first;
-  CONS__StringNode *order_last;
-  CONS__StringNode **buckets;
+  CONS_StringNode *order_first;
+  CONS_StringNode *order_last;
+  CONS_StringNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U32 count;
@@ -572,23 +572,23 @@ struct CONS__Strings
 
 //- rjf: index run baking data structure
 
-typedef struct CONS__IdxRunNode CONS__IdxRunNode;
-struct CONS__IdxRunNode
+typedef struct CONS_IdxRunNode CONS_IdxRunNode;
+struct CONS_IdxRunNode
 {
-  CONS__IdxRunNode *order_next;
-  CONS__IdxRunNode *bucket_next;
+  CONS_IdxRunNode *order_next;
+  CONS_IdxRunNode *bucket_next;
   U32 *idx_run;
   U64 hash;
   U32 count;
   U32 first_idx;
 };
 
-typedef struct CONS__IdxRuns CONS__IdxRuns;
-struct CONS__IdxRuns
+typedef struct CONS_IdxRuns CONS_IdxRuns;
+struct CONS_IdxRuns
 {
-  CONS__IdxRunNode *order_first;
-  CONS__IdxRunNode *order_last;
-  CONS__IdxRunNode **buckets;
+  CONS_IdxRunNode *order_first;
+  CONS_IdxRunNode *order_last;
+  CONS_IdxRunNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U32 count;
@@ -597,38 +597,38 @@ struct CONS__IdxRuns
 
 //- rjf: source file & file path baking data structures
 
-typedef struct CONS__PathNode CONS__PathNode;
-struct CONS__PathNode
+typedef struct CONS_PathNode CONS_PathNode;
+struct CONS_PathNode
 {
-  CONS__PathNode *next_order;
-  CONS__PathNode *parent;
-  CONS__PathNode *first_child;
-  CONS__PathNode *last_child;
-  CONS__PathNode *next_sibling;
+  CONS_PathNode *next_order;
+  CONS_PathNode *parent;
+  CONS_PathNode *first_child;
+  CONS_PathNode *last_child;
+  CONS_PathNode *next_sibling;
   String8 name;
-  struct CONS__SrcNode *src_file;
+  struct CONS_SrcNode *src_file;
   U32 idx;
 };
 
-typedef struct CONS__LineMapFragment CONS__LineMapFragment;
-struct CONS__LineMapFragment
+typedef struct CONS_LineMapFragment CONS_LineMapFragment;
+struct CONS_LineMapFragment
 {
-  CONS__LineMapFragment *next;
+  CONS_LineMapFragment *next;
   CONS_LineSequenceNode *sequence;
 };
 
-typedef struct CONS__SrcNode CONS__SrcNode;
-struct CONS__SrcNode
+typedef struct CONS_SrcNode CONS_SrcNode;
+struct CONS_SrcNode
 {
-  CONS__SrcNode *next;
-  CONS__PathNode *path_node;
+  CONS_SrcNode *next;
+  CONS_PathNode *path_node;
   U32 idx;
   
   String8 normal_full_path;
   
   // place to gather the line info attached to this src file
-  CONS__LineMapFragment *first_fragment;
-  CONS__LineMapFragment *last_fragment;
+  CONS_LineMapFragment *first_fragment;
+  CONS_LineMapFragment *last_fragment;
   
   // place to put the final baked version of this file's line map
   U32 line_map_nums_data_idx;
@@ -637,22 +637,22 @@ struct CONS__SrcNode
   U32 line_map_voff_data_idx;
 };
 
-typedef struct CONS__PathTree CONS__PathTree;
-struct CONS__PathTree
+typedef struct CONS_PathTree CONS_PathTree;
+struct CONS_PathTree
 {
-  CONS__PathNode *first;
-  CONS__PathNode *last;
+  CONS_PathNode *first;
+  CONS_PathNode *last;
   U32 count;
-  CONS__PathNode root;
-  CONS__SrcNode *src_first;
-  CONS__SrcNode *src_last;
+  CONS_PathNode root;
+  CONS_SrcNode *src_first;
+  CONS_SrcNode *src_last;
   U32 src_count;
 };
 
 //- rjf: line info baking data structures
 
-typedef struct CONS__LineRec CONS__LineRec;
-struct CONS__LineRec
+typedef struct CONS_LineRec CONS_LineRec;
+struct CONS_LineRec
 {
   U32 file_id;
   U32 line_num;
@@ -660,8 +660,8 @@ struct CONS__LineRec
   U16 col_opl;
 };
 
-typedef struct CONS__UnitLinesCombined CONS__UnitLinesCombined;
-struct CONS__UnitLinesCombined
+typedef struct CONS_UnitLinesCombined CONS_UnitLinesCombined;
+struct CONS_UnitLinesCombined
 {
   U64 *voffs;
   RADDBGI_Line *lines;
@@ -669,8 +669,8 @@ struct CONS__UnitLinesCombined
   U32 line_count;
 };
 
-typedef struct CONS__SrcLinesCombined CONS__SrcLinesCombined;
-struct CONS__SrcLinesCombined
+typedef struct CONS_SrcLinesCombined CONS_SrcLinesCombined;
+struct CONS_SrcLinesCombined
 {
   U32 *line_nums;
   U32 *line_ranges;
@@ -679,51 +679,51 @@ struct CONS__SrcLinesCombined
   U32  voff_count;
 };
 
-typedef struct CONS__SrcLineMapVoffBlock CONS__SrcLineMapVoffBlock;
-struct CONS__SrcLineMapVoffBlock
+typedef struct CONS_SrcLineMapVoffBlock CONS_SrcLineMapVoffBlock;
+struct CONS_SrcLineMapVoffBlock
 {
-  CONS__SrcLineMapVoffBlock *next;
+  CONS_SrcLineMapVoffBlock *next;
   U64 voff;
 };
 
-typedef struct CONS__SrcLineMapBucket CONS__SrcLineMapBucket;
-struct CONS__SrcLineMapBucket
+typedef struct CONS_SrcLineMapBucket CONS_SrcLineMapBucket;
+struct CONS_SrcLineMapBucket
 {
-  CONS__SrcLineMapBucket *order_next;
-  CONS__SrcLineMapBucket *hash_next;
+  CONS_SrcLineMapBucket *order_next;
+  CONS_SrcLineMapBucket *hash_next;
   U32 line_num;
-  CONS__SrcLineMapVoffBlock *first_voff_block;
-  CONS__SrcLineMapVoffBlock *last_voff_block;
+  CONS_SrcLineMapVoffBlock *first_voff_block;
+  CONS_SrcLineMapVoffBlock *last_voff_block;
   U64 voff_count;
 };
 
 //- rjf: vmap baking data structure 
 
-typedef struct CONS__VMap CONS__VMap;
-struct CONS__VMap
+typedef struct CONS_VMap CONS_VMap;
+struct CONS_VMap
 {
   RADDBGI_VMapEntry *vmap; // [count + 1]
   U32 count;
 };
 
-typedef struct CONS__VMapMarker CONS__VMapMarker;
-struct CONS__VMapMarker
+typedef struct CONS_VMapMarker CONS_VMapMarker;
+struct CONS_VMapMarker
 {
   U32 idx;
   U32 begin_range;
 };
 
-typedef struct CONS__VMapRangeTracker CONS__VMapRangeTracker;
-struct CONS__VMapRangeTracker
+typedef struct CONS_VMapRangeTracker CONS_VMapRangeTracker;
+struct CONS_VMapRangeTracker
 {
-  CONS__VMapRangeTracker *next;
+  CONS_VMapRangeTracker *next;
   U32 idx;
 };
 
 //- rjf: type data baking types
 
-typedef struct CONS__TypeData CONS__TypeData;
-struct CONS__TypeData
+typedef struct CONS_TypeData CONS_TypeData;
+struct CONS_TypeData
 {
   RADDBGI_TypeNode *type_nodes;
   U32 type_node_count;
@@ -740,13 +740,13 @@ struct CONS__TypeData
 
 //- rjf: symbol data baking types
 
-typedef struct CONS__SymbolData CONS__SymbolData;
-struct CONS__SymbolData
+typedef struct CONS_SymbolData CONS_SymbolData;
+struct CONS_SymbolData
 {
   RADDBGI_GlobalVariable *global_variables;
   U32 global_variable_count;
   
-  CONS__VMap *global_vmap;
+  CONS_VMap *global_vmap;
   
   RADDBGI_ThreadVariable *thread_variables;
   U32 thread_variable_count;
@@ -760,7 +760,7 @@ struct CONS__SymbolData
   U64 *scope_voffs;
   U32 scope_voff_count;
   
-  CONS__VMap *scope_vmap;
+  CONS_VMap *scope_vmap;
   
   RADDBGI_Local *locals;
   U32 local_count;
@@ -774,23 +774,23 @@ struct CONS__SymbolData
 
 //- rjf: name map baking types
 
-typedef struct CONS__NameMapSemiNode CONS__NameMapSemiNode;
-struct CONS__NameMapSemiNode
+typedef struct CONS_NameMapSemiNode CONS_NameMapSemiNode;
+struct CONS_NameMapSemiNode
 {
-  CONS__NameMapSemiNode *next;
-  CONS__NameMapNode *node;
+  CONS_NameMapSemiNode *next;
+  CONS_NameMapNode *node;
 };
 
-typedef struct CONS__NameMapSemiBucket CONS__NameMapSemiBucket;
-struct CONS__NameMapSemiBucket
+typedef struct CONS_NameMapSemiBucket CONS_NameMapSemiBucket;
+struct CONS_NameMapSemiBucket
 {
-  CONS__NameMapSemiNode *first;
-  CONS__NameMapSemiNode *last;
+  CONS_NameMapSemiNode *first;
+  CONS_NameMapSemiNode *last;
   U64 count;
 };
 
-typedef struct CONS__NameMapBaked CONS__NameMapBaked;
-struct CONS__NameMapBaked
+typedef struct CONS_NameMapBaked CONS_NameMapBaked;
+struct CONS_NameMapBaked
 {
   RADDBGI_NameMapBucket *buckets;
   RADDBGI_NameMapNode *nodes;
@@ -800,20 +800,20 @@ struct CONS__NameMapBaked
 
 //- rjf: bundle baking context type
 
-typedef struct CONS__BakeParams CONS__BakeParams;
-struct CONS__BakeParams
+typedef struct CONS_BakeParams CONS_BakeParams;
+struct CONS_BakeParams
 {
   U64 strings_bucket_count;
   U64 idx_runs_bucket_count;
 };
 
-typedef struct CONS__BakeCtx CONS__BakeCtx;
-struct CONS__BakeCtx
+typedef struct CONS_BakeCtx CONS_BakeCtx;
+struct CONS_BakeCtx
 {
   Arena *arena;
-  CONS__Strings strs;
-  CONS__IdxRuns idxs;
-  CONS__PathTree *tree;
+  CONS_Strings strs;
+  CONS_IdxRuns idxs;
+  CONS_PathTree *tree;
 };
 
 ////////////////////////////////
@@ -829,20 +829,20 @@ static void cons_bytecode_push_sconst(Arena *arena, CONS_EvalBytecode *bytecode,
 static void cons_bytecode_concat_in_place(CONS_EvalBytecode *left_dst, CONS_EvalBytecode *right_destroyed);
 
 //- rjf: sortable range sorting
-static CONS__SortKey* cons__sort_key_array(Arena *arena, CONS__SortKey *keys, U64 count);
+static CONS_SortKey* cons_sort_key_array(Arena *arena, CONS_SortKey *keys, U64 count);
 
 ////////////////////////////////
 //~ rjf: Auxiliary Data Structure Functions
 
 //- rjf: u64 -> ptr map
-static void cons__u64toptr_init(Arena *arena, CONS__U64ToPtrMap *map, U64 bucket_count);
-static void cons__u64toptr_lookup(CONS__U64ToPtrMap *map, U64 key, U64 hash, CONS__U64ToPtrLookup *lookup_out);
-static void cons__u64toptr_insert(Arena *arena, CONS__U64ToPtrMap *map, U64 key, U64 hash, CONS__U64ToPtrLookup *lookup, void *ptr);
+static void cons_u64toptr_init(Arena *arena, CONS_U64ToPtrMap *map, U64 bucket_count);
+static void cons_u64toptr_lookup(CONS_U64ToPtrMap *map, U64 key, U64 hash, CONS_U64ToPtrLookup *lookup_out);
+static void cons_u64toptr_insert(Arena *arena, CONS_U64ToPtrMap *map, U64 key, U64 hash, CONS_U64ToPtrLookup *lookup, void *ptr);
 
 //- rjf: string8 -> ptr map
-static void cons__str8toptr_init(Arena *arena, CONS__Str8ToPtrMap *map, U64 bucket_count);
-static void*cons__str8toptr_lookup(CONS__Str8ToPtrMap *map, String8 key, U64 hash);
-static void cons__str8toptr_insert(Arena *arena, CONS__Str8ToPtrMap *map, String8 key, U64 hash, void *ptr);
+static void cons_str8toptr_init(Arena *arena, CONS_Str8ToPtrMap *map, U64 bucket_count);
+static void*cons_str8toptr_lookup(CONS_Str8ToPtrMap *map, String8 key, U64 hash);
+static void cons_str8toptr_insert(Arena *arena, CONS_Str8ToPtrMap *map, String8 key, U64 hash, void *ptr);
 
 ////////////////////////////////
 //~ rjf: Loose Debug Info Construction (Anything -> Loose) Functions
@@ -884,9 +884,9 @@ static CONS_Type* cons_type_nil(CONS_Root *root);
 static CONS_Type* cons_type_variadic(CONS_Root *root);
 
 //- rjf: base type info constructors
-static CONS_Type*    cons__type_new(CONS_Root *root);
-static CONS_TypeUDT* cons__type_udt_from_any_type(CONS_Root *root, CONS_Type *type);
-static CONS_TypeUDT* cons__type_udt_from_record_type(CONS_Root *root, CONS_Type *type);
+static CONS_Type*    cons_type_new(CONS_Root *root);
+static CONS_TypeUDT* cons_type_udt_from_any_type(CONS_Root *root, CONS_Type *type);
+static CONS_TypeUDT* cons_type_udt_from_record_type(CONS_Root *root, CONS_Type *type);
 
 //- rjf: basic/operator type construction helpers
 static CONS_Type* cons_type_basic(CONS_Root *root, RADDBGI_TypeKind type_kind, String8 name);
@@ -925,7 +925,7 @@ static void cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_Symb
 static CONS_Scope *cons_scope_handle_from_user_id(CONS_Root *root, U64 scope_user_id, U64 scope_user_id_hash);
 static void cons_scope_set_parent(CONS_Root *root, CONS_Scope *scope, CONS_Scope *parent);
 static void cons_scope_add_voff_range(CONS_Root *root, CONS_Scope *scope, U64 voff_first, U64 voff_opl);
-static void cons__scope_recursive_set_symbol(CONS_Scope *scope, CONS_Symbol *symbol);
+static void cons_scope_recursive_set_symbol(CONS_Scope *scope, CONS_Symbol *symbol);
 
 //- rjf: local info building
 static CONS_Local* cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id, U64 local_user_id_hash);
@@ -941,55 +941,55 @@ static CONS_Location* cons_location_addr_addr_reg_plus_u16(CONS_Root *root, U8 r
 static CONS_Location* cons_location_val_reg(CONS_Root *root, U8 reg_code);
 
 //- rjf: name map building
-static CONS__NameMap* cons__name_map_for_kind(CONS_Root *root, RADDBGI_NameMapKind kind);
-static void           cons__name_map_add_pair(CONS_Root *root, CONS__NameMap *map, String8 name, U32 idx);
+static CONS_NameMap* cons_name_map_for_kind(CONS_Root *root, RADDBGI_NameMapKind kind);
+static void          cons_name_map_add_pair(CONS_Root *root, CONS_NameMap *map, String8 name, U32 idx);
 
 ////////////////////////////////
 //~ rjf: Debug Info Baking (Loose -> Tight) Functions
 
 //- rjf: bake context construction
-static CONS__BakeCtx* cons__bake_ctx_begin(CONS__BakeParams *params);
-static void           cons__bake_ctx_release(CONS__BakeCtx *bake_ctx);
+static CONS_BakeCtx* cons_bake_ctx_begin(CONS_BakeParams *params);
+static void          cons_bake_ctx_release(CONS_BakeCtx *bake_ctx);
 
 //- rjf: string baking
-static U32 cons__string(CONS__BakeCtx *bctx, String8 str);
+static U32 cons_string(CONS_BakeCtx *bctx, String8 str);
 
 //- rjf: idx run baking
-static U64 cons__idx_run_hash(U32 *idx_run, U32 count);
-static U32 cons__idx_run(CONS__BakeCtx *bctx, U32 *idx_run, U32 count);
+static U64 cons_idx_run_hash(U32 *idx_run, U32 count);
+static U32 cons_idx_run(CONS_BakeCtx *bctx, U32 *idx_run, U32 count);
 
 //- rjf: data section baking
-static U32 cons__dsection(Arena *arena, CONS__DSections *dss, void *data, U64 size, RADDBGI_DataSectionTag tag);
+static U32 cons_dsection(Arena *arena, CONS_DSections *dss, void *data, U64 size, RADDBGI_DataSectionTag tag);
 
 //- rjf: paths baking
-static String8 cons__normal_string_from_path_node(Arena *arena, CONS__PathNode *node);
-static void    cons__normal_string_from_path_node_build(Arena *arena, CONS__PathNode *node, String8List *out);
-static CONS__PathNode* cons__paths_new_node(CONS__BakeCtx *bctx);
-static CONS__PathNode* cons__paths_sub_path(CONS__BakeCtx *bctx, CONS__PathNode *dir, String8 sub_dir);
-static CONS__PathNode* cons__paths_node_from_path(CONS__BakeCtx *bctx,  String8 path);
-static U32             cons__paths_idx_from_path(CONS__BakeCtx *bctx, String8 path);
-static CONS__SrcNode*  cons__paths_new_src_node(CONS__BakeCtx *bctx);
-static CONS__SrcNode*  cons__paths_src_node_from_path_node(CONS__BakeCtx *bctx, CONS__PathNode *path_node);
+static String8 cons_normal_string_from_path_node(Arena *arena, CONS_PathNode *node);
+static void    cons_normal_string_from_path_node_build(Arena *arena, CONS_PathNode *node, String8List *out);
+static CONS_PathNode* cons_paths_new_node(CONS_BakeCtx *bctx);
+static CONS_PathNode* cons_paths_sub_path(CONS_BakeCtx *bctx, CONS_PathNode *dir, String8 sub_dir);
+static CONS_PathNode* cons_paths_node_from_path(CONS_BakeCtx *bctx,  String8 path);
+static U32            cons_paths_idx_from_path(CONS_BakeCtx *bctx, String8 path);
+static CONS_SrcNode*  cons_paths_new_src_node(CONS_BakeCtx *bctx);
+static CONS_SrcNode*  cons_paths_src_node_from_path_node(CONS_BakeCtx *bctx, CONS_PathNode *path_node);
 
 //- rjf: per-unit line info baking
-static CONS__UnitLinesCombined* cons__unit_combine_lines(Arena *arena, CONS__BakeCtx *bctx, CONS_LineSequenceNode *first_seq);
+static CONS_UnitLinesCombined* cons_unit_combine_lines(Arena *arena, CONS_BakeCtx *bctx, CONS_LineSequenceNode *first_seq);
 
 //- rjf: per-src line info baking
-static CONS__SrcLinesCombined* cons__source_combine_lines(Arena *arena, CONS__LineMapFragment *first);
+static CONS_SrcLinesCombined* cons_source_combine_lines(Arena *arena, CONS_LineMapFragment *first);
 
 //- rjf: vmap baking
-static CONS__VMap* cons__vmap_from_markers(Arena *arena, CONS__VMapMarker *markers, CONS__SortKey *keys, U64 marker_count);
-static CONS__VMap* cons__vmap_from_unit_ranges(Arena *arena, CONS_UnitVMapRange *first, U64 count);
+static CONS_VMap* cons_vmap_from_markers(Arena *arena, CONS_VMapMarker *markers, CONS_SortKey *keys, U64 marker_count);
+static CONS_VMap* cons_vmap_from_unit_ranges(Arena *arena, CONS_UnitVMapRange *first, U64 count);
 
 //- rjf: type info baking
-static U32* cons__idx_run_from_types(Arena *arena, CONS_Type **types, U32 count);
-static CONS__TypeData* cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx);
+static U32* cons_idx_run_from_types(Arena *arena, CONS_Type **types, U32 count);
+static CONS_TypeData* cons_type_data_combine(Arena *arena, CONS_Root *root, CONS_BakeCtx *bctx);
 
 //- rjf: symbol data baking
-static CONS__SymbolData* cons__symbol_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx);
+static CONS_SymbolData* cons_symbol_data_combine(Arena *arena, CONS_Root *root, CONS_BakeCtx *bctx);
 
 //- rjf: name map baking
-static CONS__NameMapBaked* cons__name_map_bake(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx, CONS__NameMap *map);
+static CONS_NameMapBaked* cons_name_map_bake(Arena *arena, CONS_Root *root, CONS_BakeCtx *bctx, CONS_NameMap *map);
 
 //- rjf: top-level baking entry point
 static void cons_bake_file(Arena *arena, CONS_Root *root, String8List *out);
