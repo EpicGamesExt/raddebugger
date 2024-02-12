@@ -56,7 +56,7 @@ commands =
   },
   .rjf_f2 =
   {
-    .win = "build raddbg_from_pdb telemetry release",
+    .win = "build raddbgi_from_pdb telemetry release",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -74,7 +74,7 @@ commands =
   },
   .rjf_f4 =
   {
-    .win = "build raddbg_from_pdb && pushd build && raddbg_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --dump:table_diagnostics && popd",
+    .win = "build raddbgi_from_pdb && pushd build && raddbg_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --dump:table_diagnostics && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -83,7 +83,7 @@ commands =
   },
   .rjf_f5 =
   {
-    .win = "pushd build && raddbg_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --capture && popd",
+    .win = "pushd build && raddbgi_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.raddbg --capture && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -108,18 +108,18 @@ commands =
     .save_dirty_files = true,
     .cursor_at_end = false,
   },
-  .build_raddbg_from_pdb =
+  .build_raddbgi_from_pdb =
   {
-    .win = "build raddbg_from_pdb",
+    .win = "build raddbgi_from_pdb",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
     .save_dirty_files = true,
     .cursor_at_end = false,
   },
-  .build_raddbg_dump =
+  .build_raddbgi_dump =
   {
-    .win = "build raddbg_dump",
+    .win = "build raddbgi_dump",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,

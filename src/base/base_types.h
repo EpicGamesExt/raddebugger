@@ -102,6 +102,7 @@
 #define AssertIff(a,b)     Assert(!!(a) == !!(b))
 #define InvalidPath        Assert(!"Invalid Path!")
 #define NotImplemented     Assert(!"Not Implemented!")
+#define NoOp               ((void)0)
 
 #define StaticAssert(C,ID) global U8 Glue(ID,__LINE__)[(C)?1:-1]
 

@@ -6,10 +6,10 @@
 
 #include <windows.h>
 #include <stdint.h>
-#include "raddbg_format/raddbg_format.h"
-#include "raddbg_format/raddbg_format_parse.h"
-#include "raddbg_format/raddbg_format.c"
-#include "raddbg_format/raddbg_format_parse.c"
+#include "raddbgi_format/raddbgi_format.h"
+#include "raddbgi_format/raddbgi_format_parse.h"
+#include "raddbgi_format/raddbgi_format.c"
+#include "raddbgi_format/raddbgi_format_parse.c"
 
 int main(int argument_count, char **arguments)
 {

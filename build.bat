@@ -99,9 +99,9 @@ if not "%no_meta%"=="1" (
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
 if "%raddbg%"=="1"             %compile% %gfx%       ..\src\raddbg\raddbg_main.cpp                                %compile_link% %out%raddbg.exe || exit /b 1
-if "%raddbg_from_pdb%"=="1"    %compile%             ..\src\raddbg_convert\pdb\raddbg_from_pdb_main.c             %compile_link% %out%raddbg_from_pdb.exe || exit /b 1
-if "%raddbg_from_dwarf%"=="1"  %compile%             ..\src\raddbg_convert\dwarf\raddbg_from_dwarf.c              %compile_link% %out%raddbg_from_dwarf.exe || exit /b 1
-if "%raddbg_dump%"=="1"        %compile%             ..\src\raddbg_dump\raddbg_dump.c                             %compile_link% %out%raddbg_dump.exe || exit /b 1
+if "%raddbgi_from_pdb%"=="1"   %compile%             ..\src\raddbgi_convert\pdb\raddbgi_from_pdb_main.c           %compile_link% %out%raddbgi_from_pdb.exe || exit /b 1
+if "%raddbgi_from_dwarf%"=="1" %compile%             ..\src\raddbgi_convert\dwarf\raddbgi_from_dwarf.c            %compile_link% %out%raddbgi_from_dwarf.exe || exit /b 1
+if "%raddbgi_dump%"=="1"       %compile%             ..\src\raddbgi_dump\raddbgi_dump.c                           %compile_link% %out%raddbgi_dump.exe || exit /b 1
 if "%ryan_scratch%"=="1"       %compile%             ..\src\scratch\ryan_scratch.c                                %compile_link% %out%ryan_scratch.exe || exit /b 1
 if "%cpp_tests%"=="1"          %compile%             ..\src\scratch\i_hate_c_plus_plus.cpp                        %compile_link% %out%cpp_tests.exe || exit /b 1
 if "%look_at_raddbg%"=="1"     %compile%             ..\src\scratch\look_at_raddbg.c                              %compile_link% %out%look_at_raddbg.exe || exit /b 1

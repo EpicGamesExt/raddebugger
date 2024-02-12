@@ -1407,11 +1407,6 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           U8 *name_ptr = numeric_ptr + size.encoded_size;
           String8 name = str8_cstring_capped((char*)name_ptr, first + cap);
           
-          if(str8_match(name, str8_lit("Foo"), 0))
-          {
-            int x = 0;
-          }
-          
           // incomplete type
           if (lf_struct->props & CV_TypeProp_FwdRef){
             RADDBG_TypeKind type_kind = RADDBG_TypeKind_IncompleteStruct;

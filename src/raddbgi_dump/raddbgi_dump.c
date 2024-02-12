@@ -3,17 +3,17 @@
 
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "raddbg_format/raddbg_format.h"
-#include "raddbg_format/raddbg_format_parse.h"
-#include "raddbg_stringize.h"
+#include "raddbgi_format/raddbgi_format.h"
+#include "raddbgi_format/raddbgi_format_parse.h"
+#include "raddbgi_stringize.h"
 
-#include "raddbg_dump.h"
+#include "raddbgi_dump.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "raddbg_format/raddbg_format.c"
-#include "raddbg_format/raddbg_format_parse.c"
-#include "raddbg_stringize.c"
+#include "raddbgi_format/raddbgi_format.c"
+#include "raddbgi_format/raddbgi_format_parse.c"
+#include "raddbgi_stringize.c"
 
 ////////////////////////////////
 //~ Program Parameters Parser

@@ -24,13 +24,13 @@ simply deserialize the PDBs). It is much slower for much larger projects at the
 moment, but we expect this will vastly improve overtime.
 
 The RADDBG format is currently specified in code, in the files within the
-`src/raddbg_format` folder. The other relevant folders for working with the
+`src/raddbgi_format` folder. The other relevant folders for working with the
 format are:
 
-- `raddbg_cons`: The RADDBG construction layer, for constructing RADDBG files.
-- `raddbg_convert`: Our implementation of PDB-to-RADDBG (and an in-progress
+- `raddbgi_cons`: The RADDBG construction layer, for making RADDBG debug info.
+- `raddbgi_convert`: Our implementation of PDB-to-RADDBG (and an in-progress
 implementation of a DWARF-to-RADDBG) conversion.
-- `raddbg_dump`: Code for textually dumping information from RADDBG files.
+- `raddbgi_dump`: Code for textually dumping information from RADDBG files.
 
 ## Development Setup Instructions
 
@@ -288,15 +288,15 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `raddbg` (no namespace): The layer which ties everything together for the main
   graphical debugger. Not much "meat", just drives `df`, implements command line
   options, and so on.
-- `raddbg_cons` (`CONS_`): Implements an API for constructing files of the
-  RADDBG debug info file format.
-- `raddbg_dump` (`DUMP_`): A dumper utility program for dumping textualizations
-  of RADDBG debug info files.
-- `raddbg_format` (`RADDBG_`): Standalone types and helper functions for the
-  RADDBG debug info file format. Does not depend on `base`.
 - `raddbg_markup` (`RADDBG_`): Standalone header file for marking up user
   programs to work with various features in the `raddbg` debugger. Does not
   depend on `base`.
+- `raddbgi_cons` (`CONS_`): Implements an API for constructing files of the
+  RADDBG debug info file format.
+- `raddbgi_dump` (`DUMP_`): A dumper utility program for dumping
+  textualizations of RADDBG debug info files.
+- `raddbgi_format` (`RADDBG_`): Standalone types and helper functions for the
+  RADDBG debug info file format. Does not depend on `base`.
 - `regs` (`REGS_`): Types, helper functions, and metadata for registers on
   supported architectures. Used in reading/writing registers in `demon`, or in
   looking up register metadata.

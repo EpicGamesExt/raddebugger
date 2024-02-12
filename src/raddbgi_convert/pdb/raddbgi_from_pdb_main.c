@@ -4,37 +4,37 @@
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "coff/coff.h"
-#include "raddbg_format/raddbg_format.h"
-#include "raddbg_cons/raddbg_cons.h"
+#include "raddbgi_format/raddbgi_format.h"
+#include "raddbgi_cons/raddbgi_cons.h"
 
-#include "raddbg_coff.h"
-#include "raddbg_codeview.h"
-#include "raddbg_msf.h"
-#include "raddbg_pdb.h"
-#include "raddbg_coff_conversion.h"
-#include "raddbg_codeview_conversion.h"
+#include "raddbgi_coff.h"
+#include "raddbgi_codeview.h"
+#include "raddbgi_msf.h"
+#include "raddbgi_pdb.h"
+#include "raddbgi_coff_conversion.h"
+#include "raddbgi_codeview_conversion.h"
 
-#include "raddbg_codeview_stringize.h"
-#include "raddbg_pdb_stringize.h"
+#include "raddbgi_codeview_stringize.h"
+#include "raddbgi_pdb_stringize.h"
 
-#include "raddbg_from_pdb.h"
+#include "raddbgi_from_pdb.h"
 
 #include "base/base_inc.c"
 #include "coff/coff.c"
 #include "os/os_inc.c"
-#include "raddbg_format/raddbg_format.c"
-#include "raddbg_cons/raddbg_cons.c"
+#include "raddbgi_format/raddbgi_format.c"
+#include "raddbgi_cons/raddbgi_cons.c"
 
-#include "raddbg_msf.c"
-#include "raddbg_codeview.c"
-#include "raddbg_pdb.c"
-#include "raddbg_coff_conversion.c"
-#include "raddbg_codeview_conversion.c"
+#include "raddbgi_msf.c"
+#include "raddbgi_codeview.c"
+#include "raddbgi_pdb.c"
+#include "raddbgi_coff_conversion.c"
+#include "raddbgi_codeview_conversion.c"
 
-#include "raddbg_codeview_stringize.c"
-#include "raddbg_pdb_stringize.c"
+#include "raddbgi_codeview_stringize.c"
+#include "raddbgi_pdb_stringize.c"
 
-#include "raddbg_from_pdb.c"
+#include "raddbgi_from_pdb.c"
 
 int
 main(int argc, char **argv){

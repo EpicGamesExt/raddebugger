@@ -3,29 +3,28 @@
 
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "raddbg_format/raddbg_format.h"
-#include "raddbg_cons/raddbg_cons.h"
+#include "raddbgi_format/raddbgi_format.h"
+#include "raddbgi_cons/raddbgi_cons.h"
 
-#include "raddbg_elf.h"
-#include "raddbg_dwarf.h"
+#include "raddbgi_elf.h"
+#include "raddbgi_dwarf.h"
 
-#include "raddbg_dwarf_stringize.h"
+#include "raddbgi_dwarf_stringize.h"
 
-#include "raddbg_from_dwarf.h"
+#include "raddbgi_from_dwarf.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "raddbg_format/raddbg_format.c"
-#include "raddbg_cons/raddbg_cons.c"
+#include "raddbgi_format/raddbgi_format.c"
+#include "raddbgi_cons/raddbgi_cons.c"
 
-#include "raddbg_elf.c"
-#include "raddbg_dwarf.c"
+#include "raddbgi_elf.c"
+#include "raddbgi_dwarf.c"
 
-#include "raddbg_dwarf_stringize.c"
+#include "raddbgi_dwarf_stringize.c"
 
 // TODO(allen): 
 // [ ] need sample data for .debug_names
-
 
 ////////////////////////////////
 //~ Program Parameters Parser
