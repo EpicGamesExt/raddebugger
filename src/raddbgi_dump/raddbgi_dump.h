@@ -7,7 +7,7 @@
 ////////////////////////////////
 //~ Program Parameters Type
 
-typedef struct DUMP_Params{
+typedef struct RADDBGIDUMP_Params{
   String8 input_name;
   String8 input_data;
   
@@ -35,11 +35,11 @@ typedef struct DUMP_Params{
   B8 dump__last;
   
   String8List errors;
-} DUMP_Params;
+} RADDBGIDUMP_Params;
 
 ////////////////////////////////
 //~ Program Parameters Parser
 
-static DUMP_Params *dump_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
+static RADDBGIDUMP_Params *raddbgidump_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
 
 #endif //RADDBGI_DUMP_H

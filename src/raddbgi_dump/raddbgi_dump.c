@@ -18,9 +18,9 @@
 ////////////////////////////////
 //~ Program Parameters Parser
 
-static DUMP_Params*
-dump_params_from_cmd_line(Arena *arena, CmdLine *cmdline){
-  DUMP_Params *result = push_array(arena, DUMP_Params, 1);
+static RADDBGIDUMP_Params*
+raddbgidump_params_from_cmd_line(Arena *arena, CmdLine *cmdline){
+  RADDBGIDUMP_Params *result = push_array(arena, RADDBGIDUMP_Params, 1);
   
   // get input raddbg
   {
@@ -144,7 +144,7 @@ main(int argc, char **argv){
   String8List args = os_string_list_from_argcv(arena, argc, argv);
   CmdLine cmdline = cmd_line_from_string_list(arena, args);
   
-  DUMP_Params *params = dump_params_from_cmd_line(arena, &cmdline);
+  RADDBGIDUMP_Params *params = raddbgidump_params_from_cmd_line(arena, &cmdline);
   
   // show input errors
   if (params->errors.node_count > 0 &&

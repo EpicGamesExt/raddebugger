@@ -294,7 +294,7 @@ A list of the layers in the codebase and their associated namespaces is below:
   depend on `base`.
 - `raddbgi_cons` (`RADDBGIC_`): Implements an API for constructing files of the
   RADDBGI debug info file format.
-- `raddbgi_dump` (`DUMP_`): A dumper utility program for dumping
+- `raddbgi_dump` (`RADDBGIDUMP_`): A dumper utility program for dumping
   textualizations of RADDBGI debug info files.
 - `raddbgi_format` (`RADDBGI_`): Standalone types and helper functions for the
   RADDBGI debug info file format. Does not depend on `base`.
