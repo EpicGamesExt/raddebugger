@@ -31,6 +31,7 @@ format are:
 info.
 - `raddbgi_convert`: Our implementation of PDB-to-RADDBGI (and an in-progress
 implementation of a DWARF-to-RADDBGI) conversion.
+- `raddbgi_stringize`: Code for converting binary RADDBGI info into text.
 - `raddbgi_dump`: Code for textually dumping information from RADDBGI files.
 
 ## Development Setup Instructions
@@ -298,6 +299,9 @@ A list of the layers in the codebase and their associated namespaces is below:
   textualizations of RADDBGI debug info files.
 - `raddbgi_format` (`RADDBGI_`): Standalone types and helper functions for the
   RADDBGI debug info file format. Does not depend on `base`.
+- `raddbgi_stringize` (`RADDBGI_`): Code to stringify binary RADDBGI info, for
+  visualizing textualizations of RADDBGI debug info. Used in `raddbgi_dump`,
+  and depends on `base`.
 - `regs` (`REGS_`): Types, helper functions, and metadata for registers on
   supported architectures. Used in reading/writing registers in `demon`, or in
   looking up register metadata.

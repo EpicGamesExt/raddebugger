@@ -5,7 +5,7 @@
 #include "os/os_inc.h"
 #include "raddbgi_format/raddbgi_format.h"
 #include "raddbgi_format/raddbgi_format_parse.h"
-#include "raddbgi_stringize.h"
+#include "raddbgi_stringize/raddbgi_stringize.h"
 
 #include "raddbgi_dump.h"
 
@@ -13,7 +13,7 @@
 #include "os/os_inc.c"
 #include "raddbgi_format/raddbgi_format.c"
 #include "raddbgi_format/raddbgi_format_parse.c"
-#include "raddbgi_stringize.c"
+#include "raddbgi_stringize/raddbgi_stringize.c"
 
 ////////////////////////////////
 //~ Program Parameters Parser
