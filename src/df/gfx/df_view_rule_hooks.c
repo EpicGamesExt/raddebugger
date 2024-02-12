@@ -5,7 +5,7 @@
 //~ rjf: Helpers
 
 internal Vec4F32
-df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed *raddbg, DF_Entity *process)
+df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBGI_Parsed *raddbg, DF_Entity *process)
 {
   Vec4F32 rgba = {0};
   Temp scratch = scratch_begin(0, 0);
@@ -27,14 +27,14 @@ df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed 
     case TG_Kind_Array:
     if(eval.mode == EVAL_EvalMode_Addr)
     {
-      U64 array_total_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, type_key);
+      U64 array_total_size = tg_byte_size_from_graph_raddbgi_key(graph, raddbg, type_key);
       U64 array_total_size_capped = ClampTop(array_total_size, 64);
       Rng1U64 array_memory_vaddr_rng = r1u64(eval.offset, eval.offset + array_total_size_capped);
       CTRL_ProcessMemorySlice array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, array_memory_vaddr_rng, 0);
       String8 array_memory = array_slice.data;
-      TG_Key element_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, raddbg, type_key);
+      TG_Key element_type_key = tg_unwrapped_direct_from_graph_raddbgi_key(graph, raddbg, type_key);
       TG_Kind element_type_kind = tg_kind_from_key(element_type_key);
-      U64 element_type_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, element_type_key);
+      U64 element_type_size = tg_byte_size_from_graph_raddbgi_key(graph, raddbg, element_type_key);
       for(U64 element_idx = 0; element_idx < 4; element_idx += 1)
       {
         U64 offset = element_idx*element_type_size;
@@ -64,12 +64,12 @@ df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed 
     case TG_Kind_Union:
     if(eval.mode == EVAL_EvalMode_Addr)
     {
-      U64 struct_total_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, type_key);
+      U64 struct_total_size = tg_byte_size_from_graph_raddbgi_key(graph, raddbg, type_key);
       U64 struct_total_size_capped = ClampTop(struct_total_size, 64);
       Rng1U64 struct_memory_vaddr_rng = r1u64(eval.offset, eval.offset + struct_total_size_capped);
       CTRL_ProcessMemorySlice struct_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, struct_memory_vaddr_rng, 0);
       String8 struct_memory = struct_slice.data;
-      TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, graph, raddbg, type_key);
+      TG_Type *type = tg_type_from_graph_raddbgi_key(scratch.arena, graph, raddbg, type_key);
       for(U64 element_idx = 0, member_idx = 0;
           element_idx < 4 && member_idx < type->count;
           member_idx += 1)
@@ -102,7 +102,7 @@ df_view_rule_hooks__rgba_from_eval(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed 
 }
 
 internal void
-df_view_rule_hooks__eval_commit_rgba(DF_Eval eval, TG_Graph *graph, RADDBG_Parsed *raddbg, DF_CtrlCtx *ctrl_ctx, Vec4F32 rgba)
+df_view_rule_hooks__eval_commit_rgba(DF_Eval eval, TG_Graph *graph, RADDBGI_Parsed *raddbg, DF_CtrlCtx *ctrl_ctx, Vec4F32 rgba)
 {
   TG_Key type_key = eval.type_key;
   TG_Kind type_kind = tg_kind_from_key(type_key);
@@ -126,13 +126,13 @@ df_view_rule_hooks__eval_commit_rgba(DF_Eval eval, TG_Graph *graph, RADDBG_Parse
     case TG_Kind_Array:
     if(eval.mode == EVAL_EvalMode_Addr)
     {
-      U64 array_total_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, type_key);
+      U64 array_total_size = tg_byte_size_from_graph_raddbgi_key(graph, raddbg, type_key);
       U64 array_total_size_capped = ClampTop(array_total_size, 64);
       Rng1U64 array_memory_vaddr_rng = r1u64(eval.offset, eval.offset + array_total_size_capped);
       String8 array_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, array_memory_vaddr_rng);
-      TG_Key element_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, raddbg, type_key);
+      TG_Key element_type_key = tg_unwrapped_direct_from_graph_raddbgi_key(graph, raddbg, type_key);
       TG_Kind element_type_kind = tg_kind_from_key(element_type_key);
-      U64 element_type_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, element_type_key);
+      U64 element_type_size = tg_byte_size_from_graph_raddbgi_key(graph, raddbg, element_type_key);
       for(U64 element_idx = 0; element_idx < 4; element_idx += 1)
       {
         U64 offset = element_idx*element_type_size;
@@ -162,11 +162,11 @@ df_view_rule_hooks__eval_commit_rgba(DF_Eval eval, TG_Graph *graph, RADDBG_Parse
     case TG_Kind_Union:
     if(eval.mode == EVAL_EvalMode_Addr)
     {
-      U64 struct_total_size = tg_byte_size_from_graph_raddbg_key(graph, raddbg, type_key);
+      U64 struct_total_size = tg_byte_size_from_graph_raddbgi_key(graph, raddbg, type_key);
       U64 struct_total_size_capped = ClampTop(struct_total_size, 64);
       Rng1U64 struct_memory_vaddr_rng = r1u64(eval.offset, eval.offset + struct_total_size_capped);
       String8 struct_memory = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, struct_memory_vaddr_rng);
-      TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, graph, raddbg, type_key);
+      TG_Type *type = tg_type_from_graph_raddbgi_key(scratch.arena, graph, raddbg, type_key);
       for(U64 element_idx = 0, member_idx = 0;
           element_idx < 4 && member_idx < type->count;
           member_idx += 1)
@@ -343,7 +343,7 @@ DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
       }
       
       // rjf: apply array size to type
-      TG_Key pointee = tg_ptee_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, type_key);
+      TG_Key pointee = tg_ptee_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, type_key);
       TG_Key array_type = tg_cons_type_make(parse_ctx->type_graph, TG_Kind_Array, pointee, array_size);
       eval.type_key = tg_cons_type_make(parse_ctx->type_graph, TG_Kind_Ptr, array_type, 0);
     }
@@ -373,7 +373,7 @@ DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(bswap)
   Temp scratch = scratch_begin(&arena, 1);
   TG_Key type_key = eval.type_key;
   TG_Kind type_kind = tg_kind_from_key(type_key);
-  U64 type_size_bytes = tg_byte_size_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, type_key);
+  U64 type_size_bytes = tg_byte_size_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, type_key);
   if(TG_Kind_Char8 <= type_kind && type_kind <= TG_Kind_S256 &&
      (type_size_bytes == 2 ||
       type_size_bytes == 4 ||

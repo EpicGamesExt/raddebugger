@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_FROM_DWARF_H
-#define RADDBG_FROM_DWARF_H
+#ifndef RADDBGI_FROM_DWARF_H
+#define RADDBGI_FROM_DWARF_H
 
 ////////////////////////////////
 //~ Program Parameters Type
@@ -47,4 +47,4 @@ static DWARFCONV_Params *dwarf_convert_params_from_cmd_line(Arena *arena, CmdLin
 
 
 
-#endif //RADDBG_FROM_DWARF_H
+#endif //RADDBGI_FROM_DWARF_H

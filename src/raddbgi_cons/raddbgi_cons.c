@@ -4,8 +4,8 @@
 ////////////////////////////////
 //~ rjf: API Implementation Helper Macros
 
-#define cons_require(root, b32, else_code, error_msg)  do { if(!(b32)) {cons_error((root), (error_msg));} else { else_code; } }while(0)
-#define cons_requiref(root, b32, else_code, fmt, ...)  do { if(!(b32)) {cons_errorf((root), (fmt), __VA_ARGS__);} else { else_code; } }while(0)
+#define cons_require(root, b32, else_code, error_msg)  do { if(!(b32)) {cons_error((root), (error_msg)); else_code;} }while(0)
+#define cons_requiref(root, b32, else_code, fmt, ...)  do { if(!(b32)) {cons_errorf((root), (fmt), __VA_ARGS__); else_code;} }while(0)
 
 ////////////////////////////////
 //~ rjf: Basic Type Helpers
@@ -24,10 +24,10 @@ cons_type_list_push(Arena *arena, CONS_TypeList *list, CONS_Type *type)
 //- rjf: bytecode lists
 
 static void
-cons_bytecode_push_op(Arena *arena, CONS_EvalBytecode *bytecode, RADDBG_EvalOp op, U64 p)
+cons_bytecode_push_op(Arena *arena, CONS_EvalBytecode *bytecode, RADDBGI_EvalOp op, U64 p)
 {
-  U8 ctrlbits = raddbg_eval_opcode_ctrlbits[op];
-  U32 p_size = RADDBG_DECODEN_FROM_CTRLBITS(ctrlbits);
+  U8 ctrlbits = raddbgi_eval_opcode_ctrlbits[op];
+  U32 p_size = RADDBGI_DECODEN_FROM_CTRLBITS(ctrlbits);
   
   CONS_EvalBytecodeOp *node = push_array(arena, CONS_EvalBytecodeOp, 1);
   node->op = op;
@@ -44,19 +44,19 @@ cons_bytecode_push_uconst(Arena *arena, CONS_EvalBytecode *bytecode, U64 x)
 {
   if(x <= 0xFF)
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU8, x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU8, x);
   }
   else if(x <= 0xFFFF)
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU16, x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU16, x);
   }
   else if(x <= 0xFFFFFFFF)
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU32, x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU32, x);
   }
   else
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU64, x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU64, x);
   }
 }
 
@@ -65,22 +65,22 @@ cons_bytecode_push_sconst(Arena *arena, CONS_EvalBytecode *bytecode, S64 x)
 {
   if(-0x80 <= x && x <= 0x7F)
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU8, (U64)x);
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_TruncSigned, 8);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU8, (U64)x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_TruncSigned, 8);
   }
   else if(-0x8000 <= x && x <= 0x7FFF)
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU16, (U64)x);
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_TruncSigned, 16);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU16, (U64)x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_TruncSigned, 16);
   }
   else if(-0x80000000ll <= x && x <= 0x7FFFFFFFll)
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU32, (U64)x);
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_TruncSigned, 32);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU32, (U64)x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_TruncSigned, 32);
   }
   else
   {
-    cons_bytecode_push_op(arena, bytecode, RADDBG_EvalOp_ConstU64, (U64)x);
+    cons_bytecode_push_op(arena, bytecode, RADDBGI_EvalOp_ConstU64, (U64)x);
   }
 }
 
@@ -387,7 +387,7 @@ cons_root_new(CONS_RootParams *params)
   {
     result->nil_type = cons__type_new(result);
     result->variadic_type = cons__type_new(result);
-    result->variadic_type->kind = RADDBG_TypeKind_Variadic;
+    result->variadic_type->kind = RADDBGI_TypeKind_Variadic;
     
     // references to "handled nil type" should be emitted as
     // references to nil - but should not generate error
@@ -470,7 +470,7 @@ cons_set_top_level_info(CONS_Root *root, CONS_TopLevelInfo *tli)
 //- rjf: binary section building
 
 static void
-cons_add_binary_section(CONS_Root *root, String8 name, RADDBG_BinarySectionFlags flags, U64 voff_first, U64 voff_opl, U64 foff_first, U64 foff_opl)
+cons_add_binary_section(CONS_Root *root, String8 name, RADDBGI_BinarySectionFlags flags, U64 voff_first, U64 voff_opl, U64 foff_first, U64 foff_opl)
 {
   CONS_BinarySection *sec = push_array(root->arena, CONS_BinarySection, 1);
   SLLQueuePush(root->binary_section_first, root->binary_section_last, sec);
@@ -595,7 +595,7 @@ cons_type_fill_id(CONS_Root *root, CONS_Reservation *res, CONS_Type *type)
 static B32
 cons_type_is_unhandled_nil(CONS_Root *root, CONS_Type *type)
 {
-  B32 result = (type->kind == RADDBG_TypeKind_NULL && type != &root->handled_nil_type);
+  B32 result = (type->kind == RADDBGI_TypeKind_NULL && type != &root->handled_nil_type);
   return result;
 }
 
@@ -648,9 +648,9 @@ cons__type_udt_from_any_type(CONS_Root *root, CONS_Type *type)
 static CONS_TypeUDT*
 cons__type_udt_from_record_type(CONS_Root *root, CONS_Type *type)
 {
-  cons_requiref(root, (type->kind == RADDBG_TypeKind_Struct ||
-                       type->kind == RADDBG_TypeKind_Class ||
-                       type->kind == RADDBG_TypeKind_Union),
+  cons_requiref(root, (type->kind == RADDBGI_TypeKind_Struct ||
+                       type->kind == RADDBGI_TypeKind_Class ||
+                       type->kind == RADDBGI_TypeKind_Union),
                 return 0,
                 "Tried to use non-user-defined-type-kind to create user-defined-type.");
   CONS_TypeUDT *result = 0;
@@ -661,9 +661,9 @@ cons__type_udt_from_record_type(CONS_Root *root, CONS_Type *type)
 //- rjf: basic/operator type construction helpers
 
 static CONS_Type*
-cons_type_basic(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name)
+cons_type_basic(CONS_Root *root, RADDBGI_TypeKind type_kind, String8 name)
 {
-  cons_requiref(root, (RADDBG_TypeKind_FirstBuiltIn <= type_kind && type_kind <= RADDBG_TypeKind_LastBuiltIn), return root->nil_type, "Non-basic type kind passed to construct basic type.");
+  cons_requiref(root, (RADDBGI_TypeKind_FirstBuiltIn <= type_kind && type_kind <= RADDBGI_TypeKind_LastBuiltIn), return root->nil_type, "Non-basic type kind passed to construct basic type.");
   CONS_Type *result = root->nil_type;
   Temp scratch = scratch_begin(0, 0);
   
@@ -685,13 +685,13 @@ cons_type_basic(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name)
   
   // check for duplicate construct
   String8 blob = str8(buf, buf_size);
-  U64 blob_hash = raddbg_hash(buf, buf_size);
+  U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = cons__str8toptr_lookup(&root->construct_map, blob, blob_hash);
   result = (CONS_Type*)lookup_ptr;
   if(result == 0)
   {
     // calculate size
-    U32 byte_size = raddbg_size_from_basic_type_kind(type_kind);
+    U32 byte_size = raddbgi_size_from_basic_type_kind(type_kind);
     if(byte_size == 0xFFFFFFFF)
     {
       byte_size = root->addr_size;
@@ -708,7 +708,7 @@ cons_type_basic(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name)
     
     // save in name map
     {
-      CONS__NameMap *map = cons__name_map_for_kind(root, RADDBG_NameMapKind_Types);
+      CONS__NameMap *map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_Types);
       cons__name_map_add_pair(root, map, result->name, result->idx);
     }
   }
@@ -719,7 +719,7 @@ cons_type_basic(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name)
 }
 
 static CONS_Type*
-cons_type_modifier(CONS_Root *root, CONS_Type *direct_type, RADDBG_TypeModifierFlags flags)
+cons_type_modifier(CONS_Root *root, CONS_Type *direct_type, RADDBGI_TypeModifierFlags flags)
 {
   CONS_Type *result = root->nil_type;
   Temp scratch = scratch_begin(0, 0);
@@ -742,14 +742,14 @@ cons_type_modifier(CONS_Root *root, CONS_Type *direct_type, RADDBG_TypeModifierF
   
   // check for duplicate construct
   String8 blob = str8(buf, buf_size);
-  U64 blob_hash = raddbg_hash(buf, buf_size);
+  U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = cons__str8toptr_lookup(&root->construct_map, blob, blob_hash);
   result = (CONS_Type*)lookup_ptr;
   if(result == 0){
     
     // setup new node
     result = cons__type_new(root);
-    result->kind = RADDBG_TypeKind_Modifier;
+    result->kind = RADDBGI_TypeKind_Modifier;
     result->flags = flags;
     result->byte_size = direct_type->byte_size;
     result->direct_type = direct_type;
@@ -790,14 +790,14 @@ cons_type_bitfield(CONS_Root *root, CONS_Type *direct_type, U32 bit_off, U32 bit
   
   // check for duplicate construct
   String8 blob = str8(buf, buf_size);
-  U64 blob_hash = raddbg_hash(buf, buf_size);
+  U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = cons__str8toptr_lookup(&root->construct_map, blob, blob_hash);
   result = (CONS_Type*)lookup_ptr;
   if(result == 0)
   {
     // setup new node
     result = cons__type_new(root);
-    result->kind = RADDBG_TypeKind_Bitfield;
+    result->kind = RADDBGI_TypeKind_Bitfield;
     result->byte_size = direct_type->byte_size;
     result->off = bit_off;
     result->count = bit_count;
@@ -813,11 +813,11 @@ cons_type_bitfield(CONS_Root *root, CONS_Type *direct_type, U32 bit_off, U32 bit
 }
 
 static CONS_Type*
-cons_type_pointer(CONS_Root *root, CONS_Type *direct_type, RADDBG_TypeKind ptr_type_kind)
+cons_type_pointer(CONS_Root *root, CONS_Type *direct_type, RADDBGI_TypeKind ptr_type_kind)
 {
-  cons_requiref(root, (ptr_type_kind == RADDBG_TypeKind_Ptr ||
-                       ptr_type_kind == RADDBG_TypeKind_LRef ||
-                       ptr_type_kind == RADDBG_TypeKind_RRef),
+  cons_requiref(root, (ptr_type_kind == RADDBGI_TypeKind_Ptr ||
+                       ptr_type_kind == RADDBGI_TypeKind_LRef ||
+                       ptr_type_kind == RADDBGI_TypeKind_RRef),
                 return root->nil_type,
                 "Non-pointer type kind used to construct pointer type.");
   CONS_Type *result = root->nil_type;
@@ -841,7 +841,7 @@ cons_type_pointer(CONS_Root *root, CONS_Type *direct_type, RADDBG_TypeKind ptr_t
   
   // check for duplicate construct
   String8 blob = str8(buf, buf_size);
-  U64 blob_hash = raddbg_hash(buf, buf_size);
+  U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = cons__str8toptr_lookup(&root->construct_map, blob, blob_hash);
   result = (CONS_Type*)lookup_ptr;
   if(result == 0)
@@ -886,14 +886,14 @@ cons_type_array(CONS_Root *root, CONS_Type *direct_type, U64 count)
   
   // check for duplicate construct
   String8 blob = str8(buf, buf_size);
-  U64 blob_hash = raddbg_hash(buf, buf_size);
+  U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = cons__str8toptr_lookup(&root->construct_map, blob, blob_hash);
   result = (CONS_Type*)lookup_ptr;
   if(result == 0)
   {
     // setup new node
     result = cons__type_new(root);
-    result->kind = RADDBG_TypeKind_Array;
+    result->kind = RADDBGI_TypeKind_Array;
     result->count = count;
     result->direct_type = direct_type;
     result->byte_size = direct_type->byte_size*count;
@@ -936,7 +936,7 @@ cons_type_proc(CONS_Root *root, CONS_Type *return_type, struct CONS_TypeList *pa
   
   // check for duplicate construct
   String8 blob = str8(buf, buf_size);
-  U64 blob_hash = raddbg_hash(buf, buf_size);
+  U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = cons__str8toptr_lookup(&root->construct_map, blob, blob_hash);
   result = (CONS_Type*)lookup_ptr;
   if(result == 0)
@@ -956,7 +956,7 @@ cons_type_proc(CONS_Root *root, CONS_Type *return_type, struct CONS_TypeList *pa
     
     // setup new node
     result = cons__type_new(root);
-    result->kind = RADDBG_TypeKind_Function;
+    result->kind = RADDBGI_TypeKind_Function;
     result->byte_size = root->addr_size;
     result->count = params->count;
     result->direct_type = return_type;
@@ -1004,7 +1004,7 @@ cons_type_method(CONS_Root *root, CONS_Type *this_type, CONS_Type *return_type, 
   
   // check for duplicate construct
   String8 blob = str8(buf, buf_size);
-  U64 blob_hash = raddbg_hash(buf, buf_size);
+  U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = cons__str8toptr_lookup(&root->construct_map, blob, blob_hash);
   result = (CONS_Type*)lookup_ptr;
   if(result == 0)
@@ -1028,7 +1028,7 @@ cons_type_method(CONS_Root *root, CONS_Type *this_type, CONS_Type *return_type, 
     
     // setup new node
     result = cons__type_new(root);
-    result->kind = RADDBG_TypeKind_Method;
+    result->kind = RADDBGI_TypeKind_Method;
     result->byte_size = root->addr_size;
     result->count = params->count;
     result->direct_type = return_type;
@@ -1046,11 +1046,11 @@ cons_type_method(CONS_Root *root, CONS_Type *this_type, CONS_Type *return_type, 
 //- rjf: udt type constructors
 
 static CONS_Type*
-cons_type_udt(CONS_Root *root, RADDBG_TypeKind record_type_kind, String8 name, U64 size)
+cons_type_udt(CONS_Root *root, RADDBGI_TypeKind record_type_kind, String8 name, U64 size)
 {
-  cons_requiref(root, (record_type_kind == RADDBG_TypeKind_Struct ||
-                       record_type_kind == RADDBG_TypeKind_Class ||
-                       record_type_kind == RADDBG_TypeKind_Union),
+  cons_requiref(root, (record_type_kind == RADDBGI_TypeKind_Struct ||
+                       record_type_kind == RADDBGI_TypeKind_Class ||
+                       record_type_kind == RADDBGI_TypeKind_Union),
                 return root->nil_type,
                 "Non-user-defined-type-kind used to create user-defined type.");
   
@@ -1062,7 +1062,7 @@ cons_type_udt(CONS_Root *root, RADDBG_TypeKind record_type_kind, String8 name, U
   
   // rjf: save in name map
   {
-    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBG_NameMapKind_Types);
+    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_Types);
     cons__name_map_add_pair(root, map, result->name, result->idx);
   }
   
@@ -1074,14 +1074,14 @@ cons_type_enum(CONS_Root *root, CONS_Type *direct_type, String8 name)
 {
   // rjf: make type
   CONS_Type *result = cons__type_new(root);
-  result->kind = RADDBG_TypeKind_Enum;
+  result->kind = RADDBGI_TypeKind_Enum;
   result->byte_size = direct_type->byte_size;
   result->name = push_str8_copy(root->arena, name);
   result->direct_type = direct_type;
   
   // rjf: save in name map
   {
-    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBG_NameMapKind_Types);
+    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_Types);
     cons__name_map_add_pair(root, map, result->name, result->idx);
   }
   
@@ -1093,14 +1093,14 @@ cons_type_alias(CONS_Root *root, CONS_Type *direct_type, String8 name)
 {
   // rjf: make type
   CONS_Type *result = cons__type_new(root);
-  result->kind = RADDBG_TypeKind_Alias;
+  result->kind = RADDBGI_TypeKind_Alias;
   result->byte_size = direct_type->byte_size;
   result->name = push_str8_copy(root->arena, name);
   result->direct_type = direct_type;
   
   // rjf: save in name map
   {
-    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBG_NameMapKind_Types);
+    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_Types);
     cons__name_map_add_pair(root, map, result->name, result->idx);
   }
   
@@ -1108,12 +1108,12 @@ cons_type_alias(CONS_Root *root, CONS_Type *direct_type, String8 name)
 }
 
 static CONS_Type*
-cons_type_incomplete(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name)
+cons_type_incomplete(CONS_Root *root, RADDBGI_TypeKind type_kind, String8 name)
 {
-  cons_requiref(root, (type_kind == RADDBG_TypeKind_IncompleteStruct ||
-                       type_kind == RADDBG_TypeKind_IncompleteClass ||
-                       type_kind == RADDBG_TypeKind_IncompleteUnion ||
-                       type_kind == RADDBG_TypeKind_IncompleteEnum),
+  cons_requiref(root, (type_kind == RADDBGI_TypeKind_IncompleteStruct ||
+                       type_kind == RADDBGI_TypeKind_IncompleteClass ||
+                       type_kind == RADDBGI_TypeKind_IncompleteUnion ||
+                       type_kind == RADDBGI_TypeKind_IncompleteEnum),
                 return root->nil_type,
                 "Non-incomplete-type-kind used to create incomplete type.");
   
@@ -1124,7 +1124,7 @@ cons_type_incomplete(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name)
   
   // save in name map
   {
-    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBG_NameMapKind_Types);
+    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_Types);
     cons__name_map_add_pair(root, map, result->name, result->idx);
   }
   
@@ -1143,7 +1143,7 @@ cons_type_add_member_data_field(CONS_Root *root, CONS_Type *record_type, String8
     SLLQueuePush(udt->first_member, udt->last_member, member);
     udt->member_count += 1;
     root->total_member_count += 1;
-    member->kind = RADDBG_MemberKind_DataField;
+    member->kind = RADDBGI_MemberKind_DataField;
     member->name = push_str8_copy(root->arena, name);
     member->type = mem_type;
     member->off = off;
@@ -1160,7 +1160,7 @@ cons_type_add_member_static_data(CONS_Root *root, CONS_Type *record_type, String
     SLLQueuePush(udt->first_member, udt->last_member, member);
     udt->member_count += 1;
     root->total_member_count += 1;
-    member->kind = RADDBG_MemberKind_StaticData;
+    member->kind = RADDBGI_MemberKind_StaticData;
     member->name = push_str8_copy(root->arena, name);
     member->type = mem_type;
   }
@@ -1176,7 +1176,7 @@ cons_type_add_member_method(CONS_Root *root, CONS_Type *record_type, String8 nam
     SLLQueuePush(udt->first_member, udt->last_member, member);
     udt->member_count += 1;
     root->total_member_count += 1;
-    member->kind = RADDBG_MemberKind_Method;
+    member->kind = RADDBGI_MemberKind_Method;
     member->name = push_str8_copy(root->arena, name);
     member->type = mem_type;
   }
@@ -1194,7 +1194,7 @@ cons_type_add_member_static_method(CONS_Root *root, CONS_Type *record_type, Stri
     
     root->total_member_count += 1;
     
-    member->kind = RADDBG_MemberKind_StaticMethod;
+    member->kind = RADDBGI_MemberKind_StaticMethod;
     member->name = push_str8_copy(root->arena, name);
     member->type = mem_type;
   }
@@ -1210,7 +1210,7 @@ cons_type_add_member_virtual_method(CONS_Root *root, CONS_Type *record_type, Str
     SLLQueuePush(udt->first_member, udt->last_member, member);
     udt->member_count += 1;
     root->total_member_count += 1;
-    member->kind = RADDBG_MemberKind_VirtualMethod;
+    member->kind = RADDBGI_MemberKind_VirtualMethod;
     member->name = push_str8_copy(root->arena, name);
     member->type = mem_type;
   }
@@ -1226,7 +1226,7 @@ cons_type_add_member_base(CONS_Root *root, CONS_Type *record_type, CONS_Type *ba
     SLLQueuePush(udt->first_member, udt->last_member, member);
     udt->member_count += 1;
     root->total_member_count += 1;
-    member->kind = RADDBG_MemberKind_Base;
+    member->kind = RADDBGI_MemberKind_Base;
     member->type = base_type;
     member->off = off;
   }
@@ -1242,7 +1242,7 @@ cons_type_add_member_virtual_base(CONS_Root *root, CONS_Type *record_type, CONS_
     SLLQueuePush(udt->first_member, udt->last_member, member);
     udt->member_count += 1;
     root->total_member_count += 1;
-    member->kind = RADDBG_MemberKind_VirtualBase;
+    member->kind = RADDBGI_MemberKind_VirtualBase;
     member->type = base_type;
     // TODO(allen): what to do with the two offsets in this case?
   }
@@ -1258,7 +1258,7 @@ cons_type_add_member_nested_type(CONS_Root *root, CONS_Type *record_type, CONS_T
     SLLQueuePush(udt->first_member, udt->last_member, member);
     udt->member_count += 1;
     root->total_member_count += 1;
-    member->kind = RADDBG_MemberKind_NestedType;
+    member->kind = RADDBGI_MemberKind_NestedType;
     member->type = nested_type;
   }
 }
@@ -1266,7 +1266,7 @@ cons_type_add_member_nested_type(CONS_Root *root, CONS_Type *record_type, CONS_T
 static void
 cons_type_add_enum_val(CONS_Root *root, CONS_Type *enum_type, String8 name, U64 val)
 {
-  cons_requiref(root, (enum_type->kind == RADDBG_TypeKind_Enum), return, "Tried to add enum value to non-enum type.");
+  cons_requiref(root, (enum_type->kind == RADDBGI_TypeKind_Enum), return, "Tried to add enum value to non-enum type.");
   CONS_TypeUDT *udt = cons__type_udt_from_any_type(root, enum_type);
   if(udt != 0)
   {
@@ -1283,7 +1283,7 @@ cons_type_add_enum_val(CONS_Root *root, CONS_Type *enum_type, String8 name, U64 
 static void
 cons_type_set_source_coordinates(CONS_Root *root, CONS_Type *defined_type, String8 source_path, U32 line, U32 col)
 {
-  cons_requiref(root, (RADDBG_TypeKind_FirstUserDefined <= defined_type->kind && defined_type->kind <= RADDBG_TypeKind_LastUserDefined),
+  cons_requiref(root, (RADDBGI_TypeKind_FirstUserDefined <= defined_type->kind && defined_type->kind <= RADDBGI_TypeKind_LastUserDefined),
                 return, "Tried to add source coordinates to non-user-defined type.");
   CONS_TypeUDT *udt = cons__type_udt_from_any_type(root, defined_type);
   if(udt != 0)
@@ -1367,15 +1367,15 @@ cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_SymbolInfo *info
       default:{}break;
       case CONS_SymbolKind_GlobalVariable:
       {
-        map = cons__name_map_for_kind(root, RADDBG_NameMapKind_GlobalVariables);
+        map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_GlobalVariables);
       }break;
       case CONS_SymbolKind_ThreadVariable:
       {
-        map = cons__name_map_for_kind(root, RADDBG_NameMapKind_ThreadVariables);
+        map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_ThreadVariables);
       }break;
       case CONS_SymbolKind_Procedure:
       {
-        map = cons__name_map_for_kind(root, RADDBG_NameMapKind_Procedures);
+        map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_Procedures);
       }break;
     }
     if(map != 0)
@@ -1387,7 +1387,7 @@ cons_symbol_set_info(CONS_Root *root, CONS_Symbol *symbol, CONS_SymbolInfo *info
   // save link name map
   if(kind == CONS_SymbolKind_Procedure && symbol->link_name.size > 0)
   {
-    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBG_NameMapKind_LinkNameProcedures);
+    CONS__NameMap *map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_LinkNameProcedures);
     cons__name_map_add_pair(root, map, symbol->link_name, symbol->idx);
   }
 }
@@ -1472,9 +1472,9 @@ cons_local_handle_from_user_id(CONS_Root *root, U64 local_user_id, U64 local_use
 static void
 cons_local_set_basic_info(CONS_Root *root, CONS_Local *local, CONS_LocalInfo *info)
 {
-  cons_requiref(root, local->kind == RADDBG_LocalKind_NULL, return, "Local information set multiple times.");
+  cons_requiref(root, local->kind == RADDBGI_LocalKind_NULL, return, "Local information set multiple times.");
   cons_requiref(root, info->scope != 0, return, "Tried to set invalid scope as local's containing scope.");
-  cons_requiref(root, RADDBG_LocalKind_NULL < info->kind && info->kind < RADDBG_LocalKind_COUNT, return, "Invalid local kind.");
+  cons_requiref(root, RADDBGI_LocalKind_NULL < info->kind && info->kind < RADDBGI_LocalKind_COUNT, return, "Invalid local kind.");
   cons_requiref(root, info->type != 0, return, "Tried to set invalid type as local's type.");
   CONS_Scope *scope = info->scope;
   SLLQueuePush(scope->first_local, scope->last_local, local);
@@ -1515,7 +1515,7 @@ static CONS_Location*
 cons_location_addr_bytecode_stream(CONS_Root *root, struct CONS_EvalBytecode *bytecode)
 {
   CONS_Location *result = push_array(root->arena, CONS_Location, 1);
-  result->kind = RADDBG_LocationKind_AddrBytecodeStream;
+  result->kind = RADDBGI_LocationKind_AddrBytecodeStream;
   result->bytecode = *bytecode;
   return result;
 }
@@ -1524,7 +1524,7 @@ static CONS_Location*
 cons_location_val_bytecode_stream(CONS_Root *root, struct CONS_EvalBytecode *bytecode)
 {
   CONS_Location *result = push_array(root->arena, CONS_Location, 1);
-  result->kind = RADDBG_LocationKind_ValBytecodeStream;
+  result->kind = RADDBGI_LocationKind_ValBytecodeStream;
   result->bytecode = *bytecode;
   return result;
 }
@@ -1533,7 +1533,7 @@ static CONS_Location*
 cons_location_addr_reg_plus_u16(CONS_Root *root, U8 reg_code, U16 offset)
 {
   CONS_Location *result = push_array(root->arena, CONS_Location, 1);
-  result->kind = RADDBG_LocationKind_AddrRegisterPlusU16;
+  result->kind = RADDBGI_LocationKind_AddrRegisterPlusU16;
   result->register_code = reg_code;
   result->offset = offset;
   return result;
@@ -1543,7 +1543,7 @@ static CONS_Location*
 cons_location_addr_addr_reg_plus_u16(CONS_Root *root, U8 reg_code, U16 offset)
 {
   CONS_Location *result = push_array(root->arena, CONS_Location, 1);
-  result->kind = RADDBG_LocationKind_AddrAddrRegisterPlusU16;
+  result->kind = RADDBGI_LocationKind_AddrAddrRegisterPlusU16;
   result->register_code = reg_code;
   result->offset = offset;
   return result;
@@ -1553,7 +1553,7 @@ static CONS_Location*
 cons_location_val_reg(CONS_Root *root, U8 reg_code)
 {
   CONS_Location *result = push_array(root->arena, CONS_Location, 1);
-  result->kind = RADDBG_LocationKind_ValRegister;
+  result->kind = RADDBGI_LocationKind_ValRegister;
   result->register_code = reg_code;
   return result;
 }
@@ -1561,10 +1561,10 @@ cons_location_val_reg(CONS_Root *root, U8 reg_code)
 //- rjf: name map building
 
 static CONS__NameMap*
-cons__name_map_for_kind(CONS_Root *root, RADDBG_NameMapKind kind)
+cons__name_map_for_kind(CONS_Root *root, RADDBGI_NameMapKind kind)
 {
   CONS__NameMap *result = 0;
-  if(kind < RADDBG_NameMapKind_COUNT)
+  if(kind < RADDBGI_NameMapKind_COUNT)
   {
     if(root->name_maps[kind] == 0)
     {
@@ -1581,7 +1581,7 @@ static void
 cons__name_map_add_pair(CONS_Root *root, CONS__NameMap *map, String8 string, U32 idx)
 {
   // hash
-  U64 hash = raddbg_hash(string.str, string.size);
+  U64 hash = raddbgi_hash(string.str, string.size);
   U64 bucket_idx = hash%map->buckets_count;
   
   // find existing name node
@@ -1691,7 +1691,7 @@ cons__string(CONS__BakeCtx *bctx, String8 str)
 {
   Arena *arena = bctx->arena;
   CONS__Strings *strs = &bctx->strs;
-  U64 hash = raddbg_hash(str.str, str.size);
+  U64 hash = raddbgi_hash(str.str, str.size);
   U64 bucket_idx = hash%strs->buckets_count;
   
   // look for a match
@@ -1807,7 +1807,7 @@ cons__idx_run(CONS__BakeCtx *bctx, U32 *idx_run, U32 count)
 //- rjf: data section baking
 
 static U32
-cons__dsection(Arena *arena, CONS__DSections *dss, void *data, U64 size, RADDBG_DataSectionTag tag)
+cons__dsection(Arena *arena, CONS__DSections *dss, void *data, U64 size, RADDBGI_DataSectionTag tag)
 {
   U32 result = dss->count;
   CONS__DSectionNode *node = push_array(arena, CONS__DSectionNode, 1);
@@ -2034,7 +2034,7 @@ cons__unit_combine_lines(Arena *arena, CONS__BakeCtx *bctx, CONS_LineSequenceNod
   
   // arrange output
   U64 *arranged_voffs = push_array_no_zero(arena, U64, key_count + 1);
-  RADDBG_Line *arranged_lines = push_array_no_zero(arena, RADDBG_Line, key_count);
+  RADDBGI_Line *arranged_lines = push_array_no_zero(arena, RADDBGI_Line, key_count);
   
   for(U64 i = 0; i < key_count; i += 1){
     arranged_voffs[i] = sorted_line_keys[i].key;
@@ -2200,11 +2200,11 @@ cons__vmap_from_markers(Arena *arena, CONS__VMapMarker *markers, CONS__SortKey *
   
   // fill output vmap entries
   U32 vmap_count_raw = marker_count - 1 + extra_vmap_entry;
-  RADDBG_VMapEntry *vmap = push_array_no_zero(arena, RADDBG_VMapEntry, vmap_count_raw + 1);
+  RADDBGI_VMapEntry *vmap = push_array_no_zero(arena, RADDBGI_VMapEntry, vmap_count_raw + 1);
   U32 vmap_entry_count_pass_1 = 0;
   
   {
-    RADDBG_VMapEntry *vmap_ptr = vmap;
+    RADDBGI_VMapEntry *vmap_ptr = vmap;
     
     if(extra_vmap_entry){
       vmap_ptr->voff = 0;
@@ -2289,7 +2289,7 @@ cons__vmap_from_markers(Arena *arena, CONS__VMapMarker *markers, CONS__SortKey *
     //  (the last entry is not replaced because it acts as a terminator)
     U32 last = vmap_entry_count_pass_1 - 1;
     
-    RADDBG_VMapEntry *vmap_ptr = vmap;
+    RADDBGI_VMapEntry *vmap_ptr = vmap;
     U64 real_idx = 0;
     
     for(U32 i = 0; i < last; i += 1, vmap_ptr += 1){
@@ -2308,12 +2308,12 @@ cons__vmap_from_markers(Arena *arena, CONS__VMapMarker *markers, CONS__SortKey *
   // combine duplicate neighbors
   U32 vmap_entry_count = 0;
   {
-    RADDBG_VMapEntry *vmap_ptr = vmap;
-    RADDBG_VMapEntry *vmap_opl = vmap + vmap_entry_count_pass_1;
-    RADDBG_VMapEntry *vmap_out = vmap;
+    RADDBGI_VMapEntry *vmap_ptr = vmap;
+    RADDBGI_VMapEntry *vmap_opl = vmap + vmap_entry_count_pass_1;
+    RADDBGI_VMapEntry *vmap_out = vmap;
     
     for(;vmap_ptr < vmap_opl;){
-      RADDBG_VMapEntry *vmap_range_first = vmap_ptr;
+      RADDBGI_VMapEntry *vmap_range_first = vmap_ptr;
       U64 idx = vmap_ptr->idx;
       vmap_ptr += 1;
       for(;vmap_ptr < vmap_opl && vmap_ptr->idx == idx;) vmap_ptr += 1;
@@ -2398,16 +2398,16 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
   
   // fill type nodes
   U32 type_count = root->type_count;
-  RADDBG_TypeNode *type_nodes = push_array_no_zero(arena, RADDBG_TypeNode, type_count);
+  RADDBGI_TypeNode *type_nodes = push_array_no_zero(arena, RADDBGI_TypeNode, type_count);
   
   {
-    RADDBG_TypeNode *ptr = type_nodes;
-    RADDBG_TypeNode *opl = ptr + type_count;
+    RADDBGI_TypeNode *ptr = type_nodes;
+    RADDBGI_TypeNode *opl = ptr + type_count;
     CONS_Type *loose_type = root->first_type;
     for(;loose_type != 0 && ptr < opl;
         loose_type = loose_type->next_order, ptr += 1){
       
-      RADDBG_TypeKind kind = loose_type->kind;
+      RADDBGI_TypeKind kind = loose_type->kind;
       
       // shared
       ptr->kind = kind;
@@ -2415,21 +2415,21 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
       ptr->byte_size = loose_type->byte_size;
       
       // built-in
-      if(RADDBG_TypeKind_FirstBuiltIn <= kind && kind <= RADDBG_TypeKind_LastBuiltIn){
+      if(RADDBGI_TypeKind_FirstBuiltIn <= kind && kind <= RADDBGI_TypeKind_LastBuiltIn){
         ptr->built_in.name_string_idx = cons__string(bctx, loose_type->name);
       }
       
       // constructed
-      else if(RADDBG_TypeKind_FirstConstructed <= kind && kind <= RADDBG_TypeKind_LastConstructed){
+      else if(RADDBGI_TypeKind_FirstConstructed <= kind && kind <= RADDBGI_TypeKind_LastConstructed){
         ptr->constructed.direct_type_idx = loose_type->direct_type->idx;
         
         switch (kind){
-          case RADDBG_TypeKind_Array:
+          case RADDBGI_TypeKind_Array:
           {
             ptr->constructed.count = loose_type->count;
           }break;
           
-          case RADDBG_TypeKind_Function:
+          case RADDBGI_TypeKind_Function:
           {
             // parameters
             U32 count = loose_type->count;
@@ -2438,7 +2438,7 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
             ptr->constructed.count = count;
           }break;
           
-          case RADDBG_TypeKind_Method:
+          case RADDBGI_TypeKind_Method:
           {
             // parameters
             U32 count = loose_type->count;
@@ -2450,7 +2450,7 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
       }
       
       // user-defined
-      else if(RADDBG_TypeKind_FirstUserDefined <= kind && kind <= RADDBG_TypeKind_LastUserDefined){
+      else if(RADDBGI_TypeKind_FirstUserDefined <= kind && kind <= RADDBGI_TypeKind_LastUserDefined){
         ptr->user_defined.name_string_idx = cons__string(bctx, loose_type->name);
         if(loose_type->udt != 0){
           ptr->user_defined.udt_idx = loose_type->udt->idx;
@@ -2461,7 +2461,7 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
       }
       
       // bitfield
-      else if(kind == RADDBG_TypeKind_Bitfield){
+      else if(kind == RADDBGI_TypeKind_Bitfield){
         ptr->bitfield.off = loose_type->off;
         ptr->bitfield.size = loose_type->count;
       }
@@ -2477,23 +2477,23 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
   
   // fill udts
   U32 udt_count = root->type_udt_count;
-  RADDBG_UDT *udts = push_array_no_zero(arena, RADDBG_UDT, udt_count);
+  RADDBGI_UDT *udts = push_array_no_zero(arena, RADDBGI_UDT, udt_count);
   
   U32 member_count = root->total_member_count;
-  RADDBG_Member *members = push_array_no_zero(arena, RADDBG_Member, member_count);
+  RADDBGI_Member *members = push_array_no_zero(arena, RADDBGI_Member, member_count);
   
   U32 enum_member_count = root->total_enum_val_count;
-  RADDBG_EnumMember *enum_members = push_array_no_zero(arena, RADDBG_EnumMember, enum_member_count);
+  RADDBGI_EnumMember *enum_members = push_array_no_zero(arena, RADDBGI_EnumMember, enum_member_count);
   
   {
-    RADDBG_UDT *ptr = udts;
-    RADDBG_UDT *opl = ptr + udt_count;
+    RADDBGI_UDT *ptr = udts;
+    RADDBGI_UDT *opl = ptr + udt_count;
     
-    RADDBG_Member *member_ptr = members;
-    RADDBG_Member *member_opl = members + member_count;
+    RADDBGI_Member *member_ptr = members;
+    RADDBGI_Member *member_opl = members + member_count;
     
-    RADDBG_EnumMember *enum_member_ptr = enum_members;
-    RADDBG_EnumMember *enum_member_opl = enum_members + enum_member_count;
+    RADDBGI_EnumMember *enum_member_ptr = enum_members;
+    RADDBGI_EnumMember *enum_member_opl = enum_members + enum_member_count;
     
     CONS_TypeUDT *loose_udt = root->first_udt;
     for(;loose_udt != 0 && ptr < opl;
@@ -2505,7 +2505,7 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
       
       // enum members
       if(loose_udt->enum_val_count != 0){
-        ptr->flags |= RADDBG_UserDefinedTypeFlag_EnumMembers;
+        ptr->flags |= RADDBGI_UserDefinedTypeFlag_EnumMembers;
         
         ptr->member_first = (U32)(enum_member_ptr - enum_members);
         ptr->member_count = loose_udt->enum_val_count;
@@ -2537,7 +2537,7 @@ cons__type_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
           member_ptr->type_idx = loose_member->type->idx;
           
           // TODO(allen): 
-          if(loose_member->kind == RADDBG_MemberKind_Method){
+          if(loose_member->kind == RADDBGI_MemberKind_Method){
             //loose_member_ptr->unit_idx = ;
             //loose_member_ptr->proc_symbol_idx = ;
           }
@@ -2595,19 +2595,19 @@ cons__symbol_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
   U32 procedure_count = 1 + root->symbol_kind_counts[CONS_SymbolKind_Procedure];
   
   // allocate symbol arrays
-  RADDBG_GlobalVariable *global_variables =
-    push_array(arena, RADDBG_GlobalVariable, globalvar_count);
+  RADDBGI_GlobalVariable *global_variables =
+    push_array(arena, RADDBGI_GlobalVariable, globalvar_count);
   
-  RADDBG_ThreadVariable *thread_variables =
-    push_array(arena, RADDBG_ThreadVariable, threadvar_count);
+  RADDBGI_ThreadVariable *thread_variables =
+    push_array(arena, RADDBGI_ThreadVariable, threadvar_count);
   
-  RADDBG_Procedure *procedures = push_array(arena, RADDBG_Procedure, procedure_count);
+  RADDBGI_Procedure *procedures = push_array(arena, RADDBGI_Procedure, procedure_count);
   
   // fill symbol arrays
   {
-    RADDBG_GlobalVariable *global_ptr = global_variables;
-    RADDBG_ThreadVariable *thread_local_ptr = thread_variables;
-    RADDBG_Procedure *procedure_ptr = procedures;
+    RADDBGI_GlobalVariable *global_ptr = global_variables;
+    RADDBGI_ThreadVariable *thread_local_ptr = thread_variables;
+    RADDBGI_Procedure *procedure_ptr = procedures;
     
     // nils
     global_ptr += 1;
@@ -2622,19 +2622,19 @@ cons__symbol_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
       U32 link_name_string_idx = cons__string(bctx, node->link_name);
       U32 type_idx = node->type->idx;
       
-      RADDBG_LinkFlags link_flags = 0;
+      RADDBGI_LinkFlags link_flags = 0;
       U32 container_idx = 0;
       {      
         if(node->is_extern){
-          link_flags |= RADDBG_LinkFlag_External;
+          link_flags |= RADDBGI_LinkFlag_External;
         }
         if(node->container_symbol != 0){
           container_idx = node->container_symbol->idx;
-          link_flags |= RADDBG_LinkFlag_ProcScoped;
+          link_flags |= RADDBGI_LinkFlag_ProcScoped;
         }
         else if(node->container_type != 0 && node->container_type->udt != 0){
           container_idx = node->container_type->udt->idx;
-          link_flags |= RADDBG_LinkFlag_TypeScoped;
+          link_flags |= RADDBGI_LinkFlag_TypeScoped;
         }
       }
       
@@ -2758,27 +2758,27 @@ cons__symbol_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
          root->first_scope->range_count == 0);
   
   U32 scope_count = root->scope_count;
-  RADDBG_Scope *scopes = push_array(arena, RADDBG_Scope, scope_count);
+  RADDBGI_Scope *scopes = push_array(arena, RADDBGI_Scope, scope_count);
   
   U32 scope_voff_count = root->scope_voff_count;
   U64 *scope_voffs = push_array(arena, U64, scope_voff_count);
   
   U32 local_count = root->local_count;
-  RADDBG_Local *locals = push_array(arena, RADDBG_Local, local_count);
+  RADDBGI_Local *locals = push_array(arena, RADDBGI_Local, local_count);
   
   U32 location_block_count = root->location_count;
-  RADDBG_LocationBlock *location_blocks =
-    push_array(arena, RADDBG_LocationBlock, location_block_count);
+  RADDBGI_LocationBlock *location_blocks =
+    push_array(arena, RADDBGI_LocationBlock, location_block_count);
   
   String8List location_data = {0};
   
   // iterate scopes, locals, and locations
   //  fill scope voffs, locals, and location information
   {
-    RADDBG_Scope *scope_ptr = scopes;
+    RADDBGI_Scope *scope_ptr = scopes;
     U64 *scope_voff_ptr = scope_voffs;
-    RADDBG_Local *local_ptr = locals;
-    RADDBG_LocationBlock *location_block_ptr = location_blocks;
+    RADDBGI_Local *local_ptr = locals;
+    RADDBGI_LocationBlock *location_block_ptr = location_blocks;
     
     for(CONS_Scope *node = root->first_scope;
         node != 0;
@@ -2836,8 +2836,8 @@ cons__symbol_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
                   str8_serial_push_data(scratch.arena, &location_data, &data, 1);
                 }break;
                 
-                case RADDBG_LocationKind_AddrBytecodeStream:
-                case RADDBG_LocationKind_ValBytecodeStream:
+                case RADDBGI_LocationKind_AddrBytecodeStream:
+                case RADDBGI_LocationKind_ValBytecodeStream:
                 {
                   str8_list_push(scratch.arena, &location_data, push_str8_copy(scratch.arena, str8_struct(&location->kind)));
                   for(CONS_EvalBytecodeOp *op_node = location->bytecode.first_op;
@@ -2856,19 +2856,19 @@ cons__symbol_data_combine(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx)
                   }
                 }break;
                 
-                case RADDBG_LocationKind_AddrRegisterPlusU16:
-                case RADDBG_LocationKind_AddrAddrRegisterPlusU16:
+                case RADDBGI_LocationKind_AddrRegisterPlusU16:
+                case RADDBGI_LocationKind_AddrAddrRegisterPlusU16:
                 {
-                  RADDBG_LocationRegisterPlusU16 loc = {0};
+                  RADDBGI_LocationRegisterPlusU16 loc = {0};
                   loc.kind = location->kind;
                   loc.register_code = location->register_code;
                   loc.offset = location->offset;
                   str8_list_push(scratch.arena, &location_data, push_str8_copy(scratch.arena, str8_struct(&loc)));
                 }break;
                 
-                case RADDBG_LocationKind_ValRegister:
+                case RADDBGI_LocationKind_ValRegister:
                 {
-                  RADDBG_LocationRegister loc = {0};
+                  RADDBGI_LocationRegister loc = {0};
                   loc.kind = location->kind;
                   loc.register_code = location->register_code;
                   str8_list_push(scratch.arena, &location_data, push_str8_copy(scratch.arena, str8_struct(&loc)));
@@ -2987,7 +2987,7 @@ cons__name_map_bake(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx, CONS__Na
   for(CONS__NameMapNode *node = map->first;
       node != 0;
       node = node->order_next){
-    U64 hash = raddbg_hash(node->string.str, node->string.size);
+    U64 hash = raddbgi_hash(node->string.str, node->string.size);
     U64 bi = hash%bucket_count;
     CONS__NameMapSemiNode *snode = push_array(scratch.arena, CONS__NameMapSemiNode, 1);
     SLLQueuePush(sbuckets[bi].first, sbuckets[bi].last, snode);
@@ -2996,13 +2996,13 @@ cons__name_map_bake(Arena *arena, CONS_Root *root, CONS__BakeCtx *bctx, CONS__Na
   }
   
   // allocate tables
-  RADDBG_NameMapBucket *buckets = push_array(arena, RADDBG_NameMapBucket, bucket_count);
-  RADDBG_NameMapNode *nodes = push_array_no_zero(arena, RADDBG_NameMapNode, node_count);
+  RADDBGI_NameMapBucket *buckets = push_array(arena, RADDBGI_NameMapBucket, bucket_count);
+  RADDBGI_NameMapNode *nodes = push_array_no_zero(arena, RADDBGI_NameMapNode, node_count);
   
   // convert to serialized buckets & nodes
   {
-    RADDBG_NameMapBucket *bucket_ptr = buckets;
-    RADDBG_NameMapNode *node_ptr = nodes;
+    RADDBGI_NameMapBucket *bucket_ptr = buckets;
+    RADDBGI_NameMapNode *node_ptr = nodes;
     for(U32 i = 0; i < bucket_count; i += 1, bucket_ptr += 1){
       bucket_ptr->first_node = (U32)(node_ptr - nodes);
       bucket_ptr->node_count = sbuckets[i].count;
@@ -3070,7 +3070,7 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
   
   // setup cons helpers
   CONS__DSections dss = {0};
-  cons__dsection(arena, &dss, 0, 0, RADDBG_DataSectionTag_NULL);
+  cons__dsection(arena, &dss, 0, 0, RADDBGI_DataSectionTag_NULL);
   
   CONS__BakeParams bctx_params = {0};
   {
@@ -3083,7 +3083,7 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
   // MAIN PART: allocating and filling out sections of the file
   
   // top level info
-  RADDBG_TopLevelInfo *tli = push_array(arena, RADDBG_TopLevelInfo, 1);
+  RADDBGI_TopLevelInfo *tli = push_array(arena, RADDBGI_TopLevelInfo, 1);
   {
     CONS_TopLevelInfo *cons_tli = &root->top_level_info;
     tli->architecture = cons_tli->architecture;
@@ -3091,13 +3091,13 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
     tli->exe_hash = cons_tli->exe_hash;
     tli->voff_max = cons_tli->voff_max;
   }
-  cons__dsection(arena, &dss, tli, sizeof(*tli), RADDBG_DataSectionTag_TopLevelInfo);
+  cons__dsection(arena, &dss, tli, sizeof(*tli), RADDBGI_DataSectionTag_TopLevelInfo);
   
   // binary sections array
   {
     U32 count = root->binary_section_count;
-    RADDBG_BinarySection *sections = push_array(arena, RADDBG_BinarySection, count);
-    RADDBG_BinarySection *dsec = sections;
+    RADDBGI_BinarySection *sections = push_array(arena, RADDBGI_BinarySection, count);
+    RADDBGI_BinarySection *dsec = sections;
     for(CONS_BinarySection *ssec = root->binary_section_first;
         ssec != 0;
         ssec = ssec->next, dsec += 1){
@@ -3108,7 +3108,7 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
       dsec->foff_first = ssec->foff_first;
       dsec->foff_opl   = ssec->foff_opl;
     }
-    cons__dsection(arena, &dss, sections, sizeof(*sections)*count, RADDBG_DataSectionTag_BinarySections);
+    cons__dsection(arena, &dss, sections, sizeof(*sections)*count, RADDBGI_DataSectionTag_BinarySections);
   }
   
   // units array
@@ -3117,8 +3117,8 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
   // * combining line info for whole unit
   {
     U32 count = root->unit_count;
-    RADDBG_Unit *units = push_array(arena, RADDBG_Unit, count);
-    RADDBG_Unit *dunit = units;
+    RADDBGI_Unit *units = push_array(arena, RADDBGI_Unit, count);
+    RADDBGI_Unit *dunit = units;
     for(CONS_Unit *sunit = root->unit_first;
         sunit != 0;
         sunit = sunit->next_order, dunit += 1){
@@ -3147,20 +3147,20 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
       if(line_count > 0){
         dunit->line_info_voffs_data_idx =
           cons__dsection(arena, &dss, lines->voffs, sizeof(U64)*(line_count + 1),
-                         RADDBG_DataSectionTag_LineInfoVoffs);
+                         RADDBGI_DataSectionTag_LineInfoVoffs);
         dunit->line_info_data_idx =
-          cons__dsection(arena, &dss, lines->lines, sizeof(RADDBG_Line)*line_count,
-                         RADDBG_DataSectionTag_LineInfoData);
+          cons__dsection(arena, &dss, lines->lines, sizeof(RADDBGI_Line)*line_count,
+                         RADDBGI_DataSectionTag_LineInfoData);
         if(lines->cols != 0){
           dunit->line_info_col_data_idx =
-            cons__dsection(arena, &dss, lines->cols, sizeof(RADDBG_Column)*line_count,
-                           RADDBG_DataSectionTag_LineInfoColumns);
+            cons__dsection(arena, &dss, lines->cols, sizeof(RADDBGI_Column)*line_count,
+                           RADDBGI_DataSectionTag_LineInfoColumns);
         }
         dunit->line_info_count = line_count;
       }
     }
     
-    cons__dsection(arena, &dss, units, sizeof(*units)*count, RADDBG_DataSectionTag_Units);
+    cons__dsection(arena, &dss, units, sizeof(*units)*count, RADDBGI_DataSectionTag_Units);
   }
   
   // source file line info baking
@@ -3178,21 +3178,21 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
       
       src_node->line_map_nums_data_idx =
         cons__dsection(arena, &dss, lines->line_nums, sizeof(*lines->line_nums)*line_count,
-                       RADDBG_DataSectionTag_LineMapNumbers);
+                       RADDBGI_DataSectionTag_LineMapNumbers);
       
       src_node->line_map_range_data_idx =
         cons__dsection(arena, &dss, lines->line_ranges, sizeof(*lines->line_ranges)*(line_count + 1),
-                       RADDBG_DataSectionTag_LineMapRanges);
+                       RADDBGI_DataSectionTag_LineMapRanges);
       
       src_node->line_map_voff_data_idx =
         cons__dsection(arena, &dss, lines->voffs, sizeof(*lines->voffs)*lines->voff_count,
-                       RADDBG_DataSectionTag_LineMapVoffs);
+                       RADDBGI_DataSectionTag_LineMapVoffs);
     }
   }
   
   // source file name mapping
   {
-    CONS__NameMap* map = cons__name_map_for_kind(root, RADDBG_NameMapKind_NormalSourcePaths);
+    CONS__NameMap* map = cons__name_map_for_kind(root, RADDBGI_NameMapKind_NormalSourcePaths);
     for(CONS__SrcNode *src_node = bctx->tree->src_first;
         src_node != 0;
         src_node = src_node->next){
@@ -3209,7 +3209,7 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
                                                    root->unit_vmap_range_count);
     
     U64 vmap_size = sizeof(*vmap->vmap)*(vmap->count + 1);
-    cons__dsection(arena, &dss, vmap->vmap, vmap_size, RADDBG_DataSectionTag_UnitVmap);
+    cons__dsection(arena, &dss, vmap->vmap, vmap_size, RADDBGI_DataSectionTag_UnitVmap);
   }
   
   // type info baking
@@ -3217,16 +3217,16 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
     CONS__TypeData *types = cons__type_data_combine(arena, root, bctx);
     
     U64 type_nodes_size = sizeof(*types->type_nodes)*types->type_node_count;
-    cons__dsection(arena, &dss, types->type_nodes, type_nodes_size, RADDBG_DataSectionTag_TypeNodes);
+    cons__dsection(arena, &dss, types->type_nodes, type_nodes_size, RADDBGI_DataSectionTag_TypeNodes);
     
     U64 udt_size = sizeof(*types->udts)*types->udt_count;
-    cons__dsection(arena, &dss, types->udts, udt_size, RADDBG_DataSectionTag_UDTs);
+    cons__dsection(arena, &dss, types->udts, udt_size, RADDBGI_DataSectionTag_UDTs);
     
     U64 member_size = sizeof(*types->members)*types->member_count;
-    cons__dsection(arena, &dss, types->members, member_size, RADDBG_DataSectionTag_Members);
+    cons__dsection(arena, &dss, types->members, member_size, RADDBGI_DataSectionTag_Members);
     
     U64 enum_member_size = sizeof(*types->enum_members)*types->enum_member_count;
-    cons__dsection(arena, &dss, types->enum_members, enum_member_size, RADDBG_DataSectionTag_EnumMembers);
+    cons__dsection(arena, &dss, types->enum_members, enum_member_size, RADDBGI_DataSectionTag_EnumMembers);
   }
   
   // symbol info baking
@@ -3236,59 +3236,59 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
     U64 global_variables_size =
       sizeof(*symbol_data->global_variables)*symbol_data->global_variable_count;
     cons__dsection(arena, &dss, symbol_data->global_variables, global_variables_size,
-                   RADDBG_DataSectionTag_GlobalVariables);
+                   RADDBGI_DataSectionTag_GlobalVariables);
     
     CONS__VMap *global_vmap = symbol_data->global_vmap;
     U64 global_vmap_size = sizeof(*global_vmap->vmap)*(global_vmap->count + 1);
     cons__dsection(arena, &dss, global_vmap->vmap, global_vmap_size,
-                   RADDBG_DataSectionTag_GlobalVmap);
+                   RADDBGI_DataSectionTag_GlobalVmap);
     
     U64 thread_variables_size =
       sizeof(*symbol_data->thread_variables)*symbol_data->thread_variable_count;
     cons__dsection(arena, &dss, symbol_data->thread_variables, thread_variables_size,
-                   RADDBG_DataSectionTag_ThreadVariables);
+                   RADDBGI_DataSectionTag_ThreadVariables);
     
     U64 procedures_size = sizeof(*symbol_data->procedures)*symbol_data->procedure_count;
     cons__dsection(arena, &dss, symbol_data->procedures, procedures_size,
-                   RADDBG_DataSectionTag_Procedures);
+                   RADDBGI_DataSectionTag_Procedures);
     
     U64 scopes_size = sizeof(*symbol_data->scopes)*symbol_data->scope_count;
-    cons__dsection(arena, &dss, symbol_data->scopes, scopes_size, RADDBG_DataSectionTag_Scopes);
+    cons__dsection(arena, &dss, symbol_data->scopes, scopes_size, RADDBGI_DataSectionTag_Scopes);
     
     U64 scope_voffs_size = sizeof(*symbol_data->scope_voffs)*symbol_data->scope_voff_count;
     cons__dsection(arena, &dss, symbol_data->scope_voffs, scope_voffs_size,
-                   RADDBG_DataSectionTag_ScopeVoffData);
+                   RADDBGI_DataSectionTag_ScopeVoffData);
     
     CONS__VMap *scope_vmap = symbol_data->scope_vmap;
     U64 scope_vmap_size = sizeof(*scope_vmap->vmap)*(scope_vmap->count + 1);
-    cons__dsection(arena, &dss, scope_vmap->vmap, scope_vmap_size, RADDBG_DataSectionTag_ScopeVmap);
+    cons__dsection(arena, &dss, scope_vmap->vmap, scope_vmap_size, RADDBGI_DataSectionTag_ScopeVmap);
     
     U64 local_size = sizeof(*symbol_data->locals)*symbol_data->local_count;
-    cons__dsection(arena, &dss, symbol_data->locals, local_size, RADDBG_DataSectionTag_Locals);
+    cons__dsection(arena, &dss, symbol_data->locals, local_size, RADDBGI_DataSectionTag_Locals);
     
     U64 location_blocks_size =
       sizeof(*symbol_data->location_blocks)*symbol_data->location_block_count;
     cons__dsection(arena, &dss, symbol_data->location_blocks, location_blocks_size,
-                   RADDBG_DataSectionTag_LocationBlocks);
+                   RADDBGI_DataSectionTag_LocationBlocks);
     
     U64 location_data_size = symbol_data->location_data_size;
     cons__dsection(arena, &dss, symbol_data->location_data, location_data_size,
-                   RADDBG_DataSectionTag_LocationData);
+                   RADDBGI_DataSectionTag_LocationData);
   }
   
   // name map baking
   {
     U32 name_map_count = 0;
-    for(U32 i = 0; i < RADDBG_NameMapKind_COUNT; i += 1){
+    for(U32 i = 0; i < RADDBGI_NameMapKind_COUNT; i += 1){
       if(root->name_maps[i] != 0){
         name_map_count += 1;
       }
     }
     
-    RADDBG_NameMap *name_maps = push_array(arena, RADDBG_NameMap, name_map_count);
+    RADDBGI_NameMap *name_maps = push_array(arena, RADDBGI_NameMap, name_map_count);
     
-    RADDBG_NameMap *name_map_ptr = name_maps;
-    for(U32 i = 0; i < RADDBG_NameMapKind_COUNT; i += 1){
+    RADDBGI_NameMap *name_map_ptr = name_maps;
+    for(U32 i = 0; i < RADDBGI_NameMapKind_COUNT; i += 1){
       CONS__NameMap *map = root->name_maps[i];
       if(map != 0){
         CONS__NameMapBaked *baked = cons__name_map_bake(arena, root, bctx, map);
@@ -3296,16 +3296,16 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
         name_map_ptr->kind = i;
         name_map_ptr->bucket_data_idx =
           cons__dsection(arena, &dss, baked->buckets, sizeof(*baked->buckets)*baked->bucket_count,
-                         RADDBG_DataSectionTag_NameMapBuckets);
+                         RADDBGI_DataSectionTag_NameMapBuckets);
         name_map_ptr->node_data_idx =
           cons__dsection(arena, &dss, baked->nodes, sizeof(*baked->nodes)*baked->node_count,
-                         RADDBG_DataSectionTag_NameMapNodes);
+                         RADDBGI_DataSectionTag_NameMapNodes);
         name_map_ptr += 1;
       }
     }
     
     cons__dsection(arena, &dss, name_maps, sizeof(*name_maps)*name_map_count,
-                   RADDBG_DataSectionTag_NameMaps);
+                   RADDBGI_DataSectionTag_NameMaps);
   }
   
   ////////////////////////////////
@@ -3314,9 +3314,9 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
   // generate data sections for file paths
   {
     U32 count = bctx->tree->count;
-    RADDBG_FilePathNode *nodes = push_array(arena, RADDBG_FilePathNode, count);
+    RADDBGI_FilePathNode *nodes = push_array(arena, RADDBGI_FilePathNode, count);
     
-    RADDBG_FilePathNode *out_node = nodes;
+    RADDBGI_FilePathNode *out_node = nodes;
     for(CONS__PathNode *node = bctx->tree->first;
         node != 0;
         node = node->next_order, out_node += 1){
@@ -3335,15 +3335,15 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
       }
     }
     
-    cons__dsection(arena, &dss, nodes, sizeof(*nodes)*count, RADDBG_DataSectionTag_FilePathNodes);
+    cons__dsection(arena, &dss, nodes, sizeof(*nodes)*count, RADDBGI_DataSectionTag_FilePathNodes);
   }
   
   // generate data sections for files
   {
     U32 count = bctx->tree->src_count;
-    RADDBG_SourceFile *src_files = push_array(arena, RADDBG_SourceFile, count);
+    RADDBGI_SourceFile *src_files = push_array(arena, RADDBGI_SourceFile, count);
     
-    RADDBG_SourceFile *out_src_file = src_files;
+    RADDBGI_SourceFile *out_src_file = src_files;
     for(CONS__SrcNode *node = bctx->tree->src_first;
         node != 0;
         node = node->next, out_src_file += 1){
@@ -3355,7 +3355,7 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
       out_src_file->line_map_voff_data_idx = node->line_map_voff_data_idx;
     }
     
-    cons__dsection(arena, &dss, src_files, sizeof(*src_files)*count, RADDBG_DataSectionTag_SourceFiles);
+    cons__dsection(arena, &dss, src_files, sizeof(*src_files)*count, RADDBGI_DataSectionTag_SourceFiles);
   }
   
   // generate data sections for strings
@@ -3388,8 +3388,8 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
     }
     
     cons__dsection(arena, &dss, str_offs, sizeof(*str_offs)*(bctx->strs.count + 1),
-                   RADDBG_DataSectionTag_StringTable);
-    cons__dsection(arena, &dss, buf, off_cursor, RADDBG_DataSectionTag_StringData);
+                   RADDBGI_DataSectionTag_StringTable);
+    cons__dsection(arena, &dss, buf, off_cursor, RADDBGI_DataSectionTag_StringData);
   }
   
   // generate data sections for index runs
@@ -3409,14 +3409,14 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
     }
     
     cons__dsection(arena, &dss, idx_data, sizeof(*idx_data)*bctx->idxs.idx_count,
-                   RADDBG_DataSectionTag_IndexRuns);
+                   RADDBGI_DataSectionTag_IndexRuns);
   }
   
   // layout
   // * the header and data section table have to be initialized "out of order"
   // * so that the rest of the system can avoid this tricky order-layout interdependence stuff
-  RADDBG_Header *header = push_array(arena, RADDBG_Header, 1);
-  RADDBG_DataSection *dstable = push_array(arena, RADDBG_DataSection, dss.count);
+  RADDBGI_Header *header = push_array(arena, RADDBGI_Header, 1);
+  RADDBGI_DataSection *dstable = push_array(arena, RADDBGI_DataSection, dss.count);
   str8_serial_push_align(arena, out, 8);
   U64 header_off = out->total_size;
   str8_list_push(arena, out, str8_struct(header));
@@ -3424,8 +3424,8 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
   U64 data_section_off = out->total_size;
   str8_list_push(arena, out, str8((U8 *)dstable, sizeof(*dstable)*dss.count));
   {
-    header->magic = RADDBG_MAGIC_CONSTANT;
-    header->encoding_version = RADDBG_ENCODING_VERSION;
+    header->magic = RADDBGI_MAGIC_CONSTANT;
+    header->encoding_version = RADDBGI_ENCODING_VERSION;
     header->data_section_off = data_section_off;
     header->data_section_count = dss.count;
   }
@@ -3438,7 +3438,7 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
     }
     Assert(test_dss_count == dss.count);
     
-    RADDBG_DataSection *ptr = dstable;
+    RADDBGI_DataSection *ptr = dstable;
     for(CONS__DSectionNode *node = dss.first;
         node != 0;
         node = node->next, ptr += 1){
@@ -3450,7 +3450,7 @@ cons_bake_file(Arena *arena, CONS_Root *root, String8List *out)
         str8_list_push(arena, out, str8((U8 *)node->data, node->size));
       }
       ptr->tag = node->tag;
-      ptr->encoding = RADDBG_DataSectionEncoding_Unpacked;
+      ptr->encoding = RADDBGI_DataSectionEncoding_Unpacked;
       ptr->off = data_section_offset;
       ptr->encoded_size = node->size;
       ptr->unpacked_size = node->size;

@@ -98,7 +98,7 @@ struct CONS_BinarySection
 {
   CONS_BinarySection *next;
   String8 name;
-  RADDBG_BinarySectionFlags flags;
+  RADDBGI_BinarySectionFlags flags;
   U64 voff_first;
   U64 voff_opl;
   U64 foff_first;
@@ -134,7 +134,7 @@ struct CONS_UnitInfo
   String8 object_file;
   String8 archive_file;
   String8 build_path;
-  RADDBG_Language language;
+  RADDBGI_Language language;
 };
 
 typedef struct CONS_Unit CONS_Unit;
@@ -149,7 +149,7 @@ struct CONS_Unit
   String8 object_file;
   String8 archive_file;
   String8 build_path;
-  RADDBG_Language language;
+  RADDBGI_Language language;
   CONS_LineSequenceNode *line_seq_first;
   CONS_LineSequenceNode *line_seq_last;
   U64 line_seq_count;
@@ -185,7 +185,7 @@ typedef struct CONS_TypeMember CONS_TypeMember;
 struct CONS_TypeMember
 {
   CONS_TypeMember *next;
-  RADDBG_MemberKind kind;
+  RADDBGI_MemberKind kind;
   String8 name;
   struct CONS_Type *type;
   U32 off;
@@ -203,7 +203,7 @@ typedef struct CONS_Type CONS_Type;
 struct CONS_Type
 {
   CONS_Type *next_order;
-  RADDBG_TypeKind kind;
+  RADDBGI_TypeKind kind;
   U32 idx;
   U32 byte_size;
   U32 flags;
@@ -298,7 +298,7 @@ struct CONS_Symbol
 typedef struct CONS_LocalInfo CONS_LocalInfo;
 struct CONS_LocalInfo
 {
-  RADDBG_LocalKind kind;
+  RADDBGI_LocalKind kind;
   struct CONS_Scope *scope;
   String8 name;
   CONS_Type *type;
@@ -308,7 +308,7 @@ typedef struct CONS_Local CONS_Local;
 struct CONS_Local
 {
   CONS_Local *next;
-  RADDBG_LocalKind kind;
+  RADDBGI_LocalKind kind;
   String8 name;
   CONS_Type *type;
   struct CONS_LocationSet *locset;
@@ -348,7 +348,7 @@ typedef struct CONS_EvalBytecodeOp CONS_EvalBytecodeOp;
 struct CONS_EvalBytecodeOp
 {
   CONS_EvalBytecodeOp *next;
-  RADDBG_EvalOp op;
+  RADDBGI_EvalOp op;
   U32 p_size;
   U64 p;
 };
@@ -365,7 +365,7 @@ struct CONS_EvalBytecode
 typedef struct CONS_Location CONS_Location;
 struct CONS_Location
 {
-  RADDBG_LocationKind kind;
+  RADDBGI_LocationKind kind;
   U8 register_code;
   U16 offset;
   CONS_EvalBytecode bytecode;
@@ -426,7 +426,7 @@ struct CONS__NameMap
 typedef struct CONS_TopLevelInfo CONS_TopLevelInfo;
 struct CONS_TopLevelInfo
 {
-  RADDBG_Arch architecture;
+  RADDBGI_Arch architecture;
   String8 exe_name;
   U64 exe_hash;
   U64 voff_max;
@@ -513,7 +513,7 @@ struct CONS_Root
   U64 location_count;
   
   // name maps
-  CONS__NameMap *name_maps[RADDBG_NameMapKind_COUNT];
+  CONS__NameMap *name_maps[RADDBGI_NameMapKind_COUNT];
   
   //////// Handle Relationship Maps
   
@@ -536,7 +536,7 @@ struct CONS__DSectionNode
   CONS__DSectionNode *next;
   void *data;
   U64 size;
-  RADDBG_DataSectionTag tag;
+  RADDBGI_DataSectionTag tag;
 };
 
 typedef struct CONS__DSections CONS__DSections;
@@ -664,7 +664,7 @@ typedef struct CONS__UnitLinesCombined CONS__UnitLinesCombined;
 struct CONS__UnitLinesCombined
 {
   U64 *voffs;
-  RADDBG_Line *lines;
+  RADDBGI_Line *lines;
   U16 *cols;
   U32 line_count;
 };
@@ -702,7 +702,7 @@ struct CONS__SrcLineMapBucket
 typedef struct CONS__VMap CONS__VMap;
 struct CONS__VMap
 {
-  RADDBG_VMapEntry *vmap; // [count + 1]
+  RADDBGI_VMapEntry *vmap; // [count + 1]
   U32 count;
 };
 
@@ -725,16 +725,16 @@ struct CONS__VMapRangeTracker
 typedef struct CONS__TypeData CONS__TypeData;
 struct CONS__TypeData
 {
-  RADDBG_TypeNode *type_nodes;
+  RADDBGI_TypeNode *type_nodes;
   U32 type_node_count;
   
-  RADDBG_UDT *udts;
+  RADDBGI_UDT *udts;
   U32 udt_count;
   
-  RADDBG_Member *members;
+  RADDBGI_Member *members;
   U32 member_count;
   
-  RADDBG_EnumMember *enum_members;
+  RADDBGI_EnumMember *enum_members;
   U32 enum_member_count;
 };
 
@@ -743,18 +743,18 @@ struct CONS__TypeData
 typedef struct CONS__SymbolData CONS__SymbolData;
 struct CONS__SymbolData
 {
-  RADDBG_GlobalVariable *global_variables;
+  RADDBGI_GlobalVariable *global_variables;
   U32 global_variable_count;
   
   CONS__VMap *global_vmap;
   
-  RADDBG_ThreadVariable *thread_variables;
+  RADDBGI_ThreadVariable *thread_variables;
   U32 thread_variable_count;
   
-  RADDBG_Procedure *procedures;
+  RADDBGI_Procedure *procedures;
   U32 procedure_count;
   
-  RADDBG_Scope *scopes;
+  RADDBGI_Scope *scopes;
   U32 scope_count;
   
   U64 *scope_voffs;
@@ -762,10 +762,10 @@ struct CONS__SymbolData
   
   CONS__VMap *scope_vmap;
   
-  RADDBG_Local *locals;
+  RADDBGI_Local *locals;
   U32 local_count;
   
-  RADDBG_LocationBlock *location_blocks;
+  RADDBGI_LocationBlock *location_blocks;
   U32 location_block_count;
   
   void *location_data;
@@ -792,8 +792,8 @@ struct CONS__NameMapSemiBucket
 typedef struct CONS__NameMapBaked CONS__NameMapBaked;
 struct CONS__NameMapBaked
 {
-  RADDBG_NameMapBucket *buckets;
-  RADDBG_NameMapNode *nodes;
+  RADDBGI_NameMapBucket *buckets;
+  RADDBGI_NameMapNode *nodes;
   U32 bucket_count;
   U32 node_count;
 };
@@ -823,7 +823,7 @@ struct CONS__BakeCtx
 static void cons_type_list_push(Arena *arena, CONS_TypeList *list, CONS_Type *type);
 
 //- rjf: bytecode lists
-static void cons_bytecode_push_op(Arena *arena, CONS_EvalBytecode *bytecode, RADDBG_EvalOp op, U64 p);
+static void cons_bytecode_push_op(Arena *arena, CONS_EvalBytecode *bytecode, RADDBGI_EvalOp op, U64 p);
 static void cons_bytecode_push_uconst(Arena *arena, CONS_EvalBytecode *bytecode, U64 x);
 static void cons_bytecode_push_sconst(Arena *arena, CONS_EvalBytecode *bytecode, S64 x);
 static void cons_bytecode_concat_in_place(CONS_EvalBytecode *left_dst, CONS_EvalBytecode *right_destroyed);
@@ -861,7 +861,7 @@ static void cons_set_top_level_info(CONS_Root *root, CONS_TopLevelInfo *tli);
 
 //- rjf: binary section building
 static void cons_add_binary_section(CONS_Root *root,
-                                    String8 name, RADDBG_BinarySectionFlags flags,
+                                    String8 name, RADDBGI_BinarySectionFlags flags,
                                     U64 voff_first, U64 voff_opl, U64 foff_first,
                                     U64 foff_opl);
 
@@ -889,19 +889,19 @@ static CONS_TypeUDT* cons__type_udt_from_any_type(CONS_Root *root, CONS_Type *ty
 static CONS_TypeUDT* cons__type_udt_from_record_type(CONS_Root *root, CONS_Type *type);
 
 //- rjf: basic/operator type construction helpers
-static CONS_Type* cons_type_basic(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name);
-static CONS_Type* cons_type_modifier(CONS_Root *root, CONS_Type *direct_type, RADDBG_TypeModifierFlags flags);
+static CONS_Type* cons_type_basic(CONS_Root *root, RADDBGI_TypeKind type_kind, String8 name);
+static CONS_Type* cons_type_modifier(CONS_Root *root, CONS_Type *direct_type, RADDBGI_TypeModifierFlags flags);
 static CONS_Type* cons_type_bitfield(CONS_Root *root, CONS_Type *direct_type, U32 bit_off, U32 bit_count);
-static CONS_Type* cons_type_pointer(CONS_Root *root, CONS_Type *direct_type, RADDBG_TypeKind ptr_type_kind);
+static CONS_Type* cons_type_pointer(CONS_Root *root, CONS_Type *direct_type, RADDBGI_TypeKind ptr_type_kind);
 static CONS_Type* cons_type_array(CONS_Root *root, CONS_Type *direct_type, U64 count);
 static CONS_Type* cons_type_proc(CONS_Root *root, CONS_Type *return_type, struct CONS_TypeList *params);
 static CONS_Type* cons_type_method(CONS_Root *root, CONS_Type *this_type, CONS_Type *return_type, struct CONS_TypeList *params);
 
 //- rjf: udt type constructors
-static CONS_Type* cons_type_udt(CONS_Root *root, RADDBG_TypeKind record_type_kind, String8 name, U64 size);
+static CONS_Type* cons_type_udt(CONS_Root *root, RADDBGI_TypeKind record_type_kind, String8 name, U64 size);
 static CONS_Type* cons_type_enum(CONS_Root *root, CONS_Type *direct_type, String8 name);
 static CONS_Type* cons_type_alias(CONS_Root *root, CONS_Type *direct_type, String8 name);
-static CONS_Type* cons_type_incomplete(CONS_Root *root, RADDBG_TypeKind type_kind, String8 name);
+static CONS_Type* cons_type_incomplete(CONS_Root *root, RADDBGI_TypeKind type_kind, String8 name);
 
 //- rjf: type member building
 static void cons_type_add_member_data_field(CONS_Root *root, CONS_Type *record_type, String8 name, CONS_Type *mem_type, U32 off);
@@ -941,7 +941,7 @@ static CONS_Location* cons_location_addr_addr_reg_plus_u16(CONS_Root *root, U8 r
 static CONS_Location* cons_location_val_reg(CONS_Root *root, U8 reg_code);
 
 //- rjf: name map building
-static CONS__NameMap* cons__name_map_for_kind(CONS_Root *root, RADDBG_NameMapKind kind);
+static CONS__NameMap* cons__name_map_for_kind(CONS_Root *root, RADDBGI_NameMapKind kind);
 static void           cons__name_map_add_pair(CONS_Root *root, CONS__NameMap *map, String8 name, U32 idx);
 
 ////////////////////////////////
@@ -959,7 +959,7 @@ static U64 cons__idx_run_hash(U32 *idx_run, U32 count);
 static U32 cons__idx_run(CONS__BakeCtx *bctx, U32 *idx_run, U32 count);
 
 //- rjf: data section baking
-static U32 cons__dsection(Arena *arena, CONS__DSections *dss, void *data, U64 size, RADDBG_DataSectionTag tag);
+static U32 cons__dsection(Arena *arena, CONS__DSections *dss, void *data, U64 size, RADDBGI_DataSectionTag tag);
 
 //- rjf: paths baking
 static String8 cons__normal_string_from_path_node(Arena *arena, CONS__PathNode *node);

@@ -55,7 +55,7 @@ main(int argc, char **argv){
   String8List args = os_string_list_from_argcv(arena, argc, argv);
   CmdLine cmdline = cmd_line_from_string_list(arena, args);
   
-  ProfBeginCapture("raddbg_from_pdb");
+  ProfBeginCapture("raddbgi_from_pdb");
   
   //- rjf: parse arguments
   PDBCONV_Params *params = pdb_convert_params_from_cmd_line(arena, &cmdline);

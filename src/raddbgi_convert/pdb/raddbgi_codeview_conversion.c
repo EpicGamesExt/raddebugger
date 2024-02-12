@@ -4,12 +4,12 @@
 ////////////////////////////////
 //~ CodeView Conversion Functions
 
-static RADDBG_Arch
-raddbg_arch_from_cv_arch(CV_Arch cv_arch){
-  RADDBG_Arch result = 0;
+static RADDBGI_Arch
+raddbgi_arch_from_cv_arch(CV_Arch cv_arch){
+  RADDBGI_Arch result = 0;
   switch (cv_arch){
-    case CV_Arch_8086: result = RADDBG_Arch_X86; break;
-    case CV_Arch_X64:  result = RADDBG_Arch_X64; break;
+    case CV_Arch_8086: result = RADDBGI_Arch_X86; break;
+    case CV_Arch_X64:  result = RADDBGI_Arch_X64; break;
     
     //case CV_Arch_8080: break;
     //case CV_Arch_80286: break;
@@ -73,23 +73,23 @@ raddbg_arch_from_cv_arch(CV_Arch cv_arch){
   return(result);
 }
 
-static RADDBG_RegisterCode
-raddbg_reg_code_from_cv_reg_code(RADDBG_Arch arch, CV_Reg reg_code){
-  RADDBG_RegisterCode result = 0;
+static RADDBGI_RegisterCode
+raddbgi_reg_code_from_cv_reg_code(RADDBGI_Arch arch, CV_Reg reg_code){
+  RADDBGI_RegisterCode result = 0;
   switch (arch){
-    case RADDBG_Arch_X86:
+    case RADDBGI_Arch_X86:
     {
       switch (reg_code){
-#define X(CVN,C,RDN,BP,BZ) case C: result = RADDBG_RegisterCode_X86_##RDN; break;
+#define X(CVN,C,RDN,BP,BZ) case C: result = RADDBGI_RegisterCode_X86_##RDN; break;
         CV_Reg_X86_XList(X)
 #undef X
       }
     }break;
     
-    case RADDBG_Arch_X64:
+    case RADDBGI_Arch_X64:
     {
       switch (reg_code){
-#define X(CVN,C,RDN,BP,BZ) case C: result = RADDBG_RegisterCode_X64_##RDN; break;
+#define X(CVN,C,RDN,BP,BZ) case C: result = RADDBGI_RegisterCode_X64_##RDN; break;
         CV_Reg_X64_XList(X)
 #undef X
       }
@@ -98,12 +98,12 @@ raddbg_reg_code_from_cv_reg_code(RADDBG_Arch arch, CV_Reg reg_code){
   return(result);
 }
 
-static RADDBG_Language
-raddbg_language_from_cv_language(CV_Language cv_language){
-  RADDBG_Language result = 0;
+static RADDBGI_Language
+raddbgi_language_from_cv_language(CV_Language cv_language){
+  RADDBGI_Language result = 0;
   switch (cv_language){
-    case CV_Language_C:       result = RADDBG_Language_C; break;
-    case CV_Language_CXX:     result = RADDBG_Language_CPlusPlus; break;
+    case CV_Language_C:       result = RADDBGI_Language_C; break;
+    case CV_Language_CXX:     result = RADDBGI_Language_CPlusPlus; break;
     //case CV_Language_FORTRAN: result = ; break;
     //case CV_Language_MASM:    result = ; break;
     //case CV_Language_PASCAL:  result = ; break;

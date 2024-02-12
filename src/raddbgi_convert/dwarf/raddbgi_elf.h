@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_ELF_H
-#define RADDBG_ELF_H
+#ifndef RADDBGI_ELF_H
+#define RADDBGI_ELF_H
 
 // https://refspecs.linuxfoundation.org/elf/elf.pdf
 
@@ -514,4 +514,4 @@ static String8 elf_string_from_symbol_binding(ELF_SymbolBinding binding);
 static String8 elf_string_from_symbol_type(ELF_SymbolType type);
 static String8 elf_string_from_symbol_visibility(ELF_SymbolVisibility visibility);
 
-#endif //RADDBG_ELF_H
+#endif //RADDBGI_ELF_H

@@ -1,60 +1,60 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_FORMAT_H
-#define RADDBG_FORMAT_H
+#ifndef RADDBGI_FORMAT_H
+#define RADDBGI_FORMAT_H
 
 ////////////////////////////////////////////////////////////////
 // Overridable procedure decoration
 
-#if !defined(RADDBG_PROC)
-# define RADDBG_PROC static
+#if !defined(RADDBGI_PROC)
+# define RADDBGI_PROC static
 #endif
 
 ////////////////////////////////////////////////////////////////
 // Overridable integer types
 
-#if !defined(RADDBG_U8)
-# define RADDBG_U8 RADDBG_U8
-# define RADDBG_U16 RADDBG_U16
-# define RADDBG_U32 RADDBG_U32
-# define RADDBG_U64 RADDBG_U64
-# define RADDBG_S8 RADDBG_S8
-# define RADDBG_S16 RADDBG_S16
-# define RADDBG_S32 RADDBG_S32
-# define RADDBG_S64 RADDBG_S64
+#if !defined(RADDBGI_U8)
+# define RADDBGI_U8 RADDBGI_U8
+# define RADDBGI_U16 RADDBGI_U16
+# define RADDBGI_U32 RADDBGI_U32
+# define RADDBGI_U64 RADDBGI_U64
+# define RADDBGI_S8 RADDBGI_S8
+# define RADDBGI_S16 RADDBGI_S16
+# define RADDBGI_S32 RADDBGI_S32
+# define RADDBGI_S64 RADDBGI_S64
 
 #include <stdint.h>
-typedef uint8_t  RADDBG_U8;
-typedef uint16_t RADDBG_U16;
-typedef uint32_t RADDBG_U32;
-typedef uint64_t RADDBG_U64;
-typedef int8_t   RADDBG_S8;
-typedef int16_t  RADDBG_S16;
-typedef int32_t  RADDBG_S32;
-typedef int64_t  RADDBG_S64;
+typedef uint8_t  RADDBGI_U8;
+typedef uint16_t RADDBGI_U16;
+typedef uint32_t RADDBGI_U32;
+typedef uint64_t RADDBGI_U64;
+typedef int8_t   RADDBGI_S8;
+typedef int16_t  RADDBGI_S16;
+typedef int32_t  RADDBGI_S32;
+typedef int64_t  RADDBGI_S64;
 #endif
 
 ////////////////////////////////////////////////////////////////
 // Architecture Constants
 
-#define RADDBG_ArchXList(X)\
+#define RADDBGI_ArchXList(X)\
 X(NULL, 0, 0)\
 X(X86,  1, 4)\
 X(X64,  2, 8)
 
-typedef RADDBG_U32 RADDBG_Arch;
-typedef enum RADDBG_ArchEnum{
-#define X(N,C,Z) RADDBG_Arch_##N = C,
-  RADDBG_ArchXList(X)
+typedef RADDBGI_U32 RADDBGI_Arch;
+typedef enum RADDBGI_ArchEnum{
+#define X(N,C,Z) RADDBGI_Arch_##N = C,
+  RADDBGI_ArchXList(X)
 #undef X
-} RADDBG_ArchEnum;
+} RADDBGI_ArchEnum;
 
 
-typedef RADDBG_U8 RADDBG_RegisterCode;
+typedef RADDBGI_U8 RADDBGI_RegisterCode;
 
 // x86 registers
-#define RADDBG_RegisterCode_X86_XList(X) \
+#define RADDBGI_RegisterCode_X86_XList(X) \
 X(nil,             0) \
 X(eax,             1) \
 X(ecx,             2) \
@@ -118,14 +118,14 @@ X(ymm6,           59) \
 X(ymm7,           60) \
 X(COUNT,          61)
 
-typedef enum RADDBG_RegisterCode_X86_Enum{
-#define X(N,C) RADDBG_RegisterCode_X86_##N = C,
-  RADDBG_RegisterCode_X86_XList(X)
+typedef enum RADDBGI_RegisterCode_X86_Enum{
+#define X(N,C) RADDBGI_RegisterCode_X86_##N = C,
+  RADDBGI_RegisterCode_X86_XList(X)
 #undef X
-} RADDBG_RegisterCode_X86_Enum;
+} RADDBGI_RegisterCode_X86_Enum;
 
 // x64 registers
-#define RADDBG_RegisterCode_X64_XList(X) \
+#define RADDBGI_RegisterCode_X64_XList(X) \
 X(nil,             0) \
 X(rax,             1) \
 X(rcx,             2) \
@@ -205,48 +205,48 @@ X(fdp,             75) \
 X(mxcsr_mask,      76) \
 X(COUNT,           77)
 
-typedef enum RADDBG_RegisterCode_X64_Enum{
-#define X(N,C) RADDBG_RegisterCode_X64_##N = C,
-  RADDBG_RegisterCode_X64_XList(X)
+typedef enum RADDBGI_RegisterCode_X64_Enum{
+#define X(N,C) RADDBGI_RegisterCode_X64_##N = C,
+  RADDBGI_RegisterCode_X64_XList(X)
 #undef X
-} RADDBG_RegisterCode_X64_Enum;
+} RADDBGI_RegisterCode_X64_Enum;
 
 
 ////////////////////////////////////////////////////////////////
 // Format types
 
 // "raddbg\0\0"
-#define RADDBG_MAGIC_CONSTANT   0x0000676264646172
-#define RADDBG_ENCODING_VERSION 1
+#define RADDBGI_MAGIC_CONSTANT   0x0000676264646172
+#define RADDBGI_ENCODING_VERSION 1
 
-#define RADDBG_LanguageXList(X) \
+#define RADDBGI_LanguageXList(X) \
 X(NULL,      0) \
 X(C,         1) \
 X(CPlusPlus, 2)
 
-typedef RADDBG_U32 RADDBG_Language;
-typedef enum RADDBG_LanguageEnum{
-#define X(N,C) RADDBG_Language_##N = C,
-  RADDBG_LanguageXList(X)
+typedef RADDBGI_U32 RADDBGI_Language;
+typedef enum RADDBGI_LanguageEnum{
+#define X(N,C) RADDBGI_Language_##N = C,
+  RADDBGI_LanguageXList(X)
 #undef X
-} RADDBG_LanguageEnum;
+} RADDBGI_LanguageEnum;
 
-typedef struct RADDBG_Header{
+typedef struct RADDBGI_Header{
   // identification
-  RADDBG_U64 magic;
-  RADDBG_U32 encoding_version;
+  RADDBGI_U64 magic;
+  RADDBGI_U32 encoding_version;
   
   // data sections
-  RADDBG_U32 data_section_off;
-  RADDBG_U32 data_section_count;
-} RADDBG_Header;
+  RADDBGI_U32 data_section_off;
+  RADDBGI_U32 data_section_count;
+} RADDBGI_Header;
 
 
 //- data sections
 
-#define RADDBG_DataSectionTag_SECONDARY 0x80000000
+#define RADDBGI_DataSectionTag_SECONDARY 0x80000000
 
-#define RADDBG_DataSectionTagXList(X,Y) \
+#define RADDBGI_DataSectionTagXList(X,Y) \
 X(NULL,                0x0000)\
 X(TopLevelInfo,        0x0001)\
 X(StringData,          0x0002)\
@@ -273,131 +273,131 @@ X(LocationBlocks,      0x0016)\
 X(LocationData,        0x0017)\
 X(NameMaps,            0x0018)\
 Y(PRIMARY_COUNT)\
-X(SKIP,                RADDBG_DataSectionTag_SECONDARY|0x0000)\
-X(LineInfoVoffs,       RADDBG_DataSectionTag_SECONDARY|0x0001)\
-X(LineInfoData,        RADDBG_DataSectionTag_SECONDARY|0x0002)\
-X(LineInfoColumns,     RADDBG_DataSectionTag_SECONDARY|0x0003)\
-X(LineMapNumbers,      RADDBG_DataSectionTag_SECONDARY|0x0004)\
-X(LineMapRanges,       RADDBG_DataSectionTag_SECONDARY|0x0005)\
-X(LineMapVoffs,        RADDBG_DataSectionTag_SECONDARY|0x0006)\
-X(NameMapBuckets,      RADDBG_DataSectionTag_SECONDARY|0x0007)\
-X(NameMapNodes,        RADDBG_DataSectionTag_SECONDARY|0x0008)
+X(SKIP,                RADDBGI_DataSectionTag_SECONDARY|0x0000)\
+X(LineInfoVoffs,       RADDBGI_DataSectionTag_SECONDARY|0x0001)\
+X(LineInfoData,        RADDBGI_DataSectionTag_SECONDARY|0x0002)\
+X(LineInfoColumns,     RADDBGI_DataSectionTag_SECONDARY|0x0003)\
+X(LineMapNumbers,      RADDBGI_DataSectionTag_SECONDARY|0x0004)\
+X(LineMapRanges,       RADDBGI_DataSectionTag_SECONDARY|0x0005)\
+X(LineMapVoffs,        RADDBGI_DataSectionTag_SECONDARY|0x0006)\
+X(NameMapBuckets,      RADDBGI_DataSectionTag_SECONDARY|0x0007)\
+X(NameMapNodes,        RADDBGI_DataSectionTag_SECONDARY|0x0008)
 
-typedef RADDBG_U32 RADDBG_DataSectionTag;
-typedef enum RADDBG_DataSectionTagEnum{
-#define X(N,C) RADDBG_DataSectionTag_##N = C,
-#define Y(N)   RADDBG_DataSectionTag_##N,
-  RADDBG_DataSectionTagXList(X,Y)
+typedef RADDBGI_U32 RADDBGI_DataSectionTag;
+typedef enum RADDBGI_DataSectionTagEnum{
+#define X(N,C) RADDBGI_DataSectionTag_##N = C,
+#define Y(N)   RADDBGI_DataSectionTag_##N,
+  RADDBGI_DataSectionTagXList(X,Y)
 #undef X
 #undef Y
-} RADDBG_DataSectionTagEnum;
+} RADDBGI_DataSectionTagEnum;
 
 
-#define RADDBG_DataSectionEncodingXList(X) \
+#define RADDBGI_DataSectionEncodingXList(X) \
 X(Unpacked, 0)
 
-typedef RADDBG_U32 RADDBG_DataSectionEncoding;
-typedef enum RADDBG_DataSectionEncodingEnum{
-#define X(N,C) RADDBG_DataSectionEncoding_##N = C,
-  RADDBG_DataSectionEncodingXList(X)
+typedef RADDBGI_U32 RADDBGI_DataSectionEncoding;
+typedef enum RADDBGI_DataSectionEncodingEnum{
+#define X(N,C) RADDBGI_DataSectionEncoding_##N = C,
+  RADDBGI_DataSectionEncodingXList(X)
 #undef X
-} RADDBG_DataSectionEncodingEnum;
+} RADDBGI_DataSectionEncodingEnum;
 
-typedef struct RADDBG_DataSection{
-  RADDBG_DataSectionTag tag;
-  RADDBG_DataSectionEncoding encoding;
-  RADDBG_U64 off;
-  RADDBG_U64 encoded_size;
-  RADDBG_U64 unpacked_size;
-} RADDBG_DataSection;
+typedef struct RADDBGI_DataSection{
+  RADDBGI_DataSectionTag tag;
+  RADDBGI_DataSectionEncoding encoding;
+  RADDBGI_U64 off;
+  RADDBGI_U64 encoded_size;
+  RADDBGI_U64 unpacked_size;
+} RADDBGI_DataSection;
 
 
 //- common types
-typedef struct RADDBG_VMapEntry{
-  RADDBG_U64 voff;
-  RADDBG_U64 idx;
-} RADDBG_VMapEntry;
+typedef struct RADDBGI_VMapEntry{
+  RADDBGI_U64 voff;
+  RADDBGI_U64 idx;
+} RADDBGI_VMapEntry;
 
 //- top level info
-typedef struct RADDBG_TopLevelInfo{
-  RADDBG_Arch architecture;
-  RADDBG_U32 exe_name_string_idx;
-  RADDBG_U64 exe_hash;
-  RADDBG_U64 voff_max;
-} RADDBG_TopLevelInfo;
+typedef struct RADDBGI_TopLevelInfo{
+  RADDBGI_Arch architecture;
+  RADDBGI_U32 exe_name_string_idx;
+  RADDBGI_U64 exe_hash;
+  RADDBGI_U64 voff_max;
+} RADDBGI_TopLevelInfo;
 
 //- binary sections
-typedef RADDBG_U32 RADDBG_BinarySectionFlags;
-typedef enum RADDBG_BinarySectionFlagsEnum{
-  RADDBG_BinarySectionFlag_Read    = (1 << 0),
-  RADDBG_BinarySectionFlag_Write   = (1 << 1),
-  RADDBG_BinarySectionFlag_Execute = (1 << 2)
-} RADDBG_BinarySectionFlagsEnum;
+typedef RADDBGI_U32 RADDBGI_BinarySectionFlags;
+typedef enum RADDBGI_BinarySectionFlagsEnum{
+  RADDBGI_BinarySectionFlag_Read    = (1 << 0),
+  RADDBGI_BinarySectionFlag_Write   = (1 << 1),
+  RADDBGI_BinarySectionFlag_Execute = (1 << 2)
+} RADDBGI_BinarySectionFlagsEnum;
 
-typedef struct RADDBG_BinarySection{
-  RADDBG_U32 name_string_idx;
-  RADDBG_BinarySectionFlags flags;
-  RADDBG_U64 voff_first;
-  RADDBG_U64 voff_opl;
-  RADDBG_U64 foff_first;
-  RADDBG_U64 foff_opl;
-} RADDBG_BinarySection;
+typedef struct RADDBGI_BinarySection{
+  RADDBGI_U32 name_string_idx;
+  RADDBGI_BinarySectionFlags flags;
+  RADDBGI_U64 voff_first;
+  RADDBGI_U64 voff_opl;
+  RADDBGI_U64 foff_first;
+  RADDBGI_U64 foff_opl;
+} RADDBGI_BinarySection;
 
 //- file & file system info
-typedef struct RADDBG_FilePathNode{
-  RADDBG_U32 name_string_idx;
-  RADDBG_U32 parent_path_node;
-  RADDBG_U32 first_child;
-  RADDBG_U32 next_sibling;
-  RADDBG_U32 source_file_idx;
-} RADDBG_FilePathNode;
+typedef struct RADDBGI_FilePathNode{
+  RADDBGI_U32 name_string_idx;
+  RADDBGI_U32 parent_path_node;
+  RADDBGI_U32 first_child;
+  RADDBGI_U32 next_sibling;
+  RADDBGI_U32 source_file_idx;
+} RADDBGI_FilePathNode;
 
-typedef struct RADDBG_SourceFile{
-  RADDBG_U32 file_path_node_idx;
+typedef struct RADDBGI_SourceFile{
+  RADDBGI_U32 file_path_node_idx;
   
-  RADDBG_U32 normal_full_path_string_idx;
+  RADDBGI_U32 normal_full_path_string_idx;
   
   // usage of line map to go from a line number to an array of voffs
   //  (line_map_nums * line_number) -> (nil | index)
   //  (line_map_data * index) -> (range)
   //  (line_map_voff_data * range) -> (array(voff))
   
-  RADDBG_U32 line_map_count;
-  RADDBG_U32 line_map_nums_data_idx;  // U32[line_map_count] (sorted - not closed ranges)
-  RADDBG_U32 line_map_range_data_idx; // U32[line_map_count + 1] (pairs form ranges)
-  RADDBG_U32 line_map_voff_data_idx;  // U64[...] (idx by line_map_range_data)
-} RADDBG_SourceFile;
+  RADDBGI_U32 line_map_count;
+  RADDBGI_U32 line_map_nums_data_idx;  // U32[line_map_count] (sorted - not closed ranges)
+  RADDBGI_U32 line_map_range_data_idx; // U32[line_map_count + 1] (pairs form ranges)
+  RADDBGI_U32 line_map_voff_data_idx;  // U64[...] (idx by line_map_range_data)
+} RADDBGI_SourceFile;
 
 
 //- units & line info
-typedef struct RADDBG_Unit{
-  RADDBG_U32 unit_name_string_idx;
-  RADDBG_U32 compiler_name_string_idx;
-  RADDBG_U32 source_file_path_node;
-  RADDBG_U32 object_file_path_node;
-  RADDBG_U32 archive_file_path_node;
-  RADDBG_U32 build_path_node;
-  RADDBG_Language language;
+typedef struct RADDBGI_Unit{
+  RADDBGI_U32 unit_name_string_idx;
+  RADDBGI_U32 compiler_name_string_idx;
+  RADDBGI_U32 source_file_path_node;
+  RADDBGI_U32 object_file_path_node;
+  RADDBGI_U32 archive_file_path_node;
+  RADDBGI_U32 build_path_node;
+  RADDBGI_Language language;
   
   // usage of line info to go from voff to file & line number:
   //  (line_info_voffs * voff) -> (nil + index)
-  //  (line_info_data * index) -> (RADDBG_Line = (file_idx * line_number))
+  //  (line_info_data * index) -> (RADDBGI_Line = (file_idx * line_number))
   
-  RADDBG_U32 line_info_voffs_data_idx; // U64[line_info_count + 1] (sorted ranges)
-  RADDBG_U32 line_info_data_idx;       // RADDBG_Line[line_info_count]
-  RADDBG_U32 line_info_col_data_idx;   // RADDBG_Col[line_info_count]
-  RADDBG_U32 line_info_count;
-} RADDBG_Unit;
+  RADDBGI_U32 line_info_voffs_data_idx; // U64[line_info_count + 1] (sorted ranges)
+  RADDBGI_U32 line_info_data_idx;       // RADDBGI_Line[line_info_count]
+  RADDBGI_U32 line_info_col_data_idx;   // RADDBGI_Col[line_info_count]
+  RADDBGI_U32 line_info_count;
+} RADDBGI_Unit;
 
-typedef struct RADDBG_Line{
-  RADDBG_U32 file_idx;
-  RADDBG_U32 line_num;
-} RADDBG_Line;
+typedef struct RADDBGI_Line{
+  RADDBGI_U32 file_idx;
+  RADDBGI_U32 line_num;
+} RADDBGI_Line;
 
-typedef struct RADDBG_Column{
-  RADDBG_U16 col_first;
-  RADDBG_U16 col_opl;
-} RADDBG_Column;
+typedef struct RADDBGI_Column{
+  RADDBGI_U16 col_first;
+  RADDBGI_U16 col_opl;
+} RADDBGI_Column;
 
 
 //- type info
@@ -405,7 +405,7 @@ typedef struct RADDBG_Column{
 // X(name,code) - defines a primary code
 // XZ(name,code size) - defines a primary code & associates a size
 // Y(alias_name,name) - defines an alias for bookends
-#define RADDBG_TypeKindXList(X,XZ,Y)\
+#define RADDBGI_TypeKindXList(X,XZ,Y)\
 X(NULL,          0x0000) \
 \
 XZ(Void,         0x0001,  0) Y(FirstBuiltIn, Void) \
@@ -466,23 +466,23 @@ Y(LastUserDefined, IncompleteEnum) \
 X(Bitfield,     0xF000) \
 X(Variadic,     0xF001)
 
-typedef RADDBG_U16 RADDBG_TypeKind;
-typedef enum RADDBG_TypeKindEnum{
+typedef RADDBGI_U16 RADDBGI_TypeKind;
+typedef enum RADDBGI_TypeKindEnum{
   
-#define X(name,code) RADDBG_TypeKind_##name = code,
+#define X(name,code) RADDBGI_TypeKind_##name = code,
 #define XZ(name,code,size) X(name,code)
-#define Y(alias_name,name) RADDBG_TypeKind_##alias_name = RADDBG_TypeKind_##name,
-  RADDBG_TypeKindXList(X,XZ,Y)
+#define Y(alias_name,name) RADDBGI_TypeKind_##alias_name = RADDBGI_TypeKind_##name,
+  RADDBGI_TypeKindXList(X,XZ,Y)
 #undef X
 #undef XZ
 #undef Y
   
-} RADDBG_TypeKindEnum;
+} RADDBGI_TypeKindEnum;
 
-typedef RADDBG_U16 RADDBG_TypeModifierFlags;
+typedef RADDBGI_U16 RADDBGI_TypeModifierFlags;
 enum{
-  RADDBG_TypeModifierFlag_Const    = (1 << 0),
-  RADDBG_TypeModifierFlag_Volatile = (1 << 1),
+  RADDBGI_TypeModifierFlag_Const    = (1 << 0),
+  RADDBGI_TypeModifierFlag_Volatile = (1 << 1),
 };
 
 // IMPORTANT NOTE: All type nodes in a valid raddbg are *topologically sorted*.
@@ -493,65 +493,65 @@ enum{
 //  This restriction does not apply to the members of a type that are
 // attached through a "UDT" though.
 
-typedef struct RADDBG_TypeNode{
-  RADDBG_TypeKind kind;
-  // when kind is 'Modifier' -> RADDBG_TypeModifierFlags
-  RADDBG_U16 flags;
+typedef struct RADDBGI_TypeNode{
+  RADDBGI_TypeKind kind;
+  // when kind is 'Modifier' -> RADDBGI_TypeModifierFlags
+  RADDBGI_U16 flags;
   
-  RADDBG_U32 byte_size;
+  RADDBGI_U32 byte_size;
   
   union{
     // kind is 'built-in'
     struct{
-      RADDBG_U32 name_string_idx;
+      RADDBGI_U32 name_string_idx;
     } built_in;
     
     // kind is 'constructed'
     struct{
-      RADDBG_U32 direct_type_idx;
-      RADDBG_U32 count;
+      RADDBGI_U32 direct_type_idx;
+      RADDBGI_U32 count;
       union{
         // when kind is 'Function' or 'Method'
-        RADDBG_U32 param_idx_run_first;
+        RADDBGI_U32 param_idx_run_first;
         // when kind is 'MemberPtr'
-        RADDBG_U32 owner_type_idx;
+        RADDBGI_U32 owner_type_idx;
       };
     } constructed;
     
     // kind is 'user defined'
     struct{
-      RADDBG_U32 name_string_idx;
-      RADDBG_U32 direct_type_idx;
-      RADDBG_U32 udt_idx;
+      RADDBGI_U32 name_string_idx;
+      RADDBGI_U32 direct_type_idx;
+      RADDBGI_U32 udt_idx;
     } user_defined;
     
     // (kind = Bitfield)
     struct{
-      RADDBG_U32 off;
-      RADDBG_U32 size;
+      RADDBGI_U32 off;
+      RADDBGI_U32 size;
     } bitfield;
   };
-} RADDBG_TypeNode;
+} RADDBGI_TypeNode;
 
-typedef RADDBG_U32 RADDBG_UserDefinedTypeFlags;
+typedef RADDBGI_U32 RADDBGI_UserDefinedTypeFlags;
 enum{
-  RADDBG_UserDefinedTypeFlag_EnumMembers = (1 << 0),
+  RADDBGI_UserDefinedTypeFlag_EnumMembers = (1 << 0),
 };
 
-typedef struct RADDBG_UDT{
-  RADDBG_U32 self_type_idx;
-  RADDBG_UserDefinedTypeFlags flags;
+typedef struct RADDBGI_UDT{
+  RADDBGI_U32 self_type_idx;
+  RADDBGI_UserDefinedTypeFlags flags;
   
   // when EnumMembers flag is set, indexes into enum "enum_members" instead of "members"
-  RADDBG_U32 member_first;
-  RADDBG_U32 member_count;
+  RADDBGI_U32 member_first;
+  RADDBGI_U32 member_count;
   
-  RADDBG_U32 file_idx;
-  RADDBG_U32 line;
-  RADDBG_U32 col;
-} RADDBG_UDT;
+  RADDBGI_U32 file_idx;
+  RADDBGI_U32 line;
+  RADDBGI_U32 col;
+} RADDBGI_UDT;
 
-#define RADDBG_MemberKindXList(X) \
+#define RADDBGI_MemberKindXList(X) \
 X(NULL,          0x0000) \
 X(DataField,     0x0001) \
 X(StaticData,    0x0002) \
@@ -563,12 +563,12 @@ X(Base,          0x0201) \
 X(VirtualBase,   0x0202) \
 X(NestedType,    0x0300)
 
-typedef RADDBG_U16 RADDBG_MemberKind;
-typedef enum RADDBG_MemberKindEnum{
-#define X(N,C) RADDBG_MemberKind_##N = C,
-  RADDBG_MemberKindXList(X)
+typedef RADDBGI_U16 RADDBGI_MemberKind;
+typedef enum RADDBGI_MemberKindEnum{
+#define X(N,C) RADDBGI_MemberKind_##N = C,
+  RADDBGI_MemberKindXList(X)
 #undef X
-} RADDBG_MemberKindEnum;
+} RADDBGI_MemberKindEnum;
 
 // TODO(allen): need a way to equip methods and some virtual methods
 // with procedure symbol information. I'm thinking a seperate data
@@ -578,141 +578,141 @@ typedef enum RADDBG_MemberKindEnum{
 // like 'associate_method_to_proc' that can be used *after* both the
 // method and proc are known, rather than one that forces us to know
 // the association when constructing the member data.
-typedef struct RADDBG_Member{
-  RADDBG_MemberKind kind;
-  RADDBG_U16 __unused__;
+typedef struct RADDBGI_Member{
+  RADDBGI_MemberKind kind;
+  RADDBGI_U16 __unused__;
   
-  RADDBG_U32 name_string_idx;
-  RADDBG_U32 type_idx;
-  RADDBG_U32 off;
-} RADDBG_Member;
+  RADDBGI_U32 name_string_idx;
+  RADDBGI_U32 type_idx;
+  RADDBGI_U32 off;
+} RADDBGI_Member;
 
-typedef struct RADDBG_EnumMember{
-  RADDBG_U32 name_string_idx;
-  RADDBG_U32 __unused__;
-  RADDBG_U64 val;
-} RADDBG_EnumMember;
+typedef struct RADDBGI_EnumMember{
+  RADDBGI_U32 name_string_idx;
+  RADDBGI_U32 __unused__;
+  RADDBGI_U64 val;
+} RADDBGI_EnumMember;
 
 
 //- symbol info
-typedef RADDBG_U32 RADDBG_LinkFlags;
+typedef RADDBGI_U32 RADDBGI_LinkFlags;
 enum{
-  RADDBG_LinkFlag_External   = (1 << 0),
+  RADDBGI_LinkFlag_External   = (1 << 0),
   // NOTE: Scope flags are mutually exclusive.
   //       A symbol is either global scoped, type scoped, or procedure scoped.
-  RADDBG_LinkFlag_TypeScoped = (1 << 1),
-  RADDBG_LinkFlag_ProcScoped = (1 << 2),
+  RADDBGI_LinkFlag_TypeScoped = (1 << 1),
+  RADDBGI_LinkFlag_ProcScoped = (1 << 2),
 };
 
-typedef struct RADDBG_GlobalVariable{
-  RADDBG_U32 name_string_idx;
+typedef struct RADDBGI_GlobalVariable{
+  RADDBGI_U32 name_string_idx;
   // NOTE: "global variables" can be scoped in *any* way. The scope flags here refer to 
   //       *namespace* scoping. "global variables" are all in the data section of the
   //       final exe/dll type file, so they are "global" in the life-time sense of the
   //       word. In the namespace sense of the word, they can be scoped globally, by type,
   //       or by procedure.
-  RADDBG_LinkFlags link_flags;
-  RADDBG_U64 voff;
-  RADDBG_U32 type_idx;
+  RADDBGI_LinkFlags link_flags;
+  RADDBGI_U64 voff;
+  RADDBGI_U32 type_idx;
   
   // container_idx: UDT for "TypeScoped", Procedure for "ProcScoped"
-  RADDBG_U32 container_idx;
-} RADDBG_GlobalVariable;
+  RADDBGI_U32 container_idx;
+} RADDBGI_GlobalVariable;
 
-typedef struct RADDBG_ThreadVariable{
-  RADDBG_U32 name_string_idx;
+typedef struct RADDBGI_ThreadVariable{
+  RADDBGI_U32 name_string_idx;
   // NOTE: See the note in GlobalVariable regarding scoping. The same concept applies here.
-  RADDBG_LinkFlags link_flags;
-  RADDBG_U32 tls_off;
-  RADDBG_U32 type_idx;
+  RADDBGI_LinkFlags link_flags;
+  RADDBGI_U32 tls_off;
+  RADDBGI_U32 type_idx;
   
   // container_idx: UDT for "TypeScoped", Procedure for "ProcScoped"
-  RADDBG_U32 container_idx;
-} RADDBG_ThreadVariable;
+  RADDBGI_U32 container_idx;
+} RADDBGI_ThreadVariable;
 
-typedef struct RADDBG_Procedure{
-  RADDBG_U32 name_string_idx;
-  RADDBG_U32 link_name_string_idx;
+typedef struct RADDBGI_Procedure{
+  RADDBGI_U32 name_string_idx;
+  RADDBGI_U32 link_name_string_idx;
   // NOTE: See the note in GlobalVariable regarding scoping. The same concept applies here.
-  RADDBG_LinkFlags link_flags;
-  RADDBG_U32 type_idx;
-  RADDBG_U32 root_scope_idx;
+  RADDBGI_LinkFlags link_flags;
+  RADDBGI_U32 type_idx;
+  RADDBGI_U32 root_scope_idx;
   
   // container_idx: UDT for "TypeScoped", Procedure for "ProcScoped"
-  RADDBG_U32 container_idx;
-} RADDBG_Procedure;
+  RADDBGI_U32 container_idx;
+} RADDBGI_Procedure;
 
-typedef struct RADDBG_Scope{
-  RADDBG_U32 proc_idx;
-  RADDBG_U32 parent_scope_idx;
-  RADDBG_U32 first_child_scope_idx;
-  RADDBG_U32 next_sibling_scope_idx;
+typedef struct RADDBGI_Scope{
+  RADDBGI_U32 proc_idx;
+  RADDBGI_U32 parent_scope_idx;
+  RADDBGI_U32 first_child_scope_idx;
+  RADDBGI_U32 next_sibling_scope_idx;
   
-  RADDBG_U32 voff_range_first;
-  RADDBG_U32 voff_range_opl;
+  RADDBGI_U32 voff_range_first;
+  RADDBGI_U32 voff_range_opl;
   
   // indexes into "locals"
-  RADDBG_U32 local_first;
-  RADDBG_U32 local_count;
+  RADDBGI_U32 local_first;
+  RADDBGI_U32 local_count;
   
-  RADDBG_U32 static_local_idx_run_first;
-  RADDBG_U32 static_local_count;
+  RADDBGI_U32 static_local_idx_run_first;
+  RADDBGI_U32 static_local_count;
   
   // TODO(allen): attach less common scope-relevant info
-} RADDBG_Scope;
+} RADDBGI_Scope;
 
-typedef RADDBG_U32 RADDBG_LocalKind;
+typedef RADDBGI_U32 RADDBGI_LocalKind;
 typedef enum{
-  RADDBG_LocalKind_NULL,
-  RADDBG_LocalKind_Parameter,
-  RADDBG_LocalKind_Variable,
-  RADDBG_LocalKind_COUNT
-} RADDBG_LocalKindEnum;
+  RADDBGI_LocalKind_NULL,
+  RADDBGI_LocalKind_Parameter,
+  RADDBGI_LocalKind_Variable,
+  RADDBGI_LocalKind_COUNT
+} RADDBGI_LocalKindEnum;
 
-typedef struct RADDBG_Local{
-  RADDBG_LocalKind kind;
-  RADDBG_U32 name_string_idx;
-  RADDBG_U64 type_idx;
+typedef struct RADDBGI_Local{
+  RADDBGI_LocalKind kind;
+  RADDBGI_U32 name_string_idx;
+  RADDBGI_U64 type_idx;
   // indexes into "location_blocks"
-  RADDBG_U32 location_first;
-  RADDBG_U32 location_opl;
-} RADDBG_Local;
+  RADDBGI_U32 location_first;
+  RADDBGI_U32 location_opl;
+} RADDBGI_Local;
 
-typedef struct RADDBG_LocationBlock{
-  RADDBG_U32 scope_off_first;
-  RADDBG_U32 scope_off_opl;
-  RADDBG_U32 location_data_off;
-} RADDBG_LocationBlock;
+typedef struct RADDBGI_LocationBlock{
+  RADDBGI_U32 scope_off_first;
+  RADDBGI_U32 scope_off_opl;
+  RADDBGI_U32 location_data_off;
+} RADDBGI_LocationBlock;
 
-typedef RADDBG_U8 RADDBG_LocationKind;
+typedef RADDBGI_U8 RADDBGI_LocationKind;
 typedef enum{
-  RADDBG_LocationKind_NULL,
-  RADDBG_LocationKind_AddrBytecodeStream,
-  RADDBG_LocationKind_ValBytecodeStream,
-  RADDBG_LocationKind_AddrRegisterPlusU16,
-  RADDBG_LocationKind_AddrAddrRegisterPlusU16,
-  RADDBG_LocationKind_ValRegister,
-  RADDBG_LocationKind_COUNT
-} RADDBG_LocationKindEnum;
+  RADDBGI_LocationKind_NULL,
+  RADDBGI_LocationKind_AddrBytecodeStream,
+  RADDBGI_LocationKind_ValBytecodeStream,
+  RADDBGI_LocationKind_AddrRegisterPlusU16,
+  RADDBGI_LocationKind_AddrAddrRegisterPlusU16,
+  RADDBGI_LocationKind_ValRegister,
+  RADDBGI_LocationKind_COUNT
+} RADDBGI_LocationKindEnum;
 
-typedef struct RADDBG_LocationBytecodeStream{
-  RADDBG_LocationKind kind;
-  // [... 0] null terminated byte sequence RADDBG_EvalBytecodeStream
-} RADDBG_LocationBytecodeStream;
+typedef struct RADDBGI_LocationBytecodeStream{
+  RADDBGI_LocationKind kind;
+  // [... 0] null terminated byte sequence RADDBGI_EvalBytecodeStream
+} RADDBGI_LocationBytecodeStream;
 
-typedef struct RADDBG_LocationRegisterPlusU16{
-  RADDBG_LocationKind kind;
-  RADDBG_RegisterCode register_code;
-  RADDBG_U16 offset;
-} RADDBG_LocationRegisterPlusU16;
+typedef struct RADDBGI_LocationRegisterPlusU16{
+  RADDBGI_LocationKind kind;
+  RADDBGI_RegisterCode register_code;
+  RADDBGI_U16 offset;
+} RADDBGI_LocationRegisterPlusU16;
 
-typedef struct RADDBG_LocationRegister{
-  RADDBG_LocationKind kind;
-  RADDBG_RegisterCode register_code;
-} RADDBG_LocationRegister;
+typedef struct RADDBGI_LocationRegister{
+  RADDBGI_LocationKind kind;
+  RADDBGI_RegisterCode register_code;
+} RADDBGI_LocationRegister;
 
 //- name map types
-#define RADDBG_NameMapXList(X)\
+#define RADDBGI_NameMapXList(X)\
 X(NULL,            0)\
 X(GlobalVariables, 1)\
 X(ThreadVariables, 2)\
@@ -721,42 +721,42 @@ X(Types,           4)\
 X(LinkNameProcedures, 5)\
 X(NormalSourcePaths,  6)
 
-typedef RADDBG_U32 RADDBG_NameMapKind;
-typedef enum RADDBG_NameMapKindEnum{
-#define X(N,C) RADDBG_NameMapKind_##N = C,
-  RADDBG_NameMapXList(X)
+typedef RADDBGI_U32 RADDBGI_NameMapKind;
+typedef enum RADDBGI_NameMapKindEnum{
+#define X(N,C) RADDBGI_NameMapKind_##N = C,
+  RADDBGI_NameMapXList(X)
 #undef X
   
-  RADDBG_NameMapKind_COUNT
-} RADDBG_NameMapKindEnum;
+  RADDBGI_NameMapKind_COUNT
+} RADDBGI_NameMapKindEnum;
 
 // TODO(allen): documentation here for the hashing and probing strategy for this table
 
-typedef struct RADDBG_NameMap{
-  RADDBG_NameMapKind kind;
-  RADDBG_U32 bucket_data_idx;
-  RADDBG_U32 node_data_idx;
-} RADDBG_NameMap;
+typedef struct RADDBGI_NameMap{
+  RADDBGI_NameMapKind kind;
+  RADDBGI_U32 bucket_data_idx;
+  RADDBGI_U32 node_data_idx;
+} RADDBGI_NameMap;
 
-typedef struct RADDBG_NameMapBucket{
-  RADDBG_U32 first_node;
-  RADDBG_U32 node_count;
-} RADDBG_NameMapBucket;
+typedef struct RADDBGI_NameMapBucket{
+  RADDBGI_U32 first_node;
+  RADDBGI_U32 node_count;
+} RADDBGI_NameMapBucket;
 
-typedef struct RADDBG_NameMapNode{
-  RADDBG_U32 string_idx;
-  RADDBG_U32 match_count;
+typedef struct RADDBGI_NameMapNode{
+  RADDBGI_U32 string_idx;
+  RADDBGI_U32 match_count;
   // NOTE: if (match_count == 1) then this is the index of the matching item
   //       if (match_count > 1)  then this is the first for an index run of all the matches
-  RADDBG_U32 match_idx_or_idx_run_first;
-} RADDBG_NameMapNode;
+  RADDBGI_U32 match_idx_or_idx_run_first;
+} RADDBGI_NameMapNode;
 
 
 ////////////////////////////////
 // Eval Bytecode
 
 // (Name, decodeN, popN, pushN)
-#define RADDBG_EvalOpXList(X)\
+#define RADDBGI_EvalOpXList(X)\
 X(Stop,        0, 0, 0)\
 X(Noop,        0, 0, 0)\
 X(Cond,        1, 1, 0)\
@@ -803,7 +803,7 @@ X(Pop,         0, 1, 0)\
 X(Insert,      1, 0, 0)
 
 // (Name)
-#define RADDBG_EvalTypeGroupXList(X)\
+#define RADDBGI_EvalTypeGroupXList(X)\
 X(Other)\
 X(U)\
 X(S)\
@@ -811,7 +811,7 @@ X(F32)\
 X(F64)
 
 // (Name, error-message)
-#define RADDBG_EvalConversionKindXList(X)\
+#define RADDBGI_EvalConversionKindXList(X)\
 X(Noop,         "")\
 X(Legal,        "")\
 X(OtherToOther, "cannot convert between these types")\
@@ -819,7 +819,7 @@ X(ToOther,      "cannot convert to this type")\
 X(FromOther,    "cannot convert this type")
 
 // Xb(EvalTypeGroup) Y(TypeKind) Xe(EvalTypeGroup)
-#define RADDBG_EvalTypeGroupFromKindMap(Y,Xb,Xe)\
+#define RADDBGI_EvalTypeGroupFromKindMap(Y,Xb,Xe)\
 \
 Xb(U) Y(U8) Y(U16) Y(U32) Y(U64) Y(Bool) Y(Ptr) Y(Enum)\
 Xe(U)\
@@ -834,7 +834,7 @@ Xb(F64) Y(F64)\
 Xe(F64)
 
 // Xb(EvalConversionKind) Y(EvalTypeGroup, EvalTypeGroup) Xe(EvalConversionKind)
-#define RADDBG_EvalConversionKindFromTypeGroupPairMap(Y,Xb,Xe)\
+#define RADDBGI_EvalConversionKindFromTypeGroupPairMap(Y,Xb,Xe)\
 \
 Xb(Noop) Y(U, U) Y(S, S) Y(F32, F32) Y(F64, F64) Y(U, S) Y(S, U)\
 Xe(Noop)\
@@ -855,69 +855,65 @@ Xb(FromOther) Y(Other, U) Y(Other, S) Y(Other, F32) Y(Other, F64)\
 Xe(FromOther)
 
 // eval interpretation macros
-#define RADDBG_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
+#define RADDBGI_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
 
 
 // eval enums
-typedef RADDBG_U8 RADDBG_EvalOp;
+typedef RADDBGI_U8 RADDBGI_EvalOp;
 
-typedef enum RADDBG_EvalOpEnum{
-#define X(N,dec,pop,push) RADDBG_EvalOp_##N,
-  RADDBG_EvalOpXList(X)
+typedef enum RADDBGI_EvalOpEnum{
+#define X(N,dec,pop,push) RADDBGI_EvalOp_##N,
+  RADDBGI_EvalOpXList(X)
 #undef X
   
-  RADDBG_EvalOp_COUNT
-} RADDBG_EvalOpEnum;
+  RADDBGI_EvalOp_COUNT
+} RADDBGI_EvalOpEnum;
 
 
-typedef RADDBG_U8 RADDBG_EvalTypeGroup;
+typedef RADDBGI_U8 RADDBGI_EvalTypeGroup;
 
-typedef enum RADDBG_EvalTypeGroupEnum{
-#define X(N) RADDBG_EvalTypeGroup_##N,
-  RADDBG_EvalTypeGroupXList(X)
+typedef enum RADDBGI_EvalTypeGroupEnum{
+#define X(N) RADDBGI_EvalTypeGroup_##N,
+  RADDBGI_EvalTypeGroupXList(X)
 #undef X
-  RADDBG_EvalTypeGroup_COUNT,
-} RADDBG_EvalTypeGroupEnum;
+  RADDBGI_EvalTypeGroup_COUNT,
+} RADDBGI_EvalTypeGroupEnum;
 
 
-typedef RADDBG_U8 RADDBG_EvalConversionKind;
+typedef RADDBGI_U8 RADDBGI_EvalConversionKind;
 
-typedef enum RADDBG_EvalConversionKindEnum{
-#define X(N,msg) RADDBG_EvalConversionKind_##N,
-  RADDBG_EvalConversionKindXList(X)
+typedef enum RADDBGI_EvalConversionKindEnum{
+#define X(N,msg) RADDBGI_EvalConversionKind_##N,
+  RADDBGI_EvalConversionKindXList(X)
 #undef X
-  RADDBG_EvalConversionKind_COUNT,
-} RADDBG_EvalConversionKindEnum;
+  RADDBGI_EvalConversionKind_COUNT,
+} RADDBGI_EvalConversionKindEnum;
 
 
 //- eval data tables
 
-#define RADDBG_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
-#define RADDBG_DECODEN_FROM_CTRLBITS(ctrlbits) ((ctrlbits) & 0xf)
-#define RADDBG_POPN_FROM_CTRLBITS(ctrlbits)    (((ctrlbits) >> 4) & 0x3)
-#define RADDBG_PUSHN_FROM_CTRLBITS(ctrlbits)   (((ctrlbits) >> 6) & 0x3)
+#define RADDBGI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
+#define RADDBGI_DECODEN_FROM_CTRLBITS(ctrlbits) ((ctrlbits) & 0xf)
+#define RADDBGI_POPN_FROM_CTRLBITS(ctrlbits)    (((ctrlbits) >> 4) & 0x3)
+#define RADDBGI_PUSHN_FROM_CTRLBITS(ctrlbits)   (((ctrlbits) >> 6) & 0x3)
 
-static RADDBG_U8 raddbg_eval_opcode_ctrlbits[] = {
-#define X(Name, decodeN, popN, pushN) RADDBG_EVAL_CTRLBITS(decodeN,popN,pushN),
-  RADDBG_EvalOpXList(X)
+static RADDBGI_U8 raddbgi_eval_opcode_ctrlbits[] = {
+#define X(Name, decodeN, popN, pushN) RADDBGI_EVAL_CTRLBITS(decodeN,popN,pushN),
+  RADDBGI_EvalOpXList(X)
 #undef X
 };
 
 ////////////////////////////////
 // Functions
 
-RADDBG_PROC RADDBG_U64 raddbg_hash(RADDBG_U8 *ptr, RADDBG_U64 size);
-RADDBG_PROC RADDBG_U32 raddbg_size_from_basic_type_kind(RADDBG_TypeKind kind);
-RADDBG_PROC RADDBG_U32 raddbg_addr_size_from_arch(RADDBG_Arch arch);
+RADDBGI_PROC RADDBGI_U64 raddbgi_hash(RADDBGI_U8 *ptr, RADDBGI_U64 size);
+RADDBGI_PROC RADDBGI_U32 raddbgi_size_from_basic_type_kind(RADDBGI_TypeKind kind);
+RADDBGI_PROC RADDBGI_U32 raddbgi_addr_size_from_arch(RADDBGI_Arch arch);
 
 //- eval helpers
-RADDBG_PROC RADDBG_EvalConversionKind
-raddbg_eval_conversion_rule(RADDBG_EvalTypeGroup in, RADDBG_EvalTypeGroup out);
 
-RADDBG_PROC RADDBG_U8*
-raddbg_eval_conversion_message(RADDBG_EvalConversionKind conversion_kind, RADDBG_U64 *lennout);
+RADDBGI_PROC RADDBGI_EvalConversionKind raddbgi_eval_conversion_rule(RADDBGI_EvalTypeGroup in, RADDBGI_EvalTypeGroup out);
+RADDBGI_PROC RADDBGI_U8* raddbgi_eval_conversion_message(RADDBGI_EvalConversionKind conversion_kind, RADDBGI_U64 *lennout);
+RADDBGI_PROC RADDBGI_S32 raddbgi_eval_opcode_type_compatible(RADDBGI_EvalOp op, RADDBGI_EvalTypeGroup group);
 
-RADDBG_PROC RADDBG_S32
-raddbg_eval_opcode_type_compatible(RADDBG_EvalOp op, RADDBG_EvalTypeGroup group);
-
-#endif // RADDBG_FORMAT_H
+#endif // RADDBGI_FORMAT_H

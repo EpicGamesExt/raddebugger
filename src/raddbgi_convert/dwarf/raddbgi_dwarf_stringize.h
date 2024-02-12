@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_DWARF_STRINGIZE_H
-#define RADDBG_DWARF_STRINGIZE_H
+#ifndef RADDBGI_DWARF_STRINGIZE_H
+#define RADDBGI_DWARF_STRINGIZE_H
 
 ////////////////////////////////
 //~ DWARF Stringize Functions
@@ -25,4 +25,4 @@ dwarf_stringize_addr(Arena *arena, String8List *out, DWARF_AddrUnit *unit, U32 i
 
 
 
-#endif //RADDBG_DWARF_STRINGIZE_H
+#endif //RADDBGI_DWARF_STRINGIZE_H

@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_FROM_PDB_H
-#define RADDBG_FROM_PDB_H
+#ifndef RADDBGI_FROM_PDB_H
+#define RADDBGI_FROM_PDB_H
 
 ////////////////////////////////
 //~ Program Parameters Type
@@ -107,7 +107,7 @@ typedef struct PDBCONV_KnownGlobalSet{
 typedef struct PDBCONV_CtxParams PDBCONV_CtxParams;
 struct PDBCONV_CtxParams
 {
-  RADDBG_Arch arch;
+  RADDBGI_Arch arch;
   PDB_TpiHashParsed *tpi_hash;
   CV_LeafParsed *tpi_leaf;
   PDB_CoffSectionArray *sections;
@@ -140,7 +140,7 @@ typedef struct PDBCONV_Ctx{
   Arena *arena;
   
   // INPUT data
-  RADDBG_Arch arch;
+  RADDBGI_Arch arch;
   U64 addr_size;
   PDB_TpiHashParsed *hash;
   CV_LeafParsed *leaf;
@@ -247,7 +247,7 @@ static void pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *se
 
 // location info helpers
 static CONS_Location* pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
-                                                         RADDBG_RegisterCode reg_code,
+                                                         RADDBGI_RegisterCode reg_code,
                                                          U32 reg_byte_size,
                                                          U32 reg_byte_pos,
                                                          S64 offset,
@@ -257,8 +257,8 @@ static CV_EncodedFramePtrReg pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ct
                                                                  CONS_Symbol *proc,
                                                                  B32 param_base);
 
-static RADDBG_RegisterCode pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBG_Arch arch,
-                                                                     CV_EncodedFramePtrReg encoded_reg);
+static RADDBGI_RegisterCode pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch,
+                                                                      CV_EncodedFramePtrReg encoded_reg);
 
 static void pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
                                                   CONS_LocationSet *locset,
@@ -288,4 +288,4 @@ struct PDBCONV_Out
 
 static PDBCONV_Out *pdbconv_convert(Arena *arena, PDBCONV_Params *params);
 
-#endif //RADDBG_FROM_PDB_H
+#endif // RADDBGI_FROM_PDB_H

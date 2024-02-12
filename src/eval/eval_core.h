@@ -41,7 +41,7 @@ struct EVAL_ErrorList
 
 enum
 {
-  EVAL_IRExtKind_Bytecode = RADDBG_EvalOp_COUNT,
+  EVAL_IRExtKind_Bytecode = RADDBGI_EvalOp_COUNT,
   EVAL_IRExtKind_COUNT
 };
 
@@ -49,7 +49,7 @@ typedef struct EVAL_Op EVAL_Op;
 struct EVAL_Op
 {
   EVAL_Op *next;
-  RADDBG_EvalOp opcode;
+  RADDBGI_EvalOp opcode;
   union
   {
     U64 p;
@@ -115,7 +115,7 @@ struct EVAL_Expr
 
 typedef struct EVAL_IRTree EVAL_IRTree;
 struct EVAL_IRTree{
-  RADDBG_EvalOp op;
+  RADDBGI_EvalOp op;
   EVAL_IRTree *children[3];
   union{
     U64 p;

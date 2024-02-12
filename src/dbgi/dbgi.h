@@ -18,7 +18,7 @@ struct DBGI_Parse
   void *dbg_base;
   FileProperties dbg_props;
   PE_BinInfo pe;
-  RADDBG_Parsed rdbg;
+  RADDBGI_Parsed rdbg;
 };
 
 ////////////////////////////////
@@ -341,24 +341,24 @@ global DBGI_Parse dbgi_parse_nil =
     0,
     0,
     0,
-    &raddbg_binary_section_nil, 1,
-    &raddbg_file_path_node_nil, 1,
-    &raddbg_source_file_nil, 1,
-    &raddbg_unit_nil, 1,
-    &raddbg_vmap_entry_nil, 1,
-    &raddbg_type_node_nil, 1,
-    &raddbg_udt_nil, 1,
-    &raddbg_member_nil, 1,
-    &raddbg_enum_member_nil, 1,
-    &raddbg_global_variable_nil, 1,
-    &raddbg_vmap_entry_nil, 1,
-    &raddbg_thread_variable_nil, 1,
-    &raddbg_procedure_nil, 1,
-    &raddbg_scope_nil, 1,
-    &raddbg_voff_nil, 1,
-    &raddbg_vmap_entry_nil, 1,
-    &raddbg_local_nil, 1,
-    &raddbg_location_block_nil, 1,
+    &raddbgi_binary_section_nil, 1,
+    &raddbgi_file_path_node_nil, 1,
+    &raddbgi_source_file_nil, 1,
+    &raddbgi_unit_nil, 1,
+    &raddbgi_vmap_entry_nil, 1,
+    &raddbgi_type_node_nil, 1,
+    &raddbgi_udt_nil, 1,
+    &raddbgi_member_nil, 1,
+    &raddbgi_enum_member_nil, 1,
+    &raddbgi_global_variable_nil, 1,
+    &raddbgi_vmap_entry_nil, 1,
+    &raddbgi_thread_variable_nil, 1,
+    &raddbgi_procedure_nil, 1,
+    &raddbgi_scope_nil, 1,
+    &raddbgi_voff_nil, 1,
+    &raddbgi_vmap_entry_nil, 1,
+    &raddbgi_local_nil, 1,
+    &raddbgi_location_block_nil, 1,
     0, 0,
     0, 0,
   },
@@ -379,7 +379,7 @@ internal void dbgi_ensure_tctx_inited(void);
 
 internal U64 dbgi_hash_from_string(String8 string);
 internal U64 dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemArray *array, U64 element_idx);
-internal String8 dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBG_Parsed *rdbg, DBGI_FuzzySearchTarget target, U64 element_idx);
+internal String8 dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBGI_Parsed *rdbg, DBGI_FuzzySearchTarget target, U64 element_idx);
 
 ////////////////////////////////
 //~ rjf: Forced Override Cache Functions

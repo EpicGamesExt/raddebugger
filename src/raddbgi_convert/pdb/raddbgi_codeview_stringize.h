@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_CODEVIEW_STRINGIZE_H
-#define RADDBG_CODEVIEW_STRINGIZE_H
+#ifndef RADDBGI_CODEVIEW_STRINGIZE_H
+#define RADDBGI_CODEVIEW_STRINGIZE_H
 
 ////////////////////////////////
 //~ CodeView Stringize Helper Types
@@ -83,4 +83,4 @@ static void cv_stringize_leaf_array(Arena *arena, String8List *out,
 
 static void cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13);
 
-#endif //RADDBG_CODEVIEW_STRINGIZE_H
+#endif //RADDBGI_CODEVIEW_STRINGIZE_H

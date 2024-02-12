@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_CODEVIEW_H
-#define RADDBG_CODEVIEW_H
+#ifndef RADDBGI_CODEVIEW_H
+#define RADDBGI_CODEVIEW_H
 
 #pragma pack(push, 1)
 
@@ -155,7 +155,7 @@ typedef enum{
 } CV_AllRegEnum;
 
 
-// X(NAME, CODE, (RADDBG_RegsiterCode_X86) NAME, BYTE_POS, BYTE_SIZE)
+// X(NAME, CODE, (RADDBGI_RegsiterCode_X86) NAME, BYTE_POS, BYTE_SIZE)
 #define CV_Reg_X86_XList(X) \
 X(NONE,     0, nil, 0, 0)\
 X(AL,       1, eax, 0, 1)\
@@ -408,7 +408,7 @@ typedef enum{
 #undef X
 } CV_Regx86Enum;
 
-// X(NAME, CODE, (RADDBG_RegsiterCode_X64) NAME, BYTE_POS, BYTE_SIZE)
+// X(NAME, CODE, (RADDBGI_RegsiterCode_X64) NAME, BYTE_POS, BYTE_SIZE)
 #define CV_Reg_X64_XList(X) \
 X(NONE,      0, nil, 0, 0)\
 X(AL,        1, rax, 0, 1)\
@@ -3057,4 +3057,4 @@ typedef struct PDB_CoffSectionArray PDB_CoffSectionArray;
 static CV_C13Parsed* cv_c13_from_data(Arena *arena, String8 c13_data,
                                       struct PDB_Strtbl *strtbl, struct PDB_CoffSectionArray *sections);
 
-#endif //RADDBG_CODEVIEW_H
+#endif //RADDBGI_CODEVIEW_H

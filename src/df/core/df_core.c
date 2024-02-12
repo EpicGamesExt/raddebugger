@@ -1085,7 +1085,7 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
       DF_Eval eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, query);
       if(eval.errors.count == 0)
       {
-        TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, eval.type_key));
+        TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_raddbgi_key(parse_ctx.type_graph, parse_ctx.rdbg, eval.type_key));
         if(eval_type_kind == TG_Kind_Ptr || eval_type_kind == TG_Kind_LRef || eval_type_kind == TG_Kind_RRef)
         {
           eval = df_value_mode_eval_from_eval(parse_ctx.type_graph, parse_ctx.rdbg, ctrl_ctx, eval);
@@ -3196,23 +3196,23 @@ df_symbol_name_from_binary_voff(Arena *arena, DF_Entity *binary, U64 voff)
     DBGI_Scope *scope = dbgi_scope_open();
     String8 path = df_full_path_from_entity(scratch.arena, binary);
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, path, 0);
-    RADDBG_Parsed *rdbg = &dbgi->rdbg;
+    RADDBGI_Parsed *rdbg = &dbgi->rdbg;
     if(result.size == 0 && rdbg->scope_vmap != 0)
     {
-      U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
-      RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+      U64 scope_idx = raddbgi_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
+      RADDBGI_Scope *scope = &rdbg->scopes[scope_idx];
       U64 proc_idx = scope->proc_idx;
-      RADDBG_Procedure *procedure = &rdbg->procedures[proc_idx];
+      RADDBGI_Procedure *procedure = &rdbg->procedures[proc_idx];
       U64 name_size = 0;
-      U8 *name_ptr = raddbg_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+      U8 *name_ptr = raddbgi_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
     }
     if(result.size == 0 && rdbg->global_vmap != 0)
     {
-      U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, voff);
-      RADDBG_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
+      U64 global_idx = raddbgi_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, voff);
+      RADDBGI_GlobalVariable *global_var = &rdbg->global_variables[global_idx];
       U64 name_size = 0;
-      U8 *name_ptr = raddbg_string_from_idx(rdbg, global_var->name_string_idx, &name_size);
+      U8 *name_ptr = raddbgi_string_from_idx(rdbg, global_var->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
     }
     dbgi_scope_close(scope);
@@ -3263,23 +3263,23 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
       DF_Entity *binary = binary_n->entity;
       String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
       DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
-      RADDBG_Parsed *rdbg = &dbgi->rdbg;
+      RADDBGI_Parsed *rdbg = &dbgi->rdbg;
       
       // rjf: file_path_normalized * rdbg -> src_id
       B32 good_src_id = 0;
       U32 src_id = 0;
       if(dbgi != &dbgi_parse_nil)
       {
-        RADDBG_NameMap *mapptr = raddbg_name_map_from_kind(rdbg, RADDBG_NameMapKind_NormalSourcePaths);
+        RADDBGI_NameMap *mapptr = raddbgi_name_map_from_kind(rdbg, RADDBGI_NameMapKind_NormalSourcePaths);
         if(mapptr != 0)
         {
-          RADDBG_ParsedNameMap map = {0};
-          raddbg_name_map_parse(rdbg, mapptr, &map);
-          RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, file_path_normalized.str, file_path_normalized.size);
+          RADDBGI_ParsedNameMap map = {0};
+          raddbgi_name_map_parse(rdbg, mapptr, &map);
+          RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(rdbg, &map, file_path_normalized.str, file_path_normalized.size);
           if(node != 0)
           {
             U32 id_count = 0;
-            U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+            U32 *ids = raddbgi_matches_from_map_node(rdbg, node, &id_count);
             if(id_count > 0)
             {
               good_src_id = 1;
@@ -3292,9 +3292,9 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
       // rjf: good src-id -> look up line info for visible range
       if(good_src_id)
       {
-        RADDBG_SourceFile *src = rdbg->source_files+src_id;
-        RADDBG_ParsedLineMap line_map = {0};
-        raddbg_line_map_from_source_file(rdbg, src, &line_map);
+        RADDBGI_SourceFile *src = rdbg->source_files+src_id;
+        RADDBGI_ParsedLineMap line_map = {0};
+        raddbgi_line_map_from_source_file(rdbg, src, &line_map);
         U64 line_idx = 0;
         for(S64 line_num = line_num_range.min;
             line_num <= line_num_range.max;
@@ -3302,15 +3302,15 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
         {
           DF_TextLineSrc2DasmInfoList *src2dasm_list = &src2dasm_array.v[line_idx];
           U32 voff_count = 0;
-          U64 *voffs = raddbg_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
+          U64 *voffs = raddbgi_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
           for(U64 idx = 0; idx < voff_count; idx += 1)
           {
             U64 base_voff = voffs[idx];
-            U64 unit_idx = raddbg_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, base_voff);
-            RADDBG_Unit *unit = &rdbg->units[unit_idx];
-            RADDBG_ParsedLineInfo unit_line_info = {0};
-            raddbg_line_info_from_unit(rdbg, unit, &unit_line_info);
-            U64 line_info_idx = raddbg_line_info_idx_from_voff(&unit_line_info, base_voff);
+            U64 unit_idx = raddbgi_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, base_voff);
+            RADDBGI_Unit *unit = &rdbg->units[unit_idx];
+            RADDBGI_ParsedLineInfo unit_line_info = {0};
+            raddbgi_line_info_from_unit(rdbg, unit, &unit_line_info);
+            U64 line_info_idx = raddbgi_line_info_idx_from_voff(&unit_line_info, base_voff);
             if(unit_line_info.voffs != 0)
             {
               Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
@@ -3347,23 +3347,23 @@ df_text_line_dasm2src_info_from_binary_voff(DF_Entity *binary, U64 voff)
   DBGI_Scope *scope = dbgi_scope_open();
   String8 path = df_full_path_from_entity(scratch.arena, binary);
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, path, 0);
-  RADDBG_Parsed *rdbg = &dbgi->rdbg;
+  RADDBGI_Parsed *rdbg = &dbgi->rdbg;
   DF_TextLineDasm2SrcInfo result = {0};
   result.file = result.binary = &df_g_nil_entity;
   if(rdbg->unit_vmap != 0 && rdbg->units != 0 && rdbg->source_files != 0)
   {
-    U64 unit_idx = raddbg_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, voff);
-    RADDBG_Unit *unit = &rdbg->units[unit_idx];
-    RADDBG_ParsedLineInfo unit_line_info = {0};
-    raddbg_line_info_from_unit(rdbg, unit, &unit_line_info);
-    U64 line_info_idx = raddbg_line_info_idx_from_voff(&unit_line_info, voff);
+    U64 unit_idx = raddbgi_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, voff);
+    RADDBGI_Unit *unit = &rdbg->units[unit_idx];
+    RADDBGI_ParsedLineInfo unit_line_info = {0};
+    raddbgi_line_info_from_unit(rdbg, unit, &unit_line_info);
+    U64 line_info_idx = raddbgi_line_info_idx_from_voff(&unit_line_info, voff);
     if(line_info_idx < unit_line_info.count)
     {
-      RADDBG_Line *line = &unit_line_info.lines[line_info_idx];
-      RADDBG_Column *column = (line_info_idx < unit_line_info.col_count) ? &unit_line_info.cols[line_info_idx] : 0;
-      RADDBG_SourceFile *file = &rdbg->source_files[line->file_idx];
+      RADDBGI_Line *line = &unit_line_info.lines[line_info_idx];
+      RADDBGI_Column *column = (line_info_idx < unit_line_info.col_count) ? &unit_line_info.cols[line_info_idx] : 0;
+      RADDBGI_SourceFile *file = &rdbg->source_files[line->file_idx];
       String8 file_normalized_full_path = {0};
-      file_normalized_full_path.str = raddbg_string_from_idx(rdbg, file->normal_full_path_string_idx, &file_normalized_full_path.size);
+      file_normalized_full_path.str = raddbgi_string_from_idx(rdbg, file->normal_full_path_string_idx, &file_normalized_full_path.size);
       result.binary = binary;
       if(line->file_idx != 0 && file_normalized_full_path.size != 0)
       {
@@ -3412,11 +3412,11 @@ df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name)
   {
     String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
-    RADDBG_Parsed *rdbg = &dbgi->rdbg;
-    RADDBG_NameMapKind name_map_kinds[] =
+    RADDBGI_Parsed *rdbg = &dbgi->rdbg;
+    RADDBGI_NameMapKind name_map_kinds[] =
     {
-      RADDBG_NameMapKind_GlobalVariables,
-      RADDBG_NameMapKind_Procedures,
+      RADDBGI_NameMapKind_GlobalVariables,
+      RADDBGI_NameMapKind_Procedures,
     };
     if(dbgi != &dbgi_parse_nil)
     {
@@ -3424,11 +3424,11 @@ df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name)
           name_map_kind_idx < ArrayCount(name_map_kinds);
           name_map_kind_idx += 1)
       {
-        RADDBG_NameMapKind name_map_kind = name_map_kinds[name_map_kind_idx];
-        RADDBG_NameMap *name_map = raddbg_name_map_from_kind(rdbg, name_map_kind);
-        RADDBG_ParsedNameMap parsed_name_map = {0};
-        raddbg_name_map_parse(rdbg, name_map, &parsed_name_map);
-        RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &parsed_name_map, symbol_name.str, symbol_name.size);
+        RADDBGI_NameMapKind name_map_kind = name_map_kinds[name_map_kind_idx];
+        RADDBGI_NameMap *name_map = raddbgi_name_map_from_kind(rdbg, name_map_kind);
+        RADDBGI_ParsedNameMap parsed_name_map = {0};
+        raddbgi_name_map_parse(rdbg, name_map, &parsed_name_map);
+        RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(rdbg, &parsed_name_map, symbol_name.str, symbol_name.size);
         
         // rjf: node -> num
         U64 entity_num = 0;
@@ -3443,7 +3443,7 @@ df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name)
             default:
             {
               U32 num = 0;
-              U32 *run = raddbg_matches_from_map_node(rdbg, node, &num);
+              U32 *run = raddbgi_matches_from_map_node(rdbg, node, &num);
               if(num != 0)
               {
                 entity_num = run[0]+1;
@@ -3457,15 +3457,15 @@ df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name)
         if(entity_num != 0) switch(name_map_kind)
         {
           default:{}break;
-          case RADDBG_NameMapKind_GlobalVariables:
+          case RADDBGI_NameMapKind_GlobalVariables:
           {
-            RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(rdbg, global_variables, entity_num-1);
+            RADDBGI_GlobalVariable *global_var = raddbgi_element_from_idx(rdbg, global_variables, entity_num-1);
             voff = global_var->voff;
           }break;
-          case RADDBG_NameMapKind_Procedures:
+          case RADDBGI_NameMapKind_Procedures:
           {
-            RADDBG_Procedure *procedure = raddbg_element_from_idx(rdbg, procedures, entity_num-1);
-            RADDBG_Scope *scope = raddbg_element_from_idx(rdbg, scopes, procedure->root_scope_idx);
+            RADDBGI_Procedure *procedure = raddbgi_element_from_idx(rdbg, procedures, entity_num-1);
+            RADDBGI_Scope *scope = raddbgi_element_from_idx(rdbg, scopes, procedure->root_scope_idx);
             voff = rdbg->scope_voffs[scope->voff_range_first];
           }break;
         }
@@ -3495,11 +3495,11 @@ df_type_num_from_binary_name(DF_Entity *binary, String8 name)
   {
     String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
-    RADDBG_Parsed *rdbg = &dbgi->rdbg;
-    RADDBG_NameMap *name_map = raddbg_name_map_from_kind(rdbg, RADDBG_NameMapKind_Types);
-    RADDBG_ParsedNameMap parsed_name_map = {0};
-    raddbg_name_map_parse(rdbg, name_map, &parsed_name_map);
-    RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &parsed_name_map, name.str, name.size);
+    RADDBGI_Parsed *rdbg = &dbgi->rdbg;
+    RADDBGI_NameMap *name_map = raddbgi_name_map_from_kind(rdbg, RADDBGI_NameMapKind_Types);
+    RADDBGI_ParsedNameMap parsed_name_map = {0};
+    raddbgi_name_map_parse(rdbg, name_map, &parsed_name_map);
+    RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(rdbg, &parsed_name_map, name.str, name.size);
     U64 entity_num = 0;
     if(node != 0)
     {
@@ -3512,7 +3512,7 @@ df_type_num_from_binary_name(DF_Entity *binary, String8 name)
         default:
         {
           U32 num = 0;
-          U32 *run = raddbg_matches_from_map_node(rdbg, node, &num);
+          U32 *run = raddbgi_matches_from_map_node(rdbg, node, &num);
           if(num != 0)
           {
             entity_num = run[0]+1;
@@ -3697,8 +3697,8 @@ df_push_locals_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *
   Temp scratch = scratch_begin(&arena, 1);
   String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
-  RADDBG_Parsed *rdbg = &dbgi->rdbg;
-  EVAL_String2NumMap *result = eval_push_locals_map_from_raddbg_voff(arena, rdbg, voff);
+  RADDBGI_Parsed *rdbg = &dbgi->rdbg;
+  EVAL_String2NumMap *result = eval_push_locals_map_from_raddbgi_voff(arena, rdbg, voff);
   scratch_end(scratch);
   return result;
 }
@@ -3709,8 +3709,8 @@ df_push_member_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *
   Temp scratch = scratch_begin(&arena, 1);
   String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
-  RADDBG_Parsed *rdbg = &dbgi->rdbg;
-  EVAL_String2NumMap *result = eval_push_member_map_from_raddbg_voff(arena, rdbg, voff);
+  RADDBGI_Parsed *rdbg = &dbgi->rdbg;
+  EVAL_String2NumMap *result = eval_push_member_map_from_raddbgi_voff(arena, rdbg, voff);
   scratch_end(scratch);
   return result;
 }
@@ -3987,7 +3987,7 @@ df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 
   DF_Entity *binary = df_binary_file_from_module(module);
   String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
-  RADDBG_Parsed *rdbg = &dbgi->rdbg;
+  RADDBGI_Parsed *rdbg = &dbgi->rdbg;
   Architecture arch = df_architecture_from_entity(process);
   EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch(arch);
   EVAL_String2NumMap *reg_alias_map = ctrl_string2alias_from_arch(arch);
@@ -4035,22 +4035,22 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
       DF_Entity *binary = binary_n->entity;
       String8 binary_path = df_full_path_from_entity(scratch.arena, binary);
       DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_path, 0);
-      RADDBG_Parsed *rdbg = &dbgi->rdbg;
+      RADDBGI_Parsed *rdbg = &dbgi->rdbg;
       
       // rjf: file_path_normalized * rdbg -> src_id
       B32 good_src_id = 0;
       U32 src_id = 0;
       {
-        RADDBG_NameMap *mapptr = raddbg_name_map_from_kind(rdbg, RADDBG_NameMapKind_NormalSourcePaths);
+        RADDBGI_NameMap *mapptr = raddbgi_name_map_from_kind(rdbg, RADDBGI_NameMapKind_NormalSourcePaths);
         if(mapptr != 0)
         {
-          RADDBG_ParsedNameMap map = {0};
-          raddbg_name_map_parse(rdbg, mapptr, &map);
-          RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &map, file_path_normalized.str, file_path_normalized.size);
+          RADDBGI_ParsedNameMap map = {0};
+          raddbgi_name_map_parse(rdbg, mapptr, &map);
+          RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(rdbg, &map, file_path_normalized.str, file_path_normalized.size);
           if(node != 0)
           {
             U32 id_count = 0;
-            U32 *ids = raddbg_matches_from_map_node(rdbg, node, &id_count);
+            U32 *ids = raddbgi_matches_from_map_node(rdbg, node, &id_count);
             if(id_count > 0)
             {
               good_src_id = 1;
@@ -4063,19 +4063,19 @@ df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt)
       // rjf: good src-id -> look up line info for visible range
       if(good_src_id)
       {
-        RADDBG_SourceFile *src = rdbg->source_files+src_id;
-        RADDBG_ParsedLineMap line_map = {0};
-        raddbg_line_map_from_source_file(rdbg, src, &line_map);
+        RADDBGI_SourceFile *src = rdbg->source_files+src_id;
+        RADDBGI_ParsedLineMap line_map = {0};
+        raddbgi_line_map_from_source_file(rdbg, src, &line_map);
         U32 voff_count = 0;
-        U64 *voffs = raddbg_line_voffs_from_num(&line_map, (U32)pt.line, &voff_count);
+        U64 *voffs = raddbgi_line_voffs_from_num(&line_map, (U32)pt.line, &voff_count);
         for(U64 idx = 0; idx < voff_count; idx += 1)
         {
           U64 base_voff = voffs[idx];
-          U64 unit_idx = raddbg_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, base_voff);
-          RADDBG_Unit *unit = &rdbg->units[unit_idx];
-          RADDBG_ParsedLineInfo unit_line_info = {0};
-          raddbg_line_info_from_unit(rdbg, unit, &unit_line_info);
-          U64 line_info_idx = raddbg_line_info_idx_from_voff(&unit_line_info, base_voff);
+          U64 unit_idx = raddbgi_vmap_idx_from_voff(rdbg->unit_vmap, rdbg->unit_vmap_count, base_voff);
+          RADDBGI_Unit *unit = &rdbg->units[unit_idx];
+          RADDBGI_ParsedLineInfo unit_line_info = {0};
+          raddbgi_line_info_from_unit(rdbg, unit, &unit_line_info);
+          U64 line_info_idx = raddbgi_line_info_idx_from_voff(&unit_line_info, base_voff);
           Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
           S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;
           DF_TextLineSrc2DasmInfoNode *src2dasm_n = push_array(scratch.arena, DF_TextLineSrc2DasmInfoNode, 1);
@@ -4246,7 +4246,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
 }
 
 internal DF_Eval
-df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
+df_value_mode_eval_from_eval(TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
 {
   ProfBeginFunction();
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
@@ -4262,7 +4262,7 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
     {
       TG_Key type_key = eval.type_key;
       TG_Kind type_kind = tg_kind_from_key(type_key);
-      U64 type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, type_key);
+      U64 type_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, type_key);
       if(!tg_key_match(type_key, tg_key_zero()) && type_byte_size <= 8)
       {
         Temp scratch = scratch_begin(0, 0);
@@ -4292,7 +4292,7 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
     case EVAL_EvalMode_Reg:
     {
       TG_Key type_key = eval.type_key;
-      U64 type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, type_key);
+      U64 type_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, type_key);
       U64 reg_off = eval.offset;
       CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
       if(unwind.first != 0)
@@ -4316,7 +4316,7 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *c
 }
 
 internal DF_Eval
-df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
+df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -4330,11 +4330,11 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
   TG_Kind type_kind = tg_kind_from_key(type_key);
   if(type_kind == TG_Kind_Ptr)
   {
-    TG_Key ptee_type_key = tg_unwrapped_direct_from_graph_raddbg_key(graph, rdbg, type_key);
+    TG_Key ptee_type_key = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, type_key);
     TG_Kind ptee_type_kind = tg_kind_from_key(ptee_type_key);
     if(ptee_type_kind == TG_Kind_Struct || ptee_type_kind == TG_Kind_Class)
     {
-      TG_Type *ptee_type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, ptee_type_key);
+      TG_Type *ptee_type = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, ptee_type_key);
       B32 has_vtable = 0;
       for(U64 idx = 0; idx < ptee_type->count; idx += 1)
       {
@@ -4363,13 +4363,13 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_Ctr
             U64 vtable_vaddr = 0;
             MemoryCopy(&vtable_vaddr, vtable_base_ptr_memory.str, addr_size);
             U64 vtable_voff = df_voff_from_vaddr(module, vtable_vaddr);
-            U64 global_idx = raddbg_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, vtable_voff);
-            RADDBG_GlobalVariable *global_var = raddbg_element_from_idx(rdbg, global_variables, global_idx);
-            if(global_var->link_flags & RADDBG_LinkFlag_TypeScoped)
+            U64 global_idx = raddbgi_vmap_idx_from_voff(rdbg->global_vmap, rdbg->global_vmap_count, vtable_voff);
+            RADDBGI_GlobalVariable *global_var = raddbgi_element_from_idx(rdbg, global_variables, global_idx);
+            if(global_var->link_flags & RADDBGI_LinkFlag_TypeScoped)
             {
-              RADDBG_UDT *udt = raddbg_element_from_idx(rdbg, udts, global_var->container_idx);
-              RADDBG_TypeNode *type = raddbg_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
-              TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type->kind), (U64)udt->self_type_idx);
+              RADDBGI_UDT *udt = raddbgi_element_from_idx(rdbg, udts, global_var->container_idx);
+              RADDBGI_TypeNode *type = raddbgi_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+              TG_Key derived_type_key = tg_key_ext(tg_kind_from_raddbgi_type_kind(type->kind), (U64)udt->self_type_idx);
               TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
               eval.type_key = ptr_to_derived_type_key;
             }
@@ -4579,13 +4579,13 @@ df_string_from_ascii_value(Arena *arena, U8 val)
 }
 
 internal String8
-df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_EvalVizStringFlags flags, U32 radix, DF_Eval eval)
+df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_EvalVizStringFlags flags, U32 radix, DF_Eval eval)
 {
   ProfBeginFunction();
   String8 result = {0};
-  TG_Key type_key = tg_unwrapped_from_graph_raddbg_key(graph, rdbg, eval.type_key);
+  TG_Key type_key = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, eval.type_key);
   TG_Kind type_kind = tg_kind_from_key(type_key);
-  U64 type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, type_key);
+  U64 type_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, type_key);
   U8 digit_group_separator = 0;
   if(!(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
   {
@@ -4653,7 +4653,7 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *r
     case TG_Kind_Enum:
     {
       Temp scratch = scratch_begin(&arena, 1);
-      TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, type_key);
+      TG_Type *type = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, type_key);
       String8 constant_name = {0};
       for(U64 val_idx = 0; val_idx < type->count; val_idx += 1)
       {
@@ -4693,7 +4693,7 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *r
 //- rjf: writing values back to child processes
 
 internal B32
-df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval dst_eval, DF_Eval src_eval)
+df_commit_eval_value(TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval dst_eval, DF_Eval src_eval)
 {
   B32 result = 0;
   Temp scratch = scratch_begin(0, 0);
@@ -4705,8 +4705,8 @@ df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx,
   TG_Key src_type_key = src_eval.type_key;
   TG_Kind dst_type_kind = tg_kind_from_key(dst_type_key);
   TG_Kind src_type_kind = tg_kind_from_key(src_type_key);
-  U64 dst_type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, dst_type_key);
-  U64 src_type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, src_type_key);
+  U64 dst_type_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, dst_type_key);
+  U64 src_type_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, src_type_key);
   
   //- rjf: get commit data based on destination type
   String8 commit_data = {0};
@@ -4914,7 +4914,7 @@ df_filtered_data_members_from_members_cfg_table(Arena *arena, TG_MemberArray mem
 }
 
 internal DF_EvalLinkBaseChunkList
-df_eval_link_base_chunk_list_from_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key link_member_type_key, U64 link_member_off, DF_CtrlCtx *ctrl_ctx, DF_Eval eval, U64 cap)
+df_eval_link_base_chunk_list_from_eval(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key link_member_type_key, U64 link_member_off, DF_CtrlCtx *ctrl_ctx, DF_Eval eval, U64 cap)
 {
   DF_EvalLinkBaseChunkList list = {0};
   for(DF_Eval base_eval = eval, last_eval = zero_struct; list.count < cap;)
@@ -5053,7 +5053,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   //////////////////////////////
   //- rjf: unpack eval
   //
-  TG_Key eval_type_key = tg_unwrapped_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, eval.type_key);
+  TG_Key eval_type_key = tg_unwrapped_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, eval.type_key);
   TG_Kind eval_type_kind = tg_kind_from_key(eval_type_key);
   
   //////////////////////////////
@@ -5084,7 +5084,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   TG_Kind ptr_type_kind = TG_Kind_Null;
   if(eval_type_kind == TG_Kind_Ptr || eval_type_kind == TG_Kind_LRef || eval_type_kind == TG_Kind_RRef)
   {
-    TG_Key direct_type_key = tg_ptee_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, eval_type_key);
+    TG_Key direct_type_key = tg_ptee_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, eval_type_key);
     TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
     DF_Eval ptr_val_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
     
@@ -5199,7 +5199,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     ProfScope("build viz blocks for UDT members")
   {
     //- rjf: type -> filtered data members
-    TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
+    TG_MemberArray data_members = tg_data_members_from_graph_raddbgi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
     TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
     
     //- rjf: build blocks for all members, split by sub-expansions
@@ -5255,7 +5255,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     ProfScope("build viz blocks for UDT type-eval enums")
   {
     //- rjf: type -> full type info
-    TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
+    TG_Type *type = tg_type_from_graph_raddbgi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
     
     //- rjf: build block for all members (cannot be expanded)
     DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_EnumMembers, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
@@ -5277,7 +5277,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     ProfScope("(structs, unions, classes) descend to members & make block(s), with linked list view")
   {
     //- rjf: type -> data members
-    TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
+    TG_MemberArray data_members = tg_data_members_from_graph_raddbgi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, udt_eval.type_key);
     
     //- rjf: find link member
     TG_Member *link_member = 0;
@@ -5290,7 +5290,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       {
         link_member = mem;
         link_member_type_kind = tg_kind_from_key(link_member->type_key);
-        link_member_ptee_type_key = tg_ptee_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, link_member->type_key);
+        link_member_ptee_type_key = tg_ptee_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, link_member->type_key);
         break;
       }
     }
@@ -5371,10 +5371,10 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     ProfScope("(arrays) descend to elements & make block(s)")
   {
     //- rjf: unpack array type info
-    TG_Type *array_type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, arr_eval.type_key);
+    TG_Type *array_type = tg_type_from_graph_raddbgi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, arr_eval.type_key);
     U64 array_count = array_type->count;
     TG_Key element_type_key = array_type->direct_type_key;
-    U64 element_type_byte_size = tg_byte_size_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, element_type_key);
+    U64 element_type_byte_size = tg_byte_size_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, element_type_key);
     
     //- rjf: build blocks for all elements, split by sub-expansions
     DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
@@ -5612,7 +5612,7 @@ df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalViz
   // rjf: determine exandability, editability
   if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)
   {
-    for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
+    for(TG_Key t = eval.type_key;; t = tg_unwrapped_direct_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, t))
     {
       TG_Kind kind = tg_kind_from_key(t);
       if(kind == TG_Kind_Null)

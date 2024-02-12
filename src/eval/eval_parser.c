@@ -57,7 +57,7 @@ global read_only S64 eval_g_max_precedence = 15;
 //~ rjf: Map Building Fast Paths
 
 internal EVAL_String2NumMap *
-eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 voff)
+eval_push_locals_map_from_raddbgi_voff(Arena *arena, RADDBGI_Parsed *rdbg, U64 voff)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -66,17 +66,17 @@ eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   struct Task
   {
     Task *next;
-    RADDBG_Scope *scope;
+    RADDBGI_Scope *scope;
   };
   Task *first_task = 0;
   Task *last_task = 0;
   
   //- rjf: voff -> tightest scope
-  RADDBG_Scope *tightest_scope = 0;
+  RADDBGI_Scope *tightest_scope = 0;
   if(rdbg->scope_vmap != 0 && rdbg->scopes != 0)
   {
-    U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
-    RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+    U64 scope_idx = raddbgi_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
+    RADDBGI_Scope *scope = &rdbg->scopes[scope_idx];
     Task *task = push_array(scratch.arena, Task, 1);
     task->scope = scope;
     SLLQueuePush(first_task, last_task, task);
@@ -86,8 +86,8 @@ eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   //- rjf: voff-1 -> scope
   if(voff > 0 && rdbg->scope_vmap != 0 && rdbg->scopes != 0)
   {
-    U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff-1);
-    RADDBG_Scope *scope = &rdbg->scopes[scope_idx];
+    U64 scope_idx = raddbgi_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff-1);
+    RADDBGI_Scope *scope = &rdbg->scopes[scope_idx];
     if(scope != tightest_scope)
     {
       Task *task = push_array(scratch.arena, Task, 1);
@@ -99,7 +99,7 @@ eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   //- rjf: tightest scope -> walk up the tree & build tasks for each parent scope
   if(tightest_scope != 0)
   {
-    for(RADDBG_Scope *scope = &rdbg->scopes[tightest_scope->parent_scope_idx];
+    for(RADDBGI_Scope *scope = &rdbg->scopes[tightest_scope->parent_scope_idx];
         scope != 0 && scope != &rdbg->scopes[0];
         scope = &rdbg->scopes[scope->parent_scope_idx])
     {
@@ -116,15 +116,15 @@ eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   //- rjf: accumulate locals for all tasks
   for(Task *task = first_task; task != 0; task = task->next)
   {
-    RADDBG_Scope *scope = task->scope;
+    RADDBGI_Scope *scope = task->scope;
     if(scope != 0)
     {
       U32 local_opl_idx = scope->local_first + scope->local_count;
       for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
       {
-        RADDBG_Local *local_var = &rdbg->locals[local_idx];
+        RADDBGI_Local *local_var = &rdbg->locals[local_idx];
         U64 local_name_size = 0;
-        U8 *local_name_str = raddbg_string_from_idx(rdbg, local_var->name_string_idx, &local_name_size);
+        U8 *local_name_str = raddbgi_string_from_idx(rdbg, local_var->name_string_idx, &local_name_size);
         String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
         eval_string2num_map_insert(arena, map, name, (U64)local_idx+1);
       }
@@ -136,18 +136,18 @@ eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
 }
 
 internal EVAL_String2NumMap *
-eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 voff)
+eval_push_member_map_from_raddbgi_voff(Arena *arena, RADDBGI_Parsed *rdbg, U64 voff)
 {
   //- rjf: voff -> tightest scope
-  RADDBG_Scope *tightest_scope = 0;
+  RADDBGI_Scope *tightest_scope = 0;
   if(rdbg->scope_vmap != 0 && rdbg->scopes != 0)
   {
-    U64 scope_idx = raddbg_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
+    U64 scope_idx = raddbgi_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
     tightest_scope = &rdbg->scopes[scope_idx];
   }
   
   //- rjf: tightest scope -> procedure
-  RADDBG_Procedure *procedure = 0;
+  RADDBGI_Procedure *procedure = 0;
   if(tightest_scope != 0 && rdbg->procedures != 0)
   {
     U32 proc_idx = tightest_scope->proc_idx;
@@ -158,8 +158,8 @@ eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   }
   
   //- rjf: procedure -> udt
-  RADDBG_UDT *udt = 0;
-  if(procedure != 0 && rdbg->udts != 0 && procedure->link_flags & RADDBG_LinkFlag_TypeScoped)
+  RADDBGI_UDT *udt = 0;
+  if(procedure != 0 && rdbg->udts != 0 && procedure->link_flags & RADDBGI_LinkFlag_TypeScoped)
   {
     U32 udt_idx = procedure->container_idx;
     if(0 < udt_idx && udt_idx < rdbg->udts_count)
@@ -173,7 +173,7 @@ eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
   *map = eval_string2num_map_make(arena, 64);
   
   //- rjf: udt -> fill member map
-  if(udt != 0 && !(udt->flags & RADDBG_UserDefinedTypeFlag_EnumMembers) && rdbg->members != 0)
+  if(udt != 0 && !(udt->flags & RADDBGI_UserDefinedTypeFlag_EnumMembers) && rdbg->members != 0)
   {
     U64 data_member_num = 1;
     for(U32 member_idx = udt->member_first;
@@ -184,11 +184,11 @@ eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 vof
       {
         break;
       }
-      RADDBG_Member *m = &rdbg->members[member_idx];
-      if(m->kind == RADDBG_MemberKind_DataField)
+      RADDBGI_Member *m = &rdbg->members[member_idx];
+      if(m->kind == RADDBGI_MemberKind_DataField)
       {
         String8 name = {0};
-        name.str = raddbg_string_from_idx(rdbg, m->name_string_idx, &name.size);
+        name.str = raddbgi_string_from_idx(rdbg, m->name_string_idx, &name.size);
         eval_string2num_map_insert(arena, map, name, data_member_num);
         data_member_num += 1;
       }
@@ -464,25 +464,25 @@ eval_token_array_make_first_opl(EVAL_Token *first, EVAL_Token *opl)
 //~ rjf: Parser Functions
 
 internal TG_Key
-eval_leaf_type_from_name(RADDBG_Parsed *rdbg, String8 name)
+eval_leaf_type_from_name(RADDBGI_Parsed *rdbg, String8 name)
 {
   TG_Key key = zero_struct;
   B32 found = 0;
   if(rdbg->type_nodes != 0)
   {
-    RADDBG_NameMap *name_map = raddbg_name_map_from_kind(rdbg, RADDBG_NameMapKind_Types);
-    RADDBG_ParsedNameMap parsed_name_map = {0};
-    raddbg_name_map_parse(rdbg, name_map, &parsed_name_map);
-    RADDBG_NameMapNode *node = raddbg_name_map_lookup(rdbg, &parsed_name_map, name.str, name.size);
+    RADDBGI_NameMap *name_map = raddbgi_name_map_from_kind(rdbg, RADDBGI_NameMapKind_Types);
+    RADDBGI_ParsedNameMap parsed_name_map = {0};
+    raddbgi_name_map_parse(rdbg, name_map, &parsed_name_map);
+    RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(rdbg, &parsed_name_map, name.str, name.size);
     if(node != 0)
     {
       U32 match_count = 0;
-      U32 *matches = raddbg_matches_from_map_node(rdbg, node, &match_count);
+      U32 *matches = raddbgi_matches_from_map_node(rdbg, node, &match_count);
       if(match_count != 0)
       {
-        RADDBG_TypeNode *type_node = raddbg_element_from_idx(rdbg, type_nodes, matches[0]);
-        found = type_node->kind != RADDBG_TypeKind_NULL;
-        key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)matches[0]);
+        RADDBGI_TypeNode *type_node = raddbgi_element_from_idx(rdbg, type_nodes, matches[0]);
+        found = type_node->kind != RADDBGI_TypeKind_NULL;
+        key = tg_key_ext(tg_kind_from_raddbgi_type_kind(type_node->kind), (U64)matches[0]);
       }
     }
   }
@@ -787,9 +787,9 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           B32 mapped_identifier = 0;
           B32 identifier_type_is_possibly_dynamically_overridden = 0;
           B32 identifier_looks_like_type_expr = 0;
-          RADDBG_LocationKind            loc_kind = RADDBG_LocationKind_NULL;
-          RADDBG_LocationRegister        loc_reg = {0};
-          RADDBG_LocationRegisterPlusU16 loc_reg_u16 = {0};
+          RADDBGI_LocationKind            loc_kind = RADDBGI_LocationKind_NULL;
+          RADDBGI_LocationRegister        loc_reg = {0};
+          RADDBGI_LocationRegisterPlusU16 loc_reg_u16 = {0};
           String8                        loc_bytecode = {0};
           REGS_RegCode                   reg_code = 0;
           REGS_AliasCode                 alias_code = 0;
@@ -800,12 +800,12 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           String8List namespaceified_token_strings = {0};
           if(ctx->rdbg->procedures != 0 && ctx->rdbg->scopes != 0 && ctx->rdbg->scope_vmap != 0)
           {
-            U64 scope_idx = raddbg_vmap_idx_from_voff(ctx->rdbg->scope_vmap, ctx->rdbg->scope_vmap_count, ctx->ip_voff);
-            RADDBG_Scope *scope = &ctx->rdbg->scopes[scope_idx];
+            U64 scope_idx = raddbgi_vmap_idx_from_voff(ctx->rdbg->scope_vmap, ctx->rdbg->scope_vmap_count, ctx->ip_voff);
+            RADDBGI_Scope *scope = &ctx->rdbg->scopes[scope_idx];
             U64 proc_idx = scope->proc_idx;
-            RADDBG_Procedure *procedure = &ctx->rdbg->procedures[proc_idx];
+            RADDBGI_Procedure *procedure = &ctx->rdbg->procedures[proc_idx];
             U64 name_size = 0;
-            U8 *name_ptr = raddbg_string_from_idx(ctx->rdbg, procedure->name_string_idx, &name_size);
+            U8 *name_ptr = raddbgi_string_from_idx(ctx->rdbg, procedure->name_string_idx, &name_size);
             String8 containing_procedure_name = str8(name_ptr, name_size);
             U64 last_past_scope_resolution_pos = 0;
             for(;;)
@@ -843,26 +843,26 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             {
               mapped_identifier = 1;
               identifier_type_is_possibly_dynamically_overridden = 1;
-              RADDBG_Local *local_var = raddbg_element_from_idx(ctx->rdbg, locals, local_num-1);
-              RADDBG_TypeNode *type_node = raddbg_element_from_idx(ctx->rdbg, type_nodes, local_var->type_idx);
-              type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)local_var->type_idx);
+              RADDBGI_Local *local_var = raddbgi_element_from_idx(ctx->rdbg, locals, local_num-1);
+              RADDBGI_TypeNode *type_node = raddbgi_element_from_idx(ctx->rdbg, type_nodes, local_var->type_idx);
+              type_key = tg_key_ext(tg_kind_from_raddbgi_type_kind(type_node->kind), (U64)local_var->type_idx);
               
               // rjf: grab location info
               for(U32 loc_block_idx = local_var->location_first;
                   loc_block_idx < local_var->location_opl;
                   loc_block_idx += 1)
               {
-                RADDBG_LocationBlock *block = &ctx->rdbg->location_blocks[loc_block_idx];
+                RADDBGI_LocationBlock *block = &ctx->rdbg->location_blocks[loc_block_idx];
                 if(block->scope_off_first <= ctx->ip_voff && ctx->ip_voff < block->scope_off_opl)
                 {
-                  loc_kind = *((RADDBG_LocationKind *)(ctx->rdbg->location_data + block->location_data_off));
+                  loc_kind = *((RADDBGI_LocationKind *)(ctx->rdbg->location_data + block->location_data_off));
                   switch(loc_kind)
                   {
                     default:{mapped_identifier = 0;}break;
-                    case RADDBG_LocationKind_AddrBytecodeStream:
-                    case RADDBG_LocationKind_ValBytecodeStream:
+                    case RADDBGI_LocationKind_AddrBytecodeStream:
+                    case RADDBGI_LocationKind_ValBytecodeStream:
                     {
-                      U8 *bytecode_base = ctx->rdbg->location_data + block->location_data_off + sizeof(RADDBG_LocationKind);
+                      U8 *bytecode_base = ctx->rdbg->location_data + block->location_data_off + sizeof(RADDBGI_LocationKind);
                       U64 bytecode_size = 0;
                       for(U64 idx = 0; idx < ctx->rdbg->location_data_size; idx += 1)
                       {
@@ -871,18 +871,18 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                         {
                           break;
                         }
-                        U8 ctrlbits = raddbg_eval_opcode_ctrlbits[op];
-                        U32 p_size = RADDBG_DECODEN_FROM_CTRLBITS(ctrlbits);
+                        U8 ctrlbits = raddbgi_eval_opcode_ctrlbits[op];
+                        U32 p_size = RADDBGI_DECODEN_FROM_CTRLBITS(ctrlbits);
                         bytecode_size += 1+p_size;
                       }
                       loc_bytecode = str8(bytecode_base, bytecode_size);
                     }break;
-                    case RADDBG_LocationKind_AddrRegisterPlusU16:
-                    case RADDBG_LocationKind_AddrAddrRegisterPlusU16:
+                    case RADDBGI_LocationKind_AddrRegisterPlusU16:
+                    case RADDBGI_LocationKind_AddrAddrRegisterPlusU16:
                     {
                       MemoryCopy(&loc_reg_u16, (ctx->rdbg->location_data + block->location_data_off), sizeof(loc_reg_u16));
                     }break;
-                    case RADDBG_LocationKind_ValRegister:
+                    case RADDBGI_LocationKind_ValRegister:
                     {
                       MemoryCopy(&loc_reg, (ctx->rdbg->location_data + block->location_data_off), sizeof(loc_reg));
                     }break;
@@ -919,21 +919,21 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           //- rjf: try global variables
           if(mapped_identifier == 0)
           {
-            RADDBG_NameMap *name_map = raddbg_name_map_from_kind(ctx->rdbg, RADDBG_NameMapKind_GlobalVariables);
+            RADDBGI_NameMap *name_map = raddbgi_name_map_from_kind(ctx->rdbg, RADDBGI_NameMapKind_GlobalVariables);
             if(name_map != 0 && ctx->rdbg->global_variables != 0)
             {
-              RADDBG_ParsedNameMap parsed_name_map = {0};
-              raddbg_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
-              RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
+              RADDBGI_ParsedNameMap parsed_name_map = {0};
+              raddbgi_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
+              RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
-              U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
+              U32 *matches = raddbgi_matches_from_map_node(ctx->rdbg, node, &matches_count);
               for(String8Node *n = namespaceified_token_strings.first;
                   n != 0 && matches_count == 0;
                   n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
+                node = raddbgi_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
-                matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
+                matches = raddbgi_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }
               if(matches_count != 0)
               {
@@ -942,16 +942,16 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                 // don't know of a magic hash table fixup path in PDBs, so
                 // in this case, I'm going to prefer the latest-added global.
                 U32 match_idx = matches[matches_count-1];
-                RADDBG_GlobalVariable *global_var = &ctx->rdbg->global_variables[match_idx];
+                RADDBGI_GlobalVariable *global_var = &ctx->rdbg->global_variables[match_idx];
                 EVAL_OpList oplist = {0};
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_ModuleOff, global_var->voff);
-                loc_kind = RADDBG_LocationKind_AddrBytecodeStream;
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_ModuleOff, global_var->voff);
+                loc_kind = RADDBGI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = global_var->type_idx;
                 if(type_idx < ctx->rdbg->type_nodes_count)
                 {
-                  RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
-                  type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_idx);
+                  RADDBGI_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
+                  type_key = tg_key_ext(tg_kind_from_raddbgi_type_kind(type_node->kind), (U64)type_idx);
                 }
                 mapped_identifier = 1;
               }
@@ -961,35 +961,35 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           //- rjf: try thread variables
           if(mapped_identifier == 0)
           {
-            RADDBG_NameMap *name_map = raddbg_name_map_from_kind(ctx->rdbg, RADDBG_NameMapKind_ThreadVariables);
+            RADDBGI_NameMap *name_map = raddbgi_name_map_from_kind(ctx->rdbg, RADDBGI_NameMapKind_ThreadVariables);
             if(name_map != 0 && ctx->rdbg->global_variables != 0)
             {
-              RADDBG_ParsedNameMap parsed_name_map = {0};
-              raddbg_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
-              RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
+              RADDBGI_ParsedNameMap parsed_name_map = {0};
+              raddbgi_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
+              RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
-              U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
+              U32 *matches = raddbgi_matches_from_map_node(ctx->rdbg, node, &matches_count);
               for(String8Node *n = namespaceified_token_strings.first;
                   n != 0 && matches_count == 0;
                   n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
+                node = raddbgi_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
-                matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
+                matches = raddbgi_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }
               if(matches_count != 0)
               {
                 U32 match_idx = matches[0];
-                RADDBG_ThreadVariable *thread_var = &ctx->rdbg->thread_variables[match_idx];
+                RADDBGI_ThreadVariable *thread_var = &ctx->rdbg->thread_variables[match_idx];
                 EVAL_OpList oplist = {0};
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_TLSOff, thread_var->tls_off);
-                loc_kind = RADDBG_LocationKind_AddrBytecodeStream;
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_TLSOff, thread_var->tls_off);
+                loc_kind = RADDBGI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = thread_var->type_idx;
                 if(type_idx < ctx->rdbg->type_nodes_count)
                 {
-                  RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
-                  type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_idx);
+                  RADDBGI_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
+                  type_key = tg_key_ext(tg_kind_from_raddbgi_type_kind(type_node->kind), (U64)type_idx);
                 }
                 mapped_identifier = 1;
               }
@@ -999,37 +999,37 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           //- rjf: try procedures
           if(mapped_identifier == 0)
           {
-            RADDBG_NameMap *name_map = raddbg_name_map_from_kind(ctx->rdbg, RADDBG_NameMapKind_Procedures);
+            RADDBGI_NameMap *name_map = raddbgi_name_map_from_kind(ctx->rdbg, RADDBGI_NameMapKind_Procedures);
             if(name_map != 0 && ctx->rdbg->procedures != 0 && ctx->rdbg->scopes != 0 && ctx->rdbg->scope_voffs)
             {
-              RADDBG_ParsedNameMap parsed_name_map = {0};
-              raddbg_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
-              RADDBG_NameMapNode *node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
+              RADDBGI_ParsedNameMap parsed_name_map = {0};
+              raddbgi_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
+              RADDBGI_NameMapNode *node = raddbgi_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
-              U32 *matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
+              U32 *matches = raddbgi_matches_from_map_node(ctx->rdbg, node, &matches_count);
               for(String8Node *n = namespaceified_token_strings.first;
                   n != 0 && matches_count == 0;
                   n = n->next)
               {
-                node = raddbg_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
+                node = raddbgi_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
-                matches = raddbg_matches_from_map_node(ctx->rdbg, node, &matches_count);
+                matches = raddbgi_matches_from_map_node(ctx->rdbg, node, &matches_count);
               }
               if(matches_count != 0)
               {
                 U32 match_idx = matches[0];
-                RADDBG_Procedure *procedure = &ctx->rdbg->procedures[match_idx];
-                RADDBG_Scope *scope = &ctx->rdbg->scopes[procedure->root_scope_idx];
+                RADDBGI_Procedure *procedure = &ctx->rdbg->procedures[match_idx];
+                RADDBGI_Scope *scope = &ctx->rdbg->scopes[procedure->root_scope_idx];
                 U64 voff = ctx->rdbg->scope_voffs[scope->voff_range_first];
                 EVAL_OpList oplist = {0};
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_ModuleOff, voff);
-                loc_kind = RADDBG_LocationKind_ValBytecodeStream;
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_ModuleOff, voff);
+                loc_kind = RADDBGI_LocationKind_ValBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = procedure->type_idx;
                 if(type_idx < ctx->rdbg->type_nodes_count)
                 {
-                  RADDBG_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
-                  type_key = tg_key_ext(tg_kind_from_raddbg_type_kind(type_node->kind), (U64)type_idx);
+                  RADDBGI_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
+                  type_key = tg_key_ext(tg_kind_from_raddbgi_type_kind(type_node->kind), (U64)type_idx);
                 }
                 mapped_identifier = 1;
               }
@@ -1086,44 +1086,44 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                   eval_errorf(arena, &result.errors, EVAL_ErrorKind_MissingInfo, token_string.str, "Missing location information for \"%S\".", token_string);
                 }
               }break;
-              case RADDBG_LocationKind_AddrBytecodeStream:
+              case RADDBGI_LocationKind_AddrBytecodeStream:
               {
                 atom = eval_expr_leaf_bytecode(arena, token_string.str, type_key, loc_bytecode, EVAL_EvalMode_Addr);
               }break;
-              case RADDBG_LocationKind_ValBytecodeStream:
+              case RADDBGI_LocationKind_ValBytecodeStream:
               {
                 atom = eval_expr_leaf_bytecode(arena, token_string.str, type_key, loc_bytecode, EVAL_EvalMode_Value);
               }break;
-              case RADDBG_LocationKind_AddrRegisterPlusU16:
+              case RADDBGI_LocationKind_AddrRegisterPlusU16:
               {
                 EVAL_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(ctx->arch)/8;
-                U64 regread_param = RADDBG_EncodeRegReadParam(loc_reg_u16.register_code, byte_size, 0);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_RegRead, regread_param);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_ConstU16, loc_reg_u16.offset);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_Add, 0);
+                U64 regread_param = RADDBGI_EncodeRegReadParam(loc_reg_u16.register_code, byte_size, 0);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_RegRead, regread_param);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_ConstU16, loc_reg_u16.offset);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_Add, 0);
                 atom = eval_expr_leaf_op_list(arena, token_string.str, type_key, &oplist, EVAL_EvalMode_Addr);
               }break;
-              case RADDBG_LocationKind_AddrAddrRegisterPlusU16:
+              case RADDBGI_LocationKind_AddrAddrRegisterPlusU16:
               {
                 EVAL_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(ctx->arch)/8;
-                U64 regread_param = RADDBG_EncodeRegReadParam(loc_reg_u16.register_code, byte_size, 0);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_RegRead, regread_param);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_ConstU16, loc_reg_u16.offset);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_Add, 0);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_MemRead, bit_size_from_arch(ctx->arch)/8);
+                U64 regread_param = RADDBGI_EncodeRegReadParam(loc_reg_u16.register_code, byte_size, 0);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_RegRead, regread_param);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_ConstU16, loc_reg_u16.offset);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_Add, 0);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_MemRead, bit_size_from_arch(ctx->arch)/8);
                 atom = eval_expr_leaf_op_list(arena, token_string.str, type_key, &oplist, EVAL_EvalMode_Addr);
               }break;
-              case RADDBG_LocationKind_ValRegister:
+              case RADDBGI_LocationKind_ValRegister:
               {
-                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_raddbg_code(ctx->arch, loc_reg.register_code);
+                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_raddbgi_code(ctx->arch, loc_reg.register_code);
                 REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(ctx->arch)[regs_reg_code];
                 EVAL_OpList oplist = {0};
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;
-                U64 regread_param = RADDBG_EncodeRegReadParam(loc_reg.register_code, byte_size, byte_pos);
-                eval_oplist_push_op(arena, &oplist, RADDBG_EvalOp_RegRead, regread_param);
+                U64 regread_param = RADDBGI_EncodeRegReadParam(loc_reg.register_code, byte_size, byte_pos);
+                eval_oplist_push_op(arena, &oplist, RADDBGI_EvalOp_RegRead, regread_param);
                 atom = eval_expr_leaf_op_list(arena, token_string.str, type_key, &oplist, EVAL_EvalMode_Value);
               }break;
             }

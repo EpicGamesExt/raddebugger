@@ -15,7 +15,7 @@ cd /D "%~dp0"
 :: `build raddbg clang`
 :: `build raddbg release`
 :: `build raddbg asan telemetry`
-:: `build raddbg_from_pdb`
+:: `build raddbgi_from_pdb`
 ::
 :: For a full list of possible build targets and their build command lines,
 :: search for @build_targets in this file.
@@ -85,7 +85,7 @@ pushd build
 popd
 
 :: --- Get Current Git Commit Id ----------------------------------------------
-for /f %%i in ('call git describe --always --dirty') do set compile=%compile% -DRADDBG_GIT=\"%%i\"
+for /f %%i in ('call git describe --always --dirty') do set compile=%compile% -DRADDBGI_GIT=\"%%i\"
 
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]

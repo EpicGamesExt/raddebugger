@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBG_PDB_H
-#define RADDBG_PDB_H
+#ifndef RADDBGI_PDB_H
+#define RADDBGI_PDB_H
 
 // https://github.com/microsoft/microsoft-pdb/tree/master/PDB
 
@@ -459,4 +459,4 @@ static String8              pdb_strtbl_string_from_off(PDB_Strtbl *strtbl, U32 o
 static String8              pdb_strtbl_string_from_index(PDB_Strtbl *strtbl,
                                                          PDB_StringIndex idx);
 
-#endif //RADDBG_PDB_H
+#endif //RADDBGI_PDB_H

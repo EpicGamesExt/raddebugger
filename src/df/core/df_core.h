@@ -1579,8 +1579,8 @@ internal B32 df_eval_memory_read(void *u, void *out, U64 addr, U64 size);
 internal EVAL_ParseCtx df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 vaddr);
 internal EVAL_ParseCtx df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt);
 internal DF_Eval df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, String8 string);
-internal DF_Eval df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
-internal DF_Eval df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
+internal DF_Eval df_value_mode_eval_from_eval(TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
+internal DF_Eval df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
 internal DF_Eval df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////
@@ -1604,14 +1604,14 @@ internal String8 df_eval_view_rule_from_key(DF_EvalView *eval_view, DF_ExpandKey
 
 //- rjf: evaluation value string builder helpers
 internal String8 df_string_from_ascii_value(Arena *arena, U8 val);
-internal String8 df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_EvalVizStringFlags flags, U32 radix, DF_Eval eval);
+internal String8 df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_EvalVizStringFlags flags, U32 radix, DF_Eval eval);
 
 //- rjf: writing values back to child processes
-internal B32 df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval dst_eval, DF_Eval src_eval);
+internal B32 df_commit_eval_value(TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval dst_eval, DF_Eval src_eval);
 
 //- rjf: type helpers
 internal TG_MemberArray df_filtered_data_members_from_members_cfg_table(Arena *arena, TG_MemberArray members, DF_CfgTable *cfg);
-internal DF_EvalLinkBaseChunkList df_eval_link_base_chunk_list_from_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key link_member_type_key, U64 link_member_off, DF_CtrlCtx *ctrl_ctx, DF_Eval eval, U64 cap);
+internal DF_EvalLinkBaseChunkList df_eval_link_base_chunk_list_from_eval(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key link_member_type_key, U64 link_member_off, DF_CtrlCtx *ctrl_ctx, DF_Eval eval, U64 cap);
 internal DF_EvalLinkBase df_eval_link_base_from_chunk_list_index(DF_EvalLinkBaseChunkList *list, U64 idx);
 internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *arena, DF_EvalLinkBaseChunkList *chunks);
 

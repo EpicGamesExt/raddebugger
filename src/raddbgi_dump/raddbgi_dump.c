@@ -159,12 +159,12 @@ main(int argc, char **argv){
   // will we try to parse an input file
   B32 try_parse_input = (params->errors.node_count == 0);
   
-  RADDBG_ParseStatus parse_status = RADDBG_ParseStatus_Good;
-  RADDBG_Parsed raddbg__ = {0};
-  RADDBG_Parsed *raddbg = 0;
+  RADDBGI_ParseStatus parse_status = RADDBGI_ParseStatus_Good;
+  RADDBGI_Parsed raddbg__ = {0};
+  RADDBGI_Parsed *raddbg = 0;
   if (try_parse_input){
-    parse_status = raddbg_parse(params->input_data.str, params->input_data.size, &raddbg__);
-    if (parse_status == RADDBG_ParseStatus_Good){
+    parse_status = raddbgi_parse(params->input_data.str, params->input_data.size, &raddbg__);
+    if (parse_status == RADDBGI_ParseStatus_Good){
       raddbg = &raddbg__;
     }
   }
@@ -181,24 +181,24 @@ main(int argc, char **argv){
     // DATA SECTIONS
     if (raddbg->dsecs != 0 && params->dump_data_sections){
       str8_list_pushf(arena, &dump, "# DATA SECTIONS:\n");
-      raddbg_stringize_data_sections(arena, &dump, raddbg, 1);
+      raddbgi_stringize_data_sections(arena, &dump, raddbg, 1);
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
     
     // TOP LEVEL INFO
     if (raddbg->top_level_info != 0 && params->dump_top_level_info){
       str8_list_pushf(arena, &dump, "# TOP LEVEL INFO:\n");
-      raddbg_stringize_top_level_info(arena, &dump, raddbg, raddbg->top_level_info, 1);
+      raddbgi_stringize_top_level_info(arena, &dump, raddbg, raddbg->top_level_info, 1);
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
     
     // BINARY SECTIONS
     if (raddbg->binary_sections != 0 && params->dump_binary_sections){
       str8_list_pushf(arena, &dump, "# BINARY SECTIONS:\n");
-      RADDBG_BinarySection *ptr = raddbg->binary_sections;
+      RADDBGI_BinarySection *ptr = raddbg->binary_sections;
       for (U32 i = 0; i < raddbg->binary_sections_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " section[%u]:\n", i);
-        raddbg_stringize_binary_section(arena, &dump, raddbg, ptr, 2);
+        raddbgi_stringize_binary_section(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -206,17 +206,17 @@ main(int argc, char **argv){
     
     // FILE PATHS
     if (raddbg->file_paths != 0 && params->dump_file_paths){
-      RADDBG_FilePathBundle file_path_bundle = {0};
+      RADDBGI_FilePathBundle file_path_bundle = {0};
       {
         file_path_bundle.file_paths = raddbg->file_paths;
         file_path_bundle.file_path_count = raddbg->file_paths_count;
       }
       
       str8_list_pushf(arena, &dump, "# FILE PATHS\n");
-      RADDBG_FilePathNode *ptr = raddbg->file_paths;
+      RADDBGI_FilePathNode *ptr = raddbg->file_paths;
       for (U32 i = 0; i < raddbg->file_paths_count; i += 1, ptr += 1){
         if (ptr->parent_path_node == 0){
-          raddbg_stringize_file_path(arena, &dump, raddbg, &file_path_bundle, ptr, 1);
+          raddbgi_stringize_file_path(arena, &dump, raddbg, &file_path_bundle, ptr, 1);
         }
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -225,10 +225,10 @@ main(int argc, char **argv){
     // SOURCE FILES
     if (raddbg->source_files != 0 && params->dump_source_files){
       str8_list_pushf(arena, &dump, "# SOURCE FILES\n");
-      RADDBG_SourceFile *ptr = raddbg->source_files;
+      RADDBGI_SourceFile *ptr = raddbg->source_files;
       for (U32 i = 0; i < raddbg->source_files_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " source_file[%u]:\n", i);
-        raddbg_stringize_source_file(arena, &dump, raddbg, ptr, 2);
+        raddbgi_stringize_source_file(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -237,10 +237,10 @@ main(int argc, char **argv){
     // UNITS
     if (raddbg->units != 0 && params->dump_units){
       str8_list_pushf(arena, &dump, "# UNITS\n");
-      RADDBG_Unit *ptr = raddbg->units;
+      RADDBGI_Unit *ptr = raddbg->units;
       for (U32 i = 0; i < raddbg->units_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " unit[%u]:\n", i);
-        raddbg_stringize_unit(arena, &dump, raddbg, ptr, 2);
+        raddbgi_stringize_unit(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -249,7 +249,7 @@ main(int argc, char **argv){
     // UNIT VMAP
     if (raddbg->unit_vmap != 0 && params->dump_unit_vmap){
       str8_list_pushf(arena, &dump, "# UNIT VMAP\n");
-      RADDBG_VMapEntry *ptr = raddbg->unit_vmap;
+      RADDBGI_VMapEntry *ptr = raddbg->unit_vmap;
       for (U32 i = 0; i < raddbg->unit_vmap_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", ptr->voff, ptr->idx);
       }
@@ -259,10 +259,10 @@ main(int argc, char **argv){
     // TYPE NODES
     if (raddbg->type_nodes != 0 && params->dump_type_nodes){
       str8_list_pushf(arena, &dump, "# TYPE NODES:\n");
-      RADDBG_TypeNode *ptr = raddbg->type_nodes;
+      RADDBGI_TypeNode *ptr = raddbg->type_nodes;
       for (U32 i = 0; i < raddbg->type_nodes_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " type[%u]:\n", i);
-        raddbg_stringize_type_node(arena, &dump, raddbg, ptr, 2);
+        raddbgi_stringize_type_node(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -270,7 +270,7 @@ main(int argc, char **argv){
     
     // UDT DATA
     if (raddbg->udts != 0 && params->dump_udt_data){
-      RADDBG_UDTMemberBundle member_bundle = {0};
+      RADDBGI_UDTMemberBundle member_bundle = {0};
       {
         member_bundle.members = raddbg->members;
         member_bundle.enum_members = raddbg->enum_members;
@@ -279,10 +279,10 @@ main(int argc, char **argv){
       }
       
       str8_list_pushf(arena, &dump, "# UDTS:\n");
-      RADDBG_UDT *ptr = raddbg->udts;
+      RADDBGI_UDT *ptr = raddbg->udts;
       for (U32 i = 0; i < raddbg->udts_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " udt[%u]:\n", i);
-        raddbg_stringize_udt(arena, &dump, raddbg, &member_bundle, ptr, 2);
+        raddbgi_stringize_udt(arena, &dump, raddbg, &member_bundle, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -291,10 +291,10 @@ main(int argc, char **argv){
     // GLOBAL VARIABLES
     if (raddbg->global_variables != 0 && params->dump_global_variables){
       str8_list_pushf(arena, &dump, "# GLOBAL VARIABLES:\n");
-      RADDBG_GlobalVariable *ptr = raddbg->global_variables;
+      RADDBGI_GlobalVariable *ptr = raddbg->global_variables;
       for (U32 i = 0; i < raddbg->global_variables_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " global_variable[%u]:\n", i);
-        raddbg_stringize_global_variable(arena, &dump, raddbg, ptr, 2);
+        raddbgi_stringize_global_variable(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -303,7 +303,7 @@ main(int argc, char **argv){
     // GLOBAL VMAP
     if (raddbg->global_vmap != 0 && params->dump_global_vmap){
       str8_list_pushf(arena, &dump, "# GLOBAL VMAP:\n");
-      RADDBG_VMapEntry *ptr = raddbg->global_vmap;
+      RADDBGI_VMapEntry *ptr = raddbg->global_vmap;
       for (U32 i = 0; i < raddbg->global_vmap_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", ptr->voff, ptr->idx);
       }
@@ -313,10 +313,10 @@ main(int argc, char **argv){
     // THREAD LOCAL VARIABLES
     if (raddbg->thread_variables != 0 && params->dump_thread_variables){
       str8_list_pushf(arena, &dump, "# THREAD VARIABLES:\n");
-      RADDBG_ThreadVariable *ptr = raddbg->thread_variables;
+      RADDBGI_ThreadVariable *ptr = raddbg->thread_variables;
       for (U32 i = 0; i < raddbg->thread_variables_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " thread_variable[%u]:\n", i);
-        raddbg_stringize_thread_variable(arena, &dump, raddbg, ptr, 2);
+        raddbgi_stringize_thread_variable(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -325,10 +325,10 @@ main(int argc, char **argv){
     // PROCEDURES
     if (raddbg->procedures != 0 && params->dump_procedures){
       str8_list_pushf(arena, &dump, "# PROCEDURES:\n");
-      RADDBG_Procedure *ptr = raddbg->procedures;
+      RADDBGI_Procedure *ptr = raddbg->procedures;
       for (U32 i = 0; i < raddbg->procedures_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " procedure[%u]:\n", i);
-        raddbg_stringize_procedure(arena, &dump, raddbg, ptr, 2);
+        raddbgi_stringize_procedure(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -336,7 +336,7 @@ main(int argc, char **argv){
     
     // SCOPES
     if (raddbg->scopes != 0 && params->dump_scopes){
-      RADDBG_ScopeBundle scope_bundle = {0};
+      RADDBGI_ScopeBundle scope_bundle = {0};
       {
         scope_bundle.scopes = raddbg->scopes;
         scope_bundle.scope_count = raddbg->scopes_count;
@@ -351,10 +351,10 @@ main(int argc, char **argv){
       }
       
       str8_list_pushf(arena, &dump, "# SCOPES:\n");
-      RADDBG_Scope *ptr = raddbg->scopes;
+      RADDBGI_Scope *ptr = raddbg->scopes;
       for (U32 i = 0; i < raddbg->scopes_count; i += 1, ptr += 1){
         if (ptr->parent_scope_idx == 0){
-          raddbg_stringize_scope(arena, &dump, raddbg, &scope_bundle, ptr, 1);
+          raddbgi_stringize_scope(arena, &dump, raddbg, &scope_bundle, ptr, 1);
           str8_list_push(arena, &dump, str8_lit("\n"));
         }
       }
@@ -364,7 +364,7 @@ main(int argc, char **argv){
     // SCOPE VMAP
     if (raddbg->scope_vmap != 0 && params->dump_scope_vmap){
       str8_list_pushf(arena, &dump, "# SCOPE VMAP:\n");
-      RADDBG_VMapEntry *ptr = raddbg->scope_vmap;
+      RADDBGI_VMapEntry *ptr = raddbg->scope_vmap;
       for (U32 i = 0; i < raddbg->scope_vmap_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", ptr->voff, ptr->idx);
       }
@@ -374,33 +374,33 @@ main(int argc, char **argv){
     // NAME MAPS
     if (raddbg->name_maps != 0 && params->dump_name_map){
       str8_list_pushf(arena, &dump, "# NAME MAP:\n");
-      RADDBG_NameMap *ptr = raddbg->name_maps;
+      RADDBGI_NameMap *ptr = raddbg->name_maps;
       for (U32 i = 0; i < raddbg->name_maps_count; i += 1, ptr += 1){
         str8_list_pushf(arena, &dump, " name_map[%u]:\n", i);
         
-        RADDBG_ParsedNameMap name_map = {0};
-        raddbg_name_map_parse(raddbg, ptr, &name_map);
+        RADDBGI_ParsedNameMap name_map = {0};
+        raddbgi_name_map_parse(raddbg, ptr, &name_map);
         
-        RADDBG_NameMapBucket *bucket = name_map.buckets;
+        RADDBGI_NameMapBucket *bucket = name_map.buckets;
         for (U32 j = 0; j < name_map.bucket_count; j += 1, bucket += 1){
           if (bucket->node_count > 0){
             str8_list_pushf(arena, &dump, "  bucket[%u]:\n", j);
-            RADDBG_NameMapNode *node = name_map.nodes + bucket->first_node;
-            RADDBG_NameMapNode *node_opl = node + bucket->node_count;
+            RADDBGI_NameMapNode *node = name_map.nodes + bucket->first_node;
+            RADDBGI_NameMapNode *node_opl = node + bucket->node_count;
             for (; node < node_opl; node += 1){
               String8 string = {0};
-              string.str = raddbg_string_from_idx(raddbg, node->string_idx, &string.size);
+              string.str = raddbgi_string_from_idx(raddbg, node->string_idx, &string.size);
               str8_list_pushf(arena, &dump, "   match \"%.*s\": ", str8_varg(string));
               if (node->match_count == 1){
                 str8_list_pushf(arena, &dump, "%u", node->match_idx_or_idx_run_first);
               }
               else{
-                RADDBG_U32 idx_count = 0;
-                RADDBG_U32 *idx_run =
-                  raddbg_idx_run_from_first_count(raddbg, node->match_idx_or_idx_run_first,
-                                                  node->match_count, &idx_count);
+                RADDBGI_U32 idx_count = 0;
+                RADDBGI_U32 *idx_run =
+                  raddbgi_idx_run_from_first_count(raddbg, node->match_idx_or_idx_run_first,
+                                                   node->match_count, &idx_count);
                 if (idx_count > 0){
-                  RADDBG_U32 last = idx_count - 1;
+                  RADDBGI_U32 last = idx_count - 1;
                   for (U32 k = 0; k < last; k += 1){
                     str8_list_pushf(arena, &dump, "%u, ", idx_run[k]);
                   }
