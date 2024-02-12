@@ -139,7 +139,7 @@ pdb_convert_params_from_cmd_line(Arena *arena, CmdLine *cmdline){
 //- rjf: pdb conversion context creation
 
 static PDBCONV_Ctx *
-pdbconv_ctx_alloc(PDBCONV_CtxParams *params, CONS_Root *out_root)
+pdbconv_ctx_alloc(PDBCONV_CtxParams *params, RADDBGIC_Root *out_root)
 {
   Arena *arena = arena_alloc();
   PDBCONV_Ctx *pdb_ctx = push_array(arena, PDBCONV_Ctx, 1);
@@ -193,7 +193,7 @@ pdbconv_u32_from_numeric(PDBCONV_Ctx *ctx, CV_NumericParsed *num){
   U64 n_u64 = cv_u64_from_numeric(num);
   U32 n_u32 = (U32)n_u64;
   if (n_u64 > 0xFFFFFFFF){
-    cons_errorf(ctx->root, "constant too large");
+    raddbgic_errorf(ctx->root, "constant too large");
     n_u32 = 0;
   }
   return(n_u32);
@@ -219,9 +219,9 @@ pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx){
   // setup variadic itype -> node
   ProfScope("setup variadic itype -> node")
   {
-    CONS_Type *variadic_type = cons_type_variadic(ctx->root);
-    CONS_Reservation *res = cons_type_reserve_id(ctx->root, CV_TypeId_Variadic, CV_TypeId_Variadic);
-    cons_type_fill_id(ctx->root, res, variadic_type);
+    RADDBGIC_Type *variadic_type = raddbgic_type_variadic(ctx->root);
+    RADDBGIC_Reservation *res = raddbgic_type_reserve_id(ctx->root, CV_TypeId_Variadic, CV_TypeId_Variadic);
+    raddbgic_type_fill_id(ctx->root, res, variadic_type);
   }
   
   // resolve forward references
@@ -414,7 +414,7 @@ pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype){
   return(result);
 }
 
-static CONS_Type*
+static RADDBGIC_Type*
 pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
   B32 is_basic = (itype < 0x1000);
   
@@ -429,7 +429,7 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
   }
   
   // type handle from id
-  CONS_Type *result = cons_type_from_id(ctx->root, itype, itype);
+  RADDBGIC_Type *result = raddbgic_type_from_id(ctx->root, itype, itype);
   
   // basic type
   if(result == 0 && is_basic)
@@ -446,14 +446,14 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype){
   // never return null, return "nil" instead
   if(result == 0)
   {
-    result = cons_type_nil(ctx->root);
+    result = raddbgic_type_nil(ctx->root);
   }
   
   return(result);
 }
 
 static void
-pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId field_itype){
+pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype){
   Temp scratch = scratch_begin(0, 0);
   
   String8 data = ctx->leaf->data;
@@ -554,9 +554,9 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
             list_item_opl_off = name_off + name.size + 1;
             
             // emit member
-            CONS_Type *mem_type = pdbconv_type_resolve_itype(ctx, member->itype);
+            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, member->itype);
             U32 offset_u32 = pdbconv_u32_from_numeric(ctx, &offset);
-            cons_type_add_member_data_field(ctx->root, owner_type, name, mem_type, offset_u32);
+            raddbgic_type_add_member_data_field(ctx->root, owner_type, name, mem_type, offset_u32);
           }
         }break;
         
@@ -575,8 +575,8 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
             // TODO(allen): handle attribs
             
             // emit member
-            CONS_Type *mem_type = pdbconv_type_resolve_itype(ctx, stmember->itype);
-            cons_type_add_member_static_data(ctx->root, owner_type, name, mem_type);
+            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, stmember->itype);
+            raddbgic_type_add_member_static_data(ctx->root, owner_type, name, mem_type);
           }
         }break;
         
@@ -654,17 +654,17 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
               // TODO(allen): handle attribs
               
               // emit
-              CONS_Type *mem_type = pdbconv_type_resolve_itype(ctx, method->itype);
+              RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, method->itype);
               
               switch (prop){
                 default:
                 {
-                  cons_type_add_member_method(ctx->root, owner_type, name, mem_type);
+                  raddbgic_type_add_member_method(ctx->root, owner_type, name, mem_type);
                 }break;
                 
                 case CV_MethodProp_Static:
                 {
-                  cons_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
+                  raddbgic_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
                 }break;
                 
                 case CV_MethodProp_Virtual:
@@ -672,7 +672,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
                 case CV_MethodProp_Intro:
                 case CV_MethodProp_PureIntro:
                 {
-                  cons_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
+                  raddbgic_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
                 }break;
               }
             }
@@ -705,17 +705,17 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
             // TODO(allen): handle attribs
             
             // emit
-            CONS_Type *mem_type = pdbconv_type_resolve_itype(ctx, one_method->itype);
+            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, one_method->itype);
             
             switch (prop){
               default:
               {
-                cons_type_add_member_method(ctx->root, owner_type, name, mem_type);
+                raddbgic_type_add_member_method(ctx->root, owner_type, name, mem_type);
               }break;
               
               case CV_MethodProp_Static:
               {
-                cons_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
+                raddbgic_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
               }break;
               
               case CV_MethodProp_Virtual:
@@ -723,7 +723,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
               case CV_MethodProp_Intro:
               case CV_MethodProp_PureIntro:
               {
-                cons_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
+                raddbgic_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
               }break;
             }
           }
@@ -742,8 +742,8 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
             list_item_opl_off = name_off + name.size + 1;
             
             // emit member
-            CONS_Type *mem_type = pdbconv_type_resolve_itype(ctx, nest_type->itype);
-            cons_type_add_member_nested_type(ctx->root, owner_type, mem_type);
+            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, nest_type->itype);
+            raddbgic_type_add_member_nested_type(ctx->root, owner_type, mem_type);
           }
         }break;
         
@@ -762,8 +762,8 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
             // TODO(allen): handle attribs
             
             // emit member
-            CONS_Type *mem_type = pdbconv_type_resolve_itype(ctx, nest_type->itype);
-            cons_type_add_member_nested_type(ctx->root, owner_type, mem_type);
+            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, nest_type->itype);
+            raddbgic_type_add_member_nested_type(ctx->root, owner_type, mem_type);
           }
         }break;
         
@@ -782,9 +782,9 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
             // TODO(allen): handle attribs
             
             // emit member
-            CONS_Type *base_type = pdbconv_type_resolve_itype(ctx, bclass->itype);
+            RADDBGIC_Type *base_type = pdbconv_type_resolve_itype(ctx, bclass->itype);
             U32 offset_u32 = pdbconv_u32_from_numeric(ctx, &offset);
-            cons_type_add_member_base(ctx->root, owner_type, base_type, offset_u32);
+            raddbgic_type_add_member_base(ctx->root, owner_type, base_type, offset_u32);
           }
         }break;
         
@@ -807,11 +807,11 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
             // TODO(allen): handle attribs
             
             // emit member
-            CONS_Type *base_type = pdbconv_type_resolve_itype(ctx, vbclass->itype);
+            RADDBGIC_Type *base_type = pdbconv_type_resolve_itype(ctx, vbclass->itype);
             U32 vbptr_offset_u32  = pdbconv_u32_from_numeric(ctx, &num1);
             U32 vtable_offset_u32 = pdbconv_u32_from_numeric(ctx, &num2);
-            cons_type_add_member_virtual_base(ctx->root, owner_type, base_type,
-                                              vbptr_offset_u32, vtable_offset_u32);
+            raddbgic_type_add_member_virtual_base(ctx->root, owner_type, base_type,
+                                                  vbptr_offset_u32, vtable_offset_u32);
           }
         }break;
         
@@ -829,8 +829,8 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
         default:
         {
           String8 kind_str = cv_string_from_leaf_kind(field_kind);
-          cons_errorf(ctx->root, "unhandled/invalid case: equip_members -> %.*s",
-                      str8_varg(kind_str));
+          raddbgic_errorf(ctx->root, "unhandled/invalid case: equip_members -> %.*s",
+                          str8_varg(kind_str));
         }break;
       }
       
@@ -844,7 +844,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId fi
 }
 
 static void
-pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId field_itype){
+pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype){
   Temp scratch = scratch_begin(0, 0);
   
   String8 data = ctx->leaf->data;
@@ -946,15 +946,15 @@ pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId
           
           // emit enum val
           U64 val_u64 = cv_u64_from_numeric(&val);
-          cons_type_add_enum_val(ctx->root, owner_type, name, val_u64);
+          raddbgic_type_add_enum_val(ctx->root, owner_type, name, val_u64);
         }break;
         
         // unhandled or invalid cases
         default:
         {
           String8 kind_str = cv_string_from_leaf_kind(field_kind);
-          cons_errorf(ctx->root, "unhandled/invalid case: equip_enumerates -> %.*s",
-                      str8_varg(kind_str));
+          raddbgic_errorf(ctx->root, "unhandled/invalid case: equip_enumerates -> %.*s",
+                          str8_varg(kind_str));
         }break;
       }
       
@@ -967,188 +967,188 @@ pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, CONS_Type *owner_type, CV_TypeId
   scratch_end(scratch);
 }
 
-static CONS_Type*
+static RADDBGIC_Type*
 pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype){
   Assert(itype < 0x1000);
   
   CV_BasicPointerKind basic_ptr_kind = CV_BasicPointerKindFromTypeId(itype);
   CV_BasicType basic_type_code = CV_BasicTypeFromTypeId(itype);
   
-  CONS_Reservation *basic_res = cons_type_reserve_id(ctx->root, basic_type_code, basic_type_code);
+  RADDBGIC_Reservation *basic_res = raddbgic_type_reserve_id(ctx->root, basic_type_code, basic_type_code);
   
-  CONS_Type *basic_type = 0;
+  RADDBGIC_Type *basic_type = 0;
   switch (basic_type_code){
     case CV_BasicType_VOID:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_Void, str8_lit("void"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Void, str8_lit("void"));
     }break;
     
     case CV_BasicType_HRESULT:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("HRESULT"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("HRESULT"));
     }break;
     
     case CV_BasicType_RCHAR:
     case CV_BasicType_CHAR:
     case CV_BasicType_CHAR8:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_Char8, str8_lit("char"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Char8, str8_lit("char"));
     }break;
     
     case CV_BasicType_UCHAR:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_UChar8, str8_lit("UCHAR"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_UChar8, str8_lit("UCHAR"));
     }break;
     
     case CV_BasicType_WCHAR:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_UChar16, str8_lit("WCHAR"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_UChar16, str8_lit("WCHAR"));
     }break;
     
     case CV_BasicType_CHAR16:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_Char16, str8_lit("CHAR16"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Char16, str8_lit("CHAR16"));
     }break;
     
     case CV_BasicType_CHAR32:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_Char32, str8_lit("CHAR32"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Char32, str8_lit("CHAR32"));
     }break;
     
     case CV_BasicType_BOOL8:
     case CV_BasicType_INT8:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_S8, str8_lit("S8"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S8, str8_lit("S8"));
     }break;
     
     case CV_BasicType_BOOL16:
     case CV_BasicType_INT16:
     case CV_BasicType_SHORT:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_S16, str8_lit("S16"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S16, str8_lit("S16"));
     }break;
     
     case CV_BasicType_BOOL32:
     case CV_BasicType_INT32:
     case CV_BasicType_LONG:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_S32, str8_lit("S32"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S32, str8_lit("S32"));
     }break;
     
     case CV_BasicType_BOOL64:
     case CV_BasicType_INT64:
     case CV_BasicType_QUAD:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_S64, str8_lit("S64"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S64, str8_lit("S64"));
     }break;
     
     case CV_BasicType_INT128:
     case CV_BasicType_OCT:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_S128, str8_lit("S128"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S128, str8_lit("S128"));
     }break;
     
     case CV_BasicType_UINT8:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_U8, str8_lit("U8"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U8, str8_lit("U8"));
     }break;
     
     case CV_BasicType_UINT16:
     case CV_BasicType_USHORT:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_U16, str8_lit("U16"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U16, str8_lit("U16"));
     }break;
     
     case CV_BasicType_UINT32:
     case CV_BasicType_ULONG:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_U32, str8_lit("U32"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U32, str8_lit("U32"));
     }break;
     
     case CV_BasicType_UINT64:
     case CV_BasicType_UQUAD:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_U64, str8_lit("U64"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U64, str8_lit("U64"));
     }break;
     
     case CV_BasicType_UINT128:
     case CV_BasicType_UOCT:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_U128, str8_lit("U128"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U128, str8_lit("U128"));
     }break;
     
     case CV_BasicType_FLOAT16:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_F16, str8_lit("F16"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F16, str8_lit("F16"));
     }break;
     
     case CV_BasicType_FLOAT32:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_F32, str8_lit("F32"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F32, str8_lit("F32"));
     }break;
     
     case CV_BasicType_FLOAT32PP:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_F32PP, str8_lit("F32PP"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F32PP, str8_lit("F32PP"));
     }break;
     
     case CV_BasicType_FLOAT48:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_F48, str8_lit("F48"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F48, str8_lit("F48"));
     }break;
     
     case CV_BasicType_FLOAT64:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_F64, str8_lit("F64"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F64, str8_lit("F64"));
     }break;
     
     case CV_BasicType_FLOAT80:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_F80, str8_lit("F80"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F80, str8_lit("F80"));
     }break;
     
     case CV_BasicType_FLOAT128:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_F128, str8_lit("F128"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F128, str8_lit("F128"));
     }break;
     
     case CV_BasicType_COMPLEX32:
     {
       basic_type =
-        cons_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF32, str8_lit("ComplexF32"));
+        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF32, str8_lit("ComplexF32"));
     }break;
     
     case CV_BasicType_COMPLEX64:
     {
       basic_type =
-        cons_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF64, str8_lit("ComplexF64"));
+        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF64, str8_lit("ComplexF64"));
     }break;
     
     case CV_BasicType_COMPLEX80:
     {
       basic_type =
-        cons_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF80, str8_lit("ComplexF80"));
+        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF80, str8_lit("ComplexF80"));
     }break;
     
     case CV_BasicType_COMPLEX128:
     {
       basic_type =
-        cons_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF128, str8_lit("ComplexF128"));
+        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF128, str8_lit("ComplexF128"));
     }break;
     
     case CV_BasicType_PTR:
     {
-      basic_type = cons_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("PTR"));
+      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("PTR"));
     }break;
   }
   
   // basic resolve
-  cons_type_fill_id(ctx->root, basic_res, basic_type);
+  raddbgic_type_fill_id(ctx->root, basic_res, basic_type);
   
   // wrap in constructed type
-  CONS_Type *constructed_type = 0;
+  RADDBGIC_Type *constructed_type = 0;
   if (basic_ptr_kind != 0 && basic_type != 0){
-    CONS_Reservation *constructed_res = cons_type_reserve_id(ctx->root, itype, itype);
+    RADDBGIC_Reservation *constructed_res = raddbgic_type_reserve_id(ctx->root, itype, itype);
     
     switch (basic_ptr_kind){
       case CV_BasicPointerKind_16BIT:
@@ -1158,16 +1158,16 @@ pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype){
       case CV_BasicPointerKind_16_32BIT:
       case CV_BasicPointerKind_64BIT:
       {
-        constructed_type = cons_type_pointer(ctx->root, basic_type, RADDBGI_TypeKind_Ptr);
+        constructed_type = raddbgic_type_pointer(ctx->root, basic_type, RADDBGI_TypeKind_Ptr);
       }break;
     }
     
     // constructed resolve
-    cons_type_fill_id(ctx->root, constructed_res, constructed_type);
+    raddbgic_type_fill_id(ctx->root, constructed_res, constructed_type);
   }
   
   // select output
-  CONS_Type *result = basic_type;
+  RADDBGIC_Type *result = basic_type;
   if (basic_ptr_kind != 0){
     result = constructed_type;
   }
@@ -1175,16 +1175,16 @@ pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype){
   return(result);
 }
 
-static CONS_Type*
+static RADDBGIC_Type*
 pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
   Assert(ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl);
   
-  CONS_Reservation *res = cons_type_reserve_id(ctx->root, itype, itype);
+  RADDBGIC_Reservation *res = raddbgic_type_reserve_id(ctx->root, itype, itype);
   
   CV_RecRange *range = &ctx->leaf->leaf_ranges.ranges[itype - ctx->leaf->itype_first];
   String8 data = ctx->leaf->data;
   
-  CONS_Type *result = 0;
+  RADDBGIC_Type *result = 0;
   if (range->off + range->hdr.size <= data.size){
     U8 *first = data.str + range->off + 2;
     U64 cap = range->hdr.size - 2;
@@ -1204,9 +1204,9 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             flags |= RADDBGI_TypeModifierFlag_Volatile;
           }
           
-          CONS_Type *direct_type = pdbconv_type_resolve_and_check(ctx, modifier->itype);
+          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, modifier->itype);
           if (flags != 0){
-            result = cons_type_modifier(ctx->root, direct_type, flags);
+            result = raddbgic_type_modifier(ctx->root, direct_type, flags);
           }
           else{
             result = direct_type;
@@ -1250,12 +1250,12 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             type_kind = RADDBGI_TypeKind_RRef;
           }
           
-          CONS_Type *direct_type = pdbconv_type_resolve_and_check(ctx, pointer->itype);
-          CONS_Type *ptr_type = cons_type_pointer(ctx->root, direct_type, type_kind);
+          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, pointer->itype);
+          RADDBGIC_Type *ptr_type = raddbgic_type_pointer(ctx->root, direct_type, type_kind);
           
           result = ptr_type;
           if (modifier_flags != 0){
-            result = cons_type_modifier(ctx->root, ptr_type, modifier_flags);
+            result = raddbgic_type_modifier(ctx->root, ptr_type, modifier_flags);
           }
         }
       }break;
@@ -1270,12 +1270,12 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           
           // TODO(allen): handle call_kind & attribs
           
-          CONS_Type *ret_type = pdbconv_type_resolve_and_check(ctx, procedure->ret_itype);
+          RADDBGIC_Type *ret_type = pdbconv_type_resolve_and_check(ctx, procedure->ret_itype);
           
-          CONS_TypeList param_list = {0};
+          RADDBGIC_TypeList param_list = {0};
           pdbconv_type_resolve_arglist(scratch.arena, &param_list, ctx, procedure->arg_itype);
           
-          result = cons_type_proc(ctx->root, ret_type, &param_list);
+          result = raddbgic_type_proc(ctx->root, ret_type, &param_list);
           
           scratch_end(scratch);
         }
@@ -1292,18 +1292,18 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           // TODO(allen): handle call_kind & attribs
           // TODO(allen): preserve "this_adjust"
           
-          CONS_Type *ret_type = pdbconv_type_resolve_and_check(ctx, mfunction->ret_itype);
+          RADDBGIC_Type *ret_type = pdbconv_type_resolve_and_check(ctx, mfunction->ret_itype);
           
-          CONS_TypeList param_list = {0};
+          RADDBGIC_TypeList param_list = {0};
           pdbconv_type_resolve_arglist(scratch.arena, &param_list, ctx, mfunction->arg_itype);
           
-          CONS_Type *this_type = 0;
+          RADDBGIC_Type *this_type = 0;
           if (mfunction->this_itype != 0){
             this_type = pdbconv_type_resolve_and_check(ctx, mfunction->this_itype);
-            result = cons_type_method(ctx->root, this_type, ret_type, &param_list);
+            result = raddbgic_type_method(ctx->root, this_type, ret_type, &param_list);
           }
           else{
-            result = cons_type_proc(ctx->root, ret_type, &param_list);
+            result = raddbgic_type_proc(ctx->root, ret_type, &param_list);
           }
           
           scratch_end(scratch);
@@ -1315,8 +1315,8 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
         // TODO(allen): error if bad range
         if (sizeof(CV_LeafBitField) <= cap){
           CV_LeafBitField *bit_field = (CV_LeafBitField*)first;
-          CONS_Type *direct_type = pdbconv_type_resolve_and_check(ctx, bit_field->itype);
-          result = cons_type_bitfield(ctx->root, direct_type, bit_field->pos, bit_field->len);
+          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, bit_field->itype);
+          result = raddbgic_type_bitfield(ctx->root, direct_type, bit_field->pos, bit_field->len);
         }
       }break;
       
@@ -1332,14 +1332,14 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           
           U64 full_size = cv_u64_from_numeric(&array_count);
           
-          CONS_Type *direct_type = pdbconv_type_resolve_and_check(ctx, array->entry_itype);
+          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, array->entry_itype);
           U64 count = full_size;
           if (direct_type != 0 && direct_type->byte_size != 0){
             count /= direct_type->byte_size;
           }
           
           // build type
-          result = cons_type_array(ctx->root, direct_type, count);
+          result = raddbgic_type_array(ctx->root, direct_type, count);
         }
       }break;
       
@@ -1367,7 +1367,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             if (range->hdr.kind == CV_LeafKind_CLASS){
               type_kind = RADDBGI_TypeKind_IncompleteClass;
             }
-            result = cons_type_incomplete(ctx->root, type_kind, name);
+            result = raddbgic_type_incomplete(ctx->root, type_kind, name);
           }
           
           // complete type
@@ -1376,7 +1376,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             if (range->hdr.kind == CV_LeafKind_CLASS){
               type_kind = RADDBGI_TypeKind_Class;
             }
-            result = cons_type_udt(ctx->root, type_kind, name, size_u64);
+            result = raddbgic_type_udt(ctx->root, type_kind, name, size_u64);
             
             // remember to revisit this for members
             {
@@ -1413,7 +1413,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             if (range->hdr.kind == CV_LeafKind_CLASS2){
               type_kind = RADDBGI_TypeKind_IncompleteClass;
             }
-            result = cons_type_incomplete(ctx->root, type_kind, name);
+            result = raddbgic_type_incomplete(ctx->root, type_kind, name);
           }
           
           // complete type
@@ -1422,7 +1422,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
             if (range->hdr.kind == CV_LeafKind_CLASS2){
               type_kind = RADDBGI_TypeKind_Class;
             }
-            result = cons_type_udt(ctx->root, type_kind, name, size_u64);
+            result = raddbgic_type_udt(ctx->root, type_kind, name, size_u64);
             
             // remember to revisit this for members
             {
@@ -1455,12 +1455,12 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           // incomplete type
           if (lf_union->props & CV_TypeProp_FwdRef){
             result =
-              cons_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteUnion, name);
+              raddbgic_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteUnion, name);
           }
           
           // complete type
           else{
-            result = cons_type_udt(ctx->root, RADDBGI_TypeKind_Union, name, size_u64);
+            result = raddbgic_type_udt(ctx->root, RADDBGI_TypeKind_Union, name, size_u64);
             
             // remember to revisit this for members
             {
@@ -1487,13 +1487,13 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
           
           // incomplete type
           if (lf_enum->props & CV_TypeProp_FwdRef){
-            result = cons_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteEnum, name);
+            result = raddbgic_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteEnum, name);
           }
           
           // complete type
           else{
-            CONS_Type *direct_type = pdbconv_type_resolve_and_check(ctx, lf_enum->base_itype);
-            result = cons_type_enum(ctx->root, direct_type, name);
+            RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, lf_enum->base_itype);
+            result = raddbgic_type_enum(ctx->root, direct_type, name);
             
             // remember to revisit this for enumerates
             {
@@ -1512,7 +1512,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
       case CV_LeafKind_VFTABLE:
       case CV_LeafKind_LABEL:
       {
-        result = cons_type_handled_nil(ctx->root);
+        result = raddbgic_type_handled_nil(ctx->root);
       }break;
       
       // do nothing cases - these get handled in special passes and
@@ -1653,29 +1653,29 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
       default:
       {
         String8 kind_str = cv_string_from_leaf_kind(range->hdr.kind);
-        cons_errorf(ctx->root, "pdbconv: unhandled leaf case %.*s (0x%x)",
-                    str8_varg(kind_str), range->hdr.kind);
+        raddbgic_errorf(ctx->root, "pdbconv: unhandled leaf case %.*s (0x%x)",
+                        str8_varg(kind_str), range->hdr.kind);
       }break;
     }
   }
   
-  cons_type_fill_id(ctx->root, res, result);
+  raddbgic_type_fill_id(ctx->root, res, result);
   
   return(result);
 }
 
-static CONS_Type*
+static RADDBGIC_Type*
 pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype){
-  CONS_Type *result = pdbconv_type_resolve_itype(ctx, itype);
-  if(cons_type_is_unhandled_nil(ctx->root, result))
+  RADDBGIC_Type *result = pdbconv_type_resolve_itype(ctx, itype);
+  if(raddbgic_type_is_unhandled_nil(ctx->root, result))
   {
-    cons_errorf(ctx->root, "pdbconv: could not resolve itype (itype = %u)", itype);
+    raddbgic_errorf(ctx->root, "pdbconv: could not resolve itype (itype = %u)", itype);
   }
   return(result);
 }
 
 static void
-pdbconv_type_resolve_arglist(Arena *arena, CONS_TypeList *out,
+pdbconv_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
                              PDBCONV_Ctx *ctx, CV_TypeId arglist_itype){
   ProfBeginFunction();
   
@@ -1697,8 +1697,8 @@ pdbconv_type_resolve_arglist(Arena *arena, CONS_TypeList *out,
         U32 max_count = (cap - sizeof(*arglist))/sizeof(CV_TypeId);
         U32 clamped_count = ClampTop(arglist->count, max_count);
         for (U32 i = 0; i < clamped_count; i += 1){
-          CONS_Type *param_type = pdbconv_type_resolve_and_check(ctx, itypes[i]);
-          cons_type_list_push(arena,  out, param_type);
+          RADDBGIC_Type *param_type = pdbconv_type_resolve_and_check(ctx, itypes[i]);
+          raddbgic_type_list_push(arena,  out, param_type);
         }
         
       }
@@ -1708,11 +1708,11 @@ pdbconv_type_resolve_arglist(Arena *arena, CONS_TypeList *out,
   ProfEnd();
 }
 
-static CONS_Type*
+static RADDBGIC_Type*
 pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name){
   // TODO(rjf): no idea if this is correct
   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(ctx->hash, ctx->leaf, name, 0);
-  CONS_Type *result = cons_type_from_id(ctx->root, cv_type_id, cv_type_id);
+  RADDBGIC_Type *result = raddbgic_type_from_id(ctx->root, cv_type_id, cv_type_id);
   return(result);
 }
 
@@ -1805,7 +1805,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
   ProfScope("map out data associations")
   {
     // state variables
-    CONS_Symbol *current_proc = 0;
+    RADDBGIC_Symbol *current_proc = 0;
     
     // loop
     CV_RecRange *rec_range = sym->sym_ranges.ranges;
@@ -1851,7 +1851,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
         {
           U64 symbol_id = user_id_base + off;
           U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-          current_proc = cons_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+          current_proc = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
         }break;
       }
     }
@@ -1861,7 +1861,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
   ProfScope("main symbol construction pass")
   {
     // state variables
-    CONS_LocationSet *defrange_target = 0;
+    RADDBGIC_LocationSet *defrange_target = 0;
     B32 defrange_target_is_param = 0;
     
     // loop
@@ -1882,8 +1882,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
       U64 cap = (opl_off - off);
       
       // current state
-      CONS_Scope *current_scope = pdbconv_symbol_current_scope(ctx);
-      CONS_Symbol *current_procedure = 0;
+      RADDBGIC_Scope *current_scope = pdbconv_symbol_current_scope(ctx);
+      RADDBGIC_Symbol *current_procedure = 0;
       if(current_scope != 0)
       {
         current_procedure = current_scope->symbol;
@@ -1927,8 +1927,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             U64 scope_id = user_id_base + scope_num;
             U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
             scope_num += 1;
-            CONS_Scope *block_scope = cons_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
-            cons_scope_set_parent(ctx->root, block_scope, current_scope);
+            RADDBGIC_Scope *block_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
+            raddbgic_scope_set_parent(ctx->root, block_scope, current_scope);
             pdbconv_symbol_push_scope(ctx, block_scope, current_procedure);
             
             // set voff range
@@ -1936,7 +1936,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             if (section != 0){
               U64 voff_first = section->voff + block32->off;
               U64 voff_last = voff_first + block32->len;
-              cons_scope_add_voff_range(ctx->root, block_scope, voff_first, voff_last);
+              raddbgic_scope_add_voff_range(ctx->root, block_scope, voff_first, voff_last);
             }
           }
         }break;
@@ -1966,10 +1966,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               pdbconv_known_global_insert(ctx->arena, &ctx->known_globals, name, voff);
               
               // type of variable
-              CONS_Type *type = pdbconv_type_resolve_itype(ctx, data32->itype);
+              RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, data32->itype);
               
               // container type
-              CONS_Type *container_type = 0;
+              RADDBGIC_Type *container_type = 0;
               U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
               if (container_name_opl > 2){
                 String8 container_name = str8(name.str, container_name_opl - 2);
@@ -1977,7 +1977,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               }
               
               // container symbol
-              CONS_Symbol *container_symbol = 0;
+              RADDBGIC_Symbol *container_symbol = 0;
               if (container_type == 0){
                 container_symbol = current_procedure;
               }
@@ -1988,10 +1988,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               // cons this symbol
               U64 symbol_id = user_id_base + off;
               U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-              CONS_Symbol *symbol = cons_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+              RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
               
-              CONS_SymbolInfo info = zero_struct;
-              info.kind = CONS_SymbolKind_GlobalVariable;
+              RADDBGIC_SymbolInfo info = zero_struct;
+              info.kind = RADDBGIC_SymbolKind_GlobalVariable;
               info.name = name;
               info.type = type;
               info.is_extern = is_extern;
@@ -1999,7 +1999,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               info.container_type = container_type;
               info.container_symbol = container_symbol;
               
-              cons_symbol_set_info(ctx->root, symbol, &info);
+              raddbgic_symbol_set_info(ctx->root, symbol, &info);
             }
           }
         }break;
@@ -2018,10 +2018,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             String8 name = str8_cstring_capped((char*)(proc32 + 1), first + cap);
             
             // type of procedure
-            CONS_Type *type = pdbconv_type_resolve_itype(ctx, proc32->itype);
+            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, proc32->itype);
             
             // container type
-            CONS_Type *container_type = 0;
+            RADDBGIC_Type *container_type = 0;
             U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
             if (container_name_opl > 2){
               String8 container_name = str8(name.str, container_name_opl - 2);
@@ -2029,7 +2029,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             }
             
             // container symbol
-            CONS_Symbol *container_symbol = 0;
+            RADDBGIC_Symbol *container_symbol = 0;
             if (container_type == 0){
               container_symbol = current_procedure;
             }
@@ -2037,7 +2037,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             // get this symbol handle
             U64 symbol_id = user_id_base + off;
             U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-            CONS_Symbol *proc_symbol = cons_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+            RADDBGIC_Symbol *proc_symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
             
             // scope
             
@@ -2048,7 +2048,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             //       no parent.
             U64 scope_id = user_id_base + scope_num;
             U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
-            CONS_Scope *root_scope = cons_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
+            RADDBGIC_Scope *root_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
             pdbconv_symbol_push_scope(ctx, root_scope, proc_symbol);
             scope_num += 1;
             
@@ -2058,7 +2058,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             if (section != 0){
               U64 voff_first = section->voff + proc32->off;
               U64 voff_last = voff_first + proc32->len;
-              cons_scope_add_voff_range(ctx->root, root_scope, voff_first, voff_last);
+              raddbgic_scope_add_voff_range(ctx->root, root_scope, voff_first, voff_last);
               
               voff = voff_first;
             }
@@ -2073,8 +2073,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             B32 is_extern = (kind == CV_SymKind_GPROC32);
             
             // set symbol info
-            CONS_SymbolInfo info = zero_struct;
-            info.kind = CONS_SymbolKind_Procedure;
+            RADDBGIC_SymbolInfo info = zero_struct;
+            info.kind = RADDBGIC_SymbolKind_Procedure;
             info.name = name;
             info.link_name = link_name;
             info.type = type;
@@ -2083,7 +2083,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             info.container_symbol = container_symbol;
             info.root_scope = root_scope;
             
-            cons_symbol_set_info(ctx->root, proc_symbol, &info);
+            raddbgic_symbol_set_info(ctx->root, proc_symbol, &info);
           }
         }break;
         
@@ -2103,7 +2103,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             String8 name = str8_cstring_capped((char*)(regrel32 + 1), first + cap);
             
             // type of variable
-            CONS_Type *type = pdbconv_type_resolve_itype(ctx, regrel32->itype);
+            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, regrel32->itype);
             
             // extract regrel's info
             CV_Reg cv_reg = regrel32->reg;
@@ -2137,15 +2137,15 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             // emit local
             U64 local_id = user_id_base + local_num;;
             U64 local_id_hash = pdbconv_hash_from_local_user_id(sym_unique_id_hash, local_id);
-            CONS_Local *local_var = cons_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
+            RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
             local_num += 1;
             
-            CONS_LocalInfo info = {0};
+            RADDBGIC_LocalInfo info = {0};
             info.kind = local_kind;
             info.scope = current_scope;
             info.name = name;
             info.type = type;
-            cons_local_set_basic_info(ctx->root, local_var, &info);
+            raddbgic_local_set_basic_info(ctx->root, local_var, &info);
             
             // add location to local
             {
@@ -2176,12 +2176,12 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               U32 byte_pos = 0;
               
               // set location case
-              CONS_Location *loc =
+              RADDBGIC_Location *loc =
                 pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
                                                    (S64)(S32)var_off, extra_indirection_to_value);
               
-              CONS_LocationSet *locset = cons_location_set_from_local(ctx->root, local_var);
-              cons_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
+              RADDBGIC_LocationSet *locset = raddbgic_location_set_from_local(ctx->root, local_var);
+              raddbgic_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
             }
           }
         }break;
@@ -2203,10 +2203,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             U32 tls_off = thread32->tls_off;
             
             // type of variable
-            CONS_Type *type = pdbconv_type_resolve_itype(ctx, thread32->itype);
+            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, thread32->itype);
             
             // container type
-            CONS_Type *container_type = 0;
+            RADDBGIC_Type *container_type = 0;
             U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
             if (container_name_opl > 2){
               String8 container_name = str8(name.str, container_name_opl - 2);
@@ -2214,7 +2214,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             }
             
             // container symbol
-            CONS_Symbol *container_symbol = 0;
+            RADDBGIC_Symbol *container_symbol = 0;
             if (container_type == 0){
               container_symbol = current_procedure;
             }
@@ -2225,10 +2225,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             // setup symbol
             U64 symbol_id = user_id_base + off;
             U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-            CONS_Symbol *symbol = cons_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+            RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
             
-            CONS_SymbolInfo info = zero_struct;
-            info.kind = CONS_SymbolKind_ThreadVariable;
+            RADDBGIC_SymbolInfo info = zero_struct;
+            info.kind = RADDBGIC_SymbolKind_ThreadVariable;
             info.name = name;
             info.type = type;
             info.is_extern = is_extern;
@@ -2236,7 +2236,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             info.container_type = container_type;
             info.container_symbol = container_symbol;
             
-            cons_symbol_set_info(ctx->root, symbol, &info);
+            raddbgic_symbol_set_info(ctx->root, symbol, &info);
           }
         }break;
         
@@ -2253,7 +2253,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             String8 name = str8_cstring_capped((char*)(slocal + 1), first + cap);
             
             // type of variable
-            CONS_Type *type = pdbconv_type_resolve_itype(ctx, slocal->itype);
+            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, slocal->itype);
             
             // determine how to handle
             B32 begin_a_global_modification = 0;
@@ -2280,20 +2280,20 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               // emit local
               U64 local_id = user_id_base + local_num;
               U64 local_id_hash = pdbconv_hash_from_local_user_id(sym_unique_id_hash, local_id);
-              CONS_Local *local_var = cons_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
+              RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
               local_num += 1;
               local_var->kind = local_kind;
               local_var->name = name;
               local_var->type = type;
               
-              CONS_LocalInfo info = {0};
+              RADDBGIC_LocalInfo info = {0};
               info.kind = local_kind;
               info.scope = current_scope;
               info.name = name;
               info.type = type;
-              cons_local_set_basic_info(ctx->root, local_var, &info);
+              raddbgic_local_set_basic_info(ctx->root, local_var, &info);
               
-              defrange_target = cons_location_set_from_local(ctx->root, local_var);
+              defrange_target = raddbgic_location_set_from_local(ctx->root, local_var);
               defrange_target_is_param = (local_kind == RADDBGI_LocalKind_Parameter);
             }
           }
@@ -2318,7 +2318,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
               
               // setup location
-              CONS_Location *location = cons_location_val_reg(ctx->root, register_code);
+              RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
               
               // extract range info
               CV_LvarAddrRange *range = &defrange_register->range;
@@ -2356,7 +2356,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               U32 byte_size = ctx->addr_size;
               U32 byte_pos = 0;
               S64 var_off = (S64)defrange_fprel->off;
-              CONS_Location *location =
+              RADDBGIC_Location *location =
                 pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
                                                    var_off, extra_indirection);
               
@@ -2394,7 +2394,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
                 RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
                 
                 // setup location
-                CONS_Location *location = cons_location_val_reg(ctx->root, register_code);
+                RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
                 
                 // extract range info
                 CV_LvarAddrRange *range = &defrange_subfield_register->range;
@@ -2434,13 +2434,13 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               U32 byte_size = ctx->addr_size;
               U32 byte_pos = 0;
               S64 var_off = (S64)defrange_fprel_full_scope->off;
-              CONS_Location *location =
+              RADDBGIC_Location *location =
                 pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
                                                    var_off, extra_indirection);
               
               
               // emit location
-              cons_location_set_add_case(ctx->root, defrange_target, 0, max_U64, location);
+              raddbgic_location_set_add_case(ctx->root, defrange_target, 0, max_U64, location);
             }
           }
         }break;
@@ -2470,7 +2470,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
               S64 var_off = defrange_register_rel->reg_off;
               
               // setup location
-              CONS_Location *location =
+              RADDBGIC_Location *location =
                 pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
                                                    var_off, extra_indirection_to_value);
               
@@ -2500,7 +2500,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
             String8 name = str8_cstring_capped((char*)(file_static + 1), first + cap);
             
             // type of variable
-            CONS_Type *type = pdbconv_type_resolve_itype(ctx, file_static->itype);
+            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, file_static->itype);
             
             // TODO(allen): emit a global modifier symbol
             
@@ -2514,7 +2514,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id){
     
     // if scope stack isn't empty emit an error
     {
-      CONS_Scope* scope = pdbconv_symbol_current_scope(ctx);
+      RADDBGIC_Scope* scope = pdbconv_symbol_current_scope(ctx);
       if(scope != 0)
       {
         // TODO(allen): emit error
@@ -2583,7 +2583,7 @@ pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym){
 // "frameproc" map
 
 static void
-pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,CONS_Symbol *key,PDBCONV_FrameProcData *data){
+pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,RADDBGIC_Symbol *key,PDBCONV_FrameProcData *data){
   ProfBeginFunction();
   U64 key_int = IntFromPtr(key);
   PDBCONV_FrameProcMap *map = &ctx->frame_proc_map;
@@ -2618,7 +2618,7 @@ pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,CONS_Symbol *key,PDBCONV_FrameP
 }
 
 static PDBCONV_FrameProcData*
-pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, CONS_Symbol *key){
+pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *key){
   U64 key_int = IntFromPtr(key);
   PDBCONV_FrameProcMap *map = &ctx->frame_proc_map;
   U32 bucket_idx = key_int%map->buckets_count;
@@ -2639,7 +2639,7 @@ pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, CONS_Symbol *key){
 
 // scope stack
 static void
-pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, CONS_Scope *scope, CONS_Symbol *symbol){
+pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol){
   PDBCONV_ScopeNode *node = ctx->scope_node_free;
   if (node == 0){
     node = push_array(ctx->arena, PDBCONV_ScopeNode, 1);
@@ -2757,42 +2757,42 @@ pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 n
 
 // location info helpers
 
-static CONS_Location*
+static RADDBGIC_Location*
 pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
                                    RADDBGI_RegisterCode reg_code,
                                    U32 reg_byte_size,
                                    U32 reg_byte_pos,
                                    S64 offset,
                                    B32 extra_indirection){
-  CONS_Location *result = 0;
+  RADDBGIC_Location *result = 0;
   if (0 <= offset && offset <= (S64)max_U16){
     if (extra_indirection){
-      result = cons_location_addr_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
+      result = raddbgic_location_addr_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
     }
     else{
-      result = cons_location_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
+      result = raddbgic_location_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
     }
   }
   else{
     Arena *arena = ctx->arena;
     
-    CONS_EvalBytecode bytecode = {0};
+    RADDBGIC_EvalBytecode bytecode = {0};
     U32 regread_param = RADDBGI_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
-    cons_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_RegRead, regread_param);
-    cons_bytecode_push_sconst(arena, &bytecode, offset);
-    cons_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_Add, 0);
+    raddbgic_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_RegRead, regread_param);
+    raddbgic_bytecode_push_sconst(arena, &bytecode, offset);
+    raddbgic_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_Add, 0);
     if (extra_indirection){
-      cons_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_MemRead, ctx->addr_size);
+      raddbgic_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_MemRead, ctx->addr_size);
     }
     
-    result = cons_location_addr_bytecode_stream(ctx->root, &bytecode);
+    result = raddbgic_location_addr_bytecode_stream(ctx->root, &bytecode);
   }
   
   return(result);
 }
 
 static CV_EncodedFramePtrReg
-pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx, CONS_Symbol *proc, B32 param_base){
+pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *proc, B32 param_base){
   CV_EncodedFramePtrReg result = 0;
   if (proc != 0){
     PDBCONV_FrameProcData *frame_proc = pdbconv_symbol_frame_proc_read(ctx, proc);
@@ -2855,8 +2855,8 @@ pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch, CV_EncodedFramePtrR
 
 static void
 pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
-                                      CONS_LocationSet *locset,
-                                      CONS_Location *location,
+                                      RADDBGIC_LocationSet *locset,
+                                      RADDBGIC_Location *location,
                                       CV_LvarAddrRange *range,
                                       CV_LvarAddrGap *gaps, U64 gap_count){
   // extract range info
@@ -2877,13 +2877,13 @@ pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
     U64 voff_gap_first = voff_first + gap_ptr->off;
     U64 voff_gap_opl   = voff_gap_first + gap_ptr->len;
     if (voff_cursor < voff_gap_first){
-      cons_location_set_add_case(ctx->root, locset, voff_cursor, voff_gap_first, location);
+      raddbgic_location_set_add_case(ctx->root, locset, voff_cursor, voff_gap_first, location);
     }
     voff_cursor = voff_gap_opl;
   }
   
   if (voff_cursor < voff_opl){
-    cons_location_set_add_case(ctx->root, locset, voff_cursor, voff_opl, location);
+    raddbgic_location_set_add_case(ctx->root, locset, voff_cursor, voff_opl, location);
   }
 }
 
@@ -3195,7 +3195,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     
     
     // setup root
-    CONS_RootParams root_params = {0};
+    RADDBGIC_RootParams root_params = {0};
     root_params.addr_size = addr_size;
     
     root_params.bucket_count_units = comp_unit_count;
@@ -3205,7 +3205,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     root_params.bucket_count_types = tpi->itype_opl;
     root_params.bucket_count_type_constructs = tpi->itype_opl;
     
-    CONS_Root *root = cons_root_new(&root_params);
+    RADDBGIC_Root *root = raddbgic_root_new(&root_params);
     out->root = root;
     
     // top level info
@@ -3222,13 +3222,13 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
       }
       
       // set top level info
-      CONS_TopLevelInfo tli = {0};
+      RADDBGIC_TopLevelInfo tli = {0};
       tli.architecture = architecture;
       tli.exe_name = params->input_exe_name;
       tli.exe_hash = exe_hash;
       tli.voff_max = voff_max;
       
-      cons_set_top_level_info(root, &tli);
+      raddbgic_set_top_level_info(root, &tli);
     }
     
     
@@ -3242,9 +3242,9 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         String8 name = str8_cstring_capped(name_first, name_opl);
         RADDBGI_BinarySectionFlags flags =
           raddbgi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
-        cons_add_binary_section(root, name, flags,
-                                coff_ptr->voff, coff_ptr->voff + coff_ptr->vsize,
-                                coff_ptr->foff, coff_ptr->foff + coff_ptr->fsize);
+        raddbgic_add_binary_section(root, name, flags,
+                                    coff_ptr->voff, coff_ptr->voff + coff_ptr->vsize,
+                                    coff_ptr->foff, coff_ptr->foff + coff_ptr->fsize);
       }
     }
     
@@ -3287,16 +3287,16 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         RADDBGI_Language lang = raddbgi_language_from_cv_language(sym->info.language);
         
         // basic per unit info
-        CONS_Unit *unit_handle = cons_unit_handle_from_user_id(root, i, i);
+        RADDBGIC_Unit *unit_handle = raddbgic_unit_handle_from_user_id(root, i, i);
         
-        CONS_UnitInfo info = {0};
+        RADDBGIC_UnitInfo info = {0};
         info.unit_name = unit_name;
         info.compiler_name = compiler_name;
         info.object_file = obj_name;
         info.archive_file = archive_file;
         info.language = lang;
         
-        cons_unit_set_info(root, unit_handle, &info);
+        raddbgic_unit_set_info(root, unit_handle, &info);
         
         // unit's line info
         for (CV_C13SubSectionNode *node = unit_c13->first_sub_section;
@@ -3310,13 +3310,13 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
                 lines_n = lines_n->next)
             {
               CV_C13LinesParsed *lines = &lines_n->v;
-              CONS_LineSequence seq = {0};
+              RADDBGIC_LineSequence seq = {0};
               seq.file_name  = lines->file_name;
               seq.voffs      = lines->voffs;
               seq.line_nums  = lines->line_nums;
               seq.col_nums   = lines->col_nums;
               seq.line_count = lines->line_count;
-              cons_unit_add_line_sequence(root, unit_handle, &seq);
+              raddbgic_unit_add_line_sequence(root, unit_handle, &seq);
             }
           }
         }
@@ -3330,10 +3330,10 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
       PDB_CompUnitContribution *contrib_opl = contrib_ptr + comp_unit_contribution_count;
       for (;contrib_ptr < contrib_opl; contrib_ptr += 1){
         if (contrib_ptr->mod < root->unit_count){
-          CONS_Unit *unit_handle = cons_unit_handle_from_user_id(root, contrib_ptr->mod, contrib_ptr->mod);
-          cons_unit_vmap_add_range(root, unit_handle,
-                                   contrib_ptr->voff_first,
-                                   contrib_ptr->voff_opl);
+          RADDBGIC_Unit *unit_handle = raddbgic_unit_handle_from_user_id(root, contrib_ptr->mod, contrib_ptr->mod);
+          raddbgic_unit_vmap_add_range(root, unit_handle,
+                                       contrib_ptr->voff_first,
+                                       contrib_ptr->voff_opl);
         }
       }
     }
@@ -3365,7 +3365,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     
     // conversion errors
     if (!params->hide_errors.converting){
-      for (CONS_Error *error = cons_get_first_error(root);
+      for (RADDBGIC_Error *error = raddbgic_get_first_error(root);
            error != 0;
            error = error->next){
         str8_list_push(arena, &out->errors, error->msg);
@@ -3561,12 +3561,12 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         {str8_lit("pdbconv_ctx frame_proc_map"), pdbconv_ctx?pdbconv_ctx->frame_proc_map.buckets_count:0,  pdbconv_ctx?pdbconv_ctx->frame_proc_map.pair_count:0,  pdbconv_ctx?pdbconv_ctx->frame_proc_map.bucket_collision_count:0},
         {str8_lit("pdbconv_ctx known_globals"),  pdbconv_ctx?pdbconv_ctx->known_globals.buckets_count:0,   pdbconv_ctx?pdbconv_ctx->known_globals.global_count:0, pdbconv_ctx?pdbconv_ctx->known_globals.bucket_collision_count:0},
         {str8_lit("pdbconv_ctx link_names"),     pdbconv_ctx?pdbconv_ctx->link_names.buckets_count:0,      pdbconv_ctx?pdbconv_ctx->link_names.link_name_count:0, pdbconv_ctx?pdbconv_ctx->link_names.bucket_collision_count:0},
-        {str8_lit("cons_root unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count,          out->root->unit_map.bucket_collision_count},
-        {str8_lit("cons_root symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count,        out->root->symbol_map.bucket_collision_count},
-        {str8_lit("cons_root scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count,         out->root->scope_map.bucket_collision_count},
-        {str8_lit("cons_root local_map"),        out->root->local_map.buckets_count,         out->root->local_map.pair_count,         out->root->local_map.bucket_collision_count},
-        {str8_lit("cons_root type_from_id_map"), out->root->type_from_id_map.buckets_count,  out->root->type_from_id_map.pair_count,  out->root->type_from_id_map.bucket_collision_count},
-        {str8_lit("cons_root construct_map"),    out->root->construct_map.buckets_count,     out->root->construct_map.pair_count,     out->root->construct_map.bucket_collision_count},
+        {str8_lit("raddbgic_root unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count,          out->root->unit_map.bucket_collision_count},
+        {str8_lit("raddbgic_root symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count,        out->root->symbol_map.bucket_collision_count},
+        {str8_lit("raddbgic_root scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count,         out->root->scope_map.bucket_collision_count},
+        {str8_lit("raddbgic_root local_map"),        out->root->local_map.buckets_count,         out->root->local_map.pair_count,         out->root->local_map.bucket_collision_count},
+        {str8_lit("raddbgic_root type_from_id_map"), out->root->type_from_id_map.buckets_count,  out->root->type_from_id_map.pair_count,  out->root->type_from_id_map.bucket_collision_count},
+        {str8_lit("raddbgic_root construct_map"),    out->root->construct_map.buckets_count,     out->root->construct_map.pair_count,     out->root->construct_map.bucket_collision_count},
       };
       for(U64 idx = 0; idx < ArrayCount(table_info); idx += 1)
       {

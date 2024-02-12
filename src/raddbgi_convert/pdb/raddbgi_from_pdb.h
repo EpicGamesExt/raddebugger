@@ -62,7 +62,7 @@ typedef struct PDBCONV_FwdMap{
 
 typedef struct PDBCONV_TypeRev{
   struct PDBCONV_TypeRev *next;
-  CONS_Type *owner_type;
+  RADDBGIC_Type *owner_type;
   CV_TypeId field_itype;
 } PDBCONV_TypeRev;
 
@@ -73,7 +73,7 @@ typedef struct PDBCONV_FrameProcData{
 
 typedef struct PDBCONV_FrameProcNode{
   struct PDBCONV_FrameProcNode *next;
-  CONS_Symbol *key;
+  RADDBGIC_Symbol *key;
   PDBCONV_FrameProcData data;
 } PDBCONV_FrameProcNode;
 
@@ -86,8 +86,8 @@ typedef struct PDBCONV_FrameProcMap{
 
 typedef struct PDBCONV_ScopeNode{
   struct PDBCONV_ScopeNode *next;
-  CONS_Scope *scope;
-  CONS_Symbol *symbol;
+  RADDBGIC_Scope *scope;
+  RADDBGIC_Symbol *symbol;
 } PDBCONV_ScopeNode;
 
 typedef struct PDBCONV_KnownGlobalNode{
@@ -148,7 +148,7 @@ typedef struct PDBCONV_Ctx{
   U64 section_count;
   
   // OUTPUT data
-  CONS_Root *root;
+  RADDBGIC_Root *root;
   
   // TEMPORARY STATE
   PDBCONV_FwdMap fwd_map;
@@ -164,7 +164,7 @@ typedef struct PDBCONV_Ctx{
 } PDBCONV_Ctx;
 
 //- rjf: pdb conversion context creation
-static PDBCONV_Ctx *pdbconv_ctx_alloc(PDBCONV_CtxParams *params, CONS_Root *out_root);
+static PDBCONV_Ctx *pdbconv_ctx_alloc(PDBCONV_CtxParams *params, RADDBGIC_Root *out_root);
 
 //- pdb types and symbols
 static void pdbconv_types_and_symbols(PDBCONV_Ctx *pdb_ctx, PDBCONV_TypesSymbolsParams *params);
@@ -187,21 +187,21 @@ static COFF_SectionHeader* pdbconv_sec_header_from_sec_num(PDBCONV_Ctx *ctx, U32
 static void       pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx);
 
 static CV_TypeId  pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static CONS_Type* pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static void       pdbconv_type_equip_members(PDBCONV_Ctx *ctx, CONS_Type *owern_type,
+static RADDBGIC_Type* pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype);
+static void       pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owern_type,
                                              CV_TypeId field_itype);
-static void       pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, CONS_Type *owner_type,
+static void       pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type,
                                                 CV_TypeId field_itype);
 
 // type info construction helpers
-static CONS_Type* pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static CONS_Type* pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static CONS_Type* pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static void       pdbconv_type_resolve_arglist(Arena *arena, CONS_TypeList *out,
+static RADDBGIC_Type* pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype);
+static RADDBGIC_Type* pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype);
+static RADDBGIC_Type* pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype);
+static void       pdbconv_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
                                                PDBCONV_Ctx *ctx, CV_TypeId arglist_itype);
 
 // type info resolution helpers
-static CONS_Type* pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name);
+static RADDBGIC_Type* pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name);
 
 // type fwd map
 static void      pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map,
@@ -219,12 +219,12 @@ static void pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_uni
 static void pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym);
 
 // "frameproc" map
-static void                   pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,CONS_Symbol *key,
+static void                   pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,RADDBGIC_Symbol *key,
                                                               PDBCONV_FrameProcData *data);
-static PDBCONV_FrameProcData* pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, CONS_Symbol *key);
+static PDBCONV_FrameProcData* pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *key);
 
 // scope stack
-static void pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, CONS_Scope *scope, CONS_Symbol *symbol);
+static void pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol);
 static void pdbconv_symbol_pop_scope(PDBCONV_Ctx *ctx);
 static void pdbconv_symbol_clear_scope_stack(PDBCONV_Ctx *ctx);
 
@@ -246,23 +246,23 @@ static void pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *se
 
 
 // location info helpers
-static CONS_Location* pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
-                                                         RADDBGI_RegisterCode reg_code,
-                                                         U32 reg_byte_size,
-                                                         U32 reg_byte_pos,
-                                                         S64 offset,
-                                                         B32 extra_indirection);
+static RADDBGIC_Location* pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
+                                                             RADDBGI_RegisterCode reg_code,
+                                                             U32 reg_byte_size,
+                                                             U32 reg_byte_pos,
+                                                             S64 offset,
+                                                             B32 extra_indirection);
 
 static CV_EncodedFramePtrReg pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx,
-                                                                 CONS_Symbol *proc,
+                                                                 RADDBGIC_Symbol *proc,
                                                                  B32 param_base);
 
 static RADDBGI_RegisterCode pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch,
                                                                       CV_EncodedFramePtrReg encoded_reg);
 
 static void pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
-                                                  CONS_LocationSet *locset,
-                                                  CONS_Location *location,
+                                                  RADDBGIC_LocationSet *locset,
+                                                  RADDBGIC_Location *location,
                                                   CV_LvarAddrRange *range,
                                                   CV_LvarAddrGap *gaps, U64 gap_count);
 
@@ -278,7 +278,7 @@ typedef struct PDBCONV_Out PDBCONV_Out;
 struct PDBCONV_Out
 {
   B32 good_parse;
-  CONS_Root *root;
+  RADDBGIC_Root *root;
   String8List dump;
   String8List errors;
 };

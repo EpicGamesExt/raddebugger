@@ -98,7 +98,7 @@ main(int argc, char **argv){
   if(out != 0 && out->good_parse && params->output_name.size > 0 && out->good_parse)
   {
     String8List baked = {0};
-    cons_bake_file(arena, out->root, &baked);
+    raddbgic_bake_file(arena, out->root, &baked);
     for(String8Node *node = baked.first; node != 0; node = node->next)
     {
       fwrite(node->string.str, node->string.size, 1, out_file);

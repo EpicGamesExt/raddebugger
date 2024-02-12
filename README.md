@@ -292,7 +292,7 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `raddbg_markup` (`RADDBG_`): Standalone header file for marking up user
   programs to work with various features in the `raddbg` debugger. Does not
   depend on `base`.
-- `raddbgi_cons` (`CONS_`): Implements an API for constructing files of the
+- `raddbgi_cons` (`RADDBGIC_`): Implements an API for constructing files of the
   RADDBGI debug info file format.
 - `raddbgi_dump` (`DUMP_`): A dumper utility program for dumping
   textualizations of RADDBGI debug info files.
