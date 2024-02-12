@@ -15,22 +15,23 @@ You can download pre-built binaries for the debugger
 
 The RAD Debugger project aims to simplify the debugger by simplifying and
 unifying the underlying debug info format. In that pursuit we've built
-the RADDBG debug info format, which is what the debugger parses and uses. To
+the RADDBGI debug info format, which is what the debugger parses and uses. To
 work with existing toolchains, we convert PDB (and eventually PE/ELF files
-with embedded DWARF) into the RADDBG format on-demand. This conversion process
+with embedded DWARF) into the RADDBGI format on-demand. This conversion process
 is currently an unoptimized reference version. Nevertheless it's still quite
 fast for smaller PDB files (in many cases faster than many other programs
 simply deserialize the PDBs). It is much slower for much larger projects at the
 moment, but we expect this will vastly improve overtime.
 
-The RADDBG format is currently specified in code, in the files within the
+The RADDBGI format is currently specified in code, in the files within the
 `src/raddbgi_format` folder. The other relevant folders for working with the
 format are:
 
-- `raddbgi_cons`: The RADDBG construction layer, for making RADDBG debug info.
-- `raddbgi_convert`: Our implementation of PDB-to-RADDBG (and an in-progress
-implementation of a DWARF-to-RADDBG) conversion.
-- `raddbgi_dump`: Code for textually dumping information from RADDBG files.
+- `raddbgi_cons`: The RADDBGI construction layer, for making RADDBGI debug
+info.
+- `raddbgi_convert`: Our implementation of PDB-to-RADDBGI (and an in-progress
+implementation of a DWARF-to-RADDBGI) conversion.
+- `raddbgi_dump`: Code for textually dumping information from RADDBGI files.
 
 ## Development Setup Instructions
 
@@ -119,13 +120,13 @@ such that the debugging experience is rock solid.
 
 Additionally, the debug info conversion process is not fast (nor wide) enough
 to support extremely large projects. This is for two reasons: (a) the
-PDB-to-RADDBG converter is an unoptimized reference implementation, and (b) the
-debugger learns of new modules (and thus which PDBs to load) in a
+PDB-to-RADDBGI converter is an unoptimized reference implementation, and (b)
+the debugger learns of new modules (and thus which PDBs to load) in a
 serially-dependent way (this is necessarily the case for correct debugging
 results). We expect that the conversion process' performance can be massively
 improved, and also that some heuristics can be used to begin converting PDBs
-to RADDBGs before the debugger knows those PDBs are needed, thus ensuring the
-associated RADDBG files are ready instantaneously when the associated modules
+to RADDBGIs before the debugger knows those PDBs are needed, thus ensuring the
+associated RADDBGI files are ready instantaneously when the associated modules
 are finally loaded by the debugger. Improving this situation is a major part of
 this phase, as it will make the debugger much more usable for large projects.
 
@@ -145,9 +146,9 @@ The major parts of this phase are:
 abstraction API.
 - Porting the `src/unwind` layer to support x64 ELF unwinding (currently, there
 is only an x64 PE unwinding implementation).
-- Creating a DWARF-to-RADDBG converter (in the same way that we've built a PDB-
-to-RADDBG converter). A partial implementation of this is in
-`src/raddbg_convert/dwarf`.
+- Creating a DWARF-to-RADDBGI converter (in the same way that we've built a
+PDB-to-RADDBGI converter). A partial implementation of this is in
+`src/raddbgi_convert/dwarf`.
 - Porting the `src/render` layer to implement all of the rendering features the
 frontend needs on a Linux-compatible API (the backend used on Windows is D3D11).
 - Porting the `src/font_provider` layer to a Linux-compatible font
@@ -221,10 +222,10 @@ A list of the layers in the codebase and their associated namespaces is below:
   disassembly for a particular virtual address range in a process, and threads
   implemented in this layer decode and cache the disassembly for that range.
 - `dbgi` (`DBGI_`): An asynchronous debug info loader and cache. Loads debug
-  info stored in the RADDBG format. Users ask for debug info for a particular
+  info stored in the RADDBGI format. Users ask for debug info for a particular
   executable, and on separate threads, this layer loads the associated debug
   info file. If necessary, it will launch a separate conversion process to
-  convert original debug info into the RADDBG format.
+  convert original debug info into the RADDBGI format.
 - `demon` (`DEMON_`): An abstraction layer for local-machine, low-level process
   control. The abstraction is used to provide a common interface for process
   control on target platforms. Used to implement part of `ctrl`.
@@ -292,11 +293,11 @@ A list of the layers in the codebase and their associated namespaces is below:
   programs to work with various features in the `raddbg` debugger. Does not
   depend on `base`.
 - `raddbgi_cons` (`CONS_`): Implements an API for constructing files of the
-  RADDBG debug info file format.
+  RADDBGI debug info file format.
 - `raddbgi_dump` (`DUMP_`): A dumper utility program for dumping
-  textualizations of RADDBG debug info files.
-- `raddbgi_format` (`RADDBG_`): Standalone types and helper functions for the
-  RADDBG debug info file format. Does not depend on `base`.
+  textualizations of RADDBGI debug info files.
+- `raddbgi_format` (`RADDBGI_`): Standalone types and helper functions for the
+  RADDBGI debug info file format. Does not depend on `base`.
 - `regs` (`REGS_`): Types, helper functions, and metadata for registers on
   supported architectures. Used in reading/writing registers in `demon`, or in
   looking up register metadata.
@@ -315,7 +316,7 @@ A list of the layers in the codebase and their associated namespaces is below:
   Used by the debugger to visualize source code files. Users ask for text lines,
   tokens, and metadata, and it is prepared on background threads.
 - `type_graph` (`TG_`): Code for analyzing and navigating type structures from
-  RADDBG debug info files, with the additional capability of constructing
+  RADDBGI debug info files, with the additional capability of constructing
   synthetic types *not* found in debug info. Used in `eval` and for various
   visualization features.
 - `ui` (`UI_`): Machinery for building graphical user interfaces. Provides a
