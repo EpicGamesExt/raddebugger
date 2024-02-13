@@ -4,10 +4,10 @@
 ////////////////////////////////
 //~ rjf: Command Line -> Conversion Parameters
 
-internal PDBCONV_Params*
-pdb_convert_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
+internal P2R_Params*
+p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
 {
-  PDBCONV_Params *result = push_array(arena, PDBCONV_Params, 1);
+  P2R_Params *result = push_array(arena, P2R_Params, 1);
   
   // get input pdb
   {
@@ -153,11 +153,11 @@ pdb_convert_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
 
 //- rjf: pdb conversion context creation
 
-internal PDBCONV_Ctx *
-pdbconv_ctx_alloc(PDBCONV_CtxParams *params, RADDBGIC_Root *out_root)
+internal P2R_Ctx *
+p2r_ctx_alloc(P2R_CtxParams *params, RADDBGIC_Root *out_root)
 {
   Arena *arena = arena_alloc();
-  PDBCONV_Ctx *pdb_ctx = push_array(arena, PDBCONV_Ctx, 1);
+  P2R_Ctx *pdb_ctx = push_array(arena, P2R_Ctx, 1);
   pdb_ctx->arena = arena;
   pdb_ctx->arch = params->arch;
   pdb_ctx->addr_size = raddbgi_addr_size_from_arch(pdb_ctx->arch);
@@ -172,32 +172,32 @@ pdbconv_ctx_alloc(PDBCONV_CtxParams *params, RADDBGIC_Root *out_root)
   pdb_ctx->known_globals.buckets_count  = BKTCOUNT(params->known_global_map_bucket_count);
   pdb_ctx->link_names.buckets_count     = BKTCOUNT(params->link_name_map_bucket_count);
 #undef BKTCOUNT
-  pdb_ctx->fwd_map.buckets = push_array(pdb_ctx->arena, PDBCONV_FwdNode *, pdb_ctx->fwd_map.buckets_count);
-  pdb_ctx->frame_proc_map.buckets = push_array(pdb_ctx->arena, PDBCONV_FrameProcNode *, pdb_ctx->frame_proc_map.buckets_count);
-  pdb_ctx->known_globals.buckets = push_array(pdb_ctx->arena, PDBCONV_KnownGlobalNode *, pdb_ctx->known_globals.buckets_count);
-  pdb_ctx->link_names.buckets = push_array(pdb_ctx->arena, PDBCONV_LinkNameNode *, pdb_ctx->link_names.buckets_count);
+  pdb_ctx->fwd_map.buckets = push_array(pdb_ctx->arena, P2R_FwdNode *, pdb_ctx->fwd_map.buckets_count);
+  pdb_ctx->frame_proc_map.buckets = push_array(pdb_ctx->arena, P2R_FrameProcNode *, pdb_ctx->frame_proc_map.buckets_count);
+  pdb_ctx->known_globals.buckets = push_array(pdb_ctx->arena, P2R_KnownGlobalNode *, pdb_ctx->known_globals.buckets_count);
+  pdb_ctx->link_names.buckets = push_array(pdb_ctx->arena, P2R_LinkNameNode *, pdb_ctx->link_names.buckets_count);
   return pdb_ctx;
 }
 
 //- rjf: pdb types and symbols
 
 internal void
-pdbconv_types_and_symbols(PDBCONV_Ctx *pdb_ctx, PDBCONV_TypesSymbolsParams *params)
+p2r_types_and_symbols(P2R_Ctx *pdb_ctx, P2R_TypesSymbolsParams *params)
 {
   ProfBeginFunction();
   
   // convert types
-  pdbconv_type_cons_main_passes(pdb_ctx);
+  p2r_type_cons_main_passes(pdb_ctx);
   if(params->sym != 0)
   {
-    pdbconv_gather_link_names(pdb_ctx, params->sym);
-    pdbconv_symbol_cons(pdb_ctx, params->sym, 0);
+    p2r_gather_link_names(pdb_ctx, params->sym);
+    p2r_symbol_cons(pdb_ctx, params->sym, 0);
   }
   U64 unit_count = params->unit_count;
   for(U64 i = 0; i < unit_count; i += 1)
   {
     CV_SymParsed *unit_sym = params->sym_for_unit[i];
-    pdbconv_symbol_cons(pdb_ctx, unit_sym, 1 + i);
+    p2r_symbol_cons(pdb_ctx, unit_sym, 1 + i);
   }
   
   ProfEnd();
@@ -206,7 +206,7 @@ pdbconv_types_and_symbols(PDBCONV_Ctx *pdb_ctx, PDBCONV_TypesSymbolsParams *para
 //- rjf: decoding helpers
 
 internal U32
-pdbconv_u32_from_numeric(PDBCONV_Ctx *ctx, CV_NumericParsed *num)
+p2r_u32_from_numeric(P2R_Ctx *ctx, CV_NumericParsed *num)
 {
   U64 n_u64 = cv_u64_from_numeric(num);
   U32 n_u32 = (U32)n_u64;
@@ -219,7 +219,7 @@ pdbconv_u32_from_numeric(PDBCONV_Ctx *ctx, CV_NumericParsed *num)
 }
 
 internal COFF_SectionHeader *
-pdbconv_sec_header_from_sec_num(PDBCONV_Ctx *ctx, U32 sec_num)
+p2r_sec_header_from_sec_num(P2R_Ctx *ctx, U32 sec_num)
 {
   COFF_SectionHeader *result = 0;
   if(0 < sec_num && sec_num <= ctx->section_count)
@@ -232,7 +232,7 @@ pdbconv_sec_header_from_sec_num(PDBCONV_Ctx *ctx, U32 sec_num)
 //- rjf: type info
 
 internal void
-pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx)
+p2r_type_cons_main_passes(P2R_Ctx *ctx)
 {
   ProfBeginFunction();
   CV_TypeId itype_first = ctx->leaf->itype_first;
@@ -251,7 +251,7 @@ pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx)
   {
     for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
     {
-      pdbconv_type_resolve_fwd(ctx, itype);
+      p2r_type_resolve_fwd(ctx, itype);
     }
   }
   
@@ -260,29 +260,29 @@ pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx)
   {
     for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
     {
-      pdbconv_type_resolve_itype(ctx, itype);
+      p2r_type_resolve_itype(ctx, itype);
     }
   }
   
   // construct member info
   ProfScope("construct member info")
   {
-    for(PDBCONV_TypeRev *rev = ctx->member_revisit_first;
+    for(P2R_TypeRev *rev = ctx->member_revisit_first;
         rev != 0;
         rev = rev->next)
     {
-      pdbconv_type_equip_members(ctx, rev->owner_type, rev->field_itype);
+      p2r_type_equip_members(ctx, rev->owner_type, rev->field_itype);
     }
   }
   
   // construct enum info
   ProfScope("construct enum info")
   {
-    for(PDBCONV_TypeRev *rev = ctx->enum_revisit_first;
+    for(P2R_TypeRev *rev = ctx->enum_revisit_first;
         rev != 0;
         rev = rev->next)
     {
-      pdbconv_type_equip_enumerates(ctx, rev->owner_type, rev->field_itype);
+      p2r_type_equip_enumerates(ctx, rev->owner_type, rev->field_itype);
     }
   }
   
@@ -291,7 +291,7 @@ pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx)
 }
 
 internal CV_TypeId
-pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype)
+p2r_type_resolve_fwd(P2R_Ctx *ctx, CV_TypeId itype)
 {
   ProfBeginFunction();
   Assert(ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl);
@@ -453,7 +453,7 @@ pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype)
   // save in map
   if(result != 0)
   {
-    pdbconv_type_fwd_map_set(ctx->arena, &ctx->fwd_map, itype, result);
+    p2r_type_fwd_map_set(ctx->arena, &ctx->fwd_map, itype, result);
   }
   
   ProfEnd();
@@ -461,14 +461,14 @@ pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype)
 }
 
 internal RADDBGIC_Type*
-pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype)
+p2r_type_resolve_itype(P2R_Ctx *ctx, CV_TypeId itype)
 {
   B32 is_basic = (itype < 0x1000);
   
   // convert fwd references to real types
   if(!is_basic)
   {
-    CV_TypeId resolved_itype = pdbconv_type_fwd_map_get(&ctx->fwd_map, itype);
+    CV_TypeId resolved_itype = p2r_type_fwd_map_get(&ctx->fwd_map, itype);
     if(resolved_itype != 0)
     {
       itype = resolved_itype;
@@ -481,13 +481,13 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype)
   // basic type
   if(result == 0 && is_basic)
   {
-    result = pdbconv_type_cons_basic(ctx, itype);
+    result = p2r_type_cons_basic(ctx, itype);
   }
   
   // leaf decode
   if(result == 0 && (ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl))
   {
-    result = pdbconv_type_cons_leaf_record(ctx, itype);
+    result = p2r_type_cons_leaf_record(ctx, itype);
   }
   
   // never return null, return "nil" instead
@@ -500,7 +500,7 @@ pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype)
 }
 
 internal void
-pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype)
+p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -613,8 +613,8 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
             list_item_opl_off = name_off + name.size + 1;
             
             // emit member
-            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, member->itype);
-            U32 offset_u32 = pdbconv_u32_from_numeric(ctx, &offset);
+            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, member->itype);
+            U32 offset_u32 = p2r_u32_from_numeric(ctx, &offset);
             raddbgic_type_add_member_data_field(ctx->root, owner_type, name, mem_type, offset_u32);
           }
         }break;
@@ -635,7 +635,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, stmember->itype);
+            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, stmember->itype);
             raddbgic_type_add_member_static_data(ctx->root, owner_type, name, mem_type);
           }
         }break;
@@ -720,7 +720,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
               // TODO(allen): handle attribs
               
               // emit
-              RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, method->itype);
+              RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, method->itype);
               
               switch (prop)
               {
@@ -774,7 +774,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
             // TODO(allen): handle attribs
             
             // emit
-            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, one_method->itype);
+            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, one_method->itype);
             
             switch (prop)
             {
@@ -813,7 +813,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
             list_item_opl_off = name_off + name.size + 1;
             
             // emit member
-            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, nest_type->itype);
+            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, nest_type->itype);
             raddbgic_type_add_member_nested_type(ctx->root, owner_type, mem_type);
           }
         }break;
@@ -834,7 +834,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *mem_type = pdbconv_type_resolve_itype(ctx, nest_type->itype);
+            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, nest_type->itype);
             raddbgic_type_add_member_nested_type(ctx->root, owner_type, mem_type);
           }
         }break;
@@ -855,8 +855,8 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *base_type = pdbconv_type_resolve_itype(ctx, bclass->itype);
-            U32 offset_u32 = pdbconv_u32_from_numeric(ctx, &offset);
+            RADDBGIC_Type *base_type = p2r_type_resolve_itype(ctx, bclass->itype);
+            U32 offset_u32 = p2r_u32_from_numeric(ctx, &offset);
             raddbgic_type_add_member_base(ctx->root, owner_type, base_type, offset_u32);
           }
         }break;
@@ -881,9 +881,9 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *base_type = pdbconv_type_resolve_itype(ctx, vbclass->itype);
-            U32 vbptr_offset_u32  = pdbconv_u32_from_numeric(ctx, &num1);
-            U32 vtable_offset_u32 = pdbconv_u32_from_numeric(ctx, &num2);
+            RADDBGIC_Type *base_type = p2r_type_resolve_itype(ctx, vbclass->itype);
+            U32 vbptr_offset_u32  = p2r_u32_from_numeric(ctx, &num1);
+            U32 vtable_offset_u32 = p2r_u32_from_numeric(ctx, &num2);
             raddbgic_type_add_member_virtual_base(ctx->root, owner_type, base_type,
                                                   vbptr_offset_u32, vtable_offset_u32);
           }
@@ -918,7 +918,7 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
 }
 
 internal void
-pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype)
+p2r_type_equip_enumerates(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -1053,7 +1053,7 @@ pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_Ty
 }
 
 internal RADDBGIC_Type*
-pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype)
+p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype)
 {
   Assert(itype < 0x1000);
   
@@ -1266,7 +1266,7 @@ pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype)
 }
 
 internal RADDBGIC_Type*
-pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
+p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
 {
   Assert(ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl);
   
@@ -1300,7 +1300,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
             flags |= RADDBGI_TypeModifierFlag_Volatile;
           }
           
-          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, modifier->itype);
+          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, modifier->itype);
           if(flags != 0)
           {
             result = raddbgic_type_modifier(ctx->root, direct_type, flags);
@@ -1355,7 +1355,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
             type_kind = RADDBGI_TypeKind_RRef;
           }
           
-          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, pointer->itype);
+          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, pointer->itype);
           RADDBGIC_Type *ptr_type = raddbgic_type_pointer(ctx->root, direct_type, type_kind);
           
           result = ptr_type;
@@ -1377,10 +1377,10 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
           
           // TODO(allen): handle call_kind & attribs
           
-          RADDBGIC_Type *ret_type = pdbconv_type_resolve_and_check(ctx, procedure->ret_itype);
+          RADDBGIC_Type *ret_type = p2r_type_resolve_and_check(ctx, procedure->ret_itype);
           
           RADDBGIC_TypeList param_list = {0};
-          pdbconv_type_resolve_arglist(scratch.arena, &param_list, ctx, procedure->arg_itype);
+          p2r_type_resolve_arglist(scratch.arena, &param_list, ctx, procedure->arg_itype);
           
           result = raddbgic_type_proc(ctx->root, ret_type, &param_list);
           
@@ -1400,15 +1400,15 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
           // TODO(allen): handle call_kind & attribs
           // TODO(allen): preserve "this_adjust"
           
-          RADDBGIC_Type *ret_type = pdbconv_type_resolve_and_check(ctx, mfunction->ret_itype);
+          RADDBGIC_Type *ret_type = p2r_type_resolve_and_check(ctx, mfunction->ret_itype);
           
           RADDBGIC_TypeList param_list = {0};
-          pdbconv_type_resolve_arglist(scratch.arena, &param_list, ctx, mfunction->arg_itype);
+          p2r_type_resolve_arglist(scratch.arena, &param_list, ctx, mfunction->arg_itype);
           
           RADDBGIC_Type *this_type = 0;
           if(mfunction->this_itype != 0)
           {
-            this_type = pdbconv_type_resolve_and_check(ctx, mfunction->this_itype);
+            this_type = p2r_type_resolve_and_check(ctx, mfunction->this_itype);
             result = raddbgic_type_method(ctx->root, this_type, ret_type, &param_list);
           }
           else
@@ -1426,7 +1426,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
         if(sizeof(CV_LeafBitField) <= cap)
         {
           CV_LeafBitField *bit_field = (CV_LeafBitField*)first;
-          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, bit_field->itype);
+          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, bit_field->itype);
           result = raddbgic_type_bitfield(ctx->root, direct_type, bit_field->pos, bit_field->len);
         }
       }break;
@@ -1444,7 +1444,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
           
           U64 full_size = cv_u64_from_numeric(&array_count);
           
-          RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, array->entry_itype);
+          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, array->entry_itype);
           U64 count = full_size;
           if(direct_type != 0 && direct_type->byte_size != 0)
           {
@@ -1498,7 +1498,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
             
             // remember to revisit this for members
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
+              P2R_TypeRev *rev = push_array(ctx->arena, P2R_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_struct->field_itype;
               SLLQueuePush(ctx->member_revisit_first, ctx->member_revisit_last, rev);
@@ -1549,7 +1549,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
             
             // remember to revisit this for members
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
+              P2R_TypeRev *rev = push_array(ctx->arena, P2R_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_struct->field_itype;
               SLLQueuePush(ctx->member_revisit_first, ctx->member_revisit_last, rev);
@@ -1590,7 +1590,7 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
             
             // remember to revisit this for members
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
+              P2R_TypeRev *rev = push_array(ctx->arena, P2R_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_union->field_itype;
               SLLQueuePush(ctx->member_revisit_first, ctx->member_revisit_last, rev);
@@ -1621,12 +1621,12 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
           // complete type
           else
           {
-            RADDBGIC_Type *direct_type = pdbconv_type_resolve_and_check(ctx, lf_enum->base_itype);
+            RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, lf_enum->base_itype);
             result = raddbgic_type_enum(ctx->root, direct_type, name);
             
             // remember to revisit this for enumerates
             {
-              PDBCONV_TypeRev *rev = push_array(ctx->arena, PDBCONV_TypeRev, 1);
+              P2R_TypeRev *rev = push_array(ctx->arena, P2R_TypeRev, 1);
               rev->owner_type = result;
               rev->field_itype = lf_enum->field_itype;
               SLLQueuePush(ctx->enum_revisit_first, ctx->enum_revisit_last, rev);
@@ -1794,9 +1794,9 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype)
 }
 
 internal RADDBGIC_Type*
-pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype)
+p2r_type_resolve_and_check(P2R_Ctx *ctx, CV_TypeId itype)
 {
-  RADDBGIC_Type *result = pdbconv_type_resolve_itype(ctx, itype);
+  RADDBGIC_Type *result = p2r_type_resolve_itype(ctx, itype);
   if(raddbgic_type_is_unhandled_nil(ctx->root, result))
   {
     raddbgic_push_errorf(ctx->root, "pdbconv: could not resolve itype (itype = %u)", itype);
@@ -1805,8 +1805,8 @@ pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype)
 }
 
 internal void
-pdbconv_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
-                             PDBCONV_Ctx *ctx, CV_TypeId arglist_itype)
+p2r_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
+                         P2R_Ctx *ctx, CV_TypeId arglist_itype)
 {
   ProfBeginFunction();
   
@@ -1832,7 +1832,7 @@ pdbconv_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
         U32 clamped_count = ClampTop(arglist->count, max_count);
         for(U32 i = 0; i < clamped_count; i += 1)
         {
-          RADDBGIC_Type *param_type = pdbconv_type_resolve_and_check(ctx, itypes[i]);
+          RADDBGIC_Type *param_type = p2r_type_resolve_and_check(ctx, itypes[i]);
           raddbgic_type_list_push(arena,  out, param_type);
         }
         
@@ -1844,7 +1844,7 @@ pdbconv_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
 }
 
 internal RADDBGIC_Type*
-pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name)
+p2r_type_from_name(P2R_Ctx *ctx, String8 name)
 {
   // TODO(rjf): no idea if this is correct
   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(ctx->hash, ctx->leaf, name, 0);
@@ -1853,13 +1853,13 @@ pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name)
 }
 
 internal void
-pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map, CV_TypeId key, CV_TypeId val)
+p2r_type_fwd_map_set(Arena *arena, P2R_FwdMap *map, CV_TypeId key, CV_TypeId val)
 {
   U64 bucket_idx = key%map->buckets_count;
   
   // search for an existing match
-  PDBCONV_FwdNode *match = 0;
-  for(PDBCONV_FwdNode *node = map->buckets[bucket_idx];
+  P2R_FwdNode *match = 0;
+  for(P2R_FwdNode *node = map->buckets[bucket_idx];
       node != 0;
       node = node->next)
   {
@@ -1873,7 +1873,7 @@ pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map, CV_TypeId key, CV_Ty
   // create a new node if no match
   if(match == 0)
   {
-    match = push_array(arena, PDBCONV_FwdNode, 1);
+    match = push_array(arena, P2R_FwdNode, 1);
     SLLStackPush(map->buckets[bucket_idx], match);
     match->key = key;
     map->pair_count += 1;
@@ -1885,13 +1885,13 @@ pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map, CV_TypeId key, CV_Ty
 }
 
 internal CV_TypeId
-pdbconv_type_fwd_map_get(PDBCONV_FwdMap *map, CV_TypeId key)
+p2r_type_fwd_map_get(P2R_FwdMap *map, CV_TypeId key)
 {
   U64 bucket_idx = key%map->buckets_count;
   
   // search for an existing match
-  PDBCONV_FwdNode *match = 0;
-  for(PDBCONV_FwdNode *node = map->buckets[bucket_idx];
+  P2R_FwdNode *match = 0;
+  for(P2R_FwdNode *node = map->buckets[bucket_idx];
       node != 0;
       node = node->next)
   {
@@ -1915,28 +1915,28 @@ pdbconv_type_fwd_map_get(PDBCONV_FwdMap *map, CV_TypeId key)
 //- symbols
 
 internal U64
-pdbconv_hash_from_local_user_id(U64 sym_hash, U64 id)
+p2r_hash_from_local_user_id(U64 sym_hash, U64 id)
 {
   U64 hash = id ^ (sym_hash<<1) ^ (sym_hash<<4);
   return hash;
 }
 
 internal U64
-pdbconv_hash_from_scope_user_id(U64 sym_hash, U64 id)
+p2r_hash_from_scope_user_id(U64 sym_hash, U64 id)
 {
   U64 hash = id ^ (sym_hash<<1) ^ (sym_hash<<4);
   return hash;
 }
 
 internal U64
-pdbconv_hash_from_symbol_user_id(U64 sym_hash, U64 id)
+p2r_hash_from_symbol_user_id(U64 sym_hash, U64 id)
 {
   U64 hash = id/8 + id ^ (sym_hash<<1) ^ (sym_hash<<4);
   return hash;
 }
 
 internal void
-pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
+p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -1987,10 +1987,10 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           if(current_proc == 0) { break; }
           CV_SymFrameproc *frameproc = (CV_SymFrameproc*)sym_header_struct_base;
-          PDBCONV_FrameProcData data = {0};
+          P2R_FrameProcData data = {0};
           data.frame_size = frameproc->frame_size;
           data.flags = frameproc->flags;
-          pdbconv_symbol_frame_proc_write(ctx, current_proc, &data);
+          p2r_symbol_frame_proc_write(ctx, current_proc, &data);
         }break;
         
         //- rjf: LPROC32/GPROC32
@@ -1998,7 +1998,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         case CV_SymKind_GPROC32:
         {
           U64 symbol_id = user_id_base + sym_off_first;
-          U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
+          U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
           current_proc = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
         }break;
       }
@@ -2043,7 +2043,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
       }
       
       //- rjf: unpack current state
-      RADDBGIC_Scope *current_scope = pdbconv_symbol_current_scope(ctx);
+      RADDBGIC_Scope *current_scope = p2r_symbol_current_scope(ctx);
       RADDBGIC_Symbol *current_procedure = 0;
       if(current_scope != 0)
       {
@@ -2058,7 +2058,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         //- rjf: END
         case CV_SymKind_END:
         {
-          pdbconv_symbol_pop_scope(ctx);
+          p2r_symbol_pop_scope(ctx);
           defrange_target = 0;
           defrange_target_is_param = 0;
         }break;
@@ -2071,13 +2071,13 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           // scope
           U64 scope_id = user_id_base + scope_num;
           scope_num += 1;
-          U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
+          U64 scope_hash = p2r_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
           RADDBGIC_Scope *block_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
           raddbgic_scope_set_parent(ctx->root, block_scope, current_scope);
-          pdbconv_symbol_push_scope(ctx, block_scope, current_procedure);
+          p2r_symbol_push_scope(ctx, block_scope, current_procedure);
           
           // set voff range
-          COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, block32->sec);
+          COFF_SectionHeader *section = p2r_sec_header_from_sec_num(ctx, block32->sec);
           if(section != 0)
           {
             U64 voff_first = section->voff + block32->off;
@@ -2094,27 +2094,27 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           String8 name = str8_cstring_capped(data32+1, sym_data_opl);
           
           // determine voff
-          COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, data32->sec);
+          COFF_SectionHeader *section = p2r_sec_header_from_sec_num(ctx, data32->sec);
           U64 voff = ((section != 0)?section->voff:0) + data32->off;
           
           // deduplicate global variable symbols with the same name & offset
           // * PDB likes to have duplicates of these spread across
           // * different symbol streams so we deduplicate across the
           // * entire translation context.
-          if(!pdbconv_known_global_lookup(&ctx->known_globals, name, voff))
+          if(!p2r_known_global_lookup(&ctx->known_globals, name, voff))
           {
-            pdbconv_known_global_insert(ctx->arena, &ctx->known_globals, name, voff);
+            p2r_known_global_insert(ctx->arena, &ctx->known_globals, name, voff);
             
             // type of variable
-            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, data32->itype);
+            RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, data32->itype);
             
             // container type
             RADDBGIC_Type *container_type = 0;
-            U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
+            U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
             if(container_name_opl > 2)
             {
               String8 container_name = str8(name.str, container_name_opl - 2);
-              container_type = pdbconv_type_from_name(ctx, container_name);
+              container_type = p2r_type_from_name(ctx, container_name);
             }
             
             // container symbol
@@ -2129,7 +2129,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             
             // cons this symbol
             U64 symbol_id = user_id_base + sym_off_first;
-            U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
+            U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
             RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
             
             RADDBGIC_SymbolInfo info = zero_struct;
@@ -2151,15 +2151,15 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           CV_SymProc32 *proc32 = (CV_SymProc32*)sym_header_struct_base;
           String8 name = str8_cstring_capped(proc32+1, sym_data_opl);
-          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, proc32->itype);
+          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, proc32->itype);
           
           // container type
           RADDBGIC_Type *container_type = 0;
-          U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
+          U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
           if(container_name_opl > 2)
           {
             String8 container_name = str8(name.str, container_name_opl - 2);
-            container_type = pdbconv_type_from_name(ctx, container_name);
+            container_type = p2r_type_from_name(ctx, container_name);
           }
           
           // container symbol
@@ -2171,7 +2171,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           // get this symbol handle
           U64 symbol_id = user_id_base + sym_off_first;
-          U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
+          U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
           RADDBGIC_Symbol *proc_symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
           
           // scope
@@ -2182,14 +2182,14 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           //       procedure *not* the namespaces, so a procedure's root scope always has
           //       no parent.
           U64 scope_id = user_id_base + scope_num;
-          U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
+          U64 scope_hash = p2r_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
           RADDBGIC_Scope *root_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
-          pdbconv_symbol_push_scope(ctx, root_scope, proc_symbol);
+          p2r_symbol_push_scope(ctx, root_scope, proc_symbol);
           scope_num += 1;
           
           // set voff range
           U64 voff = 0;
-          COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, proc32->sec);
+          COFF_SectionHeader *section = p2r_sec_header_from_sec_num(ctx, proc32->sec);
           if(section != 0)
           {
             U64 voff_first = section->voff + proc32->off;
@@ -2203,7 +2203,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           String8 link_name = {0};
           if(voff != 0)
           {
-            link_name = pdbconv_link_name_find(&ctx->link_names, voff);
+            link_name = p2r_link_name_find(&ctx->link_names, voff);
           }
           
           // determine link kind
@@ -2231,7 +2231,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           CV_SymRegrel32 *regrel32 = (CV_SymRegrel32*)sym_header_struct_base;
           String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
-          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, regrel32->itype);
+          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, regrel32->itype);
           
           // extract regrel's info
           CV_Reg cv_reg = regrel32->reg;
@@ -2255,8 +2255,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
               U32 frame_size = 0xFFFFFFFF;
               if(current_procedure != 0)
               {
-                PDBCONV_FrameProcData *frameproc =
-                  pdbconv_symbol_frame_proc_read(ctx, current_procedure);
+                P2R_FrameProcData *frameproc =
+                  p2r_symbol_frame_proc_read(ctx, current_procedure);
                 frame_size = frameproc->frame_size;
               }
               if(var_off > frame_size)
@@ -2268,7 +2268,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           // emit local
           U64 local_id = user_id_base + local_num;;
-          U64 local_id_hash = pdbconv_hash_from_local_user_id(sym_unique_id_hash, local_id);
+          U64 local_id_hash = p2r_hash_from_local_user_id(sym_unique_id_hash, local_id);
           RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
           local_num += 1;
           
@@ -2312,8 +2312,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             
             // set location case
             RADDBGIC_Location *loc =
-              pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
-                                                 (S64)(S32)var_off, extra_indirection_to_value);
+              p2r_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
+                                             (S64)(S32)var_off, extra_indirection_to_value);
             
             RADDBGIC_LocationSet *locset = raddbgic_location_set_from_local(ctx->root, local_var);
             raddbgic_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
@@ -2327,15 +2327,15 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           CV_SymThread32 *thread32 = (CV_SymThread32*)sym_header_struct_base;
           String8 name = str8_cstring_capped(thread32+1, sym_data_opl);
           U32 tls_off = thread32->tls_off;
-          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, thread32->itype);
+          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, thread32->itype);
           
           // container type
           RADDBGIC_Type *container_type = 0;
-          U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
+          U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
           if(container_name_opl > 2)
           {
             String8 container_name = str8(name.str, container_name_opl - 2);
-            container_type = pdbconv_type_from_name(ctx, container_name);
+            container_type = p2r_type_from_name(ctx, container_name);
           }
           
           // container symbol
@@ -2350,7 +2350,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           // setup symbol
           U64 symbol_id = user_id_base + sym_off_first;
-          U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
+          U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
           RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
           
           RADDBGIC_SymbolInfo info = zero_struct;
@@ -2370,7 +2370,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           CV_SymLocal *slocal = (CV_SymLocal*)sym_header_struct_base;
           String8 name = str8_cstring_capped(slocal+1, sym_data_opl);
-          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, slocal->itype);
+          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, slocal->itype);
           
           // determine how to handle
           B32 begin_a_global_modification = 0;
@@ -2400,7 +2400,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             
             // emit local
             U64 local_id = user_id_base + local_num;
-            U64 local_id_hash = pdbconv_hash_from_local_user_id(sym_unique_id_hash, local_id);
+            U64 local_id_hash = p2r_hash_from_local_user_id(sym_unique_id_hash, local_id);
             RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
             local_num += 1;
             local_var->kind = local_kind;
@@ -2439,8 +2439,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           
           // emit locations
-          pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                range, gaps, gap_count);
+          p2r_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                            range, gaps, gap_count);
         }break;
         
         //- rjf: DEFRANGE_FRAMEPOINTER_REL
@@ -2451,9 +2451,9 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           // select frame pointer register
           CV_EncodedFramePtrReg encoded_fp_reg =
-            pdbconv_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
+            p2r_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
           RADDBGI_RegisterCode fp_register_code =
-            pdbconv_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
+            p2r_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
           
           // setup location
           B32 extra_indirection = 0;
@@ -2461,8 +2461,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U32 byte_pos = 0;
           S64 var_off = (S64)defrange_fprel->off;
           RADDBGIC_Location *location =
-            pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
-                                               var_off, extra_indirection);
+            p2r_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
+                                           var_off, extra_indirection);
           
           // extract range info
           CV_LvarAddrRange *range = &defrange_fprel->range;
@@ -2470,8 +2470,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           
           // emit locations
-          pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                range, gaps, gap_count);
+          p2r_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                            range, gaps, gap_count);
         }break;
         
         //- rjf: DEFRANGE_SUBFIELD_REGISTER
@@ -2498,8 +2498,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
             
             // emit locations
-            pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                  range, gaps, gap_count);
+            p2r_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                              range, gaps, gap_count);
           }
         }break;
         
@@ -2512,9 +2512,9 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           // select frame pointer register
           CV_EncodedFramePtrReg encoded_fp_reg =
-            pdbconv_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
+            p2r_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
           RADDBGI_RegisterCode fp_register_code =
-            pdbconv_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
+            p2r_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
           
           // setup location
           B32 extra_indirection = 0;
@@ -2522,8 +2522,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U32 byte_pos = 0;
           S64 var_off = (S64)defrange_fprel_full_scope->off;
           RADDBGIC_Location *location =
-            pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
-                                               var_off, extra_indirection);
+            p2r_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
+                                           var_off, extra_indirection);
           
           
           // emit location
@@ -2548,8 +2548,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           // setup location
           RADDBGIC_Location *location =
-            pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
-                                               var_off, extra_indirection_to_value);
+            p2r_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
+                                           var_off, extra_indirection_to_value);
           
           // extract range info
           CV_LvarAddrRange *range = &defrange_register_rel->range;
@@ -2557,8 +2557,8 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           
           // emit locations
-          pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                range, gaps, gap_count);
+          p2r_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                            range, gaps, gap_count);
         }break;
         
         //- rjf: FILESTATIC
@@ -2566,7 +2566,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           CV_SymFileStatic *file_static = (CV_SymFileStatic*)sym_header_struct_base;
           String8 name = str8_cstring_capped(file_static+1, sym_data_opl);
-          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, file_static->itype);
+          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, file_static->itype);
           
           // TODO(allen): emit a global modifier symbol
           
@@ -2579,7 +2579,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
     
     //- rjf: non-empty scope stack? -> error
     {
-      RADDBGIC_Scope *scope = pdbconv_symbol_current_scope(ctx);
+      RADDBGIC_Scope *scope = p2r_symbol_current_scope(ctx);
       if(scope != 0)
       {
         // TODO(allen): emit error
@@ -2587,7 +2587,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
     }
     
     //- rjf: clear scope stack
-    pdbconv_symbol_clear_scope_stack(ctx);
+    p2r_symbol_clear_scope_stack(ctx);
   }
   
   scratch_end(scratch);
@@ -2595,7 +2595,7 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
 }
 
 internal void
-pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym)
+p2r_gather_link_names(P2R_Ctx *ctx, CV_SymParsed *sym)
 {
   ProfBeginFunction();
   // extract important values from parameters
@@ -2636,14 +2636,14 @@ pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym)
           
           // calculate voff
           U64 voff = 0;
-          COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, pub32->sec);
+          COFF_SectionHeader *section = p2r_sec_header_from_sec_num(ctx, pub32->sec);
           if(section != 0)
           {
             voff = section->voff + pub32->off;
           }
           
           // save link name
-          pdbconv_link_name_save(ctx->arena, &ctx->link_names, voff, name);
+          p2r_link_name_save(ctx->arena, &ctx->link_names, voff, name);
         }
       }break;
     }
@@ -2654,16 +2654,16 @@ pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym)
 // "frameproc" map
 
 internal void
-pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,RADDBGIC_Symbol *key,PDBCONV_FrameProcData *data)
+p2r_symbol_frame_proc_write(P2R_Ctx *ctx,RADDBGIC_Symbol *key,P2R_FrameProcData *data)
 {
   ProfBeginFunction();
   U64 key_int = IntFromPtr(key);
-  PDBCONV_FrameProcMap *map = &ctx->frame_proc_map;
+  P2R_FrameProcMap *map = &ctx->frame_proc_map;
   U32 bucket_idx = key_int%map->buckets_count;
   
   // find match
-  PDBCONV_FrameProcNode *match = 0;
-  for(PDBCONV_FrameProcNode *node = map->buckets[bucket_idx];
+  P2R_FrameProcNode *match = 0;
+  for(P2R_FrameProcNode *node = map->buckets[bucket_idx];
       node != 0;
       node = node->next)
   {
@@ -2683,7 +2683,7 @@ pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,RADDBGIC_Symbol *key,PDBCONV_Fr
   // insert new association if no match
   if(match == 0)
   {
-    match = push_array(ctx->arena, PDBCONV_FrameProcNode, 1);
+    match = push_array(ctx->arena, P2R_FrameProcNode, 1);
     SLLStackPush(map->buckets[bucket_idx], match);
     match->key = key;
     MemoryCopyStruct(&match->data, data);
@@ -2693,16 +2693,16 @@ pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,RADDBGIC_Symbol *key,PDBCONV_Fr
   ProfEnd();
 }
 
-internal PDBCONV_FrameProcData*
-pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *key)
+internal P2R_FrameProcData*
+p2r_symbol_frame_proc_read(P2R_Ctx *ctx, RADDBGIC_Symbol *key)
 {
   U64 key_int = IntFromPtr(key);
-  PDBCONV_FrameProcMap *map = &ctx->frame_proc_map;
+  P2R_FrameProcMap *map = &ctx->frame_proc_map;
   U32 bucket_idx = key_int%map->buckets_count;
   
   // find match
-  PDBCONV_FrameProcData *result = 0;
-  for(PDBCONV_FrameProcNode *node = map->buckets[bucket_idx];
+  P2R_FrameProcData *result = 0;
+  for(P2R_FrameProcNode *node = map->buckets[bucket_idx];
       node != 0;
       node = node->next)
   {
@@ -2718,12 +2718,12 @@ pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *key)
 
 // scope stack
 internal void
-pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol)
+p2r_symbol_push_scope(P2R_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol)
 {
-  PDBCONV_ScopeNode *node = ctx->scope_node_free;
+  P2R_ScopeNode *node = ctx->scope_node_free;
   if(node == 0)
   {
-    node = push_array(ctx->arena, PDBCONV_ScopeNode, 1);
+    node = push_array(ctx->arena, P2R_ScopeNode, 1);
   }
   else
   {
@@ -2735,9 +2735,9 @@ pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symb
 }
 
 internal void
-pdbconv_symbol_pop_scope(PDBCONV_Ctx *ctx)
+p2r_symbol_pop_scope(P2R_Ctx *ctx)
 {
-  PDBCONV_ScopeNode *node = ctx->scope_stack;
+  P2R_ScopeNode *node = ctx->scope_stack;
   if(node != 0)
   {
     SLLStackPop(ctx->scope_stack);
@@ -2746,11 +2746,11 @@ pdbconv_symbol_pop_scope(PDBCONV_Ctx *ctx)
 }
 
 internal void
-pdbconv_symbol_clear_scope_stack(PDBCONV_Ctx *ctx)
+p2r_symbol_clear_scope_stack(P2R_Ctx *ctx)
 {
   for(;;)
   {
-    PDBCONV_ScopeNode *node = ctx->scope_stack;
+    P2R_ScopeNode *node = ctx->scope_stack;
     if(node == 0)
     {
       break;
@@ -2763,7 +2763,7 @@ pdbconv_symbol_clear_scope_stack(PDBCONV_Ctx *ctx)
 // PDB/C++ name parsing helper
 
 internal U64
-pdbconv_end_of_cplusplus_container_name(String8 str)
+p2r_end_of_cplusplus_container_name(String8 str)
 {
   // NOTE: This finds the index one past the last "::" contained in str.
   //       if no "::" is contained in str, then the returned index is 0.
@@ -2787,7 +2787,7 @@ pdbconv_end_of_cplusplus_container_name(String8 str)
 // known global set
 
 internal U64
-pdbconv_known_global_hash(String8 name, U64 voff)
+p2r_known_global_hash(String8 name, U64 voff)
 {
   U64 result = 5381 ^ voff;
   U8 *ptr = name.str;
@@ -2800,13 +2800,13 @@ pdbconv_known_global_hash(String8 name, U64 voff)
 }
 
 internal B32
-pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff)
+p2r_known_global_lookup(P2R_KnownGlobalSet *set, String8 name, U64 voff)
 {
-  U64 hash = pdbconv_known_global_hash(name, voff);
+  U64 hash = p2r_known_global_hash(name, voff);
   U64 bucket_idx = hash%set->buckets_count;
   
-  PDBCONV_KnownGlobalNode *match = 0;
-  for(PDBCONV_KnownGlobalNode *node = set->buckets[bucket_idx];
+  P2R_KnownGlobalNode *match = 0;
+  for(P2R_KnownGlobalNode *node = set->buckets[bucket_idx];
       node != 0;
       node = node->next)
   {
@@ -2824,13 +2824,13 @@ pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff)
 }
 
 internal void
-pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 name, U64 voff)
+p2r_known_global_insert(Arena *arena, P2R_KnownGlobalSet *set, String8 name, U64 voff)
 {
-  U64 hash = pdbconv_known_global_hash(name, voff);
+  U64 hash = p2r_known_global_hash(name, voff);
   U64 bucket_idx = hash%set->buckets_count;
   
-  PDBCONV_KnownGlobalNode *match = 0;
-  for(PDBCONV_KnownGlobalNode *node = set->buckets[bucket_idx];
+  P2R_KnownGlobalNode *match = 0;
+  for(P2R_KnownGlobalNode *node = set->buckets[bucket_idx];
       node != 0;
       node = node->next)
   {
@@ -2845,7 +2845,7 @@ pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 n
   
   if(match == 0)
   {
-    PDBCONV_KnownGlobalNode *node = push_array(arena, PDBCONV_KnownGlobalNode, 1);
+    P2R_KnownGlobalNode *node = push_array(arena, P2R_KnownGlobalNode, 1);
     SLLStackPush(set->buckets[bucket_idx], node);
     node->key_name = push_str8_copy(arena, name);
     node->key_voff = voff;
@@ -2858,12 +2858,12 @@ pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set, String8 n
 // location info helpers
 
 internal RADDBGIC_Location*
-pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
-                                   RADDBGI_RegisterCode reg_code,
-                                   U32 reg_byte_size,
-                                   U32 reg_byte_pos,
-                                   S64 offset,
-                                   B32 extra_indirection)
+p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
+                               RADDBGI_RegisterCode reg_code,
+                               U32 reg_byte_size,
+                               U32 reg_byte_pos,
+                               S64 offset,
+                               B32 extra_indirection)
 {
   RADDBGIC_Location *result = 0;
   if(0 <= offset && offset <= (S64)max_U16)
@@ -2898,12 +2898,12 @@ pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
 }
 
 internal CV_EncodedFramePtrReg
-pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *proc, B32 param_base)
+p2r_cv_encoded_fp_reg_from_proc(P2R_Ctx *ctx, RADDBGIC_Symbol *proc, B32 param_base)
 {
   CV_EncodedFramePtrReg result = 0;
   if(proc != 0)
   {
-    PDBCONV_FrameProcData *frame_proc = pdbconv_symbol_frame_proc_read(ctx, proc);
+    P2R_FrameProcData *frame_proc = p2r_symbol_frame_proc_read(ctx, proc);
     CV_FrameprocFlags flags = frame_proc->flags;
     if(param_base)
     {
@@ -2918,7 +2918,7 @@ pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *proc, B32
 }
 
 internal RADDBGI_RegisterCode
-pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch, CV_EncodedFramePtrReg encoded_reg)
+p2r_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch, CV_EncodedFramePtrReg encoded_reg)
 {
   RADDBGI_RegisterCode result = 0;
   
@@ -2968,17 +2968,17 @@ pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch, CV_EncodedFramePtrR
 }
 
 internal void
-pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
-                                      RADDBGIC_LocationSet *locset,
-                                      RADDBGIC_Location *location,
-                                      CV_LvarAddrRange *range,
-                                      CV_LvarAddrGap *gaps, U64 gap_count)
+p2r_location_over_lvar_addr_range(P2R_Ctx *ctx,
+                                  RADDBGIC_LocationSet *locset,
+                                  RADDBGIC_Location *location,
+                                  CV_LvarAddrRange *range,
+                                  CV_LvarAddrGap *gaps, U64 gap_count)
 {
   // extract range info
   U64 voff_first = 0;
   U64 voff_opl = 0;
   {
-    COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, range->sec);
+    COFF_SectionHeader *section = p2r_sec_header_from_sec_num(ctx, range->sec);
     if(section != 0)
     {
       voff_first = section->voff + range->off;
@@ -3009,12 +3009,12 @@ pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
 // link names
 
 internal void
-pdbconv_link_name_save(Arena *arena, PDBCONV_LinkNameMap *map, U64 voff, String8 name)
+p2r_link_name_save(Arena *arena, P2R_LinkNameMap *map, U64 voff, String8 name)
 {
   U64 hash = (voff >> 3) ^ ((7 & voff) << 6);
   U64 bucket_idx = hash%map->buckets_count;
   
-  PDBCONV_LinkNameNode *node = push_array(arena, PDBCONV_LinkNameNode, 1);
+  P2R_LinkNameNode *node = push_array(arena, P2R_LinkNameNode, 1);
   SLLStackPush(map->buckets[bucket_idx], node);
   node->voff = voff;
   node->name = push_str8_copy(arena, name);
@@ -3023,13 +3023,13 @@ pdbconv_link_name_save(Arena *arena, PDBCONV_LinkNameMap *map, U64 voff, String8
 }
 
 internal String8
-pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff)
+p2r_link_name_find(P2R_LinkNameMap *map, U64 voff)
 {
   U64 hash = (voff >> 3) ^ ((7 & voff) << 6);
   U64 bucket_idx = hash%map->buckets_count;
   
   String8 result = {0};
-  for(PDBCONV_LinkNameNode *node = map->buckets[bucket_idx];
+  for(P2R_LinkNameNode *node = map->buckets[bucket_idx];
       node != 0;
       node = node->next)
   {
@@ -3046,10 +3046,10 @@ pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff)
 ////////////////////////////////
 //~ Conversion Path
 
-internal PDBCONV_Out *
-pdbconv_convert(Arena *arena, PDBCONV_Params *params)
+internal P2R_Out *
+p2r_convert(Arena *arena, P2R_Params *params)
 {
-  PDBCONV_Out *out = push_array(arena, PDBCONV_Out, 1);
+  P2R_Out *out = push_array(arena, P2R_Out, 1);
   out->good_parse = 1;
   
   // will we try to parse an input file?
@@ -3289,7 +3289,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
   }
   
   // output generation
-  PDBCONV_Ctx *pdbconv_ctx = 0;
+  P2R_Ctx *p2r_ctx = 0;
   if(params->output_name.size > 0)
   {
     
@@ -3497,7 +3497,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     
     // rjf: produce pdb conversion context
     {
-      PDBCONV_CtxParams p = {0};
+      P2R_CtxParams p = {0};
       {
         p.arch = architecture;
         p.tpi_hash = tpi_hash;
@@ -3508,16 +3508,16 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         p.known_global_map_bucket_count = symbol_count_prediction;
         p.link_name_map_bucket_count    = symbol_count_prediction;
       }
-      pdbconv_ctx = pdbconv_ctx_alloc(&p, root);
+      p2r_ctx = p2r_ctx_alloc(&p, root);
     }
     
     // types & symbols
     {
-      PDBCONV_TypesSymbolsParams p = {0};
+      P2R_TypesSymbolsParams p = {0};
       p.sym = sym;
       p.sym_for_unit = sym_for_unit;
       p.unit_count = comp_unit_count;
-      pdbconv_types_and_symbols(pdbconv_ctx, &p);
+      p2r_types_and_symbols(p2r_ctx, &p);
     }
     
     // conversion errors
@@ -3740,10 +3740,10 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
       }
       table_info[] =
       {
-        {str8_lit("pdbconv_ctx fwd_map"),        pdbconv_ctx?pdbconv_ctx->fwd_map.buckets_count:0,         pdbconv_ctx?pdbconv_ctx->fwd_map.pair_count:0,         pdbconv_ctx?pdbconv_ctx->fwd_map.bucket_collision_count:0},
-        {str8_lit("pdbconv_ctx frame_proc_map"), pdbconv_ctx?pdbconv_ctx->frame_proc_map.buckets_count:0,  pdbconv_ctx?pdbconv_ctx->frame_proc_map.pair_count:0,  pdbconv_ctx?pdbconv_ctx->frame_proc_map.bucket_collision_count:0},
-        {str8_lit("pdbconv_ctx known_globals"),  pdbconv_ctx?pdbconv_ctx->known_globals.buckets_count:0,   pdbconv_ctx?pdbconv_ctx->known_globals.global_count:0, pdbconv_ctx?pdbconv_ctx->known_globals.bucket_collision_count:0},
-        {str8_lit("pdbconv_ctx link_names"),     pdbconv_ctx?pdbconv_ctx->link_names.buckets_count:0,      pdbconv_ctx?pdbconv_ctx->link_names.link_name_count:0, pdbconv_ctx?pdbconv_ctx->link_names.bucket_collision_count:0},
+        {str8_lit("p2r_ctx fwd_map"),        p2r_ctx?p2r_ctx->fwd_map.buckets_count:0,         p2r_ctx?p2r_ctx->fwd_map.pair_count:0,         p2r_ctx?p2r_ctx->fwd_map.bucket_collision_count:0},
+        {str8_lit("p2r_ctx frame_proc_map"), p2r_ctx?p2r_ctx->frame_proc_map.buckets_count:0,  p2r_ctx?p2r_ctx->frame_proc_map.pair_count:0,  p2r_ctx?p2r_ctx->frame_proc_map.bucket_collision_count:0},
+        {str8_lit("p2r_ctx known_globals"),  p2r_ctx?p2r_ctx->known_globals.buckets_count:0,   p2r_ctx?p2r_ctx->known_globals.global_count:0, p2r_ctx?p2r_ctx->known_globals.bucket_collision_count:0},
+        {str8_lit("p2r_ctx link_names"),     p2r_ctx?p2r_ctx->link_names.buckets_count:0,      p2r_ctx?p2r_ctx->link_names.link_name_count:0, p2r_ctx?p2r_ctx->link_names.bucket_collision_count:0},
         {str8_lit("raddbgic_root unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count,          out->root->unit_map.bucket_collision_count},
         {str8_lit("raddbgic_root symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count,        out->root->symbol_map.bucket_collision_count},
         {str8_lit("raddbgic_root scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count,         out->root->scope_map.bucket_collision_count},

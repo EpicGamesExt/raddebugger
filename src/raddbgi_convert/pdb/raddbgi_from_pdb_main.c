@@ -54,7 +54,7 @@ main(int argc, char **argv){
   ProfBeginCapture("raddbgi_from_pdb");
   
   //- rjf: parse arguments
-  PDBCONV_Params *params = pdb_convert_params_from_cmd_line(arena, &cmdline);
+  P2R_Params *params = p2r_params_from_cmd_line(arena, &cmdline);
   
   //- rjf: show input errors
   if (params->errors.node_count > 0 &&
@@ -75,10 +75,10 @@ main(int argc, char **argv){
   }
   
   //- rjf: convert
-  PDBCONV_Out *out = 0;
+  P2R_Out *out = 0;
   if(out_file != 0)
   {
-    out = pdbconv_convert(arena, params);
+    out = p2r_convert(arena, params);
   }
   
   //- rjf: print dump

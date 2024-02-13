@@ -315,7 +315,7 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `raddbg` (no namespace): The layer which ties everything together for the main
   graphical debugger. Not much "meat", just drives `df`, implements command line
   options, and so on.
-- `raddbgi_convert` (`PDBCONV_`): Our implementation of PDB-to-RADDBGI and
+- `raddbgi_convert` (`P2R_`): Our implementation of PDB-to-RADDBGI and
   DWARF-to-RADDBGI conversion.
 - `raddbgi_dump` (`RADDBGIDUMP_`): A dumper utility program for dumping
   textualizations of RADDBGI debug info files.

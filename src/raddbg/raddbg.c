@@ -616,7 +616,7 @@ entry_point(int argc, char **argv)
       Temp scratch = scratch_begin(0, 0);
       
       //- rjf: parse arguments
-      PDBCONV_Params *params = pdb_convert_params_from_cmd_line(scratch.arena, &cmdln);
+      P2R_Params *params = p2r_params_from_cmd_line(scratch.arena, &cmdln);
       
       //- rjf: open output file
       String8 output_name = push_str8_copy(scratch.arena, params->output_name);
@@ -624,10 +624,10 @@ entry_point(int argc, char **argv)
       B32 out_file_is_good = !os_handle_match(out_file, os_handle_zero());
       
       //- rjf: convert
-      PDBCONV_Out *out = 0;
+      P2R_Out *out = 0;
       if(out_file_is_good)
       {
-        out = pdbconv_convert(scratch.arena, params);
+        out = p2r_convert(scratch.arena, params);
       }
       
       //- rjf: bake file
