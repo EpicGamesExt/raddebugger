@@ -222,7 +222,7 @@ raddbgic_bytecode_concat_in_place(RADDBGIC_EvalBytecode *left_dst, RADDBGIC_Eval
   {
     if(left_dst->first_op == 0)
     {
-      MemoryCopyStruct(left_dst, right_destroyed);
+      raddbgic_memcpy_struct(left_dst, right_destroyed);
     }
     else
     {
@@ -230,7 +230,7 @@ raddbgic_bytecode_concat_in_place(RADDBGIC_EvalBytecode *left_dst, RADDBGIC_Eval
       left_dst->op_count += right_destroyed->op_count;
       left_dst->encoded_size += right_destroyed->encoded_size;
     }
-    MemoryZeroStruct(right_destroyed);
+    raddbgic_memzero_struct(right_destroyed);
   }
 }
 
@@ -268,7 +268,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
         for(; opl < count && keys[opl - 1].key <= keys[opl].key; opl += 1);
         
         // generate an ordered range node
-        RADDBGIC_OrderedRange *new_range = raddbgic_push_array(scratch.arena, RADDBGIC_OrderedRange, 1);
+        RADDBGIC_OrderedRange *new_range = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGIC_OrderedRange, 1);
         SLLQueuePush(ranges_first, ranges_last, new_range);
         range_count += 1;
         new_range->first = first;
@@ -318,7 +318,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
           if(src_ranges == 0)
           {
             RADDBGI_U64 first = range1->first;
-            MemoryCopy(dst + first, src + first, sizeof(*src)*(range1->opl - first));
+            raddbgic_memcpy(dst + first, src + first, sizeof(*src)*(range1->opl - first));
             SLLQueuePush(dst_ranges, dst_ranges_last, range1);
             break;
           }
@@ -327,7 +327,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
           RADDBGIC_OrderedRange *range2 = src_ranges;
           SLLStackPop(src_ranges);
           
-          Assert(range1->opl == range2->first);
+          raddbgic_assert(range1->opl == range2->first);
           
           // merge these ranges
           RADDBGI_U64 jd = range1->first;
@@ -339,7 +339,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
           {
             if(src[j1].key <= src[j2].key)
             {
-              MemoryCopy(dst + jd, src + j1, sizeof(*src));
+              raddbgic_memcpy(dst + jd, src + j1, sizeof(*src));
               j1 += 1;
               jd += 1;
               if(j1 >= j1_opl)
@@ -349,7 +349,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
             }
             else
             {
-              MemoryCopy(dst + jd, src + j2, sizeof(*src));
+              raddbgic_memcpy(dst + jd, src + j2, sizeof(*src));
               j2 += 1;
               jd += 1;
               if(j2 >= j2_opl)
@@ -360,11 +360,11 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
           }
           if(j1 < j1_opl)
           {
-            MemoryCopy(dst + jd, src + j1, sizeof(*src)*(j1_opl - j1));
+            raddbgic_memcpy(dst + jd, src + j1, sizeof(*src)*(j1_opl - j1));
           }
           else
           {
-            MemoryCopy(dst + jd, src + j2, sizeof(*src)*(j2_opl - j2));
+            raddbgic_memcpy(dst + jd, src + j2, sizeof(*src)*(j2_opl - j2));
           }
           
           // save this as one range
@@ -389,7 +389,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
 #if 0
   // assert sortedness
   for(RADDBGI_U64 i = 1; i < count; i += 1){
-    Assert(result[i - 1].key <= result[i].key);
+    raddbgic_assert(result[i - 1].key <= result[i].key);
   }
 #endif
   
@@ -407,7 +407,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
 RADDBGI_PROC void
 raddbgic_u64toptr_map_init(RADDBGIC_Arena *arena, RADDBGIC_U64ToPtrMap *map, RADDBGI_U64 bucket_count)
 {
-  Assert(IsPow2OrZero(bucket_count) && bucket_count > 0);
+  raddbgic_assert(IsPow2OrZero(bucket_count) && bucket_count > 0);
   map->buckets = raddbgic_push_array(arena, RADDBGIC_U64ToPtrNode*, bucket_count);
   map->buckets_count = bucket_count;
 }
@@ -526,13 +526,13 @@ raddbgic_root_alloc(RADDBGIC_RootParams *params)
     // references to "handled nil type" should be emitted as
     // references to nil - but should not generate error
     // messages when they are detected - they are expected!
-    Assert(result->nil_type->idx == result->handled_nil_type.idx);
+    raddbgic_assert(result->nil_type->idx == result->handled_nil_type.idx);
   }
   
   // setup a null scope
   {
     RADDBGIC_Scope *scope = raddbgic_push_array(result->arena, RADDBGIC_Scope, 1);
-    SLLQueuePush_N(result->first_scope, result->last_scope, scope, next_order);
+    RADDBGIC_SLLQueuePush_N(result->first_scope, result->last_scope, scope, next_order);
     result->scope_count += 1;
   }
   
@@ -597,7 +597,7 @@ RADDBGI_PROC void
 raddbgic_set_top_level_info(RADDBGIC_Root *root, RADDBGIC_TopLevelInfo *tli)
 {
   raddbgic_requiref(root, !root->top_level_info_is_set, return, "Top level information set multiple times.");
-  MemoryCopyStruct(&root->top_level_info, tli);
+  raddbgic_memcpy_struct(&root->top_level_info, tli);
   root->top_level_info_is_set = 1;
 }
 
@@ -633,7 +633,7 @@ raddbgic_unit_handle_from_user_id(RADDBGIC_Root *root, RADDBGI_U64 unit_user_id,
   {
     result = raddbgic_push_array(root->arena, RADDBGIC_Unit, 1);
     result->idx = root->unit_count;
-    SLLQueuePush_N(root->unit_first, root->unit_last, result, next_order);
+    RADDBGIC_SLLQueuePush_N(root->unit_first, root->unit_last, result, next_order);
     root->unit_count += 1;
     raddbgic_u64toptr_map_insert(root->arena, &root->unit_map, unit_user_id, unit_user_id, &lookup, result);
   }
@@ -664,15 +664,15 @@ raddbgic_unit_add_line_sequence(RADDBGIC_Root *root, RADDBGIC_Unit *unit, RADDBG
   node->line_seq.file_name = raddbgic_str8_copy(root->arena, line_sequence->file_name);
   
   node->line_seq.voffs = raddbgic_push_array(root->arena, RADDBGI_U64, line_sequence->line_count + 1);
-  MemoryCopy(node->line_seq.voffs, line_sequence->voffs, sizeof(RADDBGI_U64)*(line_sequence->line_count + 1));
+  raddbgic_memcpy(node->line_seq.voffs, line_sequence->voffs, sizeof(RADDBGI_U64)*(line_sequence->line_count + 1));
   
   node->line_seq.line_nums = raddbgic_push_array(root->arena, RADDBGI_U32, line_sequence->line_count);
-  MemoryCopy(node->line_seq.line_nums, line_sequence->line_nums, sizeof(RADDBGI_U32)*line_sequence->line_count);
+  raddbgic_memcpy(node->line_seq.line_nums, line_sequence->line_nums, sizeof(RADDBGI_U32)*line_sequence->line_count);
   
   if(line_sequence->col_nums != 0)
   {
-    node->line_seq.col_nums = raddbgic_push_array(root->arena, U16, line_sequence->line_count);
-    MemoryCopy(node->line_seq.col_nums, line_sequence->col_nums, sizeof(U16)*line_sequence->line_count);
+    node->line_seq.col_nums = raddbgic_push_array(root->arena, RADDBGI_U16, line_sequence->line_count);
+    raddbgic_memcpy(node->line_seq.col_nums, line_sequence->col_nums, sizeof(RADDBGI_U16)*line_sequence->line_count);
   }
   
   node->line_seq.line_count = line_sequence->line_count;
@@ -726,10 +726,10 @@ raddbgic_type_fill_id(RADDBGIC_Root *root, RADDBGIC_Reservation *res, RADDBGIC_T
 
 //- rjf: nil/singleton types
 
-RADDBGI_PROC B32
+RADDBGI_PROC RADDBGI_S32
 raddbgic_type_is_unhandled_nil(RADDBGIC_Root *root, RADDBGIC_Type *type)
 {
-  B32 result = (type->kind == RADDBGI_TypeKind_NULL && type != &root->handled_nil_type);
+  RADDBGI_S32 result = (type->kind == RADDBGI_TypeKind_NULL && type != &root->handled_nil_type);
   return result;
 }
 
@@ -758,7 +758,7 @@ raddbgic_type_new(RADDBGIC_Root *root)
 {
   RADDBGIC_Type *result = raddbgic_push_array(root->arena, RADDBGIC_Type, 1);
   result->idx = root->type_count;
-  SLLQueuePush_N(root->first_type, root->last_type, result, next_order);
+  RADDBGIC_SLLQueuePush_N(root->first_type, root->last_type, result, next_order);
   root->type_count += 1;
   return result;
 }
@@ -770,7 +770,7 @@ raddbgic_type_udt_from_any_type(RADDBGIC_Root *root, RADDBGIC_Type *type)
   {
     RADDBGIC_TypeUDT *new_udt = raddbgic_push_array(root->arena, RADDBGIC_TypeUDT, 1);
     new_udt->idx = root->type_udt_count;
-    SLLQueuePush_N(root->first_udt, root->last_udt, new_udt, next_order);
+    RADDBGIC_SLLQueuePush_N(root->first_udt, root->last_udt, new_udt, next_order);
     root->type_udt_count += 1;
     new_udt->self_type = type;
     type->udt = new_udt;
@@ -799,26 +799,26 @@ raddbgic_type_basic(RADDBGIC_Root *root, RADDBGI_TypeKind type_kind, RADDBGIC_St
 {
   raddbgic_requiref(root, (RADDBGI_TypeKind_FirstBuiltIn <= type_kind && type_kind <= RADDBGI_TypeKind_LastBuiltIn), return root->nil_type, "Non-basic type kind passed to construct basic type.");
   RADDBGIC_Type *result = root->nil_type;
-  Temp scratch = scratch_begin(0, 0);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(0, 0);
   
   // setup construct buffer
   RADDBGI_U64 buf_size = sizeof(RADDBGIC_TypeConstructKind) + sizeof(type_kind) + name.size;
-  RADDBGI_U8 *buf = raddbgic_push_array(scratch.arena, RADDBGI_U8, buf_size);
+  RADDBGI_U8 *buf = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGI_U8, buf_size);
   {
     RADDBGI_U8 *ptr = buf;
     // "basic"
     *(RADDBGIC_TypeConstructKind*)ptr = RADDBGIC_TypeConstructKind_Basic;
     ptr += sizeof(RADDBGIC_TypeConstructKind);
     // type_kind
-    MemoryCopy(ptr, &type_kind, sizeof(type_kind));
+    raddbgic_memcpy(ptr, &type_kind, sizeof(type_kind));
     ptr += sizeof(type_kind);
     // name
-    MemoryCopy(ptr, name.str, name.size);
+    raddbgic_memcpy(ptr, name.str, name.size);
     ptr += name.size;
   }
   
   // check for duplicate construct
-  RADDBGIC_String8 blob = str8(buf, buf_size);
+  RADDBGIC_String8 blob = raddbgic_str8(buf, buf_size);
   RADDBGI_U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = raddbgic_str8toptr_map_lookup(&root->construct_map, blob, blob_hash);
   result = (RADDBGIC_Type*)lookup_ptr;
@@ -848,7 +848,7 @@ raddbgic_type_basic(RADDBGIC_Root *root, RADDBGI_TypeKind type_kind, RADDBGIC_St
   }
   
   scratch_end(scratch);
-  Assert(result != 0);
+  raddbgic_assert(result != 0);
   return result;
 }
 
@@ -856,26 +856,26 @@ RADDBGI_PROC RADDBGIC_Type*
 raddbgic_type_modifier(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_TypeModifierFlags flags)
 {
   RADDBGIC_Type *result = root->nil_type;
-  Temp scratch = scratch_begin(0, 0);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(0, 0);
   
   // setup construct buffer
   RADDBGI_U64 buf_size = sizeof(RADDBGIC_TypeConstructKind) + sizeof(flags) + sizeof(direct_type->idx);
-  RADDBGI_U8 *buf = raddbgic_push_array(scratch.arena, RADDBGI_U8, buf_size);
+  RADDBGI_U8 *buf = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGI_U8, buf_size);
   {
     RADDBGI_U8 *ptr = buf;
     // "modifier"
     *(RADDBGIC_TypeConstructKind*)ptr = RADDBGIC_TypeConstructKind_Modifier;
     ptr += sizeof(RADDBGIC_TypeConstructKind);
     // flags
-    MemoryCopy(ptr, &flags, sizeof(flags));
+    raddbgic_memcpy(ptr, &flags, sizeof(flags));
     ptr += sizeof(flags);
     // direct_type->idx
-    MemoryCopy(ptr, &direct_type->idx, sizeof(direct_type->idx));
+    raddbgic_memcpy(ptr, &direct_type->idx, sizeof(direct_type->idx));
     ptr += sizeof(direct_type->idx);
   }
   
   // check for duplicate construct
-  RADDBGIC_String8 blob = str8(buf, buf_size);
+  RADDBGIC_String8 blob = raddbgic_str8(buf, buf_size);
   RADDBGI_U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = raddbgic_str8toptr_map_lookup(&root->construct_map, blob, blob_hash);
   result = (RADDBGIC_Type*)lookup_ptr;
@@ -892,8 +892,8 @@ raddbgic_type_modifier(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_
     raddbgic_str8toptr_map_insert(root->arena, &root->construct_map, blob, blob_hash, result);
   }
   
-  scratch_end(scratch);
-  Assert(result != 0);
+  raddbgic_scratch_end(scratch);
+  raddbgic_assert(result != 0);
   return result;
 }
 
@@ -901,29 +901,29 @@ RADDBGI_PROC RADDBGIC_Type*
 raddbgic_type_bitfield(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_U32 bit_off, RADDBGI_U32 bit_count)
 {
   RADDBGIC_Type *result = root->nil_type;
-  Temp scratch = scratch_begin(0, 0);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(0, 0);
   
   // setup construct buffer
   RADDBGI_U64 buf_size = sizeof(RADDBGIC_TypeConstructKind) + sizeof(direct_type->idx) + sizeof(RADDBGI_U32)*2;
-  RADDBGI_U8 *buf = raddbgic_push_array(scratch.arena, RADDBGI_U8, buf_size);
+  RADDBGI_U8 *buf = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGI_U8, buf_size);
   {
     RADDBGI_U8 *ptr = buf;
     // "bitfield"
     *(RADDBGIC_TypeConstructKind*)ptr = RADDBGIC_TypeConstructKind_Bitfield;
     ptr += sizeof(RADDBGIC_TypeConstructKind);
     // direct_type->idx
-    MemoryCopy(ptr, &direct_type->idx, sizeof(direct_type->idx));
+    raddbgic_memcpy(ptr, &direct_type->idx, sizeof(direct_type->idx));
     ptr += sizeof(direct_type->idx);
     // bit_off
-    MemoryCopy(ptr, &bit_off, sizeof(bit_off));
+    raddbgic_memcpy(ptr, &bit_off, sizeof(bit_off));
     ptr += sizeof(bit_off);
     // bit_count
-    MemoryCopy(ptr, &bit_count, sizeof(bit_count));
+    raddbgic_memcpy(ptr, &bit_count, sizeof(bit_count));
     ptr += sizeof(bit_count);
   }
   
   // check for duplicate construct
-  RADDBGIC_String8 blob = str8(buf, buf_size);
+  RADDBGIC_String8 blob = raddbgic_str8(buf, buf_size);
   RADDBGI_U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = raddbgic_str8toptr_map_lookup(&root->construct_map, blob, blob_hash);
   result = (RADDBGIC_Type*)lookup_ptr;
@@ -941,8 +941,8 @@ raddbgic_type_bitfield(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_
     raddbgic_str8toptr_map_insert(root->arena, &root->construct_map, blob, blob_hash, result);
   }
   
-  scratch_end(scratch);
-  Assert(result != 0);
+  raddbgic_scratch_end(scratch);
+  raddbgic_assert(result != 0);
   return result;
 }
 
@@ -955,26 +955,26 @@ raddbgic_type_pointer(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_T
                     return root->nil_type,
                     "Non-pointer type kind used to construct pointer type.");
   RADDBGIC_Type *result = root->nil_type;
-  Temp scratch = scratch_begin(0, 0);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(0, 0);
   
   // setup construct buffer
   RADDBGI_U64 buf_size = sizeof(RADDBGIC_TypeConstructKind) + sizeof(ptr_type_kind) + sizeof(direct_type->idx);
-  RADDBGI_U8 *buf = raddbgic_push_array(scratch.arena, RADDBGI_U8, buf_size);
+  RADDBGI_U8 *buf = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGI_U8, buf_size);
   {
     RADDBGI_U8 *ptr = buf;
     // "pointer"
     *(RADDBGIC_TypeConstructKind*)ptr = RADDBGIC_TypeConstructKind_Pointer;
     ptr += sizeof(RADDBGIC_TypeConstructKind);
     // type_kind
-    MemoryCopy(ptr, &ptr_type_kind, sizeof(ptr_type_kind));
+    raddbgic_memcpy(ptr, &ptr_type_kind, sizeof(ptr_type_kind));
     ptr += sizeof(ptr_type_kind);
     // direct_type->idx
-    MemoryCopy(ptr, &direct_type->idx, sizeof(direct_type->idx));
+    raddbgic_memcpy(ptr, &direct_type->idx, sizeof(direct_type->idx));
     ptr += sizeof(direct_type->idx);
   }
   
   // check for duplicate construct
-  RADDBGIC_String8 blob = str8(buf, buf_size);
+  RADDBGIC_String8 blob = raddbgic_str8(buf, buf_size);
   RADDBGI_U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = raddbgic_str8toptr_map_lookup(&root->construct_map, blob, blob_hash);
   result = (RADDBGIC_Type*)lookup_ptr;
@@ -990,8 +990,8 @@ raddbgic_type_pointer(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_T
     raddbgic_str8toptr_map_insert(root->arena, &root->construct_map, blob, blob_hash, result);
   }
   
-  scratch_end(scratch);
-  Assert(result != 0);
+  raddbgic_scratch_end(scratch);
+  raddbgic_assert(result != 0);
   return result;
 }
 
@@ -999,27 +999,27 @@ RADDBGI_PROC RADDBGIC_Type*
 raddbgic_type_array(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_U64 count)
 {
   RADDBGIC_Type *result = root->nil_type;
-  Temp scratch = scratch_begin(0, 0);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(0, 0);
   
   // setup construct buffer
   RADDBGI_U64 buf_size =
     sizeof(RADDBGIC_TypeConstructKind) + sizeof(direct_type->idx) + sizeof(count);
-  RADDBGI_U8 *buf = raddbgic_push_array(scratch.arena, RADDBGI_U8, buf_size);
+  RADDBGI_U8 *buf = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGI_U8, buf_size);
   {
     RADDBGI_U8 *ptr = buf;
     // "array"
     *(RADDBGIC_TypeConstructKind*)ptr = RADDBGIC_TypeConstructKind_Array;
     ptr += sizeof(RADDBGIC_TypeConstructKind);
     // direct_type->idx
-    MemoryCopy(ptr, &direct_type->idx, sizeof(direct_type->idx));
+    raddbgic_memcpy(ptr, &direct_type->idx, sizeof(direct_type->idx));
     ptr += sizeof(direct_type->idx);
     // count
-    MemoryCopy(ptr, &count, sizeof(count));
+    raddbgic_memcpy(ptr, &count, sizeof(count));
     ptr += sizeof(count);
   }
   
   // check for duplicate construct
-  RADDBGIC_String8 blob = str8(buf, buf_size);
+  RADDBGIC_String8 blob = raddbgic_str8(buf, buf_size);
   RADDBGI_U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = raddbgic_str8toptr_map_lookup(&root->construct_map, blob, blob_hash);
   result = (RADDBGIC_Type*)lookup_ptr;
@@ -1037,7 +1037,7 @@ raddbgic_type_array(RADDBGIC_Root *root, RADDBGIC_Type *direct_type, RADDBGI_U64
   }
   
   scratch_end(scratch);
-  Assert(result != 0);
+  raddbgic_assert(result != 0);
   return result;
 }
 
@@ -1045,31 +1045,31 @@ RADDBGI_PROC RADDBGIC_Type*
 raddbgic_type_proc(RADDBGIC_Root *root, RADDBGIC_Type *return_type, struct RADDBGIC_TypeList *params)
 {
   RADDBGIC_Type *result = root->nil_type;
-  Temp scratch = scratch_begin(0, 0);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(0, 0);
   
   // setup construct buffer
   RADDBGI_U64 buf_size = sizeof(RADDBGIC_TypeConstructKind) + sizeof(return_type->idx)*(1 + params->count);
-  RADDBGI_U8 *buf = raddbgic_push_array(scratch.arena, RADDBGI_U8, buf_size);
+  RADDBGI_U8 *buf = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGI_U8, buf_size);
   {
     RADDBGI_U8 *ptr = buf;
     // "procedure"
     *(RADDBGIC_TypeConstructKind*)ptr = RADDBGIC_TypeConstructKind_Procedure;
     ptr += sizeof(RADDBGIC_TypeConstructKind);
     // ret_type->idx
-    MemoryCopy(ptr, &return_type->idx, sizeof(return_type->idx));
+    raddbgic_memcpy(ptr, &return_type->idx, sizeof(return_type->idx));
     ptr += sizeof(return_type->idx);
     // (params ...)->idx
     for(RADDBGIC_TypeNode *node = params->first;
         node != 0;
         node = node->next)
     {
-      MemoryCopy(ptr, &node->type->idx, sizeof(node->type->idx));
+      raddbgic_memcpy(ptr, &node->type->idx, sizeof(node->type->idx));
       ptr += sizeof(node->type->idx);
     }
   }
   
   // check for duplicate construct
-  RADDBGIC_String8 blob = str8(buf, buf_size);
+  RADDBGIC_String8 blob = raddbgic_str8(buf, buf_size);
   RADDBGI_U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = raddbgic_str8toptr_map_lookup(&root->construct_map, blob, blob_hash);
   result = (RADDBGIC_Type*)lookup_ptr;
@@ -1100,8 +1100,8 @@ raddbgic_type_proc(RADDBGIC_Root *root, RADDBGIC_Type *return_type, struct RADDB
     raddbgic_str8toptr_map_insert(root->arena, &root->construct_map, blob, blob_hash, result);
   }
   
-  scratch_end(scratch);
-  Assert(result != 0);
+  raddbgic_scratch_end(scratch);
+  raddbgic_assert(result != 0);
   return result;
 }
 
@@ -1109,35 +1109,35 @@ RADDBGI_PROC RADDBGIC_Type*
 raddbgic_type_method(RADDBGIC_Root *root, RADDBGIC_Type *this_type, RADDBGIC_Type *return_type, struct RADDBGIC_TypeList *params)
 {
   RADDBGIC_Type *result = root->nil_type;
-  Temp scratch = scratch_begin(0, 0);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(0, 0);
   
   // setup construct buffer
   RADDBGI_U64 buf_size =
     sizeof(RADDBGIC_TypeConstructKind) + sizeof(return_type->idx)*(2 + params->count);
-  RADDBGI_U8 *buf = raddbgic_push_array(scratch.arena, RADDBGI_U8, buf_size);
+  RADDBGI_U8 *buf = raddbgic_push_array(raddbgic_temp_arena(scratch), RADDBGI_U8, buf_size);
   {
     RADDBGI_U8 *ptr = buf;
     // "method"
     *(RADDBGIC_TypeConstructKind*)ptr = RADDBGIC_TypeConstructKind_Method;
     ptr += sizeof(RADDBGIC_TypeConstructKind);
     // ret_type->idx
-    MemoryCopy(ptr, &return_type->idx, sizeof(return_type->idx));
+    raddbgic_memcpy(ptr, &return_type->idx, sizeof(return_type->idx));
     ptr += sizeof(return_type->idx);
     // this_type->idx
-    MemoryCopy(ptr, &this_type->idx, sizeof(this_type->idx));
+    raddbgic_memcpy(ptr, &this_type->idx, sizeof(this_type->idx));
     ptr += sizeof(this_type->idx);
     // (params ...)->idx
     for(RADDBGIC_TypeNode *node = params->first;
         node != 0;
         node = node->next)
     {
-      MemoryCopy(ptr, &node->type->idx, sizeof(node->type->idx));
+      raddbgic_memcpy(ptr, &node->type->idx, sizeof(node->type->idx));
       ptr += sizeof(node->type->idx);
     }
   }
   
   // check for duplicate construct
-  RADDBGIC_String8 blob = str8(buf, buf_size);
+  RADDBGIC_String8 blob = raddbgic_str8(buf, buf_size);
   RADDBGI_U64 blob_hash = raddbgi_hash(buf, buf_size);
   void *lookup_ptr = raddbgic_str8toptr_map_lookup(&root->construct_map, blob, blob_hash);
   result = (RADDBGIC_Type*)lookup_ptr;
@@ -1172,8 +1172,8 @@ raddbgic_type_method(RADDBGIC_Root *root, RADDBGIC_Type *this_type, RADDBGIC_Typ
     raddbgic_str8toptr_map_insert(root->arena, &root->construct_map, blob, blob_hash, result);
   }
   
-  scratch_end(scratch);
-  Assert(result != 0);
+  raddbgic_scratch_end(scratch);
+  raddbgic_assert(result != 0);
   return result;
 }
 
@@ -1443,7 +1443,7 @@ raddbgic_symbol_handle_from_user_id(RADDBGIC_Root *root, RADDBGI_U64 symbol_user
   else
   {
     result = raddbgic_push_array(root->arena, RADDBGIC_Symbol, 1);
-    SLLQueuePush_N(root->first_symbol, root->last_symbol, result, next_order);
+    RADDBGIC_SLLQueuePush_N(root->first_symbol, root->last_symbol, result, next_order);
     root->symbol_count += 1;
     raddbgic_u64toptr_map_insert(root->arena, &root->symbol_map, symbol_user_id, symbol_user_id_hash, &lookup, result);
   }
@@ -1483,11 +1483,11 @@ raddbgic_symbol_set_info(RADDBGIC_Root *root, RADDBGIC_Symbol *symbol, RADDBGIC_
     case RADDBGIC_SymbolKind_GlobalVariable:
     case RADDBGIC_SymbolKind_ThreadVariable:
     {
-      raddbgic_requiref(root, info->root_scope == 0, NoOp, "Global or thread variable initialized with root scope.");
+      raddbgic_requiref(root, info->root_scope == 0, raddbgic_noop, "Global or thread variable initialized with root scope.");
     }break;
     case RADDBGIC_SymbolKind_Procedure:
     {
-      raddbgic_requiref(root, info->root_scope != 0, NoOp, "Procedure symbol initialized without root scope.");
+      raddbgic_requiref(root, info->root_scope != 0, raddbgic_noop, "Procedure symbol initialized without root scope.");
       symbol->root_scope = info->root_scope;
       raddbgic_scope_recursive_set_symbol(info->root_scope, symbol);
     }break;
@@ -1542,7 +1542,7 @@ raddbgic_scope_handle_from_user_id(RADDBGIC_Root *root, RADDBGI_U64 scope_user_i
   {
     result = raddbgic_push_array(root->arena, RADDBGIC_Scope, 1);
     result->idx = root->scope_count;
-    SLLQueuePush_N(root->first_scope, root->last_scope, result, next_order);
+    RADDBGIC_SLLQueuePush_N(root->first_scope, root->last_scope, result, next_order);
     root->scope_count += 1;
     raddbgic_u64toptr_map_insert(root->arena, &root->scope_map, scope_user_id, scope_user_id_hash, &lookup, result);
   }
@@ -1556,7 +1556,7 @@ raddbgic_scope_set_parent(RADDBGIC_Root *root, RADDBGIC_Scope *scope, RADDBGIC_S
   raddbgic_requiref(root, parent != 0, return, "Tried to set invalid parent as scope parent.");
   scope->symbol = parent->symbol;
   scope->parent_scope = parent;
-  SLLQueuePush_N(parent->first_child, parent->last_child, scope, next_sibling);
+  RADDBGIC_SLLQueuePush_N(parent->first_child, parent->last_child, scope, next_sibling);
 }
 
 RADDBGI_PROC void
@@ -1664,7 +1664,7 @@ raddbgic_location_val_bytecode_stream(RADDBGIC_Root *root, struct RADDBGIC_EvalB
 }
 
 RADDBGI_PROC RADDBGIC_Location*
-raddbgic_location_addr_reg_plus_u16(RADDBGIC_Root *root, RADDBGI_U8 reg_code, U16 offset)
+raddbgic_location_addr_reg_plus_u16(RADDBGIC_Root *root, RADDBGI_U8 reg_code, RADDBGI_U16 offset)
 {
   RADDBGIC_Location *result = raddbgic_push_array(root->arena, RADDBGIC_Location, 1);
   result->kind = RADDBGI_LocationKind_AddrRegisterPlusU16;
@@ -1674,7 +1674,7 @@ raddbgic_location_addr_reg_plus_u16(RADDBGIC_Root *root, RADDBGI_U8 reg_code, U1
 }
 
 RADDBGI_PROC RADDBGIC_Location*
-raddbgic_location_addr_addr_reg_plus_u16(RADDBGIC_Root *root, RADDBGI_U8 reg_code, U16 offset)
+raddbgic_location_addr_addr_reg_plus_u16(RADDBGIC_Root *root, RADDBGI_U8 reg_code, RADDBGI_U16 offset)
 {
   RADDBGIC_Location *result = raddbgic_push_array(root->arena, RADDBGIC_Location, 1);
   result->kind = RADDBGI_LocationKind_AddrAddrRegisterPlusU16;
@@ -1736,14 +1736,14 @@ raddbgic_name_map_add_pair(RADDBGIC_Root *root, RADDBGIC_NameMap *map, RADDBGIC_
   {
     match = raddbgic_push_array(root->arena, RADDBGIC_NameMapNode, 1);
     match->string = raddbgic_str8_copy(root->arena, string);
-    SLLStackPush_N(map->buckets[bucket_idx], match, bucket_next);
-    SLLQueuePush_N(map->first, map->last, match, order_next);
+    RADDBGIC_SLLStackPush_N(map->buckets[bucket_idx], match, bucket_next);
+    RADDBGIC_SLLQueuePush_N(map->first, map->last, match, order_next);
     map->name_count += 1;
     map->bucket_collision_count += (match->bucket_next != 0);
   }
   
   // find existing idx
-  B32 existing_idx = 0;
+  RADDBGI_S32 existing_idx = 0;
   for(RADDBGIC_NameMapIdxNode *node = match->idx_first;
       node != 0;
       node = node->next)
@@ -1786,7 +1786,7 @@ raddbgic_name_map_add_pair(RADDBGIC_Root *root, RADDBGIC_NameMap *map, RADDBGIC_
 RADDBGI_PROC RADDBGIC_BakeCtx*
 raddbgic_bake_ctx_begin(RADDBGIC_BakeParams *params)
 {
-  Arena *arena = arena_alloc();
+  RADDBGIC_Arena *arena = raddbgic_arena_alloc();
   RADDBGIC_BakeCtx *result = raddbgic_push_array(arena, RADDBGIC_BakeCtx, 1);
   result->arena = arena;
 #define BKTCOUNT(x) ((x)?(u64_up_to_pow2(x)):(16384))
@@ -1802,10 +1802,10 @@ raddbgic_bake_ctx_begin(RADDBGIC_BakeParams *params)
   result->tree = raddbgic_push_array(arena, RADDBGIC_PathTree, 1);
   {
     RADDBGIC_PathNode *nil_path_node = raddbgic_paths_new_node(result);
-    nil_path_node->name = str8_lit("<NIL>");
+    nil_path_node->name = raddbgic_str8_lit("<NIL>");
     RADDBGIC_SrcNode *nil_src_node = raddbgic_paths_new_src_node(result);
     nil_src_node->path_node = nil_path_node;
-    nil_src_node->normal_full_path = str8_lit("<NIL>");
+    nil_src_node->normal_full_path = raddbgic_str8_lit("<NIL>");
     nil_path_node->src_file = nil_src_node;
   }
   
@@ -1823,7 +1823,7 @@ raddbgic_bake_ctx_release(RADDBGIC_BakeCtx *bake_ctx)
 RADDBGI_PROC RADDBGI_U32
 raddbgic_string(RADDBGIC_BakeCtx *bctx, RADDBGIC_String8 str)
 {
-  Arena *arena = bctx->arena;
+  RADDBGIC_Arena *arena = bctx->arena;
   RADDBGIC_Strings *strs = &bctx->strs;
   RADDBGI_U64 hash = raddbgi_hash(str.str, str.size);
   RADDBGI_U64 bucket_idx = hash%strs->buckets_count;
@@ -1844,19 +1844,19 @@ raddbgic_string(RADDBGIC_BakeCtx *bctx, RADDBGIC_String8 str)
   // insert new node if no match
   if(match == 0)
   {
-    RADDBGIC_StringNode *node = push_array_no_zero(arena, RADDBGIC_StringNode, 1);
+    RADDBGIC_StringNode *node = raddbgic_push_array_no_zero(arena, RADDBGIC_StringNode, 1);
     node->str = raddbgic_str8_copy(arena, str);
     node->hash = hash;
     node->idx = strs->count;
     strs->count += 1;
-    SLLQueuePush_N(strs->order_first, strs->order_last, node, order_next);
-    SLLStackPush_N(strs->buckets[bucket_idx], node, bucket_next);
+    RADDBGIC_SLLQueuePush_N(strs->order_first, strs->order_last, node, order_next);
+    RADDBGIC_SLLStackPush_N(strs->buckets[bucket_idx], node, bucket_next);
     match = node;
     strs->bucket_collision_count += (node->bucket_next != 0);
   }
   
   // extract idx to return
-  Assert(match != 0);
+  raddbgic_assert(match != 0);
   RADDBGI_U32 result = match->idx;
   return result;
 }
@@ -1879,7 +1879,7 @@ raddbgic_idx_run_hash(RADDBGI_U32 *idx_run, RADDBGI_U32 count)
 RADDBGI_PROC RADDBGI_U32
 raddbgic_idx_run(RADDBGIC_BakeCtx *bctx, RADDBGI_U32 *idx_run, RADDBGI_U32 count)
 {
-  Arena *arena = bctx->arena;
+  RADDBGIC_Arena *arena = bctx->arena;
   RADDBGIC_IdxRuns *idxs = &bctx->idxs;
   
   RADDBGI_U64 hash = raddbgic_idx_run_hash(idx_run, count);
@@ -1893,7 +1893,7 @@ raddbgic_idx_run(RADDBGIC_BakeCtx *bctx, RADDBGI_U32 *idx_run, RADDBGI_U32 count
   {
     if(node->hash == hash)
     {
-      S32 is_match = 1;
+      RADDBGI_S32 is_match = 1;
       RADDBGI_U32 *node_idx = node->idx_run;
       for(RADDBGI_U32 i = 0; i < count; i += 1)
       {
@@ -1914,8 +1914,8 @@ raddbgic_idx_run(RADDBGIC_BakeCtx *bctx, RADDBGI_U32 *idx_run, RADDBGI_U32 count
   // insert new node if no match
   if(match == 0)
   {
-    RADDBGIC_IdxRunNode *node = push_array_no_zero(arena, RADDBGIC_IdxRunNode, 1);
-    RADDBGI_U32 *idx_run_copy = push_array_no_zero(arena, RADDBGI_U32, count);
+    RADDBGIC_IdxRunNode *node = raddbgic_push_array_no_zero(arena, RADDBGIC_IdxRunNode, 1);
+    RADDBGI_U32 *idx_run_copy = raddbgic_push_array_no_zero(arena, RADDBGI_U32, count);
     for(RADDBGI_U32 i = 0; i < count; i += 1)
     {
       idx_run_copy[i] = idx_run[i];
@@ -1926,14 +1926,14 @@ raddbgic_idx_run(RADDBGIC_BakeCtx *bctx, RADDBGI_U32 *idx_run, RADDBGI_U32 count
     node->first_idx = idxs->idx_count;
     idxs->count += 1;
     idxs->idx_count += count;
-    SLLQueuePush_N(idxs->order_first, idxs->order_last, node, order_next);
-    SLLStackPush_N(idxs->buckets[bucket_idx], node, bucket_next);
+    RADDBGIC_SLLQueuePush_N(idxs->order_first, idxs->order_last, node, order_next);
+    RADDBGIC_SLLStackPush_N(idxs->buckets[bucket_idx], node, bucket_next);
     match = node;
     idxs->bucket_collision_count += (node->bucket_next != 0);
   }
   
   // extract idx to return
-  Assert(match != 0);
+  raddbgic_assert(match != 0);
   RADDBGI_U32 result = match->first_idx;
   return result;
 }
@@ -1958,7 +1958,7 @@ raddbgic_dsection(RADDBGIC_Arena *arena, RADDBGIC_DSections *dss, void *data, RA
 RADDBGI_PROC RADDBGIC_String8
 raddbgic_normal_string_from_path_node(RADDBGIC_Arena *arena, RADDBGIC_PathNode *node)
 {
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   RADDBGIC_String8List list = {0};
   if(node != 0)
   {
@@ -2000,7 +2000,7 @@ raddbgic_paths_new_node(RADDBGIC_BakeCtx *bctx)
 {
   RADDBGIC_PathTree *tree = bctx->tree;
   RADDBGIC_PathNode *result = raddbgic_push_array(bctx->arena, RADDBGIC_PathNode, 1);
-  SLLQueuePush_N(tree->first, tree->last, result, next_order);
+  RADDBGIC_SLLQueuePush_N(tree->first, tree->last, result, next_order);
   result->idx = tree->count;
   tree->count += 1;
   return result;
@@ -2013,8 +2013,10 @@ raddbgic_paths_sub_path(RADDBGIC_BakeCtx *bctx, RADDBGIC_PathNode *dir, RADDBGIC
   RADDBGIC_PathNode *match = 0;
   for(RADDBGIC_PathNode *node = dir->first_child;
       node != 0;
-      node = node->next_sibling){
-    if(str8_match(node->name, sub_dir, StringMatchFlag_CaseInsensitive)){
+      node = node->next_sibling)
+  {
+    if(str8_match(node->name, sub_dir, StringMatchFlag_CaseInsensitive))
+    {
       match = node;
       break;
     }
@@ -2025,7 +2027,7 @@ raddbgic_paths_sub_path(RADDBGIC_BakeCtx *bctx, RADDBGIC_PathNode *dir, RADDBGIC
   if(match == 0){
     new_node = raddbgic_paths_new_node(bctx);
     new_node->parent = dir;
-    SLLQueuePush_N(dir->first_child, dir->last_child, new_node, next_sibling);
+    RADDBGIC_SLLQueuePush_N(dir->first_child, dir->last_child, new_node, next_sibling);
     new_node->name = raddbgic_str8_copy(bctx->arena, sub_dir);
   }
   
@@ -2105,7 +2107,7 @@ RADDBGI_PROC RADDBGIC_UnitLinesCombined*
 raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDBGIC_LineSequenceNode *first_seq)
 {
   ProfBegin("raddbgic_unit_combine_lines");
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // gather up all line info into two arrays
   //  keys: sortable array; pairs voffs with line info records; null records are sequence enders
@@ -2114,14 +2116,15 @@ raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDB
   RADDBGI_U64 seq_count = 0;
   for(RADDBGIC_LineSequenceNode *node = first_seq;
       node != 0;
-      node = node->next){
+      node = node->next)
+  {
     seq_count += 1;
     line_count += node->line_seq.line_count;
   }
   
   RADDBGI_U64 key_count = line_count + seq_count;
-  RADDBGIC_SortKey *line_keys = push_array_no_zero(scratch.arena, RADDBGIC_SortKey, key_count);
-  RADDBGIC_LineRec *line_recs = push_array_no_zero(scratch.arena, RADDBGIC_LineRec, line_count);
+  RADDBGIC_SortKey *line_keys = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_SortKey, key_count);
+  RADDBGIC_LineRec *line_recs = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_LineRec, line_count);
   
   {
     RADDBGIC_SortKey *key_ptr = line_keys;
@@ -2129,7 +2132,8 @@ raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDB
     
     for(RADDBGIC_LineSequenceNode *node = first_seq;
         node != 0;
-        node = node->next){
+        node = node->next)
+    {
       RADDBGIC_PathNode *src_path =
         raddbgic_paths_node_from_path(bctx, node->line_seq.file_name);
       RADDBGIC_SrcNode *src_file  = raddbgic_paths_src_node_from_path_node(bctx, src_path);
@@ -2155,7 +2159,7 @@ raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDB
       key_ptr += 1;
       
       RADDBGIC_LineMapFragment *fragment = raddbgic_push_array(arena, RADDBGIC_LineMapFragment, 1);
-      SLLQueuePush(src_file->first_fragment, src_file->last_fragment, fragment);
+      RADDBGIC_SLLQueuePush(src_file->first_fragment, src_file->last_fragment, fragment);
       fragment->sequence = node;
     }
   }
@@ -2167,8 +2171,8 @@ raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDB
   // null record first, and no more than one null record and one non-null record
   
   // arrange output
-  RADDBGI_U64 *arranged_voffs = push_array_no_zero(arena, RADDBGI_U64, key_count + 1);
-  RADDBGI_Line *arranged_lines = push_array_no_zero(arena, RADDBGI_Line, key_count);
+  RADDBGI_U64 *arranged_voffs = raddbgic_push_array_no_zero(arena, RADDBGI_U64, key_count + 1);
+  RADDBGI_Line *arranged_lines = raddbgic_push_array_no_zero(arena, RADDBGI_Line, key_count);
   
   for(RADDBGI_U64 i = 0; i < key_count; i += 1){
     arranged_voffs[i] = sorted_line_keys[i].key;
@@ -2204,7 +2208,7 @@ RADDBGI_PROC RADDBGIC_SrcLinesCombined*
 raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *first)
 {
   ProfBegin("raddbgic_source_combine_lines");
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // gather line number map
   RADDBGIC_SrcLineMapBucket *first_bucket = 0;
@@ -2250,8 +2254,8 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
         // introduce new line if no match
         if(match == 0){
           match = raddbgic_push_array(scratch.arena, RADDBGIC_SrcLineMapBucket, 1);
-          SLLQueuePush_N(first_bucket, last_bucket, match, order_next);
-          SLLStackPush_N(line_hash_slots[line_hash_slot_idx], match, hash_next);
+          RADDBGIC_SLLQueuePush_N(first_bucket, last_bucket, match, order_next);
+          RADDBGIC_SLLStackPush_N(line_hash_slots[line_hash_slot_idx], match, hash_next);
           match->line_num = line_num;
           line_count += 1;
         }
@@ -2259,7 +2263,7 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
         // insert new voff
         {
           RADDBGIC_SrcLineMapVoffBlock *block = raddbgic_push_array(scratch.arena, RADDBGIC_SrcLineMapVoffBlock, 1);
-          SLLQueuePush(match->first_voff_block, match->last_voff_block, block);
+          RADDBGIC_SLLQueuePush(match->first_voff_block, match->last_voff_block, block);
           match->voff_count += 1;
           block->voff = voff;
         }
@@ -2268,7 +2272,7 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
   }
   
   // bake sortable keys array
-  RADDBGIC_SortKey *keys = push_array_no_zero(scratch.arena, RADDBGIC_SortKey, line_count);
+  RADDBGIC_SortKey *keys = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_SortKey, line_count);
   ProfScope("bake sortable keys array")
   {
     RADDBGIC_SortKey *key_ptr = keys;
@@ -2284,9 +2288,9 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
   RADDBGIC_SortKey *sorted_keys = raddbgic_sort_key_array(scratch.arena, keys, line_count);
   
   // bake result
-  RADDBGI_U32 *line_nums = push_array_no_zero(arena, RADDBGI_U32, line_count);
-  RADDBGI_U32 *line_ranges = push_array_no_zero(arena, RADDBGI_U32, line_count + 1);
-  RADDBGI_U64 *voffs = push_array_no_zero(arena, RADDBGI_U64, voff_count);
+  RADDBGI_U32 *line_nums = raddbgic_push_array_no_zero(arena, RADDBGI_U32, line_count);
+  RADDBGI_U32 *line_ranges = raddbgic_push_array_no_zero(arena, RADDBGI_U32, line_count + 1);
+  RADDBGI_U64 *voffs = raddbgic_push_array_no_zero(arena, RADDBGI_U64, voff_count);
   ProfScope("bake result")
   {
     RADDBGI_U64 *voff_ptr = voffs;
@@ -2321,7 +2325,7 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
 RADDBGI_PROC RADDBGIC_VMap*
 raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, RADDBGIC_SortKey *keys, RADDBGI_U64 marker_count)
 {
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // sort markers
   RADDBGIC_SortKey *sorted_keys = raddbgic_sort_key_array(scratch.arena, keys, marker_count);
@@ -2334,7 +2338,7 @@ raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, 
   
   // fill output vmap entries
   RADDBGI_U32 vmap_count_raw = marker_count - 1 + extra_vmap_entry;
-  RADDBGI_VMapEntry *vmap = push_array_no_zero(arena, RADDBGI_VMapEntry, vmap_count_raw + 1);
+  RADDBGI_VMapEntry *vmap = raddbgic_push_array_no_zero(arena, RADDBGI_VMapEntry, vmap_count_raw + 1);
   RADDBGI_U32 vmap_entry_count_pass_1 = 0;
   
   {
@@ -2353,7 +2357,7 @@ raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, 
     RADDBGIC_SortKey *key_opl = sorted_keys + marker_count;
     for(;key_ptr < key_opl;){
       // get initial map state from tracker stack
-      RADDBGI_U32 initial_idx = max_U32;
+      RADDBGI_U32 initial_idx = (RADDBGI_U32)0xffffffff;
       if(tracker_stack != 0){
         initial_idx = tracker_stack->idx;
       }
@@ -2370,12 +2374,12 @@ raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, 
         if(marker->begin_range){
           RADDBGIC_VMapRangeTracker *new_tracker = tracker_free;
           if(new_tracker != 0){
-            SLLStackPop(tracker_free);
+            RADDBGIC_SLLStackPop(tracker_free);
           }
           else{
             new_tracker = raddbgic_push_array(scratch.arena, RADDBGIC_VMapRangeTracker, 1);
           }
-          SLLStackPush(tracker_stack, new_tracker);
+          RADDBGIC_SLLStackPush(tracker_stack, new_tracker);
           new_tracker->idx = idx;
         }
         
@@ -2394,7 +2398,7 @@ raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, 
           }
           if(match != 0){
             *ptr_in = match->next;
-            SLLStackPush(tracker_free, match);
+            RADDBGIC_SLLStackPush(tracker_free, match);
           }
         }
       }
@@ -2451,7 +2455,7 @@ raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, 
       RADDBGI_U64 idx = vmap_ptr->idx;
       vmap_ptr += 1;
       for(;vmap_ptr < vmap_opl && vmap_ptr->idx == idx;) vmap_ptr += 1;
-      MemoryCopyStruct(vmap_out, vmap_range_first);
+      raddbgic_memcpy_struct(vmap_out, vmap_range_first);
       vmap_out += 1;
     }
     
@@ -2463,7 +2467,7 @@ raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, 
   result->vmap = vmap;
   result->count = vmap_entry_count - 1;
   
-  scratch_end(scratch);
+  raddbgic_scratch_end(scratch);
   
   return result;
 }
@@ -2471,14 +2475,14 @@ raddbgic_vmap_from_markers(RADDBGIC_Arena *arena, RADDBGIC_VMapMarker *markers, 
 RADDBGI_PROC RADDBGIC_VMap*
 raddbgic_vmap_from_unit_ranges(RADDBGIC_Arena *arena, RADDBGIC_UnitVMapRange *first, RADDBGI_U64 count)
 {
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // count necessary markers
   RADDBGI_U64 marker_count = count*2;
   
   // fill markers
-  RADDBGIC_SortKey    *keys = push_array_no_zero(scratch.arena, RADDBGIC_SortKey, marker_count);
-  RADDBGIC_VMapMarker *markers = push_array_no_zero(scratch.arena, RADDBGIC_VMapMarker, marker_count);
+  RADDBGIC_SortKey    *keys = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_SortKey, marker_count);
+  RADDBGIC_VMapMarker *markers = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_VMapMarker, marker_count);
   
   {
     RADDBGIC_SortKey *key_ptr = keys;
@@ -2508,7 +2512,7 @@ raddbgic_vmap_from_unit_ranges(RADDBGIC_Arena *arena, RADDBGIC_UnitVMapRange *fi
   
   // construct vmap
   RADDBGIC_VMap *result = raddbgic_vmap_from_markers(arena, markers, keys, marker_count);
-  scratch_end(scratch);
+  raddbgic_scratch_end(scratch);
   return result;
 }
 
@@ -2528,11 +2532,11 @@ RADDBGI_PROC RADDBGIC_TypeData*
 raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_BakeCtx *bctx)
 {
   ProfBegin("raddbgic_type_data_combine");
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // fill type nodes
   RADDBGI_U32 type_count = root->type_count;
-  RADDBGI_TypeNode *type_nodes = push_array_no_zero(arena, RADDBGI_TypeNode, type_count);
+  RADDBGI_TypeNode *type_nodes = raddbgic_push_array_no_zero(arena, RADDBGI_TypeNode, type_count);
   
   {
     RADDBGI_TypeNode *ptr = type_nodes;
@@ -2600,24 +2604,24 @@ raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_
         ptr->bitfield.size = loose_type->count;
       }
       
-      temp_end(scratch);
+      raddbgic_scratch_end(scratch);
     }
     
     // both iterators should end at the same time
-    Assert(loose_type == 0);
-    Assert(ptr == opl);
+    raddbgic_assert(loose_type == 0);
+    raddbgic_assert(ptr == opl);
   }
   
   
   // fill udts
   RADDBGI_U32 udt_count = root->type_udt_count;
-  RADDBGI_UDT *udts = push_array_no_zero(arena, RADDBGI_UDT, udt_count);
+  RADDBGI_UDT *udts = raddbgic_push_array_no_zero(arena, RADDBGI_UDT, udt_count);
   
   RADDBGI_U32 member_count = root->total_member_count;
-  RADDBGI_Member *members = push_array_no_zero(arena, RADDBGI_Member, member_count);
+  RADDBGI_Member *members = raddbgic_push_array_no_zero(arena, RADDBGI_Member, member_count);
   
   RADDBGI_U32 enum_member_count = root->total_enum_val_count;
-  RADDBGI_EnumMember *enum_members = push_array_no_zero(arena, RADDBGI_EnumMember, enum_member_count);
+  RADDBGI_EnumMember *enum_members = raddbgic_push_array_no_zero(arena, RADDBGI_EnumMember, enum_member_count);
   
   {
     RADDBGI_UDT *ptr = udts;
@@ -2634,8 +2638,8 @@ raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_
         loose_udt = loose_udt->next_order, ptr += 1){
       ptr->self_type_idx = loose_udt->self_type->idx;
       
-      Assert(loose_udt->member_count == 0 ||
-             loose_udt->enum_val_count == 0);
+      raddbgic_assert(loose_udt->member_count == 0 ||
+                      loose_udt->enum_val_count == 0);
       
       // enum members
       if(loose_udt->enum_val_count != 0){
@@ -2692,10 +2696,10 @@ raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_
     }
     
     // all iterators should end at the same time
-    Assert(loose_udt == 0);
-    Assert(ptr == opl);
-    Assert(member_ptr == member_opl);
-    Assert(enum_member_ptr == enum_member_opl);
+    raddbgic_assert(loose_udt == 0);
+    raddbgic_assert(ptr == opl);
+    raddbgic_assert(member_ptr == member_opl);
+    raddbgic_assert(enum_member_ptr == enum_member_opl);
   }
   
   
@@ -2710,7 +2714,7 @@ raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_
   result->enum_members = enum_members;
   result->enum_member_count = enum_member_count;
   
-  scratch_end(scratch);
+  raddbgic_scratch_end(scratch);
   ProfEnd();
   return result;
 }
@@ -2721,7 +2725,7 @@ RADDBGI_PROC RADDBGIC_SymbolData*
 raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_BakeCtx *bctx)
 {
   ProfBegin("raddbgic_symbol_data_combine");
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // count symbol kinds
   RADDBGI_U32 globalvar_count = 1 + root->symbol_kind_counts[RADDBGIC_SymbolKind_GlobalVariable];
@@ -2808,9 +2812,9 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
       }
     }
     
-    Assert(global_ptr - global_variables == globalvar_count);
-    Assert(thread_local_ptr - thread_variables == threadvar_count);
-    Assert(procedure_ptr - procedures == procedure_count);
+    raddbgic_assert(global_ptr - global_variables == globalvar_count);
+    raddbgic_assert(thread_local_ptr - thread_variables == threadvar_count);
+    raddbgic_assert(procedure_ptr - procedures == procedure_count);
   }
   
   // global vmap
@@ -2820,8 +2824,8 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
     RADDBGI_U32 marker_count = globalvar_count*2;
     
     // fill markers
-    RADDBGIC_SortKey    *keys = push_array_no_zero(scratch.arena, RADDBGIC_SortKey, marker_count);
-    RADDBGIC_VMapMarker *markers = push_array_no_zero(scratch.arena, RADDBGIC_VMapMarker, marker_count);
+    RADDBGIC_SortKey    *keys = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_SortKey, marker_count);
+    RADDBGIC_VMapMarker *markers = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_VMapMarker, marker_count);
     
     RADDBGIC_SortKey *key_ptr = keys;
     RADDBGIC_VMapMarker *marker_ptr = markers;
@@ -2857,7 +2861,7 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
       RADDBGI_U32 global_idx = 0;
       
       RADDBGI_U64 first = 0;
-      RADDBGI_U64 opl   = max_U64;
+      RADDBGI_U64 opl   = (RADDBGI_U64)0xffffffffffffffffull;
       
       key_ptr->key = first;
       key_ptr->val = marker_ptr;
@@ -2875,8 +2879,8 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
     }
     
     // assert we filled all the markers
-    Assert(key_ptr - keys == marker_count &&
-           marker_ptr - markers == marker_count);
+    raddbgic_assert(key_ptr - keys == marker_count &&
+                    marker_ptr - markers == marker_count);
     
     // construct vmap
     global_vmap = raddbgic_vmap_from_markers(arena, markers, keys, marker_count);
@@ -2885,11 +2889,11 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
   // allocate scope array
   
   // (assert there is a nil scope)
-  Assert(root->first_scope != 0 &&
-         root->first_scope->symbol == 0 &&
-         root->first_scope->first_child == 0 &&
-         root->first_scope->next_sibling == 0 &&
-         root->first_scope->range_count == 0);
+  raddbgic_assert(root->first_scope != 0 &&
+                  root->first_scope->symbol == 0 &&
+                  root->first_scope->first_child == 0 &&
+                  root->first_scope->next_sibling == 0 &&
+                  root->first_scope->range_count == 0);
   
   RADDBGI_U32 scope_count = root->scope_count;
   RADDBGI_Scope *scopes = raddbgic_push_array(arena, RADDBGI_Scope, scope_count);
@@ -2979,13 +2983,13 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
                       op_node = op_node->next){
                     RADDBGI_U8 op_data[9];
                     op_data[0] = op_node->op;
-                    MemoryCopy(op_data + 1, &op_node->p, op_node->p_size);
-                    RADDBGIC_String8 op_data_str = str8(op_data, 1 + op_node->p_size);
+                    raddbgic_memcpy(op_data + 1, &op_node->p, op_node->p_size);
+                    RADDBGIC_String8 op_data_str = raddbgic_str8(op_data, 1 + op_node->p_size);
                     str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, op_data_str));
                   }
                   {
                     RADDBGI_U64 data = 0;
-                    RADDBGIC_String8 data_str = str8((RADDBGI_U8 *)&data, 1);
+                    RADDBGIC_String8 data_str = raddbgic_str8((RADDBGI_U8 *)&data, 1);
                     str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, data_str));
                   }
                 }break;
@@ -3011,11 +3015,11 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
             }
           }
           
-          Assert(location_block_ptr - location_blocks == location_opl);
+          raddbgic_assert(location_block_ptr - location_blocks == location_opl);
         }
       }
       
-      Assert(local_ptr - locals == scope_local_first + scope_local_count);
+      raddbgic_assert(local_ptr - locals == scope_local_first + scope_local_count);
       
       // emit scope
       scope_ptr->proc_idx = (node->symbol == 0)?0:node->symbol->idx;
@@ -3032,8 +3036,8 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
       //scope_ptr->static_local_count = ;
     }
     
-    Assert(scope_ptr - scopes == scope_count);
-    Assert(local_ptr - locals == local_count);
+    raddbgic_assert(scope_ptr - scopes == scope_count);
+    raddbgic_assert(local_ptr - locals == local_count);
   }
   
   // flatten location data
@@ -3046,8 +3050,8 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
     RADDBGI_U32 marker_count = scope_voff_count;
     
     // fill markers
-    RADDBGIC_SortKey    *keys = push_array_no_zero(scratch.arena, RADDBGIC_SortKey, marker_count);
-    RADDBGIC_VMapMarker *markers = push_array_no_zero(scratch.arena, RADDBGIC_VMapMarker, marker_count);
+    RADDBGIC_SortKey    *keys = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_SortKey, marker_count);
+    RADDBGIC_VMapMarker *markers = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_VMapMarker, marker_count);
     
     RADDBGIC_SortKey *key_ptr = keys;
     RADDBGIC_VMapMarker *marker_ptr = markers;
@@ -3100,7 +3104,7 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
   result->location_data = location_data_str.str;
   result->location_data_size = location_data_str.size;
   
-  scratch_end(scratch);
+  raddbgic_scratch_end(scratch);
   ProfEnd();
   
   return result;
@@ -3111,7 +3115,7 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
 RADDBGI_PROC RADDBGIC_NameMapBaked*
 raddbgic_name_map_bake(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_BakeCtx *bctx, RADDBGIC_NameMap *map)
 {
-  Temp scratch = scratch_begin(&arena, 1);
+  RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   RADDBGI_U32 bucket_count = map->name_count;
   RADDBGI_U32 node_count = map->name_count;
@@ -3131,7 +3135,7 @@ raddbgic_name_map_bake(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_Bake
   
   // allocate tables
   RADDBGI_NameMapBucket *buckets = raddbgic_push_array(arena, RADDBGI_NameMapBucket, bucket_count);
-  RADDBGI_NameMapNode *nodes = push_array_no_zero(arena, RADDBGI_NameMapNode, node_count);
+  RADDBGI_NameMapNode *nodes = raddbgic_push_array_no_zero(arena, RADDBGI_NameMapNode, node_count);
   
   // convert to serialized buckets & nodes
   {
@@ -3154,8 +3158,8 @@ raddbgic_name_map_bake(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_Bake
           idx = node->idx_first->idx[0];
         }
         else{
-          Temp temp = temp_begin(scratch.arena);
-          RADDBGI_U32 *idx_run = push_array_no_zero(temp.arena, RADDBGI_U32, match_count);
+          RADDBGI_U64 temp_pos = raddbgic_arena_pos(scratch.arena);
+          RADDBGI_U32 *idx_run = raddbgic_push_array_no_zero(scratch.arena, RADDBGI_U32, match_count);
           RADDBGI_U32 *idx_ptr = idx_run;
           for(RADDBGIC_NameMapIdxNode *idxnode = node->idx_first;
               idxnode != 0;
@@ -3169,9 +3173,9 @@ raddbgic_name_map_bake(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_Bake
             }
           }
           dblbreak:;
-          Assert(idx_ptr == idx_run + match_count);
+          raddbgic_assert(idx_ptr == idx_run + match_count);
           idx = raddbgic_idx_run(bctx, idx_run, match_count);
-          temp_end(temp);
+          raddbgic_arena_pop_to(scratch.arena, temp_pos);
         }
         
         // write to node
@@ -3181,10 +3185,10 @@ raddbgic_name_map_bake(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_Bake
         node_ptr += 1;
       }
     }
-    Assert(node_ptr - nodes == node_count);
+    raddbgic_assert(node_ptr - nodes == node_count);
   }
   
-  scratch_end(scratch);
+  raddbgic_scratch_end(scratch);
   
   RADDBGIC_NameMapBaked *result = raddbgic_push_array(arena, RADDBGIC_NameMapBaked, 1);
   result->buckets = buckets;
@@ -3494,7 +3498,7 @@ raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8L
   
   // generate data sections for strings
   {
-    RADDBGI_U32 *str_offs = push_array_no_zero(arena, RADDBGI_U32, bctx->strs.count + 1);
+    RADDBGI_U32 *str_offs = raddbgic_push_array_no_zero(arena, RADDBGI_U32, bctx->strs.count + 1);
     
     RADDBGI_U32 off_cursor = 0;
     {
@@ -3516,7 +3520,7 @@ raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8L
       for(RADDBGIC_StringNode *node = bctx->strs.order_first;
           node != 0;
           node = node->order_next){
-        MemoryCopy(ptr, node->str.str, node->str.size);
+        raddbgic_memcpy(ptr, node->str.str, node->str.size);
         ptr += node->str.size;
       }
     }
@@ -3528,7 +3532,7 @@ raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8L
   
   // generate data sections for index runs
   {
-    RADDBGI_U32 *idx_data = push_array_no_zero(arena, RADDBGI_U32, bctx->idxs.idx_count);
+    RADDBGI_U32 *idx_data = raddbgic_push_array_no_zero(arena, RADDBGI_U32, bctx->idxs.idx_count);
     
     {
       RADDBGI_U32 *out_ptr = idx_data;
@@ -3536,10 +3540,10 @@ raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8L
       RADDBGIC_IdxRunNode *node = bctx->idxs.order_first;
       for(;node != 0 && out_ptr < opl;
           node = node->order_next){
-        MemoryCopy(out_ptr, node->idx_run, sizeof(*node->idx_run)*node->count);
+        raddbgic_memcpy(out_ptr, node->idx_run, sizeof(*node->idx_run)*node->count);
         out_ptr += node->count;
       }
-      Assert(out_ptr == opl);
+      raddbgic_assert(out_ptr == opl);
     }
     
     raddbgic_dsection(arena, &dss, idx_data, sizeof(*idx_data)*bctx->idxs.idx_count,
@@ -3570,7 +3574,7 @@ raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8L
         node = node->next){
       test_dss_count += 1;
     }
-    Assert(test_dss_count == dss.count);
+    raddbgic_assert(test_dss_count == dss.count);
     
     RADDBGI_DataSection *ptr = dstable;
     for(RADDBGIC_DSectionNode *node = dss.first;
@@ -3589,7 +3593,7 @@ raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8L
       ptr->encoded_size = node->size;
       ptr->unpacked_size = node->size;
     }
-    Assert(ptr == dstable + dss.count);
+    raddbgic_assert(ptr == dstable + dss.count);
   }
   
   raddbgic_bake_ctx_release(bctx);

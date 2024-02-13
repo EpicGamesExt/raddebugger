@@ -134,6 +134,7 @@ struct RADDBGIC_Temp
   RADDBGIC_Arena *arena;
   RADDBGI_U64 pos;
 };
+#define raddbgic_temp_arena(t) ((t).arena)
 #endif
 
 #if !defined(raddbgic_scratch_begin)
@@ -146,6 +147,66 @@ struct RADDBGIC_Temp
 ////////////////////////////////
 //~ rjf: Linked List Helpers
 
+#define RADDBGIC_CheckNil(nil,p) ((p) == 0 || (p) == nil)
+#define RADDBGIC_SetNil(nil,p) ((p) = nil)
+
+//- rjf: Base Doubly-Linked-List Macros
+#define RADDBGIC_DLLInsert_NPZ(nil,f,l,p,n,next,prev) (RADDBGIC_CheckNil(nil,f) ? \
+((f) = (l) = (n), RADDBGIC_SetNil(nil,(n)->next), RADDBGIC_SetNil(nil,(n)->prev)) :\
+RADDBGIC_CheckNil(nil,p) ? \
+((n)->next = (f), (f)->prev = (n), (f) = (n), RADDBGIC_SetNil(nil,(n)->prev)) :\
+((p)==(l)) ? \
+((l)->next = (n), (n)->prev = (l), (l) = (n), RADDBGIC_SetNil(nil, (n)->next)) :\
+(((!RADDBGIC_CheckNil(nil,p) && RADDBGIC_CheckNil(nil,(p)->next)) ? (0) : ((p)->next->prev = (n))), ((n)->next = (p)->next), ((p)->next = (n)), ((n)->prev = (p))))
+#define RADDBGIC_DLLPushBack_NPZ(nil,f,l,n,next,prev) RADDBGIC_DLLInsert_NPZ(nil,f,l,l,n,next,prev)
+#define RADDBGIC_DLLPushFront_NPZ(nil,f,l,n,next,prev) RADDBGIC_DLLInsert_NPZ(nil,l,f,f,n,prev,next)
+#define RADDBGIC_DLLRemove_NPZ(nil,f,l,n,next,prev) (((n) == (f) ? (f) = (n)->next : (0)),\
+((n) == (l) ? (l) = (l)->prev : (0)),\
+(RADDBGIC_CheckNil(nil,(n)->prev) ? (0) :\
+((n)->prev->next = (n)->next)),\
+(RADDBGIC_CheckNil(nil,(n)->next) ? (0) :\
+((n)->next->prev = (n)->prev)))
+
+//- rjf: Base Singly-Linked-List Queue Macros
+#define RADDBGIC_SLLQueuePush_NZ(nil,f,l,n,next) (RADDBGIC_CheckNil(nil,f)?\
+((f)=(l)=(n),RADDBGIC_SetNil(nil,(n)->next)):\
+((l)->next=(n),(l)=(n),RADDBGIC_SetNil(nil,(n)->next)))
+#define RADDBGIC_SLLQueuePushFront_NZ(nil,f,l,n,next) (RADDBGIC_CheckNil(nil,f)?\
+((f)=(l)=(n),RADDBGIC_SetNil(nil,(n)->next)):\
+((n)->next=(f),(f)=(n)))
+#define RADDBGIC_SLLQueuePop_NZ(nil,f,l,next) ((f)==(l)?\
+(RADDBGIC_SetNil(nil,f), RADDBGIC_SetNil(nil,l)):\
+((f)=(f)->next))
+
+//- rjf: Base Singly-Linked-List Stack Macros
+#define RADDBGIC_SLLStackPush_N(f,n,next) ((n)->next=(f), (f)=(n))
+#define RADDBGIC_SLLStackPop_N(f,next) ((f)=(f)->next)
+
+////////////////////////////////
+//~ rjf: Convenience Wrappers
+
+//- rjf: Doubly-Linked-List Wrappers
+#define RADDBGIC_DLLInsert_NP(f,l,p,n,next,prev) RADDBGIC_DLLInsert_NPZ(0,f,l,p,n,next,prev)
+#define RADDBGIC_DLLPushBack_NP(f,l,n,next,prev) RADDBGIC_DLLPushBack_NPZ(0,f,l,n,next,prev)
+#define RADDBGIC_DLLPushFront_NP(f,l,n,next,prev) RADDBGIC_DLLPushFront_NPZ(0,f,l,n,next,prev)
+#define RADDBGIC_DLLRemove_NP(f,l,n,next,prev) RADDBGIC_DLLRemove_NPZ(0,f,l,n,next,prev)
+#define RADDBGIC_DLLInsert(f,l,p,n) RADDBGIC_DLLInsert_NPZ(0,f,l,p,n,next,prev)
+#define RADDBGIC_DLLPushBack(f,l,n) RADDBGIC_DLLPushBack_NPZ(0,f,l,n,next,prev)
+#define RADDBGIC_DLLPushFront(f,l,n) RADDBGIC_DLLPushFront_NPZ(0,f,l,n,next,prev)
+#define RADDBGIC_DLLRemove(f,l,n) RADDBGIC_DLLRemove_NPZ(0,f,l,n,next,prev)
+
+//- rjf: Singly-Linked-List Queue Wrappers
+#define RADDBGIC_SLLQueuePush_N(f,l,n,next) RADDBGIC_SLLQueuePush_NZ(0,f,l,n,next)
+#define RADDBGIC_SLLQueuePushFront_N(f,l,n,next) RADDBGIC_SLLQueuePushFront_NZ(0,f,l,n,next)
+#define RADDBGIC_SLLQueuePop_N(f,l,next) RADDBGIC_SLLQueuePop_NZ(0,f,l,next)
+#define RADDBGIC_SLLQueuePush(f,l,n) RADDBGIC_SLLQueuePush_NZ(0,f,l,n,next)
+#define RADDBGIC_SLLQueuePushFront(f,l,n) RADDBGIC_SLLQueuePushFront_NZ(0,f,l,n,next)
+#define RADDBGIC_SLLQueuePop(f,l) RADDBGIC_SLLQueuePop_NZ(0,f,l,next)
+
+//- rjf: Singly-Linked-List Stack Wrappers
+#define RADDBGIC_SLLStackPush(f,n) RADDBGIC_SLLStackPush_N(f,n,next)
+#define RADDBGIC_SLLStackPop(f) RADDBGIC_SLLStackPop_N(f,next)
+
 ////////////////////////////////
 //~ rjf: Helper Macros
 
@@ -156,6 +217,22 @@ struct RADDBGIC_Temp
 #else
 # error RADDBGIC_THREAD_LOCAL not defined for this compiler.
 #endif
+
+#if defined(_MSC_VER)
+# define raddbgic_trap() __debugbreak()
+#elif defined(__clang__) || defined(__GNUC__) || defined(__GNUG__)
+# define raddbgic_trap() __builtin_trap()
+#else
+# error "raddbgic_trap not defined for this compiler."
+#endif
+
+#define raddbgic_assert_always(x) do{if(!(x)) {raddbgic_trap();}}while(0)
+#if !defined(NDEBUG)
+# define raddbgic_assert(x) raddbgic_assert_always(x)
+#else
+# define raddbgic_assert(x) (void)(x)
+#endif
+#define raddbgic_noop ((void)0)
 
 ////////////////////////////////
 //~ rjf: Error Types
@@ -981,6 +1058,8 @@ RADDBGI_PROC void *raddbgic_memset_fallback(void *dst, RADDBGI_U8 c, RADDBGI_U64
 RADDBGI_PROC void *raddbgic_memcpy_fallback(void *dst, void *src, RADDBGI_U64 size);
 #endif
 #define raddbgic_memzero(ptr, size) raddbgic_memset((ptr), 0, (size))
+#define raddbgic_memzero_struct(ptr) raddbgic_memset((ptr), 0, sizeof(*(ptr)))
+#define raddbgic_memcpy_struct(dst, src) raddbgic_memcpy((dst), (src), sizeof(*(dst)))
 
 //- rjf: arenas
 #if !defined (RADDBGIC_ARENA_OVERRIDE)
@@ -1002,7 +1081,7 @@ RADDBGI_PROC void raddbgic_scratch_end_fallback(RADDBGIC_Temp temp);
 //- rjf: strings
 RADDBGI_PROC RADDBGIC_String8 raddbgic_str8(RADDBGI_U8 *str, RADDBGI_U64 size);
 RADDBGI_PROC RADDBGIC_String8 raddbgic_str8_copy(RADDBGIC_Arena *arena, RADDBGIC_String8 src);
-#define raddbgic_str8_lit(S)  raddbgic_str8((U8*)(S), sizeof(S) - 1)
+#define raddbgic_str8_lit(S)  raddbgic_str8((RADDBGI_U8*)(S), sizeof(S) - 1)
 
 //- rjf: type lists
 RADDBGI_PROC void raddbgic_type_list_push(RADDBGIC_Arena *arena, RADDBGIC_TypeList *list, RADDBGIC_Type *type);
