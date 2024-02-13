@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ rjf: RADDBG Converter Helper Implementation Generators
 
-@table_gen @c_file
+@gen @c_file
 {
   `internal RADDBGI_RegisterCode regs_raddbgi_code_from_arch_reg_code(Architecture arch, REGS_RegCode code)`;
   `{`;
@@ -33,7 +33,7 @@
     `}`;
 }
 
-@table_gen @c_file
+@gen @c_file
 {
   `internal REGS_RegCode regs_reg_code_from_arch_raddbgi_code(Architecture arch, RADDBGI_RegisterCode code)`;
   `{`;

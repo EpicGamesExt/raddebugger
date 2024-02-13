@@ -518,7 +518,7 @@ DF_ThemePresetColorTable:
 
 //- rjf: view hook forward declares
 
-@table_gen
+@gen
 {
   @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name));`;
   @expand(DF_GfxViewTable a) `DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF($(a.name));`;
@@ -528,7 +528,7 @@ DF_ThemePresetColorTable:
 
 //- rjf: gfx view rule function forward declares
 
-@table_gen
+@gen
 {
   ``;
   @expand(DF_GfxViewRuleTable a)

@@ -49,49 +49,11 @@ cv_stringize_lvar_addr_gap_list(Arena *arena, String8List *out, void *first, voi
 }
 
 internal String8
-cv_string_from_sym_kind(CV_SymKind kind){
-  String8 result = str8_lit("UNRECOGNIZED_SYM_KIND");
-  switch (kind){
-#define X(N,c) case CV_SymKind_##N: result = str8_lit(#N); break;
-    CV_SymKindXList(X)
-#undef X
-  }
-  return(result);
-}
-
-internal String8
 cv_string_from_basic_type(CV_BasicType basic_type){
   String8 result = str8_lit("UNRECOGNIZED_BASIC_TYPE");
   switch (basic_type){
 #define X(N,c) case CV_BasicType_##N: result = str8_lit(#N); break;
     CV_BasicTypeXList(X)
-#undef X
-  }
-  return(result);
-}
-
-internal String8
-cv_string_from_leaf_kind(CV_LeafKind kind){
-  String8 result = str8_lit("UNRECOGNIZED_LEAF_KIND");
-  switch (kind){
-#define X(N,c) case CV_LeafKind_##N: result = str8_lit(#N); break;
-    CV_LeafKindXList(X)
-#undef X
-    
-#define X(N,c) case CV_LeafIDKind_##N: result = str8_lit(#N); break;
-    CV_LeafIDKindXList(X)
-#undef X
-  }
-  return(result);
-}
-
-internal String8
-cv_string_from_numeric_kind(CV_NumericKind kind){
-  String8 result = str8_lit("UNRECOGNIZED_NUMERIC_KIND");
-  switch (kind){
-    case 0: str8_lit("PARSE_ERROR"); break;
-#define X(N,c) case CV_NumericKind_##N: result = str8_lit(#N); break;
-    CV_NumericKindXList(X)
 #undef X
   }
   return(result);
@@ -104,17 +66,6 @@ cv_string_from_c13_sub_section_kind(CV_C13_SubSectionKind kind){
     case 0: str8_lit("PARSE_ERROR"); break;
 #define X(N,c) case CV_C13_SubSectionKind_##N: result = str8_lit(#N); break;
     CV_C13_SubSectionKindXList(X)
-#undef X
-  }
-  return(result);
-}
-
-internal String8
-cv_string_from_machine(CV_Arch arch){
-  String8 result = {0};
-  switch (arch){
-#define X(N,c) case CV_Arch_##N: result = str8_lit(#N); break;
-    CV_ArchXList(X)
 #undef X
   }
   return(result);
@@ -417,7 +368,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           CV_SymCompile *compile = (CV_SymCompile*)first;
           
           // machine
-          String8 machine = cv_string_from_machine(compile->machine);
+          String8 machine = cv_string_from_arch(compile->machine);
           str8_list_pushf(arena, out, " machine=%.*s\n",
                           str8_varg(machine));
           
@@ -742,7 +693,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           str8_list_pushf(arena, out, " flags=%x\n", compile2->flags);
           
           // machine
-          String8 machine = cv_string_from_machine(compile2->machine);
+          String8 machine = cv_string_from_arch(compile2->machine);
           str8_list_pushf(arena, out, " machine=%.*s\n",
                           str8_varg(machine));
           
@@ -906,7 +857,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           str8_list_pushf(arena, out, " flags=%x\n", compile3->flags);
           
           // machine
-          String8 machine = cv_string_from_machine(compile3->machine);
+          String8 machine = cv_string_from_arch(compile3->machine);
           str8_list_pushf(arena, out, " machine=%.*s\n",
                           str8_varg(machine));
           

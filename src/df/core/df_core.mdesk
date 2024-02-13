@@ -1796,7 +1796,7 @@ DF_DevToggleTable:
 
 //- rjf: core view rule function prototypes
 
-@table_gen
+@gen
 {
   @expand(DF_CoreViewRuleTable a) `$(a.er == "x" -> "DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(" .. a.name_lower .. ");")`;
   @expand(DF_CoreViewRuleTable a) `$(a.vb == "x" -> "DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
@@ -1827,7 +1827,7 @@ DF_DevToggleTable:
 
 //- rjf: instruction metadata table
 
-@table_gen
+@gen
 {
   ``;
   `struct{String8 mnemonic; String8 summary;} df_g_inst_table_x64[] =`;
@@ -1839,12 +1839,12 @@ DF_DevToggleTable:
 
 //- rjf: developer toggles
 
-@table_gen
+@gen
 {
   @expand(DF_DevToggleTable a) `global B32 DEV_$(a.name) = 0;`
 }
 
-@table_gen
+@gen
 {
   `struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =`;
   `{`;

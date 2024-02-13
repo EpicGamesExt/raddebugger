@@ -211,7 +211,7 @@ int main(int argument_count, char **arguments)
   }
   
   //////////////////////////////
-  //- rjf: generate table data tables
+  //- rjf: generate data tables
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
@@ -241,19 +241,58 @@ int main(int argument_count, char **arguments)
   }
   
   //////////////////////////////
-  //- rjf: generate table catch-all generations
+  //- rjf: generate enum -> string mapping functions
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      MD_Node *tag = md_tag_from_string(node, str8_lit("table_gen"), 0);
+      MD_Node *tag = md_tag_from_string(node, str8_lit("enum2string_switch"), 0);
+      if(!md_node_is_nil(tag))
+      {
+        String8 enum_type = tag->first->string;
+        String8 layer_key = mg_layer_key_from_path(file->string);
+        MG_Layer *layer = mg_layer_from_key(layer_key);
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        str8_list_pushf(mg_arena, &layer->h_functions, "internal String8 %S(%S v);\n", node->string, enum_type);
+        str8_list_pushf(mg_arena, &layer->c_functions, "internal String8\n%S(%S v)\n{\n", node->string, enum_type);
+        str8_list_pushf(mg_arena, &layer->c_functions, "String8 result = str8_lit(\"<Unknown %S>\");\n", enum_type);
+        str8_list_pushf(mg_arena, &layer->c_functions, "switch(v)\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "{\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "default:{}break;\n");
+        for(String8Node *n = gen_strings.first; n != 0; n = n->next)
+        {
+          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
+          str8_list_pushf(mg_arena, &layer->c_functions, "%S;\n", escaped);
+        }
+        str8_list_pushf(mg_arena, &layer->c_functions, "}\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "return result;\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "}\n\n");
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: generate catch-all generations
+  //
+  for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
+  {
+    MD_Node *file = n->v.root;
+    for(MD_EachNode(node, file->first))
+    {
+      MD_Node *tag = md_tag_from_string(node, str8_lit("gen"), 0);
       if(!md_node_is_nil(tag))
       {
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
-        String8List *out = md_node_has_tag(node, str8_lit("c_file"), 0) ? &layer->c_catchall : &layer->h_catchall;
+        B32 prefer_c_file = md_node_has_tag(node, str8_lit("c_file"), 0);
+        String8List *out = prefer_c_file ? &layer->c_catchall : &layer->h_catchall;
+        if(tag->first->string.size == 0){}
+        else if(str8_match(tag->first->string, str8_lit("enums"), 0))     { out = &layer->enums; }
+        else if(str8_match(tag->first->string, str8_lit("structs"), 0))   { out = &layer->structs; }
+        else if(str8_match(tag->first->string, str8_lit("functions"), 0)) { out = prefer_c_file ? &layer->c_functions : &layer->h_functions; }
+        else if(str8_match(tag->first->string, str8_lit("tables"), 0))    { out = prefer_c_file ? &layer->c_tables : &layer->h_tables; }
         String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {

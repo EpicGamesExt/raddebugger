@@ -63,14 +63,14 @@ UI_StackTable:
 
 //- rjf: declaring stack node types
 
-@table_gen
+@gen
 {
   @expand(UI_StackTable a) `typedef struct UI_$(a.name)Node UI_$(a.name)Node; struct UI_$(a.name)Node{UI_$(a.name)Node *next; $(a.type) v;};`
 }
 
 //- rjf: declaring all default stack tops
 
-@table_gen
+@gen
 {
   `#define UI_DeclStackNils \\`;
   `struct\\`;
@@ -81,7 +81,7 @@ UI_StackTable:
 
 //- rjf: initializing all default stack tops
 
-@table_gen
+@gen
 {
   `#define UI_InitStackNils(state) \\`;
   @expand(UI_StackTable a) `state->$(a.name_lower)_nil_stack_top.v = $(a.default);\\`;
@@ -90,7 +90,7 @@ UI_StackTable:
 
 //- rjf: declaring all stack nodes & free lists
 
-@table_gen
+@gen
 {
   `#define UI_DeclStacks \\`;
   `struct\\`;
@@ -101,7 +101,7 @@ UI_StackTable:
 
 //- rjf: initing all stack nodes
 
-@table_gen
+@gen
 {
   `#define UI_InitStacks(state) \\`;
   @expand(UI_StackTable a) `state->$(a.name_lower)_stack.top = &state->$(a.name_lower)_nil_stack_top; state->$(a.name_lower)_stack.bottom_val = $(a.default); state->$(a.name_lower)_stack.free = 0; state->$(a.name_lower)_stack.auto_pop = 0;\\`;
@@ -110,7 +110,7 @@ UI_StackTable:
 
 //- rjf: auto-popping all stacks
 
-@table_gen
+@gen
 {
   `#define UI_AutoPopStacks(state) \\`
   @expand(UI_StackTable a)
@@ -120,7 +120,7 @@ UI_StackTable:
 
 //- rjf: decls for the stack function operation headers
 
-@table_gen
+@gen
 {
   @expand(UI_StackTable a)
     `internal $(a.type) $(=>35) ui_top_$(a.name_lower)(void);`
@@ -136,7 +136,7 @@ UI_StackTable:
 
 //- rjf: defer-loop helpers
 
-@table_gen @c_file
+@gen @c_file
 {
   `#if 0`;
   @expand(UI_StackTable a)
@@ -146,7 +146,7 @@ UI_StackTable:
 
 //- rjf: decls for the stack operation implementations
 
-@table_gen @c_file
+@gen @c_file
 {
   @expand(UI_StackTable a)
     `internal $(a.type) ui_top_$(a.name_lower)(void) { UI_StackTopImpl(ui_state, $(a.name), $(a.name_lower)) }`;

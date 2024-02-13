@@ -1,3 +1,5 @@
+////////////////////////////////
+//~ rjf: CV Numerics
 
 @table(name val)
 CV_NumericKindTable:
@@ -25,4 +27,480 @@ CV_NumericKindTable:
   {DATE           0x801a}
   {UTF8STRING     0x801b}
   {FLOAT16        0x801c}
+}
+
+@enum(U16) CV_NumericKind:
+{
+  @expand(CV_NumericKindTable a) `$(a.name) = $(a.val)`
+}
+
+@enum2string_switch(CV_NumericKind)
+cv_string_from_numeric_kind:
+{
+  @expand(CV_NumericKindTable a) `case CV_NumericKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+////////////////////////////////
+//~ rjf: CV Architectures
+
+@table(name val)
+CV_ArchTable:
+{
+  {8080         0x00}
+  {8086         0x01}
+  {80286        0x02}
+  {80386        0x03}
+  {80486        0x04}
+  {PENTIUM      0x05}
+  {PENTIUMII    0x06}
+  {PENTIUMIII   0x07}
+  {MIPS         0x10}
+  {MIPS16       0x11}
+  {MIPS32       0x12}
+  {MIPS64       0x13}
+  {MIPSI        0x14}
+  {MIPSII       0x15}
+  {MIPSIII      0x16}
+  {MIPSIV       0x17}
+  {MIPSV        0x18}
+  {M68000       0x20}
+  {M68010       0x21}
+  {M68020       0x22}
+  {M68030       0x23}
+  {M68040       0x24}
+  {ALPHA        0x30}
+  {ALPHA_21164  0x31}
+  {ALPHA_21164A 0x32}
+  {ALPHA_21264  0x33}
+  {ALPHA_21364  0x34}
+  {PPC601       0x40}
+  {PPC603       0x41}
+  {PPC604       0x42}
+  {PPC620       0x43}
+  {PPCFP        0x44}
+  {PPCBE        0x45}
+  {SH3          0x50}
+  {SH3E         0x51}
+  {SH3DSP       0x52}
+  {SH4          0x53}
+  {SHMEDIA      0x54}
+  {ARM3         0x60}
+  {ARM4         0x61}
+  {ARM4T        0x62}
+  {ARM5         0x63}
+  {ARM5T        0x64}
+  {ARM6         0x65}
+  {ARM_XMAC     0x66}
+  {ARM_WMMX     0x67}
+  {ARM7         0x68}
+  {OMNI         0x70}
+  {IA64_1       0x80}
+  {IA64_2       0x81}
+  {CEE          0x90}
+  {AM33         0xA0}
+  {M32R         0xB0}
+  {TRICORE      0xC0}
+  {X64          0xD0}
+  {EBC          0xE0}
+  {THUMB        0xF0}
+  {ARMNT        0xF4}
+  {ARM64        0xF6}
+  {D3D11_SHADER 0x100}
+}
+
+@enum(U16) CV_Arch:
+{
+  @expand(CV_ArchTable a) `$(a.name) = $(a.val)`,
+  `IA64        = CV_Arch_IA64_1`,
+  `PENTIUMPRO  = CV_Arch_PENTIUMII`,
+  `MIPSR4000   = CV_Arch_MIPS`,
+  `ALPHA_21064 = CV_Arch_ALPHA`,
+  `AMD64       = CV_Arch_X64`,
+}
+
+@enum2string_switch(CV_Arch)
+cv_string_from_arch:
+{
+  @expand(CV_ArchTable a) `case CV_Arch_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+////////////////////////////////
+//~ rjf: CV Registers
+
+@table(name val) CV_AllRegTable:
+{
+  {ERR    30000}
+  {TEB    30001}
+  {TIMER  30002}
+  {EFAD1  30003}
+  {EFAD2  30004}
+  {EFAD3  30005}
+  {VFRAME 30006}
+  {HANDLE 30007}
+  {PARAMS 30008}
+  {LOCALS 30009}
+  {TID    30010}
+  {ENV    30011}
+  {CMDLN  30012}
+}
+
+@enum(U16) CV_AllReg:
+{
+  @expand(CV_AllRegTable a) `$(a.name) = $(a.val)`
+}
+
+////////////////////////////////
+//~ rjf: CV Sym Kinds
+
+@table(name val) CV_SymKindTable:
+{
+  {COMPILE        0x0001}
+  {REGISTER_16t   0x0002}
+  {CONSTANT_16t   0x0003}
+  {UDT_16t        0x0004}
+  {SSEARCH        0x0005}
+  {END            0x0006}
+  {SKIP           0x0007}
+  {CVRESERVE      0x0008}
+  {OBJNAME_ST     0x0009}
+  {ENDARG         0x000a}
+  {COBOLUDT_16t   0x000b}
+  {MANYREG_16t    0x000c}
+  {RETURN         0x000d}
+  {ENTRYTHIS      0x000e}
+  {BPREL16        0x0100}
+  {LDATA16        0x0101}
+  {GDATA16        0x0102}
+  {PUB16          0x0103}
+  {LPROC16        0x0104}
+  {GPROC16        0x0105}
+  {THUNK16        0x0106}
+  {BLOCK16        0x0107}
+  {WITH16         0x0108}
+  {LABEL16        0x0109}
+  {CEXMODEL16     0x010a}
+  {VFTABLE16      0x010b}
+  {REGREL16       0x010c}
+  {BPREL32_16t    0x0200}
+  {LDATA32_16t    0x0201}
+  {GDATA32_16t    0x0202}
+  {PUB32_16t      0x0203}
+  {LPROC32_16t    0x0204}
+  {GPROC32_16t    0x0205}
+  {THUNK32_ST     0x0206}
+  {BLOCK32_ST     0x0207}
+  {WITH32_ST      0x0208}
+  {LABEL32_ST     0x0209}
+  {CEXMODEL32     0x020a}
+  {VFTABLE32_16t  0x020b}
+  {REGREL32_16t   0x020c}
+  {LTHREAD32_16t  0x020d}
+  {GTHREAD32_16t  0x020e}
+  {SLINK32        0x020f}
+  {LPROCMIPS_16t  0x0300}
+  {GPROCMIPS_16t  0x0301}
+  {PROCREF_ST     0x0400}
+  {DATAREF_ST     0x0401}
+  {ALIGN          0x0402}
+  {LPROCREF_ST    0x0403}
+  {OEM            0x0404}
+  {TI16_MAX       0x1000}
+  {CONSTANT_ST    0x1002}
+  {UDT_ST         0x1003}
+  {COBOLUDT_ST    0x1004}
+  {MANYREG_ST     0x1005}
+  {BPREL32_ST     0x1006}
+  {LDATA32_ST     0x1007}
+  {GDATA32_ST     0x1008}
+  {PUB32_ST       0x1009}
+  {LPROC32_ST     0x100a}
+  {GPROC32_ST     0x100b}
+  {VFTABLE32      0x100c}
+  {REGREL32_ST    0x100d}
+  {LTHREAD32_ST   0x100e}
+  {GTHREAD32_ST   0x100f}
+  {LPROCMIPS_ST   0x1010}
+  {GPROCMIPS_ST   0x1011}
+  {FRAMEPROC      0x1012}
+  {COMPILE2_ST    0x1013}
+  {MANYREG2_ST    0x1014}
+  {LPROCIA64_ST   0x1015}
+  {GPROCIA64_ST   0x1016}
+  {LOCALSLOT_ST   0x1017}
+  {PARAMSLOT_ST   0x1018}
+  {ANNOTATION     0x1019}
+  {GMANPROC_ST    0x101a}
+  {LMANPROC_ST    0x101b}
+  {RESERVED1      0x101c}
+  {RESERVED2      0x101d}
+  {RESERVED3      0x101e}
+  {RESERVED4      0x101f}
+  {LMANDATA_ST    0x1020}
+  {GMANDATA_ST    0x1021}
+  {MANFRAMEREL_ST 0x1022}
+  {MANREGISTER_ST 0x1023}
+  {MANSLOT_ST     0x1024}
+  {MANMANYREG_ST  0x1025}
+  {MANREGREL_ST   0x1026}
+  {MANMANYREG2_ST 0x1027}
+  {MANTYPREF      0x1028}
+  {UNAMESPACE_ST  0x1029}
+  {ST_MAX         0x1100}
+  {OBJNAME        0x1101}
+  {THUNK32        0x1102}
+  {BLOCK32        0x1103}
+  {WITH32         0x1104}
+  {LABEL32        0x1105}
+  {REGISTER       0x1106}
+  {CONSTANT       0x1107}
+  {UDT            0x1108}
+  {COBOLUDT       0x1109}
+  {MANYREG        0x110a}
+  {BPREL32        0x110b}
+  {LDATA32        0x110c}
+  {GDATA32        0x110d}
+  {PUB32          0x110e}
+  {LPROC32        0x110f}
+  {GPROC32        0x1110}
+  {REGREL32       0x1111}
+  {LTHREAD32      0x1112}
+  {GTHREAD32      0x1113}
+  {LPROCMIPS      0x1114}
+  {GPROCMIPS      0x1115}
+  {COMPILE2       0x1116}
+  {MANYREG2       0x1117}
+  {LPROCIA64      0x1118}
+  {GPROCIA64      0x1119}
+  {LOCALSLOT      0x111a}
+  {PARAMSLOT      0x111b}
+  {LMANDATA       0x111c}
+  {GMANDATA       0x111d}
+  {MANFRAMEREL    0x111e}
+  {MANREGISTER    0x111f}
+  {MANSLOT        0x1120}
+  {MANMANYREG     0x1121}
+  {MANREGREL      0x1122}
+  {MANMANYREG2    0x1123}
+  {UNAMESPACE     0x1124}
+  {PROCREF        0x1125}
+  {DATAREF        0x1126}
+  {LPROCREF       0x1127}
+  {ANNOTATIONREF  0x1128}
+  {TOKENREF       0x1129}
+  {GMANPROC       0x112a}
+  {LMANPROC       0x112b}
+  {TRAMPOLINE     0x112c}
+  {MANCONSTANT    0x112d}
+  {ATTR_FRAMEREL  0x112e}
+  {ATTR_REGISTER  0x112f}
+  {ATTR_REGREL    0x1130}
+  {ATTR_MANYREG   0x1131}
+  {SEPCODE        0x1132}
+  {DEFRANGE_2005  0x1134}
+  {DEFRANGE2_2005 0x1135}
+  {SECTION        0x1136}
+  {COFFGROUP      0x1137}
+  {EXPORT         0x1138}
+  {CALLSITEINFO   0x1139}
+  {FRAMECOOKIE    0x113a}
+  {DISCARDED      0x113b}
+  {COMPILE3       0x113c}
+  {ENVBLOCK       0x113d}
+  {LOCAL          0x113e}
+  {DEFRANGE       0x113f}
+  {DEFRANGE_SUBFIELD 0x1140}
+  {DEFRANGE_REGISTER 0x1141}
+  {DEFRANGE_FRAMEPOINTER_REL 0x1142}
+  {DEFRANGE_SUBFIELD_REGISTER 0x1143}
+  {DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE 0x1144}
+  {DEFRANGE_REGISTER_REL 0x1145}
+  {LPROC32_ID            0x1146}
+  {GPROC32_ID            0x1147}
+  {LPROCMIPS_ID          0x1148}
+  {GPROCMIPS_ID          0x1149}
+  {LPROCIA64_ID          0x114a}
+  {GPROCIA64_ID          0x114b}
+  {BUILDINFO             0x114c}
+  {INLINESITE            0x114d}
+  {INLINESITE_END        0x114e}
+  {PROC_ID_END           0x114f}
+  {DEFRANGE_HLSL         0x1150}
+  {GDATA_HLSL            0x1151}
+  {LDATA_HLSL            0x1152}
+  {FILESTATIC            0x1153}
+  {LPROC32_DPC           0x1155}
+  {LPROC32_DPC_ID        0x1156}
+  {DEFRANGE_DPC_PTR_TAG  0x1157}
+  {DPC_SYM_TAG_MAP       0x1158}
+  {ARMSWITCHTABLE        0x1159}
+  {CALLEES               0x115a}
+  {CALLERS               0x115b}
+  {POGODATA              0x115c}
+  {INLINESITE2           0x115d}
+  {HEAPALLOCSITE         0x115e}
+  {MOD_TYPEREF           0x115f}
+  {REF_MINIPDB           0x1160}
+  {PDBMAP                0x1161}
+  {GDATA_HLSL32          0x1162}
+  {LDATA_HLSL32          0x1163}
+  {GDATA_HLSL32_EX       0x1164}
+  {LDATA_HLSL32_EX       0x1165}
+  {FASTLINK              0x1167}
+  {INLINEES              0x1168}
+}
+
+@enum(U16) CV_SymKind:
+{
+  @expand(CV_SymKindTable a) `$(a.name) = $(a.val)`
+}
+
+@enum2string_switch(CV_SymKind)
+cv_string_from_sym_kind:
+{
+  @expand(CV_SymKindTable a) `case CV_SymKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+////////////////////////////////
+//~ rjf: CV Leaf
+
+@table(name val)
+CV_LeafKindTable:
+{
+  {MODIFIER_16t  0x0001}
+  {POINTER_16t   0x0002}
+  {ARRAY_16t     0x0003}
+  {CLASS_16t     0x0004}
+  {STRUCTURE_16t 0x0005}
+  {UNION_16t     0x0006}
+  {ENUM_16t      0x0007}
+  {PROCEDURE_16t 0x0008}
+  {MFUNCTION_16t 0x0009}
+  {VTSHAPE       0x000a}
+  {COBOL0_16t    0x000b}
+  {COBOL1        0x000c}
+  {BARRAY_16t    0x000d}
+  {LABEL         0x000e}
+  {NULL          0x000f}
+  {NOTTRAN       0x0010}
+  {DIMARRAY_16t  0x0011}
+  {VFTPATH_16t   0x0012}
+  {PRECOMP_16t   0x0013}
+  {ENDPRECOMP    0x0014}
+  {OEM_16t       0x0015}
+  {TYPESERVER_ST 0x0016}
+  {SKIP_16t      0x0200}
+  {ARGLIST_16t   0x0201}
+  {DEFARG_16t    0x0202}
+  {LIST          0x0203}
+  {FIELDLIST_16t 0x0204}
+  {DERIVED_16t   0x0205}
+  {BITFIELD_16t  0x0206}
+  {METHODLIST_16t 0x0207}
+  {DIMCONU_16t   0x0208}
+  {DIMCONLU_16t  0x0209}
+  {DIMVARU_16t   0x020a}
+  {DIMVARLU_16t  0x020b}
+  {REFSYM        0x020c}
+  {BCLASS_16t    0x0400}
+  {VBCLASS_16t   0x0401}
+  {IVBCLASS_16t  0x0402}
+  {ENUMERATE_ST  0x0403}
+  {FRIENDFCN_16t 0x0404}
+  {INDEX_16t     0x0405}
+  {MEMBER_16t    0x0406}
+  {STMEMBER_16t  0x0407}
+  {METHOD_16t    0x0408}
+  {NESTTYPE_16t  0x0409}
+  {VFUNCTAB_16t  0x040a}
+  {FRIENDCLS_16t 0x040b}
+  {ONEMETHOD_16t 0x040c}
+  {VFUNCOFF_16t  0x040d}
+  {TI16_MAX      0x1000}
+  {MODIFIER      0x1001}
+  {POINTER       0x1002}
+  {ARRAY_ST      0x1003}
+  {CLASS_ST      0x1004}
+  {STRUCTURE_ST  0x1005}
+  {UNION_ST      0x1006}
+  {ENUM_ST       0x1007}
+  {PROCEDURE     0x1008}
+  {MFUNCTION     0x1009}
+  {COBOL0        0x100a}
+  {BARRAY        0x100b}
+  {DIMARRAY_ST   0x100c}
+  {VFTPATH       0x100d}
+  {PRECOMP_ST    0x100e}
+  {OEM           0x100f}
+  {ALIAS_ST      0x1010}
+  {OEM2          0x1011}
+  {SKIP          0x1200}
+  {ARGLIST       0x1201}
+  {DEFARG_ST     0x1202}
+  {FIELDLIST     0x1203}
+  {DERIVED       0x1204}
+  {BITFIELD      0x1205}
+  {METHODLIST    0x1206}
+  {DIMCONU       0x1207}
+  {DIMCONLU      0x1208}
+  {DIMVARU       0x1209}
+  {DIMVARLU      0x120a}
+  {BCLASS        0x1400}
+  {VBCLASS       0x1401}
+  {IVBCLASS      0x1402}
+  {FRIENDFCN_ST  0x1403}
+  {INDEX         0x1404}
+  {MEMBER_ST     0x1405}
+  {STMEMBER_ST   0x1406}
+  {METHOD_ST     0x1407}
+  {NESTTYPE_ST   0x1408}
+  {VFUNCTAB      0x1409}
+  {FRIENDCLS     0x140a}
+  {ONEMETHOD_ST  0x140b}
+  {VFUNCOFF      0x140c}
+  {NESTTYPEEX_ST 0x140d}
+  {MEMBERMODIFY_ST 0x140e}
+  {MANAGED_ST    0x140f}
+  {ST_MAX        0x1500}
+  {TYPESERVER    0x1501}
+  {ENUMERATE     0x1502}
+  {ARRAY         0x1503}
+  {CLASS         0x1504}
+  {STRUCTURE     0x1505}
+  {UNION         0x1506}
+  {ENUM          0x1507}
+  {DIMARRAY      0x1508}
+  {PRECOMP       0x1509}
+  {ALIAS         0x150a}
+  {DEFARG        0x150b}
+  {FRIENDFCN     0x150c}
+  {MEMBER        0x150d}
+  {STMEMBER      0x150e}
+  {METHOD        0x150f}
+  {NESTTYPE      0x1510}
+  {ONEMETHOD     0x1511}
+  {NESTTYPEEX    0x1512}
+  {MEMBERMODIFY  0x1513}
+  {MANAGED       0x1514}
+  {TYPESERVER2   0x1515}
+  {STRIDED_ARRAY 0x1516}
+  {HLSL          0x1517}
+  {MODIFIER_EX   0x1518}
+  {INTERFACE     0x1519}
+  {BINTERFACE    0x151a}
+  {VECTOR        0x151b}
+  {MATRIX        0x151c}
+  {VFTABLE       0x151d}
+  {CLASS2        0x1608}
+  {STRUCT2       0x1609}
+}
+
+@enum(U16) CV_LeafKind:
+{
+  @expand(CV_LeafKindTable a) `$(a.name) = $(a.val)`;
+}
+
+@enum2string_switch(CV_LeafKind)
+cv_string_from_leaf_kind:
+{
+  @expand(CV_LeafKindTable a) `case CV_LeafKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
 }

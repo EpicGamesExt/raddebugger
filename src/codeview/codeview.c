@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ Generated Code
+
+#include "generated/codeview.meta.c"
+
+////////////////////////////////
 //~ CodeView Common Functions
 
 internal CV_NumericParsed
