@@ -634,7 +634,7 @@ entry_point(int argc, char **argv)
       if(out != 0 && params->output_name.size > 0)
       {
         String8List baked = {0};
-        raddbgic_bake_file(scratch.arena, out->root, &baked);
+        rdim_bake_file(scratch.arena, out->root, &baked);
         U64 off = 0;
         for(String8Node *node = baked.first; node != 0; node = node->next)
         {

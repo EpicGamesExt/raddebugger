@@ -67,7 +67,7 @@ typedef struct P2R_TypeRev P2R_TypeRev;
 struct P2R_TypeRev
 {
   P2R_TypeRev *next;
-  RADDBGIC_Type *owner_type;
+  RDIM_Type *owner_type;
   CV_TypeId field_itype;
 };
 
@@ -84,7 +84,7 @@ typedef struct P2R_FrameProcNode P2R_FrameProcNode;
 struct P2R_FrameProcNode
 {
   P2R_FrameProcNode *next;
-  RADDBGIC_Symbol *key;
+  RDIM_Symbol *key;
   P2R_FrameProcData data;
 };
 
@@ -103,8 +103,8 @@ typedef struct P2R_ScopeNode P2R_ScopeNode;
 struct P2R_ScopeNode
 {
   P2R_ScopeNode *next;
-  RADDBGIC_Scope *scope;
-  RADDBGIC_Symbol *symbol;
+  RDIM_Scope *scope;
+  RDIM_Symbol *symbol;
 };
 
 //- rjf: known global map
@@ -179,7 +179,7 @@ struct P2R_Ctx
   U64 section_count;
   
   // OUTPUT data
-  RADDBGIC_Root *root;
+  RDIM_Root *root;
   
   // TEMPORARY STATE
   P2R_FwdMap fwd_map;
@@ -201,7 +201,7 @@ typedef struct P2R_Out P2R_Out;
 struct P2R_Out
 {
   B32 good_parse;
-  RADDBGIC_Root *root;
+  RDIM_Root *root;
   String8List dump;
   String8List errors;
 };
@@ -227,7 +227,7 @@ internal RADDBGI_Language     raddbgi_language_from_cv_language(CV_Language lang
 //~ rjf: Conversion Implementation Helpers
 
 //- rjf: pdb conversion context creation
-internal P2R_Ctx *p2r_ctx_alloc(P2R_CtxParams *params, RADDBGIC_Root *out_root);
+internal P2R_Ctx *p2r_ctx_alloc(P2R_CtxParams *params, RDIM_Root *out_root);
 
 //- rjf: pdb types and symbols
 internal void p2r_types_and_symbols(P2R_Ctx *pdb_ctx, P2R_TypesSymbolsParams *params);
@@ -249,19 +249,19 @@ internal COFF_SectionHeader* p2r_sec_header_from_sec_num(P2R_Ctx *ctx, U32 sec_n
 // type info construction passes
 internal void           p2r_type_cons_main_passes(P2R_Ctx *ctx);
 internal CV_TypeId      p2r_type_resolve_fwd(P2R_Ctx *ctx, CV_TypeId itype);
-internal RADDBGIC_Type* p2r_type_resolve_itype(P2R_Ctx *ctx, CV_TypeId itype);
-internal void           p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owern_type, CV_TypeId field_itype);
-internal void           p2r_type_equip_enumerates(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype);
+internal RDIM_Type* p2r_type_resolve_itype(P2R_Ctx *ctx, CV_TypeId itype);
+internal void           p2r_type_equip_members(P2R_Ctx *ctx, RDIM_Type *owern_type, CV_TypeId field_itype);
+internal void           p2r_type_equip_enumerates(P2R_Ctx *ctx, RDIM_Type *owner_type, CV_TypeId field_itype);
 
 // type info construction helpers
-internal RADDBGIC_Type* p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype);
-internal RADDBGIC_Type* p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype);
-internal RADDBGIC_Type* p2r_type_resolve_and_check(P2R_Ctx *ctx, CV_TypeId itype);
-internal void       p2r_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
+internal RDIM_Type* p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype);
+internal RDIM_Type* p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype);
+internal RDIM_Type* p2r_type_resolve_and_check(P2R_Ctx *ctx, CV_TypeId itype);
+internal void       p2r_type_resolve_arglist(Arena *arena, RDIM_TypeList *out,
                                              P2R_Ctx *ctx, CV_TypeId arglist_itype);
 
 // type info resolution helpers
-internal RADDBGIC_Type* p2r_type_from_name(P2R_Ctx *ctx, String8 name);
+internal RDIM_Type* p2r_type_from_name(P2R_Ctx *ctx, String8 name);
 
 // type fwd map
 internal void      p2r_type_fwd_map_set(Arena *arena, P2R_FwdMap *map,
@@ -278,12 +278,12 @@ internal void p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id
 internal void p2r_gather_link_names(P2R_Ctx *ctx, CV_SymParsed *sym);
 
 // "frameproc" map
-internal void                   p2r_symbol_frame_proc_write(P2R_Ctx *ctx,RADDBGIC_Symbol *key,
+internal void                   p2r_symbol_frame_proc_write(P2R_Ctx *ctx,RDIM_Symbol *key,
                                                             P2R_FrameProcData *data);
-internal P2R_FrameProcData* p2r_symbol_frame_proc_read(P2R_Ctx *ctx, RADDBGIC_Symbol *key);
+internal P2R_FrameProcData* p2r_symbol_frame_proc_read(P2R_Ctx *ctx, RDIM_Symbol *key);
 
 // scope stack
-internal void p2r_symbol_push_scope(P2R_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol);
+internal void p2r_symbol_push_scope(P2R_Ctx *ctx, RDIM_Scope *scope, RDIM_Symbol *symbol);
 internal void p2r_symbol_pop_scope(P2R_Ctx *ctx);
 internal void p2r_symbol_clear_scope_stack(P2R_Ctx *ctx);
 
@@ -302,23 +302,23 @@ internal void p2r_known_global_insert(Arena *arena, P2R_KnownGlobalSet *set,
 
 
 // location info helpers
-internal RADDBGIC_Location* p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
-                                                           RADDBGI_RegisterCode reg_code,
-                                                           U32 reg_byte_size,
-                                                           U32 reg_byte_pos,
-                                                           S64 offset,
-                                                           B32 extra_indirection);
+internal RDIM_Location* p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
+                                                       RADDBGI_RegisterCode reg_code,
+                                                       U32 reg_byte_size,
+                                                       U32 reg_byte_pos,
+                                                       S64 offset,
+                                                       B32 extra_indirection);
 
 internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_proc(P2R_Ctx *ctx,
-                                                               RADDBGIC_Symbol *proc,
+                                                               RDIM_Symbol *proc,
                                                                B32 param_base);
 
 internal RADDBGI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch,
                                                                     CV_EncodedFramePtrReg encoded_reg);
 
 internal void p2r_location_over_lvar_addr_range(P2R_Ctx *ctx,
-                                                RADDBGIC_LocationSet *locset,
-                                                RADDBGIC_Location *location,
+                                                RDIM_LocationSet *locset,
+                                                RDIM_Location *location,
                                                 CV_LvarAddrRange *range,
                                                 CV_LvarAddrGap *gaps, U64 gap_count);
 

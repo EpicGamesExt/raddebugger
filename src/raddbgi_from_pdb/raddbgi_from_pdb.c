@@ -304,7 +304,7 @@ raddbgi_language_from_cv_language(CV_Language cv_language)
 //- rjf: pdb conversion context creation
 
 internal P2R_Ctx *
-p2r_ctx_alloc(P2R_CtxParams *params, RADDBGIC_Root *out_root)
+p2r_ctx_alloc(P2R_CtxParams *params, RDIM_Root *out_root)
 {
   Arena *arena = arena_alloc();
   P2R_Ctx *pdb_ctx = push_array(arena, P2R_Ctx, 1);
@@ -362,7 +362,7 @@ p2r_u32_from_numeric(P2R_Ctx *ctx, CV_NumericParsed *num)
   U32 n_u32 = (U32)n_u64;
   if(n_u64 > 0xFFFFFFFF)
   {
-    raddbgic_push_errorf(ctx->root, "constant too large");
+    rdim_push_errorf(ctx->root, "constant too large");
     n_u32 = 0;
   }
   return(n_u32);
@@ -391,9 +391,9 @@ p2r_type_cons_main_passes(P2R_Ctx *ctx)
   // setup variadic itype -> node
   ProfScope("setup variadic itype -> node")
   {
-    RADDBGIC_Type *variadic_type = raddbgic_type_variadic(ctx->root);
-    RADDBGIC_Reservation *res = raddbgic_type_reserve_id(ctx->root, CV_TypeId_Variadic, CV_TypeId_Variadic);
-    raddbgic_type_fill_id(ctx->root, res, variadic_type);
+    RDIM_Type *variadic_type = rdim_type_variadic(ctx->root);
+    RDIM_Reservation *res = rdim_type_reserve_id(ctx->root, CV_TypeId_Variadic, CV_TypeId_Variadic);
+    rdim_type_fill_id(ctx->root, res, variadic_type);
   }
   
   // resolve forward references
@@ -610,7 +610,7 @@ p2r_type_resolve_fwd(P2R_Ctx *ctx, CV_TypeId itype)
   return(result);
 }
 
-internal RADDBGIC_Type*
+internal RDIM_Type*
 p2r_type_resolve_itype(P2R_Ctx *ctx, CV_TypeId itype)
 {
   B32 is_basic = (itype < 0x1000);
@@ -626,7 +626,7 @@ p2r_type_resolve_itype(P2R_Ctx *ctx, CV_TypeId itype)
   }
   
   // type handle from id
-  RADDBGIC_Type *result = raddbgic_type_from_id(ctx->root, itype, itype);
+  RDIM_Type *result = rdim_type_from_id(ctx->root, itype, itype);
   
   // basic type
   if(result == 0 && is_basic)
@@ -643,14 +643,14 @@ p2r_type_resolve_itype(P2R_Ctx *ctx, CV_TypeId itype)
   // never return null, return "nil" instead
   if(result == 0)
   {
-    result = raddbgic_type_nil(ctx->root);
+    result = rdim_type_nil(ctx->root);
   }
   
   return(result);
 }
 
 internal void
-p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype)
+p2r_type_equip_members(P2R_Ctx *ctx, RDIM_Type *owner_type, CV_TypeId field_itype)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -763,9 +763,9 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
             list_item_opl_off = name_off + name.size + 1;
             
             // emit member
-            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, member->itype);
+            RDIM_Type *mem_type = p2r_type_resolve_itype(ctx, member->itype);
             U32 offset_u32 = p2r_u32_from_numeric(ctx, &offset);
-            raddbgic_type_add_member_data_field(ctx->root, owner_type, name, mem_type, offset_u32);
+            rdim_type_add_member_data_field(ctx->root, owner_type, name, mem_type, offset_u32);
           }
         }break;
         
@@ -785,8 +785,8 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, stmember->itype);
-            raddbgic_type_add_member_static_data(ctx->root, owner_type, name, mem_type);
+            RDIM_Type *mem_type = p2r_type_resolve_itype(ctx, stmember->itype);
+            rdim_type_add_member_static_data(ctx->root, owner_type, name, mem_type);
           }
         }break;
         
@@ -870,18 +870,18 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
               // TODO(allen): handle attribs
               
               // emit
-              RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, method->itype);
+              RDIM_Type *mem_type = p2r_type_resolve_itype(ctx, method->itype);
               
               switch (prop)
               {
                 default:
                 {
-                  raddbgic_type_add_member_method(ctx->root, owner_type, name, mem_type);
+                  rdim_type_add_member_method(ctx->root, owner_type, name, mem_type);
                 }break;
                 
                 case CV_MethodProp_Static:
                 {
-                  raddbgic_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
+                  rdim_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
                 }break;
                 
                 case CV_MethodProp_Virtual:
@@ -889,7 +889,7 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
                 case CV_MethodProp_Intro:
                 case CV_MethodProp_PureIntro:
                 {
-                  raddbgic_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
+                  rdim_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
                 }break;
               }
             }
@@ -924,18 +924,18 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
             // TODO(allen): handle attribs
             
             // emit
-            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, one_method->itype);
+            RDIM_Type *mem_type = p2r_type_resolve_itype(ctx, one_method->itype);
             
             switch (prop)
             {
               default:
               {
-                raddbgic_type_add_member_method(ctx->root, owner_type, name, mem_type);
+                rdim_type_add_member_method(ctx->root, owner_type, name, mem_type);
               }break;
               
               case CV_MethodProp_Static:
               {
-                raddbgic_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
+                rdim_type_add_member_static_method(ctx->root, owner_type, name, mem_type);
               }break;
               
               case CV_MethodProp_Virtual:
@@ -943,7 +943,7 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
               case CV_MethodProp_Intro:
               case CV_MethodProp_PureIntro:
               {
-                raddbgic_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
+                rdim_type_add_member_virtual_method(ctx->root, owner_type, name, mem_type);
               }break;
             }
           }
@@ -963,8 +963,8 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
             list_item_opl_off = name_off + name.size + 1;
             
             // emit member
-            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, nest_type->itype);
-            raddbgic_type_add_member_nested_type(ctx->root, owner_type, mem_type);
+            RDIM_Type *mem_type = p2r_type_resolve_itype(ctx, nest_type->itype);
+            rdim_type_add_member_nested_type(ctx->root, owner_type, mem_type);
           }
         }break;
         
@@ -984,8 +984,8 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *mem_type = p2r_type_resolve_itype(ctx, nest_type->itype);
-            raddbgic_type_add_member_nested_type(ctx->root, owner_type, mem_type);
+            RDIM_Type *mem_type = p2r_type_resolve_itype(ctx, nest_type->itype);
+            rdim_type_add_member_nested_type(ctx->root, owner_type, mem_type);
           }
         }break;
         
@@ -1005,9 +1005,9 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *base_type = p2r_type_resolve_itype(ctx, bclass->itype);
+            RDIM_Type *base_type = p2r_type_resolve_itype(ctx, bclass->itype);
             U32 offset_u32 = p2r_u32_from_numeric(ctx, &offset);
-            raddbgic_type_add_member_base(ctx->root, owner_type, base_type, offset_u32);
+            rdim_type_add_member_base(ctx->root, owner_type, base_type, offset_u32);
           }
         }break;
         
@@ -1031,11 +1031,11 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
             // TODO(allen): handle attribs
             
             // emit member
-            RADDBGIC_Type *base_type = p2r_type_resolve_itype(ctx, vbclass->itype);
+            RDIM_Type *base_type = p2r_type_resolve_itype(ctx, vbclass->itype);
             U32 vbptr_offset_u32  = p2r_u32_from_numeric(ctx, &num1);
             U32 vtable_offset_u32 = p2r_u32_from_numeric(ctx, &num2);
-            raddbgic_type_add_member_virtual_base(ctx->root, owner_type, base_type,
-                                                  vbptr_offset_u32, vtable_offset_u32);
+            rdim_type_add_member_virtual_base(ctx->root, owner_type, base_type,
+                                              vbptr_offset_u32, vtable_offset_u32);
           }
         }break;
         
@@ -1053,8 +1053,8 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
         default:
         {
           String8 kind_str = cv_string_from_leaf_kind(field_kind);
-          raddbgic_push_errorf(ctx->root, "unhandled/invalid case: equip_members -> %.*s",
-                               str8_varg(kind_str));
+          rdim_push_errorf(ctx->root, "unhandled/invalid case: equip_members -> %.*s",
+                           str8_varg(kind_str));
         }break;
       }
       
@@ -1068,7 +1068,7 @@ p2r_type_equip_members(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_
 }
 
 internal void
-p2r_type_equip_enumerates(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype)
+p2r_type_equip_enumerates(P2R_Ctx *ctx, RDIM_Type *owner_type, CV_TypeId field_itype)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -1181,15 +1181,15 @@ p2r_type_equip_enumerates(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId fie
           
           // emit enum val
           U64 val_u64 = cv_u64_from_numeric(&val);
-          raddbgic_type_add_enum_val(ctx->root, owner_type, name, val_u64);
+          rdim_type_add_enum_val(ctx->root, owner_type, name, val_u64);
         }break;
         
         // unhandled or invalid cases
         default:
         {
           String8 kind_str = cv_string_from_leaf_kind(field_kind);
-          raddbgic_push_errorf(ctx->root, "unhandled/invalid case: equip_enumerates -> %.*s",
-                               str8_varg(kind_str));
+          rdim_push_errorf(ctx->root, "unhandled/invalid case: equip_enumerates -> %.*s",
+                           str8_varg(kind_str));
         }break;
       }
       
@@ -1202,7 +1202,7 @@ p2r_type_equip_enumerates(P2R_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId fie
   scratch_end(scratch);
 }
 
-internal RADDBGIC_Type*
+internal RDIM_Type*
 p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype)
 {
   Assert(itype < 0x1000);
@@ -1210,183 +1210,183 @@ p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype)
   CV_BasicPointerKind basic_ptr_kind = CV_BasicPointerKindFromTypeId(itype);
   CV_BasicType basic_type_code = CV_BasicTypeFromTypeId(itype);
   
-  RADDBGIC_Reservation *basic_res = raddbgic_type_reserve_id(ctx->root, basic_type_code, basic_type_code);
+  RDIM_Reservation *basic_res = rdim_type_reserve_id(ctx->root, basic_type_code, basic_type_code);
   
-  RADDBGIC_Type *basic_type = 0;
+  RDIM_Type *basic_type = 0;
   switch (basic_type_code)
   {
     case CV_BasicType_VOID:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Void, str8_lit("void"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Void, str8_lit("void"));
     }break;
     
     case CV_BasicType_HRESULT:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("HRESULT"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("HRESULT"));
     }break;
     
     case CV_BasicType_RCHAR:
     case CV_BasicType_CHAR:
     case CV_BasicType_CHAR8:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Char8, str8_lit("char"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Char8, str8_lit("char"));
     }break;
     
     case CV_BasicType_UCHAR:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_UChar8, str8_lit("UCHAR"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_UChar8, str8_lit("UCHAR"));
     }break;
     
     case CV_BasicType_WCHAR:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_UChar16, str8_lit("WCHAR"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_UChar16, str8_lit("WCHAR"));
     }break;
     
     case CV_BasicType_CHAR16:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Char16, str8_lit("CHAR16"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Char16, str8_lit("CHAR16"));
     }break;
     
     case CV_BasicType_CHAR32:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Char32, str8_lit("CHAR32"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Char32, str8_lit("CHAR32"));
     }break;
     
     case CV_BasicType_BOOL8:
     case CV_BasicType_INT8:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S8, str8_lit("S8"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S8, str8_lit("S8"));
     }break;
     
     case CV_BasicType_BOOL16:
     case CV_BasicType_INT16:
     case CV_BasicType_SHORT:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S16, str8_lit("S16"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S16, str8_lit("S16"));
     }break;
     
     case CV_BasicType_BOOL32:
     case CV_BasicType_INT32:
     case CV_BasicType_LONG:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S32, str8_lit("S32"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S32, str8_lit("S32"));
     }break;
     
     case CV_BasicType_BOOL64:
     case CV_BasicType_INT64:
     case CV_BasicType_QUAD:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S64, str8_lit("S64"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S64, str8_lit("S64"));
     }break;
     
     case CV_BasicType_INT128:
     case CV_BasicType_OCT:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_S128, str8_lit("S128"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S128, str8_lit("S128"));
     }break;
     
     case CV_BasicType_UINT8:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U8, str8_lit("U8"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U8, str8_lit("U8"));
     }break;
     
     case CV_BasicType_UINT16:
     case CV_BasicType_USHORT:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U16, str8_lit("U16"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U16, str8_lit("U16"));
     }break;
     
     case CV_BasicType_UINT32:
     case CV_BasicType_ULONG:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U32, str8_lit("U32"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U32, str8_lit("U32"));
     }break;
     
     case CV_BasicType_UINT64:
     case CV_BasicType_UQUAD:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U64, str8_lit("U64"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U64, str8_lit("U64"));
     }break;
     
     case CV_BasicType_UINT128:
     case CV_BasicType_UOCT:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_U128, str8_lit("U128"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U128, str8_lit("U128"));
     }break;
     
     case CV_BasicType_FLOAT16:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F16, str8_lit("F16"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F16, str8_lit("F16"));
     }break;
     
     case CV_BasicType_FLOAT32:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F32, str8_lit("F32"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F32, str8_lit("F32"));
     }break;
     
     case CV_BasicType_FLOAT32PP:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F32PP, str8_lit("F32PP"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F32PP, str8_lit("F32PP"));
     }break;
     
     case CV_BasicType_FLOAT48:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F48, str8_lit("F48"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F48, str8_lit("F48"));
     }break;
     
     case CV_BasicType_FLOAT64:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F64, str8_lit("F64"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F64, str8_lit("F64"));
     }break;
     
     case CV_BasicType_FLOAT80:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F80, str8_lit("F80"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F80, str8_lit("F80"));
     }break;
     
     case CV_BasicType_FLOAT128:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_F128, str8_lit("F128"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F128, str8_lit("F128"));
     }break;
     
     case CV_BasicType_COMPLEX32:
     {
       basic_type =
-        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF32, str8_lit("ComplexF32"));
+        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF32, str8_lit("ComplexF32"));
     }break;
     
     case CV_BasicType_COMPLEX64:
     {
       basic_type =
-        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF64, str8_lit("ComplexF64"));
+        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF64, str8_lit("ComplexF64"));
     }break;
     
     case CV_BasicType_COMPLEX80:
     {
       basic_type =
-        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF80, str8_lit("ComplexF80"));
+        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF80, str8_lit("ComplexF80"));
     }break;
     
     case CV_BasicType_COMPLEX128:
     {
       basic_type =
-        raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF128, str8_lit("ComplexF128"));
+        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF128, str8_lit("ComplexF128"));
     }break;
     
     case CV_BasicType_PTR:
     {
-      basic_type = raddbgic_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("PTR"));
+      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("PTR"));
     }break;
   }
   
   // basic resolve
-  raddbgic_type_fill_id(ctx->root, basic_res, basic_type);
+  rdim_type_fill_id(ctx->root, basic_res, basic_type);
   
   // wrap in constructed type
-  RADDBGIC_Type *constructed_type = 0;
+  RDIM_Type *constructed_type = 0;
   if(basic_ptr_kind != 0 && basic_type != 0)
   {
-    RADDBGIC_Reservation *constructed_res = raddbgic_type_reserve_id(ctx->root, itype, itype);
+    RDIM_Reservation *constructed_res = rdim_type_reserve_id(ctx->root, itype, itype);
     
     switch (basic_ptr_kind)
     {
@@ -1397,16 +1397,16 @@ p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype)
       case CV_BasicPointerKind_16_32BIT:
       case CV_BasicPointerKind_64BIT:
       {
-        constructed_type = raddbgic_type_pointer(ctx->root, basic_type, RADDBGI_TypeKind_Ptr);
+        constructed_type = rdim_type_pointer(ctx->root, basic_type, RADDBGI_TypeKind_Ptr);
       }break;
     }
     
     // constructed resolve
-    raddbgic_type_fill_id(ctx->root, constructed_res, constructed_type);
+    rdim_type_fill_id(ctx->root, constructed_res, constructed_type);
   }
   
   // select output
-  RADDBGIC_Type *result = basic_type;
+  RDIM_Type *result = basic_type;
   if(basic_ptr_kind != 0)
   {
     result = constructed_type;
@@ -1415,17 +1415,17 @@ p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype)
   return(result);
 }
 
-internal RADDBGIC_Type*
+internal RDIM_Type*
 p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
 {
   Assert(ctx->leaf->itype_first <= itype && itype < ctx->leaf->itype_opl);
   
-  RADDBGIC_Reservation *res = raddbgic_type_reserve_id(ctx->root, itype, itype);
+  RDIM_Reservation *res = rdim_type_reserve_id(ctx->root, itype, itype);
   
   CV_RecRange *range = &ctx->leaf->leaf_ranges.ranges[itype - ctx->leaf->itype_first];
   String8 data = ctx->leaf->data;
   
-  RADDBGIC_Type *result = 0;
+  RDIM_Type *result = 0;
   if(range->off + range->hdr.size <= data.size)
   {
     U8 *first = data.str + range->off + 2;
@@ -1450,10 +1450,10 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
             flags |= RADDBGI_TypeModifierFlag_Volatile;
           }
           
-          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, modifier->itype);
+          RDIM_Type *direct_type = p2r_type_resolve_and_check(ctx, modifier->itype);
           if(flags != 0)
           {
-            result = raddbgic_type_modifier(ctx->root, direct_type, flags);
+            result = rdim_type_modifier(ctx->root, direct_type, flags);
           }
           else
           {
@@ -1505,13 +1505,13 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
             type_kind = RADDBGI_TypeKind_RRef;
           }
           
-          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, pointer->itype);
-          RADDBGIC_Type *ptr_type = raddbgic_type_pointer(ctx->root, direct_type, type_kind);
+          RDIM_Type *direct_type = p2r_type_resolve_and_check(ctx, pointer->itype);
+          RDIM_Type *ptr_type = rdim_type_pointer(ctx->root, direct_type, type_kind);
           
           result = ptr_type;
           if(modifier_flags != 0)
           {
-            result = raddbgic_type_modifier(ctx->root, ptr_type, modifier_flags);
+            result = rdim_type_modifier(ctx->root, ptr_type, modifier_flags);
           }
         }
       }break;
@@ -1527,12 +1527,12 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           
           // TODO(allen): handle call_kind & attribs
           
-          RADDBGIC_Type *ret_type = p2r_type_resolve_and_check(ctx, procedure->ret_itype);
+          RDIM_Type *ret_type = p2r_type_resolve_and_check(ctx, procedure->ret_itype);
           
-          RADDBGIC_TypeList param_list = {0};
+          RDIM_TypeList param_list = {0};
           p2r_type_resolve_arglist(scratch.arena, &param_list, ctx, procedure->arg_itype);
           
-          result = raddbgic_type_proc(ctx->root, ret_type, &param_list);
+          result = rdim_type_proc(ctx->root, ret_type, &param_list);
           
           scratch_end(scratch);
         }
@@ -1550,20 +1550,20 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // TODO(allen): handle call_kind & attribs
           // TODO(allen): preserve "this_adjust"
           
-          RADDBGIC_Type *ret_type = p2r_type_resolve_and_check(ctx, mfunction->ret_itype);
+          RDIM_Type *ret_type = p2r_type_resolve_and_check(ctx, mfunction->ret_itype);
           
-          RADDBGIC_TypeList param_list = {0};
+          RDIM_TypeList param_list = {0};
           p2r_type_resolve_arglist(scratch.arena, &param_list, ctx, mfunction->arg_itype);
           
-          RADDBGIC_Type *this_type = 0;
+          RDIM_Type *this_type = 0;
           if(mfunction->this_itype != 0)
           {
             this_type = p2r_type_resolve_and_check(ctx, mfunction->this_itype);
-            result = raddbgic_type_method(ctx->root, this_type, ret_type, &param_list);
+            result = rdim_type_method(ctx->root, this_type, ret_type, &param_list);
           }
           else
           {
-            result = raddbgic_type_proc(ctx->root, ret_type, &param_list);
+            result = rdim_type_proc(ctx->root, ret_type, &param_list);
           }
           
           scratch_end(scratch);
@@ -1576,8 +1576,8 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
         if(sizeof(CV_LeafBitField) <= cap)
         {
           CV_LeafBitField *bit_field = (CV_LeafBitField*)first;
-          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, bit_field->itype);
-          result = raddbgic_type_bitfield(ctx->root, direct_type, bit_field->pos, bit_field->len);
+          RDIM_Type *direct_type = p2r_type_resolve_and_check(ctx, bit_field->itype);
+          result = rdim_type_bitfield(ctx->root, direct_type, bit_field->pos, bit_field->len);
         }
       }break;
       
@@ -1594,7 +1594,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           
           U64 full_size = cv_u64_from_numeric(&array_count);
           
-          RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, array->entry_itype);
+          RDIM_Type *direct_type = p2r_type_resolve_and_check(ctx, array->entry_itype);
           U64 count = full_size;
           if(direct_type != 0 && direct_type->byte_size != 0)
           {
@@ -1602,7 +1602,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           }
           
           // build type
-          result = raddbgic_type_array(ctx->root, direct_type, count);
+          result = rdim_type_array(ctx->root, direct_type, count);
         }
       }break;
       
@@ -1633,7 +1633,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
             {
               type_kind = RADDBGI_TypeKind_IncompleteClass;
             }
-            result = raddbgic_type_incomplete(ctx->root, type_kind, name);
+            result = rdim_type_incomplete(ctx->root, type_kind, name);
           }
           
           // complete type
@@ -1644,7 +1644,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
             {
               type_kind = RADDBGI_TypeKind_Class;
             }
-            result = raddbgic_type_udt(ctx->root, type_kind, name, size_u64);
+            result = rdim_type_udt(ctx->root, type_kind, name, size_u64);
             
             // remember to revisit this for members
             {
@@ -1684,7 +1684,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
             {
               type_kind = RADDBGI_TypeKind_IncompleteClass;
             }
-            result = raddbgic_type_incomplete(ctx->root, type_kind, name);
+            result = rdim_type_incomplete(ctx->root, type_kind, name);
           }
           
           // complete type
@@ -1695,7 +1695,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
             {
               type_kind = RADDBGI_TypeKind_Class;
             }
-            result = raddbgic_type_udt(ctx->root, type_kind, name, size_u64);
+            result = rdim_type_udt(ctx->root, type_kind, name, size_u64);
             
             // remember to revisit this for members
             {
@@ -1730,13 +1730,13 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           if(lf_union->props & CV_TypeProp_FwdRef)
           {
             result =
-              raddbgic_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteUnion, name);
+              rdim_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteUnion, name);
           }
           
           // complete type
           else
           {
-            result = raddbgic_type_udt(ctx->root, RADDBGI_TypeKind_Union, name, size_u64);
+            result = rdim_type_udt(ctx->root, RADDBGI_TypeKind_Union, name, size_u64);
             
             // remember to revisit this for members
             {
@@ -1765,14 +1765,14 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // incomplete type
           if(lf_enum->props & CV_TypeProp_FwdRef)
           {
-            result = raddbgic_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteEnum, name);
+            result = rdim_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteEnum, name);
           }
           
           // complete type
           else
           {
-            RADDBGIC_Type *direct_type = p2r_type_resolve_and_check(ctx, lf_enum->base_itype);
-            result = raddbgic_type_enum(ctx->root, direct_type, name);
+            RDIM_Type *direct_type = p2r_type_resolve_and_check(ctx, lf_enum->base_itype);
+            result = rdim_type_enum(ctx->root, direct_type, name);
             
             // remember to revisit this for enumerates
             {
@@ -1791,7 +1791,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
       case CV_LeafKind_VFTABLE:
       case CV_LeafKind_LABEL:
       {
-        result = raddbgic_type_handled_nil(ctx->root);
+        result = rdim_type_handled_nil(ctx->root);
       }break;
       
       // do nothing cases - these get handled in special passes and
@@ -1932,30 +1932,30 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
       default:
       {
         String8 kind_str = cv_string_from_leaf_kind(range->hdr.kind);
-        raddbgic_push_errorf(ctx->root, "pdbconv: unhandled leaf case %.*s (0x%x)",
-                             str8_varg(kind_str), range->hdr.kind);
+        rdim_push_errorf(ctx->root, "pdbconv: unhandled leaf case %.*s (0x%x)",
+                         str8_varg(kind_str), range->hdr.kind);
       }break;
     }
   }
   
-  raddbgic_type_fill_id(ctx->root, res, result);
+  rdim_type_fill_id(ctx->root, res, result);
   
   return(result);
 }
 
-internal RADDBGIC_Type*
+internal RDIM_Type*
 p2r_type_resolve_and_check(P2R_Ctx *ctx, CV_TypeId itype)
 {
-  RADDBGIC_Type *result = p2r_type_resolve_itype(ctx, itype);
-  if(raddbgic_type_is_unhandled_nil(ctx->root, result))
+  RDIM_Type *result = p2r_type_resolve_itype(ctx, itype);
+  if(rdim_type_is_unhandled_nil(ctx->root, result))
   {
-    raddbgic_push_errorf(ctx->root, "pdbconv: could not resolve itype (itype = %u)", itype);
+    rdim_push_errorf(ctx->root, "pdbconv: could not resolve itype (itype = %u)", itype);
   }
   return(result);
 }
 
 internal void
-p2r_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
+p2r_type_resolve_arglist(Arena *arena, RDIM_TypeList *out,
                          P2R_Ctx *ctx, CV_TypeId arglist_itype)
 {
   ProfBeginFunction();
@@ -1982,8 +1982,8 @@ p2r_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
         U32 clamped_count = ClampTop(arglist->count, max_count);
         for(U32 i = 0; i < clamped_count; i += 1)
         {
-          RADDBGIC_Type *param_type = p2r_type_resolve_and_check(ctx, itypes[i]);
-          raddbgic_type_list_push(arena,  out, param_type);
+          RDIM_Type *param_type = p2r_type_resolve_and_check(ctx, itypes[i]);
+          rdim_type_list_push(arena,  out, param_type);
         }
         
       }
@@ -1993,12 +1993,12 @@ p2r_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
   ProfEnd();
 }
 
-internal RADDBGIC_Type*
+internal RDIM_Type*
 p2r_type_from_name(P2R_Ctx *ctx, String8 name)
 {
   // TODO(rjf): no idea if this is correct
   CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(ctx->hash, ctx->leaf, name, 0);
-  RADDBGIC_Type *result = raddbgic_type_from_id(ctx->root, cv_type_id, cv_type_id);
+  RDIM_Type *result = rdim_type_from_id(ctx->root, cv_type_id, cv_type_id);
   return(result);
 }
 
@@ -2099,7 +2099,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
   //
   ProfScope("map out data associations")
   {
-    RADDBGIC_Symbol *current_proc = 0;
+    RDIM_Symbol *current_proc = 0;
     CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
     CV_RecRange *rec_ranges_opl   = rec_ranges_first + sym->sym_ranges.count;
     for(CV_RecRange *rec_range = rec_ranges_first;
@@ -2149,7 +2149,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           U64 symbol_id = user_id_base + sym_off_first;
           U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-          current_proc = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+          current_proc = rdim_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
         }break;
       }
     }
@@ -2160,7 +2160,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
   //
   ProfScope("main symbol construction pass")
   {
-    RADDBGIC_LocationSet *defrange_target = 0;
+    RDIM_LocationSet *defrange_target = 0;
     B32 defrange_target_is_param = 0;
     U64 local_num = 1;
     U64 scope_num = 1;
@@ -2193,8 +2193,8 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
       }
       
       //- rjf: unpack current state
-      RADDBGIC_Scope *current_scope = p2r_symbol_current_scope(ctx);
-      RADDBGIC_Symbol *current_procedure = 0;
+      RDIM_Scope *current_scope = p2r_symbol_current_scope(ctx);
+      RDIM_Symbol *current_procedure = 0;
       if(current_scope != 0)
       {
         current_procedure = current_scope->symbol;
@@ -2222,8 +2222,8 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U64 scope_id = user_id_base + scope_num;
           scope_num += 1;
           U64 scope_hash = p2r_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
-          RADDBGIC_Scope *block_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
-          raddbgic_scope_set_parent(ctx->root, block_scope, current_scope);
+          RDIM_Scope *block_scope = rdim_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
+          rdim_scope_set_parent(ctx->root, block_scope, current_scope);
           p2r_symbol_push_scope(ctx, block_scope, current_procedure);
           
           // set voff range
@@ -2232,7 +2232,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           {
             U64 voff_first = section->voff + block32->off;
             U64 voff_last = voff_first + block32->len;
-            raddbgic_scope_add_voff_range(ctx->root, block_scope, voff_first, voff_last);
+            rdim_scope_add_voff_range(ctx->root, block_scope, voff_first, voff_last);
           }
         }break;
         
@@ -2256,10 +2256,10 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             p2r_known_global_insert(ctx->arena, &ctx->known_globals, name, voff);
             
             // type of variable
-            RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, data32->itype);
+            RDIM_Type *type = p2r_type_resolve_itype(ctx, data32->itype);
             
             // container type
-            RADDBGIC_Type *container_type = 0;
+            RDIM_Type *container_type = 0;
             U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
             if(container_name_opl > 2)
             {
@@ -2268,7 +2268,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             }
             
             // container symbol
-            RADDBGIC_Symbol *container_symbol = 0;
+            RDIM_Symbol *container_symbol = 0;
             if(container_type == 0)
             {
               container_symbol = current_procedure;
@@ -2280,10 +2280,10 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             // cons this symbol
             U64 symbol_id = user_id_base + sym_off_first;
             U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-            RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+            RDIM_Symbol *symbol = rdim_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
             
-            RADDBGIC_SymbolInfo info = zero_struct;
-            info.kind = RADDBGIC_SymbolKind_GlobalVariable;
+            RDIM_SymbolInfo info = zero_struct;
+            info.kind = RDIM_SymbolKind_GlobalVariable;
             info.name = name;
             info.type = type;
             info.is_extern = is_extern;
@@ -2291,7 +2291,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             info.container_type = container_type;
             info.container_symbol = container_symbol;
             
-            raddbgic_symbol_set_info(ctx->root, symbol, &info);
+            rdim_symbol_set_info(ctx->root, symbol, &info);
           }
         }break;
         
@@ -2301,10 +2301,10 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           CV_SymProc32 *proc32 = (CV_SymProc32*)sym_header_struct_base;
           String8 name = str8_cstring_capped(proc32+1, sym_data_opl);
-          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, proc32->itype);
+          RDIM_Type *type = p2r_type_resolve_itype(ctx, proc32->itype);
           
           // container type
-          RADDBGIC_Type *container_type = 0;
+          RDIM_Type *container_type = 0;
           U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
           if(container_name_opl > 2)
           {
@@ -2313,7 +2313,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           }
           
           // container symbol
-          RADDBGIC_Symbol *container_symbol = 0;
+          RDIM_Symbol *container_symbol = 0;
           if(container_type == 0)
           {
             container_symbol = current_procedure;
@@ -2322,7 +2322,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           // get this symbol handle
           U64 symbol_id = user_id_base + sym_off_first;
           U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-          RADDBGIC_Symbol *proc_symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+          RDIM_Symbol *proc_symbol = rdim_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
           
           // scope
           
@@ -2333,7 +2333,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           //       no parent.
           U64 scope_id = user_id_base + scope_num;
           U64 scope_hash = p2r_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
-          RADDBGIC_Scope *root_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
+          RDIM_Scope *root_scope = rdim_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
           p2r_symbol_push_scope(ctx, root_scope, proc_symbol);
           scope_num += 1;
           
@@ -2344,7 +2344,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           {
             U64 voff_first = section->voff + proc32->off;
             U64 voff_last = voff_first + proc32->len;
-            raddbgic_scope_add_voff_range(ctx->root, root_scope, voff_first, voff_last);
+            rdim_scope_add_voff_range(ctx->root, root_scope, voff_first, voff_last);
             
             voff = voff_first;
           }
@@ -2360,8 +2360,8 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           B32 is_extern = (kind == CV_SymKind_GPROC32);
           
           // set symbol info
-          RADDBGIC_SymbolInfo info = zero_struct;
-          info.kind = RADDBGIC_SymbolKind_Procedure;
+          RDIM_SymbolInfo info = zero_struct;
+          info.kind = RDIM_SymbolKind_Procedure;
           info.name = name;
           info.link_name = link_name;
           info.type = type;
@@ -2370,7 +2370,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           info.container_symbol = container_symbol;
           info.root_scope = root_scope;
           
-          raddbgic_symbol_set_info(ctx->root, proc_symbol, &info);
+          rdim_symbol_set_info(ctx->root, proc_symbol, &info);
         }break;
         
         //- rjf: REGREL32
@@ -2381,7 +2381,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           
           CV_SymRegrel32 *regrel32 = (CV_SymRegrel32*)sym_header_struct_base;
           String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
-          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, regrel32->itype);
+          RDIM_Type *type = p2r_type_resolve_itype(ctx, regrel32->itype);
           
           // extract regrel's info
           CV_Reg cv_reg = regrel32->reg;
@@ -2419,15 +2419,15 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           // emit local
           U64 local_id = user_id_base + local_num;;
           U64 local_id_hash = p2r_hash_from_local_user_id(sym_unique_id_hash, local_id);
-          RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
+          RDIM_Local *local_var = rdim_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
           local_num += 1;
           
-          RADDBGIC_LocalInfo info = {0};
+          RDIM_LocalInfo info = {0};
           info.kind = local_kind;
           info.scope = current_scope;
           info.name = name;
           info.type = type;
-          raddbgic_local_set_basic_info(ctx->root, local_var, &info);
+          rdim_local_set_basic_info(ctx->root, local_var, &info);
           
           // add location to local
           {
@@ -2461,12 +2461,12 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             U32 byte_pos = 0;
             
             // set location case
-            RADDBGIC_Location *loc =
+            RDIM_Location *loc =
               p2r_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
                                              (S64)(S32)var_off, extra_indirection_to_value);
             
-            RADDBGIC_LocationSet *locset = raddbgic_location_set_from_local(ctx->root, local_var);
-            raddbgic_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
+            RDIM_LocationSet *locset = rdim_location_set_from_local(ctx->root, local_var);
+            rdim_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
           }
         }break;
         
@@ -2477,10 +2477,10 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           CV_SymThread32 *thread32 = (CV_SymThread32*)sym_header_struct_base;
           String8 name = str8_cstring_capped(thread32+1, sym_data_opl);
           U32 tls_off = thread32->tls_off;
-          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, thread32->itype);
+          RDIM_Type *type = p2r_type_resolve_itype(ctx, thread32->itype);
           
           // container type
-          RADDBGIC_Type *container_type = 0;
+          RDIM_Type *container_type = 0;
           U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
           if(container_name_opl > 2)
           {
@@ -2489,7 +2489,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           }
           
           // container symbol
-          RADDBGIC_Symbol *container_symbol = 0;
+          RDIM_Symbol *container_symbol = 0;
           if(container_type == 0)
           {
             container_symbol = current_procedure;
@@ -2501,10 +2501,10 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           // setup symbol
           U64 symbol_id = user_id_base + sym_off_first;
           U64 symbol_hash = p2r_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-          RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+          RDIM_Symbol *symbol = rdim_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
           
-          RADDBGIC_SymbolInfo info = zero_struct;
-          info.kind = RADDBGIC_SymbolKind_ThreadVariable;
+          RDIM_SymbolInfo info = zero_struct;
+          info.kind = RDIM_SymbolKind_ThreadVariable;
           info.name = name;
           info.type = type;
           info.is_extern = is_extern;
@@ -2512,7 +2512,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           info.container_type = container_type;
           info.container_symbol = container_symbol;
           
-          raddbgic_symbol_set_info(ctx->root, symbol, &info);
+          rdim_symbol_set_info(ctx->root, symbol, &info);
         }break;
         
         //- rjf: LOCAL
@@ -2520,7 +2520,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           CV_SymLocal *slocal = (CV_SymLocal*)sym_header_struct_base;
           String8 name = str8_cstring_capped(slocal+1, sym_data_opl);
-          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, slocal->itype);
+          RDIM_Type *type = p2r_type_resolve_itype(ctx, slocal->itype);
           
           // determine how to handle
           B32 begin_a_global_modification = 0;
@@ -2551,20 +2551,20 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             // emit local
             U64 local_id = user_id_base + local_num;
             U64 local_id_hash = p2r_hash_from_local_user_id(sym_unique_id_hash, local_id);
-            RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
+            RDIM_Local *local_var = rdim_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
             local_num += 1;
             local_var->kind = local_kind;
             local_var->name = name;
             local_var->type = type;
             
-            RADDBGIC_LocalInfo info = {0};
+            RDIM_LocalInfo info = {0};
             info.kind = local_kind;
             info.scope = current_scope;
             info.name = name;
             info.type = type;
-            raddbgic_local_set_basic_info(ctx->root, local_var, &info);
+            rdim_local_set_basic_info(ctx->root, local_var, &info);
             
-            defrange_target = raddbgic_location_set_from_local(ctx->root, local_var);
+            defrange_target = rdim_location_set_from_local(ctx->root, local_var);
             defrange_target_is_param = (local_kind == RADDBGI_LocalKind_Parameter);
           }
         }break;
@@ -2581,7 +2581,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
           
           // setup location
-          RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
+          RDIM_Location *location = rdim_location_val_reg(ctx->root, register_code);
           
           // extract range info
           CV_LvarAddrRange *range = &defrange_register->range;
@@ -2610,7 +2610,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U32 byte_size = ctx->addr_size;
           U32 byte_pos = 0;
           S64 var_off = (S64)defrange_fprel->off;
-          RADDBGIC_Location *location =
+          RDIM_Location *location =
             p2r_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
                                            var_off, extra_indirection);
           
@@ -2640,7 +2640,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
             
             // setup location
-            RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
+            RDIM_Location *location = rdim_location_val_reg(ctx->root, register_code);
             
             // extract range info
             CV_LvarAddrRange *range = &defrange_subfield_register->range;
@@ -2671,13 +2671,13 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U32 byte_size = ctx->addr_size;
           U32 byte_pos = 0;
           S64 var_off = (S64)defrange_fprel_full_scope->off;
-          RADDBGIC_Location *location =
+          RDIM_Location *location =
             p2r_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
                                            var_off, extra_indirection);
           
           
           // emit location
-          raddbgic_location_set_add_case(ctx->root, defrange_target, 0, max_U64, location);
+          rdim_location_set_add_case(ctx->root, defrange_target, 0, max_U64, location);
         }break;
         
         //- rjf: DEFRANGE_REGISTER_REL
@@ -2697,7 +2697,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           S64 var_off = defrange_register_rel->reg_off;
           
           // setup location
-          RADDBGIC_Location *location =
+          RDIM_Location *location =
             p2r_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
                                            var_off, extra_indirection_to_value);
           
@@ -2716,7 +2716,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         {
           CV_SymFileStatic *file_static = (CV_SymFileStatic*)sym_header_struct_base;
           String8 name = str8_cstring_capped(file_static+1, sym_data_opl);
-          RADDBGIC_Type *type = p2r_type_resolve_itype(ctx, file_static->itype);
+          RDIM_Type *type = p2r_type_resolve_itype(ctx, file_static->itype);
           
           // TODO(allen): emit a global modifier symbol
           
@@ -2729,7 +2729,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
     
     //- rjf: non-empty scope stack? -> error
     {
-      RADDBGIC_Scope *scope = p2r_symbol_current_scope(ctx);
+      RDIM_Scope *scope = p2r_symbol_current_scope(ctx);
       if(scope != 0)
       {
         // TODO(allen): emit error
@@ -2804,7 +2804,7 @@ p2r_gather_link_names(P2R_Ctx *ctx, CV_SymParsed *sym)
 // "frameproc" map
 
 internal void
-p2r_symbol_frame_proc_write(P2R_Ctx *ctx,RADDBGIC_Symbol *key,P2R_FrameProcData *data)
+p2r_symbol_frame_proc_write(P2R_Ctx *ctx,RDIM_Symbol *key,P2R_FrameProcData *data)
 {
   ProfBeginFunction();
   U64 key_int = IntFromPtr(key);
@@ -2844,7 +2844,7 @@ p2r_symbol_frame_proc_write(P2R_Ctx *ctx,RADDBGIC_Symbol *key,P2R_FrameProcData 
 }
 
 internal P2R_FrameProcData*
-p2r_symbol_frame_proc_read(P2R_Ctx *ctx, RADDBGIC_Symbol *key)
+p2r_symbol_frame_proc_read(P2R_Ctx *ctx, RDIM_Symbol *key)
 {
   U64 key_int = IntFromPtr(key);
   P2R_FrameProcMap *map = &ctx->frame_proc_map;
@@ -2868,7 +2868,7 @@ p2r_symbol_frame_proc_read(P2R_Ctx *ctx, RADDBGIC_Symbol *key)
 
 // scope stack
 internal void
-p2r_symbol_push_scope(P2R_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol)
+p2r_symbol_push_scope(P2R_Ctx *ctx, RDIM_Scope *scope, RDIM_Symbol *symbol)
 {
   P2R_ScopeNode *node = ctx->scope_node_free;
   if(node == 0)
@@ -3007,7 +3007,7 @@ p2r_known_global_insert(Arena *arena, P2R_KnownGlobalSet *set, String8 name, U64
 
 // location info helpers
 
-internal RADDBGIC_Location*
+internal RDIM_Location*
 p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
                                RADDBGI_RegisterCode reg_code,
                                U32 reg_byte_size,
@@ -3015,40 +3015,40 @@ p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
                                S64 offset,
                                B32 extra_indirection)
 {
-  RADDBGIC_Location *result = 0;
+  RDIM_Location *result = 0;
   if(0 <= offset && offset <= (S64)max_U16)
   {
     if(extra_indirection)
     {
-      result = raddbgic_location_addr_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
+      result = rdim_location_addr_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
     }
     else
     {
-      result = raddbgic_location_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
+      result = rdim_location_addr_reg_plus_u16(ctx->root, reg_code, (U16)offset);
     }
   }
   else
   {
     Arena *arena = ctx->arena;
     
-    RADDBGIC_EvalBytecode bytecode = {0};
+    RDIM_EvalBytecode bytecode = {0};
     U32 regread_param = RADDBGI_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
-    raddbgic_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_RegRead, regread_param);
-    raddbgic_bytecode_push_sconst(arena, &bytecode, offset);
-    raddbgic_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_Add, 0);
+    rdim_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_RegRead, regread_param);
+    rdim_bytecode_push_sconst(arena, &bytecode, offset);
+    rdim_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_Add, 0);
     if(extra_indirection)
     {
-      raddbgic_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_MemRead, ctx->addr_size);
+      rdim_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_MemRead, ctx->addr_size);
     }
     
-    result = raddbgic_location_addr_bytecode_stream(ctx->root, &bytecode);
+    result = rdim_location_addr_bytecode_stream(ctx->root, &bytecode);
   }
   
   return(result);
 }
 
 internal CV_EncodedFramePtrReg
-p2r_cv_encoded_fp_reg_from_proc(P2R_Ctx *ctx, RADDBGIC_Symbol *proc, B32 param_base)
+p2r_cv_encoded_fp_reg_from_proc(P2R_Ctx *ctx, RDIM_Symbol *proc, B32 param_base)
 {
   CV_EncodedFramePtrReg result = 0;
   if(proc != 0)
@@ -3119,8 +3119,8 @@ p2r_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch, CV_EncodedFramePtrReg e
 
 internal void
 p2r_location_over_lvar_addr_range(P2R_Ctx *ctx,
-                                  RADDBGIC_LocationSet *locset,
-                                  RADDBGIC_Location *location,
+                                  RDIM_LocationSet *locset,
+                                  RDIM_Location *location,
                                   CV_LvarAddrRange *range,
                                   CV_LvarAddrGap *gaps, U64 gap_count)
 {
@@ -3145,14 +3145,14 @@ p2r_location_over_lvar_addr_range(P2R_Ctx *ctx,
     U64 voff_gap_opl   = voff_gap_first + gap_ptr->len;
     if(voff_cursor < voff_gap_first)
     {
-      raddbgic_location_set_add_case(ctx->root, locset, voff_cursor, voff_gap_first, location);
+      rdim_location_set_add_case(ctx->root, locset, voff_cursor, voff_gap_first, location);
     }
     voff_cursor = voff_gap_opl;
   }
   
   if(voff_cursor < voff_opl)
   {
-    raddbgic_location_set_add_case(ctx->root, locset, voff_cursor, voff_opl, location);
+    rdim_location_set_add_case(ctx->root, locset, voff_cursor, voff_opl, location);
   }
 }
 
@@ -3494,7 +3494,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     
     
     // setup root
-    RADDBGIC_RootParams root_params = {0};
+    RDIM_RootParams root_params = {0};
     root_params.addr_size = addr_size;
     
     root_params.bucket_count_units = comp_unit_count;
@@ -3504,7 +3504,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     root_params.bucket_count_types = tpi->itype_opl;
     root_params.bucket_count_type_constructs = tpi->itype_opl;
     
-    RADDBGIC_Root *root = raddbgic_root_alloc(&root_params);
+    RDIM_Root *root = rdim_root_alloc(&root_params);
     out->root = root;
     
     // top level info
@@ -3522,13 +3522,13 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
       }
       
       // set top level info
-      RADDBGIC_TopLevelInfo tli = {0};
+      RDIM_TopLevelInfo tli = {0};
       tli.architecture = architecture;
       tli.exe_name = params->input_exe_name;
       tli.exe_hash = exe_hash;
       tli.voff_max = voff_max;
       
-      raddbgic_set_top_level_info(root, &tli);
+      rdim_set_top_level_info(root, &tli);
     }
     
     
@@ -3543,9 +3543,9 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         String8 name = str8_cstring_capped(name_first, name_opl);
         RADDBGI_BinarySectionFlags flags =
           raddbgi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
-        raddbgic_add_binary_section(root, name, flags,
-                                    coff_ptr->voff, coff_ptr->voff + coff_ptr->vsize,
-                                    coff_ptr->foff, coff_ptr->foff + coff_ptr->fsize);
+        rdim_add_binary_section(root, name, flags,
+                                coff_ptr->voff, coff_ptr->voff + coff_ptr->vsize,
+                                coff_ptr->foff, coff_ptr->foff + coff_ptr->fsize);
       }
     }
     
@@ -3592,16 +3592,16 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         RADDBGI_Language lang = raddbgi_language_from_cv_language(sym->info.language);
         
         // basic per unit info
-        RADDBGIC_Unit *unit_handle = raddbgic_unit_handle_from_user_id(root, i, i);
+        RDIM_Unit *unit_handle = rdim_unit_handle_from_user_id(root, i, i);
         
-        RADDBGIC_UnitInfo info = {0};
+        RDIM_UnitInfo info = {0};
         info.unit_name = unit_name;
         info.compiler_name = compiler_name;
         info.object_file = obj_name;
         info.archive_file = archive_file;
         info.language = lang;
         
-        raddbgic_unit_set_info(root, unit_handle, &info);
+        rdim_unit_set_info(root, unit_handle, &info);
         
         // unit's line info
         for(CV_C13SubSectionNode *node = unit_c13->first_sub_section;
@@ -3615,13 +3615,13 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
                 lines_n = lines_n->next)
             {
               CV_C13LinesParsed *lines = &lines_n->v;
-              RADDBGIC_LineSequence seq = {0};
+              RDIM_LineSequence seq = {0};
               seq.file_name  = lines->file_name;
               seq.voffs      = lines->voffs;
               seq.line_nums  = lines->line_nums;
               seq.col_nums   = lines->col_nums;
               seq.line_count = lines->line_count;
-              raddbgic_unit_add_line_sequence(root, unit_handle, &seq);
+              rdim_unit_add_line_sequence(root, unit_handle, &seq);
             }
           }
         }
@@ -3637,10 +3637,10 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
       {
         if(contrib_ptr->mod < root->unit_count)
         {
-          RADDBGIC_Unit *unit_handle = raddbgic_unit_handle_from_user_id(root, contrib_ptr->mod, contrib_ptr->mod);
-          raddbgic_unit_vmap_add_range(root, unit_handle,
-                                       contrib_ptr->voff_first,
-                                       contrib_ptr->voff_opl);
+          RDIM_Unit *unit_handle = rdim_unit_handle_from_user_id(root, contrib_ptr->mod, contrib_ptr->mod);
+          rdim_unit_vmap_add_range(root, unit_handle,
+                                   contrib_ptr->voff_first,
+                                   contrib_ptr->voff_opl);
         }
       }
     }
@@ -3673,7 +3673,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     // conversion errors
     if(!params->hide_errors.converting)
     {
-      for(RADDBGIC_Error *error = raddbgic_first_error_from_root(root);
+      for(RDIM_Error *error = rdim_first_error_from_root(root);
           error != 0;
           error = error->next)
       {
@@ -3894,12 +3894,12 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         {str8_lit("p2r_ctx frame_proc_map"), p2r_ctx?p2r_ctx->frame_proc_map.buckets_count:0,  p2r_ctx?p2r_ctx->frame_proc_map.pair_count:0,  p2r_ctx?p2r_ctx->frame_proc_map.bucket_collision_count:0},
         {str8_lit("p2r_ctx known_globals"),  p2r_ctx?p2r_ctx->known_globals.buckets_count:0,   p2r_ctx?p2r_ctx->known_globals.global_count:0, p2r_ctx?p2r_ctx->known_globals.bucket_collision_count:0},
         {str8_lit("p2r_ctx link_names"),     p2r_ctx?p2r_ctx->link_names.buckets_count:0,      p2r_ctx?p2r_ctx->link_names.link_name_count:0, p2r_ctx?p2r_ctx->link_names.bucket_collision_count:0},
-        {str8_lit("raddbgic_root unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count,          out->root->unit_map.bucket_collision_count},
-        {str8_lit("raddbgic_root symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count,        out->root->symbol_map.bucket_collision_count},
-        {str8_lit("raddbgic_root scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count,         out->root->scope_map.bucket_collision_count},
-        {str8_lit("raddbgic_root local_map"),        out->root->local_map.buckets_count,         out->root->local_map.pair_count,         out->root->local_map.bucket_collision_count},
-        {str8_lit("raddbgic_root type_from_id_map"), out->root->type_from_id_map.buckets_count,  out->root->type_from_id_map.pair_count,  out->root->type_from_id_map.bucket_collision_count},
-        {str8_lit("raddbgic_root construct_map"),    out->root->construct_map.buckets_count,     out->root->construct_map.pair_count,     out->root->construct_map.bucket_collision_count},
+        {str8_lit("rdim_root unit_map"),         out->root->unit_map.buckets_count,          out->root->unit_map.pair_count,          out->root->unit_map.bucket_collision_count},
+        {str8_lit("rdim_root symbol_map"),       out->root->symbol_map.buckets_count,        out->root->symbol_map.pair_count,        out->root->symbol_map.bucket_collision_count},
+        {str8_lit("rdim_root scope_map"),        out->root->scope_map.buckets_count,         out->root->scope_map.pair_count,         out->root->scope_map.bucket_collision_count},
+        {str8_lit("rdim_root local_map"),        out->root->local_map.buckets_count,         out->root->local_map.pair_count,         out->root->local_map.bucket_collision_count},
+        {str8_lit("rdim_root type_from_id_map"), out->root->type_from_id_map.buckets_count,  out->root->type_from_id_map.pair_count,  out->root->type_from_id_map.bucket_collision_count},
+        {str8_lit("rdim_root construct_map"),    out->root->construct_map.buckets_count,     out->root->construct_map.pair_count,     out->root->construct_map.bucket_collision_count},
       };
       for(U64 idx = 0; idx < ArrayCount(table_info); idx += 1)
       {
