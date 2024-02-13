@@ -4,7 +4,7 @@
 #include "lib_raddbgi_format/raddbgi_format.h"
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "raddbgi_cons_local/raddbgi_cons_local.h"
+#include "raddbgi_make_local/raddbgi_make_local.h"
 
 #include "raddbgi_elf.h"
 #include "raddbgi_dwarf.h"
@@ -16,7 +16,7 @@
 #include "lib_raddbgi_format/raddbgi_format.c"
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "raddbgi_cons_local/raddbgi_cons_local.c"
+#include "raddbgi_make_local/raddbgi_make_local.c"
 
 #include "raddbgi_elf.c"
 #include "raddbgi_dwarf.c"

@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_CONS_H
-#define RADDBGI_CONS_H
+#ifndef RADDBGI_MAKE_H
+#define RADDBGI_MAKE_H
 
 ////////////////////////////////
 //~ rjf: Overrideable Memory Operations
@@ -1300,4 +1300,4 @@ RADDBGI_PROC RDIM_NameMapBaked* rdim_name_map_bake(RDIM_Arena *arena, RDIM_Root 
 //- rjf: top-level baking entry point
 RADDBGI_PROC void rdim_bake_file(RDIM_Arena *arena, RDIM_Root *root, RDIM_String8List *out);
 
-#endif // RADDBGI_CONS_H
+#endif // RADDBGI_MAKE_H

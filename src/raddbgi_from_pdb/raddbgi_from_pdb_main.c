@@ -6,25 +6,25 @@
 
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "raddbgi_make_local/raddbgi_make_local.h"
 #include "coff/coff.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_stringize.h"
 #include "msf/msf.h"
 #include "pdb/pdb.h"
 #include "pdb/pdb_stringize.h"
-#include "raddbgi_cons_local/raddbgi_cons_local.h"
 
 #include "raddbgi_from_pdb.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "raddbgi_make_local/raddbgi_make_local.c"
 #include "coff/coff.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_stringize.c"
 #include "msf/msf.c"
 #include "pdb/pdb.c"
 #include "pdb/pdb_stringize.c"
-#include "raddbgi_cons_local/raddbgi_cons_local.c"
 
 #include "raddbgi_from_pdb.c"
 
