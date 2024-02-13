@@ -4410,15 +4410,15 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             DF_Entity *task = n->entity;
             if(task->alloc_time_us + 500000 < os_now_microseconds())
             {
-              String8 raddbgi_path = task->name;
-              String8 raddbgi_name = str8_skip_last_slash(raddbgi_path);
-              String8 task_text = push_str8f(scratch.arena, "Creating %S...", raddbgi_name);
+              String8 rdi_path = task->name;
+              String8 rdi_name = str8_skip_last_slash(rdi_path);
+              String8 task_text = push_str8f(scratch.arena, "Creating %S...", rdi_name);
               UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
               UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
               UI_Signal sig = ui_signal_from_box(box);
               if(ui_hovering(sig)) UI_Tooltip
               {
-                ui_label(raddbgi_path);
+                ui_label(rdi_path);
               }
               ui_box_equip_display_string(box, task_text);
             }
@@ -5232,7 +5232,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 default:{}break;
                 case EVAL_EvalMode_Addr:
                 {
-                  U64 size = tg_byte_size_from_graph_raddbgi_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+                  U64 size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
                   size = Min(size, 64);
                   Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
                   CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
@@ -6858,7 +6858,7 @@ df_eval_escaped_from_raw_string(Arena *arena, String8 raw)
 }
 
 internal String8List
-df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RADDBGI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table)
+df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RDI_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table)
 {
   ProfBeginFunction();
   String8List list = {0};
@@ -6869,13 +6869,13 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
   {
     if(opt_member != 0)
     {
-      U64 member_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, opt_member->type_key);
+      U64 member_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, opt_member->type_key);
       str8_list_pushf(arena, &list, "member (%I64u offset, %I64u byte%s)", opt_member->off, member_byte_size, member_byte_size > 1 ? "s" : "");
     }
     else
     {
       String8 basic_type_kind_string = tg_kind_basic_string_table[tg_kind_from_key(eval.type_key)];
-      U64 byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, eval.type_key);
+      U64 byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, eval.type_key);
       str8_list_pushf(arena, &list, "%S (%I64u byte%s)", basic_type_kind_string, byte_size, byte_size > 1 ? "s" : "");
     }
   }
@@ -6883,7 +6883,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
   //- rjf: non-type path: descend recursively & produce single-line value strings
   else if(max_size > 0)
   {
-    TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, eval.type_key));
+    TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_rdi_key(graph, rdbg, eval.type_key));
     U32 radix = default_radix;
     DF_CfgVal *dec_cfg = df_cfg_val_from_string(cfg_table, str8_lit("dec"));
     DF_CfgVal *hex_cfg = df_cfg_val_from_string(cfg_table, str8_lit("hex"));
@@ -6924,7 +6924,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         
         // rjf: get pointed-at info
         TG_Kind type_kind = tg_kind_from_key(eval.type_key);
-        TG_Key direct_type_key = tg_ptee_from_graph_raddbgi_key(graph, rdbg, eval.type_key);
+        TG_Key direct_type_key = tg_ptee_from_graph_rdi_key(graph, rdbg, eval.type_key);
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
         B32 direct_type_has_content = (direct_type_kind != TG_Kind_Null && direct_type_kind != TG_Kind_Void && value_eval.imm_u64 != 0);
         B32 direct_type_is_string = (direct_type_kind != TG_Kind_Null && value_eval.imm_u64 != 0 &&
@@ -7011,7 +7011,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
       case TG_Kind_Array:
       {
         Temp scratch = scratch_begin(&arena, 1);
-        TG_Type *eval_type = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, eval.type_key);
+        TG_Type *eval_type = tg_type_from_graph_rdi_key(scratch.arena, graph, rdbg, eval.type_key);
         TG_Key direct_type_key = eval_type->direct_type_key;
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
         U64 array_count = eval_type->count;
@@ -7055,7 +7055,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           if(depth < 3)
           {
-            U64 direct_type_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, direct_type_key);
+            U64 direct_type_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, direct_type_key);
             for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
             {
               DF_Eval element_eval = zero_struct;
@@ -7111,7 +7111,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         if(depth < 4)
         {
           Temp scratch = scratch_begin(&arena, 1);
-          TG_MemberArray data_members = tg_data_members_from_graph_raddbgi_key(scratch.arena, graph, rdbg, eval.type_key);
+          TG_MemberArray data_members = tg_data_members_from_graph_rdi_key(scratch.arena, graph, rdbg, eval.type_key);
           TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
           for(U64 member_idx = 0; member_idx < filtered_data_members.count && max_size > space_taken; member_idx += 1)
           {
@@ -7312,7 +7312,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_Members:
       if(block_type_kind != TG_Kind_Null)
       {
-        TG_MemberArray data_members = tg_data_members_from_graph_raddbgi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        TG_MemberArray data_members = tg_data_members_from_graph_rdi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
         TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, &block->cfg_table);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max && idx < filtered_data_members.count; idx += 1)
         {
@@ -7370,7 +7370,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_EnumMembers:
       if(block_type_kind == TG_Kind_Enum)
       {
-        TG_Type *type = tg_type_from_graph_raddbgi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        TG_Type *type = tg_type_from_graph_rdi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max && idx < type->count; idx += 1)
         {
           TG_EnumVal *enum_val = &type->enum_vals[idx];
@@ -7414,9 +7414,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       //
       case DF_EvalVizBlockKind_Elements:
       {
-        TG_Key direct_type_key = tg_unwrapped_direct_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        TG_Key direct_type_key = tg_unwrapped_direct_from_graph_rdi_key(parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
-        U64 direct_type_key_byte_size = tg_byte_size_from_graph_raddbgi_key(parse_ctx->type_graph, parse_ctx->rdbg, direct_type_key);
+        U64 direct_type_key_byte_size = tg_byte_size_from_graph_rdi_key(parse_ctx->type_graph, parse_ctx->rdbg, direct_type_key);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
           // rjf: get keys for this row

@@ -27,7 +27,7 @@ read_only global CV_TypeId cv_type_id_variadic = 0xFFFFFFFF;
 ////////////////////////////////
 //~ rjf: Registers
 
-// X(NAME, CODE, (RADDBGI_RegsiterCode_X86) NAME, BYTE_POS, BYTE_SIZE)
+// X(NAME, CODE, (RDI_RegisterCode_X86) NAME, BYTE_POS, BYTE_SIZE)
 #define CV_Reg_X86_XList(X) \
 X(NONE,     0, nil, 0, 0)\
 X(AL,       1, eax, 0, 1)\
@@ -282,7 +282,7 @@ typedef enum CV_Regx86Enum
 }
 CV_Regx86Enum;
 
-// X(NAME, CODE, (RADDBGI_RegsiterCode_X64) NAME, BYTE_POS, BYTE_SIZE)
+// X(NAME, CODE, (RDI_RegisterCode_X64) NAME, BYTE_POS, BYTE_SIZE)
 #define CV_Reg_X64_XList(X) \
 X(NONE,      0, nil, 0, 0)\
 X(AL,        1, rax, 0, 1)\

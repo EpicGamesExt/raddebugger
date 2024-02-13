@@ -151,21 +151,21 @@ p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
 ////////////////////////////////
 //~ rjf: COFF <-> RADDBGI Canonical Conversions
 
-internal RADDBGI_BinarySectionFlags
-raddbgi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
+internal RDI_BinarySectionFlags
+rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 {
-  RADDBGI_BinarySectionFlags result = 0;
+  RDI_BinarySectionFlags result = 0;
   if(flags & COFF_SectionFlag_MEM_READ)
   {
-    result |= RADDBGI_BinarySectionFlag_Read;
+    result |= RDI_BinarySectionFlag_Read;
   }
   if(flags & COFF_SectionFlag_MEM_WRITE)
   {
-    result |= RADDBGI_BinarySectionFlag_Write;
+    result |= RDI_BinarySectionFlag_Write;
   }
   if(flags & COFF_SectionFlag_MEM_EXECUTE)
   {
-    result |= RADDBGI_BinarySectionFlag_Execute;
+    result |= RDI_BinarySectionFlag_Execute;
   }
   return(result);
 }
@@ -173,14 +173,14 @@ raddbgi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 ////////////////////////////////
 //~ rjf: CodeView <-> RADDBGI Canonical Conversions
 
-internal RADDBGI_Arch
-raddbgi_arch_from_cv_arch(CV_Arch cv_arch)
+internal RDI_Arch
+rdi_arch_from_cv_arch(CV_Arch cv_arch)
 {
-  RADDBGI_Arch result = 0;
+  RDI_Arch result = 0;
   switch(cv_arch)
   {
-    case CV_Arch_8086: result = RADDBGI_Arch_X86; break;
-    case CV_Arch_X64:  result = RADDBGI_Arch_X64; break;
+    case CV_Arch_8086: result = RDI_Arch_X86; break;
+    case CV_Arch_X64:  result = RDI_Arch_X64; break;
     //case CV_Arch_8080: break;
     //case CV_Arch_80286: break;
     //case CV_Arch_80386: break;
@@ -243,26 +243,26 @@ raddbgi_arch_from_cv_arch(CV_Arch cv_arch)
   return(result);
 }
 
-internal RADDBGI_RegisterCode
-raddbgi_reg_code_from_cv_reg_code(RADDBGI_Arch arch, CV_Reg reg_code)
+internal RDI_RegisterCode
+rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
 {
-  RADDBGI_RegisterCode result = 0;
+  RDI_RegisterCode result = 0;
   switch(arch)
   {
-    case RADDBGI_Arch_X86:
+    case RDI_Arch_X86:
     {
       switch(reg_code)
       {
-#define X(CVN,C,RDN,BP,BZ) case C: result = RADDBGI_RegisterCode_X86_##RDN; break;
+#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegisterCode_X86_##RDN; break;
         CV_Reg_X86_XList(X)
 #undef X
       }
     }break;
-    case RADDBGI_Arch_X64:
+    case RDI_Arch_X64:
     {
       switch(reg_code)
       {
-#define X(CVN,C,RDN,BP,BZ) case C: result = RADDBGI_RegisterCode_X64_##RDN; break;
+#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegisterCode_X64_##RDN; break;
         CV_Reg_X64_XList(X)
 #undef X
       }
@@ -271,14 +271,14 @@ raddbgi_reg_code_from_cv_reg_code(RADDBGI_Arch arch, CV_Reg reg_code)
   return(result);
 }
 
-internal RADDBGI_Language
-raddbgi_language_from_cv_language(CV_Language cv_language)
+internal RDI_Language
+rdi_language_from_cv_language(CV_Language cv_language)
 {
-  RADDBGI_Language result = 0;
+  RDI_Language result = 0;
   switch(cv_language)
   {
-    case CV_Language_C:       result = RADDBGI_Language_C; break;
-    case CV_Language_CXX:     result = RADDBGI_Language_CPlusPlus; break;
+    case CV_Language_C:       result = RDI_Language_C; break;
+    case CV_Language_CXX:     result = RDI_Language_CPlusPlus; break;
     //case CV_Language_FORTRAN: result = ; break;
     //case CV_Language_MASM:    result = ; break;
     //case CV_Language_PASCAL:  result = ; break;
@@ -310,7 +310,7 @@ p2r_ctx_alloc(P2R_CtxParams *params, RDIM_Root *out_root)
   P2R_Ctx *pdb_ctx = push_array(arena, P2R_Ctx, 1);
   pdb_ctx->arena = arena;
   pdb_ctx->arch = params->arch;
-  pdb_ctx->addr_size = raddbgi_addr_size_from_arch(pdb_ctx->arch);
+  pdb_ctx->addr_size = rdi_addr_size_from_arch(pdb_ctx->arch);
   pdb_ctx->hash = params->tpi_hash;
   pdb_ctx->leaf = params->tpi_leaf;
   pdb_ctx->sections = params->sections->sections;
@@ -1217,165 +1217,165 @@ p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype)
   {
     case CV_BasicType_VOID:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Void, str8_lit("void"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_Void, str8_lit("void"));
     }break;
     
     case CV_BasicType_HRESULT:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("HRESULT"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_Handle, str8_lit("HRESULT"));
     }break;
     
     case CV_BasicType_RCHAR:
     case CV_BasicType_CHAR:
     case CV_BasicType_CHAR8:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Char8, str8_lit("char"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_Char8, str8_lit("char"));
     }break;
     
     case CV_BasicType_UCHAR:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_UChar8, str8_lit("UCHAR"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_UChar8, str8_lit("UCHAR"));
     }break;
     
     case CV_BasicType_WCHAR:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_UChar16, str8_lit("WCHAR"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_UChar16, str8_lit("WCHAR"));
     }break;
     
     case CV_BasicType_CHAR16:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Char16, str8_lit("CHAR16"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_Char16, str8_lit("CHAR16"));
     }break;
     
     case CV_BasicType_CHAR32:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Char32, str8_lit("CHAR32"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_Char32, str8_lit("CHAR32"));
     }break;
     
     case CV_BasicType_BOOL8:
     case CV_BasicType_INT8:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S8, str8_lit("S8"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_S8, str8_lit("S8"));
     }break;
     
     case CV_BasicType_BOOL16:
     case CV_BasicType_INT16:
     case CV_BasicType_SHORT:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S16, str8_lit("S16"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_S16, str8_lit("S16"));
     }break;
     
     case CV_BasicType_BOOL32:
     case CV_BasicType_INT32:
     case CV_BasicType_LONG:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S32, str8_lit("S32"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_S32, str8_lit("S32"));
     }break;
     
     case CV_BasicType_BOOL64:
     case CV_BasicType_INT64:
     case CV_BasicType_QUAD:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S64, str8_lit("S64"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_S64, str8_lit("S64"));
     }break;
     
     case CV_BasicType_INT128:
     case CV_BasicType_OCT:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_S128, str8_lit("S128"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_S128, str8_lit("S128"));
     }break;
     
     case CV_BasicType_UINT8:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U8, str8_lit("U8"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_U8, str8_lit("U8"));
     }break;
     
     case CV_BasicType_UINT16:
     case CV_BasicType_USHORT:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U16, str8_lit("U16"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_U16, str8_lit("U16"));
     }break;
     
     case CV_BasicType_UINT32:
     case CV_BasicType_ULONG:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U32, str8_lit("U32"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_U32, str8_lit("U32"));
     }break;
     
     case CV_BasicType_UINT64:
     case CV_BasicType_UQUAD:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U64, str8_lit("U64"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_U64, str8_lit("U64"));
     }break;
     
     case CV_BasicType_UINT128:
     case CV_BasicType_UOCT:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_U128, str8_lit("U128"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_U128, str8_lit("U128"));
     }break;
     
     case CV_BasicType_FLOAT16:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F16, str8_lit("F16"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_F16, str8_lit("F16"));
     }break;
     
     case CV_BasicType_FLOAT32:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F32, str8_lit("F32"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_F32, str8_lit("F32"));
     }break;
     
     case CV_BasicType_FLOAT32PP:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F32PP, str8_lit("F32PP"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_F32PP, str8_lit("F32PP"));
     }break;
     
     case CV_BasicType_FLOAT48:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F48, str8_lit("F48"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_F48, str8_lit("F48"));
     }break;
     
     case CV_BasicType_FLOAT64:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F64, str8_lit("F64"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_F64, str8_lit("F64"));
     }break;
     
     case CV_BasicType_FLOAT80:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F80, str8_lit("F80"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_F80, str8_lit("F80"));
     }break;
     
     case CV_BasicType_FLOAT128:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_F128, str8_lit("F128"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_F128, str8_lit("F128"));
     }break;
     
     case CV_BasicType_COMPLEX32:
     {
       basic_type =
-        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF32, str8_lit("ComplexF32"));
+        rdim_type_basic(ctx->root, RDI_TypeKind_ComplexF32, str8_lit("ComplexF32"));
     }break;
     
     case CV_BasicType_COMPLEX64:
     {
       basic_type =
-        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF64, str8_lit("ComplexF64"));
+        rdim_type_basic(ctx->root, RDI_TypeKind_ComplexF64, str8_lit("ComplexF64"));
     }break;
     
     case CV_BasicType_COMPLEX80:
     {
       basic_type =
-        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF80, str8_lit("ComplexF80"));
+        rdim_type_basic(ctx->root, RDI_TypeKind_ComplexF80, str8_lit("ComplexF80"));
     }break;
     
     case CV_BasicType_COMPLEX128:
     {
       basic_type =
-        rdim_type_basic(ctx->root, RADDBGI_TypeKind_ComplexF128, str8_lit("ComplexF128"));
+        rdim_type_basic(ctx->root, RDI_TypeKind_ComplexF128, str8_lit("ComplexF128"));
     }break;
     
     case CV_BasicType_PTR:
     {
-      basic_type = rdim_type_basic(ctx->root, RADDBGI_TypeKind_Handle, str8_lit("PTR"));
+      basic_type = rdim_type_basic(ctx->root, RDI_TypeKind_Handle, str8_lit("PTR"));
     }break;
   }
   
@@ -1397,7 +1397,7 @@ p2r_type_cons_basic(P2R_Ctx *ctx, CV_TypeId itype)
       case CV_BasicPointerKind_16_32BIT:
       case CV_BasicPointerKind_64BIT:
       {
-        constructed_type = rdim_type_pointer(ctx->root, basic_type, RADDBGI_TypeKind_Ptr);
+        constructed_type = rdim_type_pointer(ctx->root, basic_type, RDI_TypeKind_Ptr);
       }break;
     }
     
@@ -1440,14 +1440,14 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
         {
           CV_LeafModifier *modifier = (CV_LeafModifier*)first;
           
-          RADDBGI_TypeModifierFlags flags = 0;
+          RDI_TypeModifierFlags flags = 0;
           if(modifier->flags & CV_ModifierFlag_Const)
           {
-            flags |= RADDBGI_TypeModifierFlag_Const;
+            flags |= RDI_TypeModifierFlag_Const;
           }
           if(modifier->flags & CV_ModifierFlag_Volatile)
           {
-            flags |= RADDBGI_TypeModifierFlag_Volatile;
+            flags |= RDI_TypeModifierFlag_Volatile;
           }
           
           RDIM_Type *direct_type = p2r_type_resolve_and_check(ctx, modifier->itype);
@@ -1476,33 +1476,33 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // TODO(allen): if ptr_mode in {PtrMem, PtrMethod} then output a member pointer instead
           
           // extract modifier flags
-          RADDBGI_TypeModifierFlags modifier_flags = 0;
+          RDI_TypeModifierFlags modifier_flags = 0;
           if(pointer->attribs & CV_PointerAttrib_Const)
           {
-            modifier_flags |= RADDBGI_TypeModifierFlag_Const;
+            modifier_flags |= RDI_TypeModifierFlag_Const;
           }
           if(pointer->attribs & CV_PointerAttrib_Volatile)
           {
-            modifier_flags |= RADDBGI_TypeModifierFlag_Volatile;
+            modifier_flags |= RDI_TypeModifierFlag_Volatile;
           }
           
           // determine type kind
-          RADDBGI_TypeKind type_kind = RADDBGI_TypeKind_Ptr;
+          RDI_TypeKind type_kind = RDI_TypeKind_Ptr;
           if(pointer->attribs & CV_PointerAttrib_LRef)
           {
-            type_kind = RADDBGI_TypeKind_LRef;
+            type_kind = RDI_TypeKind_LRef;
           }
           else if(pointer->attribs & CV_PointerAttrib_RRef)
           {
-            type_kind = RADDBGI_TypeKind_RRef;
+            type_kind = RDI_TypeKind_RRef;
           }
           if(ptr_mode == CV_PointerMode_LRef)
           {
-            type_kind = RADDBGI_TypeKind_LRef;
+            type_kind = RDI_TypeKind_LRef;
           }
           else if(ptr_mode == CV_PointerMode_RRef)
           {
-            type_kind = RADDBGI_TypeKind_RRef;
+            type_kind = RDI_TypeKind_RRef;
           }
           
           RDIM_Type *direct_type = p2r_type_resolve_and_check(ctx, pointer->itype);
@@ -1628,10 +1628,10 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // incomplete type
           if(lf_struct->props & CV_TypeProp_FwdRef)
           {
-            RADDBGI_TypeKind type_kind = RADDBGI_TypeKind_IncompleteStruct;
+            RDI_TypeKind type_kind = RDI_TypeKind_IncompleteStruct;
             if(range->hdr.kind == CV_LeafKind_CLASS)
             {
-              type_kind = RADDBGI_TypeKind_IncompleteClass;
+              type_kind = RDI_TypeKind_IncompleteClass;
             }
             result = rdim_type_incomplete(ctx->root, type_kind, name);
           }
@@ -1639,10 +1639,10 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // complete type
           else
           {
-            RADDBGI_TypeKind type_kind = RADDBGI_TypeKind_Struct;
+            RDI_TypeKind type_kind = RDI_TypeKind_Struct;
             if(range->hdr.kind == CV_LeafKind_CLASS)
             {
-              type_kind = RADDBGI_TypeKind_Class;
+              type_kind = RDI_TypeKind_Class;
             }
             result = rdim_type_udt(ctx->root, type_kind, name, size_u64);
             
@@ -1679,10 +1679,10 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // incomplete type
           if(lf_struct->props & CV_TypeProp_FwdRef)
           {
-            RADDBGI_TypeKind type_kind = RADDBGI_TypeKind_IncompleteStruct;
+            RDI_TypeKind type_kind = RDI_TypeKind_IncompleteStruct;
             if(range->hdr.kind == CV_LeafKind_CLASS2)
             {
-              type_kind = RADDBGI_TypeKind_IncompleteClass;
+              type_kind = RDI_TypeKind_IncompleteClass;
             }
             result = rdim_type_incomplete(ctx->root, type_kind, name);
           }
@@ -1690,10 +1690,10 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // complete type
           else
           {
-            RADDBGI_TypeKind type_kind = RADDBGI_TypeKind_Struct;
+            RDI_TypeKind type_kind = RDI_TypeKind_Struct;
             if(range->hdr.kind == CV_LeafKind_CLASS2)
             {
-              type_kind = RADDBGI_TypeKind_Class;
+              type_kind = RDI_TypeKind_Class;
             }
             result = rdim_type_udt(ctx->root, type_kind, name, size_u64);
             
@@ -1730,13 +1730,13 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           if(lf_union->props & CV_TypeProp_FwdRef)
           {
             result =
-              rdim_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteUnion, name);
+              rdim_type_incomplete(ctx->root, RDI_TypeKind_IncompleteUnion, name);
           }
           
           // complete type
           else
           {
-            result = rdim_type_udt(ctx->root, RADDBGI_TypeKind_Union, name, size_u64);
+            result = rdim_type_udt(ctx->root, RDI_TypeKind_Union, name, size_u64);
             
             // remember to revisit this for members
             {
@@ -1765,7 +1765,7 @@ p2r_type_cons_leaf_record(P2R_Ctx *ctx, CV_TypeId itype)
           // incomplete type
           if(lf_enum->props & CV_TypeProp_FwdRef)
           {
-            result = rdim_type_incomplete(ctx->root, RADDBGI_TypeKind_IncompleteEnum, name);
+            result = rdim_type_incomplete(ctx->root, RDI_TypeKind_IncompleteEnum, name);
           }
           
           // complete type
@@ -2092,7 +2092,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
   Temp scratch = scratch_begin(0, 0);
   String8 data = sym->data;
   U64 user_id_base = (((U64)sym_unique_id) << 32);
-  U64 sym_unique_id_hash = raddbgi_hash((U8*)&sym_unique_id, sizeof(sym_unique_id));
+  U64 sym_unique_id_hash = rdi_hash((U8*)&sym_unique_id, sizeof(sym_unique_id));
   
   //////////////////////////////
   //- rjf: PASS 1: map out data associations
@@ -2388,17 +2388,17 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           U32 var_off = regrel32->reg_off;
           
           // need arch for analyzing register stuff
-          RADDBGI_Arch arch = ctx->arch;
+          RDI_Arch arch = ctx->arch;
           U64 addr_size = ctx->addr_size;
           
           // determine if this is a parameter
-          RADDBGI_LocalKind local_kind = RADDBGI_LocalKind_Variable;
+          RDI_LocalKind local_kind = RDI_LocalKind_Variable;
           {
             B32 is_stack_reg = 0;
             switch (arch)
             {
-              case RADDBGI_Arch_X86: is_stack_reg = (cv_reg == CV_Regx86_ESP); break;
-              case RADDBGI_Arch_X64: is_stack_reg = (cv_reg == CV_Regx64_RSP); break;
+              case RDI_Arch_X86: is_stack_reg = (cv_reg == CV_Regx86_ESP); break;
+              case RDI_Arch_X64: is_stack_reg = (cv_reg == CV_Regx64_RSP); break;
             }
             if(is_stack_reg)
             {
@@ -2411,7 +2411,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
               }
               if(var_off > frame_size)
               {
-                local_kind = RADDBGI_LocalKind_Parameter;
+                local_kind = RDI_LocalKind_Parameter;
               }
             }
           }
@@ -2435,18 +2435,18 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             B32 extra_indirection_to_value = 0;
             switch (arch)
             {
-              case RADDBGI_Arch_X86:
+              case RDI_Arch_X86:
               {
-                if(local_kind == RADDBGI_LocalKind_Parameter &&
+                if(local_kind == RDI_LocalKind_Parameter &&
                    (type->byte_size > 4 || !IsPow2OrZero(type->byte_size)))
                 {
                   extra_indirection_to_value = 1;
                 }
               }break;
               
-              case RADDBGI_Arch_X64:
+              case RDI_Arch_X64:
               {
-                if(local_kind == RADDBGI_LocalKind_Parameter &&
+                if(local_kind == RDI_LocalKind_Parameter &&
                    (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)))
                 {
                   extra_indirection_to_value = 1;
@@ -2455,7 +2455,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             }
             
             // get raddbg register code
-            RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+            RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
             // TODO(allen): real byte_size & byte_pos from cv_reg goes here
             U32 byte_size = 8;
             U32 byte_pos = 0;
@@ -2542,10 +2542,10 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           else
           {
             // local kind
-            RADDBGI_LocalKind local_kind = RADDBGI_LocalKind_Variable;
+            RDI_LocalKind local_kind = RDI_LocalKind_Variable;
             if(slocal->flags & CV_LocalFlag_Param)
             {
-              local_kind = RADDBGI_LocalKind_Parameter;
+              local_kind = RDI_LocalKind_Parameter;
             }
             
             // emit local
@@ -2565,7 +2565,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             rdim_local_set_basic_info(ctx->root, local_var, &info);
             
             defrange_target = rdim_location_set_from_local(ctx->root, local_var);
-            defrange_target_is_param = (local_kind == RADDBGI_LocalKind_Parameter);
+            defrange_target_is_param = (local_kind == RDI_LocalKind_Parameter);
           }
         }break;
         
@@ -2576,9 +2576,9 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)sym_header_struct_base;
           
           // TODO(allen): offset & size from cv_reg code
-          RADDBGI_Arch arch = ctx->arch;
+          RDI_Arch arch = ctx->arch;
           CV_Reg cv_reg = defrange_register->reg;
-          RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
           
           // setup location
           RDIM_Location *location = rdim_location_val_reg(ctx->root, register_code);
@@ -2602,7 +2602,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           // select frame pointer register
           CV_EncodedFramePtrReg encoded_fp_reg =
             p2r_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
-          RADDBGI_RegisterCode fp_register_code =
+          RDI_RegisterCode fp_register_code =
             p2r_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
           
           // setup location
@@ -2635,9 +2635,9 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           {
             
             // TODO(allen): offset & size from cv_reg code
-            RADDBGI_Arch arch = ctx->arch;
+            RDI_Arch arch = ctx->arch;
             CV_Reg cv_reg = defrange_subfield_register->reg;
-            RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+            RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
             
             // setup location
             RDIM_Location *location = rdim_location_val_reg(ctx->root, register_code);
@@ -2663,7 +2663,7 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           // select frame pointer register
           CV_EncodedFramePtrReg encoded_fp_reg =
             p2r_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
-          RADDBGI_RegisterCode fp_register_code =
+          RDI_RegisterCode fp_register_code =
             p2r_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
           
           // setup location
@@ -2687,9 +2687,9 @@ p2r_symbol_cons(P2R_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
           CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)sym_header_struct_base;
           
           // TODO(allen): offset & size from cv_reg code
-          RADDBGI_Arch arch = ctx->arch;
+          RDI_Arch arch = ctx->arch;
           CV_Reg cv_reg = defrange_register_rel->reg;
-          RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
           U32 byte_size = ctx->addr_size;
           U32 byte_pos = 0;
           
@@ -3009,7 +3009,7 @@ p2r_known_global_insert(Arena *arena, P2R_KnownGlobalSet *set, String8 name, U64
 
 internal RDIM_Location*
 p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
-                               RADDBGI_RegisterCode reg_code,
+                               RDI_RegisterCode reg_code,
                                U32 reg_byte_size,
                                U32 reg_byte_pos,
                                S64 offset,
@@ -3032,13 +3032,13 @@ p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
     Arena *arena = ctx->arena;
     
     RDIM_EvalBytecode bytecode = {0};
-    U32 regread_param = RADDBGI_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
-    rdim_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_RegRead, regread_param);
+    U32 regread_param = RDI_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
+    rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_RegRead, regread_param);
     rdim_bytecode_push_sconst(arena, &bytecode, offset);
-    rdim_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_Add, 0);
+    rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_Add, 0);
     if(extra_indirection)
     {
-      rdim_bytecode_push_op(arena, &bytecode, RADDBGI_EvalOp_MemRead, ctx->addr_size);
+      rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_MemRead, ctx->addr_size);
     }
     
     result = rdim_location_addr_bytecode_stream(ctx->root, &bytecode);
@@ -3067,14 +3067,14 @@ p2r_cv_encoded_fp_reg_from_proc(P2R_Ctx *ctx, RDIM_Symbol *proc, B32 param_base)
   return(result);
 }
 
-internal RADDBGI_RegisterCode
-p2r_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch, CV_EncodedFramePtrReg encoded_reg)
+internal RDI_RegisterCode
+p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg)
 {
-  RADDBGI_RegisterCode result = 0;
+  RDI_RegisterCode result = 0;
   
   switch (arch)
   {
-    case RADDBGI_Arch_X86:
+    case RDI_Arch_X86:
     {
       switch (encoded_reg)
       {
@@ -3085,30 +3085,30 @@ p2r_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch, CV_EncodedFramePtrReg e
         }break;
         case CV_EncodedFramePtrReg_FramePtr:
         {
-          result = RADDBGI_RegisterCode_X86_ebp;
+          result = RDI_RegisterCode_X86_ebp;
         }break;
         case CV_EncodedFramePtrReg_BasePtr:
         {
-          result = RADDBGI_RegisterCode_X86_ebx;
+          result = RDI_RegisterCode_X86_ebx;
         }break;
       }
     }break;
     
-    case RADDBGI_Arch_X64:
+    case RDI_Arch_X64:
     {
       switch (encoded_reg)
       {
         case CV_EncodedFramePtrReg_StackPtr:
         {
-          result = RADDBGI_RegisterCode_X64_rsp;
+          result = RDI_RegisterCode_X64_rsp;
         }break;
         case CV_EncodedFramePtrReg_FramePtr:
         {
-          result = RADDBGI_RegisterCode_X64_rbp;
+          result = RDI_RegisterCode_X64_rbp;
         }break;
         case CV_EncodedFramePtrReg_BasePtr:
         {
-          result = RADDBGI_RegisterCode_X64_r13;
+          result = RDI_RegisterCode_X64_r13;
         }break;
       }
     }break;
@@ -3435,7 +3435,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
   U64 exe_hash = 0;
   if(out->good_parse && params->input_exe_data.size > 0) ProfScope("hash exe")
   {
-    exe_hash = raddbgi_hash(params->input_exe_data.str, params->input_exe_data.size);
+    exe_hash = rdi_hash(params->input_exe_data.str, params->input_exe_data.size);
   }
   
   // output generation
@@ -3444,7 +3444,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
   {
     
     // determine arch
-    RADDBGI_Arch architecture = RADDBGI_Arch_NULL;
+    RDI_Arch architecture = RDI_Arch_NULL;
     // TODO(rjf): in some cases, the first compilation unit has a zero
     // architecture, as it's sometimes used as a "nil" unit. this causes bugs
     // in later stages of conversion - particularly, this was detected via
@@ -3462,14 +3462,14 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     {
       if(sym_for_unit[comp_unit_idx] != 0)
       {
-        architecture = raddbgi_arch_from_cv_arch(sym_for_unit[comp_unit_idx]->info.arch);
+        architecture = rdi_arch_from_cv_arch(sym_for_unit[comp_unit_idx]->info.arch);
         if(architecture != 0)
         {
           break;
         }
       }
     }
-    U64 addr_size = raddbgi_addr_size_from_arch(architecture);
+    U64 addr_size = rdi_addr_size_from_arch(architecture);
     
     
     // predict symbol counts
@@ -3541,8 +3541,8 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         char *name_first = (char*)coff_ptr->name;
         char *name_opl   = name_first + sizeof(coff_ptr->name);
         String8 name = str8_cstring_capped(name_first, name_opl);
-        RADDBGI_BinarySectionFlags flags =
-          raddbgi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
+        RDI_BinarySectionFlags flags =
+          rdi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
         rdim_add_binary_section(root, name, flags,
                                 coff_ptr->voff, coff_ptr->voff + coff_ptr->vsize,
                                 coff_ptr->foff, coff_ptr->foff + coff_ptr->fsize);
@@ -3589,7 +3589,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
         String8 archive_file = unit->group_name;
         
         // extract langauge
-        RADDBGI_Language lang = raddbgi_language_from_cv_language(sym->info.language);
+        RDI_Language lang = rdi_language_from_cv_language(sym->info.language);
         
         // basic per unit info
         RDIM_Unit *unit_handle = rdim_unit_handle_from_user_id(root, i, i);

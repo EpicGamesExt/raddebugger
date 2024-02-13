@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef TYPE_GRAPH_NEW_H
-#define TYPE_GRAPH_NEW_H
+#ifndef TYPE_GRAPH_H
+#define TYPE_GRAPH_H
 
 ////////////////////////////////
 //~ rjf: Generated Code
@@ -203,8 +203,8 @@ internal TG_KeyList tg_key_list_copy(Arena *arena, TG_KeyList *src);
 ////////////////////////////////
 //~ rjf: RADDBG <-> TG Enum Conversions
 
-internal TG_Kind tg_kind_from_raddbgi_type_kind(RADDBGI_TypeKind kind);
-internal TG_MemberKind tg_member_kind_from_raddbgi_member_kind(RADDBGI_MemberKind kind);
+internal TG_Kind tg_kind_from_rdi_type_kind(RDI_TypeKind kind);
+internal TG_MemberKind tg_member_kind_from_rdi_member_kind(RDI_MemberKind kind);
 
 ////////////////////////////////
 //~ rjf: Key Type Functions
@@ -225,19 +225,19 @@ internal TG_Key tg_cons_type_make(TG_Graph *graph, TG_Kind kind, TG_Key direct_t
 ////////////////////////////////
 //~ rjf: Graph Introspection API
 
-internal TG_Type *tg_type_from_graph_raddbgi_key(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_direct_from_graph_raddbgi_key(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_unwrapped_direct_from_graph_raddbgi_key(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_owner_from_graph_raddbgi_key(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_ptee_from_graph_raddbgi_key(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_unwrapped_from_graph_raddbgi_key(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal U64 tg_byte_size_from_graph_raddbgi_key(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
+internal TG_Type *tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_Key tg_direct_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_Key tg_unwrapped_direct_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_Key tg_owner_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_Key tg_ptee_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_Key tg_unwrapped_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal U64 tg_byte_size_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
 internal TG_Kind tg_kind_from_key(TG_Key key);
 internal TG_Member *tg_member_copy(Arena *arena, TG_Member *src);
-internal TG_MemberArray tg_members_from_graph_raddbgi_key(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal TG_MemberArray tg_data_members_from_graph_raddbgi_key(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
-internal void tg_lhs_string_from_key(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key, String8List *out, U32 prec, B32 skip_return);
-internal void tg_rhs_string_from_key(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key, String8List *out, U32 prec);
-internal String8 tg_string_from_key(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key);
+internal TG_MemberArray tg_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_MemberArray tg_data_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal void tg_lhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key, String8List *out, U32 prec, B32 skip_return);
+internal void tg_rhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key, String8List *out, U32 prec);
+internal String8 tg_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
 
-#endif // TYPE_GRAPH_NEW_H
+#endif // TYPE_GRAPH_H

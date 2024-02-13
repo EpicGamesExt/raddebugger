@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_CONS_LOCAL_H
-#define RADDBGI_CONS_LOCAL_H
+#ifndef RDI_CONS_LOCAL_H
+#define RDI_CONS_LOCAL_H
 
 // rjf: base layer memory ops
 #define RDIM_MEMSET_OVERRIDE
@@ -11,11 +11,11 @@
 #define rdim_memcpy MemoryCopy
 
 // rjf: base layer string overrides
-#define RADDBGI_STRING8_OVERRIDE
+#define RDI_STRING8_OVERRIDE
 #define RDIM_String8 String8
 #define RDIM_String8_BaseMember str
 #define RDIM_String8_SizeMember size
-#define RADDBGI_STRING8LIST_OVERRIDE
+#define RDI_STRING8LIST_OVERRIDE
 #define RDIM_String8Node String8Node
 #define RDIM_String8Node_NextPtrMember next
 #define RDIM_String8Node_StringMember string
@@ -43,4 +43,4 @@
 
 #include "lib_raddbgi_make/raddbgi_make.h"
 
-#endif // RADDBGI_CONS_LOCAL_H
+#endif // RDI_CONS_LOCAL_H

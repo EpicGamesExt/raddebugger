@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_DUMP_H
-#define RADDBGI_DUMP_H
+#ifndef RDI_DUMP_H
+#define RDI_DUMP_H
 
 ////////////////////////////////
 //~ Program Parameters Type
@@ -42,4 +42,4 @@ typedef struct RADDBGIDUMP_Params{
 
 static RADDBGIDUMP_Params *raddbgidump_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
 
-#endif //RADDBGI_DUMP_H
+#endif //RDI_DUMP_H

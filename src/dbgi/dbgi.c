@@ -111,7 +111,7 @@ dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemAr
 }
 
 internal String8
-dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBGI_Parsed *rdbg, DBGI_FuzzySearchTarget target, U64 element_idx)
+dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RDI_Parsed *rdbg, DBGI_FuzzySearchTarget target, U64 element_idx)
 {
   String8 result = {0};
   switch(target)
@@ -119,31 +119,31 @@ dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBGI_Parsed *rdbg, DBGI_F
     // NOTE(rjf): no default - warn if we miss a case
     case DBGI_FuzzySearchTarget_Procedures:
     {
-      RADDBGI_Procedure *proc = raddbgi_element_from_idx(rdbg, procedures, element_idx);
+      RDI_Procedure *proc = rdi_element_from_idx(rdbg, procedures, element_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbgi_string_from_idx(rdbg, proc->name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdbg, proc->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_GlobalVariables:
     {
-      RADDBGI_GlobalVariable *gvar = raddbgi_element_from_idx(rdbg, global_variables, element_idx);
+      RDI_GlobalVariable *gvar = rdi_element_from_idx(rdbg, global_variables, element_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbgi_string_from_idx(rdbg, gvar->name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdbg, gvar->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_ThreadVariables:
     {
-      RADDBGI_ThreadVariable *tvar = raddbgi_element_from_idx(rdbg, thread_variables, element_idx);
+      RDI_ThreadVariable *tvar = rdi_element_from_idx(rdbg, thread_variables, element_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbgi_string_from_idx(rdbg, tvar->name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdbg, tvar->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_UDTs:
     {
-      RADDBGI_UDT *udt = raddbgi_element_from_idx(rdbg, udts, element_idx);
-      RADDBGI_TypeNode *type_node = raddbgi_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+      RDI_UDT *udt = rdi_element_from_idx(rdbg, udts, element_idx);
+      RDI_TypeNode *type_node = rdi_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbgi_string_from_idx(rdbg, type_node->user_defined.name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdbg, type_node->user_defined.name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_COUNT:{}break;
@@ -769,7 +769,7 @@ dbgi_parse_thread_entry_point(void *p)
       }
       if(!og_dbg_format_is_known)
       {
-        if(data.size >= 8 && *(U64 *)data.str == RADDBGI_MAGIC_CONSTANT)
+        if(data.size >= 8 && *(U64 *)data.str == RDI_MAGIC_CONSTANT)
         {
           og_dbg_format_is_known = 1;
           og_dbg_is_raddbg = 1;
@@ -838,10 +838,10 @@ dbgi_parse_thread_entry_point(void *p)
       file_map = os_file_map_open(OS_AccessFlag_Read, file);
       file_props = os_properties_from_file(file);
       file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
-      if(sizeof(RADDBGI_Header) <= file_props.size)
+      if(sizeof(RDI_Header) <= file_props.size)
       {
-        RADDBGI_Header *header = (RADDBGI_Header*)file_base;
-        if(header->encoding_version != RADDBGI_ENCODING_VERSION)
+        RDI_Header *header = (RDI_Header*)file_base;
+        if(header->encoding_version != RDI_ENCODING_VERSION)
         {
           raddbgi_file_is_up_to_date = 0;
         }
@@ -1017,14 +1017,14 @@ dbgi_parse_thread_entry_point(void *p)
     }
     
     //- rjf: parse raddbg info
-    RADDBGI_Parsed raddbgi_parsed = dbgi_parse_nil.rdbg;
+    RDI_Parsed rdi_parsed = dbgi_parse_nil.rdbg;
     U64 arch_addr_size = 8;
     if(do_task)
     {
-      RADDBGI_ParseStatus parse_status = raddbgi_parse((U8 *)raddbgi_file_base, raddbgi_file_props.size, &raddbgi_parsed);
-      if(raddbgi_parsed.top_level_info != 0)
+      RDI_ParseStatus parse_status = rdi_parse((U8 *)raddbgi_file_base, raddbgi_file_props.size, &rdi_parsed);
+      if(rdi_parsed.top_level_info != 0)
       {
-        arch_addr_size = raddbgi_addr_size_from_arch(raddbgi_parsed.top_level_info->architecture);
+        arch_addr_size = rdi_addr_size_from_arch(rdi_parsed.top_level_info->architecture);
       }
     }
     
@@ -1053,7 +1053,7 @@ dbgi_parse_thread_entry_point(void *p)
           bin->parse.arena = parse_arena;
           bin->parse.dbg_path = push_str8_copy(parse_arena, dbg_path);
           MemoryCopyStruct(&bin->parse.pe, &exe_pe_info);
-          MemoryCopyStruct(&bin->parse.rdbg, &raddbgi_parsed);
+          MemoryCopyStruct(&bin->parse.rdbg, &rdi_parsed);
           bin->parse.gen = bin->gen;
           break;
         }
@@ -1197,7 +1197,7 @@ dbgi_fuzzy_thread__entry_point(void *p)
     
     //- rjf: exe_path -> dbgi_parse, raddbg
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
-    RADDBGI_Parsed *rdbg = &dbgi->rdbg;
+    RDI_Parsed *rdbg = &dbgi->rdbg;
     
     //- rjf: rdbg * query -> item list
     U64 table_ptr_off = 0;
@@ -1210,30 +1210,30 @@ dbgi_fuzzy_thread__entry_point(void *p)
       case DBGI_FuzzySearchTarget_COUNT:{}break;
       case DBGI_FuzzySearchTarget_Procedures:
       {
-        table_ptr_off = OffsetOf(RADDBGI_Parsed, procedures);
-        element_name_idx_off = OffsetOf(RADDBGI_Procedure, name_string_idx);
+        table_ptr_off = OffsetOf(RDI_Parsed, procedures);
+        element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
         element_count = rdbg->procedures_count;
-        element_size = sizeof(RADDBGI_Procedure);
+        element_size = sizeof(RDI_Procedure);
       }break;
       case DBGI_FuzzySearchTarget_GlobalVariables:
       {
-        table_ptr_off = OffsetOf(RADDBGI_Parsed, global_variables);
-        element_name_idx_off = OffsetOf(RADDBGI_GlobalVariable, name_string_idx);
+        table_ptr_off = OffsetOf(RDI_Parsed, global_variables);
+        element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
         element_count = rdbg->global_variables_count;
-        element_size = sizeof(RADDBGI_GlobalVariable);
+        element_size = sizeof(RDI_GlobalVariable);
       }break;
       case DBGI_FuzzySearchTarget_ThreadVariables:
       {
-        table_ptr_off = OffsetOf(RADDBGI_Parsed, thread_variables);
-        element_name_idx_off = OffsetOf(RADDBGI_ThreadVariable, name_string_idx);
+        table_ptr_off = OffsetOf(RDI_Parsed, thread_variables);
+        element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
         element_count = rdbg->thread_variables_count;
-        element_size = sizeof(RADDBGI_ThreadVariable);
+        element_size = sizeof(RDI_ThreadVariable);
       }break;
       case DBGI_FuzzySearchTarget_UDTs:
       {
-        table_ptr_off = OffsetOf(RADDBGI_Parsed, udts);
+        table_ptr_off = OffsetOf(RDI_Parsed, udts);
         element_count = rdbg->udts_count;
-        element_size = sizeof(RADDBGI_UDT);
+        element_size = sizeof(RDI_UDT);
       }break;
     }
     DBGI_FuzzySearchItemChunkList items_list = {0};
@@ -1246,13 +1246,13 @@ dbgi_fuzzy_thread__entry_point(void *p)
         U32 *name_idx_ptr = (U32 *)((U8 *)element + element_name_idx_off);
         if(target == DBGI_FuzzySearchTarget_UDTs)
         {
-          RADDBGI_UDT *udt = (RADDBGI_UDT *)element;
-          RADDBGI_TypeNode *type_node = raddbgi_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+          RDI_UDT *udt = (RDI_UDT *)element;
+          RDI_TypeNode *type_node = rdi_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
           name_idx_ptr = &type_node->user_defined.name_string_idx;
         }
         U32 name_idx = *name_idx_ptr;
         U64 name_size = 0;
-        U8 *name_base = raddbgi_string_from_idx(rdbg, name_idx, &name_size);
+        U8 *name_base = rdi_string_from_idx(rdbg, name_idx, &name_size);
         String8 name = str8(name_base, name_size);
         if(name.size == 0) { continue; }
         FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query, name);

@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_FROM_PDB_H
-#define RADDBGI_FROM_PDB_H
+#ifndef RDI_FROM_PDB_H
+#define RDI_FROM_PDB_H
 
 ////////////////////////////////
 //~ rjf: Conversion Parameters Type
@@ -130,7 +130,7 @@ struct P2R_KnownGlobalSet
 typedef struct P2R_CtxParams P2R_CtxParams;
 struct P2R_CtxParams
 {
-  RADDBGI_Arch arch;
+  RDI_Arch arch;
   PDB_TpiHashParsed *tpi_hash;
   CV_LeafParsed *tpi_leaf;
   PDB_CoffSectionArray *sections;
@@ -171,7 +171,7 @@ struct P2R_Ctx
   Arena *arena;
   
   // INPUT data
-  RADDBGI_Arch arch;
+  RDI_Arch arch;
   U64 addr_size;
   PDB_TpiHashParsed *hash;
   CV_LeafParsed *leaf;
@@ -214,14 +214,14 @@ internal P2R_Params *p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
 ////////////////////////////////
 //~ rjf: COFF => RADDBGI Canonical Conversions
 
-internal RADDBGI_BinarySectionFlags raddbgi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
+internal RDI_BinarySectionFlags rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
 
 ////////////////////////////////
 //~ rjf: CodeView => RADDBGI Canonical Conversions
 
-internal RADDBGI_Arch         raddbgi_arch_from_cv_arch(CV_Arch arch);
-internal RADDBGI_RegisterCode raddbgi_reg_code_from_cv_reg_code(RADDBGI_Arch arch, CV_Reg reg_code);
-internal RADDBGI_Language     raddbgi_language_from_cv_language(CV_Language language);
+internal RDI_Arch         rdi_arch_from_cv_arch(CV_Arch arch);
+internal RDI_RegisterCode rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
+internal RDI_Language     rdi_language_from_cv_language(CV_Language language);
 
 ////////////////////////////////
 //~ rjf: Conversion Implementation Helpers
@@ -303,7 +303,7 @@ internal void p2r_known_global_insert(Arena *arena, P2R_KnownGlobalSet *set,
 
 // location info helpers
 internal RDIM_Location* p2r_location_from_addr_reg_off(P2R_Ctx *ctx,
-                                                       RADDBGI_RegisterCode reg_code,
+                                                       RDI_RegisterCode reg_code,
                                                        U32 reg_byte_size,
                                                        U32 reg_byte_pos,
                                                        S64 offset,
@@ -313,8 +313,8 @@ internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_proc(P2R_Ctx *ctx,
                                                                RDIM_Symbol *proc,
                                                                B32 param_base);
 
-internal RADDBGI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch,
-                                                                    CV_EncodedFramePtrReg encoded_reg);
+internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch,
+                                                                CV_EncodedFramePtrReg encoded_reg);
 
 internal void p2r_location_over_lvar_addr_range(P2R_Ctx *ctx,
                                                 RDIM_LocationSet *locset,
@@ -332,4 +332,4 @@ internal String8 p2r_link_name_find(P2R_LinkNameMap *map, U64 voff);
 
 internal P2R_Out *p2r_convert(Arena *arena, P2R_Params *params);
 
-#endif // RADDBGI_FROM_PDB_H
+#endif // RDI_FROM_PDB_H

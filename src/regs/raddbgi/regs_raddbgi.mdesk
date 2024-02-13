@@ -6,9 +6,9 @@
 
 @gen @c_file
 {
-  `internal RADDBGI_RegisterCode regs_raddbgi_code_from_arch_reg_code(Architecture arch, REGS_RegCode code)`;
+  `internal RDI_RegisterCode regs_rdi_code_from_arch_reg_code(Architecture arch, REGS_RegCode code)`;
   `{`;
-    `RADDBGI_RegisterCode result = 0;`;
+    `RDI_RegisterCode result = 0;`;
     `switch(arch)`;
     `{`;
       `default:{}break;`;
@@ -17,7 +17,7 @@
         `switch(code)`
           `{`;
           `default:{}break;`;
-          @expand(REGS_RegTableX64 a) `case REGS_RegCodeX64_$(a.name):{result = RADDBGI_RegisterCode_X64_$(a.name);}break;`;
+          @expand(REGS_RegTableX64 a) `case REGS_RegCodeX64_$(a.name):{result = RDI_RegisterCode_X64_$(a.name);}break;`;
           `}`;
         `}break;`;
       `case Architecture_x86:`;
@@ -25,7 +25,7 @@
         `switch(code)`
           `{`;
           `default:{}break;`;
-          @expand(REGS_RegTableX86 a) `case REGS_RegCodeX86_$(a.name):{result = RADDBGI_RegisterCode_X86_$(a.name);}break;`;
+          @expand(REGS_RegTableX86 a) `case REGS_RegCodeX86_$(a.name):{result = RDI_RegisterCode_X86_$(a.name);}break;`;
           `}`;
         `}break;`;
       `}`;
@@ -35,7 +35,7 @@
 
 @gen @c_file
 {
-  `internal REGS_RegCode regs_reg_code_from_arch_raddbgi_code(Architecture arch, RADDBGI_RegisterCode code)`;
+  `internal REGS_RegCode regs_reg_code_from_arch_rdi_code(Architecture arch, RDI_RegisterCode code)`;
   `{`;
     `REGS_RegCode result = 0;`;
     `switch(arch)`;
@@ -46,7 +46,7 @@
         `switch(code)`
           `{`;
           `default:{}break;`;
-          @expand(REGS_RegTableX64 a) `case RADDBGI_RegisterCode_X64_$(a.name):{result = REGS_RegCodeX64_$(a.name);}break;`;
+          @expand(REGS_RegTableX64 a) `case RDI_RegisterCode_X64_$(a.name):{result = REGS_RegCodeX64_$(a.name);}break;`;
           `}`;
         `}break;`;
       `case Architecture_x86:`;
@@ -54,7 +54,7 @@
         `switch(code)`
           `{`;
           `default:{}break;`;
-          @expand(REGS_RegTableX86 a) `case RADDBGI_RegisterCode_X86_$(a.name):{result = REGS_RegCodeX86_$(a.name);}break;`;
+          @expand(REGS_RegTableX86 a) `case RDI_RegisterCode_X86_$(a.name):{result = REGS_RegCodeX86_$(a.name);}break;`;
           `}`;
         `}break;`;
       `}`;

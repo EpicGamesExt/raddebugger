@@ -23,8 +23,8 @@ eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
       default:
       {
         // compute bytecode advance
-        U8 ctrlbits = raddbgi_eval_opcode_ctrlbits[opcode];
-        U64 extra_byte_count = RADDBGI_DECODEN_FROM_CTRLBITS(ctrlbits);
+        U8 ctrlbits = rdi_eval_opcode_ctrlbits[opcode];
+        U64 extra_byte_count = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
         
         U8 *next_ptr = ptr + 1 + extra_byte_count;
         Assert(next_ptr <= opl);
@@ -62,9 +62,9 @@ eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
 }
 
 internal void
-eval_oplist_push_op(Arena *arena, EVAL_OpList *list, RADDBGI_EvalOp opcode, U64 p){
-  U8 ctrlbits = raddbgi_eval_opcode_ctrlbits[opcode];
-  U32 p_size = RADDBGI_DECODEN_FROM_CTRLBITS(ctrlbits);
+eval_oplist_push_op(Arena *arena, EVAL_OpList *list, RDI_EvalOp opcode, U64 p){
+  U8 ctrlbits = rdi_eval_opcode_ctrlbits[opcode];
+  U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   
   EVAL_Op *node = push_array_no_zero(arena, EVAL_Op, 1);
   node->opcode = opcode;
@@ -78,35 +78,35 @@ eval_oplist_push_op(Arena *arena, EVAL_OpList *list, RADDBGI_EvalOp opcode, U64 
 internal void
 eval_oplist_push_uconst(Arena *arena, EVAL_OpList *list, U64 x){
   if (x <= 0xFF){
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU8, x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU8, x);
   }
   else if (x <= 0xFFFF){
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU16, x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, x);
   }
   else if (x <= 0xFFFFFFFF){
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU32, x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, x);
   }
   else{
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU64, x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, x);
   }
 }
 
 internal void
 eval_oplist_push_sconst(Arena *arena, EVAL_OpList *list, S64 x){
   if (-0x80 <= x && x <= 0x7F){
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU8, (U64)x);
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_TruncSigned, 8);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU8, (U64)x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 8);
   }
   else if (-0x8000 <= x && x <= 0x7FFF){
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU16, (U64)x);
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_TruncSigned, 16);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, (U64)x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 16);
   }
   else if (-0x80000000ll <= x && x <= 0x7FFFFFFFll){
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU32, (U64)x);
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_TruncSigned, 32);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, (U64)x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 32);
   }
   else{
-    eval_oplist_push_op(arena, list, RADDBGI_EvalOp_ConstU64, (U64)x);
+    eval_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, (U64)x);
   }
 }
 
@@ -138,31 +138,31 @@ eval_oplist_concat_in_place(EVAL_OpList *left_dst, EVAL_OpList *right_destroyed)
 ////////////////////////////////
 //~ allen: EVAL Expression Info Functions
 
-internal RADDBGI_EvalOp
+internal RDI_EvalOp
 eval_opcode_from_expr_kind(EVAL_ExprKind kind){
-  RADDBGI_EvalOp result = RADDBGI_EvalOp_Stop;
+  RDI_EvalOp result = RDI_EvalOp_Stop;
   switch (kind){
-    case EVAL_ExprKind_Neg:    result = RADDBGI_EvalOp_Neg;    break;
-    case EVAL_ExprKind_LogNot: result = RADDBGI_EvalOp_LogNot; break;
-    case EVAL_ExprKind_BitNot: result = RADDBGI_EvalOp_BitNot; break;
-    case EVAL_ExprKind_Mul:    result = RADDBGI_EvalOp_Mul;    break;
-    case EVAL_ExprKind_Div:    result = RADDBGI_EvalOp_Div;    break;
-    case EVAL_ExprKind_Mod:    result = RADDBGI_EvalOp_Mod;    break;
-    case EVAL_ExprKind_Add:    result = RADDBGI_EvalOp_Add;    break;
-    case EVAL_ExprKind_Sub:    result = RADDBGI_EvalOp_Sub;    break;
-    case EVAL_ExprKind_LShift: result = RADDBGI_EvalOp_LShift; break;
-    case EVAL_ExprKind_RShift: result = RADDBGI_EvalOp_RShift; break;
-    case EVAL_ExprKind_Less:   result = RADDBGI_EvalOp_Less;   break;
-    case EVAL_ExprKind_LsEq:   result = RADDBGI_EvalOp_LsEq;   break;
-    case EVAL_ExprKind_Grtr:   result = RADDBGI_EvalOp_Grtr;   break;
-    case EVAL_ExprKind_GrEq:   result = RADDBGI_EvalOp_GrEq;   break;
-    case EVAL_ExprKind_EqEq:   result = RADDBGI_EvalOp_EqEq;   break;
-    case EVAL_ExprKind_NtEq:   result = RADDBGI_EvalOp_NtEq;   break;
-    case EVAL_ExprKind_BitAnd: result = RADDBGI_EvalOp_BitAnd; break;
-    case EVAL_ExprKind_BitXor: result = RADDBGI_EvalOp_BitXor; break;
-    case EVAL_ExprKind_BitOr:  result = RADDBGI_EvalOp_BitOr;  break;
-    case EVAL_ExprKind_LogAnd: result = RADDBGI_EvalOp_LogAnd; break;
-    case EVAL_ExprKind_LogOr:  result = RADDBGI_EvalOp_LogOr;  break;
+    case EVAL_ExprKind_Neg:    result = RDI_EvalOp_Neg;    break;
+    case EVAL_ExprKind_LogNot: result = RDI_EvalOp_LogNot; break;
+    case EVAL_ExprKind_BitNot: result = RDI_EvalOp_BitNot; break;
+    case EVAL_ExprKind_Mul:    result = RDI_EvalOp_Mul;    break;
+    case EVAL_ExprKind_Div:    result = RDI_EvalOp_Div;    break;
+    case EVAL_ExprKind_Mod:    result = RDI_EvalOp_Mod;    break;
+    case EVAL_ExprKind_Add:    result = RDI_EvalOp_Add;    break;
+    case EVAL_ExprKind_Sub:    result = RDI_EvalOp_Sub;    break;
+    case EVAL_ExprKind_LShift: result = RDI_EvalOp_LShift; break;
+    case EVAL_ExprKind_RShift: result = RDI_EvalOp_RShift; break;
+    case EVAL_ExprKind_Less:   result = RDI_EvalOp_Less;   break;
+    case EVAL_ExprKind_LsEq:   result = RDI_EvalOp_LsEq;   break;
+    case EVAL_ExprKind_Grtr:   result = RDI_EvalOp_Grtr;   break;
+    case EVAL_ExprKind_GrEq:   result = RDI_EvalOp_GrEq;   break;
+    case EVAL_ExprKind_EqEq:   result = RDI_EvalOp_EqEq;   break;
+    case EVAL_ExprKind_NtEq:   result = RDI_EvalOp_NtEq;   break;
+    case EVAL_ExprKind_BitAnd: result = RDI_EvalOp_BitAnd; break;
+    case EVAL_ExprKind_BitXor: result = RDI_EvalOp_BitXor; break;
+    case EVAL_ExprKind_BitOr:  result = RDI_EvalOp_BitOr;  break;
+    case EVAL_ExprKind_LogAnd: result = RDI_EvalOp_LogAnd; break;
+    case EVAL_ExprKind_LogOr:  result = RDI_EvalOp_LogOr;  break;
   }
   return(result);
 }
@@ -286,9 +286,9 @@ eval_expr_leaf_type(Arena *arena, void *location, TG_Key type_key){
 ////////////////////////////////
 //~ allen: EVAL Type Information Transformers
 
-internal RADDBGI_EvalTypeGroup
+internal RDI_EvalTypeGroup
 eval_type_group_from_kind(TG_Kind kind){
-  RADDBGI_EvalTypeGroup result = 0;
+  RDI_EvalTypeGroup result = 0;
   switch (kind){
     default:{}break;
     
@@ -303,7 +303,7 @@ eval_type_group_from_kind(TG_Kind kind){
     case TG_Kind_IncompleteStruct: case TG_Kind_IncompleteClass:
     case TG_Kind_IncompleteUnion:  case TG_Kind_IncompleteEnum:
     case TG_Kind_Bitfield:   case TG_Kind_Variadic:
-    result = RADDBGI_EvalTypeGroup_Other; break;
+    result = RDI_EvalTypeGroup_Other; break;
     
     case TG_Kind_Handle:
     case TG_Kind_UChar8: case TG_Kind_UChar16: case TG_Kind_UChar32:
@@ -312,26 +312,26 @@ eval_type_group_from_kind(TG_Kind kind){
     case TG_Kind_U512:
     case TG_Kind_Ptr: case TG_Kind_LRef: case TG_Kind_RRef:
     case TG_Kind_Function: case TG_Kind_Method: case TG_Kind_MemberPtr:
-    result = RADDBGI_EvalTypeGroup_U; break;
+    result = RDI_EvalTypeGroup_U; break;
     
     case TG_Kind_Char8: case TG_Kind_Char16: case TG_Kind_Char32:
     case TG_Kind_S8:    case TG_Kind_S16:    case TG_Kind_S32:
     case TG_Kind_S64:   case TG_Kind_S128:   case TG_Kind_S256:
     case TG_Kind_S512:
     case TG_Kind_Bool:
-    result = RADDBGI_EvalTypeGroup_S; break;
+    result = RDI_EvalTypeGroup_S; break;
     
     case TG_Kind_F32:
-    result = RADDBGI_EvalTypeGroup_F32; break;
+    result = RDI_EvalTypeGroup_F32; break;
     
     case TG_Kind_F64:
-    result = RADDBGI_EvalTypeGroup_F64; break;
+    result = RDI_EvalTypeGroup_F64; break;
   }
   return(result);
 }
 
 internal TG_Key
-eval_type_unwrap_enum(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key)
+eval_type_unwrap_enum(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key)
 {
   TG_Key result = key;
   for(B32 good = 1; good;)
@@ -339,7 +339,7 @@ eval_type_unwrap_enum(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key)
     TG_Kind kind = tg_kind_from_key(key);
     if(kind == TG_Kind_Enum)
     {
-      result = tg_direct_from_graph_raddbgi_key(graph, rdbg, result);
+      result = tg_direct_from_graph_rdi_key(graph, rdbg, result);
     }
     else
     {
@@ -350,7 +350,7 @@ eval_type_unwrap_enum(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key)
 }
 
 internal TG_Key
-eval_type_promote(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key){
+eval_type_promote(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key){
   TG_Key result = key;
   TG_Kind kind = tg_kind_from_key(key);
   if(kind == TG_Kind_Bool ||
@@ -365,7 +365,7 @@ eval_type_promote(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key key){
 }
 
 internal TG_Key
-eval_type_coerce(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
+eval_type_coerce(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key l, TG_Key r){
   Assert(eval_kind_is_basic_or_enum(tg_kind_from_key(l)) &&
          eval_kind_is_basic_or_enum(tg_kind_from_key(r)));
   
@@ -384,12 +384,12 @@ eval_type_coerce(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
 }
 
 internal B32
-eval_type_match(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
+eval_type_match(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key l, TG_Key r){
   B32 result = 0;
   
   // unwrap
-  TG_Key lu = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, l);
-  TG_Key ru = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, r);
+  TG_Key lu = tg_unwrapped_from_graph_rdi_key(graph, rdbg, l);
+  TG_Key ru = tg_unwrapped_from_graph_rdi_key(graph, rdbg, r);
   
   if (tg_key_match(lu, ru)){
     result = 1;
@@ -408,8 +408,8 @@ eval_type_match(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
         case TG_Kind_LRef:
         case TG_Kind_RRef:
         {
-          TG_Key lud = tg_direct_from_graph_raddbgi_key(graph, rdbg, lu);
-          TG_Key rud = tg_direct_from_graph_raddbgi_key(graph, rdbg, ru);
+          TG_Key lud = tg_direct_from_graph_rdi_key(graph, rdbg, lu);
+          TG_Key rud = tg_direct_from_graph_rdi_key(graph, rdbg, ru);
           if (eval_type_match(graph, rdbg, lud, rud)){
             result = 1;
           }
@@ -417,10 +417,10 @@ eval_type_match(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
         
         case TG_Kind_MemberPtr:
         {
-          TG_Key lud = tg_direct_from_graph_raddbgi_key(graph, rdbg, lu);
-          TG_Key rud = tg_direct_from_graph_raddbgi_key(graph, rdbg, ru);
-          TG_Key luo = tg_owner_from_graph_raddbgi_key(graph, rdbg, lu);
-          TG_Key ruo = tg_owner_from_graph_raddbgi_key(graph, rdbg, ru);
+          TG_Key lud = tg_direct_from_graph_rdi_key(graph, rdbg, lu);
+          TG_Key rud = tg_direct_from_graph_rdi_key(graph, rdbg, ru);
+          TG_Key luo = tg_owner_from_graph_rdi_key(graph, rdbg, lu);
+          TG_Key ruo = tg_owner_from_graph_rdi_key(graph, rdbg, ru);
           if (eval_type_match(graph, rdbg, lud, rud) &&
               eval_type_match(graph, rdbg, luo, ruo)){
             result = 1;
@@ -430,8 +430,8 @@ eval_type_match(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
         case TG_Kind_Array:
         {
           Temp scratch = scratch_begin(0, 0);
-          TG_Type *lt = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, l);
-          TG_Type *rt = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, r);
+          TG_Type *lt = tg_type_from_graph_rdi_key(scratch.arena, graph, rdbg, l);
+          TG_Type *rt = tg_type_from_graph_rdi_key(scratch.arena, graph, rdbg, r);
           if(lt->count == rt->count && eval_type_match(graph, rdbg, lt->direct_type_key, rt->direct_type_key))
           {
             result = 1;
@@ -442,8 +442,8 @@ eval_type_match(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
         case TG_Kind_Function:
         {
           Temp scratch = scratch_begin(0, 0);
-          TG_Type *lt = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, l);
-          TG_Type *rt = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, r);
+          TG_Type *lt = tg_type_from_graph_rdi_key(scratch.arena, graph, rdbg, l);
+          TG_Type *rt = tg_type_from_graph_rdi_key(scratch.arena, graph, rdbg, r);
           if (lt->count == rt->count && eval_type_match(graph, rdbg, lt->direct_type_key, rt->direct_type_key))
           {
             B32 params_match = 1;
@@ -466,8 +466,8 @@ eval_type_match(TG_Graph *graph, RADDBGI_Parsed *rdbg, TG_Key l, TG_Key r){
         case TG_Kind_Method:
         {
           Temp scratch = scratch_begin(0, 0);
-          TG_Type *lt = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, l);
-          TG_Type *rt = tg_type_from_graph_raddbgi_key(scratch.arena, graph, rdbg, r);
+          TG_Type *lt = tg_type_from_graph_rdi_key(scratch.arena, graph, rdbg, l);
+          TG_Type *rt = tg_type_from_graph_rdi_key(scratch.arena, graph, rdbg, r);
           if (lt->count == rt->count &&
               eval_type_match(graph, rdbg, lt->direct_type_key, rt->direct_type_key) &&
               eval_type_match(graph, rdbg, lt->owner_type_key, rt->owner_type_key))
@@ -522,15 +522,15 @@ eval_kind_is_basic_or_enum(TG_Kind kind){
 internal EVAL_IRTree*
 eval_irtree_const_u(Arena *arena, U64 v){
   // choose encoding op
-  RADDBGI_EvalOp op = RADDBGI_EvalOp_ConstU64;
+  RDI_EvalOp op = RDI_EvalOp_ConstU64;
   if (v < 0x100){
-    op = RADDBGI_EvalOp_ConstU8;
+    op = RDI_EvalOp_ConstU8;
   }
   else if (v < 0x10000){
-    op = RADDBGI_EvalOp_ConstU16;
+    op = RDI_EvalOp_ConstU16;
   }
   else if (v < 0x100000000){
-    op = RADDBGI_EvalOp_ConstU32;
+    op = RDI_EvalOp_ConstU32;
   }
   
   // make the tree node
@@ -541,8 +541,8 @@ eval_irtree_const_u(Arena *arena, U64 v){
 }
 
 internal EVAL_IRTree*
-eval_irtree_unary_op(Arena *arena, RADDBGI_EvalOp op,
-                     RADDBGI_EvalTypeGroup group, EVAL_IRTree *c){
+eval_irtree_unary_op(Arena *arena, RDI_EvalOp op,
+                     RDI_EvalTypeGroup group, EVAL_IRTree *c){
   EVAL_IRTree *result = push_array(arena, EVAL_IRTree, 1);
   result->op = op;
   result->p = group;
@@ -551,7 +551,7 @@ eval_irtree_unary_op(Arena *arena, RADDBGI_EvalOp op,
 }
 
 internal EVAL_IRTree*
-eval_irtree_binary_op(Arena *arena, RADDBGI_EvalOp op, RADDBGI_EvalTypeGroup group,
+eval_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group,
                       EVAL_IRTree *l, EVAL_IRTree *r){
   EVAL_IRTree *result = push_array(arena, EVAL_IRTree, 1);
   result->op = op;
@@ -562,15 +562,15 @@ eval_irtree_binary_op(Arena *arena, RADDBGI_EvalOp op, RADDBGI_EvalTypeGroup gro
 }
 
 internal EVAL_IRTree*
-eval_irtree_binary_op_u(Arena *arena, RADDBGI_EvalOp op, EVAL_IRTree *l, EVAL_IRTree *r){
-  EVAL_IRTree *result = eval_irtree_binary_op(arena, op, RADDBGI_EvalTypeGroup_U, l, r);
+eval_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, EVAL_IRTree *l, EVAL_IRTree *r){
+  EVAL_IRTree *result = eval_irtree_binary_op(arena, op, RDI_EvalTypeGroup_U, l, r);
   return(result);
 }
 
 internal EVAL_IRTree*
 eval_irtree_conditional(Arena *arena, EVAL_IRTree *c, EVAL_IRTree *l, EVAL_IRTree *r){
   EVAL_IRTree *result = push_array(arena, EVAL_IRTree, 1);
-  result->op = RADDBGI_EvalOp_Cond;
+  result->op = RDI_EvalOp_Cond;
   result->children[0] = c;
   result->children[1] = l;
   result->children[2] = r;
@@ -589,13 +589,13 @@ eval_irtree_bytecode_no_copy(Arena *arena, String8 bytecode){
 //~ allen: EVAL IR-Tree High Level Helpers
 
 internal EVAL_IRTree*
-eval_irtree_mem_read_type(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL_IRTree *c, TG_Key type_key){
-  U64 byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, type_key);
+eval_irtree_mem_read_type(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_IRTree *c, TG_Key type_key){
+  U64 byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, type_key);
   EVAL_IRTree *result = &eval_irtree_nil;
   if (0 < byte_size && byte_size <= 8){
     // build the read node
     EVAL_IRTree *read_node = push_array(arena, EVAL_IRTree, 1);
-    read_node->op = RADDBGI_EvalOp_MemRead;
+    read_node->op = RDI_EvalOp_MemRead;
     read_node->p = byte_size;
     read_node->children[0] = c;
     
@@ -605,7 +605,7 @@ eval_irtree_mem_read_type(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, E
     TG_Kind kind = tg_kind_from_key(type_key);
     if (bit_size < 64 && eval_kind_is_signed(kind)){
       with_trunc = push_array(arena, EVAL_IRTree, 1);
-      with_trunc->op = RADDBGI_EvalOp_TruncSigned;
+      with_trunc->op = RDI_EvalOp_TruncSigned;
       with_trunc->p = bit_size;
       with_trunc->children[0] = read_node;
     }
@@ -620,23 +620,23 @@ eval_irtree_mem_read_type(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, E
 }
 
 internal EVAL_IRTree*
-eval_irtree_convert_lo(Arena *arena, EVAL_IRTree *c, RADDBGI_EvalTypeGroup out, RADDBGI_EvalTypeGroup in){
+eval_irtree_convert_lo(Arena *arena, EVAL_IRTree *c, RDI_EvalTypeGroup out, RDI_EvalTypeGroup in){
   EVAL_IRTree *result = push_array(arena, EVAL_IRTree, 1);
-  result->op = RADDBGI_EvalOp_Convert;
+  result->op = RDI_EvalOp_Convert;
   result->p = in | (out << 8);
   result->children[0] = c;
   return(result);
 }
 
 internal EVAL_IRTree*
-eval_irtree_trunc(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL_IRTree *c, TG_Key type_key){
+eval_irtree_trunc(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_IRTree *c, TG_Key type_key){
   EVAL_IRTree *result = c;
-  U64 byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, type_key);
+  U64 byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, type_key);
   if (byte_size < 64){
-    RADDBGI_EvalOp op = RADDBGI_EvalOp_Trunc;
+    RDI_EvalOp op = RDI_EvalOp_Trunc;
     TG_Kind kind = tg_kind_from_key(type_key);
     if (eval_kind_is_signed(kind)){
-      op = RADDBGI_EvalOp_TruncSigned;
+      op = RDI_EvalOp_TruncSigned;
     }
     U64 bit_size = byte_size << 3;
     result = push_array(arena, EVAL_IRTree, 1);
@@ -648,19 +648,19 @@ eval_irtree_trunc(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL_IRTr
 }
 
 internal EVAL_IRTree*
-eval_irtree_convert_hi(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL_IRTree *c, TG_Key out, TG_Key in){
+eval_irtree_convert_hi(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_IRTree *c, TG_Key out, TG_Key in){
   EVAL_IRTree *result = c;
   TG_Kind in_kind = tg_kind_from_key(in);
   TG_Kind out_kind = tg_kind_from_key(out);
   U8 in_group  = eval_type_group_from_kind(in_kind);
   U8 out_group = eval_type_group_from_kind(out_kind);
-  U32 conversion_rule = raddbgi_eval_conversion_rule(in_group, out_group);
-  if(conversion_rule == RADDBGI_EvalConversionKind_Legal)
+  U32 conversion_rule = rdi_eval_conversion_rule(in_group, out_group);
+  if(conversion_rule == RDI_EvalConversionKind_Legal)
   {
     result = eval_irtree_convert_lo(arena, result, out_group, in_group);
   }
-  U64 in_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, in);
-  U64 out_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, out);
+  U64 in_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, in);
+  U64 out_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, out);
   if(out_byte_size < in_byte_size && eval_kind_is_integer(out_kind))
   {
     result = eval_irtree_trunc(arena, graph, rdbg, result, out);
@@ -669,7 +669,7 @@ eval_irtree_convert_hi(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL
 }
 
 internal EVAL_IRTree*
-eval_irtree_resolve_to_value(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL_EvalMode from_mode,
+eval_irtree_resolve_to_value(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_EvalMode from_mode,
                              EVAL_IRTree *tree, TG_Key type_key){
   EVAL_IRTree *result = tree;
   switch (from_mode){
@@ -680,7 +680,7 @@ eval_irtree_resolve_to_value(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg
     }break;
     case EVAL_EvalMode_Reg:
     {
-      result = eval_irtree_unary_op(arena, RADDBGI_EvalOp_RegReadDyn, RADDBGI_EvalTypeGroup_U, tree);
+      result = eval_irtree_unary_op(arena, RDI_EvalOp_RegReadDyn, RDI_EvalTypeGroup_U, tree);
     }break;
   }
   return(result);
@@ -715,7 +715,7 @@ eval_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, EVAL_String2ExprMap
 }
 
 internal TG_Key
-eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout){
+eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout){
   TG_Key result = zero_struct;
   
   EVAL_ExprKind kind = expr->kind;
@@ -758,7 +758,7 @@ eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EV
 }
 
 internal EVAL_IRTreeAndType
-eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rdbg, EVAL_String2ExprMap *leaf_ident_expr_map, EVAL_Expr *expr, EVAL_ErrorList *eout)
+eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_String2ExprMap *leaf_ident_expr_map, EVAL_Expr *expr, EVAL_ErrorList *eout)
 {
   ProfBeginFunction();
   EVAL_IRTreeAndType result = {0};
@@ -781,8 +781,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprr, eout);
       
       if (l.tree->op != 0 && r.tree->op != 0){      
-        TG_Key l_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, l.type_key);
-        TG_Key r_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, r.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, l.type_key);
+        TG_Key r_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, r.type_key);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         TG_Kind r_restype_kind = tg_kind_from_key(r_restype);
         
@@ -795,8 +795,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
           eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, exprr->location, "Cannot index with this type.");
         }
         else{
-          direct_type = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, l_restype);
-          direct_type_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, direct_type);
+          direct_type = tg_unwrapped_direct_from_graph_rdi_key(graph, rdbg, l_restype);
+          direct_type_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, direct_type);
           if (l_restype_kind == TG_Kind_Ptr){
             if (direct_type_size == 0){
               eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, exprr->location, "Cannot index into pointers of zero-sized types.");
@@ -832,7 +832,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
           EVAL_IRTree *index_tree = eval_irtree_resolve_to_value(arena, graph, rdbg, r.mode, r.tree, r_restype);
           if (direct_type_size > 1){
             EVAL_IRTree *const_tree = eval_irtree_const_u(arena, direct_type_size);
-            index_tree = eval_irtree_binary_op_u(arena, RADDBGI_EvalOp_Mul, index_tree, const_tree);
+            index_tree = eval_irtree_binary_op_u(arena, RDI_EvalOp_Mul, index_tree, const_tree);
           }
           
           // how to compute the base address
@@ -842,7 +842,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
           }
           
           // how to compute the final address
-          EVAL_IRTree *new_tree = eval_irtree_binary_op_u(arena, RADDBGI_EvalOp_Add, index_tree, base_tree);
+          EVAL_IRTree *new_tree = eval_irtree_binary_op_u(arena, RDI_EvalOp_Add, index_tree, base_tree);
           
           // fill result
           result.tree     = new_tree;
@@ -860,14 +860,14 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       EVAL_IRTreeAndType l = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprl, eout);
       
       if (l.tree->op != 0 && !tg_key_match(tg_key_zero(), l.type_key)){
-        TG_Key l_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, l.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, l.type_key);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         
         // determine which type to use
         TG_Key check_type_key = l_restype;
         TG_Kind check_type_kind = l_restype_kind;
         if (l_restype_kind == TG_Kind_Ptr || l_restype_kind == TG_Kind_LRef || l_restype_kind == TG_Kind_RRef){
-          check_type_key = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, l_restype);
+          check_type_key = tg_unwrapped_direct_from_graph_rdi_key(graph, rdbg, l_restype);
           check_type_kind = tg_kind_from_key(check_type_key);
         }
         
@@ -921,7 +921,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
             
             if (l_good && r_good){
               Temp scratch = scratch_begin(&arena, 1);
-              TG_MemberArray check_type_members = tg_data_members_from_graph_raddbgi_key(scratch.arena, graph, rdbg, check_type_key);
+              TG_MemberArray check_type_members = tg_data_members_from_graph_rdi_key(scratch.arena, graph, rdbg, check_type_key);
               
               // lookup member
               String8 member_name = exprr->name;
@@ -957,7 +957,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
               }
               if (r_off != 0){
                 EVAL_IRTree *const_tree = eval_irtree_const_u(arena, r_off);
-                new_tree = eval_irtree_binary_op_u(arena, RADDBGI_EvalOp_Add, new_tree, const_tree);
+                new_tree = eval_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
               }
               
               // fill result
@@ -978,10 +978,10 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
       
       if (c.tree->op != 0){
-        TG_Key c_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, c.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
-        TG_Key c_restype_direct = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, c_restype);
-        U64 c_restype_direct_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, c_restype_direct);
+        TG_Key c_restype_direct = tg_unwrapped_direct_from_graph_rdi_key(graph, rdbg, c_restype);
+        U64 c_restype_direct_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, c_restype_direct);
         
         // analyze situation
         B32 can_generate = 0;
@@ -1035,7 +1035,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
       if(c.tree->op != 0 && !tg_key_match(c.type_key, tg_key_zero()))
       {
-        TG_Key c_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, c.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
         
         // analyze situation
@@ -1070,26 +1070,26 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       
       if(cast_type_kind != TG_Kind_Null && c.tree->op != 0)
       {
-        TG_Key c_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, c.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
-        U64 c_restype_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, c_restype);
-        U64 cast_type_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, cast_type_key);
+        U64 c_restype_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, c_restype);
+        U64 cast_type_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, cast_type_key);
         
         // analyze situation
         U8 in_group  = eval_type_group_from_kind(c_restype_kind);
         U8 out_group = eval_type_group_from_kind(cast_type_kind);
-        RADDBGI_EvalConversionKind conversion_rule = raddbgi_eval_conversion_rule(in_group, out_group);
+        RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_rule(in_group, out_group);
         
         // generate tree
         switch(conversion_rule)
         {
-          case RADDBGI_EvalConversionKind_Noop:
-          case RADDBGI_EvalConversionKind_Legal:
+          case RDI_EvalConversionKind_Noop:
+          case RDI_EvalConversionKind_Legal:
           {
             EVAL_IRTree *in_tree = eval_irtree_resolve_to_value(arena, graph, rdbg, c.mode, c.tree, c_restype);
             
             EVAL_IRTree *new_tree = in_tree;
-            if (conversion_rule == RADDBGI_EvalConversionKind_Legal){
+            if (conversion_rule == RDI_EvalConversionKind_Legal){
               new_tree = eval_irtree_convert_lo(arena, in_tree, out_group, in_group);
             }
             if (cast_type_byte_size < c_restype_byte_size && eval_kind_is_integer(cast_type_kind)){
@@ -1104,8 +1104,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
           default:
           {
             String8 text = str8_lit("(internal) unknown conversion rule");
-            if (conversion_rule < RADDBGI_EvalConversionKind_COUNT){
-              text.str = raddbgi_eval_conversion_message(conversion_rule, &text.size);
+            if (conversion_rule < RDI_EvalConversionKind_COUNT){
+              text.str = rdi_eval_conversion_message(conversion_rule, &text.size);
             }
             eval_error(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, text);
           }break;
@@ -1141,7 +1141,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       TG_Kind type_kind = tg_kind_from_key(type_key);
       if (type_kind != TG_Kind_Null){
         can_generate = 1;
-        size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, type_key);
+        size = tg_byte_size_from_graph_rdi_key(graph, rdbg, type_key);
       }
       
       // generate ir tree
@@ -1162,15 +1162,15 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       
       EVAL_IRTreeAndType c = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprc, eout);
       if (c.tree->op != 0){
-        TG_Key c_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, c.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, c.type_key);
         TG_Key p_type = eval_type_promote(graph, rdbg, c_restype);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
         
         // analyze situation
         B32 can_generate = 0;
-        RADDBGI_EvalOp op = eval_opcode_from_expr_kind(kind);
+        RDI_EvalOp op = eval_opcode_from_expr_kind(kind);
         U8 c_group = eval_type_group_from_kind(c_restype_kind);
-        if (!raddbgi_eval_opcode_type_compatible(op, c_group)){
+        if (!rdi_eval_opcode_type_compatible(op, c_group)){
           eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
         }
         else{
@@ -1218,8 +1218,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       EVAL_IRTreeAndType r = eval_irtree_and_type_from_expr(arena, graph, rdbg, leaf_ident_expr_map, exprr, eout);
       
       if (l.tree->op != 0 && r.tree->op != 0){
-        TG_Key l_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, l.type_key);
-        TG_Key r_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, r.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, l.type_key);
+        TG_Key r_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, r.type_key);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         TG_Kind r_restype_kind = tg_kind_from_key(r_restype);
         
@@ -1235,7 +1235,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
           r_restype_kind = tg_kind_from_key(r_restype);
         }
         
-        RADDBGI_EvalOp op = eval_opcode_from_expr_kind(kind);
+        RDI_EvalOp op = eval_opcode_from_expr_kind(kind);
         
         //- pointer decay
         B32 l_is_pointer = (l_restype_kind == TG_Kind_Ptr);
@@ -1267,10 +1267,10 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
             arith_path = EVAL_ArithPath_PtrAdd;
           }
           if (l_is_pointer_like && r_is_pointer_like){
-            TG_Key l_restype_direct = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, l_restype);
-            TG_Key r_restype_direct = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, r_restype);
-            U64 l_restype_direct_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, l_restype_direct);
-            U64 r_restype_direct_byte_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, r_restype_direct);
+            TG_Key l_restype_direct = tg_unwrapped_direct_from_graph_rdi_key(graph, rdbg, l_restype);
+            TG_Key r_restype_direct = tg_unwrapped_direct_from_graph_rdi_key(graph, rdbg, r_restype);
+            U64 l_restype_direct_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, l_restype_direct);
+            U64 r_restype_direct_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, r_restype_direct);
             if (l_restype_direct_byte_size == r_restype_direct_byte_size){
               arith_path = EVAL_ArithPath_PtrSub;
             }
@@ -1299,7 +1299,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
             U8 cv_group = eval_type_group_from_kind(cv_type_kind);
             
             B32 can_generate = 0;
-            if (raddbgi_eval_opcode_type_compatible(op, cv_group)){
+            if (rdi_eval_opcode_type_compatible(op, cv_group)){
               can_generate = 1;
             }
             else{
@@ -1339,8 +1339,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
               ptr_is_decay = r_is_decay;
             }
             
-            TG_Key direct = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, ptr->type_key);
-            U64 direct_type_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, direct);
+            TG_Key direct = tg_unwrapped_direct_from_graph_rdi_key(graph, rdbg, ptr->type_key);
+            U64 direct_type_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, direct);
             
             // generate ir tree
             EVAL_IRTree *ptr_tree = ptr->tree;
@@ -1351,7 +1351,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
             EVAL_IRTree *integer_tree = eval_irtree_resolve_to_value(arena, graph, rdbg, integer->mode, integer->tree, integer->type_key);
             if (direct_type_size > 1){
               EVAL_IRTree *const_tree = eval_irtree_const_u(arena, direct_type_size);
-              integer_tree = eval_irtree_binary_op_u(arena, RADDBGI_EvalOp_Mul, integer_tree, const_tree);
+              integer_tree = eval_irtree_binary_op_u(arena, RDI_EvalOp_Mul, integer_tree, const_tree);
             }
             
             TG_Key ptr_type = ptr->type_key;
@@ -1359,7 +1359,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
               ptr_type = tg_cons_type_make(graph, TG_Kind_Ptr, direct, 0);
             }
             
-            EVAL_IRTree *new_tree = eval_irtree_binary_op(arena, op, RADDBGI_EvalTypeGroup_U, ptr_tree, integer_tree);
+            EVAL_IRTree *new_tree = eval_irtree_binary_op(arena, op, RDI_EvalTypeGroup_U, ptr_tree, integer_tree);
             
             result.tree     = new_tree;
             result.type_key = ptr_type;
@@ -1368,8 +1368,8 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
           
           case EVAL_ArithPath_PtrSub:
           {
-            TG_Key direct = tg_unwrapped_direct_from_graph_raddbgi_key(graph, rdbg, l_restype);
-            U64 direct_type_size = tg_byte_size_from_graph_raddbgi_key(graph, rdbg, direct);
+            TG_Key direct = tg_unwrapped_direct_from_graph_rdi_key(graph, rdbg, l_restype);
+            U64 direct_type_size = tg_byte_size_from_graph_rdi_key(graph, rdbg, direct);
             
             // generate ir tree
             EVAL_IRTree *l_tree = l.tree;
@@ -1382,12 +1382,12 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
               r_tree = eval_irtree_resolve_to_value(arena, graph, rdbg, r.mode, r.tree, r_restype);
             }
             
-            EVAL_IRTree *op_tree = eval_irtree_binary_op(arena, op, RADDBGI_EvalTypeGroup_U, l_tree, r_tree);
+            EVAL_IRTree *op_tree = eval_irtree_binary_op(arena, op, RDI_EvalTypeGroup_U, l_tree, r_tree);
             
             EVAL_IRTree *new_tree = op_tree;
             if (direct_type_size > 1){
               EVAL_IRTree *const_tree = eval_irtree_const_u(arena, direct_type_size);
-              new_tree = eval_irtree_binary_op(arena, RADDBGI_EvalOp_Div, RADDBGI_EvalTypeGroup_U, new_tree, const_tree);
+              new_tree = eval_irtree_binary_op(arena, RDI_EvalOp_Div, RDI_EvalTypeGroup_U, new_tree, const_tree);
             }
             
             result.tree = new_tree;
@@ -1410,9 +1410,9 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RADDBGI_Parsed *rd
       
       if (l.tree->op != 0 && r.tree->op != 0 && c.tree->op != 0){
         
-        TG_Key c_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, c.type_key);
-        TG_Key l_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, l.type_key);
-        TG_Key r_restype = tg_unwrapped_from_graph_raddbgi_key(graph, rdbg, r.type_key);
+        TG_Key c_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, c.type_key);
+        TG_Key l_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, l.type_key);
+        TG_Key r_restype = tg_unwrapped_from_graph_rdi_key(graph, rdbg, r.type_key);
         TG_Kind c_restype_kind = tg_kind_from_key(c_restype);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         TG_Kind r_restype_kind = tg_kind_from_key(r_restype);
@@ -1568,8 +1568,8 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
   ProfBeginFunction();
   U32 op = tree->op;
   switch (op){
-    case RADDBGI_EvalOp_Stop:
-    case RADDBGI_EvalOp_Skip:
+    case RDI_EvalOp_Stop:
+    case RDI_EvalOp_Skip:
     {
       // TODO: error - invalid ir-tree op
     }break;
@@ -1579,7 +1579,7 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
       eval_oplist_push_bytecode(arena, out, tree->bytecode);
     }break;
     
-    case RADDBGI_EvalOp_Cond:
+    case RDI_EvalOp_Cond:
     {
       // split out each of the children
       EVAL_OpList prt_cond = {0};
@@ -1598,11 +1598,11 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
       //  4.
       
       // modify prt_right in place to create step 2
-      eval_oplist_push_op(arena, &prt_right, RADDBGI_EvalOp_Skip, prt_left.encoded_size);
+      eval_oplist_push_op(arena, &prt_right, RDI_EvalOp_Skip, prt_left.encoded_size);
       
       // merge 1 into out
       eval_oplist_concat_in_place(out, &prt_cond);
-      eval_oplist_push_op(arena, out, RADDBGI_EvalOp_Cond, prt_right.encoded_size);
+      eval_oplist_push_op(arena, out, RDI_EvalOp_Cond, prt_right.encoded_size);
       
       // merge 2 into out
       eval_oplist_concat_in_place(out, &prt_right);
@@ -1613,20 +1613,20 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
     
     default:
     {
-      if (op >= RADDBGI_EvalOp_COUNT){
+      if (op >= RDI_EvalOp_COUNT){
         // TODO: error - invalid ir-tree op
       }
       else{
         // handle all children
-        U8 ctrlbits = raddbgi_eval_opcode_ctrlbits[op];
-        U64 child_count = RADDBGI_POPN_FROM_CTRLBITS(ctrlbits);
+        U8 ctrlbits = rdi_eval_opcode_ctrlbits[op];
+        U64 child_count = RDI_POPN_FROM_CTRLBITS(ctrlbits);
         EVAL_IRTree**child = tree->children;
         for (U64 i = 0; i < child_count; i += 1, child += 1){
           eval_oplist_from_irtree(arena, *child, out);
         }
         
         // emit op to compute this node
-        eval_oplist_push_op(arena, out, (RADDBGI_EvalOp)tree->op, tree->p);
+        eval_oplist_push_op(arena, out, (RDI_EvalOp)tree->op, tree->p);
       }
     }break;
   }
