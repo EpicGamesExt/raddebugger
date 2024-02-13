@@ -35,10 +35,10 @@ the format are:
 
 - `lib_raddbgi_cons`: The RADDBGI construction library, for making RADDBGI
 debug info.
-- `raddbgi_convert`: Our legacy-debug-info-to-RADDBGI converters. Right now
-this includes a working PDB-to-RADDBGI converter, and an in-progress DWARF-to-
-RADDBGI converter. These converters can be built both as helper codebase layers
-or with a command line interface frontend.
+- `raddbgi_from_pdb`: Our PDB-to-RADDBGI converter. Can be used as a helper
+codebase layer, or built as an executable with a command line interface
+frontend.
+- `raddbgi_from_dwarf`: Our in-progress DWARF-to-RADDBGI converter.
 - `raddbgi_dump`: Our RADDBGI textual dumping utility.
 
 ## Development Setup Instructions
@@ -156,7 +156,7 @@ abstraction API.
 is only an x64 PE unwinding implementation).
 - Creating a DWARF-to-RADDBGI converter (in the same way that we've built a
 PDB-to-RADDBGI converter). A partial implementation of this is in
-`src/raddbgi_convert/dwarf`.
+`src/raddbgi_from_dwarf`.
 - Porting the `src/render` layer to implement all of the rendering features the
 frontend needs on a Linux-compatible API (the backend used on Windows is D3D11).
 - Porting the `src/font_provider` layer to a Linux-compatible font
@@ -315,7 +315,8 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `raddbg` (no namespace): The layer which ties everything together for the main
   graphical debugger. Not much "meat", just drives `df`, implements command line
   options, and so on.
-- `raddbgi_convert` (`P2R_`): Our implementation of PDB-to-RADDBGI and
+- `raddbgi_from_pdb` (`P2R_`): Our implementation of PDB-to-RADDBGI conversion.
+- `raddbgi_from_dwarf` (`D2R_`): Our in-progress implementation of
   DWARF-to-RADDBGI conversion.
 - `raddbgi_dump` (`RADDBGIDUMP_`): A dumper utility program for dumping
   textualizations of RADDBGI debug info files.
