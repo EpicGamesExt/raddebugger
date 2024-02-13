@@ -113,6 +113,18 @@ mg_txt_pt_from_string_off(String8 string, U64 off)
 }
 
 ////////////////////////////////
+//~ rjf: Message Lists
+
+internal void
+mg_msg_list_push(Arena *arena, MG_MsgList *msgs, MG_Msg *msg)
+{
+  MG_MsgNode *n = push_array(arena, MG_MsgNode, 1);
+  MemoryCopyStruct(&n->v, msg);
+  SLLQueuePush(msgs->first, msgs->last, n);
+  msgs->count += 1;
+}
+
+////////////////////////////////
 //~ rjf: String Escaping
 
 internal String8

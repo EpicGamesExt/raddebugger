@@ -28,6 +28,7 @@ int main(int argument_count, char **arguments)
   //////////////////////////////
   //- rjf: set up state
   //
+  MG_MsgList msgs = {0};
   mg_arena = arena_alloc__sized(GB(64), MB(64));
   mg_state = push_array(mg_arena, MG_State, 1);
   mg_state->slots_count = 256;
@@ -91,15 +92,11 @@ int main(int argument_count, char **arguments)
         String8 data = os_data_from_file_path(mg_arena, file_path);
         MD_TokenizeResult tokenize = md_tokenize_from_text(mg_arena, data);
         MD_ParseResult parse = md_parse_from_text_tokens(mg_arena, file_path, data, tokenize.tokens);
-        MG_FileParseNode *parse_n = push_array(mg_arena, MG_FileParseNode, 1);
-        SLLQueuePush(parses.first, parses.last, parse_n);
-        parse_n->v.root = parse.root;
-        parses.count += 1;
-        for(MD_Msg *msg = parse.msgs.first; msg != 0; msg = msg->next)
+        for(MD_Msg *m = parse.msgs.first; m != 0; m = m->next)
         {
-          TxtPt pt = mg_txt_pt_from_string_off(data, msg->node->src_offset);
+          TxtPt pt = mg_txt_pt_from_string_off(data, m->node->src_offset);
           String8 msg_kind_string = {0};
-          switch(msg->kind)
+          switch(m->kind)
           {
             default:{}break;
             case MD_MsgKind_Note:        {msg_kind_string = str8_lit("note");}break;
@@ -107,8 +104,14 @@ int main(int argument_count, char **arguments)
             case MD_MsgKind_Error:       {msg_kind_string = str8_lit("error");}break;
             case MD_MsgKind_FatalError:  {msg_kind_string = str8_lit("fatal error");}break;
           }
-          fprintf(stderr, "%.*s:%i:%i: %.*s: %.*s\n", str8_varg(file_path), (int)pt.line, (int)pt.column, str8_varg(msg_kind_string), str8_varg(msg->string));
+          String8 location = push_str8f(mg_arena, "%S:%I64d:%I64d", file_path, pt.line, pt.column);
+          MG_Msg dst_m = {location, msg_kind_string, m->string};
+          mg_msg_list_push(mg_arena, &msgs, &dst_m);
         }
+        MG_FileParseNode *parse_n = push_array(mg_arena, MG_FileParseNode, 1);
+        SLLQueuePush(parses.first, parses.last, parse_n);
+        parse_n->v.root = parse.root;
+        parses.count += 1;
       }
     }
   }
@@ -427,6 +430,15 @@ int main(int argument_count, char **arguments)
         }
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: write out all messages to stderr
+  //
+  for(MG_MsgNode *n = msgs.first; n != 0; n = n->next)
+  {
+    MG_Msg *msg = &n->v;
+    fprintf(stderr, "%.*s: %.*s: %.*s\n", str8_varg(msg->location), str8_varg(msg->kind), str8_varg(msg->msg));
   }
   
   return 0;
