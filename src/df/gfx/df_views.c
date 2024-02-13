@@ -7407,6 +7407,23 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   }
   
   //////////////////////////////
+  //- T: Autoscrolling
+  //
+  
+  static S64 last_frame_line_count = 0;
+  if(txti_buffer_is_ready)
+  {
+    if (txti_buffer_info.total_line_count > last_frame_line_count) 
+    {
+      S64 line_num = txti_buffer_info.total_line_count;
+      tv->cursor = tv->mark = txt_pt(line_num, 1);
+      tv->center_cursor = !tv->contain_cursor || (line_num < target_visible_line_num_range.min);
+    }
+       
+    last_frame_line_count = txti_buffer_info.total_line_count;
+  }
+  
+  //////////////////////////////
   //- rjf: top-level container interaction (scrolling)
   //
   if(txti_buffer_is_ready)
