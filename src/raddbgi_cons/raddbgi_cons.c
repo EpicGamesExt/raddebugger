@@ -12,7 +12,7 @@
 
 //- rjf: memory set
 
-#if !defined(raddbgic_memset)
+#if !defined(RADDBGIC_MEMSET_OVERRIDE)
 RADDBGI_PROC void *
 raddbgic_memset_fallback(void *dst, RADDBGI_U8 c, RADDBGI_U64 size)
 {
@@ -37,18 +37,40 @@ raddbgic_str8(RADDBGI_U8 *str, RADDBGI_U64 size)
 
 //- rjf: arenas
 
-RADDBGI_PROC void *
-raddbgic_arena_push(RADDBGIC_Arena *arena, RADDBGI_U64 size)
+#if !defined (RADDBGIC_ARENA_OVERRIDE)
+
+RADDBGI_PROC RADDBGIC_Arena *
+raddbgic_arena_alloc_fallback(void)
 {
-  void *result = RADDBGIC_Arena_PushImpl((arena), (size));
-  return result;
+  RADDBGIC_Arena *arena = 0;
+  return arena;
 }
 
 RADDBGI_PROC void
-raddbgic_arena_pop_to(RADDBGIC_Arena *arena, RADDBGI_U64 pos)
+raddbgic_arena_release_fallback(RADDBGIC_Arena *arena)
 {
-  RADDBGIC_Arena_PopToImpl((arena), (pos));
+  
 }
+
+RADDBGI_PROC RADDBGI_U64
+raddbgic_arena_pos_fallback(RADDBGIC_Arena *arena)
+{
+  return 0;
+}
+
+RADDBGI_PROC void *
+raddbgic_arena_push_fallback(RADDBGIC_Arena *arena, RADDBGI_U64 size)
+{
+  return 0;
+}
+
+RADDBGI_PROC void
+raddbgic_arena_pop_to_fallback(RADDBGIC_Arena *arena, RADDBGI_U64 pos)
+{
+  
+}
+
+#endif
 
 //- rjf: type lists
 
@@ -194,7 +216,7 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
     }
     else
     {
-      RADDBGIC_SortKey *keys_swap = push_array_no_zero(arena, RADDBGIC_SortKey, count);
+      RADDBGIC_SortKey *keys_swap = raddbgic_push_array_no_zero(arena, RADDBGIC_SortKey, count);
       RADDBGIC_SortKey *src = keys;
       RADDBGIC_SortKey *dst = keys_swap;
       RADDBGIC_OrderedRange *src_ranges = ranges_first;

@@ -7,10 +7,15 @@
 ////////////////////////////////
 //~ rjf: Overrideable Memory Operations
 
+// To override the slow/default memset implementation used by the library,
+// do the following:
+//
+// #define RADDBGIC_MEMSET_OVERRIDE
+// #define raddbgic_memset <name of memset implementation>
+
 #if !defined(raddbgic_memset)
 # define raddbgic_memset raddbgic_memset_fallback
 #endif
-#define raddbgic_memzero(ptr, size) raddbgic_memset((ptr), 0, (size))
 
 ////////////////////////////////
 //~ rjf: Overrideable String View Types
@@ -57,12 +62,13 @@ struct RADDBGIC_String8List
 
 // To override the arena allocator type used by the library, do the following:
 //
+// #define RADDBGIC_ARENA_OVERRIDE
 // #define RADDBGIC_Arena <name of your arena type here>
-// #define RADDBGIC_Arena_AllocImpl   <name of your creation function - must be (void) -> Arena*>
-// #define RADDBGIC_Arena_ReleaseImpl <name of your release function  - must be (Arena*) -> void>
-// #define RADDBGIC_Arena_PosImpl     <name of your position function - must be (Arena*) -> U64>
-// #define RADDBGIC_Arena_PushImpl    <name of your pushing function  - must be (Arena*, U64 size) -> void*>
-// #define RADDBGIC_Arena_PopToImpl   <name of your popping function  - must be (Arena*, U64 pos) -> void>
+// #define raddbgic_arena_alloc   <name of your creation function - must be (void) -> Arena*>
+// #define raddbgic_arena_release <name of your release function  - must be (Arena*) -> void>
+// #define raddbgic_arena_pos     <name of your position function - must be (Arena*) -> U64>
+// #define raddbgic_arena_push    <name of your pushing function  - must be (Arena*, U64 size) -> void*>
+// #define raddbgic_arena_pop_to  <name of your popping function  - must be (Arena*, U64 pos) -> void>
 
 #if !defined(RADDBGIC_Arena)
 typedef struct RADDBGIC_Arena RADDBGIC_Arena;
@@ -77,6 +83,19 @@ struct RADDBGIC_Arena
   RADDBGI_U64 align;
   RADDBGI_S8 grow;
 };
+#endif
+
+#if !defined(raddbgic_arena_alloc)
+# define raddbgic_arena_alloc raddbgic_arena_alloc_fallback
+#endif
+#if !defined(raddbgic_arena_release)
+# define raddbgic_arena_release raddbgic_arena_release_fallback
+#endif
+#if !defined(raddbgic_arena_pos)
+# define raddbgic_arena_pos raddbgic_arena_pos_fallback
+#endif
+#if !defined(raddbgic_arena_push)
+# define raddbgic_arena_push raddbgic_arena_push_fallback
 #endif
 
 typedef struct RADDBGIC_Temp RADDBGIC_Temp;
@@ -902,18 +921,24 @@ struct RADDBGIC_BakeCtx
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
-//- rjf: memory set
-#if !defined(raddbgic_memset)
+//- rjf: memory operations
+#if !defined(RADDBGIC_MEMSET_OVERRIDE)
 RADDBGI_PROC void *raddbgic_memset_fallback(void *dst, RADDBGI_U8 c, RADDBGI_U64 size);
 #endif
+#define raddbgic_memzero(ptr, size) raddbgic_memset((ptr), 0, (size))
 
 //- rjf: strings
 RADDBGI_PROC RADDBGIC_String8 raddbgic_str8(RADDBGI_U8 *str, RADDBGI_U64 size);
 #define raddbgic_str8_lit(S)  raddbgic_str8((U8*)(S), sizeof(S) - 1)
 
 //- rjf: arenas
-RADDBGI_PROC void *raddbgic_arena_push(RADDBGIC_Arena *arena, RADDBGI_U64 size);
-RADDBGI_PROC void raddbgic_arena_pop_to(RADDBGIC_Arena *arena, RADDBGI_U64 pos);
+#if !defined (RADDBGIC_ARENA_OVERRIDE)
+RADDBGI_PROC RADDBGIC_Arena *raddbgic_arena_alloc_fallback(void);
+RADDBGI_PROC void raddbgic_arena_release_fallback(RADDBGIC_Arena *arena);
+RADDBGI_PROC RADDBGI_U64 raddbgic_arena_pos_fallback(RADDBGIC_Arena *arena);
+RADDBGI_PROC void *raddbgic_arena_push_fallback(RADDBGIC_Arena *arena, RADDBGI_U64 size);
+RADDBGI_PROC void raddbgic_arena_pop_to_fallback(RADDBGIC_Arena *arena, RADDBGI_U64 pos);
+#endif
 #define raddbgic_push_array_no_zero(a,T,c) (T*)raddbgic_arena_push((a), sizeof(T)*(c))
 #define raddbgic_push_array(a,T,c) (T*)raddbgic_memzero(raddbgic_push_array_no_zero(a,T,c), sizeof(T)*(c))
 

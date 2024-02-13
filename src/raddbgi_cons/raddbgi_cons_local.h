@@ -5,9 +5,11 @@
 #define RADDBGI_CONS_LOCAL_H
 
 // rjf: base layer memory ops
+#define RADDBGIC_MEMSET_OVERRIDE
 #define raddbgic_memset memset
 
 // rjf: base layer string overrides
+#define RADDBGI_STRING8_OVERRIDE
 #define RADDBGIC_String8 String8
 #define RADDBGIC_String8_BaseMember str
 #define RADDBGIC_String8_SizeMember size
@@ -15,12 +17,13 @@
 #define RADDBGIC_String8List String8List
 
 // rjf: base layer arena overrides
+#define RADDBGIC_ARENA_OVERRIDE
 #define RADDBGIC_Arena Arena
-#define RADDBGIC_Arena_AllocImpl arena_alloc
-#define RADDBGIC_Arena_ReleaseImpl arena_release
-#define RADDBGIC_Arena_PosImpl arena_pos
-#define RADDBGIC_Arena_PushImpl arena_push
-#define RADDBGIC_Arena_PopToImpl arena_pop_to
+#define raddbgic_arena_alloc     arena_alloc
+#define raddbgic_arena_release   arena_release
+#define raddbgic_arena_pos       arena_pos
+#define raddbgic_arena_push      arena_push
+#define raddbgic_arena_pop_to    arena_pop_to
 
 #include "raddbgi_cons.h"
 
