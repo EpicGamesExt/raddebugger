@@ -33,11 +33,11 @@ The RADDBGI format is currently specified in code, in the files within the
 `src/lib_raddbgi_format` folder. The other relevant folders for working with
 the format are:
 
-- `lib_raddbgi_cons`: The RADDBGI construction library, for making RADDBGI
-debug info.
+- `lib_raddbgi_make`: The "RAD Debug Info Make" library, for making RADDBGI
+  debug info.
 - `raddbgi_from_pdb`: Our PDB-to-RADDBGI converter. Can be used as a helper
-codebase layer, or built as an executable with a command line interface
-frontend.
+  codebase layer, or built as an executable with a command line interface
+  frontend.
 - `raddbgi_from_dwarf`: Our in-progress DWARF-to-RADDBGI converter.
 - `raddbgi_dump`: Our RADDBGI textual dumping utility.
 
@@ -274,7 +274,7 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `lib_raddbg_markup` (`RADDBG_`): Standalone library for marking up user
   programs to work with various features in the `raddbg` debugger. Does not
   depend on `base`, and can be independently relocated to other codebases.
-- `lib_raddbgi_cons` (`RADDBGIC_`): Standalone library for constructing RADDBGI
+- `lib_raddbgi_make` (`RDIM_`): Standalone library for constructing RADDBGI
   debug info data. Does not depend on `base`, and can be independently relocated
   to other codebases.
 - `lib_raddbgi_format` (`RADDBGI_`): Standalone library for defining the core
