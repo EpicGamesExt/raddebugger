@@ -193,7 +193,7 @@ pdbconv_u32_from_numeric(PDBCONV_Ctx *ctx, CV_NumericParsed *num){
   U64 n_u64 = cv_u64_from_numeric(num);
   U32 n_u32 = (U32)n_u64;
   if (n_u64 > 0xFFFFFFFF){
-    raddbgic_errorf(ctx->root, "constant too large");
+    raddbgic_push_errorf(ctx->root, "constant too large");
     n_u32 = 0;
   }
   return(n_u32);
@@ -829,8 +829,8 @@ pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeI
         default:
         {
           String8 kind_str = cv_string_from_leaf_kind(field_kind);
-          raddbgic_errorf(ctx->root, "unhandled/invalid case: equip_members -> %.*s",
-                          str8_varg(kind_str));
+          raddbgic_push_errorf(ctx->root, "unhandled/invalid case: equip_members -> %.*s",
+                               str8_varg(kind_str));
         }break;
       }
       
@@ -953,8 +953,8 @@ pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_Ty
         default:
         {
           String8 kind_str = cv_string_from_leaf_kind(field_kind);
-          raddbgic_errorf(ctx->root, "unhandled/invalid case: equip_enumerates -> %.*s",
-                          str8_varg(kind_str));
+          raddbgic_push_errorf(ctx->root, "unhandled/invalid case: equip_enumerates -> %.*s",
+                               str8_varg(kind_str));
         }break;
       }
       
@@ -1653,8 +1653,8 @@ pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype){
       default:
       {
         String8 kind_str = cv_string_from_leaf_kind(range->hdr.kind);
-        raddbgic_errorf(ctx->root, "pdbconv: unhandled leaf case %.*s (0x%x)",
-                        str8_varg(kind_str), range->hdr.kind);
+        raddbgic_push_errorf(ctx->root, "pdbconv: unhandled leaf case %.*s (0x%x)",
+                             str8_varg(kind_str), range->hdr.kind);
       }break;
     }
   }
@@ -1669,7 +1669,7 @@ pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype){
   RADDBGIC_Type *result = pdbconv_type_resolve_itype(ctx, itype);
   if(raddbgic_type_is_unhandled_nil(ctx->root, result))
   {
-    raddbgic_errorf(ctx->root, "pdbconv: could not resolve itype (itype = %u)", itype);
+    raddbgic_push_errorf(ctx->root, "pdbconv: could not resolve itype (itype = %u)", itype);
   }
   return(result);
 }
@@ -3205,7 +3205,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     root_params.bucket_count_types = tpi->itype_opl;
     root_params.bucket_count_type_constructs = tpi->itype_opl;
     
-    RADDBGIC_Root *root = raddbgic_root_new(&root_params);
+    RADDBGIC_Root *root = raddbgic_root_alloc(&root_params);
     out->root = root;
     
     // top level info
@@ -3365,7 +3365,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     
     // conversion errors
     if (!params->hide_errors.converting){
-      for (RADDBGIC_Error *error = raddbgic_get_first_error(root);
+      for (RADDBGIC_Error *error = raddbgic_first_error_from_root(root);
            error != 0;
            error = error->next){
         str8_list_push(arena, &out->errors, error->msg);

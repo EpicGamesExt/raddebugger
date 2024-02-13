@@ -5,7 +5,7 @@
 #include "os/os_inc.h"
 #include "coff/coff.h"
 #include "raddbgi_format/raddbgi_format.h"
-#include "raddbgi_cons/raddbgi_cons.h"
+#include "raddbgi_cons/raddbgi_cons_local.h"
 
 #include "raddbgi_coff.h"
 #include "raddbgi_codeview.h"
@@ -23,7 +23,7 @@
 #include "coff/coff.c"
 #include "os/os_inc.c"
 #include "raddbgi_format/raddbgi_format.c"
-#include "raddbgi_cons/raddbgi_cons.c"
+#include "raddbgi_cons/raddbgi_cons_local.c"
 
 #include "raddbgi_msf.c"
 #include "raddbgi_codeview.c"

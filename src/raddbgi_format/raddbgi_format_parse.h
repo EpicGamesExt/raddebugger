@@ -141,7 +141,7 @@ static RADDBGI_GlobalVariable raddbgi_global_variable_nil = {0};
 static RADDBGI_ThreadVariable raddbgi_thread_variable_nil = {0};
 static RADDBGI_Procedure raddbgi_procedure_nil = {0};
 static RADDBGI_Scope raddbgi_scope_nil = {0};
-static U64 raddbgi_voff_nil = 0;
+static RADDBGI_U64 raddbgi_voff_nil = 0;
 static RADDBGI_LocationBlock raddbgi_location_block_nil = {0};
 static RADDBGI_Local raddbgi_local_nil = {0};
 #endif

@@ -135,6 +135,15 @@ commands =
     .save_dirty_files = true,
     .cursor_at_end = false,
   },
+  .build_ryan_scratch =
+  {
+    .win = "build ryan_scratch",
+    .linux = "",
+    .out = "*compilation*",
+    .footer_panel = true,
+    .save_dirty_files = true,
+    .cursor_at_end = false,
+  },
   .run_raddbg =
   {
     .win = "pushd build && raddbg.exe && popd",
