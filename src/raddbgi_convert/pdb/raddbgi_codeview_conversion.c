@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ CodeView Conversion Functions
 
-static RADDBGI_Arch
+internal RADDBGI_Arch
 raddbgi_arch_from_cv_arch(CV_Arch cv_arch){
   RADDBGI_Arch result = 0;
   switch (cv_arch){
@@ -73,7 +73,7 @@ raddbgi_arch_from_cv_arch(CV_Arch cv_arch){
   return(result);
 }
 
-static RADDBGI_RegisterCode
+internal RADDBGI_RegisterCode
 raddbgi_reg_code_from_cv_reg_code(RADDBGI_Arch arch, CV_Reg reg_code){
   RADDBGI_RegisterCode result = 0;
   switch (arch){
@@ -98,7 +98,7 @@ raddbgi_reg_code_from_cv_reg_code(RADDBGI_Arch arch, CV_Reg reg_code){
   return(result);
 }
 
-static RADDBGI_Language
+internal RADDBGI_Language
 raddbgi_language_from_cv_language(CV_Language cv_language){
   RADDBGI_Language result = 0;
   switch (cv_language){

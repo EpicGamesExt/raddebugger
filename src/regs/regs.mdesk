@@ -299,18 +299,18 @@ REGS_ArchTable:
 ////////////////////////////////
 //~ rjf: X64 Generators
 
-@table_gen_enum REGS_RegCodeX64:
+@enum REGS_RegCodeX64:
 {
-  `REGS_RegCodeX64_NULL,`;
-  @expand(REGS_RegTableX64 a) `REGS_RegCodeX64_$(a.name),`;
-  `REGS_RegCodeX64_COUNT`;
+  NULL,
+  @expand(REGS_RegTableX64 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum REGS_AliasCodeX64:
+@enum REGS_AliasCodeX64:
 {
-  `REGS_AliasCodeX64_NULL,`;
-  @expand(REGS_AliasTableX64 a) `REGS_AliasCodeX64_$(a.name),`;
-  `REGS_AliasCodeX64_COUNT`;
+  NULL,
+  @expand(REGS_AliasTableX64 a) `$(a.name)`,
+  COUNT,
 }
 
 @table_gen_struct
@@ -364,18 +364,18 @@ regs_g_alias_code_x64_slice_table:
 ////////////////////////////////
 //~ rjf: X86 Generators
 
-@table_gen_enum REGS_RegCodeX86:
+@enum REGS_RegCodeX86:
 {
-  `REGS_RegCodeX86_NULL,`;
-  @expand(REGS_RegTableX86 a) `REGS_RegCodeX86_$(a.name),`;
-  `REGS_RegCodeX86_COUNT`;
+  NULL,
+  @expand(REGS_RegTableX86 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum REGS_AliasCodeX86:
+@enum REGS_AliasCodeX86:
 {
-  `REGS_AliasCodeX86_NULL,`;
-  @expand(REGS_AliasTableX86 a) `REGS_AliasCodeX86_$(a.name),`;
-  `REGS_AliasCodeX86_COUNT`;
+  NULL,
+  @expand(REGS_AliasTableX86 a) `$(a.name)`,
+  COUNT,
 }
 
 @table_gen_struct

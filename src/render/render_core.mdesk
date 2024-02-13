@@ -59,40 +59,40 @@ R_PassKindTable:
 ////////////////////////////////
 //~ rjf: Generators
 
-@table_gen_enum R_Tex2DFormat:
+@enum R_Tex2DFormat:
 {
-  @expand(R_Tex2DFormatTable a) `R_Tex2DFormat_$(a.name),`;
-  `R_Tex2DFormat_COUNT`;
+  @expand(R_Tex2DFormatTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_Tex2DKind:
+@enum R_Tex2DKind:
 {
-  @expand(R_Tex2DKindTable a) `R_Tex2DKind_$(a.name),`;
-  `R_Tex2DKind_COUNT`;
+  @expand(R_Tex2DKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_Tex2DSampleKind:
+@enum R_Tex2DSampleKind:
 {
-  @expand(R_Tex2DSampleKindTable a) `R_Tex2DSampleKind_$(a.name),`;
-  `R_Tex2DSampleKind_COUNT`;
+  @expand(R_Tex2DSampleKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_GeoTopologyKind:
+@enum R_GeoTopologyKind:
 {
-  @expand(R_GeoTopologyKindTable a) `R_GeoTopologyKind_$(a.name),`;
-  `R_GeoTopologyKind_COUNT`;
+  @expand(R_GeoTopologyKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_BufferKind:
+@enum R_BufferKind:
 {
-  @expand(R_BufferKindTable a) `R_BufferKind_$(a.name),`;
-  `R_BufferKind_COUNT`;
+  @expand(R_BufferKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_PassKind:
+@enum R_PassKind:
 {
-  @expand(R_PassKindTable a) `R_PassKind_$(a.name),`;
-  `R_PassKind_COUNT`;
+  @expand(R_PassKindTable a) `$(a.name)`,
+  COUNT,
 }
 
 @table_gen_data(type:String8) r_tex2d_format_display_string_table:

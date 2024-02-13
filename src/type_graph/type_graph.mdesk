@@ -67,21 +67,20 @@ TG_KindTable:
 ////////////////////////////////
 //~ rjf: Generators
 
-@table_gen_enum
-TG_Kind:
+@enum TG_Kind:
 {
-  @expand(TG_KindTable a) `TG_Kind_$(a.name),`;
-  `TG_Kind_COUNT,`;
-  `TG_Kind_FirstBasic = TG_Kind_Void,`;
-  `TG_Kind_LastBasic  = TG_Kind_ComplexF128,`;
-  `TG_Kind_FirstInteger = TG_Kind_Char8,`;
-  `TG_Kind_LastInteger  = TG_Kind_S512,`;
-  `TG_Kind_FirstSigned1 = TG_Kind_Char8,`;
-  `TG_Kind_LastSigned1  = TG_Kind_Char32,`;
-  `TG_Kind_FirstSigned2 = TG_Kind_S8,`;
-  `TG_Kind_LastSigned2  = TG_Kind_S512,`;
-  `TG_Kind_FirstIncomplete = TG_Kind_IncompleteStruct,`;
-  `TG_Kind_LastIncomplete  = TG_Kind_IncompleteEnum,`;
+  @expand(TG_KindTable a) `$(a.name)`,
+  COUNT,
+  `FirstBasic      = TG_Kind_Void`,
+  `LastBasic       = TG_Kind_ComplexF128`,
+  `FirstInteger    = TG_Kind_Char8`,
+  `LastInteger     = TG_Kind_S512`,
+  `FirstSigned1    = TG_Kind_Char8`,
+  `LastSigned1     = TG_Kind_Char32`,
+  `FirstSigned2    = TG_Kind_S8`,
+  `LastSigned2     = TG_Kind_S512`,
+  `FirstIncomplete = TG_Kind_IncompleteStruct`,
+  `LastIncomplete  = TG_Kind_IncompleteEnum`,
 }
 
 @table_gen_data(type:U8, fallback:0)

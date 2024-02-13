@@ -81,10 +81,10 @@ EVAL_ResultCodeTable:
   ``;
 }
 
-@table_gen_enum EVAL_ResultCode:
+@enum EVAL_ResultCode:
 {
-  @expand(EVAL_ResultCodeTable a) `EVAL_ResultCode_$(a.name),`;
-  EVAL_ResultCode_COUNT
+  @expand(EVAL_ResultCodeTable a) `$(a.name)`,
+  COUNT,
 }
 
 @table_gen_data(type:U8, fallback:0)

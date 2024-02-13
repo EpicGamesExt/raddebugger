@@ -46,7 +46,7 @@ CTRL_ExceptionCodeKind_Win32ProcedureNotFound,
 CTRL_ExceptionCodeKind_Win32SanitizerErrorDetected,
 CTRL_ExceptionCodeKind_Win32SanitizerRawAccessViolation,
 CTRL_ExceptionCodeKind_Win32DirectXDebugLayer,
-CTRL_ExceptionCodeKind_COUNT
+CTRL_ExceptionCodeKind_COUNT,
 } CTRL_ExceptionCodeKind;
 
 U32 ctrl_exception_code_kind_code_table[] =

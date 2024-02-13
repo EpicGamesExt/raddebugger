@@ -85,7 +85,7 @@ REGS_RegCodeX64_ymm12,
 REGS_RegCodeX64_ymm13,
 REGS_RegCodeX64_ymm14,
 REGS_RegCodeX64_ymm15,
-REGS_RegCodeX64_COUNT
+REGS_RegCodeX64_COUNT,
 } REGS_RegCodeX64;
 
 typedef enum REGS_AliasCodeX64
@@ -170,7 +170,7 @@ REGS_AliasCodeX64_mm4,
 REGS_AliasCodeX64_mm5,
 REGS_AliasCodeX64_mm6,
 REGS_AliasCodeX64_mm7,
-REGS_AliasCodeX64_COUNT
+REGS_AliasCodeX64_COUNT,
 } REGS_AliasCodeX64;
 
 typedef enum REGS_RegCodeX86
@@ -236,7 +236,7 @@ REGS_RegCodeX86_ymm4,
 REGS_RegCodeX86_ymm5,
 REGS_RegCodeX86_ymm6,
 REGS_RegCodeX86_ymm7,
-REGS_RegCodeX86_COUNT
+REGS_RegCodeX86_COUNT,
 } REGS_RegCodeX86;
 
 typedef enum REGS_AliasCodeX86
@@ -277,7 +277,7 @@ REGS_AliasCodeX86_mm4,
 REGS_AliasCodeX86_mm5,
 REGS_AliasCodeX86_mm6,
 REGS_AliasCodeX86_mm7,
-REGS_AliasCodeX86_COUNT
+REGS_AliasCodeX86_COUNT,
 } REGS_AliasCodeX86;
 
 typedef struct REGS_RegBlockX64 REGS_RegBlockX64;

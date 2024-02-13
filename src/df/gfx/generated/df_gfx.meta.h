@@ -37,7 +37,7 @@ DF_GfxViewKind_Breakpoints,
 DF_GfxViewKind_WatchPins,
 DF_GfxViewKind_ExceptionFilters,
 DF_GfxViewKind_Theme,
-DF_GfxViewKind_COUNT
+DF_GfxViewKind_COUNT,
 } DF_GfxViewKind;
 
 typedef enum DF_ThemeColor
@@ -95,7 +95,7 @@ DF_ThemeColor_Thread7,
 DF_ThemeColor_ThreadUnwound,
 DF_ThemeColor_InactivePanelOverlay,
 DF_ThemeColor_DropShadow,
-DF_ThemeColor_COUNT
+DF_ThemeColor_COUNT,
 } DF_ThemeColor;
 
 typedef enum DF_ThemePreset
@@ -109,7 +109,7 @@ DF_ThemePreset_SolarizedLight,
 DF_ThemePreset_HandmadeHero,
 DF_ThemePreset_FourCoder,
 DF_ThemePreset_FarManager,
-DF_ThemePreset_COUNT
+DF_ThemePreset_COUNT,
 } DF_ThemePreset;
 
 DF_VIEW_SETUP_FUNCTION_DEF(Null);

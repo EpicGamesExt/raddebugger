@@ -1688,59 +1688,49 @@ DF_DevToggleTable:
 
 //- rjf: enums
 
-@table_gen_enum
-DF_CfgSrc:
+@enum DF_CfgSrc:
 {
-  @expand(DF_CfgSrcTable a) `DF_CfgSrc_$(a.name),`;
-  `DF_CfgSrc_COUNT`;
+  @expand(DF_CfgSrcTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-DF_EntityKind:
+@enum DF_EntityKind:
 {
-  @expand(DF_EntityKindTable a) `DF_EntityKind_$(a.name),`;
-  `DF_EntityKind_COUNT`;
+  @expand(DF_EntityKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-DF_NameKind:
+@enum DF_NameKind:
 {
-  @expand(DF_NameKindTable, a) `DF_NameKind_$(a.name),`;
-  `DF_NameKind_COUNT`;
+  @expand(DF_NameKindTable, a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-DF_CoreCmdKind:
+@enum DF_CoreCmdKind:
 {
-  @expand(DF_CoreCmdTable, a)
-    `DF_CoreCmdKind_$(a.name),`,
-  `DF_CoreCmdKind_COUNT`,
+  @expand(DF_CoreCmdTable, a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-DF_IconKind:
+@enum DF_IconKind:
 {
-  @expand(DF_IconTable a)
-    `DF_IconKind_$(a.name),`;
-  `DF_IconKind_COUNT`;
+  @expand(DF_IconTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-DF_CoreViewRuleKind:
+@enum DF_CoreViewRuleKind:
 {
-  @expand(DF_CoreViewRuleTable a) `DF_CoreViewRuleKind_$(a.name),`;
-  `DF_CoreViewRuleKind_COUNT`;
+  @expand(DF_CoreViewRuleTable a) `$(a.name)`,
+  COUNT,
 }
 
 //- rjf: command params
 
-@table_gen_enum
-DF_CmdParamSlot:
+@enum DF_CmdParamSlot:
 {
-  `DF_CmdParamSlot_Null,`;
-  @expand(DF_CmdParamSlotTable a)
-    `DF_CmdParamSlot_$(a.name),`;
-  `DF_CmdParamSlot_COUNT`;
+  Null,
+  @expand(DF_CmdParamSlotTable a) `$(a.name)`,
+  COUNT,
 }
 
 @table_gen

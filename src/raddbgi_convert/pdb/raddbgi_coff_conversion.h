@@ -7,6 +7,6 @@
 ////////////////////////////////
 //~ COFF Conversion Functions
 
-static RADDBGI_BinarySectionFlags raddbgi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
+internal RADDBGI_BinarySectionFlags raddbgi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
 
 #endif //RADDBGI_COFF_CONVERSION_H

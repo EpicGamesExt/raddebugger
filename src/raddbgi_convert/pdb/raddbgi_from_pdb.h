@@ -5,18 +5,19 @@
 #define RADDBGI_FROM_PDB_H
 
 ////////////////////////////////
-//~ Program Parameters Type
+//~ rjf: Conversion Parameters Type
 
-typedef struct PDBCONV_Params{
+typedef struct PDBCONV_Params PDBCONV_Params;
+struct PDBCONV_Params
+{
   String8 input_pdb_name;
   String8 input_pdb_data;
-  
   String8 input_exe_name;
   String8 input_exe_data;
-  
   String8 output_name;
   
-  struct{
+  struct
+  {
     B8 input;
     B8 output;
     B8 parsing;
@@ -36,73 +37,95 @@ typedef struct PDBCONV_Params{
   B8 dump__last;
   
   String8List errors;
-} PDBCONV_Params;
+};
 
 ////////////////////////////////
-//~ Program Parameters Parser
+//~ rjf: PDB Type & Symbol Info Translation Helper Types
 
-static PDBCONV_Params *pdb_convert_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
+//- rjf: typeid forward reference map
 
-////////////////////////////////
-//~ PDB Type & Symbol Info Translation Helpers
-
-//- translation helper types
-typedef struct PDBCONV_FwdNode{
-  struct PDBCONV_FwdNode *next;
+typedef struct PDBCONV_FwdNode PDBCONV_FwdNode;
+struct PDBCONV_FwdNode
+{
+  PDBCONV_FwdNode *next;
   CV_TypeId key;
   CV_TypeId val;
-} PDBCONV_FwdNode;
+};
 
-typedef struct PDBCONV_FwdMap{
+typedef struct PDBCONV_FwdMap PDBCONV_FwdMap;
+struct PDBCONV_FwdMap
+{
   PDBCONV_FwdNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U64 pair_count;
-} PDBCONV_FwdMap;
+};
 
-typedef struct PDBCONV_TypeRev{
-  struct PDBCONV_TypeRev *next;
+//- rjf: type revisit lists
+
+typedef struct PDBCONV_TypeRev PDBCONV_TypeRev;
+struct PDBCONV_TypeRev
+{
+  PDBCONV_TypeRev *next;
   RADDBGIC_Type *owner_type;
   CV_TypeId field_itype;
-} PDBCONV_TypeRev;
+};
 
-typedef struct PDBCONV_FrameProcData{
+//- rjf: frame proc maps
+
+typedef struct PDBCONV_FrameProcData PDBCONV_FrameProcData;
+struct PDBCONV_FrameProcData
+{
   U32 frame_size;
   CV_FrameprocFlags flags;
-} PDBCONV_FrameProcData;
+};
 
-typedef struct PDBCONV_FrameProcNode{
-  struct PDBCONV_FrameProcNode *next;
+typedef struct PDBCONV_FrameProcNode PDBCONV_FrameProcNode;
+struct PDBCONV_FrameProcNode
+{
+  PDBCONV_FrameProcNode *next;
   RADDBGIC_Symbol *key;
   PDBCONV_FrameProcData data;
-} PDBCONV_FrameProcNode;
+};
 
-typedef struct PDBCONV_FrameProcMap{
+typedef struct PDBCONV_FrameProcMap PDBCONV_FrameProcMap;
+struct PDBCONV_FrameProcMap
+{
   PDBCONV_FrameProcNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U64 pair_count;
-} PDBCONV_FrameProcMap;
+};
 
-typedef struct PDBCONV_ScopeNode{
-  struct PDBCONV_ScopeNode *next;
+//- rjf: scopes
+
+typedef struct PDBCONV_ScopeNode PDBCONV_ScopeNode;
+struct PDBCONV_ScopeNode
+{
+  PDBCONV_ScopeNode *next;
   RADDBGIC_Scope *scope;
   RADDBGIC_Symbol *symbol;
-} PDBCONV_ScopeNode;
+};
 
-typedef struct PDBCONV_KnownGlobalNode{
-  struct PDBCONV_KnownGlobalNode *next;
+//- rjf: known global map
+
+typedef struct PDBCONV_KnownGlobalNode PDBCONV_KnownGlobalNode;
+struct PDBCONV_KnownGlobalNode
+{
+  PDBCONV_KnownGlobalNode *next;
   String8 key_name;
   U64     key_voff;
   U64     hash;
-} PDBCONV_KnownGlobalNode;
+};
 
-typedef struct PDBCONV_KnownGlobalSet{
+typedef struct PDBCONV_KnownGlobalSet PDBCONV_KnownGlobalSet;
+struct PDBCONV_KnownGlobalSet
+{
   PDBCONV_KnownGlobalNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U64 global_count;
-} PDBCONV_KnownGlobalSet;
+};
 
 typedef struct PDBCONV_CtxParams PDBCONV_CtxParams;
 struct PDBCONV_CtxParams
@@ -117,26 +140,34 @@ struct PDBCONV_CtxParams
   U64 link_name_map_bucket_count;
 };
 
-typedef struct PDBCONV_TypesSymbolsParams{
+typedef struct PDBCONV_TypesSymbolsParams PDBCONV_TypesSymbolsParams;
+struct PDBCONV_TypesSymbolsParams
+{
   CV_SymParsed *sym;
   CV_SymParsed **sym_for_unit;
   U64 unit_count;
-} PDBCONV_TypesSymbolsParams;
+};
 
-typedef struct PDBCONV_LinkNameNode{
-  struct PDBCONV_LinkNameNode *next;
+typedef struct PDBCONV_LinkNameNode PDBCONV_LinkNameNode;
+struct PDBCONV_LinkNameNode
+{
+  PDBCONV_LinkNameNode *next;
   U64 voff;
   String8 name;
-} PDBCONV_LinkNameNode;
+};
 
-typedef struct PDBCONV_LinkNameMap{
+typedef struct PDBCONV_LinkNameMap PDBCONV_LinkNameMap;
+struct PDBCONV_LinkNameMap
+{
   PDBCONV_LinkNameNode **buckets;
   U64 buckets_count;
   U64 bucket_collision_count;
   U64 link_name_count;
-} PDBCONV_LinkNameMap;
+};
 
-typedef struct PDBCONV_Ctx{
+typedef struct PDBCONV_Ctx PDBCONV_Ctx;
+struct PDBCONV_Ctx
+{
   Arena *arena;
   
   // INPUT data
@@ -161,115 +192,7 @@ typedef struct PDBCONV_Ctx{
   PDBCONV_ScopeNode *scope_node_free;
   PDBCONV_KnownGlobalSet known_globals;
   PDBCONV_LinkNameMap link_names;
-} PDBCONV_Ctx;
-
-//- rjf: pdb conversion context creation
-static PDBCONV_Ctx *pdbconv_ctx_alloc(PDBCONV_CtxParams *params, RADDBGIC_Root *out_root);
-
-//- pdb types and symbols
-static void pdbconv_types_and_symbols(PDBCONV_Ctx *pdb_ctx, PDBCONV_TypesSymbolsParams *params);
-
-//- decoding helpers
-static U32 pdbconv_u32_from_numeric(PDBCONV_Ctx *ctx, CV_NumericParsed *num);
-static COFF_SectionHeader* pdbconv_sec_header_from_sec_num(PDBCONV_Ctx *ctx, U32 sec_num);
-
-//- type info
-
-// TODO(allen): explain the overarching pattern of PDB type info translation here
-// 1. main passes (out of order necessity) & after
-// 2. resolve forward
-// 3. cons type info
-// 4. "resolve itype"
-// 5. equipping members & enumerates
-// 6. equipping source coordinates
-
-// type info construction passes
-static void       pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx);
-
-static CV_TypeId  pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static RADDBGIC_Type* pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static void       pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owern_type,
-                                             CV_TypeId field_itype);
-static void       pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type,
-                                                CV_TypeId field_itype);
-
-// type info construction helpers
-static RADDBGIC_Type* pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static RADDBGIC_Type* pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static RADDBGIC_Type* pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype);
-static void       pdbconv_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
-                                               PDBCONV_Ctx *ctx, CV_TypeId arglist_itype);
-
-// type info resolution helpers
-static RADDBGIC_Type* pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name);
-
-// type fwd map
-static void      pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map,
-                                          CV_TypeId key, CV_TypeId val);
-static CV_TypeId pdbconv_type_fwd_map_get(PDBCONV_FwdMap *map, CV_TypeId key);
-
-
-//- symbol info
-
-// symbol info construction
-static U64 pdbconv_hash_from_local_user_id(U64 sym_hash, U64 id);
-static U64 pdbconv_hash_from_scope_user_id(U64 sym_hash, U64 id);
-static U64 pdbconv_hash_from_symbol_user_id(U64 sym_hash, U64 id);
-static void pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id);
-static void pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym);
-
-// "frameproc" map
-static void                   pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,RADDBGIC_Symbol *key,
-                                                              PDBCONV_FrameProcData *data);
-static PDBCONV_FrameProcData* pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *key);
-
-// scope stack
-static void pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol);
-static void pdbconv_symbol_pop_scope(PDBCONV_Ctx *ctx);
-static void pdbconv_symbol_clear_scope_stack(PDBCONV_Ctx *ctx);
-
-#define pdbconv_symbol_current_scope(ctx) \
-((ctx)->scope_stack == 0)?0:((ctx)->scope_stack->scope)
-
-#define pdbconv_symbol_current_symbol(ctx) \
-((ctx)->scope_stack == 0)?0:((ctx)->scope_stack->symbol)
-
-// PDB/C++ name parsing helper
-static U64 pdbconv_end_of_cplusplus_container_name(String8 str);
-
-// global deduplication
-static U64  pdbconv_known_global_hash(String8 name, U64 voff);
-
-static B32  pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff);
-static void pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set,
-                                        String8 name, U64 voff);
-
-
-// location info helpers
-static RADDBGIC_Location* pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
-                                                             RADDBGI_RegisterCode reg_code,
-                                                             U32 reg_byte_size,
-                                                             U32 reg_byte_pos,
-                                                             S64 offset,
-                                                             B32 extra_indirection);
-
-static CV_EncodedFramePtrReg pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx,
-                                                                 RADDBGIC_Symbol *proc,
-                                                                 B32 param_base);
-
-static RADDBGI_RegisterCode pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch,
-                                                                      CV_EncodedFramePtrReg encoded_reg);
-
-static void pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
-                                                  RADDBGIC_LocationSet *locset,
-                                                  RADDBGIC_Location *location,
-                                                  CV_LvarAddrRange *range,
-                                                  CV_LvarAddrGap *gaps, U64 gap_count);
-
-// link names
-static void    pdbconv_link_name_save(Arena *arena, PDBCONV_LinkNameMap *map,
-                                      U64 voff, String8 name);
-static String8 pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff);
+};
 
 ////////////////////////////////
 //~ Conversion Output Type
@@ -284,8 +207,117 @@ struct PDBCONV_Out
 };
 
 ////////////////////////////////
-//~ Conversion Path
+//~ rjf: Command Line -> Conversion Parameters
 
-static PDBCONV_Out *pdbconv_convert(Arena *arena, PDBCONV_Params *params);
+internal PDBCONV_Params *pdb_convert_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
+
+////////////////////////////////
+//~ rjf: Conversion Implementation Helpers
+
+//- rjf: pdb conversion context creation
+internal PDBCONV_Ctx *pdbconv_ctx_alloc(PDBCONV_CtxParams *params, RADDBGIC_Root *out_root);
+
+//- rjf: pdb types and symbols
+internal void pdbconv_types_and_symbols(PDBCONV_Ctx *pdb_ctx, PDBCONV_TypesSymbolsParams *params);
+
+//- rjf: decoding helpers
+internal U32 pdbconv_u32_from_numeric(PDBCONV_Ctx *ctx, CV_NumericParsed *num);
+internal COFF_SectionHeader* pdbconv_sec_header_from_sec_num(PDBCONV_Ctx *ctx, U32 sec_num);
+
+//- rjf: type info
+//
+// TODO(allen): explain the overarching pattern of PDB type info translation here
+// 1. main passes (out of order necessity) & after
+// 2. resolve forward
+// 3. cons type info
+// 4. "resolve itype"
+// 5. equipping members & enumerates
+// 6. equipping source coordinates
+
+// type info construction passes
+internal void           pdbconv_type_cons_main_passes(PDBCONV_Ctx *ctx);
+internal CV_TypeId      pdbconv_type_resolve_fwd(PDBCONV_Ctx *ctx, CV_TypeId itype);
+internal RADDBGIC_Type* pdbconv_type_resolve_itype(PDBCONV_Ctx *ctx, CV_TypeId itype);
+internal void           pdbconv_type_equip_members(PDBCONV_Ctx *ctx, RADDBGIC_Type *owern_type, CV_TypeId field_itype);
+internal void           pdbconv_type_equip_enumerates(PDBCONV_Ctx *ctx, RADDBGIC_Type *owner_type, CV_TypeId field_itype);
+
+// type info construction helpers
+internal RADDBGIC_Type* pdbconv_type_cons_basic(PDBCONV_Ctx *ctx, CV_TypeId itype);
+internal RADDBGIC_Type* pdbconv_type_cons_leaf_record(PDBCONV_Ctx *ctx, CV_TypeId itype);
+internal RADDBGIC_Type* pdbconv_type_resolve_and_check(PDBCONV_Ctx *ctx, CV_TypeId itype);
+internal void       pdbconv_type_resolve_arglist(Arena *arena, RADDBGIC_TypeList *out,
+                                                 PDBCONV_Ctx *ctx, CV_TypeId arglist_itype);
+
+// type info resolution helpers
+internal RADDBGIC_Type* pdbconv_type_from_name(PDBCONV_Ctx *ctx, String8 name);
+
+// type fwd map
+internal void      pdbconv_type_fwd_map_set(Arena *arena, PDBCONV_FwdMap *map,
+                                            CV_TypeId key, CV_TypeId val);
+internal CV_TypeId pdbconv_type_fwd_map_get(PDBCONV_FwdMap *map, CV_TypeId key);
+
+//- rjf: symbol info
+
+// symbol info construction
+internal U64 pdbconv_hash_from_local_user_id(U64 sym_hash, U64 id);
+internal U64 pdbconv_hash_from_scope_user_id(U64 sym_hash, U64 id);
+internal U64 pdbconv_hash_from_symbol_user_id(U64 sym_hash, U64 id);
+internal void pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id);
+internal void pdbconv_gather_link_names(PDBCONV_Ctx *ctx, CV_SymParsed *sym);
+
+// "frameproc" map
+internal void                   pdbconv_symbol_frame_proc_write(PDBCONV_Ctx *ctx,RADDBGIC_Symbol *key,
+                                                                PDBCONV_FrameProcData *data);
+internal PDBCONV_FrameProcData* pdbconv_symbol_frame_proc_read(PDBCONV_Ctx *ctx, RADDBGIC_Symbol *key);
+
+// scope stack
+internal void pdbconv_symbol_push_scope(PDBCONV_Ctx *ctx, RADDBGIC_Scope *scope, RADDBGIC_Symbol *symbol);
+internal void pdbconv_symbol_pop_scope(PDBCONV_Ctx *ctx);
+internal void pdbconv_symbol_clear_scope_stack(PDBCONV_Ctx *ctx);
+
+#define pdbconv_symbol_current_scope(ctx)  ((ctx)->scope_stack == 0)?0:((ctx)->scope_stack->scope)
+#define pdbconv_symbol_current_symbol(ctx) ((ctx)->scope_stack == 0)?0:((ctx)->scope_stack->symbol)
+
+// PDB/C++ name parsing helper
+internal U64 pdbconv_end_of_cplusplus_container_name(String8 str);
+
+// global deduplication
+internal U64  pdbconv_known_global_hash(String8 name, U64 voff);
+
+internal B32  pdbconv_known_global_lookup(PDBCONV_KnownGlobalSet *set, String8 name, U64 voff);
+internal void pdbconv_known_global_insert(Arena *arena, PDBCONV_KnownGlobalSet *set,
+                                          String8 name, U64 voff);
+
+
+// location info helpers
+internal RADDBGIC_Location* pdbconv_location_from_addr_reg_off(PDBCONV_Ctx *ctx,
+                                                               RADDBGI_RegisterCode reg_code,
+                                                               U32 reg_byte_size,
+                                                               U32 reg_byte_pos,
+                                                               S64 offset,
+                                                               B32 extra_indirection);
+
+internal CV_EncodedFramePtrReg pdbconv_cv_encoded_fp_reg_from_proc(PDBCONV_Ctx *ctx,
+                                                                   RADDBGIC_Symbol *proc,
+                                                                   B32 param_base);
+
+internal RADDBGI_RegisterCode pdbconv_reg_code_from_arch_encoded_fp_reg(RADDBGI_Arch arch,
+                                                                        CV_EncodedFramePtrReg encoded_reg);
+
+internal void pdbconv_location_over_lvar_addr_range(PDBCONV_Ctx *ctx,
+                                                    RADDBGIC_LocationSet *locset,
+                                                    RADDBGIC_Location *location,
+                                                    CV_LvarAddrRange *range,
+                                                    CV_LvarAddrGap *gaps, U64 gap_count);
+
+// link names
+internal void    pdbconv_link_name_save(Arena *arena, PDBCONV_LinkNameMap *map,
+                                        U64 voff, String8 name);
+internal String8 pdbconv_link_name_find(PDBCONV_LinkNameMap *map, U64 voff);
+
+////////////////////////////////
+//~ rjf: Top-Level Conversion Entry Point
+
+internal PDBCONV_Out *pdbconv_convert(Arena *arena, PDBCONV_Params *params);
 
 #endif // RADDBGI_FROM_PDB_H

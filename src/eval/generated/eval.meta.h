@@ -19,7 +19,7 @@ EVAL_ResultCode_BadModuleBase,
 EVAL_ResultCode_BadTLSBase,
 EVAL_ResultCode_InsufficientStackSpace,
 EVAL_ResultCode_MalformedBytecode,
-EVAL_ResultCode_COUNT
+EVAL_ResultCode_COUNT,
 } EVAL_ResultCode;
 
 typedef U32 EVAL_ExprKind;

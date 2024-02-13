@@ -400,28 +400,22 @@ DF_ThemePresetColorTable:
 
 //- rjf: enums
 
-@table_gen_enum
-DF_GfxViewKind:
+@enum DF_GfxViewKind:
 {
-  @expand(DF_GfxViewTable a)
-    `DF_GfxViewKind_$(a.name),`
-    `DF_GfxViewKind_COUNT`;
+  @expand(DF_GfxViewTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-DF_ThemeColor:
+@enum DF_ThemeColor:
 {
-  @expand(DF_ThemeTable, a)
-    `DF_ThemeColor_$(a.name),`;
-  `DF_ThemeColor_COUNT`;
+  @expand(DF_ThemeTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-DF_ThemePreset:
+@enum DF_ThemePreset:
 {
-  @expand(DF_ThemePresetTable a)
-    `DF_ThemePreset_$(a.name),`;
-  `DF_ThemePreset_COUNT`;
+  @expand(DF_ThemePresetTable a) `$(a.name)`,
+  COUNT,
 }
 
 //- rjf: theme preset color tables

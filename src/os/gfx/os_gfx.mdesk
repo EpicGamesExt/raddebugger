@@ -155,11 +155,10 @@ OS_KeyTable:
 ////////////////////////////////
 //~ rjf: Generators
 
-@table_gen_enum
-OS_Key:
+@enum OS_Key:
 {
-  @expand(OS_KeyTable a) `OS_Key_$(a.name),`;
-  `OS_Key_COUNT`;
+  @expand(OS_KeyTable a) `$(a.name)`,
+  COUNT,
 }
 
 @table_gen_data(type: String8, fallback:`{0}`)

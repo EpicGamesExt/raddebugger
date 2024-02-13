@@ -49,11 +49,11 @@ CTRL_ExceptionCodeKindTable:
 ////////////////////////////////
 //~ rjf: Generators
 
-@table_gen_enum CTRL_ExceptionCodeKind:
+@enum CTRL_ExceptionCodeKind:
 {
-  `CTRL_ExceptionCodeKind_Null,`;
-  @expand(CTRL_ExceptionCodeKindTable a) `CTRL_ExceptionCodeKind_$(a.name),`;
-  `CTRL_ExceptionCodeKind_COUNT`;
+  Null,
+  @expand(CTRL_ExceptionCodeKindTable a) `$(a.name)`,
+  COUNT,
 }
 
 @table_gen_data(type:U32, fallback:0)

@@ -13,13 +13,11 @@
 
 typedef U32 CV_TypeId;
 typedef U32 CV_ItemId;
-
-static  CV_TypeId cv_type_id_variadic = 0xFFFFFFFF;
-
 typedef U16 CV_ModIndex;
 typedef U16 CV_SectionIndex;
-
 typedef U16 CV_Reg;
+
+read_only global CV_TypeId cv_type_id_variadic = 0xFFFFFFFF;
 
 #define CV_NumericKindXList(X) \
 X(CHAR,       0x8000)\

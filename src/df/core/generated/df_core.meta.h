@@ -12,7 +12,7 @@ DF_CfgSrc_User,
 DF_CfgSrc_Profile,
 DF_CfgSrc_CommandLine,
 DF_CfgSrc_Transient,
-DF_CfgSrc_COUNT
+DF_CfgSrc_COUNT,
 } DF_CfgSrc;
 
 typedef enum DF_EntityKind
@@ -44,7 +44,7 @@ DF_EntityKind_PendingThreadName,
 DF_EntityKind_ConversionTask,
 DF_EntityKind_ConversionFail,
 DF_EntityKind_EndedProcess,
-DF_EntityKind_COUNT
+DF_EntityKind_COUNT,
 } DF_EntityKind;
 
 typedef enum DF_NameKind
@@ -52,7 +52,7 @@ typedef enum DF_NameKind
 DF_NameKind_Null,
 DF_NameKind_EntityName,
 DF_NameKind_EntityKindName,
-DF_NameKind_COUNT
+DF_NameKind_COUNT,
 } DF_NameKind;
 
 typedef enum DF_CoreCmdKind
@@ -263,7 +263,7 @@ DF_CoreCmdKind_PickFileOrFolder,
 DF_CoreCmdKind_CompleteQuery,
 DF_CoreCmdKind_CancelQuery,
 DF_CoreCmdKind_ToggleDevMenu,
-DF_CoreCmdKind_COUNT
+DF_CoreCmdKind_COUNT,
 } DF_CoreCmdKind;
 
 typedef enum DF_IconKind
@@ -337,7 +337,7 @@ DF_IconKind_QuestionMark,
 DF_IconKind_Person,
 DF_IconKind_Briefcase,
 DF_IconKind_Dot,
-DF_IconKind_COUNT
+DF_IconKind_COUNT,
 } DF_IconKind;
 
 typedef enum DF_CoreViewRuleKind
@@ -358,7 +358,7 @@ DF_CoreViewRuleKind_Text,
 DF_CoreViewRuleKind_Disasm,
 DF_CoreViewRuleKind_Bitmap,
 DF_CoreViewRuleKind_Geo,
-DF_CoreViewRuleKind_COUNT
+DF_CoreViewRuleKind_COUNT,
 } DF_CoreViewRuleKind;
 
 typedef enum DF_CmdParamSlot
@@ -382,7 +382,7 @@ DF_CmdParamSlot_Index,
 DF_CmdParamSlot_ID,
 DF_CmdParamSlot_PreferDisassembly,
 DF_CmdParamSlot_ForceConfirm,
-DF_CmdParamSlot_COUNT
+DF_CmdParamSlot_COUNT,
 } DF_CmdParamSlot;
 
 typedef struct DF_CmdParams DF_CmdParams;

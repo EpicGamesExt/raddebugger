@@ -98,8 +98,16 @@ int main(int argument_count, char **arguments)
         for(MD_Msg *msg = parse.msgs.first; msg != 0; msg = msg->next)
         {
           TxtPt pt = mg_txt_pt_from_string_off(data, msg->node->src_offset);
-          // TODO(rjf): error kind display & locations
-          fprintf(stderr, "%.*s:%i:%i %.*s\n", str8_varg(file_path), (int)pt.line, (int)pt.column, str8_varg(msg->string));
+          String8 msg_kind_string = {0};
+          switch(msg->kind)
+          {
+            default:{}break;
+            case MD_MsgKind_Note:        {msg_kind_string = str8_lit("note");}break;
+            case MD_MsgKind_Warning:     {msg_kind_string = str8_lit("warning");}break;
+            case MD_MsgKind_Error:       {msg_kind_string = str8_lit("error");}break;
+            case MD_MsgKind_FatalError:  {msg_kind_string = str8_lit("fatal error");}break;
+          }
+          fprintf(stderr, "%.*s:%i:%i: %.*s: %.*s\n", str8_varg(file_path), (int)pt.line, (int)pt.column, str8_varg(msg_kind_string), str8_varg(msg->string));
         }
       }
     }
@@ -141,19 +149,35 @@ int main(int argument_count, char **arguments)
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      if(md_node_has_tag(node, str8_lit("table_gen_enum"), 0))
+      MD_Node *tag = md_tag_from_string(node, str8_lit("enum"), 0);
+      if(!md_node_is_nil(tag))
       {
+        String8 enum_base_type_name = tag->first->string;
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
         String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
-        str8_list_pushf(mg_arena, &layer->enums, "typedef enum %S\n{\n", node->string);
+        if(enum_base_type_name.size == 0)
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %S\n{\n", node->string);
+        }
+        else
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "typedef %S %S;\n", enum_base_type_name, node->string);
+          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %SEnum\n{\n", node->string);
+        }
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_push(mg_arena, &layer->enums, escaped);
-          str8_list_push(mg_arena, &layer->enums, str8_lit("\n"));
+          str8_list_pushf(mg_arena, &layer->enums, "%S_%S,\n", node->string, escaped);
         }
-        str8_list_pushf(mg_arena, &layer->enums, "} %S;\n\n", node->string);
+        if(enum_base_type_name.size == 0)
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "} %S;\n\n", node->string);
+        }
+        else
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "} %SEnum;\n\n", node->string);
+        }
       }
     }
   }

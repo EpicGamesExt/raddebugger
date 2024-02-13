@@ -1,0 +1,28 @@
+
+@table(name val)
+CV_NumericKindTable:
+{
+  {CHAR           0x8000}
+  {SHORT          0x8001}
+  {USHORT         0x8002}
+  {LONG           0x8003}
+  {ULONG          0x8004}
+  {FLOAT32        0x8005}
+  {FLOAT64        0x8006}
+  {FLOAT80        0x8007}
+  {FLOAT128       0x8008}
+  {QUADWORD       0x8009}
+  {UQUADWORD      0x800a}
+  {FLOAT48        0x800b}
+  {COMPLEX32      0x800c}
+  {COMPLEX64      0x800d}
+  {COMPLEX80      0x800e}
+  {COMPLEX128     0x800f}
+  {VARSTRING      0x8010}
+  {OCTWORD        0x8017}
+  {UOCTWORD       0x8018}
+  {DECIMAL        0x8019}
+  {DATE           0x801a}
+  {UTF8STRING     0x801b}
+  {FLOAT16        0x801c}
+}
