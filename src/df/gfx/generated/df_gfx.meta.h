@@ -786,7 +786,7 @@ rgba_from_u32_lit_comp(0x0000003f),
 rgba_from_u32_lit_comp(0x0000007f),
 };
 
-Vec4F32 * df_g_theme_preset_colors_table[] =
+Vec4F32* df_g_theme_preset_colors_table[] =
 {
 df_g_theme_preset_colors__default_dark,
 df_g_theme_preset_colors__default_light,

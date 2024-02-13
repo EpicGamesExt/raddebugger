@@ -161,14 +161,12 @@ OS_KeyTable:
   COUNT,
 }
 
-@table_gen_data(type: String8, fallback:`{0}`)
-os_g_key_display_string_table:
+@data(String8) os_g_key_display_string_table:
 {
-  @expand(OS_KeyTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(OS_KeyTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type: String8, fallback:`{0}`)
-os_g_key_cfg_string_table:
+@data(String8) os_g_key_cfg_string_table:
 {
-  @expand(OS_KeyTable a) `str8_lit_comp("$(a.cfg_string)"),`;
+  @expand(OS_KeyTable a) `str8_lit_comp("$(a.cfg_string)")`;
 }

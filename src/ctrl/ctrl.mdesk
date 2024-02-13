@@ -56,30 +56,26 @@ CTRL_ExceptionCodeKindTable:
   COUNT,
 }
 
-@table_gen_data(type:U32, fallback:0)
-ctrl_exception_code_kind_code_table:
+@data(U32) ctrl_exception_code_kind_code_table:
 {
-  `0,`;
-  @expand(CTRL_ExceptionCodeKindTable a) `$(a.code),`;
+  `0`;
+  @expand(CTRL_ExceptionCodeKindTable a) `$(a.code)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-ctrl_exception_code_kind_display_string_table:
+@data(String8) ctrl_exception_code_kind_display_string_table:
 {
-  `{0},`;
-  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+  `{0}`;
+  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-ctrl_exception_code_kind_lowercase_code_string_table:
+@data(String8) ctrl_exception_code_kind_lowercase_code_string_table:
 {
-  `{0},`;
-  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.lower_name)"),`;
+  `{0}`;
+  @expand(CTRL_ExceptionCodeKindTable a) `str8_lit_comp("$(a.lower_name)")`;
 }
 
-@table_gen_data(type:B8, fallback:0)
-ctrl_exception_code_kind_default_enable_table:
+@data(B8) ctrl_exception_code_kind_default_enable_table:
 {
-  `0,`;
-  @expand(CTRL_ExceptionCodeKindTable a) `$(a.default),`;
+  `0`;
+  @expand(CTRL_ExceptionCodeKindTable a) `$(a.default)`;
 }

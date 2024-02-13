@@ -318,46 +318,41 @@ REGS_ArchTable:
   @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
-regs_g_reg_code_x64_usage_kind_table:
+@data(REGS_UsageKind) regs_g_reg_code_x64_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_RegTableX64 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_RegTableX64 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+@data(REGS_UsageKind)
 regs_g_alias_code_x64_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_AliasTableX64 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_AliasTableX64 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_reg_code_x64_string_table:
+@data(String8) regs_g_reg_code_x64_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_RegTableX64 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_RegTableX64 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_alias_code_x64_string_table:
+@data(String8) regs_g_alias_code_x64_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_AliasTableX64 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_AliasTableX64 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type: REGS_Rng, fallback: `{0}`)
-regs_g_reg_code_x64_rng_table:
+@data(REGS_Rng) regs_g_reg_code_x64_rng_table:
 {
-  `{0},`;
-  @expand(REGS_RegTableX64 a) `{(U16)OffsetOf(REGS_RegBlockX64, $(a.name)), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_RegTableX64 a) `{(U16)OffsetOf(REGS_RegBlockX64, $(a.name)), $(a.size/8)}`,
 }
 
-@table_gen_data(type: REGS_Slice, fallback: `{0}`)
-regs_g_alias_code_x64_slice_table:
+@data(REGS_Slice) regs_g_alias_code_x64_slice_table:
 {
-  `{0},`;
-  @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////
@@ -382,46 +377,41 @@ regs_g_alias_code_x64_slice_table:
   @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+@data(REGS_UsageKind)
 regs_g_reg_code_x86_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
-regs_g_alias_code_x86_usage_kind_table:
+@data(REGS_UsageKind) regs_g_alias_code_x86_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_reg_code_x86_string_table:
+@data(String8) regs_g_reg_code_x86_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_alias_code_x86_string_table:
+@data(String8) regs_g_alias_code_x86_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type: REGS_Rng, fallback: `{0}`)
-regs_g_reg_code_x86_rng_table:
+@data(REGS_Rng) regs_g_reg_code_x86_rng_table:
 {
-  `{0},`;
-  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)}`,
 }
 
-@table_gen_data(type: REGS_Slice, fallback: `{0}`)
-regs_g_alias_code_x86_slice_table:
+@data(REGS_Slice) regs_g_alias_code_x86_slice_table:
 {
-  `{0},`;
-  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////

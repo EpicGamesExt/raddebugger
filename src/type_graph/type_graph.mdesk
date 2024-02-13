@@ -83,14 +83,12 @@ TG_KindTable:
   `LastIncomplete  = TG_Kind_IncompleteEnum`,
 }
 
-@table_gen_data(type:U8, fallback:0)
-tg_kind_basic_byte_size_table:
+@data(U8) tg_kind_basic_byte_size_table:
 {
-  @expand(TG_KindTable a) `$(a.basic_byte_size),`;
+  @expand(TG_KindTable a) `$(a.basic_byte_size)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-tg_kind_basic_string_table:
+@data(String8) tg_kind_basic_string_table:
 {
-  @expand(TG_KindTable a) `str8_lit_comp("$(a.basic_string)"),`;
+  @expand(TG_KindTable a) `str8_lit_comp("$(a.basic_string)")`;
 }

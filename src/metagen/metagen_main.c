@@ -215,21 +215,19 @@ int main(int argument_count, char **arguments)
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      MD_Node *tag = md_tag_from_string(node, str8_lit("table_gen_data"), 0);
+      MD_Node *tag = md_tag_from_string(node, str8_lit("data"), 0);
       if(!md_node_is_nil(tag))
       {
+        String8 element_type = tag->first->string;
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
         String8List *out = md_node_has_tag(node, str8_lit("c_file"), 0) ? &layer->c_tables : &layer->h_tables;
-        MD_Node *type = md_child_from_string(tag, str8_lit("type"), 0)->first;
-        MD_Node *fallback = md_child_from_string(tag, str8_lit("fallback"), 0)->first;
-        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, fallback->string, node);
-        str8_list_pushf(mg_arena, out, "%S %S[] =\n{\n", type->string, node->string);
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        str8_list_pushf(mg_arena, out, "%S %S[] =\n{\n", element_type, node->string);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_push(mg_arena, out, escaped);
-          str8_list_push(mg_arena, out, str8_lit("\n"));
+          str8_list_pushf(mg_arena, out, "%S,\n", escaped);
         }
         str8_list_push(mg_arena, out, str8_lit("};\n\n"));
       }

@@ -95,37 +95,37 @@ R_PassKindTable:
   COUNT,
 }
 
-@table_gen_data(type:String8) r_tex2d_format_display_string_table:
+@data(String8) r_tex2d_format_display_string_table:
 {
-  @expand(R_Tex2DFormatTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_Tex2DFormatTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:U8) r_tex2d_format_bytes_per_pixel_table:
+@data(U8) r_tex2d_format_bytes_per_pixel_table:
 {
-  @expand(R_Tex2DFormatTable a) `$(a.bytes_per_pixel),`;
+  @expand(R_Tex2DFormatTable a) `$(a.bytes_per_pixel)`;
 }
 
-@table_gen_data(type:String8) r_tex2d_kind_display_string_table:
+@data(String8) r_tex2d_kind_display_string_table:
 {
-  @expand(R_Tex2DKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_Tex2DKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:String8) r_tex2d_sample_kind_display_string_table:
+@data(String8) r_tex2d_sample_kind_display_string_table:
 {
-  @expand(R_Tex2DSampleKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_Tex2DSampleKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:String8) r_pass_kind_display_string_table:
+@data(String8) r_pass_kind_display_string_table:
 {
-  @expand(R_PassKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_PassKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:U8) r_pass_kind_batch_table:
+@data(U8) r_pass_kind_batch_table:
 {
-  @expand(R_PassKindTable a) `$(a.batch),`;
+  @expand(R_PassKindTable a) `$(a.batch)`;
 }
 
-@table_gen_data(type:U64) @c_file r_pass_kind_params_size_table:
+@data(U64) @c_file r_pass_kind_params_size_table:
 {
-  @expand(R_PassKindTable a) `sizeof(R_PassParams_$(a.name)),`;
+  @expand(R_PassKindTable a) `sizeof(R_PassParams_$(a.name))`;
 }

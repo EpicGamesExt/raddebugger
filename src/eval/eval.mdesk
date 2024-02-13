@@ -82,26 +82,23 @@ EVAL_ResultCodeTable:
   COUNT,
 }
 
-@table_gen_data(type:U8, fallback:0)
-eval_expr_kind_child_counts:
+@data(U8) eval_expr_kind_child_counts:
 {
-  @expand(EVAL_ExprKindTable a) `$(a.num_children),`;
+  @expand(EVAL_ExprKindTable a) `$(a.num_children)`
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
+@data(String8)
 eval_expr_kind_strings:
 {
-  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.name)"),`;
+  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.name)")`
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-eval_result_code_display_strings:
+@data(String8) eval_result_code_display_strings:
 {
-  @expand(EVAL_ResultCodeTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(EVAL_ResultCodeTable a) `str8_lit_comp("$(a.display_string)")`
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-eval_expr_op_strings:
+@data(String8) eval_expr_op_strings:
 {
-  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.op_string)"),`;
+  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.op_string)")`
 }
