@@ -41,6 +41,6 @@
 #define raddbgic_scratch_begin   scratch_begin
 #define raddbgic_scratch_end     scratch_end
 
-#include "raddbgi_cons.h"
+#include "lib_raddbgi_cons/raddbgi_cons.h"
 
 #endif // RADDBGI_CONS_LOCAL_H

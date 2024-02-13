@@ -4,12 +4,6 @@
 #ifndef RADDBGI_STRINGIZE_H
 #define RADDBGI_STRINGIZE_H
 
-// TODO(allen): this depends on types from our base layer.
-// we need to decide if we want this to be included in the "format" layer
-// and therefore lifted off of the base layer, or if we want to put it in
-// "base" or "dump" layers or something like that so that it can
-// rely on Arena, String8, and String8List from the "base" layer.
-
 ////////////////////////////////
 //~ RADDBG Stringize Helper Types
 

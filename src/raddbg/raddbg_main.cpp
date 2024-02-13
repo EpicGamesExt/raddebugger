@@ -5,6 +5,8 @@
 //~ rjf: Includes
 
 //- rjf: [h]
+#include "lib_raddbgi_format/raddbgi_format.h"
+#include "lib_raddbgi_format/raddbgi_format_parse.h"
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "mdesk/mdesk.h"
@@ -15,9 +17,7 @@
 #include "txti/txti.h"
 #include "coff/coff.h"
 #include "pe/pe.h"
-#include "raddbgi_format/raddbgi_format.h"
-#include "raddbgi_format/raddbgi_format_parse.h"
-#include "raddbgi_cons/raddbgi_cons_local.h"
+#include "raddbgi_cons_local/raddbgi_cons_local.h"
 #include "raddbgi_convert/pdb/raddbgi_coff.h"
 #include "raddbgi_convert/pdb/raddbgi_codeview.h"
 #include "raddbgi_convert/pdb/raddbgi_msf.h"
@@ -47,6 +47,8 @@
 #include "raddbg.h"
 
 //- rjf: [c]
+#include "lib_raddbgi_format/raddbgi_format.c"
+#include "lib_raddbgi_format/raddbgi_format_parse.c"
 #include "base/base_inc.c"
 #include "os/os_inc.c"
 #include "mdesk/mdesk.c"
@@ -57,9 +59,7 @@
 #include "txti/txti.c"
 #include "coff/coff.c"
 #include "pe/pe.c"
-#include "raddbgi_format/raddbgi_format.c"
-#include "raddbgi_format/raddbgi_format_parse.c"
-#include "raddbgi_cons/raddbgi_cons_local.c"
+#include "raddbgi_cons_local/raddbgi_cons_local.c"
 #include "raddbgi_convert/pdb/raddbgi_msf.c"
 #include "raddbgi_convert/pdb/raddbgi_codeview.c"
 #include "raddbgi_convert/pdb/raddbgi_pdb.c"

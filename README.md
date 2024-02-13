@@ -1,5 +1,11 @@
 # The RAD Debugger Project
 
+_**Note:** This README does not document usage instructions and tips for the
+debugger itself, and is intended as a technical overview of the project. The
+debugger's README, which includes usage instructions and tips, can be found
+packaged along with debugger releases, or within the `build` folder after a
+local copy has been built._
+
 The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It
 currently only supports local-machine Windows x64 debugging with PDBs, with
 plans to expand and port in the future. In the future we'll expand to also
@@ -24,15 +30,16 @@ simply deserialize the PDBs). It is much slower for much larger projects at the
 moment, but we expect this will vastly improve overtime.
 
 The RADDBGI format is currently specified in code, in the files within the
-`src/raddbgi_format` folder. The other relevant folders for working with the
-format are:
+`src/lib_raddbgi_format` folder. The other relevant folders for working with
+the format are:
 
-- `raddbgi_cons`: The RADDBGI construction layer, for making RADDBGI debug
-info.
-- `raddbgi_convert`: Our implementation of PDB-to-RADDBGI (and an in-progress
-implementation of a DWARF-to-RADDBGI) conversion.
-- `raddbgi_stringize`: Code for converting binary RADDBGI info into text.
-- `raddbgi_dump`: Code for textually dumping information from RADDBGI files.
+- `lib_raddbgi_cons`: The RADDBGI construction library, for making RADDBGI
+debug info.
+- `raddbgi_convert`: Our legacy-debug-info-to-RADDBGI converters. Right now
+this includes a working PDB-to-RADDBGI converter, and an in-progress DWARF-to-
+RADDBGI converter. These converters can be built both as helper codebase layers
+or with a command line interface frontend.
+- `raddbgi_dump`: Our RADDBGI textual dumping utility.
 
 ## Development Setup Instructions
 
@@ -208,6 +215,11 @@ Layers depend on other layers, but circular dependencies would break the
 separability and isolation utility of layers (in effect, forming one big layer),
 so in other words, layers are arranged into a directed acyclic graph.
 
+A few layers are built to be used completely independently from the rest of the
+codebase, as libraries in other codebases and projects. As such, these layers do
+not depend on any other layers in the codebase. The folders which contain these
+layers are prefixed with `lib_`, like `lib_raddbgi_format`.
+
 A list of the layers in the codebase and their associated namespaces is below:
 - `base` (no namespace): Universal, codebase-wide constructs. Strings, math,
   memory allocators, helper macros, command-line parsing, and so on. Depends
@@ -258,6 +270,16 @@ A list of the layers in the codebase and their associated namespaces is below:
   for asynchronously preparing data for memory visualization in the debugger.
 - `hash_store` (`HS_`): Implements a cache for general data blobs, keyed by a
   128-bit hash of the data. Used as a general data store by other layers.
+- `lib_raddbg_markup` (`RADDBG_`): Standalone library for marking up user
+  programs to work with various features in the `raddbg` debugger. Does not
+  depend on `base`, and can be independently relocated to other codebases.
+- `lib_raddbgi_cons` (`RADDBGIC_`): Standalone library for constructing RADDBGI
+  debug info data. Does not depend on `base`, and can be independently relocated
+  to other codebases.
+- `lib_raddbgi_format` (`RADDBGI_`): Standalone library for defining the core
+  RADDBGI types and helper functions for reading and writing the RADDBGI debug
+  info file format. Does not depend on `base`, and can be independently
+  relocated to other codebases.
 - `metagen` (`MG_`): A metaprogram which is used to generate primarily code and
   data tables. Consumes Metadesk files, stored with the extension `.mdesk`, and
   generates C code which is then included by hand-written C code. Currently, it
@@ -290,18 +312,10 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `raddbg` (no namespace): The layer which ties everything together for the main
   graphical debugger. Not much "meat", just drives `df`, implements command line
   options, and so on.
-- `raddbg_markup` (`RADDBG_`): Standalone header file for marking up user
-  programs to work with various features in the `raddbg` debugger. Does not
-  depend on `base`.
-- `raddbgi_cons` (`RADDBGIC_`): Implements an API for constructing files of the
-  RADDBGI debug info file format.
+- `raddbgi_convert` (`PDBCONV_`): Our implementation of PDB-to-RADDBGI and
+  DWARF-to-RADDBGI conversion.
 - `raddbgi_dump` (`RADDBGIDUMP_`): A dumper utility program for dumping
   textualizations of RADDBGI debug info files.
-- `raddbgi_format` (`RADDBGI_`): Standalone types and helper functions for the
-  RADDBGI debug info file format. Does not depend on `base`.
-- `raddbgi_stringize` (`RADDBGI_`): Code to stringify binary RADDBGI info, for
-  visualizing textualizations of RADDBGI debug info. Used in `raddbgi_dump`,
-  and depends on `base`.
 - `regs` (`REGS_`): Types, helper functions, and metadata for registers on
   supported architectures. Used in reading/writing registers in `demon`, or in
   looking up register metadata.
