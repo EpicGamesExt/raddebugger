@@ -224,6 +224,7 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `base` (no namespace): Universal, codebase-wide constructs. Strings, math,
   memory allocators, helper macros, command-line parsing, and so on. Depends
   on no other codebase layers.
+- `codeview` (`CV_`): Code for parsing and/or writing the CodeView format.
 - `coff` (`COFF_`): Code for parsing and/or writing the COFF (Common Object File
   Format) file format.
 - `ctrl` (`CTRL_`): The debugger's "control system" layer. Implements
@@ -294,6 +295,7 @@ A list of the layers in the codebase and their associated namespaces is below:
   duplicate version of `base` and `os` are included in this layer. They are
   updated manually, as needed. This is to ensure the stability of the
   metaprogram.
+- `msf` (`MSF_`): Code for parsing and/or writing the MSF file format.
 - `mule` (no namespace): Test executables for battle testing debugger
   functionality.
 - `natvis` (no namespace): NatVis files for type visualization of the codebase's
@@ -307,6 +309,7 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `os/socket` (`OS_`): An abstraction layer, building on `os/core`, providing
   networking operating system features under an abstract API, which is
   implemented per-target-operating-system.
+- `pdb` (`PDB_`): Code for parsing and/or writing the PDB file format.
 - `pe` (`PE_`): Code for parsing and/or writing the PE (Portable Executable)
   file format.
 - `raddbg` (no namespace): The layer which ties everything together for the main
