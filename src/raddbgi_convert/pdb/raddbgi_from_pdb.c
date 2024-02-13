@@ -1985,18 +1985,12 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         //- rjf: FRAMEPROC
         case CV_SymKind_FRAMEPROC:
         {
+          if(current_proc == 0) { break; }
           CV_SymFrameproc *frameproc = (CV_SymFrameproc*)sym_header_struct_base;
-          if(current_proc == 0)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            PDBCONV_FrameProcData data = {0};
-            data.frame_size = frameproc->frame_size;
-            data.flags = frameproc->flags;
-            pdbconv_symbol_frame_proc_write(ctx, current_proc, &data);
-          }
+          PDBCONV_FrameProcData data = {0};
+          data.frame_size = frameproc->frame_size;
+          data.flags = frameproc->flags;
+          pdbconv_symbol_frame_proc_write(ctx, current_proc, &data);
         }break;
         
         //- rjf: LPROC32/GPROC32
@@ -3185,7 +3179,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     String8 leaf_data = pdb_leaf_data_from_tpi(tpi);
     tpi_leaf = cv_leaf_from_data(arena, leaf_data, tpi->itype_first);
     
-    PARSE_CHECK_ERROR(tpi_hash, "TPI leaf data");
+    PARSE_CHECK_ERROR(tpi_leaf, "TPI leaf data");
   }
   
   // parse ipi hash
@@ -3196,7 +3190,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     String8 aux_data = msf_data_from_stream(msf, ipi->hash_sn_aux);
     ipi_hash = pdb_tpi_hash_from_data(arena, strtbl, ipi, hash_data, aux_data);
     
-    PARSE_CHECK_ERROR(tpi_hash, "IPI hash table");
+    PARSE_CHECK_ERROR(ipi_hash, "IPI hash table");
   }
   
   // parse ipi leaves
@@ -3206,7 +3200,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     String8 leaf_data = pdb_leaf_data_from_tpi(ipi);
     ipi_leaf = cv_leaf_from_data(arena, leaf_data, ipi->itype_first);
     
-    PARSE_CHECK_ERROR(tpi_hash, "IPI leaf data");
+    PARSE_CHECK_ERROR(ipi_leaf, "IPI leaf data");
   }
   
   // parse sym
@@ -3216,7 +3210,7 @@ str8_list_pushf(arena, &out->errors, fmt, __VA_ARGS__);\
     String8 sym_data = msf_data_from_stream(msf, dbi->sym_sn);
     sym = cv_sym_from_data(arena, sym_data, 4);
     
-    PARSE_CHECK_ERROR(tpi_hash, "public SYM data");
+    PARSE_CHECK_ERROR(sym, "public SYM data");
   }
   
   // parse compilation units
