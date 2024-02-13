@@ -152,201 +152,201 @@ cv_string_from_arch:
 ////////////////////////////////
 //~ rjf: CV Sym Kinds
 
-@table(name val) CV_SymKindTable:
+@table(name  header_type_name  val) CV_SymKindTable:
 {
-  {COMPILE        0x0001}
-  {REGISTER_16t   0x0002}
-  {CONSTANT_16t   0x0003}
-  {UDT_16t        0x0004}
-  {SSEARCH        0x0005}
-  {END            0x0006}
-  {SKIP           0x0007}
-  {CVRESERVE      0x0008}
-  {OBJNAME_ST     0x0009}
-  {ENDARG         0x000a}
-  {COBOLUDT_16t   0x000b}
-  {MANYREG_16t    0x000c}
-  {RETURN         0x000d}
-  {ENTRYTHIS      0x000e}
-  {BPREL16        0x0100}
-  {LDATA16        0x0101}
-  {GDATA16        0x0102}
-  {PUB16          0x0103}
-  {LPROC16        0x0104}
-  {GPROC16        0x0105}
-  {THUNK16        0x0106}
-  {BLOCK16        0x0107}
-  {WITH16         0x0108}
-  {LABEL16        0x0109}
-  {CEXMODEL16     0x010a}
-  {VFTABLE16      0x010b}
-  {REGREL16       0x010c}
-  {BPREL32_16t    0x0200}
-  {LDATA32_16t    0x0201}
-  {GDATA32_16t    0x0202}
-  {PUB32_16t      0x0203}
-  {LPROC32_16t    0x0204}
-  {GPROC32_16t    0x0205}
-  {THUNK32_ST     0x0206}
-  {BLOCK32_ST     0x0207}
-  {WITH32_ST      0x0208}
-  {LABEL32_ST     0x0209}
-  {CEXMODEL32     0x020a}
-  {VFTABLE32_16t  0x020b}
-  {REGREL32_16t   0x020c}
-  {LTHREAD32_16t  0x020d}
-  {GTHREAD32_16t  0x020e}
-  {SLINK32        0x020f}
-  {LPROCMIPS_16t  0x0300}
-  {GPROCMIPS_16t  0x0301}
-  {PROCREF_ST     0x0400}
-  {DATAREF_ST     0x0401}
-  {ALIGN          0x0402}
-  {LPROCREF_ST    0x0403}
-  {OEM            0x0404}
-  {TI16_MAX       0x1000}
-  {CONSTANT_ST    0x1002}
-  {UDT_ST         0x1003}
-  {COBOLUDT_ST    0x1004}
-  {MANYREG_ST     0x1005}
-  {BPREL32_ST     0x1006}
-  {LDATA32_ST     0x1007}
-  {GDATA32_ST     0x1008}
-  {PUB32_ST       0x1009}
-  {LPROC32_ST     0x100a}
-  {GPROC32_ST     0x100b}
-  {VFTABLE32      0x100c}
-  {REGREL32_ST    0x100d}
-  {LTHREAD32_ST   0x100e}
-  {GTHREAD32_ST   0x100f}
-  {LPROCMIPS_ST   0x1010}
-  {GPROCMIPS_ST   0x1011}
-  {FRAMEPROC      0x1012}
-  {COMPILE2_ST    0x1013}
-  {MANYREG2_ST    0x1014}
-  {LPROCIA64_ST   0x1015}
-  {GPROCIA64_ST   0x1016}
-  {LOCALSLOT_ST   0x1017}
-  {PARAMSLOT_ST   0x1018}
-  {ANNOTATION     0x1019}
-  {GMANPROC_ST    0x101a}
-  {LMANPROC_ST    0x101b}
-  {RESERVED1      0x101c}
-  {RESERVED2      0x101d}
-  {RESERVED3      0x101e}
-  {RESERVED4      0x101f}
-  {LMANDATA_ST    0x1020}
-  {GMANDATA_ST    0x1021}
-  {MANFRAMEREL_ST 0x1022}
-  {MANREGISTER_ST 0x1023}
-  {MANSLOT_ST     0x1024}
-  {MANMANYREG_ST  0x1025}
-  {MANREGREL_ST   0x1026}
-  {MANMANYREG2_ST 0x1027}
-  {MANTYPREF      0x1028}
-  {UNAMESPACE_ST  0x1029}
-  {ST_MAX         0x1100}
-  {OBJNAME        0x1101}
-  {THUNK32        0x1102}
-  {BLOCK32        0x1103}
-  {WITH32         0x1104}
-  {LABEL32        0x1105}
-  {REGISTER       0x1106}
-  {CONSTANT       0x1107}
-  {UDT            0x1108}
-  {COBOLUDT       0x1109}
-  {MANYREG        0x110a}
-  {BPREL32        0x110b}
-  {LDATA32        0x110c}
-  {GDATA32        0x110d}
-  {PUB32          0x110e}
-  {LPROC32        0x110f}
-  {GPROC32        0x1110}
-  {REGREL32       0x1111}
-  {LTHREAD32      0x1112}
-  {GTHREAD32      0x1113}
-  {LPROCMIPS      0x1114}
-  {GPROCMIPS      0x1115}
-  {COMPILE2       0x1116}
-  {MANYREG2       0x1117}
-  {LPROCIA64      0x1118}
-  {GPROCIA64      0x1119}
-  {LOCALSLOT      0x111a}
-  {PARAMSLOT      0x111b}
-  {LMANDATA       0x111c}
-  {GMANDATA       0x111d}
-  {MANFRAMEREL    0x111e}
-  {MANREGISTER    0x111f}
-  {MANSLOT        0x1120}
-  {MANMANYREG     0x1121}
-  {MANREGREL      0x1122}
-  {MANMANYREG2    0x1123}
-  {UNAMESPACE     0x1124}
-  {PROCREF        0x1125}
-  {DATAREF        0x1126}
-  {LPROCREF       0x1127}
-  {ANNOTATIONREF  0x1128}
-  {TOKENREF       0x1129}
-  {GMANPROC       0x112a}
-  {LMANPROC       0x112b}
-  {TRAMPOLINE     0x112c}
-  {MANCONSTANT    0x112d}
-  {ATTR_FRAMEREL  0x112e}
-  {ATTR_REGISTER  0x112f}
-  {ATTR_REGREL    0x1130}
-  {ATTR_MANYREG   0x1131}
-  {SEPCODE        0x1132}
-  {DEFRANGE_2005  0x1134}
-  {DEFRANGE2_2005 0x1135}
-  {SECTION        0x1136}
-  {COFFGROUP      0x1137}
-  {EXPORT         0x1138}
-  {CALLSITEINFO   0x1139}
-  {FRAMECOOKIE    0x113a}
-  {DISCARDED      0x113b}
-  {COMPILE3       0x113c}
-  {ENVBLOCK       0x113d}
-  {LOCAL          0x113e}
-  {DEFRANGE       0x113f}
-  {DEFRANGE_SUBFIELD 0x1140}
-  {DEFRANGE_REGISTER 0x1141}
-  {DEFRANGE_FRAMEPOINTER_REL 0x1142}
-  {DEFRANGE_SUBFIELD_REGISTER 0x1143}
-  {DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE 0x1144}
-  {DEFRANGE_REGISTER_REL 0x1145}
-  {LPROC32_ID            0x1146}
-  {GPROC32_ID            0x1147}
-  {LPROCMIPS_ID          0x1148}
-  {GPROCMIPS_ID          0x1149}
-  {LPROCIA64_ID          0x114a}
-  {GPROCIA64_ID          0x114b}
-  {BUILDINFO             0x114c}
-  {INLINESITE            0x114d}
-  {INLINESITE_END        0x114e}
-  {PROC_ID_END           0x114f}
-  {DEFRANGE_HLSL         0x1150}
-  {GDATA_HLSL            0x1151}
-  {LDATA_HLSL            0x1152}
-  {FILESTATIC            0x1153}
-  {LPROC32_DPC           0x1155}
-  {LPROC32_DPC_ID        0x1156}
-  {DEFRANGE_DPC_PTR_TAG  0x1157}
-  {DPC_SYM_TAG_MAP       0x1158}
-  {ARMSWITCHTABLE        0x1159}
-  {CALLEES               0x115a}
-  {CALLERS               0x115b}
-  {POGODATA              0x115c}
-  {INLINESITE2           0x115d}
-  {HEAPALLOCSITE         0x115e}
-  {MOD_TYPEREF           0x115f}
-  {REF_MINIPDB           0x1160}
-  {PDBMAP                0x1161}
-  {GDATA_HLSL32          0x1162}
-  {LDATA_HLSL32          0x1163}
-  {GDATA_HLSL32_EX       0x1164}
-  {LDATA_HLSL32_EX       0x1165}
-  {FASTLINK              0x1167}
-  {INLINEES              0x1168}
+  {COMPILE                                       Compile                            0x0001}
+  {REGISTER_16t                                  -                                  0x0002}
+  {CONSTANT_16t                                  -                                  0x0003}
+  {UDT_16t                                       -                                  0x0004}
+  {SSEARCH                                       StartSearch                        0x0005}
+  {END                                           -                                  0x0006}
+  {SKIP                                          -                                  0x0007}
+  {CVRESERVE                                     -                                  0x0008}
+  {OBJNAME_ST                                    -                                  0x0009}
+  {ENDARG                                        -                                  0x000a}
+  {COBOLUDT_16t                                  -                                  0x000b}
+  {MANYREG_16t                                   -                                  0x000c}
+  {RETURN                                        Return                             0x000d}
+  {ENTRYTHIS                                     -                                  0x000e}
+  {BPREL16                                       -                                  0x0100}
+  {LDATA16                                       -                                  0x0101}
+  {GDATA16                                       -                                  0x0102}
+  {PUB16                                         -                                  0x0103}
+  {LPROC16                                       -                                  0x0104}
+  {GPROC16                                       -                                  0x0105}
+  {THUNK16                                       -                                  0x0106}
+  {BLOCK16                                       -                                  0x0107}
+  {WITH16                                        -                                  0x0108}
+  {LABEL16                                       -                                  0x0109}
+  {CEXMODEL16                                    -                                  0x010a}
+  {VFTABLE16                                     -                                  0x010b}
+  {REGREL16                                      -                                  0x010c}
+  {BPREL32_16t                                   -                                  0x0200}
+  {LDATA32_16t                                   -                                  0x0201}
+  {GDATA32_16t                                   -                                  0x0202}
+  {PUB32_16t                                     -                                  0x0203}
+  {LPROC32_16t                                   -                                  0x0204}
+  {GPROC32_16t                                   -                                  0x0205}
+  {THUNK32_ST                                    -                                  0x0206}
+  {BLOCK32_ST                                    -                                  0x0207}
+  {WITH32_ST                                     -                                  0x0208}
+  {LABEL32_ST                                    -                                  0x0209}
+  {CEXMODEL32                                    -                                  0x020a}
+  {VFTABLE32_16t                                 -                                  0x020b}
+  {REGREL32_16t                                  -                                  0x020c}
+  {LTHREAD32_16t                                 -                                  0x020d}
+  {GTHREAD32_16t                                 -                                  0x020e}
+  {SLINK32                                       SLink32                            0x020f}
+  {LPROCMIPS_16t                                 -                                  0x0300}
+  {GPROCMIPS_16t                                 -                                  0x0301}
+  {PROCREF_ST                                    -                                  0x0400}
+  {DATAREF_ST                                    -                                  0x0401}
+  {ALIGN                                         -                                  0x0402}
+  {LPROCREF_ST                                   -                                  0x0403}
+  {OEM                                           OEM                                0x0404}
+  {TI16_MAX                                      -                                  0x1000}
+  {CONSTANT_ST                                   -                                  0x1002}
+  {UDT_ST                                        -                                  0x1003}
+  {COBOLUDT_ST                                   -                                  0x1004}
+  {MANYREG_ST                                    -                                  0x1005}
+  {BPREL32_ST                                    -                                  0x1006}
+  {LDATA32_ST                                    -                                  0x1007}
+  {GDATA32_ST                                    -                                  0x1008}
+  {PUB32_ST                                      -                                  0x1009}
+  {LPROC32_ST                                    -                                  0x100a}
+  {GPROC32_ST                                    -                                  0x100b}
+  {VFTABLE32                                     VPath32                            0x100c}
+  {REGREL32_ST                                   -                                  0x100d}
+  {LTHREAD32_ST                                  -                                  0x100e}
+  {GTHREAD32_ST                                  -                                  0x100f}
+  {LPROCMIPS_ST                                  -                                  0x1010}
+  {GPROCMIPS_ST                                  -                                  0x1011}
+  {FRAMEPROC                                     Frameproc                          0x1012}
+  {COMPILE2_ST                                   -                                  0x1013}
+  {MANYREG2_ST                                   -                                  0x1014}
+  {LPROCIA64_ST                                  -                                  0x1015}
+  {GPROCIA64_ST                                  -                                  0x1016}
+  {LOCALSLOT_ST                                  -                                  0x1017}
+  {PARAMSLOT_ST                                  -                                  0x1018}
+  {ANNOTATION                                    Annotation                         0x1019}
+  {GMANPROC_ST                                   -                                  0x101a}
+  {LMANPROC_ST                                   -                                  0x101b}
+  {RESERVED1                                     -                                  0x101c}
+  {RESERVED2                                     -                                  0x101d}
+  {RESERVED3                                     -                                  0x101e}
+  {RESERVED4                                     -                                  0x101f}
+  {LMANDATA_ST                                   -                                  0x1020}
+  {GMANDATA_ST                                   -                                  0x1021}
+  {MANFRAMEREL_ST                                -                                  0x1022}
+  {MANREGISTER_ST                                -                                  0x1023}
+  {MANSLOT_ST                                    -                                  0x1024}
+  {MANMANYREG_ST                                 -                                  0x1025}
+  {MANREGREL_ST                                  -                                  0x1026}
+  {MANMANYREG2_ST                                -                                  0x1027}
+  {MANTYPREF                                     -                                  0x1028}
+  {UNAMESPACE_ST                                 -                                  0x1029}
+  {ST_MAX                                        -                                  0x1100}
+  {OBJNAME                                       Objname                            0x1101}
+  {THUNK32                                       Thunk32                            0x1102}
+  {BLOCK32                                       Block32                            0x1103}
+  {WITH32                                        -                                  0x1104}
+  {LABEL32                                       Label32                            0x1105}
+  {REGISTER                                      Register                           0x1106}
+  {CONSTANT                                      Constant                           0x1107}
+  {UDT                                           UDT                                0x1108}
+  {COBOLUDT                                      -                                  0x1109}
+  {MANYREG                                       Manyreg                            0x110a}
+  {BPREL32                                       BPRel32                            0x110b}
+  {LDATA32                                       Data32                             0x110c}
+  {GDATA32                                       Data32                             0x110d}
+  {PUB32                                         Pub32                              0x110e}
+  {LPROC32                                       Proc32                             0x110f}
+  {GPROC32                                       Proc32                             0x1110}
+  {REGREL32                                      Regrel32                           0x1111}
+  {LTHREAD32                                     Thread32                           0x1112}
+  {GTHREAD32                                     Thread32                           0x1113}
+  {LPROCMIPS                                     -                                  0x1114}
+  {GPROCMIPS                                     -                                  0x1115}
+  {COMPILE2                                      Compile2                           0x1116}
+  {MANYREG2                                      Manyreg2                           0x1117}
+  {LPROCIA64                                     -                                  0x1118}
+  {GPROCIA64                                     -                                  0x1119}
+  {LOCALSLOT                                     Slot                               0x111a}
+  {PARAMSLOT                                     -                                  0x111b}
+  {LMANDATA                                      -                                  0x111c}
+  {GMANDATA                                      -                                  0x111d}
+  {MANFRAMEREL                                   AttrFrameRel                       0x111e}
+  {MANREGISTER                                   AttrReg                            0x111f}
+  {MANSLOT                                       -                                  0x1120}
+  {MANMANYREG                                    AttrManyReg                        0x1121}
+  {MANREGREL                                     AttrRegRel                         0x1122}
+  {MANMANYREG2                                   -                                  0x1123}
+  {UNAMESPACE                                    UNamespace                         0x1124}
+  {PROCREF                                       Ref2                               0x1125}
+  {DATAREF                                       Ref2                               0x1126}
+  {LPROCREF                                      Ref2                               0x1127}
+  {ANNOTATIONREF                                 -                                  0x1128}
+  {TOKENREF                                      -                                  0x1129}
+  {GMANPROC                                      -                                  0x112a}
+  {LMANPROC                                      -                                  0x112b}
+  {TRAMPOLINE                                    Trampoline                         0x112c}
+  {MANCONSTANT                                   -                                  0x112d}
+  {ATTR_FRAMEREL                                 AttrFrameRel                       0x112e}
+  {ATTR_REGISTER                                 AttrReg                            0x112f}
+  {ATTR_REGREL                                   AttrRegRel                         0x1130}
+  {ATTR_MANYREG                                  AttrManyReg                        0x1131}
+  {SEPCODE                                       Sepcode                            0x1132}
+  {DEFRANGE_2005                                 -                                  0x1134}
+  {DEFRANGE2_2005                                -                                  0x1135}
+  {SECTION                                       Section                            0x1136}
+  {COFFGROUP                                     CoffGroup                          0x1137}
+  {EXPORT                                        Export                             0x1138}
+  {CALLSITEINFO                                  CallSiteInfo                       0x1139}
+  {FRAMECOOKIE                                   FrameCookie                        0x113a}
+  {DISCARDED                                     Discarded                          0x113b}
+  {COMPILE3                                      Compile3                           0x113c}
+  {ENVBLOCK                                      EnvBlock                           0x113d}
+  {LOCAL                                         Local                              0x113e}
+  {DEFRANGE                                      -                                  0x113f}
+  {DEFRANGE_SUBFIELD                             DefrangeSubfield                   0x1140}
+  {DEFRANGE_REGISTER                             DefrangeRegister                   0x1141}
+  {DEFRANGE_FRAMEPOINTER_REL                     DefrangeFramepointerRel            0x1142}
+  {DEFRANGE_SUBFIELD_REGISTER                    DefrangeSubfieldRegister           0x1143}
+  {DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE          DefrangeFramepointerRelFullScope   0x1144}
+  {DEFRANGE_REGISTER_REL                         DefrangeRegisterRel                0x1145}
+  {LPROC32_ID                                    -                                  0x1146}
+  {GPROC32_ID                                    -                                  0x1147}
+  {LPROCMIPS_ID                                  -                                  0x1148}
+  {GPROCMIPS_ID                                  -                                  0x1149}
+  {LPROCIA64_ID                                  -                                  0x114a}
+  {GPROCIA64_ID                                  -                                  0x114b}
+  {BUILDINFO                                     BuildInfo                          0x114c}
+  {INLINESITE                                    InlineSite                         0x114d}
+  {INLINESITE_END                                -                                  0x114e}
+  {PROC_ID_END                                   -                                  0x114f}
+  {DEFRANGE_HLSL                                 -                                  0x1150}
+  {GDATA_HLSL                                    -                                  0x1151}
+  {LDATA_HLSL                                    -                                  0x1152}
+  {FILESTATIC                                    FileStatic                         0x1153}
+  {LPROC32_DPC                                   -                                  0x1155}
+  {LPROC32_DPC_ID                                -                                  0x1156}
+  {DEFRANGE_DPC_PTR_TAG                          -                                  0x1157}
+  {DPC_SYM_TAG_MAP                               -                                  0x1158}
+  {ARMSWITCHTABLE                                -                                  0x1159}
+  {CALLEES                                       FunctionList                       0x115a}
+  {CALLERS                                       FunctionList                       0x115b}
+  {POGODATA                                      PogoInfo                           0x115c}
+  {INLINESITE2                                   InlineSite2                        0x115d}
+  {HEAPALLOCSITE                                 HeapAllocSite                      0x115e}
+  {MOD_TYPEREF                                   ModTypeRef                         0x115f}
+  {REF_MINIPDB                                   RefMiniPdb                         0x1160}
+  {PDBMAP                                        -                                  0x1161}
+  {GDATA_HLSL32                                  -                                  0x1162}
+  {LDATA_HLSL32                                  -                                  0x1163}
+  {GDATA_HLSL32_EX                               -                                  0x1164}
+  {LDATA_HLSL32_EX                               -                                  0x1165}
+  {FASTLINK                                      FastLink                           0x1167}
+  {INLINEES                                      Inlinees                           0x1168}
 }
 
 @enum(U16) CV_SymKind:
@@ -358,6 +358,26 @@ cv_string_from_arch:
 cv_string_from_sym_kind:
 {
   @expand(CV_SymKindTable a) `case CV_SymKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+@gen(functions)
+{
+  `internal U64 cv_header_struct_size_from_sym_kind(CV_SymKind v);`;
+}
+
+@gen(functions) @c_file
+{
+  `internal U64`;
+  `cv_header_struct_size_from_sym_kind(CV_SymKind v)`;
+  `{`;
+    `U64 result = 0;`;
+    `switch(v)`;
+    `{`;
+      `default:{}break;`;
+      @expand(CV_SymKindTable a) `$(a.header_type_name != "-" -> "case CV_SymKind_"..a.name..":{result = sizeof(CV_Sym"..a.header_type_name..");}break;")`;
+      `}`;
+    `return result;`;
+    `}`;
 }
 
 ////////////////////////////////

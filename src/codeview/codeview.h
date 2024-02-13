@@ -1059,8 +1059,8 @@ enum
   CV_GenericFlags_RSCLEAN = (1 << 1), //  "returnee stack cleanup"
 };
 
-typedef struct CV_Return CV_Return;
-struct CV_Return
+typedef struct CV_SymReturn CV_SymReturn;
+struct CV_SymReturn
 {
   CV_GenericFlags flags;
   CV_GenericStyle style;

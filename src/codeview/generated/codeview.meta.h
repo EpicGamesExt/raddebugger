@@ -455,6 +455,7 @@ internal String8 cv_string_from_numeric_kind(CV_NumericKind v);
 internal String8 cv_string_from_arch(CV_Arch v);
 internal String8 cv_string_from_sym_kind(CV_SymKind v);
 internal String8 cv_string_from_leaf_kind(CV_LeafKind v);
+internal U64 cv_header_struct_size_from_sym_kind(CV_SymKind v);
 C_LINKAGE_BEGIN
 C_LINKAGE_END
 

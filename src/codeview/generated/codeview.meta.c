@@ -449,6 +449,85 @@ case CV_LeafKind_STRUCT2:{result = str8_lit("STRUCT2");}break;
 return result;
 }
 
+internal U64
+cv_header_struct_size_from_sym_kind(CV_SymKind v)
+{
+U64 result = 0;
+switch(v)
+{
+default:{}break;
+case CV_SymKind_COMPILE:{result = sizeof(CV_SymCompile);}break;
+case CV_SymKind_SSEARCH:{result = sizeof(CV_SymStartSearch);}break;
+case CV_SymKind_RETURN:{result = sizeof(CV_SymReturn);}break;
+case CV_SymKind_SLINK32:{result = sizeof(CV_SymSLink32);}break;
+case CV_SymKind_OEM:{result = sizeof(CV_SymOEM);}break;
+case CV_SymKind_VFTABLE32:{result = sizeof(CV_SymVPath32);}break;
+case CV_SymKind_FRAMEPROC:{result = sizeof(CV_SymFrameproc);}break;
+case CV_SymKind_ANNOTATION:{result = sizeof(CV_SymAnnotation);}break;
+case CV_SymKind_OBJNAME:{result = sizeof(CV_SymObjname);}break;
+case CV_SymKind_THUNK32:{result = sizeof(CV_SymThunk32);}break;
+case CV_SymKind_BLOCK32:{result = sizeof(CV_SymBlock32);}break;
+case CV_SymKind_LABEL32:{result = sizeof(CV_SymLabel32);}break;
+case CV_SymKind_REGISTER:{result = sizeof(CV_SymRegister);}break;
+case CV_SymKind_CONSTANT:{result = sizeof(CV_SymConstant);}break;
+case CV_SymKind_UDT:{result = sizeof(CV_SymUDT);}break;
+case CV_SymKind_MANYREG:{result = sizeof(CV_SymManyreg);}break;
+case CV_SymKind_BPREL32:{result = sizeof(CV_SymBPRel32);}break;
+case CV_SymKind_LDATA32:{result = sizeof(CV_SymData32);}break;
+case CV_SymKind_GDATA32:{result = sizeof(CV_SymData32);}break;
+case CV_SymKind_PUB32:{result = sizeof(CV_SymPub32);}break;
+case CV_SymKind_LPROC32:{result = sizeof(CV_SymProc32);}break;
+case CV_SymKind_GPROC32:{result = sizeof(CV_SymProc32);}break;
+case CV_SymKind_REGREL32:{result = sizeof(CV_SymRegrel32);}break;
+case CV_SymKind_LTHREAD32:{result = sizeof(CV_SymThread32);}break;
+case CV_SymKind_GTHREAD32:{result = sizeof(CV_SymThread32);}break;
+case CV_SymKind_COMPILE2:{result = sizeof(CV_SymCompile2);}break;
+case CV_SymKind_MANYREG2:{result = sizeof(CV_SymManyreg2);}break;
+case CV_SymKind_LOCALSLOT:{result = sizeof(CV_SymSlot);}break;
+case CV_SymKind_MANFRAMEREL:{result = sizeof(CV_SymAttrFrameRel);}break;
+case CV_SymKind_MANREGISTER:{result = sizeof(CV_SymAttrReg);}break;
+case CV_SymKind_MANMANYREG:{result = sizeof(CV_SymAttrManyReg);}break;
+case CV_SymKind_MANREGREL:{result = sizeof(CV_SymAttrRegRel);}break;
+case CV_SymKind_UNAMESPACE:{result = sizeof(CV_SymUNamespace);}break;
+case CV_SymKind_PROCREF:{result = sizeof(CV_SymRef2);}break;
+case CV_SymKind_DATAREF:{result = sizeof(CV_SymRef2);}break;
+case CV_SymKind_LPROCREF:{result = sizeof(CV_SymRef2);}break;
+case CV_SymKind_TRAMPOLINE:{result = sizeof(CV_SymTrampoline);}break;
+case CV_SymKind_ATTR_FRAMEREL:{result = sizeof(CV_SymAttrFrameRel);}break;
+case CV_SymKind_ATTR_REGISTER:{result = sizeof(CV_SymAttrReg);}break;
+case CV_SymKind_ATTR_REGREL:{result = sizeof(CV_SymAttrRegRel);}break;
+case CV_SymKind_ATTR_MANYREG:{result = sizeof(CV_SymAttrManyReg);}break;
+case CV_SymKind_SEPCODE:{result = sizeof(CV_SymSepcode);}break;
+case CV_SymKind_SECTION:{result = sizeof(CV_SymSection);}break;
+case CV_SymKind_COFFGROUP:{result = sizeof(CV_SymCoffGroup);}break;
+case CV_SymKind_EXPORT:{result = sizeof(CV_SymExport);}break;
+case CV_SymKind_CALLSITEINFO:{result = sizeof(CV_SymCallSiteInfo);}break;
+case CV_SymKind_FRAMECOOKIE:{result = sizeof(CV_SymFrameCookie);}break;
+case CV_SymKind_DISCARDED:{result = sizeof(CV_SymDiscarded);}break;
+case CV_SymKind_COMPILE3:{result = sizeof(CV_SymCompile3);}break;
+case CV_SymKind_ENVBLOCK:{result = sizeof(CV_SymEnvBlock);}break;
+case CV_SymKind_LOCAL:{result = sizeof(CV_SymLocal);}break;
+case CV_SymKind_DEFRANGE_SUBFIELD:{result = sizeof(CV_SymDefrangeSubfield);}break;
+case CV_SymKind_DEFRANGE_REGISTER:{result = sizeof(CV_SymDefrangeRegister);}break;
+case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL:{result = sizeof(CV_SymDefrangeFramepointerRel);}break;
+case CV_SymKind_DEFRANGE_SUBFIELD_REGISTER:{result = sizeof(CV_SymDefrangeSubfieldRegister);}break;
+case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE:{result = sizeof(CV_SymDefrangeFramepointerRelFullScope);}break;
+case CV_SymKind_DEFRANGE_REGISTER_REL:{result = sizeof(CV_SymDefrangeRegisterRel);}break;
+case CV_SymKind_BUILDINFO:{result = sizeof(CV_SymBuildInfo);}break;
+case CV_SymKind_INLINESITE:{result = sizeof(CV_SymInlineSite);}break;
+case CV_SymKind_FILESTATIC:{result = sizeof(CV_SymFileStatic);}break;
+case CV_SymKind_CALLEES:{result = sizeof(CV_SymFunctionList);}break;
+case CV_SymKind_CALLERS:{result = sizeof(CV_SymFunctionList);}break;
+case CV_SymKind_POGODATA:{result = sizeof(CV_SymPogoInfo);}break;
+case CV_SymKind_INLINESITE2:{result = sizeof(CV_SymInlineSite2);}break;
+case CV_SymKind_HEAPALLOCSITE:{result = sizeof(CV_SymHeapAllocSite);}break;
+case CV_SymKind_MOD_TYPEREF:{result = sizeof(CV_SymModTypeRef);}break;
+case CV_SymKind_REF_MINIPDB:{result = sizeof(CV_SymRefMiniPdb);}break;
+case CV_SymKind_FASTLINK:{result = sizeof(CV_SymFastLink);}break;
+case CV_SymKind_INLINEES:{result = sizeof(CV_SymInlinees);}break;
+}
+return result;
+}
 C_LINKAGE_BEGIN
 C_LINKAGE_END
 

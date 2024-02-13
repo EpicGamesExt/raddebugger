@@ -1940,65 +1940,70 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  
-  // extract important values from parameters
   String8 data = sym->data;
   U64 user_id_base = (((U64)sym_unique_id) << 32);
   U64 sym_unique_id_hash = raddbgi_hash((U8*)&sym_unique_id, sizeof(sym_unique_id));
   
-  // PASS 1: map out data associations
+  //////////////////////////////
+  //- rjf: PASS 1: map out data associations
+  //
   ProfScope("map out data associations")
   {
-    // state variables
     RADDBGIC_Symbol *current_proc = 0;
-    
-    // loop
-    CV_RecRange *rec_range = sym->sym_ranges.ranges;
-    CV_RecRange *opl = rec_range + sym->sym_ranges.count;
-    for(;rec_range < opl; rec_range += 1)
+    CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
+    CV_RecRange *rec_ranges_opl   = rec_ranges_first + sym->sym_ranges.count;
+    for(CV_RecRange *rec_range = rec_ranges_first;
+        rec_range < rec_ranges_opl;
+        rec_range += 1)
     {
-      // symbol data range
-      U64 opl_off_raw = rec_range->off + rec_range->hdr.size;
-      U64 opl_off = ClampTop(opl_off_raw, data.size);
+      //- rjf: rec range -> symbol info range
+      U64 sym_off_first = rec_range->off + 2;
+      U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
       
-      U64 off_raw = rec_range->off + 2;
-      U64 off = ClampTop(off_raw, opl_off);
+      //- rjf: skip invalid ranges
+      if(sym_off_opl > data.size || sym_off_first > data.size || sym_off_first > sym_off_opl)
+      {
+        continue;
+      }
       
-      U8 *first = data.str + off;
-      U64 cap = (opl_off - off);
+      //- rjf: unpack symbol info
+      CV_SymKind kind = rec_range->hdr.kind;
+      U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
+      void *sym_header_struct_base = data.str + sym_off_first;
       
-      CV_SymKind kind = rec_range->hdr.kind; 
+      //- rjf: skip bad sizes
+      if(sym_off_first + sym_header_struct_size > sym_off_opl)
+      {
+        continue;
+      }
+      
+      //- rjf: consume symbol based on kind
       switch(kind)
       {
         default:{}break;
         
+        //- rjf: FRAMEPROC
         case CV_SymKind_FRAMEPROC:
         {
-          if(sizeof(CV_SymFrameproc) > cap)
+          CV_SymFrameproc *frameproc = (CV_SymFrameproc*)sym_header_struct_base;
+          if(current_proc == 0)
           {
             // TODO(allen): error
           }
           else
           {
-            CV_SymFrameproc *frameproc = (CV_SymFrameproc*)first;
-            if(current_proc == 0)
-            {
-              // TODO(allen): error
-            }
-            else
-            {
-              PDBCONV_FrameProcData data = {0};
-              data.frame_size = frameproc->frame_size;
-              data.flags = frameproc->flags;
-              pdbconv_symbol_frame_proc_write(ctx, current_proc, &data);
-            }
+            PDBCONV_FrameProcData data = {0};
+            data.frame_size = frameproc->frame_size;
+            data.flags = frameproc->flags;
+            pdbconv_symbol_frame_proc_write(ctx, current_proc, &data);
           }
         }break;
         
+        //- rjf: LPROC32/GPROC32
         case CV_SymKind_LPROC32:
         case CV_SymKind_GPROC32:
         {
-          U64 symbol_id = user_id_base + off;
+          U64 symbol_id = user_id_base + sym_off_first;
           U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
           current_proc = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
         }break;
@@ -2006,31 +2011,44 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
     }
   }
   
-  // PASS 2: main symbol construction pass
+  //////////////////////////////
+  //- rjf: PASS 2: main symbol construction pass
+  //
   ProfScope("main symbol construction pass")
   {
-    // state variables
     RADDBGIC_LocationSet *defrange_target = 0;
     B32 defrange_target_is_param = 0;
-    
-    // loop
-    CV_RecRange *rec_range = sym->sym_ranges.ranges;
-    CV_RecRange *opl = rec_range + sym->sym_ranges.count;
     U64 local_num = 1;
     U64 scope_num = 1;
-    for(;rec_range < opl; rec_range += 1)
+    CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
+    CV_RecRange *rec_ranges_opl   = rec_ranges_first + sym->sym_ranges.count;
+    for(CV_RecRange *rec_range = rec_ranges_first;
+        rec_range < rec_ranges_opl;
+        rec_range += 1)
     {
-      // symbol data range
-      U64 opl_off_raw = rec_range->off + rec_range->hdr.size;
-      U64 opl_off = ClampTop(opl_off_raw, data.size);
+      //- rjf: rec range -> symbol info range
+      U64 sym_off_first = rec_range->off + 2;
+      U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
       
-      U64 off_raw = rec_range->off + 2;
-      U64 off = ClampTop(off_raw, opl_off);
+      //- rjf: skip invalid ranges
+      if(sym_off_opl > data.size || sym_off_first > data.size || sym_off_first > sym_off_opl)
+      {
+        continue;
+      }
       
-      U8 *first = data.str + off;
-      U64 cap = (opl_off - off);
+      //- rjf: unpack symbol info
+      CV_SymKind kind = rec_range->hdr.kind;
+      U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
+      void *sym_header_struct_base = data.str + sym_off_first;
+      void *sym_data_opl = data.str + sym_off_opl;
       
-      // current state
+      //- rjf: skip bad sizes
+      if(sym_off_first + sym_header_struct_size > sym_off_opl)
+      {
+        continue;
+      }
+      
+      //- rjf: unpack current state
       RADDBGIC_Scope *current_scope = pdbconv_symbol_current_scope(ctx);
       RADDBGIC_Symbol *current_procedure = 0;
       if(current_scope != 0)
@@ -2038,148 +2056,63 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
         current_procedure = current_scope->symbol;
       }
       
-      CV_SymKind kind = rec_range->hdr.kind; 
+      //- rjf: consume symbol based on kind
       switch(kind)
       {
         default:{}break;
         
+        //- rjf: END
         case CV_SymKind_END:
-        //ProfScope("CV_SymKind_END")
         {
-          // pop scope stack
           pdbconv_symbol_pop_scope(ctx);
           defrange_target = 0;
           defrange_target_is_param = 0;
         }break;
         
-        case CV_SymKind_FRAMEPROC:
-        //ProfScope("CV_SymKind_FRAMEPROC")
-        {
-          if(sizeof(CV_SymFrameproc) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            // do nothing (handled in 'association map' pass)
-          }
-        }break;
-        
+        //- rjf: BLOCK32
         case CV_SymKind_BLOCK32:
-        //ProfScope("CV_SymKind_BLOCK32")
         {
-          if(sizeof(CV_SymBlock32) > cap)
+          CV_SymBlock32 *block32 = (CV_SymBlock32*)sym_header_struct_base;
+          
+          // scope
+          U64 scope_id = user_id_base + scope_num;
+          scope_num += 1;
+          U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
+          RADDBGIC_Scope *block_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
+          raddbgic_scope_set_parent(ctx->root, block_scope, current_scope);
+          pdbconv_symbol_push_scope(ctx, block_scope, current_procedure);
+          
+          // set voff range
+          COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, block32->sec);
+          if(section != 0)
           {
-            // TODO(allen): error
-          }
-          else
-          {
-            CV_SymBlock32 *block32 = (CV_SymBlock32*)first;
-            
-            // scope
-            U64 scope_id = user_id_base + scope_num;
-            U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
-            scope_num += 1;
-            RADDBGIC_Scope *block_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
-            raddbgic_scope_set_parent(ctx->root, block_scope, current_scope);
-            pdbconv_symbol_push_scope(ctx, block_scope, current_procedure);
-            
-            // set voff range
-            COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, block32->sec);
-            if(section != 0)
-            {
-              U64 voff_first = section->voff + block32->off;
-              U64 voff_last = voff_first + block32->len;
-              raddbgic_scope_add_voff_range(ctx->root, block_scope, voff_first, voff_last);
-            }
+            U64 voff_first = section->voff + block32->off;
+            U64 voff_last = voff_first + block32->len;
+            raddbgic_scope_add_voff_range(ctx->root, block_scope, voff_first, voff_last);
           }
         }break;
         
+        //- rjf: LDATA32/GDATA32
         case CV_SymKind_LDATA32:
         case CV_SymKind_GDATA32:
-        //ProfScope("CV_SymKind_LDATA32/CV_SymKind_GDATA32")
         {
-          if(sizeof(CV_SymData32) > cap)
+          CV_SymData32 *data32 = (CV_SymData32*)sym_header_struct_base;
+          String8 name = str8_cstring_capped(data32+1, sym_data_opl);
+          
+          // determine voff
+          COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, data32->sec);
+          U64 voff = ((section != 0)?section->voff:0) + data32->off;
+          
+          // deduplicate global variable symbols with the same name & offset
+          // * PDB likes to have duplicates of these spread across
+          // * different symbol streams so we deduplicate across the
+          // * entire translation context.
+          if(!pdbconv_known_global_lookup(&ctx->known_globals, name, voff))
           {
-            // TODO(allen): error
-          }
-          else
-          {
-            CV_SymData32 *data32 = (CV_SymData32*)first;
+            pdbconv_known_global_insert(ctx->arena, &ctx->known_globals, name, voff);
             
-            // name
-            String8 name = str8_cstring_capped((char*)(data32 + 1), first + cap);
-            
-            // determine voff
-            COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, data32->sec);
-            U64 voff = ((section != 0)?section->voff:0) + data32->off;
-            
-            // deduplicate global variable symbols with the same name & offset
-            // * PDB likes to have duplicates of these spread across
-            // * different symbol streams so we deduplicate across the
-            // * entire translation context.
-            if(!pdbconv_known_global_lookup(&ctx->known_globals, name, voff))
-            {
-              pdbconv_known_global_insert(ctx->arena, &ctx->known_globals, name, voff);
-              
-              // type of variable
-              RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, data32->itype);
-              
-              // container type
-              RADDBGIC_Type *container_type = 0;
-              U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
-              if(container_name_opl > 2)
-              {
-                String8 container_name = str8(name.str, container_name_opl - 2);
-                container_type = pdbconv_type_from_name(ctx, container_name);
-              }
-              
-              // container symbol
-              RADDBGIC_Symbol *container_symbol = 0;
-              if(container_type == 0)
-              {
-                container_symbol = current_procedure;
-              }
-              
-              // determine link kind
-              B32 is_extern = (kind == CV_SymKind_GDATA32);
-              
-              // cons this symbol
-              U64 symbol_id = user_id_base + off;
-              U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-              RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
-              
-              RADDBGIC_SymbolInfo info = zero_struct;
-              info.kind = RADDBGIC_SymbolKind_GlobalVariable;
-              info.name = name;
-              info.type = type;
-              info.is_extern = is_extern;
-              info.offset = voff;
-              info.container_type = container_type;
-              info.container_symbol = container_symbol;
-              
-              raddbgic_symbol_set_info(ctx->root, symbol, &info);
-            }
-          }
-        }break;
-        
-        case CV_SymKind_LPROC32:
-        case CV_SymKind_GPROC32:
-        //ProfScope("CV_SymKind_LPROC32/CV_SymKind_GPROC32")
-        {
-          if(sizeof(CV_SymProc32) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            CV_SymProc32 *proc32 = (CV_SymProc32*)first;
-            
-            // name
-            String8 name = str8_cstring_capped((char*)(proc32 + 1), first + cap);
-            
-            // type of procedure
-            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, proc32->itype);
+            // type of variable
+            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, data32->itype);
             
             // container type
             RADDBGIC_Type *container_type = 0;
@@ -2197,119 +2130,288 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
               container_symbol = current_procedure;
             }
             
-            // get this symbol handle
-            U64 symbol_id = user_id_base + off;
-            U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-            RADDBGIC_Symbol *proc_symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
-            
-            // scope
-            
-            // NOTE: even if there could be a containing scope at this point (which should be
-            //       illegal in C/C++ but not necessarily in another language) we would not pass
-            //       it here because these scopes refer to the ranges of code that make up a
-            //       procedure *not* the namespaces, so a procedure's root scope always has
-            //       no parent.
-            U64 scope_id = user_id_base + scope_num;
-            U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
-            RADDBGIC_Scope *root_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
-            pdbconv_symbol_push_scope(ctx, root_scope, proc_symbol);
-            scope_num += 1;
-            
-            // set voff range
-            U64 voff = 0;
-            COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, proc32->sec);
-            if(section != 0)
-            {
-              U64 voff_first = section->voff + proc32->off;
-              U64 voff_last = voff_first + proc32->len;
-              raddbgic_scope_add_voff_range(ctx->root, root_scope, voff_first, voff_last);
-              
-              voff = voff_first;
-            }
-            
-            // link name
-            String8 link_name = {0};
-            if(voff != 0)
-            {
-              link_name = pdbconv_link_name_find(&ctx->link_names, voff);
-            }
-            
             // determine link kind
-            B32 is_extern = (kind == CV_SymKind_GPROC32);
+            B32 is_extern = (kind == CV_SymKind_GDATA32);
             
-            // set symbol info
+            // cons this symbol
+            U64 symbol_id = user_id_base + sym_off_first;
+            U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
+            RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+            
             RADDBGIC_SymbolInfo info = zero_struct;
-            info.kind = RADDBGIC_SymbolKind_Procedure;
+            info.kind = RADDBGIC_SymbolKind_GlobalVariable;
             info.name = name;
-            info.link_name = link_name;
             info.type = type;
             info.is_extern = is_extern;
+            info.offset = voff;
             info.container_type = container_type;
             info.container_symbol = container_symbol;
-            info.root_scope = root_scope;
             
-            raddbgic_symbol_set_info(ctx->root, proc_symbol, &info);
+            raddbgic_symbol_set_info(ctx->root, symbol, &info);
           }
         }break;
         
-        case CV_SymKind_REGREL32:
-        ProfScope("CV_SymKind_REGREL32")
+        //- rjf: LPROC32/GPROC32
+        case CV_SymKind_LPROC32:
+        case CV_SymKind_GPROC32:
         {
-          if(sizeof(CV_SymRegrel32) > cap)
+          CV_SymProc32 *proc32 = (CV_SymProc32*)sym_header_struct_base;
+          String8 name = str8_cstring_capped(proc32+1, sym_data_opl);
+          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, proc32->itype);
+          
+          // container type
+          RADDBGIC_Type *container_type = 0;
+          U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
+          if(container_name_opl > 2)
           {
-            // TODO(allen): error
+            String8 container_name = str8(name.str, container_name_opl - 2);
+            container_type = pdbconv_type_from_name(ctx, container_name);
           }
+          
+          // container symbol
+          RADDBGIC_Symbol *container_symbol = 0;
+          if(container_type == 0)
+          {
+            container_symbol = current_procedure;
+          }
+          
+          // get this symbol handle
+          U64 symbol_id = user_id_base + sym_off_first;
+          U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
+          RADDBGIC_Symbol *proc_symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+          
+          // scope
+          
+          // NOTE: even if there could be a containing scope at this point (which should be
+          //       illegal in C/C++ but not necessarily in another language) we would not pass
+          //       it here because these scopes refer to the ranges of code that make up a
+          //       procedure *not* the namespaces, so a procedure's root scope always has
+          //       no parent.
+          U64 scope_id = user_id_base + scope_num;
+          U64 scope_hash = pdbconv_hash_from_scope_user_id(sym_unique_id_hash, scope_id);
+          RADDBGIC_Scope *root_scope = raddbgic_scope_handle_from_user_id(ctx->root, scope_id, scope_hash);
+          pdbconv_symbol_push_scope(ctx, root_scope, proc_symbol);
+          scope_num += 1;
+          
+          // set voff range
+          U64 voff = 0;
+          COFF_SectionHeader *section = pdbconv_sec_header_from_sec_num(ctx, proc32->sec);
+          if(section != 0)
+          {
+            U64 voff_first = section->voff + proc32->off;
+            U64 voff_last = voff_first + proc32->len;
+            raddbgic_scope_add_voff_range(ctx->root, root_scope, voff_first, voff_last);
+            
+            voff = voff_first;
+          }
+          
+          // link name
+          String8 link_name = {0};
+          if(voff != 0)
+          {
+            link_name = pdbconv_link_name_find(&ctx->link_names, voff);
+          }
+          
+          // determine link kind
+          B32 is_extern = (kind == CV_SymKind_GPROC32);
+          
+          // set symbol info
+          RADDBGIC_SymbolInfo info = zero_struct;
+          info.kind = RADDBGIC_SymbolKind_Procedure;
+          info.name = name;
+          info.link_name = link_name;
+          info.type = type;
+          info.is_extern = is_extern;
+          info.container_type = container_type;
+          info.container_symbol = container_symbol;
+          info.root_scope = root_scope;
+          
+          raddbgic_symbol_set_info(ctx->root, proc_symbol, &info);
+        }break;
+        
+        //- rjf: REGREL32
+        case CV_SymKind_REGREL32:
+        {
+          // TODO(allen): hide this when it's redundant with better information
+          // from a CV_SymKind_LOCAL record.
+          
+          CV_SymRegrel32 *regrel32 = (CV_SymRegrel32*)sym_header_struct_base;
+          String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
+          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, regrel32->itype);
+          
+          // extract regrel's info
+          CV_Reg cv_reg = regrel32->reg;
+          U32 var_off = regrel32->reg_off;
+          
+          // need arch for analyzing register stuff
+          RADDBGI_Arch arch = ctx->arch;
+          U64 addr_size = ctx->addr_size;
+          
+          // determine if this is a parameter
+          RADDBGI_LocalKind local_kind = RADDBGI_LocalKind_Variable;
+          {
+            B32 is_stack_reg = 0;
+            switch (arch)
+            {
+              case RADDBGI_Arch_X86: is_stack_reg = (cv_reg == CV_Regx86_ESP); break;
+              case RADDBGI_Arch_X64: is_stack_reg = (cv_reg == CV_Regx64_RSP); break;
+            }
+            if(is_stack_reg)
+            {
+              U32 frame_size = 0xFFFFFFFF;
+              if(current_procedure != 0)
+              {
+                PDBCONV_FrameProcData *frameproc =
+                  pdbconv_symbol_frame_proc_read(ctx, current_procedure);
+                frame_size = frameproc->frame_size;
+              }
+              if(var_off > frame_size)
+              {
+                local_kind = RADDBGI_LocalKind_Parameter;
+              }
+            }
+          }
+          
+          // emit local
+          U64 local_id = user_id_base + local_num;;
+          U64 local_id_hash = pdbconv_hash_from_local_user_id(sym_unique_id_hash, local_id);
+          RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
+          local_num += 1;
+          
+          RADDBGIC_LocalInfo info = {0};
+          info.kind = local_kind;
+          info.scope = current_scope;
+          info.name = name;
+          info.type = type;
+          raddbgic_local_set_basic_info(ctx->root, local_var, &info);
+          
+          // add location to local
+          {
+            // will there be an extra indirection to the value
+            B32 extra_indirection_to_value = 0;
+            switch (arch)
+            {
+              case RADDBGI_Arch_X86:
+              {
+                if(local_kind == RADDBGI_LocalKind_Parameter &&
+                   (type->byte_size > 4 || !IsPow2OrZero(type->byte_size)))
+                {
+                  extra_indirection_to_value = 1;
+                }
+              }break;
+              
+              case RADDBGI_Arch_X64:
+              {
+                if(local_kind == RADDBGI_LocalKind_Parameter &&
+                   (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)))
+                {
+                  extra_indirection_to_value = 1;
+                }
+              }break;
+            }
+            
+            // get raddbg register code
+            RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+            // TODO(allen): real byte_size & byte_pos from cv_reg goes here
+            U32 byte_size = 8;
+            U32 byte_pos = 0;
+            
+            // set location case
+            RADDBGIC_Location *loc =
+              pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
+                                                 (S64)(S32)var_off, extra_indirection_to_value);
+            
+            RADDBGIC_LocationSet *locset = raddbgic_location_set_from_local(ctx->root, local_var);
+            raddbgic_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
+          }
+        }break;
+        
+        //- rjf: LTHREAD32/GTHREAD32
+        case CV_SymKind_LTHREAD32:
+        case CV_SymKind_GTHREAD32:
+        {
+          CV_SymThread32 *thread32 = (CV_SymThread32*)sym_header_struct_base;
+          String8 name = str8_cstring_capped(thread32+1, sym_data_opl);
+          U32 tls_off = thread32->tls_off;
+          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, thread32->itype);
+          
+          // container type
+          RADDBGIC_Type *container_type = 0;
+          U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
+          if(container_name_opl > 2)
+          {
+            String8 container_name = str8(name.str, container_name_opl - 2);
+            container_type = pdbconv_type_from_name(ctx, container_name);
+          }
+          
+          // container symbol
+          RADDBGIC_Symbol *container_symbol = 0;
+          if(container_type == 0)
+          {
+            container_symbol = current_procedure;
+          }
+          
+          // determine link kind
+          B32 is_extern = (kind == CV_SymKind_GTHREAD32);
+          
+          // setup symbol
+          U64 symbol_id = user_id_base + sym_off_first;
+          U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
+          RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
+          
+          RADDBGIC_SymbolInfo info = zero_struct;
+          info.kind = RADDBGIC_SymbolKind_ThreadVariable;
+          info.name = name;
+          info.type = type;
+          info.is_extern = is_extern;
+          info.offset = tls_off;
+          info.container_type = container_type;
+          info.container_symbol = container_symbol;
+          
+          raddbgic_symbol_set_info(ctx->root, symbol, &info);
+        }break;
+        
+        //- rjf: LOCAL
+        case CV_SymKind_LOCAL:
+        {
+          CV_SymLocal *slocal = (CV_SymLocal*)sym_header_struct_base;
+          String8 name = str8_cstring_capped(slocal+1, sym_data_opl);
+          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, slocal->itype);
+          
+          // determine how to handle
+          B32 begin_a_global_modification = 0;
+          if((slocal->flags & CV_LocalFlag_Global) ||
+             (slocal->flags & CV_LocalFlag_Static))
+          {
+            begin_a_global_modification = 1;
+          }
+          
+          // emit a global modification
+          if(begin_a_global_modification)
+          {
+            // TODO(allen): add global modification symbols
+            defrange_target = 0;
+            defrange_target_is_param = 0;
+          }
+          
+          // emit a local variable
           else
           {
-            // TODO(allen): hide this when it's redundant with better information
-            // from a CV_SymKind_LOCAL record.
-            
-            CV_SymRegrel32 *regrel32 = (CV_SymRegrel32*)first;
-            
-            // name
-            String8 name = str8_cstring_capped((char*)(regrel32 + 1), first + cap);
-            
-            // type of variable
-            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, regrel32->itype);
-            
-            // extract regrel's info
-            CV_Reg cv_reg = regrel32->reg;
-            U32 var_off = regrel32->reg_off;
-            
-            // need arch for analyzing register stuff
-            RADDBGI_Arch arch = ctx->arch;
-            U64 addr_size = ctx->addr_size;
-            
-            // determine if this is a parameter
+            // local kind
             RADDBGI_LocalKind local_kind = RADDBGI_LocalKind_Variable;
+            if(slocal->flags & CV_LocalFlag_Param)
             {
-              B32 is_stack_reg = 0;
-              switch (arch)
-              {
-                case RADDBGI_Arch_X86: is_stack_reg = (cv_reg == CV_Regx86_ESP); break;
-                case RADDBGI_Arch_X64: is_stack_reg = (cv_reg == CV_Regx64_RSP); break;
-              }
-              if(is_stack_reg)
-              {
-                U32 frame_size = 0xFFFFFFFF;
-                if(current_procedure != 0)
-                {
-                  PDBCONV_FrameProcData *frameproc =
-                    pdbconv_symbol_frame_proc_read(ctx, current_procedure);
-                  frame_size = frameproc->frame_size;
-                }
-                if(var_off > frame_size)
-                {
-                  local_kind = RADDBGI_LocalKind_Parameter;
-                }
-              }
+              local_kind = RADDBGI_LocalKind_Parameter;
             }
             
             // emit local
-            U64 local_id = user_id_base + local_num;;
+            U64 local_id = user_id_base + local_num;
             U64 local_id_hash = pdbconv_hash_from_local_user_id(sym_unique_id_hash, local_id);
             RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
             local_num += 1;
+            local_var->kind = local_kind;
+            local_var->name = name;
+            local_var->type = type;
             
             RADDBGIC_LocalInfo info = {0};
             info.kind = local_kind;
@@ -2318,415 +2420,179 @@ pdbconv_symbol_cons(PDBCONV_Ctx *ctx, CV_SymParsed *sym, U32 sym_unique_id)
             info.type = type;
             raddbgic_local_set_basic_info(ctx->root, local_var, &info);
             
-            // add location to local
-            {
-              // will there be an extra indirection to the value
-              B32 extra_indirection_to_value = 0;
-              switch (arch)
-              {
-                case RADDBGI_Arch_X86:
-                {
-                  if(local_kind == RADDBGI_LocalKind_Parameter &&
-                     (type->byte_size > 4 || !IsPow2OrZero(type->byte_size)))
-                  {
-                    extra_indirection_to_value = 1;
-                  }
-                }break;
-                
-                case RADDBGI_Arch_X64:
-                {
-                  if(local_kind == RADDBGI_LocalKind_Parameter &&
-                     (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)))
-                  {
-                    extra_indirection_to_value = 1;
-                  }
-                }break;
-              }
-              
-              // get raddbg register code
-              RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
-              // TODO(allen): real byte_size & byte_pos from cv_reg goes here
-              U32 byte_size = 8;
-              U32 byte_pos = 0;
-              
-              // set location case
-              RADDBGIC_Location *loc =
-                pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
-                                                   (S64)(S32)var_off, extra_indirection_to_value);
-              
-              RADDBGIC_LocationSet *locset = raddbgic_location_set_from_local(ctx->root, local_var);
-              raddbgic_location_set_add_case(ctx->root, locset, 0, max_U64, loc);
-            }
+            defrange_target = raddbgic_location_set_from_local(ctx->root, local_var);
+            defrange_target_is_param = (local_kind == RADDBGI_LocalKind_Parameter);
           }
         }break;
         
-        case CV_SymKind_LTHREAD32:
-        case CV_SymKind_GTHREAD32:
-        //ProfScope("CV_SymKind_LTHREAD32/CV_SymKind_GTHREAD32")
-        {
-          if(sizeof(CV_SymThread32) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            CV_SymThread32 *thread32 = (CV_SymThread32*)first;
-            
-            // name
-            String8 name = str8_cstring_capped((char*)(thread32 + 1), first + cap);
-            
-            // determine tls off
-            U32 tls_off = thread32->tls_off;
-            
-            // type of variable
-            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, thread32->itype);
-            
-            // container type
-            RADDBGIC_Type *container_type = 0;
-            U64 container_name_opl = pdbconv_end_of_cplusplus_container_name(name);
-            if(container_name_opl > 2)
-            {
-              String8 container_name = str8(name.str, container_name_opl - 2);
-              container_type = pdbconv_type_from_name(ctx, container_name);
-            }
-            
-            // container symbol
-            RADDBGIC_Symbol *container_symbol = 0;
-            if(container_type == 0)
-            {
-              container_symbol = current_procedure;
-            }
-            
-            // determine link kind
-            B32 is_extern = (kind == CV_SymKind_GTHREAD32);
-            
-            // setup symbol
-            U64 symbol_id = user_id_base + off;
-            U64 symbol_hash = pdbconv_hash_from_symbol_user_id(sym_unique_id_hash, symbol_id);
-            RADDBGIC_Symbol *symbol = raddbgic_symbol_handle_from_user_id(ctx->root, symbol_id, symbol_hash);
-            
-            RADDBGIC_SymbolInfo info = zero_struct;
-            info.kind = RADDBGIC_SymbolKind_ThreadVariable;
-            info.name = name;
-            info.type = type;
-            info.is_extern = is_extern;
-            info.offset = tls_off;
-            info.container_type = container_type;
-            info.container_symbol = container_symbol;
-            
-            raddbgic_symbol_set_info(ctx->root, symbol, &info);
-          }
-        }break;
-        
-        case CV_SymKind_LOCAL:
-        //ProfScope("CV_SymKind_LOCAL")
-        {
-          if(sizeof(CV_SymLocal) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            CV_SymLocal *slocal = (CV_SymLocal*)first;
-            
-            // name
-            String8 name = str8_cstring_capped((char*)(slocal + 1), first + cap);
-            
-            // type of variable
-            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, slocal->itype);
-            
-            // determine how to handle
-            B32 begin_a_global_modification = 0;
-            if((slocal->flags & CV_LocalFlag_Global) ||
-               (slocal->flags & CV_LocalFlag_Static))
-            {
-              begin_a_global_modification = 1;
-            }
-            
-            // emit a global modification
-            if(begin_a_global_modification)
-            {
-              // TODO(allen): add global modification symbols
-              defrange_target = 0;
-              defrange_target_is_param = 0;
-            }
-            
-            // emit a local variable
-            else
-            {
-              // local kind
-              RADDBGI_LocalKind local_kind = RADDBGI_LocalKind_Variable;
-              if(slocal->flags & CV_LocalFlag_Param)
-              {
-                local_kind = RADDBGI_LocalKind_Parameter;
-              }
-              
-              // emit local
-              U64 local_id = user_id_base + local_num;
-              U64 local_id_hash = pdbconv_hash_from_local_user_id(sym_unique_id_hash, local_id);
-              RADDBGIC_Local *local_var = raddbgic_local_handle_from_user_id(ctx->root, local_id, local_id_hash);
-              local_num += 1;
-              local_var->kind = local_kind;
-              local_var->name = name;
-              local_var->type = type;
-              
-              RADDBGIC_LocalInfo info = {0};
-              info.kind = local_kind;
-              info.scope = current_scope;
-              info.name = name;
-              info.type = type;
-              raddbgic_local_set_basic_info(ctx->root, local_var, &info);
-              
-              defrange_target = raddbgic_location_set_from_local(ctx->root, local_var);
-              defrange_target_is_param = (local_kind == RADDBGI_LocalKind_Parameter);
-            }
-          }
-        }break;
-        
+        //- rjf: DEFRANGE_REGISTESR
         case CV_SymKind_DEFRANGE_REGISTER:
-        //ProfScope("CV_SymKind_DEFRANGE_REGISTER")
         {
-          if(sizeof(CV_SymDefrangeRegister) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            if(defrange_target == 0)
-            {
-              // TODO(allen): error
-            }
-            else
-            {
-              CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)first;
-              
-              // TODO(allen): offset & size from cv_reg code
-              RADDBGI_Arch arch = ctx->arch;
-              CV_Reg cv_reg = defrange_register->reg;
-              RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
-              
-              // setup location
-              RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
-              
-              // extract range info
-              CV_LvarAddrRange *range = &defrange_register->range;
-              CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register + 1);
-              U64 gap_count = ((first + cap) - (U8*)gaps)/sizeof(*gaps);
-              
-              // emit locations
-              pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                    range, gaps, gap_count);
-            }
-          }
+          if(defrange_target == 0) { break; }
+          CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)sym_header_struct_base;
+          
+          // TODO(allen): offset & size from cv_reg code
+          RADDBGI_Arch arch = ctx->arch;
+          CV_Reg cv_reg = defrange_register->reg;
+          RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+          
+          // setup location
+          RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
+          
+          // extract range info
+          CV_LvarAddrRange *range = &defrange_register->range;
+          CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register+1);
+          U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+          
+          // emit locations
+          pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                                range, gaps, gap_count);
         }break;
         
+        //- rjf: DEFRANGE_FRAMEPOINTER_REL
         case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL:
-        //ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL")
         {
-          if(sizeof(CV_SymDefrangeFramepointerRel) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            if(defrange_target == 0)
-            {
-              // TODO(allen): error
-            }
-            else
-            {
-              CV_SymDefrangeFramepointerRel *defrange_fprel = (CV_SymDefrangeFramepointerRel*)first;
-              
-              // select frame pointer register
-              CV_EncodedFramePtrReg encoded_fp_reg =
-                pdbconv_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
-              RADDBGI_RegisterCode fp_register_code =
-                pdbconv_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
-              
-              // setup location
-              B32 extra_indirection = 0;
-              U32 byte_size = ctx->addr_size;
-              U32 byte_pos = 0;
-              S64 var_off = (S64)defrange_fprel->off;
-              RADDBGIC_Location *location =
-                pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
-                                                   var_off, extra_indirection);
-              
-              // extract range info
-              CV_LvarAddrRange *range = &defrange_fprel->range;
-              CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_fprel + 1);
-              U64 gap_count = ((first + cap) - (U8*)gaps)/sizeof(*gaps);
-              
-              // emit locations
-              pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                    range, gaps, gap_count);
-            }
-          }
+          if(defrange_target == 0) { break; }
+          CV_SymDefrangeFramepointerRel *defrange_fprel = (CV_SymDefrangeFramepointerRel*)sym_header_struct_base;
+          
+          // select frame pointer register
+          CV_EncodedFramePtrReg encoded_fp_reg =
+            pdbconv_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
+          RADDBGI_RegisterCode fp_register_code =
+            pdbconv_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
+          
+          // setup location
+          B32 extra_indirection = 0;
+          U32 byte_size = ctx->addr_size;
+          U32 byte_pos = 0;
+          S64 var_off = (S64)defrange_fprel->off;
+          RADDBGIC_Location *location =
+            pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
+                                               var_off, extra_indirection);
+          
+          // extract range info
+          CV_LvarAddrRange *range = &defrange_fprel->range;
+          CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_fprel + 1);
+          U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+          
+          // emit locations
+          pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                                range, gaps, gap_count);
         }break;
         
+        //- rjf: DEFRANGE_SUBFIELD_REGISTER
         case CV_SymKind_DEFRANGE_SUBFIELD_REGISTER:
-        //ProfScope("CV_SymKind_DEFRANGE_SUBFIELD_REGISTER")
         {
-          if(sizeof(CV_SymDefrangeSubfieldRegister) > cap)
+          if(defrange_target == 0) { break; }
+          CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)sym_header_struct_base;
+          
+          // TODO(allen): full "subfield" location system
+          if(defrange_subfield_register->field_offset == 0)
           {
-            // TODO(allen): error
-          }
-          else
-          {
-            if(defrange_target == 0)
-            {
-              // TODO(allen): error
-            }
-            else
-            {
-              CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)first;
-              
-              // TODO(allen): full "subfield" location system
-              if(defrange_subfield_register->field_offset == 0)
-              {
-                
-                // TODO(allen): offset & size from cv_reg code
-                RADDBGI_Arch arch = ctx->arch;
-                CV_Reg cv_reg = defrange_subfield_register->reg;
-                RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
-                
-                // setup location
-                RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
-                
-                // extract range info
-                CV_LvarAddrRange *range = &defrange_subfield_register->range;
-                CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
-                U64 gap_count = ((first + cap) - (U8*)gaps)/sizeof(*gaps);
-                
-                // emit locations
-                pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                      range, gaps, gap_count);
-              }
-            }
+            
+            // TODO(allen): offset & size from cv_reg code
+            RADDBGI_Arch arch = ctx->arch;
+            CV_Reg cv_reg = defrange_subfield_register->reg;
+            RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+            
+            // setup location
+            RADDBGIC_Location *location = raddbgic_location_val_reg(ctx->root, register_code);
+            
+            // extract range info
+            CV_LvarAddrRange *range = &defrange_subfield_register->range;
+            CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
+            U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+            
+            // emit locations
+            pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                                  range, gaps, gap_count);
           }
         }break;
         
+        //- rjf: DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE
         case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE:
-        //ProfScope("CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE")
         {
-          if(sizeof(CV_SymDefrangeFramepointerRelFullScope) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            if(defrange_target == 0)
-            {
-              // TODO(allen): error
-            }
-            else
-            {
-              CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope =
-              (CV_SymDefrangeFramepointerRelFullScope*)first;
-              
-              // select frame pointer register
-              CV_EncodedFramePtrReg encoded_fp_reg =
-                pdbconv_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
-              RADDBGI_RegisterCode fp_register_code =
-                pdbconv_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
-              
-              // setup location
-              B32 extra_indirection = 0;
-              U32 byte_size = ctx->addr_size;
-              U32 byte_pos = 0;
-              S64 var_off = (S64)defrange_fprel_full_scope->off;
-              RADDBGIC_Location *location =
-                pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
-                                                   var_off, extra_indirection);
-              
-              
-              // emit location
-              raddbgic_location_set_add_case(ctx->root, defrange_target, 0, max_U64, location);
-            }
-          }
+          if(defrange_target == 0) { break; }
+          CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope =
+          (CV_SymDefrangeFramepointerRelFullScope*)sym_header_struct_base;
+          
+          // select frame pointer register
+          CV_EncodedFramePtrReg encoded_fp_reg =
+            pdbconv_cv_encoded_fp_reg_from_proc(ctx, current_procedure, defrange_target_is_param);
+          RADDBGI_RegisterCode fp_register_code =
+            pdbconv_reg_code_from_arch_encoded_fp_reg(ctx->arch, encoded_fp_reg);
+          
+          // setup location
+          B32 extra_indirection = 0;
+          U32 byte_size = ctx->addr_size;
+          U32 byte_pos = 0;
+          S64 var_off = (S64)defrange_fprel_full_scope->off;
+          RADDBGIC_Location *location =
+            pdbconv_location_from_addr_reg_off(ctx, fp_register_code, byte_size, byte_pos,
+                                               var_off, extra_indirection);
+          
+          
+          // emit location
+          raddbgic_location_set_add_case(ctx->root, defrange_target, 0, max_U64, location);
         }break;
         
+        //- rjf: DEFRANGE_REGISTER_REL
         case CV_SymKind_DEFRANGE_REGISTER_REL:
-        //ProfScope("CV_SymKind_DEFRANGE_REGISTER_REL")
         {
-          if(sizeof(CV_SymDefrangeRegisterRel) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)first;
-            if(defrange_target == 0)
-            {
-              // TODO(rjf): error
-            }
-            else
-            {
-              // TODO(allen): offset & size from cv_reg code
-              RADDBGI_Arch arch = ctx->arch;
-              CV_Reg cv_reg = defrange_register_rel->reg;
-              RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
-              U32 byte_size = ctx->addr_size;
-              U32 byte_pos = 0;
-              
-              B32 extra_indirection_to_value = 0;
-              S64 var_off = defrange_register_rel->reg_off;
-              
-              // setup location
-              RADDBGIC_Location *location =
-                pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
-                                                   var_off, extra_indirection_to_value);
-              
-              // extract range info
-              CV_LvarAddrRange *range = &defrange_register_rel->range;
-              CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
-              U64 gap_count = ((first + cap) - (U8*)gaps)/sizeof(*gaps);
-              
-              
-              // emit locations
-              pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
-                                                    range, gaps, gap_count);
-            }
-          }
+          if(defrange_target == 0) { break; }
+          CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)sym_header_struct_base;
+          
+          // TODO(allen): offset & size from cv_reg code
+          RADDBGI_Arch arch = ctx->arch;
+          CV_Reg cv_reg = defrange_register_rel->reg;
+          RADDBGI_RegisterCode register_code = raddbgi_reg_code_from_cv_reg_code(arch, cv_reg);
+          U32 byte_size = ctx->addr_size;
+          U32 byte_pos = 0;
+          
+          B32 extra_indirection_to_value = 0;
+          S64 var_off = defrange_register_rel->reg_off;
+          
+          // setup location
+          RADDBGIC_Location *location =
+            pdbconv_location_from_addr_reg_off(ctx, register_code, byte_size, byte_pos,
+                                               var_off, extra_indirection_to_value);
+          
+          // extract range info
+          CV_LvarAddrRange *range = &defrange_register_rel->range;
+          CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
+          U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+          
+          // emit locations
+          pdbconv_location_over_lvar_addr_range(ctx, defrange_target, location,
+                                                range, gaps, gap_count);
         }break;
         
+        //- rjf: FILESTATIC
         case CV_SymKind_FILESTATIC:
-        //ProfScope("CV_SymKind_FILESTATIC")
         {
-          if(sizeof(CV_SymFileStatic) > cap)
-          {
-            // TODO(allen): error
-          }
-          else
-          {
-            CV_SymFileStatic *file_static = (CV_SymFileStatic*)first;
-            
-            // name
-            String8 name = str8_cstring_capped((char*)(file_static + 1), first + cap);
-            
-            // type of variable
-            RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, file_static->itype);
-            
-            // TODO(allen): emit a global modifier symbol
-            
-            // defrange records from this point attach to this location information
-            defrange_target = 0;
-            defrange_target_is_param = 0;
-          }
+          CV_SymFileStatic *file_static = (CV_SymFileStatic*)sym_header_struct_base;
+          String8 name = str8_cstring_capped(file_static+1, sym_data_opl);
+          RADDBGIC_Type *type = pdbconv_type_resolve_itype(ctx, file_static->itype);
+          
+          // TODO(allen): emit a global modifier symbol
+          
+          // defrange records from this point attach to this location information
+          defrange_target = 0;
+          defrange_target_is_param = 0;
         }break;
       }
     }
     
-    // if scope stack isn't empty emit an error
+    //- rjf: non-empty scope stack? -> error
     {
-      RADDBGIC_Scope* scope = pdbconv_symbol_current_scope(ctx);
+      RADDBGIC_Scope *scope = pdbconv_symbol_current_scope(ctx);
       if(scope != 0)
       {
         // TODO(allen): emit error
       }
     }
     
-    // clear the scope stack
+    //- rjf: clear scope stack
     pdbconv_symbol_clear_scope_stack(ctx);
   }
   
