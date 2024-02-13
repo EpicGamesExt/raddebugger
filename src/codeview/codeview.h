@@ -1095,7 +1095,7 @@ struct CV_SymVPath32
   CV_TypeId path;
   U32 off;
   U16 seg;
-} CV_SymVPath32;
+};
 
 //- (SymKind: FRAMEPROC)
 
