@@ -180,7 +180,7 @@
 # define zero_struct {0}
 #endif
 
-#if COMPILER_MSVC && COMPILER_CL_YEAR < 2015
+#if COMPILER_MSVC && COMPILER_MSVC_YEAR < 2015
 # define this_function_name "unknown"
 #else
 # define this_function_name __func__
