@@ -212,6 +212,18 @@ struct P2R_Out
 internal P2R_Params *p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
 
 ////////////////////////////////
+//~ rjf: COFF => RADDBGI Canonical Conversions
+
+internal RADDBGI_BinarySectionFlags raddbgi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
+
+////////////////////////////////
+//~ rjf: CodeView => RADDBGI Canonical Conversions
+
+internal RADDBGI_Arch         raddbgi_arch_from_cv_arch(CV_Arch arch);
+internal RADDBGI_RegisterCode raddbgi_reg_code_from_cv_reg_code(RADDBGI_Arch arch, CV_Reg reg_code);
+internal RADDBGI_Language     raddbgi_language_from_cv_language(CV_Language language);
+
+////////////////////////////////
 //~ rjf: Conversion Implementation Helpers
 
 //- rjf: pdb conversion context creation

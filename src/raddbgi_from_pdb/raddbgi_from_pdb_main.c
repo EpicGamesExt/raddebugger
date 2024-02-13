@@ -13,8 +13,6 @@
 #include "pdb/pdb.h"
 #include "pdb/pdb_stringize.h"
 #include "raddbgi_cons_local/raddbgi_cons_local.h"
-#include "raddbgi_coff_conversion.h"
-#include "raddbgi_codeview_conversion.h"
 
 #include "raddbgi_from_pdb.h"
 
@@ -27,8 +25,6 @@
 #include "pdb/pdb.c"
 #include "pdb/pdb_stringize.c"
 #include "raddbgi_cons_local/raddbgi_cons_local.c"
-#include "raddbgi_coff_conversion.c"
-#include "raddbgi_codeview_conversion.c"
 
 #include "raddbgi_from_pdb.c"
 
