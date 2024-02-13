@@ -1,7 +1,7 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#if COMPILER_CL || (COMPILER_CLANG && OS_WINDOWS)
+#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 
 internal U64
 count_bits_set16(U16 val)

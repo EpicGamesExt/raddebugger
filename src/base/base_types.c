@@ -344,8 +344,8 @@ architecture_from_context(void){
 internal Compiler
 compiler_from_context(void){
   Compiler compiler = Compiler_Null;
-#if COMPILER_CL
-  compiler = Compiler_cl;
+#if COMPILER_MSVC
+  compiler = Compiler_msvc;
 #elif COMPILER_GCC
   compiler = Compiler_gcc;
 #elif COMPILER_CLANG

@@ -17,11 +17,26 @@
 # define raddbgic_memset raddbgic_memset_fallback
 #endif
 
+// To override the slow/default memcpy implementation used by the library,
+// do the following:
+//
+// #define RADDBGIC_MEMCPY_OVERRIDE
+// #define raddbgic_memcpy <name of memcpy implementation>
+
+#if !defined(raddbgic_memset)
+# define raddbgic_memset raddbgic_memset_fallback
+#endif
+
+#if !defined(raddbgic_memcpy)
+# define raddbgic_memcpy raddbgic_memcpy_fallback
+#endif
+
 ////////////////////////////////
 //~ rjf: Overrideable String View Types
 
 // To override the string view type used by the library, do the following:
 //
+// #define RADDBGIC_STRING8_OVERRIDE
 // #define RADDBGIC_String8 <name of your string type here>
 // #define RADDBGIC_String8_BaseMember <name of base pointer member>
 // #define RADDBGIC_String8_SizeMember <name of size member>
@@ -71,6 +86,7 @@ struct RADDBGIC_String8List
 // #define raddbgic_arena_pop_to  <name of your popping function  - must be (Arena*, U64 pos) -> void>
 
 #if !defined(RADDBGIC_Arena)
+# define RADDBGIC_Arena RADDBGIC_Arena 
 typedef struct RADDBGIC_Arena RADDBGIC_Arena;
 struct RADDBGIC_Arena
 {
@@ -98,12 +114,48 @@ struct RADDBGIC_Arena
 # define raddbgic_arena_push raddbgic_arena_push_fallback
 #endif
 
+////////////////////////////////
+//~ rjf: Overrideable Thread-Local Scratch Arenas
+
+// To override the default thread-local scratch arenas used b yhe library,
+// do the following:
+//
+// #define RADDBGIC_SCRATCH_OVERRIDE
+// #define RADDBGIC_Temp <name of arena temp block type - generally struct: (Arena*, U64)
+// #define raddbgic_temp_arena <name of temp -> arena implementation - must be (Temp) -> (Arena*)>
+// #define raddbgic_scratch_begin <name of scratch begin implementation - must be (Arena **conflicts, U64 conflict_count) -> Temp>
+// #define raddbgic_scratch_end <name of scratch end function - must be (Temp) -> void
+
+#if !defined(RADDBGIC_Temp)
+# define RADDBGIC_Temp RADDBGIC_Temp
 typedef struct RADDBGIC_Temp RADDBGIC_Temp;
 struct RADDBGIC_Temp
 {
   RADDBGIC_Arena *arena;
   RADDBGI_U64 pos;
 };
+#endif
+
+#if !defined(raddbgic_scratch_begin)
+# define raddbgic_scratch_begin raddbgic_scratch_begin_fallback
+#endif
+#if !defined(raddbgic_scratch_end)
+# define raddbgic_scratch_end raddbgic_scratch_end_fallback
+#endif
+
+////////////////////////////////
+//~ rjf: Linked List Helpers
+
+////////////////////////////////
+//~ rjf: Helper Macros
+
+#if defined(_MSC_VER)
+# define RADDBGIC_THREAD_LOCAL __declspec(thread)
+#elif defined(__clang__) || defined(__GNUC__) || defined(__GNUG__)
+# define RADDBGIC_THREAD_LOCAL __thread
+#else
+# error RADDBGIC_THREAD_LOCAL not defined for this compiler.
+#endif
 
 ////////////////////////////////
 //~ rjf: Error Types
@@ -925,11 +977,10 @@ struct RADDBGIC_BakeCtx
 #if !defined(RADDBGIC_MEMSET_OVERRIDE)
 RADDBGI_PROC void *raddbgic_memset_fallback(void *dst, RADDBGI_U8 c, RADDBGI_U64 size);
 #endif
+#if !defined(RADDBGIC_MEMCPY_OVERRIDE)
+RADDBGI_PROC void *raddbgic_memcpy_fallback(void *dst, void *src, RADDBGI_U64 size);
+#endif
 #define raddbgic_memzero(ptr, size) raddbgic_memset((ptr), 0, (size))
-
-//- rjf: strings
-RADDBGI_PROC RADDBGIC_String8 raddbgic_str8(RADDBGI_U8 *str, RADDBGI_U64 size);
-#define raddbgic_str8_lit(S)  raddbgic_str8((U8*)(S), sizeof(S) - 1)
 
 //- rjf: arenas
 #if !defined (RADDBGIC_ARENA_OVERRIDE)
@@ -941,6 +992,17 @@ RADDBGI_PROC void raddbgic_arena_pop_to_fallback(RADDBGIC_Arena *arena, RADDBGI_
 #endif
 #define raddbgic_push_array_no_zero(a,T,c) (T*)raddbgic_arena_push((a), sizeof(T)*(c))
 #define raddbgic_push_array(a,T,c) (T*)raddbgic_memzero(raddbgic_push_array_no_zero(a,T,c), sizeof(T)*(c))
+
+//- rjf: thread-local scratch arenas
+#if !defined (RADDBGIC_SCRATCH_OVERRIDE)
+RADDBGI_PROC RADDBGIC_Temp raddbgic_scratch_begin_fallback(RADDBGIC_Arena **conflicts, RADDBGI_U64 conflicts_count);
+RADDBGI_PROC void raddbgic_scratch_end_fallback(RADDBGIC_Temp temp);
+#endif
+
+//- rjf: strings
+RADDBGI_PROC RADDBGIC_String8 raddbgic_str8(RADDBGI_U8 *str, RADDBGI_U64 size);
+RADDBGI_PROC RADDBGIC_String8 raddbgic_str8_copy(RADDBGIC_Arena *arena, RADDBGIC_String8 src);
+#define raddbgic_str8_lit(S)  raddbgic_str8((U8*)(S), sizeof(S) - 1)
 
 //- rjf: type lists
 RADDBGI_PROC void raddbgic_type_list_push(RADDBGIC_Arena *arena, RADDBGIC_TypeList *list, RADDBGIC_Type *type);

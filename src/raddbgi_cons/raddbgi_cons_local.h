@@ -6,7 +6,9 @@
 
 // rjf: base layer memory ops
 #define RADDBGIC_MEMSET_OVERRIDE
-#define raddbgic_memset memset
+#define RADDBGIC_MEMCPY_OVERRIDE
+#define raddbgic_memset MemorySet
+#define raddbgic_memcpy MemoryCopy
 
 // rjf: base layer string overrides
 #define RADDBGI_STRING8_OVERRIDE
@@ -24,6 +26,13 @@
 #define raddbgic_arena_pos       arena_pos
 #define raddbgic_arena_push      arena_push
 #define raddbgic_arena_pop_to    arena_pop_to
+
+// rjf: base layer scratch arena overrides
+#define RADDBGIC_SCRATCH_OVERRIDE
+#define RADDBGIC_Temp Temp
+#define raddbgic_temp_arena(t)   ((t).arena)
+#define raddbgic_scratch_begin   scratch_begin
+#define raddbgic_scratch_end     scratch_end
 
 #include "raddbgi_cons.h"
 

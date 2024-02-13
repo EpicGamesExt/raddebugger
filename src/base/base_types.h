@@ -31,7 +31,7 @@
 #define global        static
 #define local_persist static
 
-#if COMPILER_CL || (COMPILER_CLANG && OS_WINDOWS)
+#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 # pragma section(".rdata$", read)
 # define read_only __declspec(allocate(".rdata$"))
 #elif (COMPILER_CLANG && OS_LINUX)
@@ -84,7 +84,7 @@
 ////////////////////////////////
 //~ rjf: Asserts
 
-#if COMPILER_CL
+#if COMPILER_MSVC
 # define Trap() __debugbreak()
 #elif COMPILER_CLANG || COMPILER_GCC
 # define Trap() __builtin_trap()
@@ -180,7 +180,7 @@
 # define zero_struct {0}
 #endif
 
-#if COMPILER_MSVC && COMPILER_MSVC_YEAR < 2015
+#if COMPILER_MSVC && COMPILER_CL_YEAR < 2015
 # define this_function_name "unknown"
 #else
 # define this_function_name __func__
@@ -196,7 +196,7 @@
 # define C_LINKAGE
 #endif
 
-#if COMPILER_CL
+#if COMPILER_MSVC
 # define thread_static __declspec(thread)
 #elif COMPILER_CLANG || COMPILER_GCC
 # define thread_static __thread
@@ -211,7 +211,7 @@
 ////////////////////////////////
 //~ ASAN
 
-#if COMPILER_CL
+#if COMPILER_MSVC
 # if defined(__SANITIZE_ADDRESS__)
 #   define ASAN_ENABLED 1
 #   define NO_ASAN __declspec(no_sanitize_address)
@@ -345,7 +345,7 @@ Architecture;
 typedef enum Compiler
 {
   Compiler_Null,
-  Compiler_cl,
+  Compiler_msvc,
   Compiler_gcc,
   Compiler_clang,
   Compiler_COUNT,
