@@ -5429,7 +5429,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     tv->goto_line_num = 0;
     line_num = Clamp(1, line_num, txti_buffer_info.total_line_count);
     tv->cursor = tv->mark = txt_pt(line_num, 1);
-    tv->center_cursor = !tv->contain_cursor || (line_num < target_visible_line_num_range.min+8 || target_visible_line_num_range.max-8 < line_num);
+    tv->center_cursor = !tv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
   }
   
   //////////////////////////////
@@ -7232,7 +7232,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     tv->goto_line_num = 0;
     line_num = Clamp(1, line_num, txti_buffer_info.total_line_count);
     tv->cursor = tv->mark = txt_pt(line_num, 1);
-    tv->center_cursor = !tv->contain_cursor || (line_num < target_visible_line_num_range.min+8 || target_visible_line_num_range.max-8 < line_num);
+    tv->center_cursor = !tv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
   }
   
   //////////////////////////////
