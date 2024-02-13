@@ -57,7 +57,7 @@ global read_only S64 eval_g_max_precedence = 15;
 //~ rjf: Map Building Fast Paths
 
 internal EVAL_String2NumMap *
-eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
+eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -73,10 +73,10 @@ eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
   
   //- rjf: voff -> tightest scope
   RDI_Scope *tightest_scope = 0;
-  if(rdbg->scope_vmap != 0 && rdbg->scopes != 0)
+  if(rdi->scope_vmap != 0 && rdi->scopes != 0)
   {
-    U64 scope_idx = rdi_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
-    RDI_Scope *scope = &rdbg->scopes[scope_idx];
+    U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, voff);
+    RDI_Scope *scope = &rdi->scopes[scope_idx];
     Task *task = push_array(scratch.arena, Task, 1);
     task->scope = scope;
     SLLQueuePush(first_task, last_task, task);
@@ -84,10 +84,10 @@ eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
   }
   
   //- rjf: voff-1 -> scope
-  if(voff > 0 && rdbg->scope_vmap != 0 && rdbg->scopes != 0)
+  if(voff > 0 && rdi->scope_vmap != 0 && rdi->scopes != 0)
   {
-    U64 scope_idx = rdi_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff-1);
-    RDI_Scope *scope = &rdbg->scopes[scope_idx];
+    U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, voff-1);
+    RDI_Scope *scope = &rdi->scopes[scope_idx];
     if(scope != tightest_scope)
     {
       Task *task = push_array(scratch.arena, Task, 1);
@@ -99,9 +99,9 @@ eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
   //- rjf: tightest scope -> walk up the tree & build tasks for each parent scope
   if(tightest_scope != 0)
   {
-    for(RDI_Scope *scope = &rdbg->scopes[tightest_scope->parent_scope_idx];
-        scope != 0 && scope != &rdbg->scopes[0];
-        scope = &rdbg->scopes[scope->parent_scope_idx])
+    for(RDI_Scope *scope = &rdi->scopes[tightest_scope->parent_scope_idx];
+        scope != 0 && scope != &rdi->scopes[0];
+        scope = &rdi->scopes[scope->parent_scope_idx])
     {
       Task *task = push_array(scratch.arena, Task, 1);
       task->scope = scope;
@@ -122,9 +122,9 @@ eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
       U32 local_opl_idx = scope->local_first + scope->local_count;
       for(U32 local_idx = scope->local_first; local_idx < local_opl_idx; local_idx += 1)
       {
-        RDI_Local *local_var = &rdbg->locals[local_idx];
+        RDI_Local *local_var = &rdi->locals[local_idx];
         U64 local_name_size = 0;
-        U8 *local_name_str = rdi_string_from_idx(rdbg, local_var->name_string_idx, &local_name_size);
+        U8 *local_name_str = rdi_string_from_idx(rdi, local_var->name_string_idx, &local_name_size);
         String8 name = push_str8_copy(arena, str8(local_name_str, local_name_size));
         eval_string2num_map_insert(arena, map, name, (U64)local_idx+1);
       }
@@ -136,35 +136,35 @@ eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
 }
 
 internal EVAL_String2NumMap *
-eval_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
+eval_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
 {
   //- rjf: voff -> tightest scope
   RDI_Scope *tightest_scope = 0;
-  if(rdbg->scope_vmap != 0 && rdbg->scopes != 0)
+  if(rdi->scope_vmap != 0 && rdi->scopes != 0)
   {
-    U64 scope_idx = rdi_vmap_idx_from_voff(rdbg->scope_vmap, rdbg->scope_vmap_count, voff);
-    tightest_scope = &rdbg->scopes[scope_idx];
+    U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, voff);
+    tightest_scope = &rdi->scopes[scope_idx];
   }
   
   //- rjf: tightest scope -> procedure
   RDI_Procedure *procedure = 0;
-  if(tightest_scope != 0 && rdbg->procedures != 0)
+  if(tightest_scope != 0 && rdi->procedures != 0)
   {
     U32 proc_idx = tightest_scope->proc_idx;
-    if(0 < proc_idx && proc_idx < rdbg->procedures_count)
+    if(0 < proc_idx && proc_idx < rdi->procedures_count)
     {
-      procedure = &rdbg->procedures[proc_idx];
+      procedure = &rdi->procedures[proc_idx];
     }
   }
   
   //- rjf: procedure -> udt
   RDI_UDT *udt = 0;
-  if(procedure != 0 && rdbg->udts != 0 && procedure->link_flags & RDI_LinkFlag_TypeScoped)
+  if(procedure != 0 && rdi->udts != 0 && procedure->link_flags & RDI_LinkFlag_TypeScoped)
   {
     U32 udt_idx = procedure->container_idx;
-    if(0 < udt_idx && udt_idx < rdbg->udts_count)
+    if(0 < udt_idx && udt_idx < rdi->udts_count)
     {
-      udt = &rdbg->udts[udt_idx];
+      udt = &rdi->udts[udt_idx];
     }
   }
   
@@ -173,22 +173,22 @@ eval_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdbg, U64 voff)
   *map = eval_string2num_map_make(arena, 64);
   
   //- rjf: udt -> fill member map
-  if(udt != 0 && !(udt->flags & RDI_UserDefinedTypeFlag_EnumMembers) && rdbg->members != 0)
+  if(udt != 0 && !(udt->flags & RDI_UserDefinedTypeFlag_EnumMembers) && rdi->members != 0)
   {
     U64 data_member_num = 1;
     for(U32 member_idx = udt->member_first;
         member_idx < udt->member_first+udt->member_count;
         member_idx += 1)
     {
-      if(member_idx < 1 || rdbg->members_count <= member_idx)
+      if(member_idx < 1 || rdi->members_count <= member_idx)
       {
         break;
       }
-      RDI_Member *m = &rdbg->members[member_idx];
+      RDI_Member *m = &rdi->members[member_idx];
       if(m->kind == RDI_MemberKind_DataField)
       {
         String8 name = {0};
-        name.str = rdi_string_from_idx(rdbg, m->name_string_idx, &name.size);
+        name.str = rdi_string_from_idx(rdi, m->name_string_idx, &name.size);
         eval_string2num_map_insert(arena, map, name, data_member_num);
         data_member_num += 1;
       }
@@ -464,23 +464,23 @@ eval_token_array_make_first_opl(EVAL_Token *first, EVAL_Token *opl)
 //~ rjf: Parser Functions
 
 internal TG_Key
-eval_leaf_type_from_name(RDI_Parsed *rdbg, String8 name)
+eval_leaf_type_from_name(RDI_Parsed *rdi, String8 name)
 {
   TG_Key key = zero_struct;
   B32 found = 0;
-  if(rdbg->type_nodes != 0)
+  if(rdi->type_nodes != 0)
   {
-    RDI_NameMap *name_map = rdi_name_map_from_kind(rdbg, RDI_NameMapKind_Types);
+    RDI_NameMap *name_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Types);
     RDI_ParsedNameMap parsed_name_map = {0};
-    rdi_name_map_parse(rdbg, name_map, &parsed_name_map);
-    RDI_NameMapNode *node = rdi_name_map_lookup(rdbg, &parsed_name_map, name.str, name.size);
+    rdi_name_map_parse(rdi, name_map, &parsed_name_map);
+    RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
     if(node != 0)
     {
       U32 match_count = 0;
-      U32 *matches = rdi_matches_from_map_node(rdbg, node, &match_count);
+      U32 *matches = rdi_matches_from_map_node(rdi, node, &match_count);
       if(match_count != 0)
       {
-        RDI_TypeNode *type_node = rdi_element_from_idx(rdbg, type_nodes, matches[0]);
+        RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, matches[0]);
         found = type_node->kind != RDI_TypeKind_NULL;
         key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), (U64)matches[0]);
       }
@@ -569,7 +569,7 @@ eval_parse_type_from_text_tokens(Arena *arena, EVAL_ParseCtx *ctx, String8 text,
     if(token.kind == EVAL_TokenKind_Identifier)
     {
       String8 token_string = str8_substr(text, token.range);
-      TG_Key type_key = eval_leaf_type_from_name(ctx->rdbg, token_string);
+      TG_Key type_key = eval_leaf_type_from_name(ctx->rdi, token_string);
       if(!tg_key_match(tg_key_zero(), type_key))
       {
         token_it += 1;
@@ -680,7 +680,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
         String8 some_type_identifier_maybe_string = str8_substr(text, some_type_identifier_maybe.range);
         if(some_type_identifier_maybe.kind == EVAL_TokenKind_Identifier)
         {
-          TG_Key type_key = eval_leaf_type_from_name(ctx->rdbg, some_type_identifier_maybe_string);
+          TG_Key type_key = eval_leaf_type_from_name(ctx->rdi, some_type_identifier_maybe_string);
           if(!tg_key_match(type_key, tg_key_zero()) || str8_match(some_type_identifier_maybe_string, str8_lit("unsigned"), 0))
           {
             // rjf: move past open paren
@@ -798,14 +798,14 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           
           //- rjf: form namespaceified fallback versions of this lookup string
           String8List namespaceified_token_strings = {0};
-          if(ctx->rdbg->procedures != 0 && ctx->rdbg->scopes != 0 && ctx->rdbg->scope_vmap != 0)
+          if(ctx->rdi->procedures != 0 && ctx->rdi->scopes != 0 && ctx->rdi->scope_vmap != 0)
           {
-            U64 scope_idx = rdi_vmap_idx_from_voff(ctx->rdbg->scope_vmap, ctx->rdbg->scope_vmap_count, ctx->ip_voff);
-            RDI_Scope *scope = &ctx->rdbg->scopes[scope_idx];
+            U64 scope_idx = rdi_vmap_idx_from_voff(ctx->rdi->scope_vmap, ctx->rdi->scope_vmap_count, ctx->ip_voff);
+            RDI_Scope *scope = &ctx->rdi->scopes[scope_idx];
             U64 proc_idx = scope->proc_idx;
-            RDI_Procedure *procedure = &ctx->rdbg->procedures[proc_idx];
+            RDI_Procedure *procedure = &ctx->rdi->procedures[proc_idx];
             U64 name_size = 0;
-            U8 *name_ptr = rdi_string_from_idx(ctx->rdbg, procedure->name_string_idx, &name_size);
+            U8 *name_ptr = rdi_string_from_idx(ctx->rdi, procedure->name_string_idx, &name_size);
             String8 containing_procedure_name = str8(name_ptr, name_size);
             U64 last_past_scope_resolution_pos = 0;
             for(;;)
@@ -843,8 +843,8 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             {
               mapped_identifier = 1;
               identifier_type_is_possibly_dynamically_overridden = 1;
-              RDI_Local *local_var = rdi_element_from_idx(ctx->rdbg, locals, local_num-1);
-              RDI_TypeNode *type_node = rdi_element_from_idx(ctx->rdbg, type_nodes, local_var->type_idx);
+              RDI_Local *local_var = rdi_element_from_idx(ctx->rdi, locals, local_num-1);
+              RDI_TypeNode *type_node = rdi_element_from_idx(ctx->rdi, type_nodes, local_var->type_idx);
               type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), (U64)local_var->type_idx);
               
               // rjf: grab location info
@@ -852,19 +852,19 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                   loc_block_idx < local_var->location_opl;
                   loc_block_idx += 1)
               {
-                RDI_LocationBlock *block = &ctx->rdbg->location_blocks[loc_block_idx];
+                RDI_LocationBlock *block = &ctx->rdi->location_blocks[loc_block_idx];
                 if(block->scope_off_first <= ctx->ip_voff && ctx->ip_voff < block->scope_off_opl)
                 {
-                  loc_kind = *((RDI_LocationKind *)(ctx->rdbg->location_data + block->location_data_off));
+                  loc_kind = *((RDI_LocationKind *)(ctx->rdi->location_data + block->location_data_off));
                   switch(loc_kind)
                   {
                     default:{mapped_identifier = 0;}break;
                     case RDI_LocationKind_AddrBytecodeStream:
                     case RDI_LocationKind_ValBytecodeStream:
                     {
-                      U8 *bytecode_base = ctx->rdbg->location_data + block->location_data_off + sizeof(RDI_LocationKind);
+                      U8 *bytecode_base = ctx->rdi->location_data + block->location_data_off + sizeof(RDI_LocationKind);
                       U64 bytecode_size = 0;
-                      for(U64 idx = 0; idx < ctx->rdbg->location_data_size; idx += 1)
+                      for(U64 idx = 0; idx < ctx->rdi->location_data_size; idx += 1)
                       {
                         U8 op = bytecode_base[idx];
                         if(op == 0)
@@ -880,11 +880,11 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                     case RDI_LocationKind_AddrRegisterPlusU16:
                     case RDI_LocationKind_AddrAddrRegisterPlusU16:
                     {
-                      MemoryCopy(&loc_reg_u16, (ctx->rdbg->location_data + block->location_data_off), sizeof(loc_reg_u16));
+                      MemoryCopy(&loc_reg_u16, (ctx->rdi->location_data + block->location_data_off), sizeof(loc_reg_u16));
                     }break;
                     case RDI_LocationKind_ValRegister:
                     {
-                      MemoryCopy(&loc_reg, (ctx->rdbg->location_data + block->location_data_off), sizeof(loc_reg));
+                      MemoryCopy(&loc_reg, (ctx->rdi->location_data + block->location_data_off), sizeof(loc_reg));
                     }break;
                   }
                 }
@@ -919,21 +919,21 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           //- rjf: try global variables
           if(mapped_identifier == 0)
           {
-            RDI_NameMap *name_map = rdi_name_map_from_kind(ctx->rdbg, RDI_NameMapKind_GlobalVariables);
-            if(name_map != 0 && ctx->rdbg->global_variables != 0)
+            RDI_NameMap *name_map = rdi_name_map_from_kind(ctx->rdi, RDI_NameMapKind_GlobalVariables);
+            if(name_map != 0 && ctx->rdi->global_variables != 0)
             {
               RDI_ParsedNameMap parsed_name_map = {0};
-              rdi_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
-              RDI_NameMapNode *node = rdi_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
+              rdi_name_map_parse(ctx->rdi, name_map, &parsed_name_map);
+              RDI_NameMapNode *node = rdi_name_map_lookup(ctx->rdi, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
-              U32 *matches = rdi_matches_from_map_node(ctx->rdbg, node, &matches_count);
+              U32 *matches = rdi_matches_from_map_node(ctx->rdi, node, &matches_count);
               for(String8Node *n = namespaceified_token_strings.first;
                   n != 0 && matches_count == 0;
                   n = n->next)
               {
-                node = rdi_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
+                node = rdi_name_map_lookup(ctx->rdi, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
-                matches = rdi_matches_from_map_node(ctx->rdbg, node, &matches_count);
+                matches = rdi_matches_from_map_node(ctx->rdi, node, &matches_count);
               }
               if(matches_count != 0)
               {
@@ -942,15 +942,15 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                 // don't know of a magic hash table fixup path in PDBs, so
                 // in this case, I'm going to prefer the latest-added global.
                 U32 match_idx = matches[matches_count-1];
-                RDI_GlobalVariable *global_var = &ctx->rdbg->global_variables[match_idx];
+                RDI_GlobalVariable *global_var = &ctx->rdi->global_variables[match_idx];
                 EVAL_OpList oplist = {0};
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, global_var->voff);
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = global_var->type_idx;
-                if(type_idx < ctx->rdbg->type_nodes_count)
+                if(type_idx < ctx->rdi->type_nodes_count)
                 {
-                  RDI_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
+                  RDI_TypeNode *type_node = &ctx->rdi->type_nodes[type_idx];
                   type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), (U64)type_idx);
                 }
                 mapped_identifier = 1;
@@ -961,34 +961,34 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           //- rjf: try thread variables
           if(mapped_identifier == 0)
           {
-            RDI_NameMap *name_map = rdi_name_map_from_kind(ctx->rdbg, RDI_NameMapKind_ThreadVariables);
-            if(name_map != 0 && ctx->rdbg->global_variables != 0)
+            RDI_NameMap *name_map = rdi_name_map_from_kind(ctx->rdi, RDI_NameMapKind_ThreadVariables);
+            if(name_map != 0 && ctx->rdi->global_variables != 0)
             {
               RDI_ParsedNameMap parsed_name_map = {0};
-              rdi_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
-              RDI_NameMapNode *node = rdi_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
+              rdi_name_map_parse(ctx->rdi, name_map, &parsed_name_map);
+              RDI_NameMapNode *node = rdi_name_map_lookup(ctx->rdi, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
-              U32 *matches = rdi_matches_from_map_node(ctx->rdbg, node, &matches_count);
+              U32 *matches = rdi_matches_from_map_node(ctx->rdi, node, &matches_count);
               for(String8Node *n = namespaceified_token_strings.first;
                   n != 0 && matches_count == 0;
                   n = n->next)
               {
-                node = rdi_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
+                node = rdi_name_map_lookup(ctx->rdi, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
-                matches = rdi_matches_from_map_node(ctx->rdbg, node, &matches_count);
+                matches = rdi_matches_from_map_node(ctx->rdi, node, &matches_count);
               }
               if(matches_count != 0)
               {
                 U32 match_idx = matches[0];
-                RDI_ThreadVariable *thread_var = &ctx->rdbg->thread_variables[match_idx];
+                RDI_ThreadVariable *thread_var = &ctx->rdi->thread_variables[match_idx];
                 EVAL_OpList oplist = {0};
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, thread_var->tls_off);
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = thread_var->type_idx;
-                if(type_idx < ctx->rdbg->type_nodes_count)
+                if(type_idx < ctx->rdi->type_nodes_count)
                 {
-                  RDI_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
+                  RDI_TypeNode *type_node = &ctx->rdi->type_nodes[type_idx];
                   type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), (U64)type_idx);
                 }
                 mapped_identifier = 1;
@@ -999,36 +999,36 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           //- rjf: try procedures
           if(mapped_identifier == 0)
           {
-            RDI_NameMap *name_map = rdi_name_map_from_kind(ctx->rdbg, RDI_NameMapKind_Procedures);
-            if(name_map != 0 && ctx->rdbg->procedures != 0 && ctx->rdbg->scopes != 0 && ctx->rdbg->scope_voffs)
+            RDI_NameMap *name_map = rdi_name_map_from_kind(ctx->rdi, RDI_NameMapKind_Procedures);
+            if(name_map != 0 && ctx->rdi->procedures != 0 && ctx->rdi->scopes != 0 && ctx->rdi->scope_voffs)
             {
               RDI_ParsedNameMap parsed_name_map = {0};
-              rdi_name_map_parse(ctx->rdbg, name_map, &parsed_name_map);
-              RDI_NameMapNode *node = rdi_name_map_lookup(ctx->rdbg, &parsed_name_map, token_string.str, token_string.size);
+              rdi_name_map_parse(ctx->rdi, name_map, &parsed_name_map);
+              RDI_NameMapNode *node = rdi_name_map_lookup(ctx->rdi, &parsed_name_map, token_string.str, token_string.size);
               U32 matches_count = 0;
-              U32 *matches = rdi_matches_from_map_node(ctx->rdbg, node, &matches_count);
+              U32 *matches = rdi_matches_from_map_node(ctx->rdi, node, &matches_count);
               for(String8Node *n = namespaceified_token_strings.first;
                   n != 0 && matches_count == 0;
                   n = n->next)
               {
-                node = rdi_name_map_lookup(ctx->rdbg, &parsed_name_map, n->string.str, n->string.size);
+                node = rdi_name_map_lookup(ctx->rdi, &parsed_name_map, n->string.str, n->string.size);
                 matches_count = 0;
-                matches = rdi_matches_from_map_node(ctx->rdbg, node, &matches_count);
+                matches = rdi_matches_from_map_node(ctx->rdi, node, &matches_count);
               }
               if(matches_count != 0)
               {
                 U32 match_idx = matches[0];
-                RDI_Procedure *procedure = &ctx->rdbg->procedures[match_idx];
-                RDI_Scope *scope = &ctx->rdbg->scopes[procedure->root_scope_idx];
-                U64 voff = ctx->rdbg->scope_voffs[scope->voff_range_first];
+                RDI_Procedure *procedure = &ctx->rdi->procedures[match_idx];
+                RDI_Scope *scope = &ctx->rdi->scopes[procedure->root_scope_idx];
+                U64 voff = ctx->rdi->scope_voffs[scope->voff_range_first];
                 EVAL_OpList oplist = {0};
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
                 loc_kind = RDI_LocationKind_ValBytecodeStream;
                 loc_bytecode = eval_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = procedure->type_idx;
-                if(type_idx < ctx->rdbg->type_nodes_count)
+                if(type_idx < ctx->rdi->type_nodes_count)
                 {
-                  RDI_TypeNode *type_node = &ctx->rdbg->type_nodes[type_idx];
+                  RDI_TypeNode *type_node = &ctx->rdi->type_nodes[type_idx];
                   type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), (U64)type_idx);
                 }
                 mapped_identifier = 1;
@@ -1039,7 +1039,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           //- rjf: try types
           if(mapped_identifier == 0)
           {
-            type_key = eval_leaf_type_from_name(ctx->rdbg, token_string);
+            type_key = eval_leaf_type_from_name(ctx->rdi, token_string);
             if(!tg_key_match(tg_key_zero(), type_key))
             {
               mapped_identifier = 1;

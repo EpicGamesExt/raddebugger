@@ -751,7 +751,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_Entity *binary = df_binary_file_from_module(module);
       String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
       DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
-      RDI_Parsed *rdbg = &dbgi->rdbg;
+      RDI_Parsed *rdi = &dbgi->rdi;
       
       //- rjf: calculate top-level keys, expand root-level, grab root expansion node
       DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
@@ -842,7 +842,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         last_vb = df_eval_viz_block_split_and_continue(arena, &blocks, last_vb, sub_expand_item_idxs[sub_expand_idx]);
         
         // rjf: grab name for the expanded row
-        String8 name = dbgi_fuzzy_item_string_from_rdbg_target_element_idx(&dbgi->rdbg, dbgi_target, sub_expand_keys[sub_expand_idx].child_num);
+        String8 name = dbgi_fuzzy_item_string_from_rdi_target_element_idx(&dbgi->rdi, dbgi_target, sub_expand_keys[sub_expand_idx].child_num);
         
         // rjf: recurse for sub-expansion
         {
@@ -1180,7 +1180,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           default:{}break;
           case EVAL_EvalMode_Addr:
           {
-            U64 size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+            U64 size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdi, row->eval.type_key);
             size = Min(size, 64);
             Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
             CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
@@ -1270,7 +1270,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                row->depth > 0 &&
                !row_expanded)
             {
-              U64 next_off = (row->eval.offset + tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key));
+              U64 next_off = (row->eval.offset + tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdi, row->eval.type_key));
               if(next_off%64 != 0 && row->eval.offset/64 < next_off/64)
               {
                 ui_set_next_fixed_x(0);
@@ -1346,7 +1346,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   String8List inheritance_chain_type_names = {0};
                   for(TG_KeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
                   {
-                    String8 inherited_type_name = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, n->v);
+                    String8 inherited_type_name = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, n->v);
                     inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
                     str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
                   }
@@ -1399,9 +1399,9 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   if(parse.expr != &eval_expr_nil && errors.count == 0)
                   {
                     ui_labelf("Type:");
-                    ir_tree_and_type = eval_irtree_and_type_from_expr(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, &eval_string2expr_map_nil, parse.expr, &errors);
+                    ir_tree_and_type = eval_irtree_and_type_from_expr(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, &eval_string2expr_map_nil, parse.expr, &errors);
                     TG_Key type_key = ir_tree_and_type.type_key;
-                    String8 type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, type_key);
+                    String8 type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, type_key);
                     UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
                       ui_label(type_string);
                   }
@@ -1554,7 +1554,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 UI_FocusActive((cell_selected && ewv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
               {
                 TG_Key key = row->eval.type_key;
-                String8 string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, key);
+                String8 string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, key);
                 string = str8_skip_chop_whitespace(string);
                 UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###type_%I64x", row_hash);
                 if(!tg_key_match(key, tg_key_zero())) UI_Parent(box)
@@ -1691,7 +1691,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         {
           Temp scratch = scratch_begin(0, 0);
           DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &macro_map, commit_string);
-          B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, commit_row->eval, write_eval);
+          B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdi, &ctrl_ctx, commit_row->eval, write_eval);
           if(success == 0)
           {
             DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2918,7 +2918,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   //- rjf: query -> raddbg, filtered items
   U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
-  RDI_Parsed *rdbg = &dbgi->rdbg;
+  RDI_Parsed *rdi = &dbgi->rdi;
   B32 items_stale = 0;
   DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, query, DBGI_FuzzySearchTarget_Procedures, os_now_microseconds()+100, &items_stale);
   if(items_stale)
@@ -2929,9 +2929,9 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   //- rjf: submit best match when hitting enter w/ no selection
   if(slv->cursor.y == 0 && items.count != 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
   {
-    RDI_Procedure *procedure = rdi_element_from_idx(rdbg, procedures, items.v[0].idx);
+    RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, items.v[0].idx);
     U64 name_size = 0;
-    U8 *name_base = rdi_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+    U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
     String8 name = str8(name_base, name_size);
     if(name.size != 0)
     {
@@ -2967,11 +2967,11 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
       DBGI_FuzzySearchItem *item = &items.v[idx];
-      RDI_Procedure *procedure = rdi_element_from_idx(rdbg, procedures, item->idx);
+      RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, item->idx);
       U64 name_size = 0;
-      U8 *name_base = rdi_string_from_idx(rdbg, procedure->name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
-      RDI_TypeNode *type_node = rdi_element_from_idx(rdbg, type_nodes, procedure->type_idx);
+      RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, procedure->type_idx);
       TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
@@ -2987,7 +2987,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         ui_box_equip_fuzzy_match_ranges(box, &item->match_ranges);
         if(!tg_key_match(tg_key_zero(), type_key))
         {
-          String8 type_string = tg_string_from_key(scratch.arena, graph, rdbg, type_key);
+          String8 type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
           df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_WeakText), type_string);
         }
       }
@@ -7902,7 +7902,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       DBGI_Scope *scope = dbgi_scope_open();
       U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
       EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_rip_vaddr);
-      RDI_Parsed *rdbg = parse_ctx.rdbg;
+      RDI_Parsed *rdi = parse_ctx.rdi;
       for(EVAL_String2NumMapNode *n = parse_ctx.locals_map->first; n != 0; n = n->order_next)
       {
         String8 local_name = n->string;
@@ -7910,7 +7910,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         if(local_eval.mode == EVAL_EvalMode_Addr)
         {
           TG_Kind local_eval_type_kind = tg_kind_from_key(local_eval.type_key);
-          U64 local_eval_type_size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, rdbg, local_eval.type_key);
+          U64 local_eval_type_size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, rdi, local_eval.type_key);
           Rng1U64 vaddr_rng = r1u64(local_eval.offset, local_eval.offset+local_eval_type_size);
           Rng1U64 vaddr_rng_in_visible = intersect_1u64(viz_range_bytes, vaddr_rng);
           if(vaddr_rng_in_visible.max != vaddr_rng_in_visible.min)
@@ -7919,7 +7919,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             {
               annotation->name_string = push_str8_copy(scratch.arena, local_name);
               annotation->kind_string = str8_lit("Local");
-              annotation->type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdbg, local_eval.type_key);
+              annotation->type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, local_eval.type_key);
               annotation->color = color_gen_table[(vaddr_rng.min/8)%ArrayCount(color_gen_table)];
               annotation->vaddr_range = vaddr_rng;
             }

@@ -42,11 +42,11 @@ internal EVAL_Expr* eval_expr_leaf_type(Arena *arena, void *location, TG_Key typ
 
 internal RDI_EvalTypeGroup eval_type_group_from_kind(TG_Kind kind);
 
-internal TG_Key eval_type_unwrap_enum(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_Key eval_type_promote(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_Key eval_type_coerce(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key l, TG_Key r);
+internal TG_Key eval_type_unwrap_enum(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_Key eval_type_promote(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_Key eval_type_coerce(TG_Graph *graph, RDI_Parsed *rdi, TG_Key l, TG_Key r);
 
-internal B32 eval_type_match(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key l, TG_Key r);
+internal B32 eval_type_match(TG_Graph *graph, RDI_Parsed *rdi, TG_Key l, TG_Key r);
 
 internal B32 eval_kind_is_integer(TG_Kind kind);
 internal B32 eval_kind_is_signed(TG_Kind kind);
@@ -65,18 +65,18 @@ internal EVAL_IRTree* eval_irtree_bytecode_no_copy(Arena *arena, String8 bytecod
 ////////////////////////////////
 //~ allen: EVAL IR-Tree High Level Helpers
 
-internal EVAL_IRTree* eval_irtree_mem_read_type(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_IRTree *c, TG_Key type_key);
+internal EVAL_IRTree* eval_irtree_mem_read_type(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, EVAL_IRTree *c, TG_Key type_key);
 internal EVAL_IRTree* eval_irtree_convert_lo(Arena *arena, EVAL_IRTree *c, RDI_EvalTypeGroup out, RDI_EvalTypeGroup in);
-internal EVAL_IRTree* eval_irtree_trunc(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_IRTree *c, TG_Key type_key);
-internal EVAL_IRTree* eval_irtree_convert_hi(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_IRTree *c, TG_Key out, TG_Key in);
-internal EVAL_IRTree* eval_irtree_resolve_to_value(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_EvalMode from_mode, EVAL_IRTree *tree, TG_Key type_key);
+internal EVAL_IRTree* eval_irtree_trunc(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, EVAL_IRTree *c, TG_Key type_key);
+internal EVAL_IRTree* eval_irtree_convert_hi(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, EVAL_IRTree *c, TG_Key out, TG_Key in);
+internal EVAL_IRTree* eval_irtree_resolve_to_value(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, EVAL_EvalMode from_mode, EVAL_IRTree *tree, TG_Key type_key);
 
 ////////////////////////////////
 //~ allen: EVAL Compiler Phases
 
 internal void eval_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, EVAL_String2ExprMap *map, EVAL_Expr *expr, EVAL_ErrorList *eout);
-internal TG_Key eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_Expr *expr, EVAL_ErrorList *eout);
-internal EVAL_IRTreeAndType eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, EVAL_String2ExprMap *leaf_ident_expr_map, EVAL_Expr *expr, EVAL_ErrorList *eout);
+internal TG_Key eval_type_from_type_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, EVAL_Expr *expr, EVAL_ErrorList *eout);
+internal EVAL_IRTreeAndType eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, EVAL_String2ExprMap *leaf_ident_expr_map, EVAL_Expr *expr, EVAL_ErrorList *eout);
 internal void eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out);
 
 #endif //EVAL_COMPILER_H

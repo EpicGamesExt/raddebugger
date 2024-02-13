@@ -277,7 +277,7 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `lib_raddbgi_make` (`RDIM_`): Standalone library for constructing RADDBGI
   debug info data. Does not depend on `base`, and can be independently relocated
   to other codebases.
-- `lib_raddbgi_format` (`RADDBGI_`): Standalone library for defining the core
+- `lib_raddbgi_format` (`RDI_`): Standalone library which defines the core
   RADDBGI types and helper functions for reading and writing the RADDBGI debug
   info file format. Does not depend on `base`, and can be independently
   relocated to other codebases.

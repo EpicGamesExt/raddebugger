@@ -225,19 +225,19 @@ internal TG_Key tg_cons_type_make(TG_Graph *graph, TG_Kind kind, TG_Key direct_t
 ////////////////////////////////
 //~ rjf: Graph Introspection API
 
-internal TG_Type *tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_direct_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_unwrapped_direct_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_owner_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_ptee_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_Key tg_unwrapped_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal U64 tg_byte_size_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_Type *tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_Key tg_direct_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_Key tg_unwrapped_direct_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_Key tg_owner_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_Key tg_ptee_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_Key tg_unwrapped_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal U64 tg_byte_size_from_graph_rdi_key(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
 internal TG_Kind tg_kind_from_key(TG_Key key);
 internal TG_Member *tg_member_copy(Arena *arena, TG_Member *src);
-internal TG_MemberArray tg_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal TG_MemberArray tg_data_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
-internal void tg_lhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key, String8List *out, U32 prec, B32 skip_return);
-internal void tg_rhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key, String8List *out, U32 prec);
-internal String8 tg_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdbg, TG_Key key);
+internal TG_MemberArray tg_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal TG_MemberArray tg_data_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
+internal void tg_lhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key key, String8List *out, U32 prec, B32 skip_return);
+internal void tg_rhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key key, String8List *out, U32 prec);
+internal String8 tg_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key key);
 
 #endif // TYPE_GRAPH_H
