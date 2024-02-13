@@ -224,15 +224,18 @@ int main(int argument_count, char **arguments)
         String8 element_type = tag->first->string;
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
-        String8List *out = md_node_has_tag(node, str8_lit("c_file"), 0) ? &layer->c_tables : &layer->h_tables;
         String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
-        str8_list_pushf(mg_arena, out, "%S %S[] =\n{\n", element_type, node->string);
+        if(!md_node_has_tag(node, str8_lit("c_file"), 0))
+        {
+          str8_list_pushf(mg_arena, &layer->h_tables, "extern %S %S[%I64u];\n", element_type, node->string, gen_strings.node_count);
+        }
+        str8_list_pushf(mg_arena, &layer->c_tables, "%S %S[%I64u] =\n{\n", element_type, node->string, gen_strings.node_count);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_pushf(mg_arena, out, "%S,\n", escaped);
+          str8_list_pushf(mg_arena, &layer->c_tables, "%S,\n", escaped);
         }
-        str8_list_push(mg_arena, out, str8_lit("};\n\n"));
+        str8_list_push(mg_arena, &layer->c_tables, str8_lit("};\n\n"));
       }
     }
   }
@@ -401,11 +404,13 @@ int main(int argument_count, char **arguments)
             {
               fwrite(n->string.str, n->string.size, 1, h);
             }
+            fprintf(h, "C_LINKAGE_BEGIN\n");
             for(String8Node *n = layer->h_tables.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, h);
             }
-            fprintf(h, "\n#endif // %.*s_META_H\n", str8_varg(layer_key_filename_upper));
+            fprintf(h, "C_LINKAGE_END\n\n");
+            fprintf(h, "#endif // %.*s_META_H\n", str8_varg(layer_key_filename_upper));
             fclose(h);
           }
           {
@@ -421,10 +426,12 @@ int main(int argument_count, char **arguments)
             {
               fwrite(n->string.str, n->string.size, 1, c);
             }
+            fprintf(c, "C_LINKAGE_BEGIN\n");
             for(String8Node *n = layer->c_tables.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, c);
             }
+            fprintf(c, "C_LINKAGE_END\n\n");
             fclose(c);
           }
         }

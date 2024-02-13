@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/ctrl.meta.c"
+
+////////////////////////////////
 //~ rjf: Main Layer Initialization
 
 internal void

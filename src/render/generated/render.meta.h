@@ -58,57 +58,13 @@ R_PassKind_Geo3D,
 R_PassKind_COUNT,
 } R_PassKind;
 
-String8 r_tex2d_format_display_string_table[] =
-{
-str8_lit_comp("R8"),
-str8_lit_comp("RG8"),
-str8_lit_comp("RGBA8"),
-str8_lit_comp("BGRA8"),
-str8_lit_comp("R16"),
-str8_lit_comp("RGBA16"),
-str8_lit_comp("R32"),
-str8_lit_comp("RG32"),
-str8_lit_comp("RGBA32"),
-};
-
-U8 r_tex2d_format_bytes_per_pixel_table[] =
-{
-1,
-2,
-4,
-4,
-2,
-8,
-4,
-8,
-16,
-};
-
-String8 r_tex2d_kind_display_string_table[] =
-{
-str8_lit_comp("Static"),
-str8_lit_comp("Dynamic"),
-};
-
-String8 r_tex2d_sample_kind_display_string_table[] =
-{
-str8_lit_comp("Nearest"),
-str8_lit_comp("Linear"),
-};
-
-String8 r_pass_kind_display_string_table[] =
-{
-str8_lit_comp("UI"),
-str8_lit_comp("Blur"),
-str8_lit_comp("Geo3D"),
-};
-
-U8 r_pass_kind_batch_table[] =
-{
-1,
-0,
-1,
-};
-
+C_LINKAGE_BEGIN
+extern String8 r_tex2d_format_display_string_table[9];
+extern U8 r_tex2d_format_bytes_per_pixel_table[9];
+extern String8 r_tex2d_kind_display_string_table[2];
+extern String8 r_tex2d_sample_kind_display_string_table[2];
+extern String8 r_pass_kind_display_string_table[3];
+extern U8 r_pass_kind_batch_table[3];
+C_LINKAGE_END
 
 #endif // RENDER_META_H

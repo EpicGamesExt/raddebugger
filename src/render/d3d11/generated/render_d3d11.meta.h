@@ -34,6 +34,7 @@ R_D3D11_UniformTypeKind_Mesh,
 R_D3D11_UniformTypeKind_COUNT,
 } R_D3D11_UniformTypeKind;
 
+C_LINKAGE_BEGIN
 read_only global String8 r_d3d11_g_rect_shader_src =
 str8_lit_comp(
 ""
@@ -461,5 +462,6 @@ str8_lit_comp(
 ""
 );
 
+C_LINKAGE_END
 
 #endif // RENDER_D3D11_META_H

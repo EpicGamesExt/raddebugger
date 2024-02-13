@@ -211,8 +211,8 @@ raddbgic_str8_list_join(RADDBGIC_Arena *arena, RADDBGIC_String8List *list, RADDB
   RADDBGIC_String8 result;
   raddbgic_memzero_struct(&result);
   RADDBGI_U64 sep_count = (list->RADDBGIC_String8List_NodeCountMember > 1) ? (list->RADDBGIC_String8List_NodeCountMember-1) : 0;
-  result.RADDBGIC_String8_SizeMember = list->RADDBGIC_String8List_TotalSizeMember;
-  result.RADDBGIC_String8_BaseMember = raddbgic_push_array_no_zero(arena, RADDBGI_U8, result.RADDBGIC_String8_SizeMember+sep_count*sep.RADDBGIC_String8_SizeMember+1);
+  result.RADDBGIC_String8_SizeMember = list->RADDBGIC_String8List_TotalSizeMember+sep_count*sep.RADDBGIC_String8_SizeMember;
+  result.RADDBGIC_String8_BaseMember = raddbgic_push_array_no_zero(arena, RADDBGI_U8, result.RADDBGIC_String8_SizeMember+1);
   RADDBGI_U64 off = 0;
   for(RADDBGIC_String8Node *node = list->RADDBGIC_String8List_FirstMember;
       node != 0;
@@ -230,7 +230,7 @@ raddbgic_str8_list_join(RADDBGIC_Arena *arena, RADDBGIC_String8List *list, RADDB
       off += sep.RADDBGIC_String8_SizeMember;
     }
   }
-  result.RADDBGIC_String8_BaseMember[result.RADDBGIC_String8_SizeMember] = 0;
+  result.RADDBGIC_String8_BaseMember[off] = 0;
   return result;
 }
 

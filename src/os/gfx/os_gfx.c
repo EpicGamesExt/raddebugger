@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/os_gfx.meta.c"
+
+////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
 internal String8List

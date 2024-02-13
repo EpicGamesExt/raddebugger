@@ -321,3 +321,6 @@ case RADDBGI_RegisterCode_X86_ymm7:{result = REGS_RegCodeX86_ymm7;}break;
 }
 return result;
 }
+C_LINKAGE_BEGIN
+C_LINKAGE_END
+

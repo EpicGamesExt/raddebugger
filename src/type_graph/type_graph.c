@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/type_graph.meta.c"
+
+////////////////////////////////
 //~ rjf: Basic Helpers
 
 internal U64
