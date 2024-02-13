@@ -32,6 +32,14 @@
 #endif
 
 ////////////////////////////////
+//~ rjf: Overrideable sprintf Functions
+
+#if !defined(raddbgic_vsnprintf)
+# include <string.h>
+# define raddbgic_vsnprintf vsnprintf
+#endif
+
+////////////////////////////////
 //~ rjf: Overrideable String View Types
 
 // To override the string view type used by the library, do the following:
@@ -41,18 +49,34 @@
 // #define RADDBGIC_String8_BaseMember <name of base pointer member>
 // #define RADDBGIC_String8_SizeMember <name of size member>
 
+// To override the string view list type used by the library, do the following:
+//
+// #define RADDBGIC_STRING8LIST_OVERRIDE
+// #define RADDBGIC_String8Node <name of your string node here>
+// #define RADDBGIC_String8_NextPtrMember <name of member encoding next pointer>
+// #define RADDBGIC_String8_StringMember <name of node member containing string view>
+// #define RADDBGIC_String8List <name of your string list here>
+// #define RADDBGIC_String8_FirstMember <name of member encoding first pointer>
+// #define RADDBGIC_String8_LastMember <name of member encoding last pointer>
+// #define RADDBGIC_String8_NodeCount <name of U64 list member containing node count>
+// #define RADDBGIC_String8_TotalSizeMember <name of U64 list member containing total joined string size>
+
 #if !defined(RADDBGIC_String8)
+#define RADDBGIC_String8 RADDBGIC_String8
 #define RADDBGIC_String8_BaseMember str
 #define RADDBGIC_String8_SizeMember size
 typedef struct RADDBGIC_String8 RADDBGIC_String8;
 struct RADDBGIC_String8
 {
-  RADDBGI_U8 *RADDBGIC_String8_BaseMember;
-  RADDBGI_U64 RADDBGIC_String8_SizeMember;
+  RADDBGI_U8 *str;
+  RADDBGI_U64 size;
 };
 #endif
 
 #if !defined(RADDBGIC_String8Node)
+#define RADDBGIC_String8Node RADDBGIC_String8Node
+#define RADDBGIC_String8Node_NextPtrMember next
+#define RADDBGIC_String8Node_StringMember string
 typedef struct RADDBGIC_String8Node RADDBGIC_String8Node;
 struct RADDBGIC_String8Node
 {
@@ -62,6 +86,11 @@ struct RADDBGIC_String8Node
 #endif
 
 #if !defined(RADDBGIC_String8List)
+#define RADDBGIC_String8List RADDBGIC_String8List
+#define RADDBGIC_String8List_FirstMember first
+#define RADDBGIC_String8List_LastMember last
+#define RADDBGIC_String8List_NodeCountMember node_count
+#define RADDBGIC_String8List_TotalSizeMember total_size
 typedef struct RADDBGIC_String8List RADDBGIC_String8List;
 struct RADDBGIC_String8List
 {
@@ -71,6 +100,12 @@ struct RADDBGIC_String8List
   RADDBGI_U64 total_size;
 };
 #endif
+
+typedef RADDBGI_U32 RADDBGIC_StringMatchFlags;
+enum
+{
+  RADDBGIC_StringMatchFlag_CaseInsensitive = (1<<0),
+};
 
 ////////////////////////////////
 //~ rjf: Overrideable Arena Allocator Types
@@ -1081,7 +1116,15 @@ RADDBGI_PROC void raddbgic_scratch_end_fallback(RADDBGIC_Temp temp);
 //- rjf: strings
 RADDBGI_PROC RADDBGIC_String8 raddbgic_str8(RADDBGI_U8 *str, RADDBGI_U64 size);
 RADDBGI_PROC RADDBGIC_String8 raddbgic_str8_copy(RADDBGIC_Arena *arena, RADDBGIC_String8 src);
-#define raddbgic_str8_lit(S)  raddbgic_str8((RADDBGI_U8*)(S), sizeof(S) - 1)
+RADDBGI_PROC RADDBGIC_String8 raddbgic_str8f(RADDBGIC_Arena *arena, char *fmt, ...);
+RADDBGI_PROC RADDBGIC_String8 raddbgic_str8fv(RADDBGIC_Arena *arena, char *fmt, va_list args);
+RADDBGI_PROC RADDBGI_S32 raddbgic_str8_match(RADDBGIC_String8 a, RADDBGIC_String8 b, RADDBGIC_StringMatchFlags flags);
+#define raddbgic_str8_lit(S)    raddbgic_str8((RADDBGI_U8*)(S), sizeof(S) - 1)
+#define raddbgic_str8_struct(S) raddbgic_str8((RADDBGI_U8*)(S), sizeof(*(S)))
+
+//- rjf: string lists
+RADDBGI_PROC void raddbgic_str8_list_push(RADDBGIC_Arena *arena, RADDBGIC_String8List *list, RADDBGIC_String8 string);
+RADDBGI_PROC RADDBGIC_String8 raddbgic_str8_list_join(RADDBGIC_Arena *arena, RADDBGIC_String8List *list, RADDBGIC_String8 sep);
 
 //- rjf: type lists
 RADDBGI_PROC void raddbgic_type_list_push(RADDBGIC_Arena *arena, RADDBGIC_TypeList *list, RADDBGIC_Type *type);

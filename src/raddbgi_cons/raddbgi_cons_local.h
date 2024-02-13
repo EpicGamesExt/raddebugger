@@ -15,8 +15,15 @@
 #define RADDBGIC_String8 String8
 #define RADDBGIC_String8_BaseMember str
 #define RADDBGIC_String8_SizeMember size
+#define RADDBGI_STRING8LIST_OVERRIDE
 #define RADDBGIC_String8Node String8Node
+#define RADDBGIC_String8Node_NextPtrMember next
+#define RADDBGIC_String8Node_StringMember string
 #define RADDBGIC_String8List String8List
+#define RADDBGIC_String8List_FirstMember first
+#define RADDBGIC_String8List_LastMember last
+#define RADDBGIC_String8List_NodeCountMember node_count
+#define RADDBGIC_String8List_TotalSizeMember total_size
 
 // rjf: base layer arena overrides
 #define RADDBGIC_ARENA_OVERRIDE

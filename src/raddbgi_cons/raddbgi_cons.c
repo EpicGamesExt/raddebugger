@@ -141,13 +141,106 @@ raddbgic_str8_copy(RADDBGIC_Arena *arena, RADDBGIC_String8 src)
   return dst;
 }
 
+RADDBGI_PROC RADDBGIC_String8
+raddbgic_str8f(RADDBGIC_Arena *arena, char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  RADDBGIC_String8 result = raddbgic_str8fv(arena, fmt, args);
+  va_end(args);
+  return(result);
+}
+
+RADDBGI_PROC RADDBGIC_String8
+raddbgic_str8fv(RADDBGIC_Arena *arena, char *fmt, va_list args)
+{
+  va_list args2;
+  va_copy(args2, args);
+  RADDBGI_U32 needed_bytes = raddbgic_vsnprintf(0, 0, fmt, args) + 1;
+  RADDBGIC_String8 result = {0};
+  result.RADDBGIC_String8_BaseMember = raddbgic_push_array_no_zero(arena, RADDBGI_U8, needed_bytes);
+  result.RADDBGIC_String8_SizeMember = raddbgic_vsnprintf((char*)result.str, needed_bytes, fmt, args2);
+  result.RADDBGIC_String8_BaseMember[result.RADDBGIC_String8_SizeMember] = 0;
+  va_end(args2);
+  return(result);
+}
+
+RADDBGI_PROC RADDBGI_S32
+raddbgic_str8_match(RADDBGIC_String8 a, RADDBGIC_String8 b, RADDBGIC_StringMatchFlags flags)
+{
+  RADDBGI_S32 result = 0;
+  if(a.RADDBGIC_String8_SizeMember == b.RADDBGIC_String8_SizeMember)
+  {
+    RADDBGI_S32 case_insensitive = (flags & RADDBGIC_StringMatchFlag_CaseInsensitive);
+    RADDBGI_U64 size = a.RADDBGIC_String8_SizeMember;
+    result = 1;
+    for(RADDBGI_U64 idx = 0; idx < size; idx += 1)
+    {
+      RADDBGI_U8 at = a.RADDBGIC_String8_BaseMember[idx];
+      RADDBGI_U8 bt = b.RADDBGIC_String8_BaseMember[idx];
+      if(case_insensitive)
+      {
+        at = ('a' <= at && at <= 'z') ? at-('a'-'A') : at;
+        bt = ('a' <= bt && bt <= 'z') ? bt-('a'-'A') : bt;
+      }
+      if(at != bt)
+      {
+        result = 0;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+//- rjf: string lists
+
+RADDBGI_PROC void
+raddbgic_str8_list_push(RADDBGIC_Arena *arena, RADDBGIC_String8List *list, RADDBGIC_String8 string)
+{
+  RADDBGIC_String8Node *n = raddbgic_push_array(arena, RADDBGIC_String8Node, 1);
+  n->RADDBGIC_String8Node_StringMember = string;
+  RADDBGIC_SLLQueuePush_N(list->RADDBGIC_String8List_FirstMember, list->RADDBGIC_String8List_LastMember, n, RADDBGIC_String8Node_NextPtrMember);
+  list->RADDBGIC_String8List_NodeCountMember += 1;
+  list->RADDBGIC_String8List_TotalSizeMember += string.RADDBGIC_String8_SizeMember;
+}
+
+RADDBGI_PROC RADDBGIC_String8
+raddbgic_str8_list_join(RADDBGIC_Arena *arena, RADDBGIC_String8List *list, RADDBGIC_String8 sep)
+{
+  RADDBGIC_String8 result;
+  raddbgic_memzero_struct(&result);
+  RADDBGI_U64 sep_count = (list->RADDBGIC_String8List_NodeCountMember > 1) ? (list->RADDBGIC_String8List_NodeCountMember-1) : 0;
+  result.RADDBGIC_String8_SizeMember = list->RADDBGIC_String8List_TotalSizeMember;
+  result.RADDBGIC_String8_BaseMember = raddbgic_push_array_no_zero(arena, RADDBGI_U8, result.RADDBGIC_String8_SizeMember+sep_count*sep.RADDBGIC_String8_SizeMember+1);
+  RADDBGI_U64 off = 0;
+  for(RADDBGIC_String8Node *node = list->RADDBGIC_String8List_FirstMember;
+      node != 0;
+      node = node->RADDBGIC_String8Node_NextPtrMember)
+  {
+    raddbgic_memcpy((RADDBGI_U8*)result.RADDBGIC_String8_BaseMember+off,
+                    node->RADDBGIC_String8Node_StringMember.RADDBGIC_String8_BaseMember,
+                    node->RADDBGIC_String8Node_StringMember.RADDBGIC_String8_SizeMember);
+    off += node->RADDBGIC_String8Node_StringMember.RADDBGIC_String8_SizeMember;
+    if(sep.RADDBGIC_String8_SizeMember != 0 && node->RADDBGIC_String8Node_NextPtrMember != 0)
+    {
+      raddbgic_memcpy((RADDBGI_U8*)result.RADDBGIC_String8_BaseMember+off,
+                      sep.RADDBGIC_String8_BaseMember,
+                      sep.RADDBGIC_String8_SizeMember);
+      off += sep.RADDBGIC_String8_SizeMember;
+    }
+  }
+  result.RADDBGIC_String8_BaseMember[result.RADDBGIC_String8_SizeMember] = 0;
+  return result;
+}
+
 //- rjf: type lists
 
 RADDBGI_PROC void
 raddbgic_type_list_push(RADDBGIC_Arena *arena, RADDBGIC_TypeList *list, RADDBGIC_Type *type)
 {
   RADDBGIC_TypeNode *node = raddbgic_push_array(arena, RADDBGIC_TypeNode, 1);
-  SLLQueuePush(list->first, list->last, node);
+  RADDBGIC_SLLQueuePush(list->first, list->last, node);
   list->count += 1;
   node->type = type;
 }
@@ -165,7 +258,7 @@ raddbgic_bytecode_push_op(RADDBGIC_Arena *arena, RADDBGIC_EvalBytecode *bytecode
   node->p_size = p_size;
   node->p = p;
   
-  SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
+  RADDBGIC_SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
   bytecode->op_count += 1;
   bytecode->encoded_size += 1 + p_size;
 }
@@ -245,7 +338,6 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
   // Also - this sort should be a "stable" sort. In the use case of sorting vmap
   // ranges, we want to be able to rely on order, so it needs to be preserved here.
   
-  ProfBegin("raddbgic_sort_key_array");
   RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   RADDBGIC_SortKey *result = 0;
   
@@ -394,8 +486,6 @@ raddbgic_sort_key_array(RADDBGIC_Arena *arena, RADDBGIC_SortKey *keys, RADDBGI_U
 #endif
   
   scratch_end(scratch);
-  ProfEnd();
-  
   return result;
 }
 
@@ -477,7 +567,7 @@ raddbgic_str8toptr_map_lookup(RADDBGIC_Str8ToPtrMap *map, RADDBGIC_String8 key, 
       node != 0;
       node = node->next)
   {
-    if(node->hash == hash && str8_match(node->key, key, 0))
+    if(node->hash == hash && raddbgic_str8_match(node->key, key, 0))
     {
       result = node->ptr;
       break;
@@ -580,7 +670,7 @@ raddbgic_push_errorf(RADDBGIC_Root *root, char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
-  RADDBGIC_String8 str = push_str8fv(root->arena, fmt, args);
+  RADDBGIC_String8 str = raddbgic_str8fv(root->arena, fmt, args);
   raddbgic_push_error(root, str);
   va_end(args);
 }
@@ -1724,7 +1814,7 @@ raddbgic_name_map_add_pair(RADDBGIC_Root *root, RADDBGIC_NameMap *map, RADDBGIC_
       node != 0;
       node = node->bucket_next)
   {
-    if(str8_match(string, node->string, 0))
+    if(raddbgic_str8_match(string, node->string, 0))
     {
       match = node;
       break;
@@ -1834,7 +1924,7 @@ raddbgic_string(RADDBGIC_BakeCtx *bctx, RADDBGIC_String8 str)
       node != 0;
       node = node->bucket_next)
   {
-    if(node->hash == hash && str8_match(node->str, str, 0))
+    if(node->hash == hash && raddbgic_str8_match(node->str, str, 0))
     {
       match = node;
       break;
@@ -1964,9 +2054,7 @@ raddbgic_normal_string_from_path_node(RADDBGIC_Arena *arena, RADDBGIC_PathNode *
   {
     raddbgic_normal_string_from_path_node_build(scratch.arena, node, &list);
   }
-  StringJoin join = {0};
-  join.sep = str8_lit("/");
-  RADDBGIC_String8 result = str8_list_join(arena, &list, &join);
+  RADDBGIC_String8 result = raddbgic_str8_list_join(arena, &list, raddbgic_str8_lit("/"));
   {
     RADDBGI_U8 *ptr = result.str;
     RADDBGI_U8 *opl = result.str + result.size;
@@ -1991,7 +2079,7 @@ raddbgic_normal_string_from_path_node_build(RADDBGIC_Arena *arena, RADDBGIC_Path
   }
   if(node->name.size > 0)
   {
-    str8_list_push(arena, out, node->name);
+    raddbgic_str8_list_push(arena, out, node->name);
   }
 }
 
@@ -2015,7 +2103,7 @@ raddbgic_paths_sub_path(RADDBGIC_BakeCtx *bctx, RADDBGIC_PathNode *dir, RADDBGIC
       node != 0;
       node = node->next_sibling)
   {
-    if(str8_match(node->name, sub_dir, StringMatchFlag_CaseInsensitive))
+    if(raddbgic_str8_match(node->name, sub_dir, RADDBGIC_StringMatchFlag_CaseInsensitive))
     {
       match = node;
       break;
@@ -2059,7 +2147,7 @@ raddbgic_paths_node_from_path(RADDBGIC_BakeCtx *bctx,  RADDBGIC_String8 path)
     
     // if range is non-empty advance the node cursor
     if(range_first < ptr){
-      RADDBGIC_String8 sub_dir = str8_range(range_first, ptr);
+      RADDBGIC_String8 sub_dir = raddbgic_str8(range_first, (RADDBGI_U64)(ptr-range_first));
       node_cursor = raddbgic_paths_sub_path(bctx, node_cursor, sub_dir);
     }
   }
@@ -2106,7 +2194,6 @@ raddbgic_paths_src_node_from_path_node(RADDBGIC_BakeCtx *bctx, RADDBGIC_PathNode
 RADDBGI_PROC RADDBGIC_UnitLinesCombined*
 raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDBGIC_LineSequenceNode *first_seq)
 {
-  ProfBegin("raddbgic_unit_combine_lines");
   RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // gather up all line info into two arrays
@@ -2197,8 +2284,6 @@ raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDB
   result->line_count = key_count;
   
   scratch_end(scratch);
-  ProfEnd();
-  
   return result;
 }
 
@@ -2207,7 +2292,6 @@ raddbgic_unit_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_BakeCtx *bctx, RADDB
 RADDBGI_PROC RADDBGIC_SrcLinesCombined*
 raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *first)
 {
-  ProfBegin("raddbgic_source_combine_lines");
   RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // gather line number map
@@ -2218,7 +2302,6 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
   RADDBGI_U64 line_count = 0;
   RADDBGI_U64 voff_count = 0;
   RADDBGI_U64 max_line_num = 0;
-  ProfScope("gather line number map")
   {
     for(RADDBGIC_LineMapFragment *map_fragment = first;
         map_fragment != 0;
@@ -2273,7 +2356,6 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
   
   // bake sortable keys array
   RADDBGIC_SortKey *keys = raddbgic_push_array_no_zero(scratch.arena, RADDBGIC_SortKey, line_count);
-  ProfScope("bake sortable keys array")
   {
     RADDBGIC_SortKey *key_ptr = keys;
     for(RADDBGIC_SrcLineMapBucket *node = first_bucket;
@@ -2291,7 +2373,6 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
   RADDBGI_U32 *line_nums = raddbgic_push_array_no_zero(arena, RADDBGI_U32, line_count);
   RADDBGI_U32 *line_ranges = raddbgic_push_array_no_zero(arena, RADDBGI_U32, line_count + 1);
   RADDBGI_U64 *voffs = raddbgic_push_array_no_zero(arena, RADDBGI_U64, voff_count);
-  ProfScope("bake result")
   {
     RADDBGI_U64 *voff_ptr = voffs;
     for(RADDBGI_U32 i = 0; i < line_count; i += 1){
@@ -2316,8 +2397,6 @@ raddbgic_source_combine_lines(RADDBGIC_Arena *arena, RADDBGIC_LineMapFragment *f
   result->voff_count = voff_count;
   
   scratch_end(scratch);
-  ProfEnd();
-  
   return result;
 }
 
@@ -2531,7 +2610,6 @@ raddbgic_idx_run_from_types(RADDBGIC_Arena *arena, RADDBGIC_Type **types, RADDBG
 RADDBGI_PROC RADDBGIC_TypeData*
 raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_BakeCtx *bctx)
 {
-  ProfBegin("raddbgic_type_data_combine");
   RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // fill type nodes
@@ -2715,7 +2793,6 @@ raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_
   result->enum_member_count = enum_member_count;
   
   raddbgic_scratch_end(scratch);
-  ProfEnd();
   return result;
 }
 
@@ -2724,7 +2801,6 @@ raddbgic_type_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_
 RADDBGI_PROC RADDBGIC_SymbolData*
 raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_BakeCtx *bctx)
 {
-  ProfBegin("raddbgic_symbol_data_combine");
   RADDBGIC_Temp scratch = raddbgic_scratch_begin(&arena, 1);
   
   // count symbol kinds
@@ -2977,7 +3053,7 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
                 case RADDBGI_LocationKind_AddrBytecodeStream:
                 case RADDBGI_LocationKind_ValBytecodeStream:
                 {
-                  str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, str8_struct(&location->kind)));
+                  raddbgic_str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, raddbgic_str8_struct(&location->kind)));
                   for(RADDBGIC_EvalBytecodeOp *op_node = location->bytecode.first_op;
                       op_node != 0;
                       op_node = op_node->next){
@@ -2985,12 +3061,12 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
                     op_data[0] = op_node->op;
                     raddbgic_memcpy(op_data + 1, &op_node->p, op_node->p_size);
                     RADDBGIC_String8 op_data_str = raddbgic_str8(op_data, 1 + op_node->p_size);
-                    str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, op_data_str));
+                    raddbgic_str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, op_data_str));
                   }
                   {
                     RADDBGI_U64 data = 0;
                     RADDBGIC_String8 data_str = raddbgic_str8((RADDBGI_U8 *)&data, 1);
-                    str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, data_str));
+                    raddbgic_str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, data_str));
                   }
                 }break;
                 
@@ -3001,7 +3077,7 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
                   loc.kind = location->kind;
                   loc.register_code = location->register_code;
                   loc.offset = location->offset;
-                  str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, str8_struct(&loc)));
+                  raddbgic_str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, raddbgic_str8_struct(&loc)));
                 }break;
                 
                 case RADDBGI_LocationKind_ValRegister:
@@ -3009,7 +3085,7 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
                   RADDBGI_LocationRegister loc = {0};
                   loc.kind = location->kind;
                   loc.register_code = location->register_code;
-                  str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, str8_struct(&loc)));
+                  raddbgic_str8_list_push(scratch.arena, &location_data, raddbgic_str8_copy(scratch.arena, raddbgic_str8_struct(&loc)));
                 }break;
               }
             }
@@ -3041,7 +3117,7 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
   }
   
   // flatten location data
-  RADDBGIC_String8 location_data_str = str8_list_join(arena, &location_data, 0);
+  RADDBGIC_String8 location_data_str = raddbgic_str8_list_join(arena, &location_data, raddbgic_str8_lit(""));
   
   // scope vmap
   RADDBGIC_VMap *scope_vmap = 0;
@@ -3105,8 +3181,6 @@ raddbgic_symbol_data_combine(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGI
   result->location_data_size = location_data_str.size;
   
   raddbgic_scratch_end(scratch);
-  ProfEnd();
-  
   return result;
 }
 
@@ -3203,7 +3277,6 @@ raddbgic_name_map_bake(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_Bake
 RADDBGI_PROC void
 raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8List *out)
 {
-  ProfBeginFunction();
   str8_serial_begin(arena, out);
   
   // setup cons helpers
@@ -3597,5 +3670,4 @@ raddbgic_bake_file(RADDBGIC_Arena *arena, RADDBGIC_Root *root, RADDBGIC_String8L
   }
   
   raddbgic_bake_ctx_release(bctx);
-  ProfEnd();
 }
