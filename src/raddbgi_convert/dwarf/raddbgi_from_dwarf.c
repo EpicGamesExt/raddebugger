@@ -1,10 +1,10 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+#include "lib_raddbgi_format/raddbgi_format.h"
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "raddbgi_format/raddbgi_format.h"
-#include "raddbgi_cons/raddbgi_cons_local.h"
+#include "raddbgi_cons_local/raddbgi_cons_local.h"
 
 #include "raddbgi_elf.h"
 #include "raddbgi_dwarf.h"
@@ -13,10 +13,10 @@
 
 #include "raddbgi_from_dwarf.h"
 
+#include "lib_raddbgi_format/raddbgi_format.c"
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "raddbgi_format/raddbgi_format.c"
-#include "raddbgi_cons/raddbgi_cons_local.c"
+#include "raddbgi_cons_local/raddbgi_cons_local.c"
 
 #include "raddbgi_elf.c"
 #include "raddbgi_dwarf.c"

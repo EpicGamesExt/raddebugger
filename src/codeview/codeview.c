@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ CodeView Common Functions
 
-static CV_NumericParsed
+internal CV_NumericParsed
 cv_numeric_from_data_range(U8 *first, U8 *opl){
   CV_NumericParsed result = {0};
   if (first + 2 <= opl){
@@ -52,7 +52,7 @@ cv_numeric_from_data_range(U8 *first, U8 *opl){
   return(result);
 }
 
-static B32
+internal B32
 cv_numeric_fits_in_u64(CV_NumericParsed *num){
   B32 result = 0;
   switch (num->kind){
@@ -66,7 +66,7 @@ cv_numeric_fits_in_u64(CV_NumericParsed *num){
   return(result);
 }
 
-static B32
+internal B32
 cv_numeric_fits_in_s64(CV_NumericParsed *num){
   B32 result = 0;
   switch (num->kind){
@@ -81,7 +81,7 @@ cv_numeric_fits_in_s64(CV_NumericParsed *num){
   return(result);
 }
 
-static B32
+internal B32
 cv_numeric_fits_in_f64(CV_NumericParsed *num){
   B32 result = 0;
   switch (num->kind){
@@ -94,7 +94,7 @@ cv_numeric_fits_in_f64(CV_NumericParsed *num){
   return(result);
 }
 
-static U64
+internal U64
 cv_u64_from_numeric(CV_NumericParsed *num){
   U64 result = 0;
   switch (num->kind){
@@ -116,7 +116,7 @@ cv_u64_from_numeric(CV_NumericParsed *num){
   return(result);
 }
 
-static S64
+internal S64
 cv_s64_from_numeric(CV_NumericParsed *num){
   S64 result = 0;
   switch (num->kind){
@@ -143,7 +143,7 @@ cv_s64_from_numeric(CV_NumericParsed *num){
   return(result);
 }
 
-static F64
+internal F64
 cv_f64_from_numeric(CV_NumericParsed *num){
   F64 result = 0;
   switch (num->kind){
@@ -164,54 +164,9 @@ cv_f64_from_numeric(CV_NumericParsed *num){
 ////////////////////////////////
 //~ CodeView Sym Parser Functions
 
-static CV_SymParsed*
-cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align){
-  Assert(1 <= sym_align && IsPow2OrZero(sym_align));
-  ProfBegin("cv_sym_from_data");
-  
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  // gather up symbols
-  CV_RecRangeStream *stream = cv_rec_range_stream_from_data(scratch.arena, sym_data, sym_align);
-  
-  // convert to result
-  CV_SymParsed *result = push_array(arena, CV_SymParsed, 1);
-  result->data = sym_data;
-  result->sym_align = sym_align;
-  result->sym_ranges = cv_rec_range_array_from_stream(arena, stream);
-  cv_sym_top_level_info_from_syms(arena, sym_data, &result->sym_ranges, &result->info);
-  
-  scratch_end(scratch);
-  
-  ProfEnd();
-  
-  return(result);
-}
+//- the first pass parser
 
-static CV_LeafParsed*
-cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId itype_first){
-  ProfBegin("cv_leaf_from_data");
-  
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  // gather up symbols
-  CV_RecRangeStream *stream = cv_rec_range_stream_from_data(scratch.arena, leaf_data, 1);
-  
-  // convert to result
-  CV_LeafParsed *result = push_array(arena, CV_LeafParsed, 1);
-  result->data = leaf_data;
-  result->itype_first = itype_first;
-  result->itype_opl = itype_first + stream->total_count;
-  result->leaf_ranges = cv_rec_range_array_from_stream(arena, stream);
-  
-  scratch_end(scratch);
-  
-  ProfEnd();
-  
-  return(result);
-}
-
-static CV_RecRangeStream*
+internal CV_RecRangeStream*
 cv_rec_range_stream_from_data(Arena *arena, String8 sym_data, U64 sym_align){
   Assert(1 <= sym_align && IsPow2OrZero(sym_align));
   
@@ -248,7 +203,33 @@ cv_rec_range_stream_from_data(Arena *arena, String8 sym_data, U64 sym_align){
   return(result);
 }
 
-static void
+//- sym
+
+internal CV_SymParsed*
+cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align){
+  Assert(1 <= sym_align && IsPow2OrZero(sym_align));
+  ProfBegin("cv_sym_from_data");
+  
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  // gather up symbols
+  CV_RecRangeStream *stream = cv_rec_range_stream_from_data(scratch.arena, sym_data, sym_align);
+  
+  // convert to result
+  CV_SymParsed *result = push_array(arena, CV_SymParsed, 1);
+  result->data = sym_data;
+  result->sym_align = sym_align;
+  result->sym_ranges = cv_rec_range_array_from_stream(arena, stream);
+  cv_sym_top_level_info_from_syms(arena, sym_data, &result->sym_ranges, &result->info);
+  
+  scratch_end(scratch);
+  
+  ProfEnd();
+  
+  return(result);
+}
+
+internal void
 cv_sym_top_level_info_from_syms(Arena *arena, String8 sym_data,
                                 CV_RecRangeArray *ranges,
                                 CV_SymTopLevelInfo *info_out){
@@ -313,17 +294,41 @@ cv_sym_top_level_info_from_syms(Arena *arena, String8 sym_data,
   }
 }
 
+//- leaf
+
+internal CV_LeafParsed*
+cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId itype_first){
+  ProfBegin("cv_leaf_from_data");
+  
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  // gather up symbols
+  CV_RecRangeStream *stream = cv_rec_range_stream_from_data(scratch.arena, leaf_data, 1);
+  
+  // convert to result
+  CV_LeafParsed *result = push_array(arena, CV_LeafParsed, 1);
+  result->data = leaf_data;
+  result->itype_first = itype_first;
+  result->itype_opl = itype_first + stream->total_count;
+  result->leaf_ranges = cv_rec_range_array_from_stream(arena, stream);
+  
+  scratch_end(scratch);
+  
+  ProfEnd();
+  
+  return(result);
+}
 
 //- range streams
 
-static CV_RecRangeChunk*
+internal CV_RecRangeChunk*
 cv_rec_range_stream_push_chunk(Arena *arena, CV_RecRangeStream *stream){
   CV_RecRangeChunk *result = push_array_no_zero(arena, CV_RecRangeChunk, 1);
   SLLQueuePush(stream->first_chunk, stream->last_chunk, result);
   return(result);
 }
 
-static CV_RecRangeArray
+internal CV_RecRangeArray
 cv_rec_range_array_from_stream(Arena *arena, CV_RecRangeStream *stream){
   U64 total_count = stream->total_count;
   CV_RecRange *ranges = push_array_no_zero(arena, CV_RecRange, total_count);
@@ -345,9 +350,8 @@ cv_rec_range_array_from_stream(Arena *arena, CV_RecRangeStream *stream){
 ////////////////////////////////
 //~ CodeView C13 Parser Functions
 
-static CV_C13Parsed*
-cv_c13_from_data(Arena *arena, String8 c13_data,
-                 PDB_Strtbl *strtbl, PDB_CoffSectionArray *sections){
+internal CV_C13Parsed*
+cv_c13_from_data(Arena *arena, String8 c13_data, PDB_Strtbl *strtbl, PDB_CoffSectionArray *sections){
   ProfBegin("cv_c13_from_data");
   
   // gather c13 data

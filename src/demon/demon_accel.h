@@ -58,8 +58,6 @@ internal U64          demon_accel_tls_root_vaddr_from_thread(DEMON_Entity *threa
 internal void*        demon_accel_read_regs(DEMON_Entity *thread);
 internal void         demon_accel_write_regs(DEMON_Entity *thread, void *data);
 
-internal void         demon_accel_low_level_write_regs(DEMON_Entity *thread);
-
 //- entity accel free
 internal void demon_accel_free(DEMON_Entity *entity);
 

@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_MSF_H
-#define RADDBGI_MSF_H
+#ifndef MSF_H
+#define MSF_H
 
 ////////////////////////////////
 //~ MSF Format Types
@@ -54,7 +54,7 @@ typedef struct MSF_Parsed{
 ////////////////////////////////
 //~ MSF Parser Function
 
-static MSF_Parsed* msf_parsed_from_data(Arena *arena, String8 msf_data);
-static String8     msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn);
+internal MSF_Parsed* msf_parsed_from_data(Arena *arena, String8 msf_data);
+internal String8     msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn);
 
-#endif //RADDBGI_MSF_H
+#endif // MSF_H

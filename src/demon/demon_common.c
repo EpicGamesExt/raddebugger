@@ -134,6 +134,7 @@ demon_ent_new(DEMON_Entity *parent, DEMON_EntityKind kind, U64 id){
 internal void
 demon_ent_release_single(DEMON_Entity *entity){
   switch (entity->kind){
+    default:{}break;
     case DEMON_EntityKind_Process: demon_proc_count -= 1; break;
     case DEMON_EntityKind_Thread: demon_thread_count -= 1; break;
     case DEMON_EntityKind_Module: demon_module_count -= 1; break;

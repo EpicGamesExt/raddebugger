@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ CodeView Common Stringize Functions
 
-static void
+internal void
 cv_stringize_numeric(Arena *arena, String8List *out, CV_NumericParsed *num){
   String8 numeric_kind_str = cv_string_from_numeric_kind(num->kind);
   str8_list_pushf(arena, out, "(%.*s)", str8_varg(numeric_kind_str));
@@ -23,17 +23,17 @@ cv_stringize_numeric(Arena *arena, String8List *out, CV_NumericParsed *num){
   }
 }
 
-static void
+internal void
 cv_stringize_lvar_addr_range(Arena *arena, String8List *out, CV_LvarAddrRange *range){
   str8_list_pushf(arena, out, "{off=%x, sec=%u, len=%u}", range->off, range->sec, range->len);
 }
 
-static void
+internal void
 cv_stringize_lvar_addr_gap(Arena *arena, String8List *out, CV_LvarAddrGap *gap){
   str8_list_pushf(arena, out, "{off=%x, len=%u}", gap->off, gap->len);
 }
 
-static void
+internal void
 cv_stringize_lvar_addr_gap_list(Arena *arena, String8List *out, void *first, void *opl){
   U64 gap_count = ((U8*)first - (U8*)opl)/sizeof(CV_LvarAddrGap);
   if (gap_count > 0){
@@ -48,7 +48,7 @@ cv_stringize_lvar_addr_gap_list(Arena *arena, String8List *out, void *first, voi
   }
 }
 
-static String8
+internal String8
 cv_string_from_sym_kind(CV_SymKind kind){
   String8 result = str8_lit("UNRECOGNIZED_SYM_KIND");
   switch (kind){
@@ -59,7 +59,7 @@ cv_string_from_sym_kind(CV_SymKind kind){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_basic_type(CV_BasicType basic_type){
   String8 result = str8_lit("UNRECOGNIZED_BASIC_TYPE");
   switch (basic_type){
@@ -70,7 +70,7 @@ cv_string_from_basic_type(CV_BasicType basic_type){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_leaf_kind(CV_LeafKind kind){
   String8 result = str8_lit("UNRECOGNIZED_LEAF_KIND");
   switch (kind){
@@ -85,7 +85,7 @@ cv_string_from_leaf_kind(CV_LeafKind kind){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_numeric_kind(CV_NumericKind kind){
   String8 result = str8_lit("UNRECOGNIZED_NUMERIC_KIND");
   switch (kind){
@@ -97,7 +97,7 @@ cv_string_from_numeric_kind(CV_NumericKind kind){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_c13_sub_section_kind(CV_C13_SubSectionKind kind){
   String8 result = str8_lit("UNRECOGNIZED_C13_SUB_SECTION_KIND");
   switch (kind){
@@ -109,7 +109,7 @@ cv_string_from_c13_sub_section_kind(CV_C13_SubSectionKind kind){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_machine(CV_Arch arch){
   String8 result = {0};
   switch (arch){
@@ -120,7 +120,7 @@ cv_string_from_machine(CV_Arch arch){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_reg(CV_Arch arch, CV_Reg reg){
   String8 result = {0};
   switch (arch){
@@ -147,7 +147,7 @@ cv_string_from_reg(CV_Arch arch, CV_Reg reg){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_pointer_kind(CV_PointerKind ptr_kind){
   String8 result = {0};
   switch (ptr_kind){
@@ -169,7 +169,7 @@ cv_string_from_pointer_kind(CV_PointerKind ptr_kind){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_pointer_mode(CV_PointerMode ptr_mode){
   String8 result = {0};
   switch (ptr_mode){
@@ -183,7 +183,7 @@ cv_string_from_pointer_mode(CV_PointerMode ptr_mode){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_hfa_kind(CV_HFAKind hfa_kind){
   String8 result = {0};
   switch (hfa_kind){
@@ -196,7 +196,7 @@ cv_string_from_hfa_kind(CV_HFAKind hfa_kind){
   return(result);
 }
 
-static String8
+internal String8
 cv_string_from_mo_com_udt_kind(CV_MoComUDTKind mo_com_udt_kind){
   String8 result = {0};
   switch (mo_com_udt_kind){
@@ -212,11 +212,11 @@ cv_string_from_mo_com_udt_kind(CV_MoComUDTKind mo_com_udt_kind){
 ////////////////////////////////
 //~ CodeView Flags Stringize Functions
 
-static char cv_stringize_spaces[] = "                                ";
+global char cv_stringize_spaces[] = "                                ";
 
 #define SPACES cv_stringize_spaces
 
-static void
+internal void
 cv_stringize_modifier_flags(Arena *arena, String8List *out,
                             U32 indent, CV_ModifierFlags flags){
   if (flags & CV_ModifierFlag_Const){
@@ -230,7 +230,7 @@ cv_stringize_modifier_flags(Arena *arena, String8List *out,
   }
 }
 
-static void
+internal void
 cv_stringize_type_props(Arena *arena, String8List *out,
                         U32 indent, CV_TypeProps props){
   if (props & CV_TypeProp_Packed){
@@ -285,7 +285,7 @@ cv_stringize_type_props(Arena *arena, String8List *out,
   }
 }
 
-static void
+internal void
 cv_stringize_pointer_attribs(Arena *arena, String8List *out,
                              U32 indent, CV_PointerAttribs attribs){
   if (attribs & CV_PointerAttrib_IsFlat){
@@ -332,7 +332,7 @@ cv_stringize_pointer_attribs(Arena *arena, String8List *out,
                   indent, SPACES, size);
 }
 
-static void
+internal void
 cv_stringize_local_flags(Arena *arena, String8List *out,
                          U32 indent, CV_LocalFlags flags){
   if (flags & CV_LocalFlag_Param){
@@ -376,7 +376,7 @@ cv_stringize_local_flags(Arena *arena, String8List *out,
 ////////////////////////////////
 //~ CodeView Sym Stringize Functions
 
-static void
+internal void
 cv_stringize_sym_parsed(Arena *arena, String8List *out, CV_SymParsed *sym){
   CV_StringizeSymParams params = {0};
   params.arch = sym->info.arch;
@@ -384,7 +384,7 @@ cv_stringize_sym_parsed(Arena *arena, String8List *out, CV_SymParsed *sym){
   cv_stringize_sym_array(arena, out, &sym->sym_ranges, sym->data, &params);
 }
 
-static void
+internal void
 cv_stringize_sym_range(Arena *arena, String8List *out,
                        CV_RecRange *range, String8 data,
                        CV_StringizeSymParams *p){
@@ -1381,7 +1381,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
   }
 }
 
-static void
+internal void
 cv_stringize_sym_array(Arena *arena, String8List *out,
                        CV_RecRangeArray *ranges, String8 data,
                        CV_StringizeSymParams *p){
@@ -1396,7 +1396,7 @@ cv_stringize_sym_array(Arena *arena, String8List *out,
 ////////////////////////////////
 //~ CodeView Leaf Stringize Functions
 
-static void
+internal void
 cv_stringize_leaf_parsed(Arena *arena, String8List *out, CV_LeafParsed *leaf){
   CV_StringizeLeafParams params = {0};
   
@@ -1404,7 +1404,7 @@ cv_stringize_leaf_parsed(Arena *arena, String8List *out, CV_LeafParsed *leaf){
                           leaf->data, &params);
 }
 
-static void
+internal void
 cv_stringize_leaf_range(Arena *arena, String8List *out,
                         CV_RecRange *range, CV_TypeId itype, String8 data,
                         CV_StringizeLeafParams *p){
@@ -2312,7 +2312,7 @@ cv_stringize_leaf_range(Arena *arena, String8List *out,
   }
 }
 
-static void
+internal void
 cv_stringize_leaf_array(Arena *arena, String8List *out,
                         CV_RecRangeArray *ranges, CV_TypeId itype_first, String8 data,
                         CV_StringizeLeafParams *p){
@@ -2328,7 +2328,7 @@ cv_stringize_leaf_array(Arena *arena, String8List *out,
 ////////////////////////////////
 //~ CodeView C13 Stringize Functions
 
-static void
+internal void
 cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13){
   for(CV_C13SubSectionNode *node = c13->first_sub_section;
       node != 0;

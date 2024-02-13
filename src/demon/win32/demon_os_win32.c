@@ -460,7 +460,9 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
     // set single step bit
     if (single_step_thread != 0){
       // TODO(allen): possibly buggy
-      switch (single_step_thread->arch){
+      switch(single_step_thread->arch)
+      {
+        default:{NotImplemented;}break;
         case Architecture_x86:
         {
           REGS_RegBlockX86 regs = {0};
@@ -1287,7 +1289,9 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *ctrls){
     //  confound us later; so here we're just being sure it's taken out.
     if (single_step_thread != 0){
       // TODO(allen): possibly buggy
-      switch (single_step_thread->arch){
+      switch(single_step_thread->arch)
+      {
+        default:{NotImplemented;}break;
         case Architecture_x86:
         {
           REGS_RegBlockX86 regs = {0};
@@ -1585,34 +1589,37 @@ demon_os_full_path_from_module(Arena *arena, DEMON_Entity *module){
 }
 
 internal U64
-demon_os_stack_base_vaddr_from_thread(DEMON_Entity *thread){
+demon_os_stack_base_vaddr_from_thread(DEMON_Entity *thread)
+{
   DEMON_Entity *process = thread->parent;
   DEMON_W32_Ext *thread_ext = demon_w32_ext(thread);
   U64 tlb = thread_ext->thread.thread_local_base;
-  
   U64 result = 0;
-  switch (thread->arch){
+  switch (thread->arch)
+  {
+    default:{NotImplemented;}break;
     case Architecture_x64:
     {
       U64 stack_base_addr = tlb + 0x8;
       demon_os_read_memory(process, &result, stack_base_addr, 8);
     }break;
-    
     case Architecture_x86:
     {
       U64 stack_base_addr = tlb + 0x4;
       demon_os_read_memory(process, &result, stack_base_addr, 4);
     }break;
   }
-  
   return(result);
 }
 
 internal U64
-demon_os_tls_root_vaddr_from_thread(DEMON_Entity *thread){
+demon_os_tls_root_vaddr_from_thread(DEMON_Entity *thread)
+{
   DEMON_W32_Ext *thread_ext = demon_w32_ext(thread);
   U64 result = thread_ext->thread.thread_local_base;
-  switch (thread->arch){
+  switch(thread->arch)
+  {
+    default:{NotImplemented;}break;
     case Architecture_x64:
     {
       result += 88;

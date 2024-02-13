@@ -158,57 +158,24 @@ demon_accel_write_regs(DEMON_Entity *thread, void *data){
   // get accel data
   DEMON_AccelThread *accel = demon_accel_from_thread(thread);
   
-  // low level write
-  B32 success = 0;
-  U64 data_size = 0;
-  switch (thread->arch){
-    case Architecture_x86:
-    {
-      data_size = sizeof(REGS_RegBlockX86);
-      success = demon_os_write_regs_x86(thread, (REGS_RegBlockX86*)data);
-    }break;
-    case Architecture_x64:
-    {
-      data_size = sizeof(REGS_RegBlockX64);
-      success = demon_os_write_regs_x64(thread, (REGS_RegBlockX64*)data);
-    }break;
-  }
+  // write
+  U64 data_size = regs_block_size_from_architecture(thread->arch);
+  B32 success = demon_os_write_regs(thread, data);
   
   // update cache
-  if (success){
+  if(success)
+  {
     accel->reg_cache_time = demon_time;
     MemoryCopy(&accel->regs, data, data_size);
   }
 }
 
-internal void
-demon_accel_low_level_write_regs(DEMON_Entity *thread){
-  // NOTE(allen): This is a tricky one. It's just a way to enable some internal
-  // optimizations. Instead of forcing the user to pass in register data
-  // to write out and copy to the cache, the "user" is other demon code that
-  // knows what it's doing. So it grabs the cache memory (through a call to
-  // `demon_accel_read_regs`) modifies it in place and then calls this.
-  // So we just have to write the cache contents directly out to OS.
-  
-  // get accel data
-  DEMON_AccelThread *accel = demon_accel_from_thread(thread);
-  switch (thread->arch){
-    case Architecture_x86:
-    {
-      demon_os_write_regs_x86(thread, &accel->regs.x86);
-    }break;
-    case Architecture_x64:
-    {
-      demon_os_write_regs_x64(thread, &accel->regs.x64);
-    }break;
-  }
-}
-
-
 //- entity accel free
 internal void
 demon_accel_free(DEMON_Entity *entity){
   switch (entity->kind){
+    default:{}break;
+    
     case DEMON_EntityKind_Module:
     {
       if (entity->accel != 0){

@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ MSF Parser Function
 
-static MSF_Parsed*
+internal MSF_Parsed*
 msf_parsed_from_data(Arena *arena, String8 msf_data){
   ProfBegin("msf_parsed_from_data");
   
@@ -274,7 +274,7 @@ msf_parsed_from_data(Arena *arena, String8 msf_data){
   return(result);
 }
 
-static String8
+internal String8
 msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn){
   String8 result = {0};
   if (sn < msf->stream_count){

@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_CODEVIEW_H
-#define RADDBGI_CODEVIEW_H
+#ifndef CODEVIEW_H
+#define CODEVIEW_H
 
 #pragma pack(push, 1)
 
@@ -3015,46 +3015,44 @@ typedef struct CV_TypeIdArray{
 ////////////////////////////////
 //~ CodeView Common Functions
 
-static CV_NumericParsed cv_numeric_from_data_range(U8 *first, U8 *opl);
+internal CV_NumericParsed cv_numeric_from_data_range(U8 *first, U8 *opl);
 
-static B32              cv_numeric_fits_in_u64(CV_NumericParsed *num);
-static B32              cv_numeric_fits_in_s64(CV_NumericParsed *num);
-static B32              cv_numeric_fits_in_f64(CV_NumericParsed *num);
+internal B32              cv_numeric_fits_in_u64(CV_NumericParsed *num);
+internal B32              cv_numeric_fits_in_s64(CV_NumericParsed *num);
+internal B32              cv_numeric_fits_in_f64(CV_NumericParsed *num);
 
-static U64              cv_u64_from_numeric(CV_NumericParsed *num);
-static S64              cv_s64_from_numeric(CV_NumericParsed *num);
-static F64              cv_f64_from_numeric(CV_NumericParsed *num);
+internal U64              cv_u64_from_numeric(CV_NumericParsed *num);
+internal S64              cv_s64_from_numeric(CV_NumericParsed *num);
+internal F64              cv_f64_from_numeric(CV_NumericParsed *num);
 
 ////////////////////////////////
 //~ CodeView Sym/Leaf Parser Functions
 
 //- the first pass parser
-static CV_RecRangeStream* cv_rec_range_stream_from_data(Arena *arena, String8 data, U64 align);
+internal CV_RecRangeStream* cv_rec_range_stream_from_data(Arena *arena, String8 data, U64 align);
 
 //- sym
-static CV_SymParsed* cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align);
+internal CV_SymParsed* cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align);
 
-static void cv_sym_top_level_info_from_syms(Arena *arena, String8 sym_data,
-                                            CV_RecRangeArray *ranges,
-                                            CV_SymTopLevelInfo *info_out);
+internal void cv_sym_top_level_info_from_syms(Arena *arena, String8 sym_data,
+                                              CV_RecRangeArray *ranges,
+                                              CV_SymTopLevelInfo *info_out);
 
 //- leaf
-static CV_LeafParsed* cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId first);
+internal CV_LeafParsed* cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId first);
 
 //- range streams
-static CV_RecRangeChunk* cv_rec_range_stream_push_chunk(Arena *arena,
-                                                        CV_RecRangeStream *stream);
+internal CV_RecRangeChunk* cv_rec_range_stream_push_chunk(Arena *arena,
+                                                          CV_RecRangeStream *stream);
 // TODO(allen): check why this isn't a pointer return - 
 // leave a note if there's a good reason, otherwise switch to pointer return
-static CV_RecRangeArray  cv_rec_range_array_from_stream(Arena *arena,
-                                                        CV_RecRangeStream *stream);
+internal CV_RecRangeArray  cv_rec_range_array_from_stream(Arena *arena, CV_RecRangeStream *stream);
 
 ////////////////////////////////
 //~ CodeView C13 Parser Functions
 
 typedef struct PDB_Strtbl PDB_Strtbl;
 typedef struct PDB_CoffSectionArray PDB_CoffSectionArray;
-static CV_C13Parsed* cv_c13_from_data(Arena *arena, String8 c13_data,
-                                      struct PDB_Strtbl *strtbl, struct PDB_CoffSectionArray *sections);
+internal CV_C13Parsed* cv_c13_from_data(Arena *arena, String8 c13_data, struct PDB_Strtbl *strtbl, struct PDB_CoffSectionArray *sections);
 
-#endif //RADDBGI_CODEVIEW_H
+#endif // CODEVIEW_H

@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ PDB Parser Functions
 
-static PDB_Info*
+internal PDB_Info*
 pdb_info_from_data(Arena *arena, String8 data){
   ProfBegin("pdb_info_from_data");
   
@@ -110,7 +110,7 @@ pdb_info_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-static PDB_NamedStreamTable*
+internal PDB_NamedStreamTable*
 pdb_named_stream_table_from_info(Arena *arena, PDB_Info *info){
   ProfBegin("pdb_named_stream_table_from_info");
   
@@ -156,7 +156,7 @@ pdb_named_stream_table_from_info(Arena *arena, PDB_Info *info){
   return(result);
 }
 
-static PDB_Strtbl*
+internal PDB_Strtbl*
 pdb_strtbl_from_data(Arena *arena, String8 data){
   ProfBegin("pdb_strtbl_from_data");
   
@@ -200,7 +200,7 @@ pdb_strtbl_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-static PDB_DbiParsed*
+internal PDB_DbiParsed*
 pdb_dbi_from_data(Arena *arena, String8 data){
   ProfBegin("pdb_dbi_from_data");
   
@@ -225,7 +225,7 @@ pdb_dbi_from_data(Arena *arena, String8 data){
     // fill result
     result = push_array(arena, PDB_DbiParsed, 1);
     result->data = data;
-    result->arch = header->machine;
+    result->machine_type = header->machine;
     result->gsi_sn = header->gsi_sn;
     result->psi_sn = header->psi_sn;
     result->sym_sn = header->sym_sn;
@@ -260,7 +260,7 @@ pdb_dbi_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-static PDB_TpiParsed*
+internal PDB_TpiParsed*
 pdb_tpi_from_data(Arena *arena, String8 data){
   ProfBegin("pdb_tpi_from_data");
   
@@ -302,7 +302,7 @@ pdb_tpi_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-static PDB_TpiHashParsed*
+internal PDB_TpiHashParsed*
 pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, String8 data, String8 aux_data){
   ProfBegin("pdb_tpi_hash_from_data");
   
@@ -434,7 +434,7 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
   return(result);
 }
 
-static PDB_GsiParsed*
+internal PDB_GsiParsed*
 pdb_gsi_from_data(Arena *arena, String8 data){
   ProfBegin("pdb_gsi_from_data");
   
@@ -563,7 +563,7 @@ pdb_gsi_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-static PDB_CoffSectionArray*
+internal PDB_CoffSectionArray*
 pdb_coff_section_array_from_data(Arena *arena, String8 data){
   U64 count = data.size/sizeof(COFF_SectionHeader);
   
@@ -573,7 +573,7 @@ pdb_coff_section_array_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-static PDB_CompUnitArray*
+internal PDB_CompUnitArray*
 pdb_comp_unit_array_from_data(Arena *arena, String8 data){
   PDB_CompUnitNode *first = 0;
   PDB_CompUnitNode *last = 0;
@@ -649,7 +649,7 @@ pdb_comp_unit_array_from_data(Arena *arena, String8 data){
   return(result);
 }
 
-static PDB_CompUnitContributionArray*
+internal PDB_CompUnitContributionArray*
 pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data,
                                            PDB_CoffSectionArray *sections){
   PDB_CompUnitContribution *contributions = 0;
@@ -715,7 +715,7 @@ pdb_comp_unit_contribution_array_from_data(Arena *arena, String8 data,
 ////////////////////////////////
 //~ PDB Definition Functions
 
-static U32
+internal U32
 pdb_string_hash1(String8 string){
   U32 result = 0;
   U8 *ptr = string.str;
@@ -733,7 +733,7 @@ pdb_string_hash1(String8 string){
 ////////////////////////////////
 //~ PDB Dbi Functions
 
-static String8
+internal String8
 pdb_data_from_dbi_range(PDB_DbiParsed *dbi, PDB_DbiRange range){
   String8 result = {0};
   if (range < PDB_DbiRange_COUNT){
@@ -745,7 +745,7 @@ pdb_data_from_dbi_range(PDB_DbiParsed *dbi, PDB_DbiRange range){
   return(result);
 }
 
-static String8
+internal String8
 pdb_data_from_unit_range(MSF_Parsed *msf, PDB_CompUnit *unit, PDB_DbiCompUnitRange range){
   String8 result = {0};
   if (range < PDB_DbiCompUnitRange_COUNT){
@@ -765,7 +765,7 @@ pdb_data_from_unit_range(MSF_Parsed *msf, PDB_CompUnit *unit, PDB_DbiCompUnitRan
 ////////////////////////////////
 //~ PDB Tpi Functions
 
-static String8
+internal String8
 pdb_leaf_data_from_tpi(PDB_TpiParsed *tpi){
   String8 data = tpi->data;
   U8 *first = data.str + tpi->leaf_first;
@@ -774,7 +774,7 @@ pdb_leaf_data_from_tpi(PDB_TpiParsed *tpi){
   return(result);
 }
 
-static CV_TypeIdArray
+internal CV_TypeIdArray
 pdb_tpi_itypes_from_name(Arena *arena, PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *leaf,
                          String8 name, B32 compare_unique_name, U32 output_cap){
   U32 hash = pdb_string_hash1(name);
@@ -965,7 +965,7 @@ pdb_tpi_itypes_from_name(Arena *arena, PDB_TpiHashParsed *tpi_hash, CV_LeafParse
   return(result);
 }
 
-static CV_TypeId
+internal CV_TypeId
 pdb_tpi_first_itype_from_name(PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *tpi_leaf,
                               String8 name, B32 compare_unique_name){
   Temp scratch = scratch_begin(0, 0);
@@ -983,7 +983,7 @@ pdb_tpi_first_itype_from_name(PDB_TpiHashParsed *tpi_hash, CV_LeafParsed *tpi_le
 ////////////////////////////////
 //~ PDB Strtbl Functions
 
-static String8
+internal String8
 pdb_strtbl_string_from_off(PDB_Strtbl *strtbl, U32 off){
   U32 strblock_max = strtbl->strblock_max;
   U32 full_off_raw = strtbl->strblock_min + off;
@@ -993,7 +993,7 @@ pdb_strtbl_string_from_off(PDB_Strtbl *strtbl, U32 off){
   return(result);
 }
 
-static String8
+internal String8
 pdb_strtbl_string_from_index(PDB_Strtbl *strtbl, PDB_StringIndex idx){
   String8 result = {0};
   if (idx < strtbl->bucket_count){
