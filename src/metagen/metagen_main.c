@@ -142,7 +142,7 @@ int main(int argument_count, char **arguments)
   }
   
   //////////////////////////////
-  //- rjf: generate table enums
+  //- rjf: generate enums
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
@@ -183,14 +183,14 @@ int main(int argument_count, char **arguments)
   }
   
   //////////////////////////////
-  //- rjf: generate table structs
+  //- rjf: generate structs
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      if(md_node_has_tag(node, str8_lit("table_gen_struct"), 0))
+      if(md_node_has_tag(node, str8_lit("struct"), 0))
       {
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
@@ -200,8 +200,7 @@ int main(int argument_count, char **arguments)
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_push(mg_arena, &layer->structs, escaped);
-          str8_list_push(mg_arena, &layer->structs, str8_lit("\n"));
+          str8_list_pushf(mg_arena, &layer->structs, "%S;\n", escaped);
         }
         str8_list_pushf(mg_arena, &layer->structs, "};\n\n");
       }

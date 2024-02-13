@@ -1733,15 +1733,10 @@ DF_DevToggleTable:
   COUNT,
 }
 
-@table_gen
+@struct DF_CmdParams:
 {
-  `typedef struct DF_CmdParams DF_CmdParams;`;
-  `struct DF_CmdParams`;
-  `{`;
-    `U64 slot_props[(DF_CmdParamSlot_COUNT + 63) / 64];`;
-    @expand(DF_CmdParamSlotTable a)
-      `$(a.c_type) $(a.name_lower);`;
-    `};`;
+  `U64 slot_props[(DF_CmdParamSlot_COUNT + 63) / 64]`;
+  @expand(DF_CmdParamSlotTable a) `$(a.c_type) $(a.name_lower)`;
 }
 
 @table_gen_data(type:Rng1U64, fallback:0)

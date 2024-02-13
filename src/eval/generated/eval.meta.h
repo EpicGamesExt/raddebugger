@@ -6,24 +6,8 @@
 #ifndef EVAL_META_H
 #define EVAL_META_H
 
-typedef enum EVAL_ResultCode
-{
-EVAL_ResultCode_Good,
-EVAL_ResultCode_DivideByZero,
-EVAL_ResultCode_BadOp,
-EVAL_ResultCode_BadOpTypes,
-EVAL_ResultCode_BadMemRead,
-EVAL_ResultCode_BadRegRead,
-EVAL_ResultCode_BadFrameBase,
-EVAL_ResultCode_BadModuleBase,
-EVAL_ResultCode_BadTLSBase,
-EVAL_ResultCode_InsufficientStackSpace,
-EVAL_ResultCode_MalformedBytecode,
-EVAL_ResultCode_COUNT,
-} EVAL_ResultCode;
-
 typedef U32 EVAL_ExprKind;
-enum
+typedef enum EVAL_ExprKindEnum
 {
 EVAL_ExprKind_ArrayIndex,
 EVAL_ExprKind_MemberAccess,
@@ -64,8 +48,24 @@ EVAL_ExprKind_Array,
 EVAL_ExprKind_Func,
 EVAL_ExprKind_Define,
 EVAL_ExprKind_LeafIdent,
-EVAL_ExprKind_COUNT
-};
+EVAL_ExprKind_COUNT,
+} EVAL_ExprKindEnum;
+
+typedef enum EVAL_ResultCode
+{
+EVAL_ResultCode_Good,
+EVAL_ResultCode_DivideByZero,
+EVAL_ResultCode_BadOp,
+EVAL_ResultCode_BadOpTypes,
+EVAL_ResultCode_BadMemRead,
+EVAL_ResultCode_BadRegRead,
+EVAL_ResultCode_BadFrameBase,
+EVAL_ResultCode_BadModuleBase,
+EVAL_ResultCode_BadTLSBase,
+EVAL_ResultCode_InsufficientStackSpace,
+EVAL_ResultCode_MalformedBytecode,
+EVAL_ResultCode_COUNT,
+} EVAL_ResultCode;
 
 U8 eval_expr_kind_child_counts[] =
 {

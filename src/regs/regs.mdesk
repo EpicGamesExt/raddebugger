@@ -313,10 +313,9 @@ REGS_ArchTable:
   COUNT,
 }
 
-@table_gen_struct
-REGS_RegBlockX64:
+@struct REGS_RegBlockX64:
 {
-  @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name);`;
+  @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
 @table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
@@ -378,10 +377,9 @@ regs_g_alias_code_x64_slice_table:
   COUNT,
 }
 
-@table_gen_struct
-REGS_RegBlockX86:
+@struct REGS_RegBlockX86:
 {
-  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name);`;
+  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
 @table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)

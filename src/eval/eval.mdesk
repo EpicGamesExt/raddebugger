@@ -70,15 +70,10 @@ EVAL_ResultCodeTable:
   { MalformedBytecode       "Malformed bytecode." }
 }
 
-@table_gen
+@enum(U32) EVAL_ExprKind:
 {
-  `typedef U32 EVAL_ExprKind;`;
-  `enum`;
-  `{`;
-    @expand(EVAL_ExprKindTable a) `EVAL_ExprKind_$(a.name),`;
-    `EVAL_ExprKind_COUNT`;
-    `};`;
-  ``;
+  @expand(EVAL_ExprKindTable a) `$(a.name)`,
+  COUNT,
 }
 
 @enum EVAL_ResultCode:
