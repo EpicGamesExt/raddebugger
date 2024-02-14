@@ -4,8 +4,8 @@
 ////////////////////////////////
 //~ rjf: API Implementation Helper Macros
 
-#define rdim_require(root, b32, else_code, error_msg)  do { if(!(b32)) {rdim_push_error((root), (error_msg)); else_code;} }while(0)
-#define rdim_requiref(root, b32, else_code, fmt, ...)  do { if(!(b32)) {rdim_push_errorf((root), (fmt), __VA_ARGS__); else_code;} }while(0)
+#define rdim_require(root, b32, else_code, error_msg)  do { if(!(b32)) {rdim_push_msg((root), (error_msg)); else_code;} }while(0)
+#define rdim_requiref(root, b32, else_code, fmt, ...)  do { if(!(b32)) {rdim_push_msgf((root), (fmt), __VA_ARGS__); else_code;} }while(0)
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -234,99 +234,6 @@ rdim_str8_list_join(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 sep)
   return result;
 }
 
-//- rjf: type lists
-
-RDI_PROC void
-rdim_type_list_push(RDIM_Arena *arena, RDIM_TypeList *list, RDIM_Type *type)
-{
-  RDIM_TypeNode *node = rdim_push_array(arena, RDIM_TypeNode, 1);
-  RDIM_SLLQueuePush(list->first, list->last, node);
-  list->count += 1;
-  node->type = type;
-}
-
-//- rjf: bytecode lists
-
-RDI_PROC void
-rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
-{
-  RDI_U8 ctrlbits = rdi_eval_opcode_ctrlbits[op];
-  RDI_U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-  
-  RDIM_EvalBytecodeOp *node = rdim_push_array(arena, RDIM_EvalBytecodeOp, 1);
-  node->op = op;
-  node->p_size = p_size;
-  node->p = p;
-  
-  RDIM_SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
-  bytecode->op_count += 1;
-  bytecode->encoded_size += 1 + p_size;
-}
-
-RDI_PROC void
-rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x)
-{
-  if(x <= 0xFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, x);
-  }
-  else if(x <= 0xFFFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, x);
-  }
-  else if(x <= 0xFFFFFFFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, x);
-  }
-  else
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, x);
-  }
-}
-
-RDI_PROC void
-rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x)
-{
-  if(-0x80 <= x && x <= 0x7F)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, (RDI_U64)x);
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 8);
-  }
-  else if(-0x8000 <= x && x <= 0x7FFF)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, (RDI_U64)x);
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 16);
-  }
-  else if(-0x80000000ll <= x && x <= 0x7FFFFFFFll)
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, (RDI_U64)x);
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 32);
-  }
-  else
-  {
-    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, (RDI_U64)x);
-  }
-}
-
-RDI_PROC void
-rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed)
-{
-  if(right_destroyed->first_op != 0)
-  {
-    if(left_dst->first_op == 0)
-    {
-      rdim_memcpy_struct(left_dst, right_destroyed);
-    }
-    else
-    {
-      left_dst->last_op = right_destroyed->last_op;
-      left_dst->op_count += right_destroyed->op_count;
-      left_dst->encoded_size += right_destroyed->encoded_size;
-    }
-    rdim_memzero_struct(right_destroyed);
-  }
-}
-
 //- rjf: sortable range sorting
 
 RDI_PROC RDIM_SortKey*
@@ -492,6 +399,17 @@ rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count)
 ////////////////////////////////
 //~ rjf: Auxiliary Data Structure Functions
 
+//- rjf: rng1u64 list
+
+RDI_PROC void
+rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r)
+{
+  RDIM_Rng1U64Node *n = rdim_push_array(arena, RDIM_Rng1U64Node, 1);
+  n->v = r;
+  RDIM_SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
 //- rjf: u64 -> ptr map
 
 RDI_PROC void
@@ -591,6 +509,247 @@ rdim_str8toptr_map_insert(RDIM_Arena *arena, RDIM_Str8ToPtrMap *map, RDIM_String
 }
 
 ////////////////////////////////
+//~ rjf: Binary Section List Building
+
+RDI_PROC RDIM_BinarySection *
+rdim_binary_section_list_push(RDIM_Arena *arena, RDIM_BinarySectionList *list)
+{
+  RDIM_BinarySectionNode *n = rdim_push_array(arena, RDIM_BinarySectionNode, 1);
+  RDIM_SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  RDIM_BinarySection *result = &n->v;
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Unit List Building
+
+RDI_PROC RDIM_Unit *
+rdim_unit_chunk_list_push(RDIM_Arena *arena, RDIM_UnitChunkList *list)
+{
+  RDIM_UnitChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_UnitChunkNode, 1);
+    n->cap   = 512;
+    n->v = rdim_push_array_no_zero(arena, RDIM_Unit, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_Unit *unit = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return unit;
+}
+
+RDI_PROC RDIM_LineSequence *
+rdim_line_sequence_list_push(RDIM_Arena *arena, RDIM_LineSequenceList *list)
+{
+  RDIM_LineSequenceNode *n = rdim_push_array(arena, RDIM_LineSequenceNode, 1);
+  RDIM_SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  return &n->v;
+}
+
+RDI_PROC RDIM_UnitArray
+rdim_unit_array_from_chunk_list(RDIM_Arena *arena, RDIM_UnitChunkList *list)
+{
+  RDIM_UnitArray array = {0};
+  array.count = list->total_count;
+  array.v = rdim_push_array_no_zero(arena, RDIM_Unit, array.count);
+  U64 idx = 0;
+  for(RDIM_UnitChunkNode *n = list->first; n != 0; n = n->next)
+  {
+    rdim_memcpy(array.v+idx, n->v, sizeof(RDIM_Unit)*n->count);
+    idx += n->count;
+  }
+  return array;
+}
+
+////////////////////////////////
+//~ rjf: Type Info Building
+
+RDI_PROC RDIM_Type *
+rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 cap)
+{
+  RDIM_TypeChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_TypeChunkNode, 1);
+    n->cap = cap;
+    n->v = rdim_push_array_no_zero(arena, RDIM_Type, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_Type *result = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC RDIM_UDT *
+rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap)
+{
+  RDIM_UDTChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_UDTChunkNode, 1);
+    n->cap = cap;
+    n->v = rdim_push_array_no_zero(arena, RDIM_UDT, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_UDT *result = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC RDIM_UDTMember *
+rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDT *udt)
+{
+  RDIM_UDTMember *mem = rdim_push_array(arena, RDIM_UDTMember, 1);
+  RDIM_SLLQueuePush(udt->first_member, udt->last_member, mem);
+  udt->member_count += 1;
+  return mem;
+}
+
+RDI_PROC RDIM_UDTEnumVal *
+rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDT *udt)
+{
+  RDIM_UDTEnumVal *mem = rdim_push_array(arena, RDIM_UDTEnumVal, 1);
+  RDIM_SLLQueuePush(udt->first_enum_val, udt->last_enum_val, mem);
+  udt->enum_val_count += 1;
+  return mem;
+}
+
+////////////////////////////////
+//~ rjf: Location Info Building
+
+RDI_PROC void
+rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
+{
+  RDI_U8 ctrlbits = rdi_eval_opcode_ctrlbits[op];
+  RDI_U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+  
+  RDIM_EvalBytecodeOp *node = rdim_push_array(arena, RDIM_EvalBytecodeOp, 1);
+  node->op = op;
+  node->p_size = p_size;
+  node->p = p;
+  
+  RDIM_SLLQueuePush(bytecode->first_op, bytecode->last_op, node);
+  bytecode->op_count += 1;
+  bytecode->encoded_size += 1 + p_size;
+}
+
+RDI_PROC void
+rdim_bytecode_push_uconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_U64 x)
+{
+  if(x <= 0xFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, x);
+  }
+  else if(x <= 0xFFFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, x);
+  }
+  else if(x <= 0xFFFFFFFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, x);
+  }
+  else
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, x);
+  }
+}
+
+RDI_PROC void
+rdim_bytecode_push_sconst(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_S64 x)
+{
+  if(-0x80 <= x && x <= 0x7F)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU8, (RDI_U64)x);
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 8);
+  }
+  else if(-0x8000 <= x && x <= 0x7FFF)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU16, (RDI_U64)x);
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 16);
+  }
+  else if(-0x80000000ll <= x && x <= 0x7FFFFFFFll)
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU32, (RDI_U64)x);
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_TruncSigned, 32);
+  }
+  else
+  {
+    rdim_bytecode_push_op(arena, bytecode, RDI_EvalOp_ConstU64, (RDI_U64)x);
+  }
+}
+
+RDI_PROC void
+rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *right_destroyed)
+{
+  if(right_destroyed->first_op != 0)
+  {
+    if(left_dst->first_op == 0)
+    {
+      rdim_memcpy_struct(left_dst, right_destroyed);
+    }
+    else
+    {
+      left_dst->last_op = right_destroyed->last_op;
+      left_dst->op_count += right_destroyed->op_count;
+      left_dst->encoded_size += right_destroyed->encoded_size;
+    }
+    rdim_memzero_struct(right_destroyed);
+  }
+}
+
+////////////////////////////////
+//~ rjf: Symbol Info Building
+
+RDI_PROC RDIM_Symbol *
+rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap)
+{
+  RDIM_SymbolChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_SymbolChunkNode, 1);
+    n->cap = cap;
+    n->v = rdim_push_array_no_zero(arena, RDIM_Symbol, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_Symbol *result = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Scope Info Building
+
+RDI_PROC RDIM_Scope *
+rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64 cap)
+{
+  RDIM_ScopeChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_ScopeChunkNode, 1);
+    n->cap = cap;
+    n->v = rdim_push_array_no_zero(arena, RDIM_Scope, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_Scope *result = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+#if 0
+////////////////////////////////
 //~ rjf: Loose Debug Info Construction (Anything -> Loose) Functions
 
 //- rjf: root creation
@@ -657,126 +816,28 @@ rdim_root_release(RDIM_Root *root)
 //- rjf: error accumulation
 
 RDI_PROC void
-rdim_push_error(RDIM_Root *root, RDIM_String8 string)
+rdim_push_msg(RDIM_Root *root, RDIM_String8 string)
 {
-  RDIM_Error *error = rdim_push_array(root->arena, RDIM_Error, 1);
-  SLLQueuePush(root->errors.first, root->errors.last, error);
-  root->errors.count += 1;
-  error->msg = string;
+  RDIM_Msg *msg = rdim_push_array(root->arena, RDIM_Msg, 1);
+  SLLQueuePush(root->msgs.first, root->msgs.last, msg);
+  root->msgs.count += 1;
+  msg->string = string;
 }
 
 RDI_PROC void
-rdim_push_errorf(RDIM_Root *root, char *fmt, ...)
+rdim_push_msgf(RDIM_Root *root, char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
   RDIM_String8 str = rdim_str8fv(root->arena, fmt, args);
-  rdim_push_error(root, str);
+  rdim_push_msg(root, str);
   va_end(args);
 }
 
-RDI_PROC RDIM_Error*
-rdim_first_error_from_root(RDIM_Root *root)
+RDI_PROC RDIM_Msg *
+rdim_first_msg_from_root(RDIM_Root *root)
 {
-  return root->errors.first;
-}
-
-//- rjf: top-level info specification
-
-RDI_PROC void
-rdim_set_top_level_info(RDIM_Root *root, RDIM_TopLevelInfo *tli)
-{
-  rdim_requiref(root, !root->top_level_info_is_set, return, "Top level information set multiple times.");
-  rdim_memcpy_struct(&root->top_level_info, tli);
-  root->top_level_info_is_set = 1;
-}
-
-//- rjf: binary section building
-
-RDI_PROC void
-rdim_add_binary_section(RDIM_Root *root, RDIM_String8 name, RDI_BinarySectionFlags flags, RDI_U64 voff_first, RDI_U64 voff_opl, RDI_U64 foff_first, RDI_U64 foff_opl)
-{
-  RDIM_BinarySection *sec = rdim_push_array(root->arena, RDIM_BinarySection, 1);
-  SLLQueuePush(root->binary_section_first, root->binary_section_last, sec);
-  root->binary_section_count += 1;
-  sec->name  = name;
-  sec->flags = flags;
-  sec->voff_first = voff_first;
-  sec->voff_opl   = voff_opl;
-  sec->foff_first = foff_first;
-  sec->foff_opl   = foff_opl;
-}
-
-//- rjf: unit info building
-
-RDI_PROC RDIM_Unit*
-rdim_unit_handle_from_user_id(RDIM_Root *root, RDI_U64 unit_user_id, RDI_U64 unit_user_id_hash)
-{
-  RDIM_U64ToPtrLookup lookup = {0};
-  rdim_u64toptr_map_lookup(&root->unit_map, unit_user_id, unit_user_id_hash, &lookup);
-  RDIM_Unit *result = 0;
-  if(lookup.match != 0)
-  {
-    result = (RDIM_Unit*)lookup.match;
-  }
-  else
-  {
-    result = rdim_push_array(root->arena, RDIM_Unit, 1);
-    result->idx = root->unit_count;
-    RDIM_SLLQueuePush_N(root->unit_first, root->unit_last, result, next_order);
-    root->unit_count += 1;
-    rdim_u64toptr_map_insert(root->arena, &root->unit_map, unit_user_id, unit_user_id, &lookup, result);
-  }
-  return result;
-}
-
-RDI_PROC void
-rdim_unit_set_info(RDIM_Root *root, RDIM_Unit *unit, RDIM_UnitInfo *info)
-{
-  rdim_requiref(root, !unit->info_is_set, return, "Unit information set multiple times.");
-  unit->info_is_set = 1;
-  unit->unit_name     = rdim_str8_copy(root->arena, info->unit_name);
-  unit->compiler_name = rdim_str8_copy(root->arena, info->compiler_name);
-  unit->source_file   = rdim_str8_copy(root->arena, info->source_file);
-  unit->object_file   = rdim_str8_copy(root->arena, info->object_file);
-  unit->archive_file  = rdim_str8_copy(root->arena, info->archive_file);
-  unit->build_path    = rdim_str8_copy(root->arena, info->build_path);
-  unit->language = info->language;
-}
-
-RDI_PROC void
-rdim_unit_add_line_sequence(RDIM_Root *root, RDIM_Unit *unit, RDIM_LineSequence *line_sequence)
-{
-  RDIM_LineSequenceNode *node = rdim_push_array(root->arena, RDIM_LineSequenceNode, 1);
-  SLLQueuePush(unit->line_seq_first, unit->line_seq_last, node);
-  unit->line_seq_count += 1;
-  
-  node->line_seq.file_name = rdim_str8_copy(root->arena, line_sequence->file_name);
-  
-  node->line_seq.voffs = rdim_push_array(root->arena, RDI_U64, line_sequence->line_count + 1);
-  rdim_memcpy(node->line_seq.voffs, line_sequence->voffs, sizeof(RDI_U64)*(line_sequence->line_count + 1));
-  
-  node->line_seq.line_nums = rdim_push_array(root->arena, RDI_U32, line_sequence->line_count);
-  rdim_memcpy(node->line_seq.line_nums, line_sequence->line_nums, sizeof(RDI_U32)*line_sequence->line_count);
-  
-  if(line_sequence->col_nums != 0)
-  {
-    node->line_seq.col_nums = rdim_push_array(root->arena, RDI_U16, line_sequence->line_count);
-    rdim_memcpy(node->line_seq.col_nums, line_sequence->col_nums, sizeof(RDI_U16)*line_sequence->line_count);
-  }
-  
-  node->line_seq.line_count = line_sequence->line_count;
-}
-
-RDI_PROC void
-rdim_unit_vmap_add_range(RDIM_Root *root, RDIM_Unit *unit, RDI_U64 first, RDI_U64 opl)
-{
-  RDIM_UnitVMapRange *node = rdim_push_array(root->arena, RDIM_UnitVMapRange, 1);
-  SLLQueuePush(root->unit_vmap_range_first, root->unit_vmap_range_last, node);
-  root->unit_vmap_range_count += 1;
-  node->unit = unit;
-  node->first = first;
-  node->opl = opl;
+  return root->msgs.first;
 }
 
 //- rjf: type info lookups/reservations
@@ -3671,3 +3732,4 @@ rdim_bake_file(RDIM_Arena *arena, RDIM_Root *root, RDIM_String8List *out)
   
   rdim_bake_ctx_release(bctx);
 }
+#endif

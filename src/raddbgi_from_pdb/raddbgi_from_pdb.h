@@ -222,6 +222,9 @@ internal RDI_BinarySectionFlags rdi_binary_section_flags_from_coff_section_flags
 internal RDI_Arch         rdi_arch_from_cv_arch(CV_Arch arch);
 internal RDI_RegisterCode rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
 internal RDI_Language     rdi_language_from_cv_language(CV_Language language);
+internal RDI_TypeKind     rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
+
+#if 0
 
 ////////////////////////////////
 //~ rjf: Conversion Implementation Helpers
@@ -326,6 +329,8 @@ internal void p2r_location_over_lvar_addr_range(P2R_Ctx *ctx,
 internal void    p2r_link_name_save(Arena *arena, P2R_LinkNameMap *map,
                                     U64 voff, String8 name);
 internal String8 p2r_link_name_find(P2R_LinkNameMap *map, U64 voff);
+
+#endif
 
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
