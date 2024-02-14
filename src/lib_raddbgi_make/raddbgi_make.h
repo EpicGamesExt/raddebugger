@@ -7,6 +7,9 @@
 // Library for building loose data structures which contain
 // RADDBGI debug information, and baking that down into the
 // proper flattened RADDBGI format.
+//
+// Requires prior inclusion of the RAD Debug Info, (R)AD(D)BG(I)
+// Format Library, in raddbgi_format.h.
 
 #ifndef RADDBGI_MAKE_H
 #define RADDBGI_MAKE_H
@@ -159,7 +162,7 @@ struct RDIM_Arena
 ////////////////////////////////
 //~ rjf: Overrideable Thread-Local Scratch Arenas
 
-// To override the default thread-local scratch arenas used b yhe library,
+// To override the default thread-local scratch arenas used by the library,
 // do the following:
 //
 // #define RDIM_SCRATCH_OVERRIDE
@@ -187,7 +190,7 @@ struct RDIM_Temp
 #endif
 
 ////////////////////////////////
-//~ rjf: Linked List Helpers
+//~ rjf: Linked List Helper Macros
 
 #define RDIM_CheckNil(nil,p) ((p) == 0 || (p) == nil)
 #define RDIM_SetNil(nil,p) ((p) = nil)
@@ -1104,7 +1107,7 @@ RDI_PROC void *rdim_memcpy_fallback(void *dst, void *src, RDI_U64 size);
 #define rdim_memcpy_struct(dst, src) rdim_memcpy((dst), (src), sizeof(*(dst)))
 
 //- rjf: arenas
-#if !defined (RDIM_ARENA_OVERRIDE)
+#if !defined(RDIM_ARENA_OVERRIDE)
 RDI_PROC RDIM_Arena *rdim_arena_alloc_fallback(void);
 RDI_PROC void rdim_arena_release_fallback(RDIM_Arena *arena);
 RDI_PROC RDI_U64 rdim_arena_pos_fallback(RDIM_Arena *arena);
@@ -1163,7 +1166,7 @@ RDI_PROC void rdim_str8toptr_map_insert(RDIM_Arena *arena, RDIM_Str8ToPtrMap *ma
 
 //- rjf: root creation
 RDI_PROC RDIM_Root* rdim_root_alloc(RDIM_RootParams *params);
-RDI_PROC void           rdim_root_release(RDIM_Root *root);
+RDI_PROC void       rdim_root_release(RDIM_Root *root);
 
 //- rjf: error accumulation
 RDI_PROC void rdim_push_error(RDIM_Root *root, RDIM_String8 string);
@@ -1188,7 +1191,7 @@ RDI_PROC void rdim_unit_vmap_add_range(RDIM_Root *root, RDIM_Unit *unit, RDI_U64
 //- rjf: type info lookups/reservations
 RDI_PROC RDIM_Type*        rdim_type_from_id(RDIM_Root *root, RDI_U64 type_user_id, RDI_U64 type_user_id_hash);
 RDI_PROC RDIM_Reservation* rdim_type_reserve_id(RDIM_Root *root, RDI_U64 type_user_id, RDI_U64 type_user_id_hash);
-RDI_PROC void                  rdim_type_fill_id(RDIM_Root *root, RDIM_Reservation *res, RDIM_Type *type);
+RDI_PROC void              rdim_type_fill_id(RDIM_Root *root, RDIM_Reservation *res, RDIM_Type *type);
 
 //- rjf: nil/singleton types
 RDI_PROC RDI_S32    rdim_type_is_unhandled_nil(RDIM_Root *root, RDIM_Type *type);
@@ -1276,7 +1279,7 @@ RDI_PROC RDI_U32 rdim_dsection(RDIM_Arena *arena, RDIM_DSections *dss, void *dat
 
 //- rjf: paths baking
 RDI_PROC RDIM_String8   rdim_normal_string_from_path_node(RDIM_Arena *arena, RDIM_PathNode *node);
-RDI_PROC void               rdim_normal_string_from_path_node_build(RDIM_Arena *arena, RDIM_PathNode *node, RDIM_String8List *out);
+RDI_PROC void           rdim_normal_string_from_path_node_build(RDIM_Arena *arena, RDIM_PathNode *node, RDIM_String8List *out);
 RDI_PROC RDIM_PathNode* rdim_paths_new_node(RDIM_BakeCtx *bctx);
 RDI_PROC RDIM_PathNode* rdim_paths_sub_path(RDIM_BakeCtx *bctx, RDIM_PathNode *dir, RDIM_String8 sub_dir);
 RDI_PROC RDIM_PathNode* rdim_paths_node_from_path(RDIM_BakeCtx *bctx,  RDIM_String8 path);

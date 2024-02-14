@@ -595,7 +595,7 @@ rdim_str8toptr_map_insert(RDIM_Arena *arena, RDIM_Str8ToPtrMap *map, RDIM_String
 
 //- rjf: root creation
 
-RDI_PROC RDIM_Root*
+RDI_PROC RDIM_Root *
 rdim_root_alloc(RDIM_RootParams *params)
 {
   RDIM_Arena *arena = rdim_arena_alloc();
