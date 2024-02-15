@@ -1302,7 +1302,157 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   ProfScope("build section for per-source-file line info")
   {
-    
+    for(RDIM_BakeSrcNode *src_file_node = path_tree.src_first;
+        src_file_node != 0;
+        src_file_node = src_file_node->next)
+    {
+      //////////////////////////
+      //- rjf: produce combined source file line info
+      //
+      RDI_U32 *src_file_line_nums   = 0;
+      RDI_U32 *src_file_line_ranges = 0;
+      RDI_U64 *src_file_voffs       = 0;
+      RDI_U32  src_file_line_count  = 0;
+      RDI_U32  src_file_voff_count  = 0;
+      {
+        RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+        
+        //- rjf: gather line number map
+        typedef struct RDIM_SrcLineMapVoffBlock RDIM_SrcLineMapVoffBlock;
+        struct RDIM_SrcLineMapVoffBlock
+        {
+          RDIM_SrcLineMapVoffBlock *next;
+          RDI_U64 voff;
+        };
+        typedef struct RDIM_SrcLineMapBucket RDIM_SrcLineMapBucket;
+        struct RDIM_SrcLineMapBucket
+        {
+          RDIM_SrcLineMapBucket *order_next;
+          RDIM_SrcLineMapBucket *hash_next;
+          RDI_U32 line_num;
+          RDIM_SrcLineMapVoffBlock *first_voff_block;
+          RDIM_SrcLineMapVoffBlock *last_voff_block;
+          RDI_U64 voff_count;
+        };
+        RDIM_SrcLineMapBucket *first_bucket = 0;
+        RDIM_SrcLineMapBucket *last_bucket = 0;
+        RDI_U64 line_hash_slots_count = 2048;
+        RDIM_SrcLineMapBucket **line_hash_slots = rdim_push_array(scratch.arena, RDIM_SrcLineMapBucket *, line_hash_slots_count);
+        RDI_U64 line_count = 0;
+        RDI_U64 voff_count = 0;
+        RDI_U64 max_line_num = 0;
+        {
+          for(RDIM_BakeLineMapFragment *map_fragment = src_file_node->first_fragment;
+              map_fragment != 0;
+              map_fragment = map_fragment->next)
+          {
+            RDIM_LineSequence *sequence = map_fragment->seq;
+            RDI_U64 *seq_voffs = sequence->voffs;
+            RDI_U32 *seq_line_nums = sequence->line_nums;
+            RDI_U64 seq_line_count = sequence->line_count;
+            for(RDI_U64 i = 0; i < seq_line_count; i += 1)
+            {
+              RDI_U32 line_num = seq_line_nums[i];
+              RDI_U64 voff = seq_voffs[i];
+              RDI_U64 line_hash_slot_idx = line_num%line_hash_slots_count;
+              
+              // rjf: update unique voff counter & max line number
+              voff_count += 1;
+              max_line_num = Max(max_line_num, line_num);
+              
+              // rjf: find match
+              RDIM_SrcLineMapBucket *match = 0;
+              {
+                for(RDIM_SrcLineMapBucket *node = line_hash_slots[line_hash_slot_idx];
+                    node != 0;
+                    node = node->hash_next)
+                {
+                  if(node->line_num == line_num)
+                  {
+                    match = node;
+                    break;
+                  }
+                }
+              }
+              
+              // rjf: introduce new map if no match
+              if(match == 0)
+              {
+                match = rdim_push_array(scratch.arena, RDIM_SrcLineMapBucket, 1);
+                RDIM_SLLQueuePush_N(first_bucket, last_bucket, match, order_next);
+                RDIM_SLLStackPush_N(line_hash_slots[line_hash_slot_idx], match, hash_next);
+                match->line_num = line_num;
+                line_count += 1;
+              }
+              
+              // rjf: insert new voff
+              {
+                RDIM_SrcLineMapVoffBlock *block = rdim_push_array(scratch.arena, RDIM_SrcLineMapVoffBlock, 1);
+                RDIM_SLLQueuePush(match->first_voff_block, match->last_voff_block, block);
+                match->voff_count += 1;
+                block->voff = voff;
+              }
+            }
+          }
+        }
+        
+        //- rjf: bake sortable keys array
+        RDIM_SortKey *keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, line_count);
+        {
+          RDIM_SortKey *key_ptr = keys;
+          for(RDIM_SrcLineMapBucket *node = first_bucket;
+              node != 0;
+              node = node->order_next, key_ptr += 1){
+            key_ptr->key = node->line_num;
+            key_ptr->val = node;
+          }
+        }
+        
+        // sort
+        RDIM_SortKey *sorted_keys = rdim_sort_key_array(scratch.arena, keys, line_count);
+        
+        // bake result
+        RDI_U32 *line_nums = rdim_push_array_no_zero(arena, RDI_U32, line_count);
+        RDI_U32 *line_ranges = rdim_push_array_no_zero(arena, RDI_U32, line_count + 1);
+        RDI_U64 *voffs = rdim_push_array_no_zero(arena, RDI_U64, voff_count);
+        {
+          RDI_U64 *voff_ptr = voffs;
+          for(RDI_U32 i = 0; i < line_count; i += 1){
+            line_nums[i] = sorted_keys[i].key;
+            line_ranges[i] = (RDI_U32)(voff_ptr - voffs);
+            RDIM_SrcLineMapBucket *bucket = (RDIM_SrcLineMapBucket*)sorted_keys[i].val;
+            for(RDIM_SrcLineMapVoffBlock *node = bucket->first_voff_block;
+                node != 0;
+                node = node->next){
+              *voff_ptr = node->voff;
+              voff_ptr += 1;
+            }
+          }
+          line_ranges[line_count] = voff_count;
+        }
+        
+        src_file_line_nums   = line_nums;
+        src_file_line_ranges = line_ranges;
+        src_file_line_count  = line_count;
+        src_file_voffs       = voffs;
+        src_file_voff_count  = voff_count;
+        scratch_end(scratch);
+      }
+      
+      //////////////////////////
+      //- rjf: produce data sections for this source file's line info tables
+      //
+      if(src_file_line_count != 0)
+      {
+        src_file_node->line_map_count = src_file_line_count;
+        src_file_node->line_map_nums_data_idx  = (RDI_U32)sections.count;
+        src_file_node->line_map_range_data_idx = src_file_node->line_map_nums_data_idx+1;
+        src_file_node->line_map_voff_data_idx  = src_file_node->line_map_nums_data_idx+2;
+        rdim_bake_section_list_push_new(arena, &sections, src_file_line_nums, sizeof(*src_file_line_nums)*src_file_line_count, RDI_DataSectionTag_LineMapNumbers);
+        rdim_bake_section_list_push_new(arena, &sections, src_file_line_ranges, sizeof(*src_file_line_ranges)*(src_file_line_count + 1), RDI_DataSectionTag_LineMapRanges);
+        rdim_bake_section_list_push_new(arena, &sections, src_file_voffs, sizeof(*src_file_voffs)*src_file_voff_count, RDI_DataSectionTag_LineMapVoffs);
+      }
+    }
   }
   
   //////////////////////////////
