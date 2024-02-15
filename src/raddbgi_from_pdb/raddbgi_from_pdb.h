@@ -40,6 +40,30 @@ struct P2R_Params
 };
 
 ////////////////////////////////
+//~ rjf: Conversion Data Structure Types
+
+//- rjf: link name map (voff -> string)
+
+typedef struct P2R_LinkNameNode P2R_LinkNameNode;
+struct P2R_LinkNameNode
+{
+  P2R_LinkNameNode *next;
+  U64 voff;
+  String8 name;
+};
+
+typedef struct P2R_LinkNameMap P2R_LinkNameMap;
+struct P2R_LinkNameMap
+{
+  P2R_LinkNameNode **buckets;
+  U64 buckets_count;
+  U64 bucket_collision_count;
+  U64 link_name_count;
+};
+
+#if 0
+
+////////////////////////////////
 //~ rjf: PDB Type & Symbol Info Translation Helper Types
 
 //- rjf: typeid forward reference map
@@ -193,6 +217,7 @@ struct P2R_Ctx
   P2R_KnownGlobalSet known_globals;
   P2R_LinkNameMap link_names;
 };
+#endif
 
 ////////////////////////////////
 //~ Conversion Output Type
@@ -205,6 +230,11 @@ struct P2R_Out
   String8List dump;
   String8List errors;
 };
+
+////////////////////////////////
+//~ rjf: Basic Helpers
+
+internal U64 p2r_end_of_cplusplus_container_name(String8 str);
 
 ////////////////////////////////
 //~ rjf: Command Line -> Conversion Parameters
@@ -223,6 +253,15 @@ internal RDI_Arch         rdi_arch_from_cv_arch(CV_Arch arch);
 internal RDI_RegisterCode rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
 internal RDI_Language     rdi_language_from_cv_language(CV_Language language);
 internal RDI_TypeKind     rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
+
+////////////////////////////////
+//~ rjf: Location Info Building Helpers
+
+internal RDIM_Location *p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegisterCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection);
+internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFrameproc *frameproc, B32 param_base);
+internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
+internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
+
 
 #if 0
 

@@ -2,6 +2,30 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Basic Helpers
+
+internal U64
+p2r_end_of_cplusplus_container_name(String8 str)
+{
+  // NOTE: This finds the index one past the last "::" contained in str.
+  //       if no "::" is contained in str, then the returned index is 0.
+  //       The intent is that [0,clamp_bot(0,result - 2)) gives the
+  //       "container name" and [result,str.size) gives the leaf name.
+  U64 result = 0;
+  if(str.size >= 2)
+  {
+    for(U64 i = str.size; i >= 2; i -= 1)
+    {
+      if(str.str[i - 2] == ':' && str.str[i - 1] == ':')
+      {
+        result = i;
+        break;
+      }
+    }
+  }
+  return(result);
+}
+////////////////////////////////
 //~ rjf: Command Line -> Conversion Parameters
 
 internal P2R_Params*
@@ -372,6 +396,139 @@ rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type)
     case CV_BasicType_PTR:{result = RDI_TypeKind_Handle;}break;
   }
   return result;
+}
+
+////////////////////////////////
+//~ rjf: Location Info Building Helpers
+
+internal RDIM_Location *
+p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegisterCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection)
+{
+  RDIM_Location *result = 0;
+  if(0 <= offset && offset <= (S64)max_U16)
+  {
+    if(extra_indirection)
+    {
+      result = rdim_push_location_addr_addr_reg_plus_u16(arena, reg_code, (U16)offset);
+    }
+    else
+    {
+      result = rdim_push_location_addr_reg_plus_u16(arena, reg_code, (U16)offset);
+    }
+  }
+  else
+  {
+    RDIM_EvalBytecode bytecode = {0};
+    U32 regread_param = RDI_EncodeRegReadParam(reg_code, reg_byte_size, reg_byte_pos);
+    rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_RegRead, regread_param);
+    rdim_bytecode_push_sconst(arena, &bytecode, offset);
+    rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_Add, 0);
+    if(extra_indirection)
+    {
+      U64 addr_size = rdi_addr_size_from_arch(arch);
+      rdim_bytecode_push_op(arena, &bytecode, RDI_EvalOp_MemRead, addr_size);
+    }
+    result = rdim_push_location_addr_bytecode_stream(arena, &bytecode);
+  }
+  return result;
+}
+
+internal CV_EncodedFramePtrReg
+p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFrameproc *frameproc, B32 param_base)
+{
+  CV_EncodedFramePtrReg result = 0;
+  CV_FrameprocFlags flags = frameproc->flags;
+  if(param_base)
+  {
+    result = CV_FrameprocFlags_ExtractParamBasePointer(flags);
+  }
+  else
+  {
+    result = CV_FrameprocFlags_ExtractLocalBasePointer(flags);
+  }
+  return result;
+}
+
+internal RDI_RegisterCode
+p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg)
+{
+  RDI_RegisterCode result = 0;
+  switch(arch)
+  {
+    case RDI_Arch_X86:
+    {
+      switch(encoded_reg)
+      {
+        case CV_EncodedFramePtrReg_StackPtr:
+        {
+          // TODO(allen): support CV_AllReg_VFRAME
+          // TODO(allen): error
+        }break;
+        case CV_EncodedFramePtrReg_FramePtr:
+        {
+          result = RDI_RegisterCode_X86_ebp;
+        }break;
+        case CV_EncodedFramePtrReg_BasePtr:
+        {
+          result = RDI_RegisterCode_X86_ebx;
+        }break;
+      }
+    }break;
+    case RDI_Arch_X64:
+    {
+      switch(encoded_reg)
+      {
+        case CV_EncodedFramePtrReg_StackPtr:
+        {
+          result = RDI_RegisterCode_X64_rsp;
+        }break;
+        case CV_EncodedFramePtrReg_FramePtr:
+        {
+          result = RDI_RegisterCode_X64_rbp;
+        }break;
+        case CV_EncodedFramePtrReg_BasePtr:
+        {
+          result = RDI_RegisterCode_X64_r13;
+        }break;
+      }
+    }break;
+  }
+  return(result);
+}
+
+internal void
+p2r_location_over_lvar_addr_range(Arena *arena, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
+{
+  //- rjf: extract range info
+  U64 voff_first = 0;
+  U64 voff_opl = 0;
+  if(section != 0)
+  {
+    voff_first = section->voff + range->off;
+    voff_opl = voff_first + range->len;
+  }
+  
+  //- rjf: emit ranges
+  CV_LvarAddrGap *gap_ptr = gaps;
+  U64 voff_cursor = voff_first;
+  for(U64 i = 0; i < gap_count; i += 1, gap_ptr += 1)
+  {
+    U64 voff_gap_first = voff_first + gap_ptr->off;
+    U64 voff_gap_opl   = voff_gap_first + gap_ptr->len;
+    if(voff_cursor < voff_gap_first)
+    {
+      RDIM_Rng1U64 voff_range = {voff_cursor, voff_gap_first};
+      rdim_location_set_push_case(arena, locset, voff_range, location);
+    }
+    voff_cursor = voff_gap_opl;
+  }
+  
+  //- rjf: emit remaining range
+  if(voff_cursor < voff_opl)
+  {
+    RDIM_Rng1U64 voff_range = {voff_cursor, voff_opl};
+    rdim_location_set_push_case(arena, locset, voff_range, location);
+  }
 }
 
 #if 0
@@ -3670,9 +3827,9 @@ p2r_convert(Arena *arena, P2R_Params *params)
     {
       rec_range_count += sym->sym_ranges.count;
     }
-    for(U64 i = 0; i < comp_unit_count; i += 1)
+    for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
     {
-      CV_SymParsed *unit_sym = sym_for_unit[i];
+      CV_SymParsed *unit_sym = sym_for_unit[comp_unit_idx];
       rec_range_count += unit_sym->sym_ranges.count;
     }
     symbol_count_prediction = rec_range_count/8;
@@ -3683,11 +3840,11 @@ p2r_convert(Arena *arena, P2R_Params *params)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: types pass 0: produce type forward resolution map
+  //- rjf: types pass 1: produce type forward resolution map
   //
   U64 type_fwd_map_count = 0;
   CV_TypeId *type_fwd_map = 0;
-  ProfScope("types pass 0: produce type forward resolution map")
+  ProfScope("types pass 1: produce type forward resolution map")
   {
     CV_TypeId itype_first = tpi_leaf->itype_first;
     CV_TypeId itype_opl   = tpi_leaf->itype_opl;
@@ -3805,7 +3962,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: types pass 1: construct all root/stub types from TPI
+  //- rjf: types pass 2: construct all root/stub types from TPI
   //
   // this does NOT gather the following information, which is done by
   // subsequent passes, as they all require full resolution of all itypes first
@@ -3828,13 +3985,13 @@ p2r_convert(Arena *arena, P2R_Params *params)
   };
   P2R_TypeIdRevisitTask *first_itype_revisit_task = 0;
   P2R_TypeIdRevisitTask *last_itype_revisit_task = 0;
+  CV_TypeId itype_first = tpi_leaf->itype_first;
+  CV_TypeId itype_opl   = tpi_leaf->itype_opl;
   RDIM_TypeArray itype_types = {0};     // root type for per-TPI-itype
   RDIM_TypeChunkList extra_types = {0}; // extra supplementary types we build, which do not have any itypes
-  ProfScope("types pass 1: construct all root/stub types from TPI")
+  ProfScope("types pass 2: construct all root/stub types from TPI")
   {
     RDI_U64 extra_types_chunk_cap = 1024;
-    CV_TypeId itype_first = tpi_leaf->itype_first;
-    CV_TypeId itype_opl   = tpi_leaf->itype_opl;
     itype_types.count = (U64)(itype_opl-itype_first);
     itype_types.v = push_array(arena, RDIM_Type, itype_types.count);
 #define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
@@ -4211,7 +4368,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: types pass 2: attach cross-itype-relationship data to all types, build UDTs
+  //- rjf: types pass 3: attach cross-itype-relationship data to all types, build UDTs
   //
   // given the root/stub types for all itypes, this pass takes care of the
   // following extra pieces of per-type information:
@@ -4224,7 +4381,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
   // - direct type forward resolution
   //
   RDIM_UDTChunkList udts = {0};
-  ProfScope("types pass 2: attach cross-itype-relationship data to all types, build UDTs")
+  ProfScope("types pass 3: attach cross-itype-relationship data to all types, build UDTs")
   {
     RDI_U64 udts_chunk_cap = 1024;
     CV_TypeId itype_first = tpi_leaf->itype_first;
@@ -4927,11 +5084,711 @@ p2r_convert(Arena *arena, P2R_Params *params)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: produce all symbols for all units
+  //- rjf: produce symbols from all sym streams
   //
-  ProfScope("produce all symbols for all units")
+  ProfScope("produce symbols from all sym streams")
   {
+#define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
     
+    ////////////////////////////
+    //- rjf: produce array of all symbol streams
+    //
+    U64 syms_count = 1 + comp_unit_count;
+    CV_SymParsed **syms = push_array(scratch.arena, CV_SymParsed *, syms_count);
+    {
+      syms[0] = sym;
+      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      {
+        syms[comp_unit_idx+1] = sym_for_unit[comp_unit_idx];
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: produce symbols
+    //
+    for(U64 sym_idx = 0; sym_idx < syms_count; sym_idx += 1)
+    {
+      CV_SymParsed *sym = syms[sym_idx];
+      Temp scratch = scratch_begin(&arena, 1);
+      
+      //////////////////////////
+      //- rjf: set up outputs for this sym stream
+      //
+      RDIM_SymbolChunkList sym_procedures = {0};
+      RDIM_SymbolChunkList sym_global_variables = {0};
+      RDIM_SymbolChunkList sym_thread_variables = {0};
+      RDIM_ScopeChunkList sym_scopes = {0};
+      U64 sym_procedures_chunk_cap = 1024;
+      U64 sym_global_variables_chunk_cap = 1024;
+      U64 sym_thread_variables_chunk_cap = 1024;
+      U64 sym_scopes_chunk_cap = 1024;
+      
+      //////////////////////////
+      //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
+      //
+      U64 procedure_frameprocs_count = 0;
+      U64 procedure_frameprocs_cap   = sym->sym_ranges.count;
+      CV_SymFrameproc **procedure_frameprocs = push_array_no_zero(scratch.arena, CV_SymFrameproc *, procedure_frameprocs_cap);
+      ProfScope("symbols pass 1: produce procedure frame info map (procedure -> frame info)")
+      {
+        U64 procedure_num = 0;
+        CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
+        CV_RecRange *rec_ranges_opl   = rec_ranges_first + sym->sym_ranges.count;
+        for(CV_RecRange *rec_range = rec_ranges_first;
+            rec_range < rec_ranges_opl;
+            rec_range += 1)
+        {
+          //- rjf: rec range -> symbol info range
+          U64 sym_off_first = rec_range->off + 2;
+          U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
+          
+          //- rjf: skip invalid ranges
+          if(sym_off_opl > sym->data.size || sym_off_first > sym->data.size || sym_off_first > sym_off_opl)
+          {
+            continue;
+          }
+          
+          //- rjf: unpack symbol info
+          CV_SymKind kind = rec_range->hdr.kind;
+          U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
+          void *sym_header_struct_base = sym->data.str + sym_off_first;
+          
+          //- rjf: skip bad sizes
+          if(sym_off_first + sym_header_struct_size > sym_off_opl)
+          {
+            continue;
+          }
+          
+          //- rjf: consume symbol based on kind
+          switch(kind)
+          {
+            default:{}break;
+            
+            //- rjf: FRAMEPROC
+            case CV_SymKind_FRAMEPROC:
+            {
+              if(procedure_num == 0) { break; }
+              if(procedure_num > procedure_frameprocs_cap) { break; }
+              CV_SymFrameproc *frameproc = (CV_SymFrameproc*)sym_header_struct_base;
+              procedure_frameprocs[procedure_num-1] = frameproc;
+              procedure_frameprocs_count = Max(procedure_frameprocs_count, procedure_num);
+            }break;
+            
+            //- rjf: LPROC32/GPROC32
+            case CV_SymKind_LPROC32:
+            case CV_SymKind_GPROC32:
+            {
+              procedure_num += 1;
+            }break;
+          }
+        }
+        U64 scratch_overkill = sizeof(procedure_frameprocs[0])*(procedure_frameprocs_cap-procedure_frameprocs_count);
+        arena_put_back(scratch.arena, scratch_overkill);
+      }
+      
+      //////////////////////////
+      //- rjf: symbols pass 2: construct all symbols, given procedure frame info map
+      //
+      ProfScope("symbols pass 2: construct all symbols, given procedure frame info map")
+      {
+        RDIM_LocationSet *defrange_target = 0;
+        B32 defrange_target_is_param = 0;
+        U64 procedure_num = 0;
+        CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
+        CV_RecRange *rec_ranges_opl   = rec_ranges_first + sym->sym_ranges.count;
+        typedef struct P2R_ScopeNode P2R_ScopeNode;
+        struct P2R_ScopeNode
+        {
+          P2R_ScopeNode *next;
+          RDIM_Scope *scope;
+        };
+        P2R_ScopeNode *top_scope_node = 0;
+        P2R_ScopeNode *free_scope_node = 0;
+        for(CV_RecRange *rec_range = rec_ranges_first;
+            rec_range < rec_ranges_opl;
+            rec_range += 1)
+        {
+          //- rjf: rec range -> symbol info range
+          U64 sym_off_first = rec_range->off + 2;
+          U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
+          
+          //- rjf: skip invalid ranges
+          if(sym_off_opl > sym->data.size || sym_off_first > sym->data.size || sym_off_first > sym_off_opl)
+          {
+            continue;
+          }
+          
+          //- rjf: unpack symbol info
+          CV_SymKind kind = rec_range->hdr.kind;
+          U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
+          void *sym_header_struct_base = sym->data.str + sym_off_first;
+          void *sym_data_opl = sym->data.str + sym_off_opl;
+          
+          //- rjf: skip bad sizes
+          if(sym_off_first + sym_header_struct_size > sym_off_opl)
+          {
+            continue;
+          }
+          
+          //- rjf: consume symbol based on kind
+          switch(kind)
+          {
+            default:{}break;
+            
+            //- rjf: END
+            case CV_SymKind_END:
+            {
+              P2R_ScopeNode *n = top_scope_node;
+              SLLStackPop(top_scope_node);
+              SLLStackPush(free_scope_node, n);
+              defrange_target = 0;
+              defrange_target_is_param = 0;
+            }break;
+            
+            //- rjf: BLOCK32
+            case CV_SymKind_BLOCK32:
+            {
+              // rjf: unpack sym
+              CV_SymBlock32 *block32 = (CV_SymBlock32 *)sym_header_struct_base;
+              
+              // rjf: build scope, insert into current parent scope
+              RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
+              {
+                if(top_scope_node == 0)
+                {
+                  // TODO(rjf): log
+                }
+                if(top_scope_node != 0)
+                {
+                  RDIM_Scope *top_scope = top_scope_node->scope;
+                  SLLQueuePush_N(top_scope->first_child, top_scope->last_child, scope, next_sibling);
+                  scope->parent_scope = top_scope;
+                  scope->symbol = top_scope->symbol;
+                }
+                COFF_SectionHeader *section = (0 < block32->sec && block32->sec <= coff_sections->count) ? &coff_sections->sections[block32->sec-1] : 0;
+                if(section != 0)
+                {
+                  U64 voff_first = section->voff + block32->off;
+                  U64 voff_last = voff_first + block32->len;
+                  RDIM_Rng1U64 voff_range = {voff_first, voff_last};
+                  rdim_rng1u64_list_push(arena, &scope->voff_ranges, voff_range);
+                }
+              }
+              
+              // rjf: push this scope to scope stack
+              {
+                P2R_ScopeNode *node = free_scope_node;
+                if(node != 0) { SLLStackPop(free_scope_node); }
+                else { node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1); }
+                node->scope = scope;
+                SLLStackPush(top_scope_node, node);
+              }
+            }break;
+            
+            //- rjf: LDATA32/GDATA32
+            case CV_SymKind_LDATA32:
+            case CV_SymKind_GDATA32:
+            {
+              // rjf: unpack sym
+              CV_SymData32 *data32 = (CV_SymData32 *)sym_header_struct_base;
+              String8 name = str8_cstring_capped(data32+1, sym_data_opl);
+              COFF_SectionHeader *section = (0 < data32->sec && data32->sec <= coff_sections->count) ? &coff_sections->sections[data32->sec-1] : 0;
+              U64 voff = (section ? section->voff : 0) + data32->off;
+              
+              // rjf: determine if this is an exact duplicate global
+              //
+              // PDB likes to have duplicates of these spread across different
+              // symbol streams so we deduplicate across the entire translation
+              // context.
+              //
+              B32 is_duplicate = 0;
+              {
+                // TODO(rjf): @important global symbol dedup
+              }
+              
+              // rjf: is not duplicate -> push new global
+              if(!is_duplicate)
+              {
+                // rjf: unpack global variable's type
+                RDIM_Type *type = p2r_type_ptr_from_itype(data32->itype);
+                
+                // rjf: unpack global's container type
+                RDIM_Type *container_type = 0;
+                U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
+                if(container_name_opl > 2)
+                {
+                  String8 container_name = str8(name.str, container_name_opl - 2);
+                  // TODO(rjf): @important type name maps
+                  // container_type = p2r_type_from_name(ctx, container_name);
+                }
+                
+                // rjf: unpack global's container symbol
+                RDIM_Symbol *container_symbol = 0;
+                if(container_type == 0 && top_scope_node != 0)
+                {
+                  container_symbol = top_scope_node->scope->symbol;
+                }
+                
+                // rjf: build symbol
+                RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, &sym_global_variables, sym_global_variables_chunk_cap);
+                symbol->kind             = RDIM_SymbolKind_GlobalVariable;
+                symbol->is_extern        = (kind == CV_SymKind_GDATA32);
+                symbol->name             = name;
+                symbol->type             = type;
+                symbol->offset           = voff;
+                symbol->container_symbol = container_symbol;
+                symbol->container_type   = container_type;
+              }
+            }break;
+            
+            //- rjf: LPROC32/GPROC32
+            case CV_SymKind_LPROC32:
+            case CV_SymKind_GPROC32:
+            {
+              // rjf: unpack sym
+              CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
+              String8 name = str8_cstring_capped(proc32+1, sym_data_opl);
+              RDIM_Type *type = p2r_type_ptr_from_itype(proc32->itype);
+              
+              // rjf: unpack proc's container type
+              RDIM_Type *container_type = 0;
+              U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
+              if(container_name_opl > 2)
+              {
+                String8 container_name = str8(name.str, container_name_opl - 2);
+                // TODO(rjf): @important type name maps
+                // container_type = p2r_type_from_name(ctx, container_name);
+              }
+              
+              // rjf: unpack proc's container symbol
+              RDIM_Symbol *container_symbol = 0;
+              if(container_type == 0 && top_scope_node != 0)
+              {
+                container_symbol = top_scope_node->scope->symbol;
+              }
+              
+              // rjf: build procedure's root scope
+              //
+              // NOTE: even if there could be a containing scope at this point (which should be
+              //       illegal in C/C++ but not necessarily in another language) we would not use
+              //       it here because these scopes refer to the ranges of code that make up a
+              //       procedure *not* the namespaces, so a procedure's root scope always has
+              //       no parent.
+              RDIM_Scope *procedure_root_scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
+              {
+                COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= coff_sections->count) ? &coff_sections->sections[proc32->sec-1] : 0;
+                if(section != 0)
+                {
+                  U64 voff_first = section->voff + proc32->off;
+                  U64 voff_last = voff_first + proc32->len;
+                  RDIM_Rng1U64 voff_range = {voff_first, voff_last};
+                  rdim_rng1u64_list_push(arena, &procedure_root_scope->voff_ranges, voff_range);
+                }
+              }
+              
+              // rjf: root scope voff minimum range -> link name
+              String8 link_name = {0};
+              if(procedure_root_scope->voff_ranges.min != 0)
+              {
+                // TODO(rjf): @important link names
+              }
+              
+              // rjf: build procedure symbol
+              RDIM_Symbol *procedure_symbol = rdim_symbol_chunk_list_push(arena, &sym_procedures, sym_procedures_chunk_cap);
+              procedure_symbol->kind             = RDIM_SymbolKind_Procedure;
+              procedure_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
+              procedure_symbol->name             = name;
+              procedure_symbol->link_name        = link_name;
+              procedure_symbol->type             = type;
+              procedure_symbol->container_symbol = container_symbol;
+              procedure_symbol->container_type   = container_type;
+              
+              // rjf: fill root scope's symbol
+              procedure_root_scope->symbol = procedure_symbol;
+              
+              // rjf: push scope to scope stack
+              {
+                P2R_ScopeNode *node = free_scope_node;
+                if(node != 0) { SLLStackPop(free_scope_node); }
+                else { node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1); }
+                node->scope = procedure_root_scope;
+                SLLStackPush(top_scope_node, node);
+              }
+              
+              // rjf: increment procedure counter
+              procedure_num += 1;
+            }break;
+            
+            //- rjf: REGREL32
+            case CV_SymKind_REGREL32:
+            {
+              // TODO(rjf): apparently some of the information here may end up being
+              // redundant with "better" information from  CV_SymKind_LOCAL record.
+              // we don't currently handle this, but if those cases arise then it
+              // will obviously be better to prefer the better information from both
+              // records.
+              
+              // rjf: no containing scope? -> malformed data; locals cannot be produced
+              // outside of a containing scope
+              if(top_scope_node == 0)
+              {
+                break;
+              }
+              
+              // rjf: unpack sym
+              CV_SymRegrel32 *regrel32 = (CV_SymRegrel32 *)sym_header_struct_base;
+              String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
+              RDIM_Type *type = p2r_type_ptr_from_itype(regrel32->itype);
+              CV_Reg cv_reg = regrel32->reg;
+              U32 var_off = regrel32->reg_off;
+              
+              // rjf: determine if this is a parameter
+              RDI_LocalKind local_kind = RDI_LocalKind_Variable;
+              {
+                B32 is_stack_reg = 0;
+                switch(arch)
+                {
+                  default:{}break;
+                  case RDI_Arch_X86:{is_stack_reg = (cv_reg == CV_Regx86_ESP);}break;
+                  case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP);}break;
+                }
+                if(is_stack_reg)
+                {
+                  U32 frame_size = 0xFFFFFFFF;
+                  if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
+                  {
+                    CV_SymFrameproc *frameproc = procedure_frameprocs[procedure_num-1];
+                    frame_size = frameproc->frame_size;
+                  }
+                  if(var_off > frame_size)
+                  {
+                    local_kind = RDI_LocalKind_Parameter;
+                  }
+                }
+              }
+              
+              // rjf: build local
+              RDIM_Scope *scope = top_scope_node->scope;
+              RDIM_Local *local = rdim_scope_push_local(arena, scope);
+              local->kind = local_kind;
+              local->name = name;
+              local->type = type;
+              
+              // rjf: add location info to local
+              {
+                // rjf: determine if we need an extra indirection to the value
+                B32 extra_indirection_to_value = 0;
+                switch(arch)
+                {
+                  case RDI_Arch_X86:
+                  {
+                    extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 4 || !IsPow2OrZero(type->byte_size)));
+                  }break;
+                  case RDI_Arch_X64:
+                  {
+                    extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));
+                  }break;
+                }
+                
+                // rjf: get raddbg register code
+                RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
+                // TODO(rjf): real byte_size & byte_pos from cv_reg goes here
+                U32 byte_size = 8;
+                U32 byte_pos = 0;
+                
+                // rjf: set location case
+                RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, arch, register_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
+                RDIM_Rng1U64 voff_range = {0, max_U64};
+                rdim_location_set_push_case(arena, &local->locset, voff_range, loc);
+              }
+            }break;
+            
+            //- rjf: LTHREAD32/GTHREAD32
+            case CV_SymKind_LTHREAD32:
+            case CV_SymKind_GTHREAD32:
+            {
+              // rjf: unpack sym
+              CV_SymThread32 *thread32 = (CV_SymThread32 *)sym_header_struct_base;
+              String8 name = str8_cstring_capped(thread32+1, sym_data_opl);
+              U32 tls_off = thread32->tls_off;
+              RDIM_Type *type = p2r_type_ptr_from_itype(thread32->itype);
+              
+              // rjf: unpack thread variable's container type
+              RDIM_Type *container_type = 0;
+              U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
+              if(container_name_opl > 2)
+              {
+                String8 container_name = str8(name.str, container_name_opl - 2);
+                // TODO(rjf): @important type name maps
+                // container_type = p2r_type_from_name(ctx, container_name);
+              }
+              
+              // rjf: unpack thread variable's container symbol
+              RDIM_Symbol *container_symbol = 0;
+              if(container_type == 0 && top_scope_node != 0)
+              {
+                container_symbol = top_scope_node->scope->symbol;
+              }
+              
+              // rjf: build symbol
+              RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, &sym_thread_variables, sym_thread_variables_chunk_cap);
+              tvar->kind             = RDIM_SymbolKind_ThreadVariable;
+              tvar->name             = name;
+              tvar->type             = type;
+              tvar->is_extern        = (kind == CV_SymKind_GTHREAD32);
+              tvar->offset           = tls_off;
+              tvar->container_type   = container_type;
+              tvar->container_symbol = container_symbol;
+            }break;
+            
+            //- rjf: LOCAL
+            case CV_SymKind_LOCAL:
+            {
+              // rjf: no containing scope? -> malformed data; locals cannot be produced
+              // outside of a containing scope
+              if(top_scope_node == 0)
+              {
+                break;
+              }
+              
+              // rjf: unpack sym
+              CV_SymLocal *slocal = (CV_SymLocal *)sym_header_struct_base;
+              String8 name = str8_cstring_capped(slocal+1, sym_data_opl);
+              RDIM_Type *type = p2r_type_ptr_from_itype(slocal->itype);
+              
+              // rjf: determine if this symbol encodes the beginning of a global modification
+              B32 is_global_modification = 0;
+              if((slocal->flags & CV_LocalFlag_Global) ||
+                 (slocal->flags & CV_LocalFlag_Static))
+              {
+                is_global_modification = 1;
+              }
+              
+              // rjf: is global modification -> emit global modification symbol
+              if(is_global_modification)
+              {
+                // TODO(rjf): add global modification symbols
+                defrange_target = 0;
+                defrange_target_is_param = 0;
+              }
+              
+              // rjf: is not a global modification -> emit a local variable
+              if(!is_global_modification)
+              {
+                // rjf: determine local kind
+                RDI_LocalKind local_kind = RDI_LocalKind_Variable;
+                if(slocal->flags & CV_LocalFlag_Param)
+                {
+                  local_kind = RDI_LocalKind_Parameter;
+                }
+                
+                // rjf: build local
+                RDIM_Scope *scope = top_scope_node->scope;
+                RDIM_Local *local = rdim_scope_push_local(arena, scope);
+                local->kind = local_kind;
+                local->name = name;
+                local->type = type;
+                
+                // rjf: save defrange target, for subsequent defrange symbols
+                defrange_target = &local->locset;
+                defrange_target_is_param = (local_kind == RDI_LocalKind_Parameter);
+              }
+            }break;
+            
+            //- rjf: DEFRANGE_REGISTESR
+            case CV_SymKind_DEFRANGE_REGISTER:
+            {
+              // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
+              // a local - break immediately
+              if(defrange_target == 0)
+              {
+                break;
+              }
+              
+              // rjf: unpack sym
+              CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)sym_header_struct_base;
+              CV_Reg cv_reg = defrange_register->reg;
+              CV_LvarAddrRange *range = &defrange_register->range;
+              COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections->count) ? &coff_sections->sections[range->sec-1] : 0;
+              CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register+1);
+              U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+              RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
+              
+              // rjf: build location
+              RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
+              
+              // rjf: emit locations over ranges
+              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+            }break;
+            
+            //- rjf: DEFRANGE_FRAMEPOINTER_REL
+            case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL:
+            {
+              // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
+              // a local - break immediately
+              if(defrange_target == 0)
+              {
+                break;
+              }
+              
+              // rjf: find current procedure's frameproc
+              CV_SymFrameproc *frameproc = 0;
+              if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
+              {
+                frameproc = procedure_frameprocs[procedure_num-1];
+              }
+              
+              // rjf: no current valid frameproc? -> somehow we got a to a framepointer-relative defrange
+              // without having an actually active procedure - break
+              if(frameproc == 0)
+              {
+                break;
+              }
+              
+              // rjf: unpack sym
+              CV_SymDefrangeFramepointerRel *defrange_fprel = (CV_SymDefrangeFramepointerRel*)sym_header_struct_base;
+              CV_LvarAddrRange *range = &defrange_fprel->range;
+              COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections->count) ? &coff_sections->sections[range->sec-1] : 0;
+              CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_fprel + 1);
+              U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+              
+              // rjf: select frame pointer register
+              CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
+              RDI_RegisterCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(arch, encoded_fp_reg);
+              
+              // rjf: build location
+              B32 extra_indirection = 0;
+              U32 byte_size = arch_addr_size;
+              U32 byte_pos = 0;
+              S64 var_off = (S64)defrange_fprel->off;
+              RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              
+              // rjf: emit locations over ranges
+              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+            }break;
+            
+            //- rjf: DEFRANGE_SUBFIELD_REGISTER
+            case CV_SymKind_DEFRANGE_SUBFIELD_REGISTER:
+            {
+              // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
+              // a local - break immediately
+              if(defrange_target == 0)
+              {
+                break;
+              }
+              
+              // rjf: unpack sym
+              CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)sym_header_struct_base;
+              CV_Reg cv_reg = defrange_subfield_register->reg;
+              CV_LvarAddrRange *range = &defrange_subfield_register->range;
+              COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections->count) ? &coff_sections->sections[range->sec-1] : 0;
+              CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
+              U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+              RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
+              
+              // rjf: skip "subfield" location info - currently not supported
+              if(defrange_subfield_register->field_offset != 0)
+              {
+                break;
+              }
+              
+              // rjf: build location
+              RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
+              
+              // rjf: emit locations over ranges
+              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+            }break;
+            
+            //- rjf: DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE
+            case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE:
+            {
+              // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
+              // a local - break immediately
+              if(defrange_target == 0)
+              {
+                break;
+              }
+              
+              // rjf: find current procedure's frameproc
+              CV_SymFrameproc *frameproc = 0;
+              if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
+              {
+                frameproc = procedure_frameprocs[procedure_num-1];
+              }
+              
+              // rjf: no current valid frameproc? -> somehow we got a to a framepointer-relative defrange
+              // without having an actually active procedure - break
+              if(frameproc == 0)
+              {
+                break;
+              }
+              
+              // rjf: unpack sym
+              CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope = (CV_SymDefrangeFramepointerRelFullScope*)sym_header_struct_base;
+              CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
+              RDI_RegisterCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(arch, encoded_fp_reg);
+              
+              // rjf: build location
+              B32 extra_indirection = 0;
+              U32 byte_size = arch_addr_size;
+              U32 byte_pos = 0;
+              S64 var_off = (S64)defrange_fprel_full_scope->off;
+              RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
+              
+              // rjf: emit location over ranges
+              RDIM_Rng1U64 voff_range = {0, max_U64};
+              rdim_location_set_push_case(arena, defrange_target, voff_range, location);
+            }break;
+            
+            //- rjf: DEFRANGE_REGISTER_REL
+            case CV_SymKind_DEFRANGE_REGISTER_REL:
+            {
+              // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
+              // a local - break immediately
+              if(defrange_target == 0)
+              {
+                break;
+              }
+              
+              // rjf: unpack sym
+              CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)sym_header_struct_base;
+              CV_Reg cv_reg = defrange_register_rel->reg;
+              RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(arch, cv_reg);
+              CV_LvarAddrRange *range = &defrange_register_rel->range;
+              COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= coff_sections->count) ? &coff_sections->sections[range->sec-1] : 0;
+              CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
+              U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
+              
+              // rjf: build location
+              // TODO(rjf): offset & size from cv_reg code
+              U32 byte_size = arch_addr_size;
+              U32 byte_pos = 0;
+              B32 extra_indirection_to_value = 0;
+              S64 var_off = defrange_register_rel->reg_off;
+              RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, register_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
+              
+              // rjf: emit locations over ranges
+              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+            }break;
+            
+            //- rjf: FILESTATIC
+            case CV_SymKind_FILESTATIC:
+            {
+              CV_SymFileStatic *file_static = (CV_SymFileStatic*)sym_header_struct_base;
+              String8 name = str8_cstring_capped(file_static+1, sym_data_opl);
+              RDIM_Type *type = p2r_type_ptr_from_itype(file_static->itype);
+              // TODO(rjf): emit a global modifier symbol
+              defrange_target = 0;
+              defrange_target_is_param = 0;
+            }break;
+          }
+        }
+      }
+      
+      scratch_end(scratch);
+    }
+    
+#undef p2r_type_ptr_from_itype
   }
   
   

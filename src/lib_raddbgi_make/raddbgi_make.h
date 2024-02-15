@@ -304,6 +304,7 @@ struct RDIM_Rng1U64List
   RDIM_Rng1U64Node *first;
   RDIM_Rng1U64Node *last;
   RDI_U64 count;
+  RDI_U64 min;
 };
 
 //- rjf: u64 -> pointer map
@@ -627,8 +628,7 @@ typedef struct RDIM_LocationCase RDIM_LocationCase;
 struct RDIM_LocationCase
 {
   RDIM_LocationCase *next;
-  RDI_U64 voff_first;
-  RDI_U64 voff_opl;
+  RDIM_Rng1U64 voff_range;
   RDIM_Location *location;
 };
 
@@ -695,7 +695,7 @@ struct RDIM_Local
   RDI_LocalKind kind;
   RDIM_String8 name;
   RDIM_Type *type;
-  RDIM_LocationSet *locset;
+  RDIM_LocationSet locset;
 };
 
 typedef struct RDIM_Scope RDIM_Scope;
@@ -706,7 +706,6 @@ struct RDIM_Scope
   RDIM_Scope *first_child;
   RDIM_Scope *last_child;
   RDIM_Scope *next_sibling;
-  RDI_U64 voff_base;
   RDIM_Rng1U64List voff_ranges;
   RDIM_Local *first_local;
   RDIM_Local *last_local;
@@ -1216,6 +1215,20 @@ RDI_PROC RDIM_Symbol *rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_Symbol
 //~ rjf: Scope Info Building
 
 RDI_PROC RDIM_Scope *rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64 cap);
+RDI_PROC RDIM_Local *rdim_scope_push_local(RDIM_Arena *arena, RDIM_Scope *scope);
+
+////////////////////////////////
+//~ rjf: Location Info Building
+
+//- rjf: individual locations
+RDI_PROC RDIM_Location *rdim_push_location_addr_bytecode_stream(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode);
+RDI_PROC RDIM_Location *rdim_push_location_val_bytecode_stream(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode);
+RDI_PROC RDIM_Location *rdim_push_location_addr_reg_plus_u16(RDIM_Arena *arena, RDI_U8 reg_code, RDI_U16 offset);
+RDI_PROC RDIM_Location *rdim_push_location_addr_addr_reg_plus_u16(RDIM_Arena *arena, RDI_U8 reg_code, RDI_U16 offset);
+RDI_PROC RDIM_Location *rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg_code);
+
+//- rjf: location sets
+RDI_PROC void rdim_location_set_push_case(RDIM_Arena *arena, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location);
 
 
 #if 0

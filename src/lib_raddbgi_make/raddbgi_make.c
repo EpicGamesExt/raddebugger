@@ -408,6 +408,10 @@ rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, RDIM_Rng1U64 r
   n->v = r;
   RDIM_SLLQueuePush(list->first, list->last, n);
   list->count += 1;
+  if(list->count == 1 || r.min < list->min)
+  {
+    list->min = r.min;
+  }
 }
 
 //- rjf: u64 -> ptr map
@@ -532,7 +536,7 @@ rdim_unit_chunk_list_push(RDIM_Arena *arena, RDIM_UnitChunkList *list)
   {
     n = rdim_push_array(arena, RDIM_UnitChunkNode, 1);
     n->cap   = 512;
-    n->v = rdim_push_array_no_zero(arena, RDIM_Unit, n->cap);
+    n->v = rdim_push_array(arena, RDIM_Unit, n->cap);
     RDIM_SLLQueuePush(list->first, list->last, n);
     list->chunk_count += 1;
   }
@@ -556,7 +560,7 @@ rdim_unit_array_from_chunk_list(RDIM_Arena *arena, RDIM_UnitChunkList *list)
 {
   RDIM_UnitArray array = {0};
   array.count = list->total_count;
-  array.v = rdim_push_array_no_zero(arena, RDIM_Unit, array.count);
+  array.v = rdim_push_array(arena, RDIM_Unit, array.count);
   U64 idx = 0;
   for(RDIM_UnitChunkNode *n = list->first; n != 0; n = n->next)
   {
@@ -577,7 +581,7 @@ rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 c
   {
     n = rdim_push_array(arena, RDIM_TypeChunkNode, 1);
     n->cap = cap;
-    n->v = rdim_push_array_no_zero(arena, RDIM_Type, n->cap);
+    n->v = rdim_push_array(arena, RDIM_Type, n->cap);
     RDIM_SLLQueuePush(list->first, list->last, n);
     list->chunk_count += 1;
   }
@@ -595,7 +599,7 @@ rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap
   {
     n = rdim_push_array(arena, RDIM_UDTChunkNode, 1);
     n->cap = cap;
-    n->v = rdim_push_array_no_zero(arena, RDIM_UDT, n->cap);
+    n->v = rdim_push_array(arena, RDIM_UDT, n->cap);
     RDIM_SLLQueuePush(list->first, list->last, n);
     list->chunk_count += 1;
   }
@@ -717,7 +721,7 @@ rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U
   {
     n = rdim_push_array(arena, RDIM_SymbolChunkNode, 1);
     n->cap = cap;
-    n->v = rdim_push_array_no_zero(arena, RDIM_Symbol, n->cap);
+    n->v = rdim_push_array(arena, RDIM_Symbol, n->cap);
     RDIM_SLLQueuePush(list->first, list->last, n);
     list->chunk_count += 1;
   }
@@ -738,7 +742,7 @@ rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64
   {
     n = rdim_push_array(arena, RDIM_ScopeChunkNode, 1);
     n->cap = cap;
-    n->v = rdim_push_array_no_zero(arena, RDIM_Scope, n->cap);
+    n->v = rdim_push_array(arena, RDIM_Scope, n->cap);
     RDIM_SLLQueuePush(list->first, list->last, n);
     list->chunk_count += 1;
   }
@@ -746,6 +750,79 @@ rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64
   n->count += 1;
   list->total_count += 1;
   return result;
+}
+
+RDI_PROC RDIM_Local *
+rdim_scope_push_local(RDIM_Arena *arena, RDIM_Scope *scope)
+{
+  RDIM_Local *local = rdim_push_array(arena, RDIM_Local, 1);
+  RDIM_SLLQueuePush(scope->first_local, scope->last_local, local);
+  scope->local_count += 1;
+  return local;
+}
+
+////////////////////////////////
+//~ rjf: Location Info Building
+
+//- rjf: individual locations
+
+RDI_PROC RDIM_Location *
+rdim_push_location_addr_bytecode_stream(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode)
+{
+  RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
+  result->kind = RDI_LocationKind_AddrBytecodeStream;
+  result->bytecode = *bytecode;
+  return result;
+}
+
+RDI_PROC RDIM_Location *
+rdim_push_location_val_bytecode_stream(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode)
+{
+  RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
+  result->kind = RDI_LocationKind_ValBytecodeStream;
+  result->bytecode = *bytecode;
+  return result;
+}
+
+RDI_PROC RDIM_Location *
+rdim_push_location_addr_reg_plus_u16(RDIM_Arena *arena, RDI_U8 reg_code, RDI_U16 offset)
+{
+  RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
+  result->kind = RDI_LocationKind_AddrRegisterPlusU16;
+  result->register_code = reg_code;
+  result->offset = offset;
+  return result;
+}
+
+RDI_PROC RDIM_Location *
+rdim_push_location_addr_addr_reg_plus_u16(RDIM_Arena *arena, RDI_U8 reg_code, RDI_U16 offset)
+{
+  RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
+  result->kind = RDI_LocationKind_AddrAddrRegisterPlusU16;
+  result->register_code = reg_code;
+  result->offset = offset;
+  return result;
+}
+
+RDI_PROC RDIM_Location *
+rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg_code)
+{
+  RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
+  result->kind = RDI_LocationKind_ValRegister;
+  result->register_code = reg_code;
+  return result;
+}
+
+//- rjf: location sets
+
+RDI_PROC void
+rdim_location_set_push_case(RDIM_Arena *arena, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location)
+{
+  RDIM_LocationCase *location_case = rdim_push_array(arena, RDIM_LocationCase, 1);
+  SLLQueuePush(locset->first_location_case, locset->last_location_case, location_case);
+  locset->location_case_count += 1;
+  location_case->voff_range = voff_range;
+  location_case->location   = location;
 }
 
 #if 0
