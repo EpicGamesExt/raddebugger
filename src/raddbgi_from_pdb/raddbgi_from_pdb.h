@@ -5,10 +5,10 @@
 #define RDI_FROM_PDB_H
 
 ////////////////////////////////
-//~ rjf: Conversion Parameters Type
+//~ rjf: Conversion Inputs/Outputs
 
-typedef struct P2R_Params P2R_Params;
-struct P2R_Params
+typedef struct P2R_ConvertIn P2R_ConvertIn;
+struct P2R_ConvertIn
 {
   String8 input_pdb_name;
   String8 input_pdb_data;
@@ -37,6 +37,19 @@ struct P2R_Params
   B8 dump__last;
   
   String8List errors;
+};
+
+typedef struct P2R_ConvertOut P2R_ConvertOut;
+struct P2R_ConvertOut
+{
+  RDIM_TopLevelInfo top_level_info;
+  RDIM_BinarySectionList binary_sections;
+  RDIM_UnitChunkList units;
+  RDIM_TypeChunkList types;
+  RDIM_SymbolChunkList global_variables;
+  RDIM_SymbolChunkList thread_variables;
+  RDIM_SymbolChunkList procedures;
+  RDIM_ScopeChunkList scopes;
 };
 
 ////////////////////////////////
@@ -217,7 +230,6 @@ struct P2R_Ctx
   P2R_KnownGlobalSet known_globals;
   P2R_LinkNameMap link_names;
 };
-#endif
 
 ////////////////////////////////
 //~ Conversion Output Type
@@ -230,6 +242,7 @@ struct P2R_Out
   String8List dump;
   String8List errors;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -237,9 +250,9 @@ struct P2R_Out
 internal U64 p2r_end_of_cplusplus_container_name(String8 str);
 
 ////////////////////////////////
-//~ rjf: Command Line -> Conversion Parameters
+//~ rjf: Command Line -> Conversion Inputs
 
-internal P2R_Params *p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline);
+internal P2R_ConvertIn *p2r_convert_in_from_cmd_line(Arena *arena, CmdLine *cmdline);
 
 ////////////////////////////////
 //~ rjf: COFF => RADDBGI Canonical Conversions
@@ -262,6 +275,11 @@ internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFramep
 internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
 internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
 
+
+////////////////////////////////
+//~ rjf: Top-Level Conversion Entry Point
+
+internal P2R_ConvertOut *p2r_convert(Arena *arena, P2R_ConvertIn *in);
 
 #if 0
 
@@ -370,10 +388,5 @@ internal void    p2r_link_name_save(Arena *arena, P2R_LinkNameMap *map,
 internal String8 p2r_link_name_find(P2R_LinkNameMap *map, U64 voff);
 
 #endif
-
-////////////////////////////////
-//~ rjf: Top-Level Conversion Entry Point
-
-internal P2R_Out *p2r_convert(Arena *arena, P2R_Params *params);
 
 #endif // RDI_FROM_PDB_H

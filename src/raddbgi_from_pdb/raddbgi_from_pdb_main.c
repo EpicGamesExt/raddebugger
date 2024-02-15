@@ -1,9 +1,11 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+//- rjf: [lib]
 #include "lib_raddbgi_format/raddbgi_format.h"
 #include "lib_raddbgi_format/raddbgi_format.c"
 
+//- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "raddbgi_make_local/raddbgi_make_local.h"
@@ -13,9 +15,9 @@
 #include "msf/msf.h"
 #include "pdb/pdb.h"
 #include "pdb/pdb_stringize.h"
-
 #include "raddbgi_from_pdb.h"
 
+//- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
 #include "raddbgi_make_local/raddbgi_make_local.c"
@@ -25,11 +27,13 @@
 #include "msf/msf.c"
 #include "pdb/pdb.c"
 #include "pdb/pdb_stringize.c"
-
 #include "raddbgi_from_pdb.c"
 
+//- rjf: entry point
+
 int
-main(int argc, char **argv){
+main(int argc, char **argv)
+{
   local_persist TCTX main_thread_tctx = {0};
   tctx_init_and_equip(&main_thread_tctx);
 #if PROFILE_TELEMETRY
@@ -40,69 +44,76 @@ main(int argc, char **argv){
   tmSetMaxThreadCount(1024);
   tmInitialize(tm_data_size, tm_data);
 #endif
-  
   ThreadName("[main]");
   
+  //- rjf: initialize dependencies
+  os_init(argc, argv);
+  
+  //- rjf: initialize state, parse command line
   Arena *arena = arena_alloc();
   String8List args = os_string_list_from_argcv(arena, argc, argv);
   CmdLine cmdline = cmd_line_from_string_list(arena, args);
+  B32 should_capture = cmd_line_has_flag(&cmdline, str8_lit("capture"));
+  P2R_ConvertIn *convert_in = p2r_convert_in_from_cmd_line(arena, &cmdline);
   
-  ProfBeginCapture("raddbgi_from_pdb");
-  
-  //- rjf: parse arguments
-  P2R_Params *params = p2r_params_from_cmd_line(arena, &cmdline);
-  
-  //- rjf: show input errors
-  if (params->errors.node_count > 0 &&
-      !params->hide_errors.input){
-    for (String8Node *node = params->errors.first;
-         node != 0;
-         node = node->next){
-      fprintf(stderr, "error(input): %.*s\n", str8_varg(node->string));
-    }
+  //- rjf: begin capture
+  if(should_capture)
+  {
+    ProfBeginCapture(argv[0]);
   }
   
-  //- rjf: open output file
-  String8 output_name = push_str8_copy(arena, params->output_name);
-  FILE *out_file = fopen((char*)output_name.str, "wb");
-  if(out_file == 0 && !params->hide_errors.output)
+  //- rjf: display errors with input
+  if(convert_in->errors.node_count > 0 && !convert_in->hide_errors.input)
   {
-    fprintf(stderr, "error(output): could not open output file\n");
+    for(String8Node *n = convert_in->errors.first; n != 0; n = n->next)
+    {
+      fprintf(stderr, "error(input): %.*s\n", str8_varg(n->string));
+    }
   }
   
   //- rjf: convert
-  P2R_Out *out = 0;
-  if(out_file != 0)
+  P2R_ConvertOut *convert_out = 0;
+  ProfScope("convert")
   {
-    out = p2r_convert(arena, params);
+    convert_out = p2r_convert(arena, convert_in);
   }
   
-  //- rjf: print dump
-  if(out != 0)
+  //- rjf: bake
+  String8List bake_strings = {0};
+  ProfScope("bake")
   {
-    for(String8Node *node = out->dump.first; node != 0; node = node->next)
+    RDIM_BakeParams bake_params = {0};
     {
-      fwrite(node->string.str, 1, node->string.size, stdout);
+      bake_params.top_level_info   = convert_out->top_level_info;
+      bake_params.binary_sections  = convert_out->binary_sections;
+      bake_params.types            = convert_out->types;
+      bake_params.global_variables = convert_out->global_variables;
+      bake_params.thread_variables = convert_out->thread_variables;
+      bake_params.procedures       = convert_out->procedures;
+      bake_params.scopes           = convert_out->scopes;
     }
+    bake_strings = rdim_bake(arena, &bake_params);
   }
   
-  //- rjf: bake file
-  if(out != 0 && out->good_parse && params->output_name.size > 0 && out->good_parse)
+  //- rjf: write
+  ProfScope("write")
   {
-    String8List baked = {0};
-    rdim_bake_file(arena, out->root, &baked);
-    for(String8Node *node = baked.first; node != 0; node = node->next)
+    OS_Handle output_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, convert_in->output_name);
+    U64 off = 0;
+    for(String8Node *n = bake_strings.first; n != 0; n = n->next)
     {
-      fwrite(node->string.str, node->string.size, 1, out_file);
+      os_file_write(output_file, r1u64(off, off+n->string.size), n->string.str);
+      off += n->string.size;
     }
+    os_file_close(output_file);
   }
   
-  //- rjf: close output file
-  if(out_file != 0)
+  
+  //- rjf: end capture
+  if(should_capture)
   {
-    fclose(out_file);
+    ProfEndCapture();
   }
   
-  ProfEndCapture();
   return(0);
 }

@@ -25,15 +25,16 @@ p2r_end_of_cplusplus_container_name(String8 str)
   }
   return(result);
 }
-////////////////////////////////
-//~ rjf: Command Line -> Conversion Parameters
 
-internal P2R_Params*
-p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
+////////////////////////////////
+//~ rjf: Command Line -> Conversion Inputs
+
+internal P2R_ConvertIn *
+p2r_convert_in_from_cmd_line(Arena *arena, CmdLine *cmdline)
 {
-  P2R_Params *result = push_array(arena, P2R_Params, 1);
+  P2R_ConvertIn *result = push_array(arena, P2R_ConvertIn, 1);
   
-  // get input pdb
+  //- rjf: get input pdb
   {
     String8 input_name = cmd_line_string(cmdline, str8_lit("pdb"));
     if(input_name.size == 0)
@@ -55,7 +56,7 @@ p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
     }
   }
   
-  // get input exe
+  //- rjf: get input exe
   {
     String8 input_name = cmd_line_string(cmdline, str8_lit("exe"));
     if(input_name.size > 0)
@@ -73,12 +74,12 @@ p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
     }
   }
   
-  // get output name
+  //- rjf: get output name
   {
     result->output_name = cmd_line_string(cmdline, str8_lit("out"));
   }
   
-  // error options
+  //- rjf: error options
   if(cmd_line_has_flag(cmdline, str8_lit("hide_errors")))
   {
     String8List vals = cmd_line_strings(cmdline, str8_lit("hide_errors"));
@@ -116,7 +117,7 @@ p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
     }
   }
   
-  // dump options
+  //- rjf: dump options
   if(cmd_line_has_flag(cmdline, str8_lit("dump")))
   {
     result->dump = 1;
@@ -169,7 +170,7 @@ p2r_params_from_cmd_line(Arena *arena, CmdLine *cmdline)
     }
   }
   
-  return(result);
+  return result;
 }
 
 ////////////////////////////////
@@ -3433,20 +3434,18 @@ p2r_link_name_find(P2R_LinkNameMap *map, U64 voff)
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
-internal P2R_Out *
-p2r_convert(Arena *arena, P2R_Params *params)
+internal P2R_ConvertOut *
+p2r_convert(Arena *arena, P2R_ConvertIn *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  P2R_Out *out = push_array(arena, P2R_Out, 1);
-  out->good_parse = 1;
   
   //////////////////////////////////////////////////////////////
   //- rjf: parse MSF structure
   //
   MSF_Parsed *msf = 0;
-  if(params->errors.node_count == 0) ProfScope("parse MSF structure")
+  if(in->input_pdb_data.size != 0) ProfScope("parse MSF structure")
   {
-    msf = msf_parsed_from_data(arena, params->input_pdb_data);
+    msf = msf_parsed_from_data(arena, in->input_pdb_data);
   }
   
   //////////////////////////////////////////////////////////////
@@ -3651,9 +3650,9 @@ p2r_convert(Arena *arena, P2R_Params *params)
   //- rjf: hash exe
   //
   U64 exe_hash = 0;
-  if(params->input_exe_data.size > 0) ProfScope("hash exe")
+  if(in->input_exe_data.size > 0) ProfScope("hash exe")
   {
-    exe_hash = rdi_hash(params->input_exe_data.str, params->input_exe_data.size);
+    exe_hash = rdi_hash(in->input_exe_data.str, in->input_exe_data.size);
   }
   
   //////////////////////////////////////////////////////////////
@@ -3708,7 +3707,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
   RDIM_TopLevelInfo top_level_info = {0};
   {
     top_level_info.arch     = arch;
-    top_level_info.exe_name = params->input_exe_name;
+    top_level_info.exe_name = in->input_exe_name;
     top_level_info.exe_hash = exe_hash;
     top_level_info.voff_max = exe_voff_max;
   }
@@ -3844,11 +3843,11 @@ p2r_convert(Arena *arena, P2R_Params *params)
   //
   U64 type_fwd_map_count = 0;
   CV_TypeId *type_fwd_map = 0;
+  CV_TypeId itype_first = 0;
+  CV_TypeId itype_opl   = tpi_leaf->itype_opl;
   ProfScope("types pass 1: produce type forward resolution map")
   {
-    CV_TypeId itype_first = tpi_leaf->itype_first;
-    CV_TypeId itype_opl   = tpi_leaf->itype_opl;
-    type_fwd_map_count = (U64)(itype_opl-itype_first);
+    type_fwd_map_count = (U64)itype_opl;
     type_fwd_map = push_array(arena, CV_TypeId, type_fwd_map_count);
     for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
     {
@@ -3985,8 +3984,6 @@ p2r_convert(Arena *arena, P2R_Params *params)
   };
   P2R_TypeIdRevisitTask *first_itype_revisit_task = 0;
   P2R_TypeIdRevisitTask *last_itype_revisit_task = 0;
-  CV_TypeId itype_first = tpi_leaf->itype_first;
-  CV_TypeId itype_opl   = tpi_leaf->itype_opl;
   RDIM_TypeArray itype_types = {0};     // root type for per-TPI-itype
   RDIM_TypeChunkList extra_types = {0}; // extra supplementary types we build, which do not have any itypes
   ProfScope("types pass 2: construct all root/stub types from TPI")
@@ -4384,8 +4381,6 @@ p2r_convert(Arena *arena, P2R_Params *params)
   ProfScope("types pass 3: attach cross-itype-relationship data to all types, build UDTs")
   {
     RDI_U64 udts_chunk_cap = 1024;
-    CV_TypeId itype_first = tpi_leaf->itype_first;
-    CV_TypeId itype_opl   = tpi_leaf->itype_opl;
 #define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
     for(P2R_TypeIdRevisitTask *task = first_itype_revisit_task; task != 0; task = task->next)
     {
@@ -4483,7 +4478,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
         //- rjf: arrays -> calculate array count based on direct type size
         //
         case RDI_TypeKind_Array:
-        if(dst_type->direct_type != 0)
+        if(dst_type->direct_type != 0 && dst_type->direct_type->byte_size != 0)
         {
           dst_type->count = dst_type->byte_size/dst_type->direct_type->byte_size;
         }break;
@@ -5086,6 +5081,10 @@ p2r_convert(Arena *arena, P2R_Params *params)
   //////////////////////////////////////////////////////////////
   //- rjf: produce symbols from all sym streams
   //
+  RDIM_SymbolChunkList all_procedures = {0};
+  RDIM_SymbolChunkList all_global_variables = {0};
+  RDIM_SymbolChunkList all_thread_variables = {0};
+  RDIM_ScopeChunkList all_scopes = {0};
   ProfScope("produce symbols from all sym streams")
   {
 #define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
@@ -5239,8 +5238,11 @@ p2r_convert(Arena *arena, P2R_Params *params)
             case CV_SymKind_END:
             {
               P2R_ScopeNode *n = top_scope_node;
-              SLLStackPop(top_scope_node);
-              SLLStackPush(free_scope_node, n);
+              if(n != 0)
+              {
+                SLLStackPop(top_scope_node);
+                SLLStackPush(free_scope_node, n);
+              }
               defrange_target = 0;
               defrange_target_is_param = 0;
             }break;
@@ -5785,19 +5787,42 @@ p2r_convert(Arena *arena, P2R_Params *params)
         }
       }
       
+      //////////////////////////
+      //- rjf: merge this stream's outputs with collated list
+      //
+      rdim_symbol_chunk_list_concat_in_place(&all_procedures, &sym_procedures);
+      rdim_symbol_chunk_list_concat_in_place(&all_global_variables, &sym_global_variables);
+      rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &sym_thread_variables);
+      rdim_scope_chunk_list_concat_in_place(&all_scopes, &sym_scopes);
+      
       scratch_end(scratch);
     }
     
 #undef p2r_type_ptr_from_itype
   }
   
+  //////////////////////////////////////////////////////////////
+  //- rjf: fill output
+  //
+  P2R_ConvertOut *out = push_array(arena, P2R_ConvertOut, 1);
+  {
+    out->top_level_info   = top_level_info;
+    out->binary_sections  = binary_sections;
+    rdim_unit_chunk_list_push_array(arena, &out->units, &units);
+    rdim_type_chunk_list_push_array(arena, &out->types, &itype_types);
+    rdim_type_chunk_list_concat_in_place(&out->types, &extra_types);
+    out->global_variables = all_global_variables;
+    out->thread_variables = all_thread_variables;
+    out->procedures       = all_procedures;
+    out->scopes           = all_scopes;
+  }
   
   //~ TODO(rjf): OLD vvvvvvvvvvvvvvvvvvv
 #if 0
   
   // output generation
   P2R_Ctx *p2r_ctx = 0;
-  if(params->output_name.size > 0)
+  if(in->output_name.size > 0)
   {
     // setup root
     RDIM_RootParams root_params = {0};
@@ -5830,7 +5855,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
       // set top level info
       RDIM_TopLevelInfo tli = {0};
       tli.architecture = architecture;
-      tli.exe_name = params->input_exe_name;
+      tli.exe_name = in->input_exe_name;
       tli.exe_hash = exe_hash;
       tli.voff_max = voff_max;
       
@@ -5977,7 +6002,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     }
     
     // conversion errors
-    if(!params->hide_errors.converting)
+    if(!in->hide_errors.converting)
     {
       for(RDIM_Msg *msg = rdim_first_msg_from_root(root);
           msg != 0;
@@ -5989,7 +6014,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
   }
   
   // dump
-  if(params->dump) ProfScope("dump")
+  if(in->dump) ProfScope("dump")
   {
     String8List dump = {0};
     
@@ -6007,7 +6032,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     }
     
     // MSF
-    if(params->dump_msf)
+    if(in->dump_msf)
     {
       if(msf != 0)
       {
@@ -6033,7 +6058,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     }
     
     // DBI
-    if(params->dump_sym)
+    if(in->dump_sym)
     {
       if(sym != 0)
       {
@@ -6047,7 +6072,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     }
     
     // TPI
-    if(params->dump_tpi_hash)
+    if(in->dump_tpi_hash)
     {
       if(tpi_hash != 0)
       {
@@ -6071,7 +6096,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     }
     
     // LEAF
-    if(params->dump_leaf)
+    if(in->dump_leaf)
     {
       if(tpi_leaf != 0)
       {
@@ -6095,7 +6120,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     }
     
     // BINARY SECTIONS
-    if(params->dump_coff_sections)
+    if(in->dump_coff_sections)
     {
       if(coff_sections != 0)
       {
@@ -6130,8 +6155,8 @@ p2r_convert(Arena *arena, P2R_Params *params)
     // UNITS
     if(comp_units != 0)
     {
-      B32 dump_sym = params->dump_sym;
-      B32 dump_c13 = params->dump_c13;
+      B32 dump_sym = in->dump_sym;
+      B32 dump_c13 = in->dump_c13;
       
       B32 dump_units = (dump_sym || dump_c13);
       
@@ -6163,7 +6188,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     // UNIT CONTRIBUTIONS
     if(comp_unit_contributions != 0)
     {
-      if(params->dump_contributions)
+      if(in->dump_contributions)
       {
         str8_list_push(arena, &dump,
                        str8_lit("################################"
@@ -6181,7 +6206,7 @@ p2r_convert(Arena *arena, P2R_Params *params)
     }
     
     // rjf: dump table diagnostics
-    if(params->dump_table_diagnostics)
+    if(in->dump_table_diagnostics)
     {
       str8_list_push(arena, &dump,
                      str8_lit("################################"
