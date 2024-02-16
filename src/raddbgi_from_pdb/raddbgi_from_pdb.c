@@ -498,7 +498,7 @@ p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encod
 }
 
 internal void
-p2r_location_over_lvar_addr_range(Arena *arena, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
+p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count)
 {
   //- rjf: extract range info
   U64 voff_first = 0;
@@ -519,7 +519,7 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_LocationSet *locset, RDIM_L
     if(voff_cursor < voff_gap_first)
     {
       RDIM_Rng1U64 voff_range = {voff_cursor, voff_gap_first};
-      rdim_location_set_push_case(arena, locset, voff_range, location);
+      rdim_location_set_push_case(arena, scopes, locset, voff_range, location);
     }
     voff_cursor = voff_gap_opl;
   }
@@ -528,7 +528,7 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_LocationSet *locset, RDIM_L
   if(voff_cursor < voff_opl)
   {
     RDIM_Rng1U64 voff_range = {voff_cursor, voff_opl};
-    rdim_location_set_push_case(arena, locset, voff_range, location);
+    rdim_location_set_push_case(arena, scopes, locset, voff_range, location);
   }
 }
 
@@ -5472,7 +5472,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               
               // rjf: build local
               RDIM_Scope *scope = top_scope_node->scope;
-              RDIM_Local *local = rdim_scope_push_local(arena, scope);
+              RDIM_Local *local = rdim_scope_push_local(arena, &sym_scopes, scope);
               local->kind = local_kind;
               local->name = name;
               local->type = type;
@@ -5502,7 +5502,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                 // rjf: set location case
                 RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, arch, register_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
                 RDIM_Rng1U64 voff_range = {0, max_U64};
-                rdim_location_set_push_case(arena, &local->locset, voff_range, loc);
+                rdim_location_set_push_case(arena, &sym_scopes, &local->locset, voff_range, loc);
               }
             }break;
             
@@ -5587,7 +5587,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                 
                 // rjf: build local
                 RDIM_Scope *scope = top_scope_node->scope;
-                RDIM_Local *local = rdim_scope_push_local(arena, scope);
+                RDIM_Local *local = rdim_scope_push_local(arena, &sym_scopes, scope);
                 local->kind = local_kind;
                 local->name = name;
                 local->type = type;
@@ -5621,7 +5621,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_FRAMEPOINTER_REL
@@ -5667,7 +5667,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_SUBFIELD_REGISTER
@@ -5699,7 +5699,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE
@@ -5740,7 +5740,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               
               // rjf: emit location over ranges
               RDIM_Rng1U64 voff_range = {0, max_U64};
-              rdim_location_set_push_case(arena, defrange_target, voff_range, location);
+              rdim_location_set_push_case(arena, &sym_scopes, defrange_target, voff_range, location);
             }break;
             
             //- rjf: DEFRANGE_REGISTER_REL
@@ -5771,7 +5771,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               RDIM_Location *location = p2r_location_from_addr_reg_off(arena, arch, register_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
               
               // rjf: emit locations over ranges
-              p2r_location_over_lvar_addr_range(arena, defrange_target, location, range, range_section, gaps, gap_count);
+              p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
             }break;
             
             //- rjf: FILESTATIC

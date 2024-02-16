@@ -531,7 +531,6 @@ rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 c
     list->chunk_count += 1;
   }
   RDIM_Type *result = &n->v[n->count];
-  result->idx = (RDI_U32)list->total_count;
   n->count += 1;
   list->total_count += 1;
   return result;
@@ -579,7 +578,6 @@ rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap
     list->chunk_count += 1;
   }
   RDIM_UDT *result = &n->v[n->count];
-  result->idx = (RDI_U32)list->total_count;
   n->count += 1;
   list->total_count += 1;
   return result;
@@ -623,7 +621,101 @@ rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt
 }
 
 ////////////////////////////////
-//~ rjf: Location Info Building
+//~ rjf: Symbol Info Building
+
+RDI_PROC RDIM_Symbol *
+rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap)
+{
+  RDIM_SymbolChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_SymbolChunkNode, 1);
+    n->cap = cap;
+    n->v = rdim_push_array(arena, RDIM_Symbol, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_Symbol *result = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC void
+rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push)
+{
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->chunk_count += to_push->chunk_count;
+    dst->total_count += to_push->total_count;
+  }
+  else if(dst->first == 0)
+  {
+    rdim_memcpy_struct(dst, to_push);
+  }
+  rdim_memzero_struct(to_push);
+}
+
+////////////////////////////////
+//~ rjf: Scope Info Building
+
+//- rjf: scopes
+
+RDI_PROC RDIM_Scope *
+rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64 cap)
+{
+  RDIM_ScopeChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_ScopeChunkNode, 1);
+    n->cap = cap;
+    n->v = rdim_push_array(arena, RDIM_Scope, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_Scope *result = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC void
+rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push)
+{
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->chunk_count += to_push->chunk_count;
+    dst->total_count += to_push->total_count;
+  }
+  else if(dst->first == 0)
+  {
+    rdim_memcpy_struct(dst, to_push);
+  }
+  rdim_memzero_struct(to_push);
+}
+
+RDI_PROC void
+rdim_scope_push_voff_range(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDIM_Scope *scope, RDIM_Rng1U64 range)
+{
+  rdim_rng1u64_list_push(arena, &scope->voff_ranges, range);
+  list->scope_voff_count += 2;
+}
+
+RDI_PROC RDIM_Local *
+rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *scope)
+{
+  RDIM_Local *local = rdim_push_array(arena, RDIM_Local, 1);
+  RDIM_SLLQueuePush(scope->first_local, scope->last_local, local);
+  scope->local_count += 1;
+  scopes->local_count += 1;
+  return local;
+}
+
+//- rjf: bytecode
 
 RDI_PROC void
 rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
@@ -705,94 +797,6 @@ rdim_bytecode_concat_in_place(RDIM_EvalBytecode *left_dst, RDIM_EvalBytecode *ri
   }
 }
 
-////////////////////////////////
-//~ rjf: Symbol Info Building
-
-RDI_PROC RDIM_Symbol *
-rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap)
-{
-  RDIM_SymbolChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_SymbolChunkNode, 1);
-    n->cap = cap;
-    n->v = rdim_push_array(arena, RDIM_Symbol, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_Symbol *result = &n->v[n->count];
-  n->count += 1;
-  list->total_count += 1;
-  return result;
-}
-
-RDI_PROC void
-rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push)
-{
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
-}
-
-////////////////////////////////
-//~ rjf: Scope Info Building
-
-RDI_PROC RDIM_Scope *
-rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64 cap)
-{
-  RDIM_ScopeChunkNode *n = list->last;
-  if(n == 0 || n->count >= n->cap)
-  {
-    n = rdim_push_array(arena, RDIM_ScopeChunkNode, 1);
-    n->cap = cap;
-    n->v = rdim_push_array(arena, RDIM_Scope, n->cap);
-    RDIM_SLLQueuePush(list->first, list->last, n);
-    list->chunk_count += 1;
-  }
-  RDIM_Scope *result = &n->v[n->count];
-  n->count += 1;
-  list->total_count += 1;
-  return result;
-}
-
-RDI_PROC void
-rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push)
-{
-  if(dst->last != 0 && to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
-  }
-  else if(dst->first == 0)
-  {
-    rdim_memcpy_struct(dst, to_push);
-  }
-  rdim_memzero_struct(to_push);
-}
-
-RDI_PROC RDIM_Local *
-rdim_scope_push_local(RDIM_Arena *arena, RDIM_Scope *scope)
-{
-  RDIM_Local *local = rdim_push_array(arena, RDIM_Local, 1);
-  RDIM_SLLQueuePush(scope->first_local, scope->last_local, local);
-  scope->local_count += 1;
-  return local;
-}
-
-////////////////////////////////
-//~ rjf: Location Info Building
-
 //- rjf: individual locations
 
 RDI_PROC RDIM_Location *
@@ -845,13 +849,14 @@ rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg_code)
 //- rjf: location sets
 
 RDI_PROC void
-rdim_location_set_push_case(RDIM_Arena *arena, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location)
+rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location)
 {
   RDIM_LocationCase *location_case = rdim_push_array(arena, RDIM_LocationCase, 1);
   SLLQueuePush(locset->first_location_case, locset->last_location_case, location_case);
   locset->location_case_count += 1;
   location_case->voff_range = voff_range;
   location_case->location   = location;
+  scopes->location_count +=1;
 }
 
 ////////////////////////////////
@@ -1207,7 +1212,7 @@ rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey
       }
     }
     
-    vmap_entry_count_pass_1 = (RDI_U32)(vmap_ptr - vmap);
+    vmap_entry_count_pass_1 = (RDI_U32)(vmap_ptr - vmap); // TODO(rjf): @u64_to_u32
   }
   
   //- rjf: combine duplicate neighbors
@@ -1225,7 +1230,7 @@ rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey
       rdim_memcpy_struct(vmap_out, vmap_range_first);
       vmap_out += 1;
     }
-    vmap_entry_count = (RDI_U32)(vmap_out - vmap);
+    vmap_entry_count = (RDI_U32)(vmap_out - vmap); // TODO(rjf): @u64_to_u32
   }
   
   //- rjf: fill result
@@ -1241,6 +1246,7 @@ rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey
 RDI_PROC RDIM_String8List
 rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
 {
+  RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   RDIM_String8List blobs;
   rdim_memzero_struct(&blobs);
   
@@ -1416,7 +1422,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
         ////////////////////////
         //- rjf: build line info sections
         //
-        RDI_U32 line_info_voffs_data_idx = (RDI_U32)sections.count;
+        RDI_U32 line_info_voffs_data_idx = (RDI_U32)sections.count; // TODO(rjf): @u64_to_u32
         RDI_U32 line_info_data_idx       = line_info_voffs_data_idx+1;
         RDI_U32 line_info_col_data_idx   = unit_cols ? line_info_voffs_data_idx+2 : 0;
         rdim_bake_section_list_push_new(arena, &sections, unit_voffs, sizeof(RDI_U64)*(unit_line_count+1), RDI_DataSectionTag_LineInfoVoffs);
@@ -1567,7 +1573,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
           for(RDI_U32 i = 0; i < line_count; i += 1)
           {
             line_nums[i] = sorted_keys[i].key;
-            line_ranges[i] = (RDI_U32)(voff_ptr - voffs);
+            line_ranges[i] = (RDI_U32)(voff_ptr - voffs); // TODO(rjf): @u64_to_u32
             RDIM_SrcLineMapBucket *bucket = (RDIM_SrcLineMapBucket*)sorted_keys[i].val;
             for(RDIM_SrcLineMapVoffBlock *node = bucket->first_voff_block; node != 0; node = node->next)
             {
@@ -1593,7 +1599,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
       if(src_file_line_count != 0)
       {
         src_file_node->line_map_count = src_file_line_count;
-        src_file_node->line_map_nums_data_idx  = (RDI_U32)sections.count;
+        src_file_node->line_map_nums_data_idx  = (RDI_U32)sections.count; // TODO(rjf): @u64_to_u32
         src_file_node->line_map_range_data_idx = src_file_node->line_map_nums_data_idx+1;
         src_file_node->line_map_voff_data_idx  = src_file_node->line_map_nums_data_idx+2;
         rdim_bake_section_list_push_new(arena, &sections, src_file_line_nums, sizeof(*src_file_line_nums)*src_file_line_count, RDI_DataSectionTag_LineMapNumbers);
@@ -1685,6 +1691,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     //- rjf: build all type nodes
     //
     RDI_TypeNode *type_nodes = push_array(arena, RDI_TypeNode, params->types.total_count);
+    ProfScope("push all type nodes")
     {
       RDI_U64 dst_idx = 0;
       for(RDIM_TypeChunkNode *n = params->types.first; n != 0; n = n->next)
@@ -1749,6 +1756,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     RDI_UDT *       udts         = push_array(arena, RDI_UDT,        params->udts.total_count);
     RDI_Member *    members      = push_array(arena, RDI_Member,     params->udts.total_member_count);
     RDI_EnumMember *enum_members = push_array(arena, RDI_EnumMember, params->udts.total_enum_val_count);
+    ProfScope("build all udts & members")
     {
       RDI_U32 dst_udt_idx = 0;
       RDI_U32 dst_member_idx = 0;
@@ -1810,10 +1818,13 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     ////////////////////////////
     //- rjf: push all type info sections
     //
-    rdim_bake_section_list_push_new(arena, &sections, type_nodes,    sizeof(RDI_TypeNode)   * params->types.total_count,         RDI_DataSectionTag_TypeNodes);
-    rdim_bake_section_list_push_new(arena, &sections, udts,          sizeof(RDI_UDT)        * params->udts.total_count,          RDI_DataSectionTag_UDTs);
-    rdim_bake_section_list_push_new(arena, &sections, members   ,    sizeof(RDI_Member)     * params->udts.total_member_count,   RDI_DataSectionTag_Members);
-    rdim_bake_section_list_push_new(arena, &sections, enum_members,  sizeof(RDI_EnumMember) * params->udts.total_enum_val_count, RDI_DataSectionTag_EnumMembers);
+    ProfScope("push all type info sections")
+    {
+      rdim_bake_section_list_push_new(arena, &sections, type_nodes,    sizeof(RDI_TypeNode)   * params->types.total_count,         RDI_DataSectionTag_TypeNodes);
+      rdim_bake_section_list_push_new(arena, &sections, udts,          sizeof(RDI_UDT)        * params->udts.total_count,          RDI_DataSectionTag_UDTs);
+      rdim_bake_section_list_push_new(arena, &sections, members   ,    sizeof(RDI_Member)     * params->udts.total_member_count,   RDI_DataSectionTag_Members);
+      rdim_bake_section_list_push_new(arena, &sections, enum_members,  sizeof(RDI_EnumMember) * params->udts.total_enum_val_count, RDI_DataSectionTag_EnumMembers);
+    }
   }
   
   //////////////////////////////
@@ -1821,7 +1832,393 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   ProfScope("build sections for symbol info")
   {
+    ////////////////////////////
+    //- rjf: build all global variables
+    //
+    RDI_GlobalVariable *global_variables = push_array(arena, RDI_GlobalVariable, params->global_variables.total_count);
+    ProfScope("build all global variables")
+    {
+      RDI_U32 dst_idx = 0;
+      for(RDIM_SymbolChunkNode *n = params->global_variables.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+        {
+          RDIM_Symbol *src = &n->v[chunk_idx];
+          RDI_GlobalVariable *dst = &global_variables[dst_idx];
+          dst->name_string_idx = rdim_bake_string(arena, &strings, src->name);
+          dst->voff            = src->offset;
+          dst->type_idx        = src->type ? src->type->idx : 0;;
+          if(src->is_extern)
+          {
+            dst->link_flags |= RDI_LinkFlag_External;
+          }
+          if(src->container_type != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_TypeScoped;
+            dst->container_idx = src->container_type && src->container_type->udt ? src->container_type->udt->idx : 0;;
+          }
+          else if(src->container_symbol != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_ProcScoped;
+            dst->container_idx = src->container_symbol->idx;
+          }
+        }
+      }
+    }
     
+    ////////////////////////////
+    //- rjf: build all thread variables
+    //
+    RDI_ThreadVariable *thread_variables = push_array(arena, RDI_ThreadVariable, params->thread_variables.total_count);
+    ProfScope("build all thread variables")
+    {
+      RDI_U32 dst_idx = 0;
+      for(RDIM_SymbolChunkNode *n = params->thread_variables.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+        {
+          RDIM_Symbol *src = &n->v[chunk_idx];
+          RDI_ThreadVariable *dst = &thread_variables[dst_idx];
+          dst->name_string_idx = rdim_bake_string(arena, &strings, src->name);
+          dst->tls_off         = (RDI_U32)src->offset; // TODO(rjf): @u64_to_u32
+          dst->type_idx        = src->type ? src->type->idx : 0;;
+          if(src->is_extern)
+          {
+            dst->link_flags |= RDI_LinkFlag_External;
+          }
+          if(src->container_type != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_TypeScoped;
+            dst->container_idx = src->container_type && src->container_type->udt ? src->container_type->udt->idx : 0;;
+          }
+          else if(src->container_symbol != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_ProcScoped;
+            dst->container_idx = src->container_symbol->idx;
+          }
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: build all procedures
+    //
+    RDI_Procedure *procedures = push_array(arena, RDI_Procedure, params->procedures.total_count);
+    ProfScope("build all procedures")
+    {
+      RDI_U32 dst_idx = 0;
+      for(RDIM_SymbolChunkNode *n = params->global_variables.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+        {
+          RDIM_Symbol *src = &n->v[chunk_idx];
+          RDI_Procedure *dst = &procedures[dst_idx];
+          dst->name_string_idx      = rdim_bake_string(arena, &strings, src->name);
+          dst->link_name_string_idx = rdim_bake_string(arena, &strings, src->link_name);
+          if(src->is_extern)
+          {
+            dst->link_flags |= RDI_LinkFlag_External;
+          }
+          if(src->container_type != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_TypeScoped;
+            dst->container_idx = src->container_type && src->container_type->udt ? src->container_type->udt->idx : 0;;
+          }
+          else if(src->container_symbol != 0)
+          {
+            dst->link_flags |= RDI_LinkFlag_ProcScoped;
+            dst->container_idx = src->container_symbol->idx;
+          }
+          dst->type_idx             = src->type ? src->type->idx : 0;
+          dst->root_scope_idx       = src->root_scope ? src->root_scope->idx : 0;
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: build global vmap
+    //
+    RDIM_VMap global_vmap = {0};
+    ProfScope("build global vmap")
+    {
+      RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+      
+      //- rjf: allocate keys/markers
+      RDI_U64 marker_count = params->global_variables.total_count*2;
+      RDIM_SortKey    *keys    = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, marker_count);
+      RDIM_VMapMarker *markers = rdim_push_array_no_zero(scratch.arena, RDIM_VMapMarker, marker_count);
+      
+      //- rjf: fill
+      {
+        RDIM_SortKey *key_ptr = keys;
+        RDIM_VMapMarker *marker_ptr = markers;
+        
+        // rjf: fill actual globals
+        for(RDIM_SymbolChunkNode *n = params->global_variables.first; n != 0; n = n->next)
+        {
+          for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
+          {
+            RDIM_Symbol *global_var = &n->v[chunk_idx];
+            RDI_U32 global_var_idx = global_var->idx;
+            
+            RDI_U64 first = global_var->offset;
+            RDI_U64 opl   = first + global_var->type->byte_size;
+            
+            key_ptr->key = first;
+            key_ptr->val = marker_ptr;
+            marker_ptr->idx = global_var_idx;
+            marker_ptr->begin_range = 1;
+            key_ptr += 1;
+            marker_ptr += 1;
+            
+            key_ptr->key = opl;
+            key_ptr->val = marker_ptr;
+            marker_ptr->idx = global_var_idx;
+            marker_ptr->begin_range = 0;
+            key_ptr += 1;
+            marker_ptr += 1;
+          }
+        }
+        
+        // rjf: fill nil global
+        {
+          RDI_U32 global_idx = 0;
+          RDI_U64 first = 0;
+          RDI_U64 opl   = 0xffffffffffffffffull;
+          key_ptr->key = first;
+          key_ptr->val = marker_ptr;
+          marker_ptr->idx = global_idx;
+          marker_ptr->begin_range = 1;
+          key_ptr += 1;
+          marker_ptr += 1;
+          key_ptr->key = opl;
+          key_ptr->val = marker_ptr;
+          marker_ptr->idx = global_idx;
+          marker_ptr->begin_range = 0;
+          key_ptr += 1;
+          marker_ptr += 1;
+        }
+      }
+      
+      // rjf: construct vmap
+      global_vmap = rdim_vmap_from_markers(arena, markers, keys, marker_count);
+      
+      rdim_scratch_end(scratch);
+    }
+    
+    ////////////////////////////
+    //- rjf: build all scopes, scope voffs, locals, and location blocks
+    //
+    RDI_Scope *         scopes          = rdim_push_array(arena, RDI_Scope,         params->scopes.total_count);
+    RDI_U64 *           scope_voffs     = rdim_push_array(arena, RDI_U64,           params->scopes.scope_voff_count);
+    RDI_Local *         locals          = rdim_push_array(arena, RDI_Local,         params->scopes.local_count);
+    RDI_LocationBlock * location_blocks = rdim_push_array(arena, RDI_LocationBlock, params->scopes.location_count);
+    RDIM_String8List    location_data_blobs = {0};
+    ProfScope("build all scopes, scope voffs, locals, and location blocks")
+    {
+      RDI_U64 dst_scope_idx = 0;
+      RDI_U64 dst_scope_voff_idx = 0;
+      RDI_U64 dst_local_idx = 0;
+      RDI_U64 dst_location_block_idx = 0;
+      for(RDIM_ScopeChunkNode *chunk_n = params->scopes.first; chunk_n != 0; chunk_n = chunk_n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < chunk_n->count; chunk_idx += 1, dst_scope_idx += 1)
+        {
+          RDIM_Scope *src_scope = &chunk_n->v[chunk_idx];
+          RDI_Scope *dst_scope = &scopes[dst_scope_idx];
+          
+          //- rjf: push scope's voffs
+          RDI_U64 voff_idx_first = dst_scope_voff_idx;
+          {
+            for(RDIM_Rng1U64Node *n = src_scope->voff_ranges.first; n != 0; n = n->next)
+            {
+              scope_voffs[dst_scope_voff_idx] = n->v.min;
+              dst_scope_voff_idx += 1;
+              scope_voffs[dst_scope_voff_idx] = n->v.max;
+              dst_scope_voff_idx += 1;
+            }
+          }
+          RDI_U64 voff_idx_opl = dst_scope_voff_idx;
+          
+          //- rjf: push locals
+          RDI_U64 local_idx_first = dst_local_idx;
+          for(RDIM_Local *src_local = src_scope->first_local;
+              src_local != 0;
+              src_local = src_local->next, dst_local_idx += 1)
+          {
+            //- rjf: push local's locations
+            RDI_U64 location_block_idx_first = dst_location_block_idx;
+            for(RDIM_LocationCase *loccase = src_local->locset.first_location_case;
+                loccase != 0;
+                loccase = loccase->next, dst_location_block_idx += 1)
+            {
+              // rjf: fill location block
+              RDI_LocationBlock *dst_locblock = &location_blocks[dst_location_block_idx];
+              dst_locblock->scope_off_first   = loccase->voff_range.min;
+              dst_locblock->scope_off_opl     = loccase->voff_range.max;
+              dst_locblock->location_data_off = location_data_blobs.total_size;
+              
+              // rjf: serialize location into location data
+              RDIM_Location *src_location = loccase->location;
+              {
+                // rjf: nil location
+                if(src_location == 0)
+                {
+                  rdim_str8_list_push_align(scratch.arena, &location_data_blobs, 8);
+                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_lit("\0"));
+                }
+                
+                // rjf: valid location
+                else switch(src_location->kind)
+                {
+                  // rjf: catchall unsupported case
+                  default:
+                  {
+                    rdim_str8_list_push_align(scratch.arena, &location_data_blobs, 8);
+                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_lit("\0"));
+                  }break;
+                  
+                  // rjf: bytecode streams
+                  case RDI_LocationKind_AddrBytecodeStream:
+                  case RDI_LocationKind_ValBytecodeStream:
+                  {
+                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&src_location->kind)));
+                    for(RDIM_EvalBytecodeOp *op_node = src_location->bytecode.first_op;
+                        op_node != 0;
+                        op_node = op_node->next)
+                    {
+                      RDI_U8 op_data[9];
+                      op_data[0] = op_node->op;
+                      rdim_memcpy(op_data + 1, &op_node->p, op_node->p_size);
+                      RDIM_String8 op_data_str = rdim_str8(op_data, 1 + op_node->p_size);
+                      rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, op_data_str));
+                    }
+                    {
+                      RDI_U64 data = 0;
+                      RDIM_String8 data_str = rdim_str8((RDI_U8 *)&data, 1);
+                      rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, data_str));
+                    }
+                  }break;
+                  
+                  // rjf: simple addr+off cases
+                  case RDI_LocationKind_AddrRegisterPlusU16:
+                  case RDI_LocationKind_AddrAddrRegisterPlusU16:
+                  {
+                    RDI_LocationRegisterPlusU16 loc = {0};
+                    loc.kind = src_location->kind;
+                    loc.register_code = src_location->register_code;
+                    loc.offset = src_location->offset;
+                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
+                  }break;
+                  
+                  // rjf: register cases
+                  case RDI_LocationKind_ValRegister:
+                  {
+                    RDI_LocationRegister loc = {0};
+                    loc.kind = src_location->kind;
+                    loc.register_code = src_location->register_code;
+                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
+                  }break;
+                }
+              }
+            }
+            RDI_U64 location_block_idx_opl = dst_location_block_idx;
+            
+            //- rjf: fill local
+            RDI_Local *dst_local = &locals[dst_local_idx];
+            dst_local->kind            = src_local->kind;
+            dst_local->name_string_idx = rdim_bake_string(arena, &strings, src_local->name);
+            dst_local->type_idx        = src_local->type ? src_local->type->idx : 0;
+            dst_local->location_first  = (RDI_U32)location_block_idx_first; // TODO(rjf): @u64_to_u32
+            dst_local->location_opl    = (RDI_U32)location_block_idx_opl;   // TODO(rjf): @u64_to_u32
+          }
+          RDI_U64 local_idx_opl = dst_local_idx;
+          
+          //- rjf: fill scope
+          dst_scope->proc_idx               = src_scope->symbol?       src_scope->symbol->idx       :0;
+          dst_scope->parent_scope_idx       = src_scope->parent_scope? src_scope->parent_scope->idx :0;
+          dst_scope->first_child_scope_idx  = src_scope->first_child?  src_scope->first_child->idx  :0;
+          dst_scope->next_sibling_scope_idx = src_scope->next_sibling? src_scope->next_sibling->idx :0;
+          dst_scope->voff_range_first       = (RDI_U32)voff_idx_first;                    // TODO(rjf): @u64_to_u32
+          dst_scope->voff_range_opl         = (RDI_U32)voff_idx_opl;                      // TODO(rjf): @u64_to_u32
+          dst_scope->local_first            = (RDI_U32)local_idx_first;                   // TODO(rjf): @u64_to_u32
+          dst_scope->local_count            = (RDI_U32)(local_idx_opl - local_idx_first); // TODO(rjf): @u64_to_u32
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: build flattened location data
+    //
+    RDIM_String8 location_data_blob = {0};
+    ProfScope("build flattened location data")
+    {
+      location_data_blob = rdim_str8_list_join(arena, &location_data_blobs, rdim_str8_lit(""));
+    }
+    
+    ////////////////////////////
+    //- rjf: build scope vmap
+    //
+    RDIM_VMap scope_vmap = {0};
+    ProfScope("build scope vmap")
+    {
+      RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+      
+      // rjf: allocate keys/markers
+      RDI_U64 marker_count = params->scopes.scope_voff_count;
+      RDIM_SortKey    *keys    = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, marker_count);
+      RDIM_VMapMarker *markers = rdim_push_array_no_zero(scratch.arena, RDIM_VMapMarker, marker_count);
+      
+      // rjf: fill
+      {
+        RDIM_SortKey *key_ptr = keys;
+        RDIM_VMapMarker *marker_ptr = markers;
+        for(RDIM_ScopeChunkNode *chunk_n = params->scopes.first; chunk_n != 0; chunk_n = chunk_n->next)
+        {
+          for(RDI_U64 chunk_idx = 0; chunk_idx < chunk_n->count; chunk_idx += 1)
+          {
+            RDIM_Scope *src_scope = &chunk_n->v[chunk_idx];
+            RDI_U32 scope_idx = src_scope->idx;
+            for(RDIM_Rng1U64Node *n = 0; n != 0; n = n->next)
+            {
+              key_ptr->key = n->v.min;
+              key_ptr->val = marker_ptr;
+              marker_ptr->idx = scope_idx;
+              marker_ptr->begin_range = 1;
+              key_ptr += 1;
+              marker_ptr += 1;
+              
+              key_ptr->key = n->v.max;
+              key_ptr->val = marker_ptr;
+              marker_ptr->idx = scope_idx;
+              marker_ptr->begin_range = 0;
+              key_ptr += 1;
+              marker_ptr += 1;
+            }
+          }
+        }
+      }
+      
+      // rjf: produce vmap
+      scope_vmap = rdim_vmap_from_markers(arena, markers, keys, marker_count);
+      rdim_scratch_end(scratch);
+    }
+    
+    ////////////////////////////
+    //- rjf: push all symbol info sections
+    //
+    ProfScope("push all symbol info sections")
+    {
+      rdim_bake_section_list_push_new(arena, &sections, global_variables,         sizeof(RDI_GlobalVariable)   * params->global_variables.total_count,     RDI_DataSectionTag_GlobalVariables);
+      rdim_bake_section_list_push_new(arena, &sections, global_vmap.vmap,         sizeof(RDI_U64)              * (global_vmap.count+1),                    RDI_DataSectionTag_GlobalVmap);
+      rdim_bake_section_list_push_new(arena, &sections, thread_variables,         sizeof(RDI_ThreadVariable)   * params->thread_variables.total_count,     RDI_DataSectionTag_ThreadVariables);
+      rdim_bake_section_list_push_new(arena, &sections, procedures,               sizeof(RDI_Procedure)        * params->procedures.total_count,           RDI_DataSectionTag_Procedures);
+      rdim_bake_section_list_push_new(arena, &sections, scopes,                   sizeof(RDI_Scope)            * params->scopes.total_count,               RDI_DataSectionTag_Scopes);
+      rdim_bake_section_list_push_new(arena, &sections, scope_vmap.vmap,          sizeof(RDI_U64)              * (scope_vmap.count+1),                     RDI_DataSectionTag_ScopeVmap);
+      rdim_bake_section_list_push_new(arena, &sections, locals,                   sizeof(RDI_Local)            * params->scopes.local_count,               RDI_DataSectionTag_Locals);
+      rdim_bake_section_list_push_new(arena, &sections, location_blocks,          sizeof(RDI_LocationBlock)    * params->scopes.location_count,            RDI_DataSectionTag_LocationBlocks);
+      rdim_bake_section_list_push_new(arena, &sections, location_data_blob.str,   location_data_blob.size,                                                 RDI_DataSectionTag_LocationData);
+    }
   }
   
   //////////////////////////////
@@ -1906,6 +2303,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     }
   }
   
+  rdim_scratch_end(scratch);
   return blobs;
 }
 
