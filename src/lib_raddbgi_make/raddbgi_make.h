@@ -505,6 +505,7 @@ typedef struct RDIM_Type RDIM_Type;
 struct RDIM_Type
 {
   RDI_TypeKind kind;
+  RDI_U32 idx;
   RDI_U32 byte_size;
   RDI_U32 flags;
   RDI_U32 off;
@@ -564,13 +565,14 @@ struct RDIM_UDTEnumVal
 typedef struct RDIM_UDT RDIM_UDT;
 struct RDIM_UDT
 {
+  RDI_U32 idx;
   RDIM_Type *self_type;
   RDIM_UDTMember *first_member;
   RDIM_UDTMember *last_member;
-  RDI_U64 member_count;
   RDIM_UDTEnumVal *first_enum_val;
   RDIM_UDTEnumVal *last_enum_val;
-  RDI_U64 enum_val_count;
+  RDI_U32 member_count;
+  RDI_U32 enum_val_count;
   RDIM_String8 source_path;
   RDI_U32 line;
   RDI_U32 col;
@@ -592,6 +594,8 @@ struct RDIM_UDTChunkList
   RDIM_UDTChunkNode *last;
   RDI_U64 chunk_count;
   RDI_U64 total_count;
+  RDI_U64 total_member_count;
+  RDI_U64 total_enum_val_count;
 };
 
 ////////////////////////////////
@@ -774,6 +778,7 @@ struct RDIM_BakeParams
   RDIM_BinarySectionList binary_sections;
   RDIM_UnitChunkList units;
   RDIM_TypeChunkList types;
+  RDIM_UDTChunkList udts;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList procedures;
@@ -1352,8 +1357,8 @@ RDI_PROC void rdim_type_chunk_list_push_array(RDIM_Arena *arena, RDIM_TypeChunkL
 RDI_PROC void rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList *to_push);
 RDI_PROC RDIM_UDT *rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap);
 RDI_PROC void rdim_udt_chunk_list_concat_in_place(RDIM_UDTChunkList *dst, RDIM_UDTChunkList *to_push);
-RDI_PROC RDIM_UDTMember *rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDT *udt);
-RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDT *udt);
+RDI_PROC RDIM_UDTMember *rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
+RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
 
 ////////////////////////////////
 //~ rjf: Location Info Building

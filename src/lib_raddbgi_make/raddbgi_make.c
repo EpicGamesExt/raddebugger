@@ -531,6 +531,7 @@ rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 c
     list->chunk_count += 1;
   }
   RDIM_Type *result = &n->v[n->count];
+  result->idx = (RDI_U32)list->total_count;
   n->count += 1;
   list->total_count += 1;
   return result;
@@ -578,6 +579,7 @@ rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap
     list->chunk_count += 1;
   }
   RDIM_UDT *result = &n->v[n->count];
+  result->idx = (RDI_U32)list->total_count;
   n->count += 1;
   list->total_count += 1;
   return result;
@@ -601,20 +603,22 @@ rdim_udt_chunk_list_concat_in_place(RDIM_UDTChunkList *dst, RDIM_UDTChunkList *t
 }
 
 RDI_PROC RDIM_UDTMember *
-rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDT *udt)
+rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt)
 {
   RDIM_UDTMember *mem = rdim_push_array(arena, RDIM_UDTMember, 1);
   RDIM_SLLQueuePush(udt->first_member, udt->last_member, mem);
   udt->member_count += 1;
+  list->total_member_count += 1;
   return mem;
 }
 
 RDI_PROC RDIM_UDTEnumVal *
-rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDT *udt)
+rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt)
 {
   RDIM_UDTEnumVal *mem = rdim_push_array(arena, RDIM_UDTEnumVal, 1);
   RDIM_SLLQueuePush(udt->first_enum_val, udt->last_enum_val, mem);
   udt->enum_val_count += 1;
+  list->total_enum_val_count += 1;
   return mem;
 }
 
@@ -1677,13 +1681,145 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   ProfScope("build sections for type info")
   {
+    ////////////////////////////
+    //- rjf: build all type nodes
+    //
+    RDI_TypeNode *type_nodes = push_array(arena, RDI_TypeNode, params->types.total_count);
+    {
+      RDI_U64 dst_idx = 0;
+      for(RDIM_TypeChunkNode *n = params->types.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+        {
+          RDIM_Type *src = &n->v[chunk_idx];
+          RDI_TypeNode *dst = &type_nodes[dst_idx];
+          
+          //- rjf: fill shared type node info
+          dst->kind      = src->kind;
+          dst->byte_size = src->byte_size;
+          
+          //- rjf: fill built-in-only type node info
+          if(RDI_TypeKind_FirstBuiltIn <= dst->kind && dst->kind <= RDI_TypeKind_LastBuiltIn)
+          {
+            dst->built_in.name_string_idx = rdim_bake_string(arena, &strings, src->name);
+          }
+          
+          //- rjf: fill constructed type node info
+          else if(RDI_TypeKind_FirstConstructed <= dst->kind && dst->kind <= RDI_TypeKind_LastConstructed)
+          {
+            dst->constructed.direct_type_idx = src->direct_type ? src->direct_type->idx : 0;
+            dst->constructed.count = src->count;
+            if(dst->kind == RDI_TypeKind_Function || dst->kind == RDI_TypeKind_Method)
+            {
+              RDI_U32 param_idx_run_count = src->count;
+              RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
+              for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
+              {
+                param_idx_run[idx] = src->param_types[idx]->idx;
+              }
+              dst->constructed.param_idx_run_first = rdim_bake_idx_run(arena, &idx_runs, param_idx_run, param_idx_run_count);
+            }
+            else if(dst->kind == RDI_TypeKind_MemberPtr)
+            {
+              // TODO(rjf): member pointers not currently supported.
+            }
+          }
+          
+          //- rjf: fill user-defined-type info
+          else if(RDI_TypeKind_FirstUserDefined <= dst->kind && dst->kind <= RDI_TypeKind_LastUserDefined)
+          {
+            dst->user_defined.name_string_idx = rdim_bake_string(arena, &strings, src->name);
+            dst->user_defined.udt_idx         = src->udt ? src->udt->idx : 0;
+            dst->user_defined.direct_type_idx = src->direct_type ? src->direct_type->idx : 0;
+          }
+          
+          //- rjf: fill bitfield info
+          else if(dst->kind == RDI_TypeKind_Bitfield)
+          {
+            dst->bitfield.off  = src->off;
+            dst->bitfield.size = src->count;
+          }
+        }
+      }
+    }
     
+    ////////////////////////////
+    //- rjf: build all udts & members
+    //
+    RDI_UDT *       udts         = push_array(arena, RDI_UDT,        params->udts.total_count);
+    RDI_Member *    members      = push_array(arena, RDI_Member,     params->udts.total_member_count);
+    RDI_EnumMember *enum_members = push_array(arena, RDI_EnumMember, params->udts.total_enum_val_count);
+    {
+      RDI_U32 dst_udt_idx = 0;
+      RDI_U32 dst_member_idx = 0;
+      RDI_U32 dst_enum_member_idx = 0;
+      for(RDIM_UDTChunkNode *n = params->udts.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_udt_idx += 1)
+        {
+          RDIM_UDT *src_udt = &n->v[chunk_idx];
+          RDI_UDT *dst_udt = &udts[dst_udt_idx];
+          
+          //- rjf: fill basics
+          dst_udt->self_type_idx = src_udt->self_type ? src_udt->self_type->idx : 0;
+          if(src_udt->source_path.size != 0)
+          {
+            RDIM_BakePathNode *path_node = rdim_bake_path_node_from_string(arena, &path_tree, src_udt->source_path);
+            RDIM_BakeSrcNode  *src_node  = rdim_bake_src_node_from_path_node(arena, &path_tree, path_node);
+            dst_udt->file_idx = src_node->idx;
+          }
+          dst_udt->line = src_udt->line;
+          dst_udt->col  = src_udt->col;
+          
+          //- rjf: fill members
+          if(src_udt->member_count != 0)
+          {
+            dst_udt->member_first = dst_member_idx;
+            dst_udt->member_count = src_udt->member_count;
+            for(RDIM_UDTMember *src_member = src_udt->first_member;
+                src_member != 0;
+                src_member = src_member->next, dst_member_idx += 1)
+            {
+              RDI_Member *dst_member = &members[dst_member_idx];
+              dst_member->kind            = src_member->kind;
+              dst_member->name_string_idx = rdim_bake_string(arena, &strings, src_member->name);
+              dst_member->type_idx        = src_member->type ? src_member->type->idx : 0;
+              dst_member->off             = src_member->off;
+            }
+          }
+          
+          //- rjf: fill enum members
+          else if(src_udt->enum_val_count != 0)
+          {
+            dst_udt->flags |= RDI_UserDefinedTypeFlag_EnumMembers;
+            dst_udt->member_first = dst_enum_member_idx;
+            dst_udt->member_count = src_udt->enum_val_count;
+            for(RDIM_UDTEnumVal *src_member = src_udt->first_enum_val;
+                src_member != 0;
+                src_member = src_member->next, dst_enum_member_idx += 1)
+            {
+              RDI_EnumMember *dst_member = &enum_members[dst_enum_member_idx];
+              dst_member->name_string_idx = rdim_bake_string(arena, &strings, src_member->name);
+              dst_member->val             = src_member->val;
+            }
+          }
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: push all type info sections
+    //
+    rdim_bake_section_list_push_new(arena, &sections, type_nodes,    sizeof(RDI_TypeNode)   * params->types.total_count,         RDI_DataSectionTag_TypeNodes);
+    rdim_bake_section_list_push_new(arena, &sections, udts,          sizeof(RDI_UDT)        * params->udts.total_count,          RDI_DataSectionTag_UDTs);
+    rdim_bake_section_list_push_new(arena, &sections, members   ,    sizeof(RDI_Member)     * params->udts.total_member_count,   RDI_DataSectionTag_Members);
+    rdim_bake_section_list_push_new(arena, &sections, enum_members,  sizeof(RDI_EnumMember) * params->udts.total_enum_val_count, RDI_DataSectionTag_EnumMembers);
   }
   
   //////////////////////////////
   //- rjf: build sections for symbol info
   //
-  ProfScope("build sections for type info")
+  ProfScope("build sections for symbol info")
   {
     
   }
@@ -1729,9 +1865,9 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   }
   
   //////////////////////////////
-  //- rjf: build blob strings for header & all sections
+  //- rjf: finalize: build blob strings for header & all sections
   //
-  ProfScope("build blob strings for header & all sections")
+  ProfScope("finalize: build blob strings for header & all sections")
   {
     // rjf: push empty header & data section table
     RDI_Header *baked_rdi_header = rdim_push_array(arena, RDI_Header, 1);

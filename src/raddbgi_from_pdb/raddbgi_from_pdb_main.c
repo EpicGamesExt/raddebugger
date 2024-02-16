@@ -87,6 +87,7 @@ main(int argc, char **argv)
       bake_params.top_level_info   = convert_out->top_level_info;
       bake_params.binary_sections  = convert_out->binary_sections;
       bake_params.types            = convert_out->types;
+      bake_params.udts             = convert_out->udts;
       bake_params.global_variables = convert_out->global_variables;
       bake_params.thread_variables = convert_out->thread_variables;
       bake_params.procedures       = convert_out->procedures;

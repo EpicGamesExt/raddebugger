@@ -46,6 +46,7 @@ struct P2R_ConvertOut
   RDIM_BinarySectionList binary_sections;
   RDIM_UnitChunkList units;
   RDIM_TypeChunkList types;
+  RDIM_UDTChunkList udts;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList procedures;

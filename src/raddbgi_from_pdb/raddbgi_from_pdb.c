@@ -4025,6 +4025,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         if(cv_basic_ptr_kind != 0)
         {
           dst_type->kind        = RDI_TypeKind_Ptr;
+          dst_type->idx         = (RDI_U32)(itype-itype_first);
           dst_type->byte_size   = arch_addr_size;
           dst_type->direct_type = basic_type;
         }
@@ -4607,7 +4608,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     next_read_ptr = name.str+name.size+1;
                     
                     // rjf: emit member
-                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                     mem->kind = RDI_MemberKind_DataField;
                     mem->name = name;
                     mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -4628,7 +4629,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     next_read_ptr = name.str+name.size+1;
                     
                     // rjf: emit member
-                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                     mem->kind = RDI_MemberKind_StaticData;
                     mem->name = name;
                     mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -4705,14 +4706,14 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                       {
                         default:
                         {
-                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                           mem->kind = RDI_MemberKind_Method;
                           mem->name = name;
                           mem->type = method_type;
                         }break;
                         case CV_MethodProp_Static:
                         {
-                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                           mem->kind = RDI_MemberKind_StaticMethod;
                           mem->name = name;
                           mem->type = method_type;
@@ -4722,7 +4723,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                         case CV_MethodProp_Intro:
                         case CV_MethodProp_PureIntro:
                         {
-                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                           mem->kind = RDI_MemberKind_VirtualMethod;
                           mem->name = name;
                           mem->type = method_type;
@@ -4760,7 +4761,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     {
                       default:
                       {
-                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                         mem->kind = RDI_MemberKind_Method;
                         mem->name = name;
                         mem->type = method_type;
@@ -4768,7 +4769,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                       
                       case CV_MethodProp_Static:
                       {
-                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                         mem->kind = RDI_MemberKind_StaticMethod;
                         mem->name = name;
                         mem->type = method_type;
@@ -4779,7 +4780,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                       case CV_MethodProp_Intro:
                       case CV_MethodProp_PureIntro:
                       {
-                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                         mem->kind = RDI_MemberKind_VirtualMethod;
                         mem->name = name;
                         mem->type = method_type;
@@ -4799,7 +4800,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     next_read_ptr = name.str+name.size+1;
                     
                     // rjf: emit member
-                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                     mem->kind = RDI_MemberKind_NestedType;
                     mem->name = name;
                     mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -4819,7 +4820,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     next_read_ptr = name.str+name.size+1;
                     
                     // rjf: emit member
-                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                     mem->kind = RDI_MemberKind_NestedType;
                     mem->name = name;
                     mem->type = p2r_type_ptr_from_itype(lf->itype);
@@ -4840,7 +4841,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     next_read_ptr = offset_ptr+offset.encoded_size;
                     
                     // rjf: emit member
-                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                     mem->kind = RDI_MemberKind_Base;
                     mem->type = p2r_type_ptr_from_itype(lf->itype);
                     mem->off  = (U32)offset64;
@@ -4862,7 +4863,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     CV_NumericParsed num2 = cv_numeric_from_data_range(num2_ptr, field_leaf_opl);
                     
                     // rjf: emit member
-                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, dst_udt);
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, &udts, dst_udt);
                     mem->kind = RDI_MemberKind_VirtualBase;
                     mem->type = p2r_type_ptr_from_itype(lf->itype);
                   }break;
@@ -5005,7 +5006,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                     next_read_ptr = name.str+name.size+1;
                     
                     // rjf: emit member
-                    RDIM_UDTEnumVal *enum_val = rdim_udt_push_enum_val(arena, dst_udt);
+                    RDIM_UDTEnumVal *enum_val = rdim_udt_push_enum_val(arena, &udts, dst_udt);
                     enum_val->name = name;
                     enum_val->val  = val64;
                   }break;
@@ -5811,6 +5812,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     rdim_unit_chunk_list_push_array(arena, &out->units, &units);
     rdim_type_chunk_list_push_array(arena, &out->types, &itype_types);
     rdim_type_chunk_list_concat_in_place(&out->types, &extra_types);
+    out->udts             = udts;
     out->global_variables = all_global_variables;
     out->thread_variables = all_thread_variables;
     out->procedures       = all_procedures;
