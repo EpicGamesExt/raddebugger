@@ -847,17 +847,6 @@ struct RDIM_BakeIdxRunMap
   RDI_U32 idx_count;
 };
 
-//- rjf: line info
-
-typedef struct RDIM_LineRec RDIM_LineRec;
-struct RDIM_LineRec
-{
-  RDI_U32 file_id;
-  RDI_U32 line_num;
-  RDI_U16 col_first;
-  RDI_U16 col_opl;
-};
-
 //- rjf: source info & path tree
 
 typedef struct RDIM_BakePathNode RDIM_BakePathNode;
