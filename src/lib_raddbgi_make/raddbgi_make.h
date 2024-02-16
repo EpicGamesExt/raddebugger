@@ -479,6 +479,7 @@ struct RDIM_LineSequenceList
 typedef struct RDIM_Unit RDIM_Unit;
 struct RDIM_Unit
 {
+  struct RDIM_UnitChunkNode *chunk;
   RDIM_String8 unit_name;
   RDIM_String8 compiler_name;
   RDIM_String8 source_file;
@@ -497,6 +498,7 @@ struct RDIM_UnitChunkNode
   RDIM_Unit *v;
   RDI_U64 count;
   RDI_U64 cap;
+  RDI_U64 base_idx;
 };
 
 typedef struct RDIM_UnitChunkList RDIM_UnitChunkList;
@@ -508,21 +510,14 @@ struct RDIM_UnitChunkList
   RDI_U64 total_count;
 };
 
-typedef struct RDIM_UnitArray RDIM_UnitArray;
-struct RDIM_UnitArray
-{
-  RDIM_Unit *v;
-  RDI_U64 count;
-};
-
 ////////////////////////////////
 //~ rjf: Type System Node Types
 
 typedef struct RDIM_Type RDIM_Type;
 struct RDIM_Type
 {
+  struct RDIM_TypeChunkNode *chunk;
   RDI_TypeKind kind;
-  RDI_U32 idx;
   RDI_U32 byte_size;
   RDI_U32 flags;
   RDI_U32 off;
@@ -540,6 +535,7 @@ struct RDIM_TypeChunkNode
   RDIM_Type *v;
   RDI_U64 count;
   RDI_U64 cap;
+  RDI_U64 base_idx;
 };
 
 typedef struct RDIM_TypeChunkList RDIM_TypeChunkList;
@@ -582,7 +578,7 @@ struct RDIM_UDTEnumVal
 typedef struct RDIM_UDT RDIM_UDT;
 struct RDIM_UDT
 {
-  RDI_U32 idx;
+  struct RDIM_UDTChunkNode *chunk;
   RDIM_Type *self_type;
   RDIM_UDTMember *first_member;
   RDIM_UDTMember *last_member;
@@ -602,6 +598,7 @@ struct RDIM_UDTChunkNode
   RDIM_UDT *v;
   RDI_U64 count;
   RDI_U64 cap;
+  RDI_U64 base_idx;
 };
 
 typedef struct RDIM_UDTChunkList RDIM_UDTChunkList;
@@ -677,8 +674,8 @@ RDIM_SymbolKind;
 typedef struct RDIM_Symbol RDIM_Symbol;
 struct RDIM_Symbol
 {
+  struct RDIM_SymbolChunkNode *chunk;
   RDIM_SymbolKind kind;
-  RDI_U32 idx;
   RDI_S32 is_extern;
   RDIM_String8 name;
   RDIM_String8 link_name;
@@ -696,6 +693,7 @@ struct RDIM_SymbolChunkNode
   RDIM_Symbol *v;
   RDI_U64 count;
   RDI_U64 cap;
+  RDI_U64 base_idx;
 };
 
 typedef struct RDIM_SymbolChunkList RDIM_SymbolChunkList;
@@ -723,6 +721,7 @@ struct RDIM_Local
 typedef struct RDIM_Scope RDIM_Scope;
 struct RDIM_Scope
 {
+  struct RDIM_ScopeChunkNode *chunk;
   RDIM_Symbol *symbol;
   RDIM_Scope *parent_scope;
   RDIM_Scope *first_child;
@@ -732,7 +731,6 @@ struct RDIM_Scope
   RDIM_Local *first_local;
   RDIM_Local *last_local;
   RDI_U32 local_count;
-  RDI_U32 idx;
 };
 
 typedef struct RDIM_ScopeChunkNode RDIM_ScopeChunkNode;
@@ -742,6 +740,7 @@ struct RDIM_ScopeChunkNode
   RDIM_Scope *v;
   RDI_U64 count;
   RDI_U64 cap;
+  RDI_U64 base_idx;
 };
 
 typedef struct RDIM_ScopeChunkList RDIM_ScopeChunkList;
@@ -1365,19 +1364,19 @@ RDI_PROC RDIM_BinarySection *rdim_binary_section_list_push(RDIM_Arena *arena, RD
 ////////////////////////////////
 //~ rjf: Unit Info Building
 
-RDI_PROC RDIM_Unit *rdim_unit_chunk_list_push(RDIM_Arena *arena, RDIM_UnitChunkList *list);
-RDI_PROC void rdim_unit_chunk_list_push_array(RDIM_Arena *arena, RDIM_UnitChunkList *list, RDIM_UnitArray *array);
+RDI_PROC RDIM_Unit *rdim_unit_chunk_list_push(RDIM_Arena *arena, RDIM_UnitChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_unit(RDIM_Unit *unit);
 RDI_PROC void rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList *to_push);
 RDI_PROC RDIM_LineSequence *rdim_line_sequence_list_push(RDIM_Arena *arena, RDIM_LineSequenceList *list);
-RDI_PROC RDIM_UnitArray rdim_unit_array_from_chunk_list(RDIM_Arena *arena, RDIM_UnitChunkList *list);
 
 ////////////////////////////////
 //~ rjf: Type Info & UDT Building
 
 RDI_PROC RDIM_Type *rdim_type_chunk_list_push(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDI_U64 cap);
-RDI_PROC void rdim_type_chunk_list_push_array(RDIM_Arena *arena, RDIM_TypeChunkList *list, RDIM_TypeArray *array);
+RDI_PROC RDI_U64 rdim_idx_from_type(RDIM_Type *type);
 RDI_PROC void rdim_type_chunk_list_concat_in_place(RDIM_TypeChunkList *dst, RDIM_TypeChunkList *to_push);
 RDI_PROC RDIM_UDT *rdim_udt_chunk_list_push(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_udt(RDIM_UDT *udt);
 RDI_PROC void rdim_udt_chunk_list_concat_in_place(RDIM_UDTChunkList *dst, RDIM_UDTChunkList *to_push);
 RDI_PROC RDIM_UDTMember *rdim_udt_push_member(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
 RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChunkList *list, RDIM_UDT *udt);
@@ -1386,6 +1385,7 @@ RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChun
 //~ rjf: Symbol Info Building
 
 RDI_PROC RDIM_Symbol *rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_symbol(RDIM_Symbol *symbol);
 RDI_PROC void rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push);
 
 ////////////////////////////////
@@ -1393,6 +1393,7 @@ RDI_PROC void rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, 
 
 //- rjf: scopes
 RDI_PROC RDIM_Scope *rdim_scope_chunk_list_push(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_scope(RDIM_Scope *scope);
 RDI_PROC void rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkList *to_push);
 RDI_PROC void rdim_scope_push_voff_range(RDIM_Arena *arena, RDIM_ScopeChunkList *list, RDIM_Scope *scope, RDIM_Rng1U64 range);
 RDI_PROC RDIM_Local *rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope *scope);

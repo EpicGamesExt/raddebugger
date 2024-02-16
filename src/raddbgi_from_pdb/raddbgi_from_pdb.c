@@ -3744,12 +3744,10 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   //////////////////////////////////////////////////////////////
   //- rjf: build unit array
   //
-  RDIM_UnitArray units = {0};
+  RDIM_UnitChunkList units = {0};
   ProfScope("build unit array")
   {
-    //- rjf: allocate
-    units.count = comp_unit_count;
-    units.v = push_array(arena, RDIM_Unit, units.count);
+    U64 units_chunk_cap = comp_unit_count;
     
     //- rjf: pass 1: fill basic per-unit info & line info
     for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
@@ -3777,8 +3775,8 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         MemoryZeroStruct(&obj_name);
       }
       
-      //- rjf: fill basic output unit info
-      RDIM_Unit *dst_unit = &units.v[comp_unit_idx];
+      //- rjf: build unit
+      RDIM_Unit *dst_unit = rdim_unit_chunk_list_push(arena, &units, units_chunk_cap);
       dst_unit->unit_name     = unit_name;
       dst_unit->compiler_name = pdb_unit_sym->info.compiler_name;
       dst_unit->object_file   = obj_name;
@@ -3815,7 +3813,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     {
       if(contrib_ptr->mod < comp_unit_count)
       {
-        RDIM_Unit *unit = &units.v[contrib_ptr->mod];
+        RDIM_Unit *unit = &units.first->v[contrib_ptr->mod];
         RDIM_Rng1U64 range = {contrib_ptr->voff_first, contrib_ptr->voff_opl};
         rdim_rng1u64_list_push(arena, &unit->voff_ranges, range);
       }
@@ -3991,17 +3989,17 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   };
   P2R_TypeIdRevisitTask *first_itype_revisit_task = 0;
   P2R_TypeIdRevisitTask *last_itype_revisit_task = 0;
-  RDIM_TypeArray itype_types = {0};     // root type for per-TPI-itype
-  RDIM_TypeChunkList extra_types = {0}; // extra supplementary types we build, which do not have any itypes
+  RDIM_TypeChunkList itype_types = {0}; // fixed chunk list for itypes
+  RDIM_TypeChunkList extra_types = {0}; // extra constructed types, for types which don't correspond to the PDB
   ProfScope("types pass 2: construct all root/stub types from TPI")
   {
+    RDI_U64 itype_types_cap = (U64)(itype_opl-itype_first);
     RDI_U64 extra_types_chunk_cap = 1024;
-    itype_types.count = (U64)(itype_opl-itype_first);
-    itype_types.v = push_array(arena, RDIM_Type, itype_types.count);
-#define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
-    for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
+    rdim_type_chunk_list_push(arena, &itype_types, itype_types_cap);
+#define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.first->v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
+    for(CV_TypeId itype = itype_first+1; itype < itype_opl; itype += 1)
     {
-      RDIM_Type *dst_type = &itype_types.v[itype-itype_first];
+      RDIM_Type *dst_type = rdim_type_chunk_list_push(arena, &itype_types, itype_types_cap);
       B32 itype_is_basic = (itype < 0x1000);
       
       //////////////////////////
@@ -4014,7 +4012,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         CV_BasicType        cv_basic_type_code = CV_BasicTypeFromTypeId(itype);
         
         // rjf: get basic type slot, fill if unfilled
-        RDIM_Type *basic_type = &itype_types.v[cv_basic_type_code-itype_first];
+        RDIM_Type *basic_type = &itype_types.first->v[cv_basic_type_code-itype_first];
         if(basic_type->kind == RDI_TypeKind_NULL)
         {
           RDI_TypeKind type_kind = rdi_type_kind_from_cv_basic_type(cv_basic_type_code);
@@ -4032,7 +4030,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         if(cv_basic_ptr_kind != 0)
         {
           dst_type->kind        = RDI_TypeKind_Ptr;
-          dst_type->idx         = (RDI_U32)(itype-itype_first);
           dst_type->byte_size   = arch_addr_size;
           dst_type->direct_type = basic_type;
         }
@@ -4148,7 +4145,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               // rjf: fill type
               dst_type->kind        = RDI_TypeKind_Function;
               dst_type->byte_size   = arch_addr_size;
-              dst_type->count       = procedure->arg_count;
               dst_type->direct_type = ret_type;
               
               // rjf: push revisit task for parameters
@@ -4171,7 +4167,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               // rjf: fill type
               dst_type->kind        = (mfunction->this_itype != 0) ? RDI_TypeKind_Method : RDI_TypeKind_Function;
               dst_type->byte_size   = arch_addr_size;
-              dst_type->count       = mfunction->arg_count;
               dst_type->direct_type = ret_type;
               
               // rjf: push revisit task for parameters/this
@@ -4389,7 +4384,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   ProfScope("types pass 3: attach cross-itype-relationship data to all types, build UDTs")
   {
     RDI_U64 udts_chunk_cap = 1024;
-#define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
+#define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.first->v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
     for(P2R_TypeIdRevisitTask *task = first_itype_revisit_task; task != 0; task = task->next)
     {
       RDIM_Type *dst_type = task->base_type;
@@ -5095,7 +5090,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   RDIM_ScopeChunkList all_scopes = {0};
   ProfScope("produce symbols from all sym streams")
   {
-#define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
+#define p2r_type_ptr_from_itype(itype) ((itype_first <= (itype) && (itype) < itype_opl) ? (&itype_types.first->v[(type_fwd_map[(itype)-itype_first] ? type_fwd_map[(itype)-itype_first] : (itype))-itype_first]) : 0)
     
     ////////////////////////////
     //- rjf: produce array of all symbol streams
@@ -5827,8 +5822,8 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   {
     out->top_level_info   = top_level_info;
     out->binary_sections  = binary_sections;
-    rdim_unit_chunk_list_push_array(arena, &out->units, &units);
-    rdim_type_chunk_list_push_array(arena, &out->types, &itype_types);
+    out->units            = units;
+    rdim_type_chunk_list_concat_in_place(&out->types, &itype_types);
     rdim_type_chunk_list_concat_in_place(&out->types, &extra_types);
     out->udts             = udts;
     out->global_variables = all_global_variables;
