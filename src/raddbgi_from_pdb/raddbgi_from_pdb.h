@@ -249,6 +249,7 @@ struct P2R_Out
 //~ rjf: Basic Helpers
 
 internal U64 p2r_end_of_cplusplus_container_name(String8 str);
+internal U64 p2r_hash_from_voff(U64 voff);
 
 ////////////////////////////////
 //~ rjf: Command Line -> Conversion Inputs

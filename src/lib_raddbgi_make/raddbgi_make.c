@@ -1251,6 +1251,24 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   rdim_memzero_struct(&blobs);
   
   //////////////////////////////
+  //- NOTE(rjf): On the ordering of baking phases:
+  //
+  // Baking is the process of taking all loose data structures passed in via
+  // `params`, or constructed on-the-fly (e.g. the `BakeStringMap`), and
+  // serializing them down into flat plain-old-data tables which can be
+  // written directly into a RADDBGI file.
+  //
+  // Perhaps unsurprisingly, after each loose data structure is baked, it can
+  // no longer be mutated and touched (otherwise you'd need to re-bake to
+  // preserve new information added to the loose data structure).
+  //
+  // The phases of baking in this baking algorithm are organized such that re-
+  // baking never occurs. This means that common baking data structures, like
+  // the string interning map (`BakeStringMap`), the index run interning map
+  // (`BakeIdxRunMap`), and so on, are serialized *last*, because they are
+  // used in previous stages of the bake.
+  
+  //////////////////////////////
   //- rjf: set up intermediate baking data structures
   //
   RDIM_BakeSectionList sections = {0};
@@ -1268,7 +1286,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build section for top-level-info
   //
-  ProfScope("build section for top-level-info")
+  RDIM_ProfScope("build section for top-level-info")
   {
     RDI_TopLevelInfo  *dst_tli = rdim_push_array(arena, RDI_TopLevelInfo, 1);
     RDIM_TopLevelInfo *src_tli = &params->top_level_info;
@@ -1282,7 +1300,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build section for binary sections
   //
-  ProfScope("build section for binary sections")
+  RDIM_ProfScope("build section for binary sections")
   {
     RDIM_BinarySectionList *src_list = &params->binary_sections;
     RDI_BinarySection *dst_base = rdim_push_array(arena, RDI_BinarySection, src_list->count);
@@ -1304,7 +1322,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build sections for units
   //
-  ProfScope("build sections for units")
+  RDIM_ProfScope("build sections for units")
   {
     RDIM_UnitChunkList *src_list = &params->units;
     RDI_Unit *dst_base = rdim_push_array(arena, RDI_Unit, src_list->total_count);
@@ -1453,7 +1471,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build section for per-source-file line info
   //
-  ProfScope("build section for per-source-file line info")
+  RDIM_ProfScope("build section for per-source-file line info")
   {
     for(RDIM_BakeSrcNode *src_file_node = path_tree.src_first;
         src_file_node != 0;
@@ -1612,7 +1630,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build section for unit vmap
   //
-  ProfScope("build section for unit vmap")
+  RDIM_ProfScope("build section for unit vmap")
   {
     //- rjf: build vmap from unit voff ranges
     RDIM_VMap unit_vmap = {0};
@@ -1685,13 +1703,13 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build sections for type info
   //
-  ProfScope("build sections for type info")
+  RDIM_ProfScope("build sections for type info")
   {
     ////////////////////////////
     //- rjf: build all type nodes
     //
     RDI_TypeNode *type_nodes = push_array(arena, RDI_TypeNode, params->types.total_count);
-    ProfScope("push all type nodes")
+    RDIM_ProfScope("push all type nodes")
     {
       RDI_U64 dst_idx = 0;
       for(RDIM_TypeChunkNode *n = params->types.first; n != 0; n = n->next)
@@ -1756,7 +1774,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     RDI_UDT *       udts         = push_array(arena, RDI_UDT,        params->udts.total_count);
     RDI_Member *    members      = push_array(arena, RDI_Member,     params->udts.total_member_count);
     RDI_EnumMember *enum_members = push_array(arena, RDI_EnumMember, params->udts.total_enum_val_count);
-    ProfScope("build all udts & members")
+    RDIM_ProfScope("build all udts & members")
     {
       RDI_U32 dst_udt_idx = 0;
       RDI_U32 dst_member_idx = 0;
@@ -1818,7 +1836,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     ////////////////////////////
     //- rjf: push all type info sections
     //
-    ProfScope("push all type info sections")
+    RDIM_ProfScope("push all type info sections")
     {
       rdim_bake_section_list_push_new(arena, &sections, type_nodes,    sizeof(RDI_TypeNode)   * params->types.total_count,         RDI_DataSectionTag_TypeNodes);
       rdim_bake_section_list_push_new(arena, &sections, udts,          sizeof(RDI_UDT)        * params->udts.total_count,          RDI_DataSectionTag_UDTs);
@@ -1830,13 +1848,13 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build sections for symbol info
   //
-  ProfScope("build sections for symbol info")
+  RDIM_ProfScope("build sections for symbol info")
   {
     ////////////////////////////
     //- rjf: build all global variables
     //
     RDI_GlobalVariable *global_variables = push_array(arena, RDI_GlobalVariable, params->global_variables.total_count);
-    ProfScope("build all global variables")
+    RDIM_ProfScope("build all global variables")
     {
       RDI_U32 dst_idx = 0;
       for(RDIM_SymbolChunkNode *n = params->global_variables.first; n != 0; n = n->next)
@@ -1870,7 +1888,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     //- rjf: build all thread variables
     //
     RDI_ThreadVariable *thread_variables = push_array(arena, RDI_ThreadVariable, params->thread_variables.total_count);
-    ProfScope("build all thread variables")
+    RDIM_ProfScope("build all thread variables")
     {
       RDI_U32 dst_idx = 0;
       for(RDIM_SymbolChunkNode *n = params->thread_variables.first; n != 0; n = n->next)
@@ -1904,7 +1922,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     //- rjf: build all procedures
     //
     RDI_Procedure *procedures = push_array(arena, RDI_Procedure, params->procedures.total_count);
-    ProfScope("build all procedures")
+    RDIM_ProfScope("build all procedures")
     {
       RDI_U32 dst_idx = 0;
       for(RDIM_SymbolChunkNode *n = params->global_variables.first; n != 0; n = n->next)
@@ -1939,7 +1957,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     //- rjf: build global vmap
     //
     RDIM_VMap global_vmap = {0};
-    ProfScope("build global vmap")
+    RDIM_ProfScope("build global vmap")
     {
       RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
       
@@ -2014,7 +2032,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     RDI_Local *         locals          = rdim_push_array(arena, RDI_Local,         params->scopes.local_count);
     RDI_LocationBlock * location_blocks = rdim_push_array(arena, RDI_LocationBlock, params->scopes.location_count);
     RDIM_String8List    location_data_blobs = {0};
-    ProfScope("build all scopes, scope voffs, locals, and location blocks")
+    RDIM_ProfScope("build all scopes, scope voffs, locals, and location blocks")
     {
       RDI_U64 dst_scope_idx = 0;
       RDI_U64 dst_scope_voff_idx = 0;
@@ -2151,7 +2169,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     //- rjf: build flattened location data
     //
     RDIM_String8 location_data_blob = {0};
-    ProfScope("build flattened location data")
+    RDIM_ProfScope("build flattened location data")
     {
       location_data_blob = rdim_str8_list_join(arena, &location_data_blobs, rdim_str8_lit(""));
     }
@@ -2160,7 +2178,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     //- rjf: build scope vmap
     //
     RDIM_VMap scope_vmap = {0};
-    ProfScope("build scope vmap")
+    RDIM_ProfScope("build scope vmap")
     {
       RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
       
@@ -2207,7 +2225,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     ////////////////////////////
     //- rjf: push all symbol info sections
     //
-    ProfScope("push all symbol info sections")
+    RDIM_ProfScope("push all symbol info sections")
     {
       rdim_bake_section_list_push_new(arena, &sections, global_variables,         sizeof(RDI_GlobalVariable)   * params->global_variables.total_count,     RDI_DataSectionTag_GlobalVariables);
       rdim_bake_section_list_push_new(arena, &sections, global_vmap.vmap,         sizeof(RDI_U64)              * (global_vmap.count+1),                    RDI_DataSectionTag_GlobalVmap);
@@ -2224,7 +2242,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build sections for name maps
   //
-  ProfScope("build sections for name maps")
+  RDIM_ProfScope("build sections for name maps")
   {
     
   }
@@ -2232,7 +2250,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build sections for file paths
   //
-  ProfScope("build sections for file paths")
+  RDIM_ProfScope("build sections for file paths")
   {
     
   }
@@ -2240,7 +2258,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build sections for source files
   //
-  ProfScope("build sections for source files")
+  RDIM_ProfScope("build sections for source files")
   {
     
   }
@@ -2248,7 +2266,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build sections for strings
   //
-  ProfScope("build sections for strings")
+  RDIM_ProfScope("build sections for strings")
   {
     
   }
@@ -2256,7 +2274,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: build section for index runs
   //
-  ProfScope("build section for index runs")
+  RDIM_ProfScope("build section for index runs")
   {
     
   }
@@ -2264,7 +2282,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //////////////////////////////
   //- rjf: finalize: build blob strings for header & all sections
   //
-  ProfScope("finalize: build blob strings for header & all sections")
+  RDIM_ProfScope("finalize: build blob strings for header & all sections")
   {
     // rjf: push empty header & data section table
     RDI_Header *baked_rdi_header = rdim_push_array(arena, RDI_Header, 1);

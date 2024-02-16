@@ -190,6 +190,23 @@ struct RDIM_Temp
 #endif
 
 ////////////////////////////////
+//~ rjf: Overrideable Profile Markup
+
+// To override the default profiling markup, do the following:
+//
+// #define RDIM_ProfBegin(...) <some expression, like a function call, to begin profiling some zone>
+// #define RDIM_ProfEnd() <some expression, like a function call, to end profiling some zone>
+
+#if !defined(RDIM_ProfBegin)
+# define RDIM_ProfBegin(...) ((void)0)
+#endif
+#if !defined(RDIM_ProfEnd)
+# define RDIM_ProfEnd() ((void)0)
+#endif
+
+#define RDIM_ProfScope(...) for(int _i_ = ((RDIM_ProfBegin(__VA_ARGS__)), 0); !_i_; _i_ += 1, (RDIM_ProfEnd()))
+
+////////////////////////////////
 //~ rjf: Linked List Helper Macros
 
 #define RDIM_CheckNil(nil,p) ((p) == 0 || (p) == nil)

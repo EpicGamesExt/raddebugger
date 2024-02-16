@@ -26,6 +26,13 @@ p2r_end_of_cplusplus_container_name(String8 str)
   return(result);
 }
 
+internal U64
+p2r_hash_from_voff(U64 voff)
+{
+  U64 hash = (voff >> 3) ^ ((7 & voff) << 6);
+  return hash;
+}
+
 ////////////////////////////////
 //~ rjf: Command Line -> Conversion Inputs
 
@@ -5066,7 +5073,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
           }
           
           // rjf: commit to link name map
-          U64 hash = (voff >> 3) ^ ((7 & voff) << 6);
+          U64 hash = p2r_hash_from_voff(voff);
           U64 bucket_idx = hash%link_name_map.buckets_count;
           P2R_LinkNameNode *node = push_array(arena, P2R_LinkNameNode, 1);
           SLLStackPush(link_name_map.buckets[bucket_idx], node);
@@ -5321,8 +5328,8 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                 if(container_name_opl > 2)
                 {
                   String8 container_name = str8(name.str, container_name_opl - 2);
-                  // TODO(rjf): @important type name maps
-                  // container_type = p2r_type_from_name(ctx, container_name);
+                  CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, name, 0);
+                  container_type = p2r_type_ptr_from_itype(cv_type_id);
                 }
                 
                 // rjf: unpack global's container symbol
@@ -5359,8 +5366,8 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               if(container_name_opl > 2)
               {
                 String8 container_name = str8(name.str, container_name_opl - 2);
-                // TODO(rjf): @important type name maps
-                // container_type = p2r_type_from_name(ctx, container_name);
+                CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, name, 0);
+                container_type = p2r_type_ptr_from_itype(cv_type_id);
               }
               
               // rjf: unpack proc's container symbol
@@ -5393,7 +5400,18 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               String8 link_name = {0};
               if(procedure_root_scope->voff_ranges.min != 0)
               {
-                // TODO(rjf): @important link names
+                U64 voff = procedure_root_scope->voff_ranges.min;
+                U64 hash = p2r_hash_from_voff(voff);
+                U64 bucket_idx = hash%link_name_map.buckets_count;
+                P2R_LinkNameNode *node = 0;
+                for(P2R_LinkNameNode *n = link_name_map.buckets[bucket_idx]; n != 0; n = n->next)
+                {
+                  if(n->voff == voff)
+                  {
+                    link_name = n->name;
+                    break;
+                  }
+                }
               }
               
               // rjf: build procedure symbol
@@ -5522,8 +5540,8 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               if(container_name_opl > 2)
               {
                 String8 container_name = str8(name.str, container_name_opl - 2);
-                // TODO(rjf): @important type name maps
-                // container_type = p2r_type_from_name(ctx, container_name);
+                CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, name, 0);
+                container_type = p2r_type_ptr_from_itype(cv_type_id);
               }
               
               // rjf: unpack thread variable's container symbol
