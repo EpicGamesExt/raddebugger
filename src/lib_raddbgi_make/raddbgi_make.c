@@ -2623,7 +2623,19 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   RDIM_ProfScope("build section for index runs")
   {
-    
+    RDI_U32 *idx_data = rdim_push_array_no_zero(arena, RDI_U32, idx_runs.idx_count);
+    {
+      RDI_U32 *out_ptr = idx_data;
+      RDI_U32 *opl = out_ptr + idx_runs.idx_count;
+      for(RDIM_BakeIdxRunNode *node = idx_runs.order_first;
+          node != 0 && out_ptr < opl;
+          node = node->order_next)
+      {
+        rdim_memcpy(out_ptr, node->idx_run, sizeof(*node->idx_run)*node->count);
+        out_ptr += node->count;
+      }
+    }
+    rdim_bake_section_list_push_new(arena, &sections, idx_data, sizeof(RDI_U32)*idx_runs.idx_count, RDI_DataSectionTag_IndexRuns);
   }
   
   //////////////////////////////
