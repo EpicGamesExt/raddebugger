@@ -3742,7 +3742,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: build unit array
+  //- rjf: build units
   //
   RDIM_UnitChunkList units = {0};
   ProfScope("build unit array")

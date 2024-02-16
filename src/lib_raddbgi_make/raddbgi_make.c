@@ -604,6 +604,8 @@ rdim_udt_chunk_list_concat_in_place(RDIM_UDTChunkList *dst, RDIM_UDTChunkList *t
     dst->last = to_push->last;
     dst->chunk_count += to_push->chunk_count;
     dst->total_count += to_push->total_count;
+    dst->total_member_count += to_push->total_member_count;
+    dst->total_enum_val_count += to_push->total_enum_val_count;
   }
   else if(dst->first == 0)
   {
@@ -736,6 +738,9 @@ rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkL
     dst->last = to_push->last;
     dst->chunk_count += to_push->chunk_count;
     dst->total_count += to_push->total_count;
+    dst->scope_voff_count += to_push->scope_voff_count;
+    dst->local_count += to_push->local_count;
+    dst->location_count += to_push->location_count;
   }
   else if(dst->first == 0)
   {
@@ -1480,7 +1485,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
           unit_lines      = arranged_lines;
           unit_cols       = 0;
           unit_line_count = key_count;
-          scratch_end(scratch);
+          rdim_scratch_end(scratch);
         }
         
         ////////////////////////
@@ -1654,7 +1659,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
         src_file_line_count  = line_count;
         src_file_voffs       = voffs;
         src_file_voff_count  = voff_count;
-        scratch_end(scratch);
+        rdim_scratch_end(scratch);
       }
       
       //////////////////////////

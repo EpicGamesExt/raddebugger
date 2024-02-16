@@ -758,30 +758,30 @@ struct RDIM_ScopeChunkList
 ////////////////////////////////
 //~ rjf: Name Map Types
 
-typedef struct RDIM_NameMapIdxNode RDIM_NameMapIdxNode;
-struct RDIM_NameMapIdxNode
+typedef struct RDIM_NameMapValNode RDIM_NameMapValNode;
+struct RDIM_NameMapValNode
 {
-  RDIM_NameMapIdxNode *next;
-  RDI_U32 idx[8];
+  RDIM_NameMapValNode *next;
+  void *val[8];
 };
 
 typedef struct RDIM_NameMapNode RDIM_NameMapNode;
 struct RDIM_NameMapNode
 {
-  RDIM_NameMapNode *bucket_next;
+  RDIM_NameMapNode *slot_next;
   RDIM_NameMapNode *order_next;
   RDIM_String8 string;
-  RDIM_NameMapIdxNode *idx_first;
-  RDIM_NameMapIdxNode *idx_last;
-  RDI_U64 idx_count;
+  RDIM_NameMapValNode *val_first;
+  RDIM_NameMapValNode *val_last;
+  RDI_U64 val_count;
 };
 
 typedef struct RDIM_NameMap RDIM_NameMap;
 struct RDIM_NameMap
 {
-  RDIM_NameMapNode **buckets;
-  RDI_U64 buckets_count;
-  RDI_U64 bucket_collision_count;
+  RDIM_NameMapNode **slots;
+  RDI_U64 slots_count;
+  RDI_U64 slot_collision_count;
   RDIM_NameMapNode *first;
   RDIM_NameMapNode *last;
   RDI_U64 name_count;
