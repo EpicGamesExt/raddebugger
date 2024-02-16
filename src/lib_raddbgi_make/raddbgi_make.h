@@ -756,38 +756,6 @@ struct RDIM_ScopeChunkList
 };
 
 ////////////////////////////////
-//~ rjf: Name Map Types
-
-typedef struct RDIM_NameMapValNode RDIM_NameMapValNode;
-struct RDIM_NameMapValNode
-{
-  RDIM_NameMapValNode *next;
-  void *val[8];
-};
-
-typedef struct RDIM_NameMapNode RDIM_NameMapNode;
-struct RDIM_NameMapNode
-{
-  RDIM_NameMapNode *slot_next;
-  RDIM_NameMapNode *order_next;
-  RDIM_String8 string;
-  RDIM_NameMapValNode *val_first;
-  RDIM_NameMapValNode *val_last;
-  RDI_U64 val_count;
-};
-
-typedef struct RDIM_NameMap RDIM_NameMap;
-struct RDIM_NameMap
-{
-  RDIM_NameMapNode **slots;
-  RDI_U64 slots_count;
-  RDI_U64 slot_collision_count;
-  RDIM_NameMapNode *first;
-  RDIM_NameMapNode *last;
-  RDI_U64 name_count;
-};
-
-////////////////////////////////
 //~ rjf: Baking Types
 
 //- rjf: bake parameters
@@ -941,6 +909,37 @@ struct RDIM_BakePathTree
   RDIM_BakeSrcNode *src_first;
   RDIM_BakeSrcNode *src_last;
   RDI_U32 src_count;
+};
+
+//- rjf: name maps
+
+typedef struct RDIM_BakeNameMapValNode RDIM_BakeNameMapValNode;
+struct RDIM_BakeNameMapValNode
+{
+  RDIM_BakeNameMapValNode *next;
+  RDI_U32 val[6];
+};
+
+typedef struct RDIM_BakeNameMapNode RDIM_BakeNameMapNode;
+struct RDIM_BakeNameMapNode
+{
+  RDIM_BakeNameMapNode *slot_next;
+  RDIM_BakeNameMapNode *order_next;
+  RDIM_String8 string;
+  RDIM_BakeNameMapValNode *val_first;
+  RDIM_BakeNameMapValNode *val_last;
+  RDI_U64 val_count;
+};
+
+typedef struct RDIM_BakeNameMap RDIM_BakeNameMap;
+struct RDIM_BakeNameMap
+{
+  RDIM_BakeNameMapNode **slots;
+  RDI_U64 slots_count;
+  RDI_U64 slot_collision_count;
+  RDIM_BakeNameMapNode *first;
+  RDIM_BakeNameMapNode *last;
+  RDI_U64 name_count;
 };
 
 //- rjf: vmaps
@@ -1433,6 +1432,9 @@ RDI_PROC RDIM_String8 rdim_normal_string_from_bake_path_node(RDIM_Arena *arena, 
 RDI_PROC RDIM_BakePathNode *rdim_bake_path_node_from_string(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string);
 RDI_PROC RDIM_BakeSrcNode *rdim_bake_src_node_from_path_node(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_BakePathNode *path_node);
 RDI_PROC RDI_U32 rdim_bake_path(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string);
+
+//- rjf: name maps
+RDI_PROC void rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, RDIM_String8 string, RDI_U32 idx);
 
 //- rjf: vmap baking
 RDI_PROC RDIM_VMap rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count);

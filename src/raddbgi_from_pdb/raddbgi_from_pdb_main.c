@@ -109,7 +109,6 @@ main(int argc, char **argv)
     os_file_close(output_file);
   }
   
-  
   //- rjf: end capture
   if(should_capture)
   {

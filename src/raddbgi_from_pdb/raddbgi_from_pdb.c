@@ -5804,10 +5804,13 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
       //////////////////////////
       //- rjf: merge this stream's outputs with collated list
       //
-      rdim_symbol_chunk_list_concat_in_place(&all_procedures, &sym_procedures);
-      rdim_symbol_chunk_list_concat_in_place(&all_global_variables, &sym_global_variables);
-      rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &sym_thread_variables);
-      rdim_scope_chunk_list_concat_in_place(&all_scopes, &sym_scopes);
+      ProfScope("merge this stream's outputs with collated list")
+      {
+        rdim_symbol_chunk_list_concat_in_place(&all_procedures, &sym_procedures);
+        rdim_symbol_chunk_list_concat_in_place(&all_global_variables, &sym_global_variables);
+        rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &sym_thread_variables);
+        rdim_scope_chunk_list_concat_in_place(&all_scopes, &sym_scopes);
+      }
       
       scratch_end(scratch);
     }
