@@ -2527,7 +2527,35 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   RDIM_ProfScope("build sections for file paths")
   {
-    
+    RDI_U32 dst_nodes_count = path_tree.count;
+    RDI_FilePathNode *dst_nodes = rdim_push_array(arena, RDI_FilePathNode, dst_nodes_count);
+    {
+      RDI_U32 dst_node_idx = 0;
+      for(RDIM_BakePathNode *src_node = path_tree.first;
+          src_node != 0;
+          src_node = src_node->next_order, dst_node_idx += 1)
+      {
+        RDI_FilePathNode *dst_node = &dst_nodes[dst_node_idx];
+        dst_node->name_string_idx = rdim_bake_string(arena, &strings, src_node->name);
+        if(src_node->parent != 0)
+        {
+          dst_node->parent_path_node = src_node->parent->idx;
+        }
+        if(src_node->first_child != 0)
+        {
+          dst_node->first_child = src_node->first_child->idx;
+        }
+        if(src_node->next_sibling != 0)
+        {
+          dst_node->next_sibling = src_node->next_sibling->idx;
+        }
+        if(src_node->src_file != 0)
+        {
+          dst_node->source_file_idx = src_node->src_file->idx;
+        }
+      }
+    }
+    rdim_bake_section_list_push_new(arena, &sections, dst_nodes, sizeof(RDI_FilePathNode)*dst_nodes_count, RDI_DataSectionTag_FilePathNodes);
   }
   
   //////////////////////////////
