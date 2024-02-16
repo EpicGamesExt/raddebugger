@@ -2588,7 +2588,34 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   RDIM_ProfScope("build sections for strings")
   {
-    
+    RDI_U32 *str_offs = rdim_push_array_no_zero(arena, RDI_U32, strings.count + 1);
+    RDI_U32 off_cursor = 0;
+    {
+      RDI_U32 *off_ptr = str_offs;
+      *off_ptr = 0;
+      off_ptr += 1;
+      for(RDIM_BakeStringNode *node = strings.order_first;
+          node != 0;
+          node = node->order_next)
+      {
+        off_cursor += node->string.size;
+        *off_ptr = off_cursor;
+        off_ptr += 1;
+      }
+    }
+    RDI_U8 *buf = rdim_push_array(arena, RDI_U8, off_cursor);
+    {
+      RDI_U8 *ptr = buf;
+      for(RDIM_BakeStringNode *node = strings.order_first;
+          node != 0;
+          node = node->order_next)
+      {
+        rdim_memcpy(ptr, node->string.str, node->string.size);
+        ptr += node->string.size;
+      }
+    }
+    rdim_bake_section_list_push_new(arena, &sections, str_offs, sizeof(RDI_U32)*(strings.count+1), RDI_DataSectionTag_StringTable);
+    rdim_bake_section_list_push_new(arena, &sections, buf, off_cursor, RDI_DataSectionTag_StringData);
   }
   
   //////////////////////////////
