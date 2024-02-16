@@ -1089,6 +1089,149 @@ rdim_bake_path(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string)
   return path_node->idx;
 }
 
+//- rjf: vmap baking
+
+RDI_PROC RDIM_VMap
+rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count)
+{
+  RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+  
+  //- rjf: sort markers
+  RDIM_SortKey *sorted_keys = rdim_sort_key_array(scratch.arena, keys, marker_count);
+  
+  //- rjf: determine if an extra vmap entry for zero is needed
+  RDI_U32 extra_vmap_entry = 0;
+  if(marker_count > 0 && sorted_keys[0].key != 0)
+  {
+    extra_vmap_entry = 1;
+  }
+  
+  //- rjf: fill output vmap entries
+  RDI_U32 vmap_count_raw = marker_count - 1 + extra_vmap_entry;
+  RDI_VMapEntry *vmap = rdim_push_array_no_zero(arena, RDI_VMapEntry, vmap_count_raw + 1);
+  RDI_U32 vmap_entry_count_pass_1 = 0;
+  {
+    typedef struct RDIM_VMapRangeTracker RDIM_VMapRangeTracker;
+    struct RDIM_VMapRangeTracker
+    {
+      RDIM_VMapRangeTracker *next;
+      RDI_U32 idx;
+    };
+    RDI_VMapEntry *vmap_ptr = vmap;
+    if(extra_vmap_entry)
+    {
+      vmap_ptr->voff = 0;
+      vmap_ptr->idx = 0;
+      vmap_ptr += 1;
+    }
+    RDIM_VMapRangeTracker *tracker_stack = 0;
+    RDIM_VMapRangeTracker *tracker_free = 0;
+    RDIM_SortKey *key_ptr = sorted_keys;
+    RDIM_SortKey *key_opl = sorted_keys + marker_count;
+    for(;key_ptr < key_opl;)
+    {
+      // rjf: get initial map state from tracker stack
+      RDI_U32 initial_idx = (RDI_U32)0xffffffff;
+      if(tracker_stack != 0)
+      {
+        initial_idx = tracker_stack->idx;
+      }
+      
+      // rjf: update tracker stack
+      //
+      // * we must process _all_ of the changes that apply at this voff before moving on
+      //
+      RDI_U64 voff = key_ptr->key;
+      
+      for(;key_ptr < key_opl && key_ptr->key == voff; key_ptr += 1)
+      {
+        RDIM_VMapMarker *marker = (RDIM_VMapMarker*)key_ptr->val;
+        RDI_U32 idx = marker->idx;
+        
+        // rjf: range begin -> push to stack
+        if(marker->begin_range)
+        {
+          RDIM_VMapRangeTracker *new_tracker = tracker_free;
+          if(new_tracker != 0)
+          {
+            RDIM_SLLStackPop(tracker_free);
+          }
+          else
+          {
+            new_tracker = rdim_push_array(scratch.arena, RDIM_VMapRangeTracker, 1);
+          }
+          RDIM_SLLStackPush(tracker_stack, new_tracker);
+          new_tracker->idx = idx;
+        }
+        
+        // rjf: range ending -> pop matching node from stack (not always the top)
+        else
+        {
+          RDIM_VMapRangeTracker **ptr_in = &tracker_stack;
+          RDIM_VMapRangeTracker *match = 0;
+          for(RDIM_VMapRangeTracker *node = tracker_stack; node != 0;)
+          {
+            if(node->idx == idx)
+            {
+              match = node;
+              break;
+            }
+            ptr_in = &node->next;
+            node = node->next;
+          }
+          if(match != 0)
+          {
+            *ptr_in = match->next;
+            RDIM_SLLStackPush(tracker_free, match);
+          }
+        }
+      }
+      
+      // rjf: get final map state from tracker stack
+      RDI_U32 final_idx = 0;
+      if(tracker_stack != 0)
+      {
+        final_idx = tracker_stack->idx;
+      }
+      
+      // rjf: if final is different from initial - emit new vmap entry
+      if(final_idx != initial_idx)
+      {
+        vmap_ptr->voff = voff;
+        vmap_ptr->idx = final_idx;
+        vmap_ptr += 1;
+      }
+    }
+    
+    vmap_entry_count_pass_1 = (RDI_U32)(vmap_ptr - vmap);
+  }
+  
+  //- rjf: combine duplicate neighbors
+  RDI_U32 vmap_entry_count = 0;
+  {
+    RDI_VMapEntry *vmap_ptr = vmap;
+    RDI_VMapEntry *vmap_opl = vmap + vmap_entry_count_pass_1;
+    RDI_VMapEntry *vmap_out = vmap;
+    for(;vmap_ptr < vmap_opl;)
+    {
+      RDI_VMapEntry *vmap_range_first = vmap_ptr;
+      RDI_U64 idx = vmap_ptr->idx;
+      vmap_ptr += 1;
+      for(;vmap_ptr < vmap_opl && vmap_ptr->idx == idx;) vmap_ptr += 1;
+      rdim_memcpy_struct(vmap_out, vmap_range_first);
+      vmap_out += 1;
+    }
+    vmap_entry_count = (RDI_U32)(vmap_out - vmap);
+  }
+  
+  //- rjf: fill result
+  RDIM_VMap result = {0};
+  result.vmap = vmap;
+  result.count = vmap_entry_count-1;
+  rdim_scratch_end(scratch);
+  return result;
+}
+
 //- rjf: main baking entry point
 
 RDI_PROC RDIM_String8List
@@ -1408,22 +1551,22 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
           }
         }
         
-        // sort
+        //- rjf: sort keys array
         RDIM_SortKey *sorted_keys = rdim_sort_key_array(scratch.arena, keys, line_count);
         
-        // bake result
+        //- rjf: bake result
         RDI_U32 *line_nums = rdim_push_array_no_zero(arena, RDI_U32, line_count);
         RDI_U32 *line_ranges = rdim_push_array_no_zero(arena, RDI_U32, line_count + 1);
         RDI_U64 *voffs = rdim_push_array_no_zero(arena, RDI_U64, voff_count);
         {
           RDI_U64 *voff_ptr = voffs;
-          for(RDI_U32 i = 0; i < line_count; i += 1){
+          for(RDI_U32 i = 0; i < line_count; i += 1)
+          {
             line_nums[i] = sorted_keys[i].key;
             line_ranges[i] = (RDI_U32)(voff_ptr - voffs);
             RDIM_SrcLineMapBucket *bucket = (RDIM_SrcLineMapBucket*)sorted_keys[i].val;
-            for(RDIM_SrcLineMapVoffBlock *node = bucket->first_voff_block;
-                node != 0;
-                node = node->next){
+            for(RDIM_SrcLineMapVoffBlock *node = bucket->first_voff_block; node != 0; node = node->next)
+            {
               *voff_ptr = node->voff;
               voff_ptr += 1;
             }
@@ -1431,6 +1574,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
           line_ranges[line_count] = voff_count;
         }
         
+        //- rjf: fill output
         src_file_line_nums   = line_nums;
         src_file_line_ranges = line_ranges;
         src_file_line_count  = line_count;
@@ -1460,7 +1604,72 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   ProfScope("build section for unit vmap")
   {
+    //- rjf: build vmap from unit voff ranges
+    RDIM_VMap unit_vmap = {0};
+    {
+      RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+      
+      // rjf: count voff ranges
+      RDI_U64 voff_range_count = 0;
+      for(RDIM_UnitChunkNode *n = params->units.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          RDIM_Unit *unit = &n->v[idx];
+          voff_range_count += unit->voff_ranges.count;
+        }
+      }
+      
+      // rjf: count necessary markers
+      RDI_U64 marker_count = voff_range_count*2;
+      
+      // rjf: build keys/markers arrays
+      RDIM_SortKey    *keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, marker_count);
+      RDIM_VMapMarker *markers = rdim_push_array_no_zero(scratch.arena, RDIM_VMapMarker, marker_count);
+      {
+        RDIM_SortKey *key_ptr = keys;
+        RDIM_VMapMarker *marker_ptr = markers;
+        RDI_U32 unit_idx = 0;
+        for(RDIM_UnitChunkNode *unit_chunk_n = params->units.first;
+            unit_chunk_n != 0;
+            unit_chunk_n = unit_chunk_n->next)
+        {
+          for(RDI_U64 idx = 0; idx < unit_chunk_n->count; idx += 1)
+          {
+            RDIM_Unit *unit = &unit_chunk_n->v[idx];
+            for(RDIM_Rng1U64Node *n = unit->voff_ranges.first; n != 0; n = n->next)
+            {
+              RDIM_Rng1U64 range = n->v;
+              if(range.min < range.max)
+              {
+                key_ptr->key = range.min;
+                key_ptr->val = marker_ptr;
+                marker_ptr->idx = unit_idx;
+                marker_ptr->begin_range = 1;
+                key_ptr += 1;
+                marker_ptr += 1;
+                
+                key_ptr->key = range.max;
+                key_ptr->val = marker_ptr;
+                marker_ptr->idx = unit_idx;
+                marker_ptr->begin_range = 0;
+                key_ptr += 1;
+                marker_ptr += 1;
+              }
+            }
+            unit_idx += 1;
+          }
+        }
+      }
+      
+      // rjf: keys/markers -> unit vmap
+      unit_vmap = rdim_vmap_from_markers(arena, markers, keys, marker_count);
+      rdim_scratch_end(scratch);
+    }
     
+    //- rjf: build section
+    RDI_U64 unit_vmap_size = sizeof(unit_vmap.vmap[0])*(unit_vmap.count+1);
+    rdim_bake_section_list_push_new(arena, &sections, unit_vmap.vmap, unit_vmap_size, RDI_DataSectionTag_UnitVmap);
   }
   
   //////////////////////////////
@@ -3376,7 +3585,7 @@ rdim_source_combine_lines(RDIM_Arena *arena, RDIM_LineMapFragment *first)
 }
 
 //- rjf: vmap baking
-RDI_PROC RDIM_VMap*
+RDI_PROC RDIM_VMap
 rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count)
 {
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);

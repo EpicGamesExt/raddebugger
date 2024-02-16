@@ -917,6 +917,22 @@ struct RDIM_BakePathTree
   RDI_U32 src_count;
 };
 
+//- rjf: vmaps
+
+typedef struct RDIM_VMap RDIM_VMap;
+struct RDIM_VMap
+{
+  RDI_VMapEntry *vmap; // [count + 1]
+  RDI_U32 count;
+};
+
+typedef struct RDIM_VMapMarker RDIM_VMapMarker;
+struct RDIM_VMapMarker
+{
+  RDI_U32 idx;
+  RDI_U32 begin_range;
+};
+
 #if 0
 ////////////////////////////////
 //~ rjf: Root Construction Bundle Types
@@ -1392,6 +1408,9 @@ RDI_PROC RDIM_String8 rdim_normal_string_from_bake_path_node(RDIM_Arena *arena, 
 RDI_PROC RDIM_BakePathNode *rdim_bake_path_node_from_string(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string);
 RDI_PROC RDIM_BakeSrcNode *rdim_bake_src_node_from_path_node(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_BakePathNode *path_node);
 RDI_PROC RDI_U32 rdim_bake_path(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string);
+
+//- rjf: vmap baking
+RDI_PROC RDIM_VMap rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count);
 
 //- rjf: main baking entry point
 RDI_PROC RDIM_String8List rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params);
