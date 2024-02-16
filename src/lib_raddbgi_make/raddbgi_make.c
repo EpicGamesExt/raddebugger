@@ -2563,7 +2563,24 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   //
   RDIM_ProfScope("build sections for source files")
   {
-    
+    RDI_U32 dst_files_count = path_tree.src_count;
+    RDI_SourceFile *dst_files = rdim_push_array(arena, RDI_SourceFile, dst_files_count);
+    {
+      RDI_U64 dst_file_idx = 0;
+      for(RDIM_BakeSrcNode *src_node = path_tree.src_first;
+          src_node != 0;
+          src_node = src_node->next, dst_file_idx += 1)
+      {
+        RDI_SourceFile *dst_file = &dst_files[dst_file_idx];
+        dst_file->file_path_node_idx          = src_node->path_node->idx;
+        dst_file->normal_full_path_string_idx = rdim_bake_string(arena, &strings, src_node->normal_full_path);
+        dst_file->line_map_nums_data_idx      = src_node->line_map_nums_data_idx;
+        dst_file->line_map_range_data_idx     = src_node->line_map_range_data_idx;
+        dst_file->line_map_count              = src_node->line_map_count;
+        dst_file->line_map_voff_data_idx      = src_node->line_map_voff_data_idx;
+      }
+    }
+    rdim_bake_section_list_push_new(arena, &sections, dst_files, sizeof(RDI_SourceFile)*dst_files_count, RDI_DataSectionTag_SourceFiles);
   }
   
   //////////////////////////////
