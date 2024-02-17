@@ -2377,7 +2377,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                   U64 voff_first = section->voff + block32->off;
                   U64 voff_last = voff_first + block32->len;
                   RDIM_Rng1U64 voff_range = {voff_first, voff_last};
-                  rdim_rng1u64_list_push(arena, &scope->voff_ranges, voff_range);
+                  rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
                 }
               }
               
@@ -2437,7 +2437,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                 
                 // rjf: build symbol
                 RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, &sym_global_variables, sym_global_variables_chunk_cap);
-                symbol->kind             = RDIM_SymbolKind_GlobalVariable;
                 symbol->is_extern        = (kind == CV_SymKind_GDATA32);
                 symbol->name             = name;
                 symbol->type             = type;
@@ -2488,7 +2487,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                   U64 voff_first = section->voff + proc32->off;
                   U64 voff_last = voff_first + proc32->len;
                   RDIM_Rng1U64 voff_range = {voff_first, voff_last};
-                  rdim_rng1u64_list_push(arena, &procedure_root_scope->voff_ranges, voff_range);
+                  rdim_scope_push_voff_range(arena, &sym_scopes, procedure_root_scope, voff_range);
                 }
               }
               
@@ -2512,13 +2511,13 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               
               // rjf: build procedure symbol
               RDIM_Symbol *procedure_symbol = rdim_symbol_chunk_list_push(arena, &sym_procedures, sym_procedures_chunk_cap);
-              procedure_symbol->kind             = RDIM_SymbolKind_Procedure;
               procedure_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
               procedure_symbol->name             = name;
               procedure_symbol->link_name        = link_name;
               procedure_symbol->type             = type;
               procedure_symbol->container_symbol = container_symbol;
               procedure_symbol->container_type   = container_type;
+              procedure_symbol->root_scope       = procedure_root_scope;
               
               // rjf: fill root scope's symbol
               procedure_root_scope->symbol = procedure_symbol;
@@ -2649,7 +2648,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               
               // rjf: build symbol
               RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, &sym_thread_variables, sym_thread_variables_chunk_cap);
-              tvar->kind             = RDIM_SymbolKind_ThreadVariable;
               tvar->name             = name;
               tvar->type             = type;
               tvar->is_extern        = (kind == CV_SymKind_GTHREAD32);

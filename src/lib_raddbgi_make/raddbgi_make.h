@@ -675,7 +675,6 @@ typedef struct RDIM_Symbol RDIM_Symbol;
 struct RDIM_Symbol
 {
   struct RDIM_SymbolChunkNode *chunk;
-  RDIM_SymbolKind kind;
   RDI_S32 is_extern;
   RDIM_String8 name;
   RDIM_String8 link_name;

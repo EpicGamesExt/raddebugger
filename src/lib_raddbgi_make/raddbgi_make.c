@@ -736,11 +736,11 @@ rdim_scope_chunk_list_concat_in_place(RDIM_ScopeChunkList *dst, RDIM_ScopeChunkL
   {
     dst->last->next = to_push->first;
     dst->last = to_push->last;
-    dst->chunk_count += to_push->chunk_count;
-    dst->total_count += to_push->total_count;
+    dst->chunk_count      += to_push->chunk_count;
+    dst->total_count      += to_push->total_count;
     dst->scope_voff_count += to_push->scope_voff_count;
-    dst->local_count += to_push->local_count;
-    dst->location_count += to_push->location_count;
+    dst->local_count      += to_push->local_count;
+    dst->location_count   += to_push->location_count;
   }
   else if(dst->first == 0)
   {
@@ -1405,6 +1405,11 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
       name_maps[k].slots_count = 65536;
       name_maps[k].slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, name_maps[k].slots_count);
     }
+    RDIM_BakePathNode *nil_path = rdim_bake_path_node_from_string(arena, &path_tree, rdim_str8_lit("<nil>"));
+    RDIM_BakeSrcNode *nil_src = rdim_bake_src_node_from_path_node(arena, &path_tree, nil_path);
+    (void)nil_src;
+    rdim_bake_string(arena, &strings, rdim_str8_lit(""));
+    rdim_bake_idx_run(arena, &idx_runs, 0, 0);
   }
   
   //////////////////////////////
@@ -2066,7 +2071,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     RDIM_ProfScope("build all procedures")
     {
       RDI_U32 dst_idx = 0;
-      for(RDIM_SymbolChunkNode *n = params->global_variables.first; n != 0; n = n->next)
+      for(RDIM_SymbolChunkNode *n = params->procedures.first; n != 0; n = n->next)
       {
         for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
         {
@@ -2343,7 +2348,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
           {
             RDIM_Scope *src_scope = &chunk_n->v[chunk_idx];
             RDI_U32 scope_idx = (RDI_U32)rdim_idx_from_scope(src_scope); // TODO(rjf): @u64_to_u32
-            for(RDIM_Rng1U64Node *n = 0; n != 0; n = n->next)
+            for(RDIM_Rng1U64Node *n = src_scope->voff_ranges.first; n != 0; n = n->next)
             {
               key_ptr->key = n->v.min;
               key_ptr->val = marker_ptr;
