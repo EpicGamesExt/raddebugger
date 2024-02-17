@@ -209,6 +209,16 @@ rdim_str8_list_push(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 stri
 }
 
 RDI_PROC void
+rdim_str8_list_push_front(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 string)
+{
+  RDIM_String8Node *n = rdim_push_array(arena, RDIM_String8Node, 1);
+  n->RDIM_String8Node_StringMember = string;
+  RDIM_SLLQueuePushFront_N(list->RDIM_String8List_FirstMember, list->RDIM_String8List_LastMember, n, RDIM_String8Node_NextPtrMember);
+  list->RDIM_String8List_NodeCountMember += 1;
+  list->RDIM_String8List_TotalSizeMember += string.RDIM_String8_SizeMember;
+}
+
+RDI_PROC void
 rdim_str8_list_push_align(RDIM_Arena *arena, RDIM_String8List *list, RDI_U64 align)
 {
   RDI_U64 total_size_pre_align  = list->total_size;
@@ -1053,7 +1063,7 @@ rdim_normal_string_from_bake_path_node(RDIM_Arena *arena, RDIM_BakePathNode *nod
   {
     if(n->name.size != 0)
     {
-      rdim_str8_list_push(scratch.arena, &list, n->name);
+      rdim_str8_list_push_front(scratch.arena, &list, n->name);
     }
   }
   RDIM_String8 result = rdim_str8_list_join(arena, &list, rdim_str8_lit("/"));
