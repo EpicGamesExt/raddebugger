@@ -947,14 +947,12 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   //////////////////////////////////////////////////////////////
   //- rjf: types pass 1: produce type forward resolution map
   //
-  U64 type_fwd_map_count = 0;
   CV_TypeId *type_fwd_map = 0;
   CV_TypeId itype_first = tpi_leaf->itype_first;
   CV_TypeId itype_opl   = tpi_leaf->itype_opl;
   ProfScope("types pass 1: produce type forward resolution map")
   {
-    type_fwd_map_count = (U64)itype_opl;
-    type_fwd_map = push_array(arena, CV_TypeId, type_fwd_map_count);
+    type_fwd_map = push_array(arena, CV_TypeId, (U64)itype_opl);
     for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
     {
       //- rjf: determine if this itype resolves to another
@@ -976,18 +974,21 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
           case CV_LeafKind_CLASS:
           case CV_LeafKind_STRUCTURE:
           {
-            // rjf: unpack leaf
+            // rjf: unpack leaf header
             CV_LeafStruct *lf_struct = (CV_LeafStruct *)itype_leaf_first;
-            U8 *numeric_ptr = (U8 *)(lf_struct + 1);
-            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-            U8 *name_ptr = numeric_ptr + size.encoded_size;
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            U8 *unique_name_ptr = name_ptr + name.size + 1;
-            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
             
             // rjf: has fwd ref flag -> lookup itype that this itype resolves to
             if(lf_struct->props & CV_TypeProp_FwdRef)
             {
+              // rjf: unpack rest of leaf
+              U8 *numeric_ptr = (U8 *)(lf_struct + 1);
+              CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+              U8 *name_ptr = numeric_ptr + size.encoded_size;
+              String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+              U8 *unique_name_ptr = name_ptr + name.size + 1;
+              String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+              
+              // rjf: lookup
               B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
                                            ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
               itype_fwd = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
@@ -998,18 +999,21 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
           case CV_LeafKind_CLASS2:
           case CV_LeafKind_STRUCT2:
           {
-            // rjf: unpack leaf
+            // rjf: unpack leaf header
             CV_LeafStruct2 *lf_struct = (CV_LeafStruct2 *)itype_leaf_first;
-            U8 *numeric_ptr = (U8 *)(lf_struct + 1);
-            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-            U8 *name_ptr = (U8 *)numeric_ptr + size.encoded_size;
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            U8 *unique_name_ptr = name_ptr + name.size + 1;
-            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
             
             // rjf: has fwd ref flag -> lookup itype that this itype resolves to
             if(lf_struct->props & CV_TypeProp_FwdRef)
             {
+              // rjf: unpack rest of leaf
+              U8 *numeric_ptr = (U8 *)(lf_struct + 1);
+              CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+              U8 *name_ptr = (U8 *)numeric_ptr + size.encoded_size;
+              String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+              U8 *unique_name_ptr = name_ptr + name.size + 1;
+              String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+              
+              // rjf: lookup
               B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
                                            ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
               itype_fwd = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
