@@ -1100,7 +1100,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   {
     RDI_U64 itype_types_cap = (U64)(itype_opl);
     RDI_U64 extra_types_chunk_cap = 1024;
-    rdim_type_chunk_list_push(arena, &itype_types, itype_types_cap);
 #define p2r_type_ptr_from_itype(itype) (((itype) < itype_opl) ? (&itype_types.first->v[(type_fwd_map[(itype)] ? type_fwd_map[(itype)] : (itype))]) : 0)
     for(CV_TypeId itype = 0; itype < itype_opl; itype += 1)
     {
@@ -1143,7 +1142,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
       //////////////////////////
       //- rjf: build non-basic type
       //
-      if(!itype_is_basic)
+      if(!itype_is_basic && itype >= itype_first)
       {
         CV_RecRange *range = &tpi_leaf->leaf_ranges.ranges[itype-itype_first];
         CV_LeafKind kind = range->hdr.kind;
@@ -2561,6 +2560,11 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               RDIM_Type *type = p2r_type_ptr_from_itype(regrel32->itype);
               CV_Reg cv_reg = regrel32->reg;
               U32 var_off = regrel32->reg_off;
+              
+              if(str8_match(name, str8_lit("basics"), 0))
+              {
+                int x = 0;
+              }
               
               // rjf: determine if this is a parameter
               RDI_LocalKind local_kind = RDI_LocalKind_Variable;
