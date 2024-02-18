@@ -1652,11 +1652,11 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
                 CV_LeafKind field_kind = *(CV_LeafKind *)read_ptr;
                 U64 field_leaf_header_size = cv_header_struct_size_from_leaf_kind(field_kind);
                 U8 *field_leaf_first = read_ptr+2;
-                U8 *field_leaf_opl   = field_leaf_first+field_leaf_header_size;
+                U8 *field_leaf_opl   = field_leaf_first+range->hdr.size-2;
                 next_read_ptr = field_leaf_opl;
                 
                 // rjf: skip out-of-bounds fields
-                if(field_leaf_opl > field_list_opl)
+                if(field_leaf_first+field_leaf_header_size > field_list_opl)
                 {
                   continue;
                 }
@@ -2560,11 +2560,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               RDIM_Type *type = p2r_type_ptr_from_itype(regrel32->itype);
               CV_Reg cv_reg = regrel32->reg;
               U32 var_off = regrel32->reg_off;
-              
-              if(str8_match(name, str8_lit("basics"), 0))
-              {
-                int x = 0;
-              }
               
               // rjf: determine if this is a parameter
               RDI_LocalKind local_kind = RDI_LocalKind_Variable;
