@@ -2389,12 +2389,12 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     RDIM_ProfScope("push all symbol info sections")
     {
       rdim_bake_section_list_push_new(arena, &sections, global_variables,         sizeof(RDI_GlobalVariable)   * params->global_variables.total_count,     RDI_DataSectionTag_GlobalVariables);
-      rdim_bake_section_list_push_new(arena, &sections, global_vmap.vmap,         sizeof(RDI_U64)              * (global_vmap.count+1),                    RDI_DataSectionTag_GlobalVmap);
+      rdim_bake_section_list_push_new(arena, &sections, global_vmap.vmap,         sizeof(RDI_VMapEntry)        * (global_vmap.count+1),                    RDI_DataSectionTag_GlobalVmap);
       rdim_bake_section_list_push_new(arena, &sections, thread_variables,         sizeof(RDI_ThreadVariable)   * params->thread_variables.total_count,     RDI_DataSectionTag_ThreadVariables);
       rdim_bake_section_list_push_new(arena, &sections, procedures,               sizeof(RDI_Procedure)        * params->procedures.total_count,           RDI_DataSectionTag_Procedures);
       rdim_bake_section_list_push_new(arena, &sections, scopes,                   sizeof(RDI_Scope)            * params->scopes.total_count,               RDI_DataSectionTag_Scopes);
       rdim_bake_section_list_push_new(arena, &sections, scope_voffs,              sizeof(RDI_U64)              * params->scopes.scope_voff_count,          RDI_DataSectionTag_ScopeVoffData);
-      rdim_bake_section_list_push_new(arena, &sections, scope_vmap.vmap,          sizeof(RDI_U64)              * (scope_vmap.count+1),                     RDI_DataSectionTag_ScopeVmap);
+      rdim_bake_section_list_push_new(arena, &sections, scope_vmap.vmap,          sizeof(RDI_VMapEntry)        * (scope_vmap.count+1),                     RDI_DataSectionTag_ScopeVmap);
       rdim_bake_section_list_push_new(arena, &sections, locals,                   sizeof(RDI_Local)            * params->scopes.local_count,               RDI_DataSectionTag_Locals);
       rdim_bake_section_list_push_new(arena, &sections, location_blocks,          sizeof(RDI_LocationBlock)    * params->scopes.location_count,            RDI_DataSectionTag_LocationBlocks);
       rdim_bake_section_list_push_new(arena, &sections, location_data_blob.str,   location_data_blob.size,                                                 RDI_DataSectionTag_LocationData);
