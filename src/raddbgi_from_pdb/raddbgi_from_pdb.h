@@ -75,6 +75,32 @@ struct P2R_LinkNameMap
   U64 link_name_count;
 };
 
+//- rjf: type forward resolution map build
+
+typedef struct P2R_ITypeFwdMapFillIn P2R_ITypeFwdMapFillIn;
+struct P2R_ITypeFwdMapFillIn
+{
+  PDB_TpiHashParsed *tpi_hash;
+  CV_LeafParsed *tpi_leaf;
+  CV_TypeId itype_first;
+  CV_TypeId itype_opl;
+  CV_TypeId *itype_fwd_map;
+};
+
+typedef struct P2R_ITypeFwdMapFillTask P2R_ITypeFwdMapFillTask;
+struct P2R_ITypeFwdMapFillTask
+{
+  P2R_ITypeFwdMapFillIn fill_in;
+};
+
+typedef struct P2R_ITypeFwdMapFillTaskBatch P2R_ITypeFwdMapFillTaskBatch;
+struct P2R_ITypeFwdMapFillTaskBatch
+{
+  P2R_ITypeFwdMapFillTask *tasks;
+  U64 tasks_count;
+  U64 *num_tasks_taken_ptr;
+};
+
 //- rjf: per-unit symbol conversion
 
 typedef struct P2R_UnitSymbolConvertIn P2R_UnitSymbolConvertIn;
@@ -150,9 +176,14 @@ internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFramep
 internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
 internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
 
+////////////////////////////////
+//~ rjf: Type Forward Resolution Map Build / Thread
+
+internal void p2r_itype_fwd_map_fill(P2R_ITypeFwdMapFillIn *in);
+internal void p2r_itype_fwd_map_fill_task_thread__entry_point(void *p);
 
 ////////////////////////////////
-//~ rjf: Per-Unit Symbol Conversion Pass Thread Entry Point
+//~ rjf: Per-Unit Symbol Conversion / Thread
 
 internal P2R_UnitSymbolConvertOut *p2r_unit_symbol_convert(Arena *arena, P2R_UnitSymbolConvertIn *in);
 internal void p2r_unit_symbol_convert_task_thread__entry_point(void *p);

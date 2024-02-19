@@ -540,6 +540,151 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDI
 }
 
 ////////////////////////////////
+//~ rjf: Type Forward Resolution Map Build / Thread
+
+internal void
+p2r_itype_fwd_map_fill(P2R_ITypeFwdMapFillIn *in)
+{
+  for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
+  {
+    //- rjf: determine if this itype resolves to another
+    CV_TypeId itype_fwd = 0;
+    CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[itype-in->itype_first];
+    CV_LeafKind kind = range->hdr.kind;
+    U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+    if(range->off+range->hdr.size <= in->tpi_leaf->data.size &&
+       range->off+2+header_struct_size <= in->tpi_leaf->data.size &&
+       range->hdr.size >= 2)
+    {
+      U8 *itype_leaf_first = in->tpi_leaf->data.str + range->off+2;
+      U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+      switch(kind)
+      {
+        default:{}break;
+        
+        //- rjf: CLASS/STRUCTURE
+        case CV_LeafKind_CLASS:
+        case CV_LeafKind_STRUCTURE:
+        {
+          // rjf: unpack leaf header
+          CV_LeafStruct *lf_struct = (CV_LeafStruct *)itype_leaf_first;
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves to
+          if(lf_struct->props & CV_TypeProp_FwdRef)
+          {
+            // rjf: unpack rest of leaf
+            U8 *numeric_ptr = (U8 *)(lf_struct + 1);
+            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+            U8 *name_ptr = numeric_ptr + size.encoded_size;
+            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+            U8 *unique_name_ptr = name_ptr + name.size + 1;
+            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+            
+            // rjf: lookup
+            B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+        
+        //- rjf: CLASS2/STRUCT2
+        case CV_LeafKind_CLASS2:
+        case CV_LeafKind_STRUCT2:
+        {
+          // rjf: unpack leaf header
+          CV_LeafStruct2 *lf_struct = (CV_LeafStruct2 *)itype_leaf_first;
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves to
+          if(lf_struct->props & CV_TypeProp_FwdRef)
+          {
+            // rjf: unpack rest of leaf
+            U8 *numeric_ptr = (U8 *)(lf_struct + 1);
+            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+            U8 *name_ptr = (U8 *)numeric_ptr + size.encoded_size;
+            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+            U8 *unique_name_ptr = name_ptr + name.size + 1;
+            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+            
+            // rjf: lookup
+            B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+        
+        //- rjf: UNION
+        case CV_LeafKind_UNION:
+        {
+          // rjf: unpack leaf
+          CV_LeafUnion *lf_union = (CV_LeafUnion *)itype_leaf_first;
+          U8 *numeric_ptr = (U8 *)(lf_union + 1);
+          CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
+          U8 *name_ptr = numeric_ptr + size.encoded_size;
+          String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+          U8 *unique_name_ptr = name_ptr + name.size + 1;
+          String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves tos
+          if(lf_union->props & CV_TypeProp_FwdRef)
+          {
+            B32 do_unique_name_lookup = (((lf_union->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_union->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+        
+        //- rjf: ENUM
+        case CV_LeafKind_ENUM:
+        {
+          // rjf: unpack leaf
+          CV_LeafEnum *lf_enum = (CV_LeafEnum*)itype_leaf_first;
+          U8 *name_ptr = (U8 *)(lf_enum + 1);
+          String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
+          U8 *unique_name_ptr = name_ptr + name.size + 1;
+          String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
+          
+          // rjf: has fwd ref flag -> lookup itype that this itype resolves to
+          if(lf_enum->props & CV_TypeProp_FwdRef)
+          {
+            B32 do_unique_name_lookup = (((lf_enum->props & CV_TypeProp_Scoped) != 0) &&
+                                         ((lf_enum->props & CV_TypeProp_HasUniqueName) != 0));
+            itype_fwd = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
+          }
+        }break;
+      }
+    }
+    
+    //- rjf: if the forwarded itype is nonzero & in TPI range -> save to map
+    if(itype_fwd != 0 && itype_fwd < in->tpi_leaf->itype_opl)
+    {
+      in->itype_fwd_map[itype-in->itype_first] = itype_fwd;
+    }
+  }
+}
+
+internal void
+p2r_itype_fwd_map_fill_task_thread__entry_point(void *p)
+{
+  TCTX tctx_;
+  tctx_init_and_equip(&tctx_);
+  P2R_ITypeFwdMapFillTaskBatch *batch = (P2R_ITypeFwdMapFillTaskBatch *)p;
+  ThreadName("[p2r] itype fwd map fill thread");
+  for(;;)
+  {
+    U64 next_task_num = ins_atomic_u64_inc_eval(batch->num_tasks_taken_ptr);
+    if(next_task_num > batch->tasks_count || 1 > next_task_num)
+    {
+      break;
+    }
+    P2R_ITypeFwdMapFillTask *task = &batch->tasks[next_task_num-1];
+    ProfScope("convert (task #%I64u)", next_task_num)
+    {
+      p2r_itype_fwd_map_fill(&task->fill_in);
+    }
+  }
+}
+
+////////////////////////////////
 //~ rjf: Per-Unit Symbol Conversion Pass Thread Entry Point
 
 internal P2R_UnitSymbolConvertOut *
@@ -1265,7 +1410,7 @@ p2r_unit_symbol_convert_task_thread__entry_point(void *p)
       break;
     }
     P2R_UnitSymbolTask *task = &batch->tasks[next_task_num-1];
-    ProfScope("convert")
+    ProfScope("convert (task #%I64u)", next_task_num)
     {
       task->convert_out = p2r_unit_symbol_convert(task->out_arena, &task->convert_in);
     }
@@ -1686,125 +1831,75 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   // to hook types up to their actual destination complete types wherever
   // possible, and so this map can be used to do that in subsequent stages.
   //
-  CV_TypeId *type_fwd_map = 0;
+  CV_TypeId *itype_fwd_map = 0;
   CV_TypeId itype_first = tpi_leaf->itype_first;
-  CV_TypeId itype_opl   = tpi_leaf->itype_opl;
+  CV_TypeId itype_opl = tpi_leaf->itype_opl;
   ProfScope("types pass 1: produce type forward resolution map")
   {
-    type_fwd_map = push_array(arena, CV_TypeId, (U64)itype_opl);
-    for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
+    ////////////////////////////
+    //- rjf: allocate forward resolution map
+    //
+    itype_fwd_map = push_array(arena, CV_TypeId, (U64)itype_opl);
+    
+    ////////////////////////////
+    //- rjf: produce task batch
+    //
+    U64 num_tasks_taken = 0;
+    P2R_ITypeFwdMapFillTaskBatch task_batch = {0};
     {
-      //- rjf: determine if this itype resolves to another
-      CV_TypeId itype_fwd = 0;
-      CV_RecRange *range = &tpi_leaf->leaf_ranges.ranges[itype-itype_first];
-      CV_LeafKind kind = range->hdr.kind;
-      U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
-      if(range->off+range->hdr.size <= tpi_leaf->data.size &&
-         range->off+2+header_struct_size <= tpi_leaf->data.size &&
-         range->hdr.size >= 2)
+      U64 task_size_itypes = 4096;
+      task_batch.tasks_count = (U64)itype_opl/task_size_itypes;
+      task_batch.tasks = push_array(scratch.arena, P2R_ITypeFwdMapFillTask, task_batch.tasks_count);
+      task_batch.num_tasks_taken_ptr = &num_tasks_taken;
+      for(U64 task_idx = 0; task_idx < task_batch.tasks_count; task_idx += 1)
       {
-        U8 *itype_leaf_first = tpi_leaf->data.str + range->off+2;
-        U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
-        switch(kind)
+        P2R_ITypeFwdMapFillTask *task = &task_batch.tasks[task_idx];
+        task->fill_in.tpi_hash    = tpi_hash;
+        task->fill_in.tpi_leaf    = tpi_leaf;
+        task->fill_in.itype_first = task_idx*task_size_itypes;
+        task->fill_in.itype_opl   = task->fill_in.itype_first + task_size_itypes;
+        task->fill_in.itype_fwd_map = itype_fwd_map;
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: launch task threads
+    //
+    U64 task_threads_count = os_logical_core_count()-1;
+    OS_Handle *task_threads = push_array(scratch.arena, OS_Handle, task_threads_count);
+    for(U64 idx = 0; idx < task_threads_count; idx += 1)
+    {
+      task_threads[idx] = os_launch_thread(p2r_itype_fwd_map_fill_task_thread__entry_point, &task_batch, 0);
+    }
+    
+    ////////////////////////////
+    //- rjf: perform tasks on the main thread
+    //
+    ProfScope("perform tasks on the main thread")
+    {
+      for(;;)
+      {
+        U64 next_task_num = ins_atomic_u64_inc_eval(task_batch.num_tasks_taken_ptr);
+        if(next_task_num > task_batch.tasks_count || 1 > next_task_num)
         {
-          default:{}break;
-          
-          //- rjf: CLASS/STRUCTURE
-          case CV_LeafKind_CLASS:
-          case CV_LeafKind_STRUCTURE:
-          {
-            // rjf: unpack leaf header
-            CV_LeafStruct *lf_struct = (CV_LeafStruct *)itype_leaf_first;
-            
-            // rjf: has fwd ref flag -> lookup itype that this itype resolves to
-            if(lf_struct->props & CV_TypeProp_FwdRef)
-            {
-              // rjf: unpack rest of leaf
-              U8 *numeric_ptr = (U8 *)(lf_struct + 1);
-              CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-              U8 *name_ptr = numeric_ptr + size.encoded_size;
-              String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-              U8 *unique_name_ptr = name_ptr + name.size + 1;
-              String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-              
-              // rjf: lookup
-              B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
-                                           ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
-              itype_fwd = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
-            }
-          }break;
-          
-          //- rjf: CLASS2/STRUCT2
-          case CV_LeafKind_CLASS2:
-          case CV_LeafKind_STRUCT2:
-          {
-            // rjf: unpack leaf header
-            CV_LeafStruct2 *lf_struct = (CV_LeafStruct2 *)itype_leaf_first;
-            
-            // rjf: has fwd ref flag -> lookup itype that this itype resolves to
-            if(lf_struct->props & CV_TypeProp_FwdRef)
-            {
-              // rjf: unpack rest of leaf
-              U8 *numeric_ptr = (U8 *)(lf_struct + 1);
-              CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-              U8 *name_ptr = (U8 *)numeric_ptr + size.encoded_size;
-              String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-              U8 *unique_name_ptr = name_ptr + name.size + 1;
-              String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-              
-              // rjf: lookup
-              B32 do_unique_name_lookup = (((lf_struct->props & CV_TypeProp_Scoped) != 0) &&
-                                           ((lf_struct->props & CV_TypeProp_HasUniqueName) != 0));
-              itype_fwd = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
-            }
-          }break;
-          
-          //- rjf: UNION
-          case CV_LeafKind_UNION:
-          {
-            // rjf: unpack leaf
-            CV_LeafUnion *lf_union = (CV_LeafUnion *)itype_leaf_first;
-            U8 *numeric_ptr = (U8 *)(lf_union + 1);
-            CV_NumericParsed size = cv_numeric_from_data_range(numeric_ptr, itype_leaf_opl);
-            U8 *name_ptr = numeric_ptr + size.encoded_size;
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            U8 *unique_name_ptr = name_ptr + name.size + 1;
-            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-            
-            // rjf: has fwd ref flag -> lookup itype that this itype resolves tos
-            if(lf_union->props & CV_TypeProp_FwdRef)
-            {
-              B32 do_unique_name_lookup = (((lf_union->props & CV_TypeProp_Scoped) != 0) &&
-                                           ((lf_union->props & CV_TypeProp_HasUniqueName) != 0));
-              itype_fwd = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
-            }
-          }break;
-          
-          //- rjf: ENUM
-          case CV_LeafKind_ENUM:
-          {
-            // rjf: unpack leaf
-            CV_LeafEnum *lf_enum = (CV_LeafEnum*)itype_leaf_first;
-            U8 *name_ptr = (U8 *)(lf_enum + 1);
-            String8 name = str8_cstring_capped(name_ptr, itype_leaf_opl);
-            U8 *unique_name_ptr = name_ptr + name.size + 1;
-            String8 unique_name = str8_cstring_capped(unique_name_ptr, itype_leaf_opl);
-            
-            // rjf: has fwd ref flag -> lookup itype that this itype resolves to
-            if(lf_enum->props & CV_TypeProp_FwdRef)
-            {
-              B32 do_unique_name_lookup = (((lf_enum->props & CV_TypeProp_Scoped) != 0) &&
-                                           ((lf_enum->props & CV_TypeProp_HasUniqueName) != 0));
-              itype_fwd = pdb_tpi_first_itype_from_name(tpi_hash, tpi_leaf, do_unique_name_lookup?unique_name:name, do_unique_name_lookup);
-            }
-          }break;
+          break;
+        }
+        P2R_ITypeFwdMapFillTask *task = &task_batch.tasks[next_task_num-1];
+        ProfScope("convert (task #%I64u)", next_task_num)
+        {
+          p2r_itype_fwd_map_fill(&task->fill_in);
         }
       }
-      
-      //- rjf: if the forwarded itype is nonzero & in TPI range -> save to map
-      if(itype_fwd != 0 && itype_fwd < itype_opl)
+    }
+    
+    ////////////////////////////
+    //- rjf: wait for task threads
+    //
+    ProfScope("wait for task threads")
+    {
+      for(U64 idx = 0; idx < task_threads_count; idx += 1)
       {
-        type_fwd_map[itype] = itype_fwd;
+        os_thread_wait(task_threads[idx], max_U64);
       }
     }
   }
@@ -1853,7 +1948,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
           walk_task != 0;
           walk_task = walk_task->next)
       {
-        CV_TypeId walk_itype = type_fwd_map[walk_task->itype] ? type_fwd_map[walk_task->itype] : walk_task->itype;
+        CV_TypeId walk_itype = itype_fwd_map[walk_task->itype] ? itype_fwd_map[walk_task->itype] : walk_task->itype;
         if(walk_itype < itype_first)
         {
           continue;
@@ -2076,7 +2171,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   P2R_TypeIdRevisitTask *last_itype_revisit_task = 0;
   RDIM_Type **itype_type_ptrs = 0;
   RDIM_TypeChunkList all_types = {0};
-#define p2r_type_ptr_from_itype(itype) (((itype) < itype_opl) ? (itype_type_ptrs[(type_fwd_map[(itype)] ? type_fwd_map[(itype)] : (itype))]) : 0)
+#define p2r_type_ptr_from_itype(itype) (((itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
   ProfScope("types pass 3: construct all root/stub types from TPI")
   {
     itype_type_ptrs = push_array(arena, RDIM_Type *, (U64)(itype_opl));
@@ -2086,7 +2181,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
           itype_chain != 0;
           itype_chain = itype_chain->next)
       {
-        CV_TypeId itype = (root_itype != itype_chain->itype && itype_chain->itype < itype_opl && type_fwd_map[itype_chain->itype]) ? type_fwd_map[itype_chain->itype] : itype_chain->itype;
+        CV_TypeId itype = (root_itype != itype_chain->itype && itype_chain->itype < itype_opl && itype_fwd_map[itype_chain->itype]) ? itype_fwd_map[itype_chain->itype] : itype_chain->itype;
         B32 itype_is_basic = (itype < 0x1000);
         
         //////////////////////////
@@ -2094,7 +2189,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         // reference whatever this itype resolves to, and so there is no point
         // in filling out this slot
         //
-        if(type_fwd_map[root_itype] != 0)
+        if(itype_fwd_map[root_itype] != 0)
         {
           continue;
         }
@@ -3160,7 +3255,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         tasks[idx].convert_in.coff_sections   = coff_sections;
         tasks[idx].convert_in.tpi_hash        = tpi_hash;
         tasks[idx].convert_in.tpi_leaf        = tpi_leaf;
-        tasks[idx].convert_in.itype_fwd_map   = type_fwd_map;
+        tasks[idx].convert_in.itype_fwd_map   = itype_fwd_map;
         tasks[idx].convert_in.itype_type_ptrs = itype_type_ptrs;
         tasks[idx].convert_in.link_name_map   = &link_name_map;
         tasks[idx].out_arena = arena_alloc();
@@ -3205,7 +3300,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
           break;
         }
         P2R_UnitSymbolTask *task = &task_batch.tasks[next_task_num-1];
-        ProfScope("convert")
+        ProfScope("convert (task #%I64u)", next_task_num)
         {
           task->convert_out = p2r_unit_symbol_convert(task->out_arena, &task->convert_in);
         }
