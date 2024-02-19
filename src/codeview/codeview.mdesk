@@ -457,7 +457,7 @@ CV_BasicTypeTable:
 }
 
 ////////////////////////////////
-//~ rjf: CV Leaf
+//~ rjf: CV Leaf Kinds
 
 @table(name  header_type_name  val)
 CV_LeafKindTable:

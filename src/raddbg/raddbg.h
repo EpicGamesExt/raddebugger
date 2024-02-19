@@ -49,6 +49,7 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
+// [ ] DBGI layer is case-sensitive even on case-insensitive systems
 // [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
