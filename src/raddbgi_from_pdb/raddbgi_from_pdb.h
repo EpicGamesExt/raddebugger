@@ -75,6 +75,49 @@ struct P2R_LinkNameMap
   U64 link_name_count;
 };
 
+//- rjf: per-unit symbol conversion
+
+typedef struct P2R_UnitSymbolConvertIn P2R_UnitSymbolConvertIn;
+struct P2R_UnitSymbolConvertIn
+{
+  RDI_Arch arch;
+  PDB_CoffSectionArray *coff_sections;
+  PDB_TpiHashParsed *tpi_hash;
+  CV_LeafParsed *tpi_leaf;
+  CV_SymParsed *sym;
+  CV_TypeId *itype_fwd_map;
+  RDIM_Type **itype_type_ptrs;
+  P2R_LinkNameMap *link_name_map;
+};
+
+typedef struct P2R_UnitSymbolConvertOut P2R_UnitSymbolConvertOut;
+struct P2R_UnitSymbolConvertOut
+{
+  RDIM_SymbolChunkList procedures;
+  RDIM_SymbolChunkList global_variables;
+  RDIM_SymbolChunkList thread_variables;
+  RDIM_ScopeChunkList scopes;
+};
+
+typedef struct P2R_UnitSymbolTask P2R_UnitSymbolTask;
+struct P2R_UnitSymbolTask
+{
+  // rjf: inputs
+  P2R_UnitSymbolConvertIn convert_in;
+  
+  // rjf: outputs
+  Arena *out_arena;
+  P2R_UnitSymbolConvertOut *convert_out;
+};
+
+typedef struct P2R_UnitSymbolTaskBatch P2R_UnitSymbolTaskBatch;
+struct P2R_UnitSymbolTaskBatch
+{
+  P2R_UnitSymbolTask *tasks;
+  U64 tasks_count;
+  U64 *num_tasks_taken_ptr;
+};
+
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
@@ -107,6 +150,12 @@ internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFramep
 internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
 internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
 
+
+////////////////////////////////
+//~ rjf: Per-Unit Symbol Conversion Pass Thread Entry Point
+
+internal P2R_UnitSymbolConvertOut *p2r_unit_symbol_convert(Arena *arena, P2R_UnitSymbolConvertIn *in);
+internal void p2r_unit_symbol_convert_task_thread__entry_point(void *p);
 
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point

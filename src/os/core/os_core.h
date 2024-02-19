@@ -306,6 +306,7 @@ internal void  os_process_release_handle(OS_Handle handle);
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 
 internal OS_Handle os_launch_thread(OS_ThreadFunctionType *func, void *ptr, void *params);
+internal B32       os_thread_wait(OS_Handle handle, U64 endt_us);
 internal void      os_release_thread_handle(OS_Handle thread);
 
 ////////////////////////////////

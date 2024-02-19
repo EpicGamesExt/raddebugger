@@ -1233,6 +1233,15 @@ os_launch_thread(OS_ThreadFunctionType *func, void *ptr, void *params){
   return(result);
 }
 
+internal B32
+os_thread_wait(OS_Handle handle, U64 endt_us)
+{
+  DWORD sleep_ms = w32_sleep_ms_from_endt_us(endt_us);
+  W32_Entity *entity = (W32_Entity *)PtrFromInt(handle.u64[0]);
+  DWORD wait_result = WaitForSingleObject(entity->thread.handle, sleep_ms);
+  return (wait_result == WAIT_OBJECT_0);
+}
+
 internal void
 os_release_thread_handle(OS_Handle thread){
   W32_Entity *entity = (W32_Entity*)PtrFromInt(thread.u64[0]);
