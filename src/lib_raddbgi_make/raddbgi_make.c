@@ -1402,17 +1402,16 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
   RDIM_BakePathTree path_tree = {0};
   RDIM_BakeNameMap name_maps[RDI_NameMapKind_COUNT] = {0};
   {
-    // TODO(rjf): adjust slots based on good estimates from params
     rdim_bake_section_list_push_new(arena, &sections, 0, 0, RDI_DataSectionTag_NULL);
-    strings.slots_count = 65536;
+    strings.slots_count = params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
     strings.slots = rdim_push_array(arena, RDIM_BakeStringNode *, strings.slots_count);
-    idx_runs.slots_count = 65536;
+    idx_runs.slots_count = params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
     idx_runs.slots = rdim_push_array(arena, RDIM_BakeIdxRunNode *, idx_runs.slots_count);
     for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
         k < RDI_NameMapKind_COUNT;
         k = (RDI_NameMapKind)(k+1))
     {
-      name_maps[k].slots_count = 65536;
+      name_maps[k].slots_count = params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
       name_maps[k].slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, name_maps[k].slots_count);
     }
     RDIM_BakePathNode *nil_path = rdim_bake_path_node_from_string(arena, &path_tree, rdim_str8_lit("<nil>"));
