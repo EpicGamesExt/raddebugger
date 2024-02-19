@@ -311,8 +311,6 @@ tex_u2x_dequeue_req(U128 *key_out, U128 *hash_out, TEX_Topology *top_out)
 internal void
 tex_xfer_thread__entry_point(void *p)
 {
-  TCTX tctx_ = {0};
-  tctx_init_and_equip(&tctx_);
   for(;;)
   {
     HS_Scope *scope = hs_scope_open();

@@ -1479,6 +1479,7 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
         RDI_Line *unit_lines      = 0;
         RDI_U16  *unit_cols       = 0;
         RDI_U32   unit_line_count = 0;
+        RDIM_ProfScope("produce combined unit line info")
         {
           RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
           
@@ -1538,7 +1539,11 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
           }
           
           //- rjf: sort
-          RDIM_SortKey *sorted_line_keys = rdim_sort_key_array(scratch.arena, line_keys, key_count);
+          RDIM_SortKey *sorted_line_keys = 0;
+          RDIM_ProfScope("sort")
+          {
+            sorted_line_keys = rdim_sort_key_array(scratch.arena, line_keys, key_count);
+          }
           
           // TODO(rjf): do a pass over sorted keys to make sure duplicate keys
           // are sorted with null record first, and no more than one null
@@ -1547,23 +1552,26 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
           //- rjf: arrange output
           RDI_U64 *arranged_voffs = rdim_push_array_no_zero(arena, RDI_U64, key_count + 1);
           RDI_Line *arranged_lines = rdim_push_array_no_zero(arena, RDI_Line, key_count);
-          for(RDI_U64 i = 0; i < key_count; i += 1)
+          RDIM_ProfScope("arrange output")
           {
-            arranged_voffs[i] = sorted_line_keys[i].key;
-          }
-          arranged_voffs[key_count] = ~0ull;
-          for(RDI_U64 i = 0; i < key_count; i += 1)
-          {
-            RDIM_LineRec *rec = (RDIM_LineRec*)sorted_line_keys[i].val;
-            if(rec != 0)
+            for(RDI_U64 i = 0; i < key_count; i += 1)
             {
-              arranged_lines[i].file_idx = rec->file_id;
-              arranged_lines[i].line_num = rec->line_num;
+              arranged_voffs[i] = sorted_line_keys[i].key;
             }
-            else
+            arranged_voffs[key_count] = ~0ull;
+            for(RDI_U64 i = 0; i < key_count; i += 1)
             {
-              arranged_lines[i].file_idx = 0;
-              arranged_lines[i].line_num = 0;
+              RDIM_LineRec *rec = (RDIM_LineRec*)sorted_line_keys[i].val;
+              if(rec != 0)
+              {
+                arranged_lines[i].file_idx = rec->file_id;
+                arranged_lines[i].line_num = rec->line_num;
+              }
+              else
+              {
+                arranged_lines[i].file_idx = 0;
+                arranged_lines[i].line_num = 0;
+              }
             }
           }
           

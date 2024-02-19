@@ -372,8 +372,6 @@ dasm_u2d_dequeue_request(void)
 internal void
 dasm_decode_thread_entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);

@@ -7753,8 +7753,6 @@ df_text_search_little_hash_from_hash(U128 hash)
 internal void
 df_text_search_thread_entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
 #if 0
   // TODO(rjf): [ ] @de2ctrl text searcher -- wound up in DE_Hash
   

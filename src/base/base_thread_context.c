@@ -19,6 +19,15 @@ tctx_init_and_equip(TCTX *tctx){
   tctx_thread_local = tctx;
 }
 
+internal void
+tctx_release(void)
+{
+  for(U64 i = 0; i < ArrayCount(tctx_thread_local->arenas); i += 1)
+  {
+    arena_release(tctx_thread_local->arenas[i]);
+  }
+}
+
 internal TCTX*
 tctx_get_equipped(void){
   return(tctx_thread_local);

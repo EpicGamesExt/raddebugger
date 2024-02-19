@@ -167,7 +167,10 @@ w32_thread_base(void *ptr){
   OS_ThreadFunctionType *func = entity->thread.func;
   void *thread_ptr = entity->thread.ptr;
   
+  TCTX tctx_;
+  tctx_init_and_equip(&tctx_);
   func(thread_ptr);
+  tctx_release();
   
   // remove my bit
   LONG result = InterlockedAnd((LONG*)&entity->reference_mask, ~0x2);
@@ -1238,7 +1241,11 @@ os_thread_wait(OS_Handle handle, U64 endt_us)
 {
   DWORD sleep_ms = w32_sleep_ms_from_endt_us(endt_us);
   W32_Entity *entity = (W32_Entity *)PtrFromInt(handle.u64[0]);
-  DWORD wait_result = WaitForSingleObject(entity->thread.handle, sleep_ms);
+  DWORD wait_result = WAIT_OBJECT_0;
+  if(entity != 0)
+  {
+    wait_result = WaitForSingleObject(entity->thread.handle, sleep_ms);
+  }
   return (wait_result == WAIT_OBJECT_0);
 }
 

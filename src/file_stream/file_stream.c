@@ -140,8 +140,6 @@ fs_u2s_dequeue_path(Arena *arena)
 internal void
 fs_streamer_thread__entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
   ThreadName("[fs] streamer #%I64u", (U64)p);
   for(;;)
   {

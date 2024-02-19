@@ -54,6 +54,60 @@ struct P2R_ConvertOut
 };
 
 ////////////////////////////////
+//~ rjf: Initial PDB Information Extraction & Conversion Preparation Task Types
+
+//- rjf: tpi hash parsing
+
+typedef struct P2R_TPIHashParseIn P2R_TPIHashParseIn;
+struct P2R_TPIHashParseIn
+{
+  PDB_Strtbl *strtbl;
+  PDB_TpiParsed *tpi;
+  String8 hash_data;
+  String8 aux_data;
+};
+
+typedef struct P2R_TPIHashParseTask P2R_TPIHashParseTask;
+struct P2R_TPIHashParseTask
+{
+  P2R_TPIHashParseIn in;
+  Arena *out_arena;
+  PDB_TpiHashParsed *out;
+};
+
+//- rjf: tpi leaves parsing
+
+typedef struct P2R_TPILeafParseIn P2R_TPILeafParseIn;
+struct P2R_TPILeafParseIn
+{
+  String8 leaf_data;
+  CV_TypeId itype_first;
+};
+
+typedef struct P2R_TPILeafParseTask P2R_TPILeafParseTask;
+struct P2R_TPILeafParseTask
+{
+  P2R_TPILeafParseIn in;
+  Arena *out_arena;
+  CV_LeafParsed *out;
+};
+
+//- rjf: exe hashing
+
+typedef struct P2R_EXEHashIn P2R_EXEHashIn;
+struct P2R_EXEHashIn
+{
+  String8 exe_data;
+};
+
+typedef struct P2R_EXEHashTask P2R_EXEHashTask;
+struct P2R_EXEHashTask
+{
+  P2R_EXEHashIn in;
+  U64 out;
+};
+
+////////////////////////////////
 //~ rjf: Conversion Data Structure Types
 
 //- rjf: link name map (voff -> string)
@@ -175,6 +229,13 @@ internal RDIM_Location *p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch ar
 internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFrameproc *frameproc, B32 param_base);
 internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
 internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
+
+////////////////////////////////
+//~ rjf: Initial Parsing & Preparation Pass Threads
+
+internal void p2r_tpi_hash_parse_thread__entry_point(void *p);
+internal void p2r_tpi_leaf_parse_thread__entry_point(void *p);
+internal void p2r_exe_hash_thread__entry_point(void *p);
 
 ////////////////////////////////
 //~ rjf: Type Forward Resolution Map Build / Thread

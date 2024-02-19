@@ -1518,8 +1518,6 @@ ctrl_u2ms_dequeue_req(CTRL_MachineID *out_machine_id, CTRL_Handle *out_process, 
 internal void
 ctrl_thread__entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
   ThreadName("[ctrl] thread");
   ProfBeginFunction();
   demon_primary_thread_begin();
@@ -3274,8 +3272,6 @@ ctrl_thread__single_step(CTRL_Msg *msg)
 internal void
 ctrl_mem_stream_thread__entry_point(void *p)
 {
-  TCTX tctx_ = {0};
-  tctx_init_and_equip(&tctx_);
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
   for(;;)
   {

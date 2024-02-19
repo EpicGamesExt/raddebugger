@@ -632,8 +632,6 @@ dbgi_p2u_pop_events(Arena *arena, U64 endt_us)
 internal void
 dbgi_parse_thread_entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
   ProfThreadName("[dbgi] parse #%I64U", (U64)p);
   for(;;)
   {
@@ -1154,8 +1152,6 @@ dbgi_qsort_compare_fuzzy_search_items(DBGI_FuzzySearchItem *a, DBGI_FuzzySearchI
 internal void
 dbgi_fuzzy_thread__entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
   ProfThreadName("[dbgi] fuzzy search #%I64U", (U64)p);
   DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[(U64)p];
   for(;;)
