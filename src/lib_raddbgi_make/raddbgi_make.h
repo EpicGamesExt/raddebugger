@@ -1083,6 +1083,9 @@ RDI_PROC void rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, 
 RDI_PROC RDIM_VMap rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count);
 
 //- rjf: main baking entry point
-RDI_PROC RDIM_String8List rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_sections_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
-#endif // RDI_MAKE_H
+//- rjf: sections -> flattened serialized blobs
+RDI_PROC RDIM_String8List rdim_blobs_from_bake_sections(RDIM_Arena *arena, RDIM_BakeSectionList *sections);
+
+#endif // RADDBGI_MAKE_H

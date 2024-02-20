@@ -647,7 +647,8 @@ entry_point(int argc, char **argv)
           bake_params.procedures       = convert_out->procedures;
           bake_params.scopes           = convert_out->scopes;
         }
-        bake_strings = rdim_bake(scratch.arena, &bake_params);
+        RDIM_BakeSectionList sections = rdim_bake_sections_from_params(scratch.arena, &bake_params);
+        bake_strings = rdim_blobs_from_bake_sections(scratch.arena, &sections);
       }
       
       //- rjf: write

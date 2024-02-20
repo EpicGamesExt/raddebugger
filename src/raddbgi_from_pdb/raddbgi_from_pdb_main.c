@@ -97,7 +97,8 @@ main(int argc, char **argv)
       bake_params.procedures       = convert_out->procedures;
       bake_params.scopes           = convert_out->scopes;
     }
-    bake_strings = rdim_bake(arena, &bake_params);
+    RDIM_BakeSectionList sections = rdim_bake_sections_from_params(arena, &bake_params);
+    bake_strings = rdim_blobs_from_bake_sections(arena, &sections);
   }
   
   //- rjf: write

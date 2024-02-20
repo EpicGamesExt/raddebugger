@@ -1368,12 +1368,10 @@ rdim_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey
 
 //- rjf: main baking entry point
 
-RDI_PROC RDIM_String8List
-rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
+RDI_PROC RDIM_BakeSectionList
+rdim_bake_sections_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
 {
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
-  RDIM_String8List blobs;
-  rdim_memzero_struct(&blobs);
   
   //////////////////////////////
   //- NOTE(rjf): On the ordering of baking phases:
@@ -2661,30 +2659,37 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
     rdim_bake_section_list_push_new(arena, &sections, idx_data, sizeof(RDI_U32)*idx_runs.idx_count, RDI_DataSectionTag_IndexRuns);
   }
   
-  //////////////////////////////
-  //- rjf: finalize: build blob strings for header & all sections
-  //
-  RDIM_ProfScope("finalize: build blob strings for header & all sections")
+  rdim_scratch_end(scratch);
+  return sections;
+}
+
+//- rjf: sections -> flattened serialized blobs
+
+RDI_PROC RDIM_String8List
+rdim_blobs_from_bake_sections(RDIM_Arena *arena, RDIM_BakeSectionList *sections)
+{
+  RDIM_String8List blobs;
+  rdim_memzero_struct(&blobs);
   {
     // rjf: push empty header & data section table
     RDI_Header *baked_rdi_header = rdim_push_array(arena, RDI_Header, 1);
-    RDI_DataSection *baked_rdi_sections = rdim_push_array(arena, RDI_DataSection, sections.count);
+    RDI_DataSection *baked_rdi_sections = rdim_push_array(arena, RDI_DataSection, sections->count);
     rdim_str8_list_push(arena, &blobs, rdim_str8_struct(baked_rdi_header));
     rdim_str8_list_push_align(arena, &blobs, 8);
     U32 data_section_off = (U32)blobs.total_size;
-    rdim_str8_list_push(arena, &blobs, rdim_str8((RDI_U8 *)baked_rdi_sections, sizeof(RDI_DataSection)*sections.count));
+    rdim_str8_list_push(arena, &blobs, rdim_str8((RDI_U8 *)baked_rdi_sections, sizeof(RDI_DataSection)*sections->count));
     
     // rjf: fill baked header
     {
       baked_rdi_header->magic              = RDI_MAGIC_CONSTANT;
       baked_rdi_header->encoding_version   = RDI_ENCODING_VERSION;
       baked_rdi_header->data_section_off   = data_section_off;
-      baked_rdi_header->data_section_count = sections.count;
+      baked_rdi_header->data_section_count = sections->count;
     }
     
     // rjf: fill baked data section table
     U64 dst_idx = 0;
-    for(RDIM_BakeSectionNode *src_n = sections.first; src_n != 0; src_n = src_n->next, dst_idx += 1)
+    for(RDIM_BakeSectionNode *src_n = sections->first; src_n != 0; src_n = src_n->next, dst_idx += 1)
     {
       RDIM_BakeSection *src = &src_n->v;
       RDI_DataSection *dst = baked_rdi_sections + dst_idx;
@@ -2702,7 +2707,5 @@ rdim_bake(RDIM_Arena *arena, RDIM_BakeParams *params)
       dst->unpacked_size = src->size;
     }
   }
-  
-  rdim_scratch_end(scratch);
   return blobs;
 }
