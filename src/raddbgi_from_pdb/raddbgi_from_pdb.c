@@ -579,6 +579,15 @@ p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p)
 }
 
 internal void *
+p2r_c13_stream_parse_task__entry_point(Arena *arena, void *p)
+{
+  P2R_C13StreamParseIn *in = (P2R_C13StreamParseIn *)p;
+  void *out = 0;
+  ProfScope("parse c13 stream") out = cv_c13_from_data(arena, in->data, in->strtbl, in->coff_sections);
+  return out;
+}
+
+internal void *
 p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p)
 {
   P2R_CompUnitParseIn *in = (P2R_CompUnitParseIn *)p;
@@ -1848,43 +1857,33 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: parse syms for each compilation unit
+  //- rjf: parse syms & line info for each compilation unit
   //
-  CV_SymParsed **sym_for_unit = push_array(arena, CV_SymParsed*, comp_unit_count);
-  if(comp_units != 0) ProfScope("parse syms for each compilation unit")
+  CV_SymParsed **sym_for_unit = push_array(arena, CV_SymParsed *, comp_unit_count);
+  CV_C13Parsed **c13_for_unit = push_array(arena, CV_C13Parsed *, comp_unit_count);
+  if(comp_units != 0) ProfScope("parse syms & line info for each compilation unit")
   {
-    //- rjf: kick off parsing tasks
-    P2R_SymbolStreamParseIn *tasks_inputs = push_array(scratch.arena, P2R_SymbolStreamParseIn, comp_unit_count);
-    TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, comp_unit_count);
+    //- rjf: kick off tasks
+    P2R_SymbolStreamParseIn *sym_tasks_inputs = push_array(scratch.arena, P2R_SymbolStreamParseIn, comp_unit_count);
+    TS_Ticket *sym_tasks_tickets = push_array(scratch.arena, TS_Ticket, comp_unit_count);
+    P2R_C13StreamParseIn *c13_tasks_inputs = push_array(scratch.arena, P2R_C13StreamParseIn, comp_unit_count);
+    TS_Ticket *c13_tasks_tickets = push_array(scratch.arena, TS_Ticket, comp_unit_count);
     for(U64 idx = 0; idx < comp_unit_count; idx += 1)
     {
       PDB_CompUnit *unit = comp_units->units[idx];
-      tasks_inputs[idx].data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_Symbols);
-      tasks_tickets[idx] = ts_kickoff(p2r_symbol_stream_parse_task__entry_point, &tasks_inputs[idx]);
+      sym_tasks_inputs[idx].data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_Symbols);
+      sym_tasks_tickets[idx]     = ts_kickoff(p2r_symbol_stream_parse_task__entry_point, &sym_tasks_inputs[idx]);
+      c13_tasks_inputs[idx].data          = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_C13);
+      c13_tasks_inputs[idx].strtbl        = strtbl;
+      c13_tasks_inputs[idx].coff_sections = coff_sections;
+      c13_tasks_tickets[idx]              = ts_kickoff(p2r_c13_stream_parse_task__entry_point, &c13_tasks_inputs[idx]);
     }
     
     //- rjf: join tasks
     for(U64 idx = 0; idx < comp_unit_count; idx += 1)
     {
-      sym_for_unit[idx] = ts_join_struct(tasks_tickets[idx], max_U64, CV_SymParsed);
-    }
-  }
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: parse c13 for each compilation unit
-  //
-  CV_C13Parsed **c13_for_unit = push_array(arena, CV_C13Parsed*, comp_unit_count);
-  if(comp_units != 0) ProfScope("parse c13s")
-  {
-    PDB_CompUnit **unit_ptr = comp_units->units;
-    for(U64 i = 0; i < comp_unit_count; i += 1, unit_ptr += 1)
-    {
-      CV_C13Parsed *unit_c13 = 0;
-      {
-        String8 c13_data = pdb_data_from_unit_range(msf, *unit_ptr, PDB_DbiCompUnitRange_C13);
-        unit_c13 = cv_c13_from_data(arena, c13_data, strtbl, coff_sections);
-      }
-      c13_for_unit[i] = unit_c13;
+      sym_for_unit[idx] = ts_join_struct(sym_tasks_tickets[idx], max_U64, CV_SymParsed);
+      c13_for_unit[idx] = ts_join_struct(c13_tasks_tickets[idx], max_U64, CV_C13Parsed);
     }
   }
   

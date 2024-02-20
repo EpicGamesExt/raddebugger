@@ -92,6 +92,16 @@ struct P2R_SymbolStreamParseIn
   String8 data;
 };
 
+//- rjf: c13 line info stream parsing
+
+typedef struct P2R_C13StreamParseIn P2R_C13StreamParseIn;
+struct P2R_C13StreamParseIn
+{
+  String8 data;
+  PDB_Strtbl *strtbl;
+  PDB_CoffSectionArray *coff_sections;
+};
+
 //- rjf: comp unit parsing
 
 typedef struct P2R_CompUnitParseIn P2R_CompUnitParseIn;
@@ -227,6 +237,7 @@ internal void *p2r_exe_hash_task__entry_point(Arena *arena, void *p);
 internal void *p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p);
+internal void *p2r_c13_stream_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p);
 
