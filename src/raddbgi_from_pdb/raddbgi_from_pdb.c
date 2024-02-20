@@ -710,10 +710,10 @@ p2r_itype_fwd_map_fill_task_thread__entry_point(void *p)
 }
 
 ////////////////////////////////
-//~ rjf: Per-Unit Symbol Conversion Pass Thread Entry Point
+//~ rjf: Symbol Stream Conversion Path & Thread
 
-internal P2R_UnitSymbolConvertOut *
-p2r_unit_symbol_convert(Arena *arena, P2R_UnitSymbolConvertIn *in)
+internal P2R_SymbolStreamConvertOut *
+p2r_symbol_stream_convert(Arena *arena, P2R_SymbolStreamConvertIn *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
 #define p2r_type_ptr_from_itype(itype) (((itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
@@ -734,13 +734,13 @@ p2r_unit_symbol_convert(Arena *arena, P2R_UnitSymbolConvertIn *in)
   //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
   //
   U64 procedure_frameprocs_count = 0;
-  U64 procedure_frameprocs_cap   = in->sym->sym_ranges.count;
+  U64 procedure_frameprocs_cap   = (in->sym_ranges_opl - in->sym_ranges_first);
   CV_SymFrameproc **procedure_frameprocs = push_array_no_zero(scratch.arena, CV_SymFrameproc *, procedure_frameprocs_cap);
   ProfScope("symbols pass 1: produce procedure frame info map (procedure -> frame info)")
   {
     U64 procedure_num = 0;
-    CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges;
-    CV_RecRange *rec_ranges_opl   = rec_ranges_first + in->sym->sym_ranges.count;
+    CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges + in->sym_ranges_first;
+    CV_RecRange *rec_ranges_opl   = in->sym->sym_ranges.ranges + in->sym_ranges_opl;
     for(CV_RecRange *rec_range = rec_ranges_first;
         rec_range < rec_ranges_opl;
         rec_range += 1)
@@ -801,8 +801,8 @@ p2r_unit_symbol_convert(Arena *arena, P2R_UnitSymbolConvertIn *in)
     RDIM_LocationSet *defrange_target = 0;
     B32 defrange_target_is_param = 0;
     U64 procedure_num = 0;
-    CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges;
-    CV_RecRange *rec_ranges_opl   = rec_ranges_first + in->sym->sym_ranges.count;
+    CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges + in->sym_ranges_first;
+    CV_RecRange *rec_ranges_opl   = in->sym->sym_ranges.ranges + in->sym_ranges_opl;
     typedef struct P2R_ScopeNode P2R_ScopeNode;
     struct P2R_ScopeNode
     {
@@ -1407,7 +1407,7 @@ p2r_unit_symbol_convert(Arena *arena, P2R_UnitSymbolConvertIn *in)
   //////////////////////////
   //- rjf: allocate & fill output
   //
-  P2R_UnitSymbolConvertOut *out = push_array(arena, P2R_UnitSymbolConvertOut, 1);
+  P2R_SymbolStreamConvertOut *out = push_array(arena, P2R_SymbolStreamConvertOut, 1);
   {
     out->procedures       = sym_procedures;
     out->global_variables = sym_global_variables;
@@ -1421,9 +1421,9 @@ p2r_unit_symbol_convert(Arena *arena, P2R_UnitSymbolConvertIn *in)
 }
 
 internal void
-p2r_unit_symbol_convert_task_thread__entry_point(void *p)
+p2r_symbol_stream_convert_task_thread__entry_point(void *p)
 {
-  P2R_UnitSymbolTaskBatch *batch = (P2R_UnitSymbolTaskBatch *)p;
+  P2R_SymbolStreamTaskBatch *batch = (P2R_SymbolStreamTaskBatch *)p;
   ThreadName("[p2r] unit symbol thread");
   for(;;)
   {
@@ -1432,10 +1432,10 @@ p2r_unit_symbol_convert_task_thread__entry_point(void *p)
     {
       break;
     }
-    P2R_UnitSymbolTask *task = &batch->tasks[next_task_num-1];
+    P2R_SymbolStreamTask *task = &batch->tasks[next_task_num-1];
     ProfScope("convert (task #%I64u)", next_task_num)
     {
-      task->convert_out = p2r_unit_symbol_convert(task->out_arena, &task->convert_in);
+      task->convert_out = p2r_symbol_stream_convert(task->out_arena, &task->convert_in);
     }
   }
 }
@@ -3291,21 +3291,22 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: produce symbols from all sym streams
+  //- rjf: produce symbols from all streams
   //
   RDIM_SymbolChunkList all_procedures = {0};
   RDIM_SymbolChunkList all_global_variables = {0};
   RDIM_SymbolChunkList all_thread_variables = {0};
   RDIM_ScopeChunkList all_scopes = {0};
-  ProfScope("produce symbols from all sym streams")
+  ProfScope("produce symbols from all streams")
   {
     ////////////////////////////
     //- rjf: produce per-task info
     //
-    U64 tasks_count = 1+comp_unit_count;
-    P2R_UnitSymbolTask *tasks = push_array(scratch.arena, P2R_UnitSymbolTask, tasks_count);
+    U64 global_stream_subdivision_tasks_count = (sym->sym_ranges.count+65535)/65536;
+    U64 global_stream_syms_per_task = sym->sym_ranges.count/global_stream_subdivision_tasks_count;
+    U64 tasks_count = comp_unit_count + global_stream_subdivision_tasks_count;
+    P2R_SymbolStreamTask *tasks = push_array(scratch.arena, P2R_SymbolStreamTask, tasks_count);
     {
-      tasks[0].convert_in.sym = sym;
       for(U64 idx = 0; idx < tasks_count; idx += 1)
       {
         tasks[idx].convert_in.arch            = arch;
@@ -3316,9 +3317,18 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         tasks[idx].convert_in.itype_type_ptrs = itype_type_ptrs;
         tasks[idx].convert_in.link_name_map   = &link_name_map;
         tasks[idx].out_arena = arena_alloc();
-        if(idx > 0)
+        if(idx < global_stream_subdivision_tasks_count)
         {
-          tasks[idx].convert_in.sym = sym_for_unit[idx-1];
+          tasks[idx].convert_in.sym             = sym;
+          tasks[idx].convert_in.sym_ranges_first= idx*global_stream_syms_per_task;
+          tasks[idx].convert_in.sym_ranges_opl  = tasks[idx].convert_in.sym_ranges_first + global_stream_syms_per_task;
+          tasks[idx].convert_in.sym_ranges_opl  = ClampTop(tasks[idx].convert_in.sym_ranges_opl, sym->sym_ranges.count);
+        }
+        else
+        {
+          tasks[idx].convert_in.sym             = sym_for_unit[idx-global_stream_subdivision_tasks_count];
+          tasks[idx].convert_in.sym_ranges_first= 0;
+          tasks[idx].convert_in.sym_ranges_opl  = sym_for_unit[idx-global_stream_subdivision_tasks_count]->sym_ranges.count;
         }
       }
     }
@@ -3327,7 +3337,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     //- rjf: produce task batch info
     //
     U64 num_tasks_taken = 0;
-    P2R_UnitSymbolTaskBatch task_batch = {0};
+    P2R_SymbolStreamTaskBatch task_batch = {0};
     {
       task_batch.tasks               = tasks;
       task_batch.tasks_count         = tasks_count;
@@ -3341,7 +3351,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     OS_Handle *task_threads = push_array(scratch.arena, OS_Handle, task_threads_count);
     for(U64 idx = 0; idx < task_threads_count; idx += 1)
     {
-      task_threads[idx] = os_launch_thread(p2r_unit_symbol_convert_task_thread__entry_point, &task_batch, 0);
+      task_threads[idx] = os_launch_thread(p2r_symbol_stream_convert_task_thread__entry_point, &task_batch, 0);
     }
     
     ////////////////////////////
@@ -3356,10 +3366,10 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         {
           break;
         }
-        P2R_UnitSymbolTask *task = &task_batch.tasks[next_task_num-1];
+        P2R_SymbolStreamTask *task = &task_batch.tasks[next_task_num-1];
         ProfScope("convert (task #%I64u)", next_task_num)
         {
-          task->convert_out = p2r_unit_symbol_convert(task->out_arena, &task->convert_in);
+          task->convert_out = p2r_symbol_stream_convert(task->out_arena, &task->convert_in);
         }
       }
     }
