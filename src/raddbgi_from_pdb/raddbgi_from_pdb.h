@@ -235,13 +235,14 @@ internal void *p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
-//~ rjf: Type Forward Resolution Map Build Path & Thread
+//~ rjf: Type Forward Resolution Map Filling Tasks
 
-internal void p2r_itype_fwd_map_fill(P2R_ITypeFwdMapFillIn *in);
-internal void p2r_itype_fwd_map_fill_task_thread__entry_point(void *p);
+internal void *p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
 //~ rjf: Symbol Stream Conversion Paths & Thread
+
+internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p);
 
 internal P2R_SymbolStreamConvertOut *p2r_symbol_stream_convert(Arena *arena, P2R_SymbolStreamConvertIn *in);
 internal void p2r_symbol_stream_convert_task_thread__entry_point(void *p);
