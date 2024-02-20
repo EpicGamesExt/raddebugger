@@ -134,18 +134,23 @@ struct P2R_ITypeFwdMapFillIn
   CV_TypeId *itype_fwd_map;
 };
 
-typedef struct P2R_ITypeFwdMapFillTask P2R_ITypeFwdMapFillTask;
-struct P2R_ITypeFwdMapFillTask
+//- rjf: itype chain build
+
+typedef struct P2R_TypeIdChain P2R_TypeIdChain;
+struct P2R_TypeIdChain
 {
-  P2R_ITypeFwdMapFillIn fill_in;
+  P2R_TypeIdChain *next;
+  CV_TypeId itype;
 };
 
-typedef struct P2R_ITypeFwdMapFillTaskBatch P2R_ITypeFwdMapFillTaskBatch;
-struct P2R_ITypeFwdMapFillTaskBatch
+typedef struct P2R_ITypeChainBuildIn P2R_ITypeChainBuildIn;
+struct P2R_ITypeChainBuildIn
 {
-  P2R_ITypeFwdMapFillTask *tasks;
-  U64 tasks_count;
-  U64 *num_tasks_taken_ptr;
+  CV_LeafParsed *tpi_leaf;
+  CV_TypeId itype_first;
+  CV_TypeId itype_opl;
+  CV_TypeId *itype_fwd_map;
+  P2R_TypeIdChain **itype_chains;
 };
 
 //- rjf: symbol stream conversion
@@ -172,25 +177,6 @@ struct P2R_SymbolStreamConvertOut
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_ScopeChunkList scopes;
-};
-
-typedef struct P2R_SymbolStreamTask P2R_SymbolStreamTask;
-struct P2R_SymbolStreamTask
-{
-  // rjf: inputs
-  P2R_SymbolStreamConvertIn convert_in;
-  
-  // rjf: outputs
-  Arena *out_arena;
-  P2R_SymbolStreamConvertOut *convert_out;
-};
-
-typedef struct P2R_SymbolStreamTaskBatch P2R_SymbolStreamTaskBatch;
-struct P2R_SymbolStreamTaskBatch
-{
-  P2R_SymbolStreamTask *tasks;
-  U64 tasks_count;
-  U64 *num_tasks_taken_ptr;
 };
 
 ////////////////////////////////
@@ -235,17 +221,15 @@ internal void *p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
-//~ rjf: Type Forward Resolution Map Filling Tasks
+//~ rjf: Type Parsing/Conversion Tasks
 
 internal void *p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p);
+internal void *p2r_itype_chain_build_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
 //~ rjf: Symbol Stream Conversion Paths & Thread
 
 internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p);
-
-internal P2R_SymbolStreamConvertOut *p2r_symbol_stream_convert(Arena *arena, P2R_SymbolStreamConvertIn *in);
-internal void p2r_symbol_stream_convert_task_thread__entry_point(void *p);
 
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point

@@ -588,7 +588,7 @@ p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p)
 }
 
 ////////////////////////////////
-//~ rjf: Type Forward Resolution Map Filling Tasks
+//~ rjf: Type Parsing/Conversion Tasks
 
 internal void *
 p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p)
@@ -715,6 +715,239 @@ p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p)
       in->itype_fwd_map[itype] = itype_fwd;
     }
   }
+  return 0;
+}
+
+internal void *
+p2r_itype_chain_build_task__entry_point(Arena *arena, void *p)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  P2R_ITypeChainBuildIn *in = (P2R_ITypeChainBuildIn *)p;
+  for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
+  {
+    //- rjf: push initial itype - should be final-visited-itype for this itype
+    {
+      P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+      c->itype = itype;
+      SLLStackPush(in->itype_chains[itype], c);
+    }
+    
+    //- rjf: skip basic types for dependency walk
+    if(itype < in->tpi_leaf->itype_first)
+    {
+      continue;
+    }
+    
+    //- rjf: walk dependent types, push to chain
+    P2R_TypeIdChain start_walk_task = {0, itype};
+    P2R_TypeIdChain *first_walk_task = &start_walk_task;
+    P2R_TypeIdChain *last_walk_task = &start_walk_task;
+    for(P2R_TypeIdChain *walk_task = first_walk_task;
+        walk_task != 0;
+        walk_task = walk_task->next)
+    {
+      CV_TypeId walk_itype = in->itype_fwd_map[walk_task->itype] ? in->itype_fwd_map[walk_task->itype] : walk_task->itype;
+      if(walk_itype < in->tpi_leaf->itype_first)
+      {
+        continue;
+      }
+      CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[walk_itype-in->tpi_leaf->itype_first];
+      CV_LeafKind kind = range->hdr.kind;
+      U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+      if(range->off+range->hdr.size <= in->tpi_leaf->data.size &&
+         range->off+2+header_struct_size <= in->tpi_leaf->data.size &&
+         range->hdr.size >= 2)
+      {
+        U8 *itype_leaf_first = in->tpi_leaf->data.str + range->off+2;
+        U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+        switch(kind)
+        {
+          default:{}break;
+          
+          //- rjf: MODIFIER
+          case CV_LeafKind_MODIFIER:
+          {
+            CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+            
+            // rjf: push dependent itype to chain
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk dependency itype
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+          }break;
+          
+          //- rjf: POINTER
+          case CV_LeafKind_POINTER:
+          {
+            CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+            
+            // rjf: push dependent itype to chain
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk dependency itype
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+          }break;
+          
+          //- rjf: PROCEDURE
+          case CV_LeafKind_PROCEDURE:
+          {
+            CV_LeafProcedure *lf = (CV_LeafProcedure *)itype_leaf_first;
+            
+            // rjf: push dependent itypes to chain
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->ret_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->arg_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk dependency itypes
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->ret_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->arg_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+          }break;
+          
+          //- rjf: MFUNCTION
+          case CV_LeafKind_MFUNCTION:
+          {
+            CV_LeafMFunction *lf = (CV_LeafMFunction *)itype_leaf_first;
+            
+            // rjf: push dependent itypes to chain
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->ret_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->arg_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->this_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk dependency itypes
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->ret_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->arg_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->this_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+          }break;
+          
+          //- rjf: BITFIELD
+          case CV_LeafKind_BITFIELD:
+          {
+            CV_LeafBitField *lf = (CV_LeafBitField *)itype_leaf_first;
+            
+            // rjf: push dependent itype to chain
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk dependency itype
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+          }break;
+          
+          //- rjf: ARRAY
+          case CV_LeafKind_ARRAY:
+          {
+            CV_LeafArray *lf = (CV_LeafArray *)itype_leaf_first;
+            
+            // rjf: push dependent itypes to chain
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->entry_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->index_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk dependency itypes
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->entry_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->index_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+          }break;
+          
+          //- rjf: ENUM
+          case CV_LeafKind_ENUM:
+          {
+            CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
+            
+            // rjf: push dependent itypes to chain
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = lf->base_itype;
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk dependency itypes
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = lf->base_itype;
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
+          }break;
+        }
+      }
+    }
+  }
+  scratch_end(scratch);
   return 0;
 }
 
@@ -1430,734 +1663,6 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
-internal P2R_SymbolStreamConvertOut *
-p2r_symbol_stream_convert(Arena *arena, P2R_SymbolStreamConvertIn *in)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-#define p2r_type_ptr_from_itype(itype) (((itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
-  
-  //////////////////////////
-  //- rjf: set up outputs for this sym stream
-  //
-  U64 sym_procedures_chunk_cap = 1024;
-  U64 sym_global_variables_chunk_cap = 1024;
-  U64 sym_thread_variables_chunk_cap = 1024;
-  U64 sym_scopes_chunk_cap = 1024;
-  RDIM_SymbolChunkList sym_procedures = {0};
-  RDIM_SymbolChunkList sym_global_variables = {0};
-  RDIM_SymbolChunkList sym_thread_variables = {0};
-  RDIM_ScopeChunkList sym_scopes = {0};
-  
-  //////////////////////////
-  //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
-  //
-  U64 procedure_frameprocs_count = 0;
-  U64 procedure_frameprocs_cap   = (in->sym_ranges_opl - in->sym_ranges_first);
-  CV_SymFrameproc **procedure_frameprocs = push_array_no_zero(scratch.arena, CV_SymFrameproc *, procedure_frameprocs_cap);
-  ProfScope("symbols pass 1: produce procedure frame info map (procedure -> frame info)")
-  {
-    U64 procedure_num = 0;
-    CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges + in->sym_ranges_first;
-    CV_RecRange *rec_ranges_opl   = in->sym->sym_ranges.ranges + in->sym_ranges_opl;
-    for(CV_RecRange *rec_range = rec_ranges_first;
-        rec_range < rec_ranges_opl;
-        rec_range += 1)
-    {
-      //- rjf: rec range -> symbol info range
-      U64 sym_off_first = rec_range->off + 2;
-      U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-      
-      //- rjf: skip invalid ranges
-      if(sym_off_opl > in->sym->data.size || sym_off_first > in->sym->data.size || sym_off_first > sym_off_opl)
-      {
-        continue;
-      }
-      
-      //- rjf: unpack symbol info
-      CV_SymKind kind = rec_range->hdr.kind;
-      U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-      void *sym_header_struct_base = in->sym->data.str + sym_off_first;
-      
-      //- rjf: skip bad sizes
-      if(sym_off_first + sym_header_struct_size > sym_off_opl)
-      {
-        continue;
-      }
-      
-      //- rjf: consume symbol based on kind
-      switch(kind)
-      {
-        default:{}break;
-        
-        //- rjf: FRAMEPROC
-        case CV_SymKind_FRAMEPROC:
-        {
-          if(procedure_num == 0) { break; }
-          if(procedure_num > procedure_frameprocs_cap) { break; }
-          CV_SymFrameproc *frameproc = (CV_SymFrameproc*)sym_header_struct_base;
-          procedure_frameprocs[procedure_num-1] = frameproc;
-          procedure_frameprocs_count = Max(procedure_frameprocs_count, procedure_num);
-        }break;
-        
-        //- rjf: LPROC32/GPROC32
-        case CV_SymKind_LPROC32:
-        case CV_SymKind_GPROC32:
-        {
-          procedure_num += 1;
-        }break;
-      }
-    }
-    U64 scratch_overkill = sizeof(procedure_frameprocs[0])*(procedure_frameprocs_cap-procedure_frameprocs_count);
-    arena_put_back(scratch.arena, scratch_overkill);
-  }
-  
-  //////////////////////////
-  //- rjf: symbols pass 2: construct all symbols, given procedure frame info map
-  //
-  ProfScope("symbols pass 2: construct all symbols, given procedure frame info map")
-  {
-    RDIM_LocationSet *defrange_target = 0;
-    B32 defrange_target_is_param = 0;
-    U64 procedure_num = 0;
-    CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges + in->sym_ranges_first;
-    CV_RecRange *rec_ranges_opl   = in->sym->sym_ranges.ranges + in->sym_ranges_opl;
-    typedef struct P2R_ScopeNode P2R_ScopeNode;
-    struct P2R_ScopeNode
-    {
-      P2R_ScopeNode *next;
-      RDIM_Scope *scope;
-    };
-    P2R_ScopeNode *top_scope_node = 0;
-    P2R_ScopeNode *free_scope_node = 0;
-    for(CV_RecRange *rec_range = rec_ranges_first;
-        rec_range < rec_ranges_opl;
-        rec_range += 1)
-    {
-      //- rjf: rec range -> symbol info range
-      U64 sym_off_first = rec_range->off + 2;
-      U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
-      
-      //- rjf: skip invalid ranges
-      if(sym_off_opl > in->sym->data.size || sym_off_first > in->sym->data.size || sym_off_first > sym_off_opl)
-      {
-        continue;
-      }
-      
-      //- rjf: unpack symbol info
-      CV_SymKind kind = rec_range->hdr.kind;
-      U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-      void *sym_header_struct_base = in->sym->data.str + sym_off_first;
-      void *sym_data_opl = in->sym->data.str + sym_off_opl;
-      
-      //- rjf: skip bad sizes
-      if(sym_off_first + sym_header_struct_size > sym_off_opl)
-      {
-        continue;
-      }
-      
-      //- rjf: consume symbol based on kind
-      switch(kind)
-      {
-        default:{}break;
-        
-        //- rjf: END
-        case CV_SymKind_END:
-        {
-          P2R_ScopeNode *n = top_scope_node;
-          if(n != 0)
-          {
-            SLLStackPop(top_scope_node);
-            SLLStackPush(free_scope_node, n);
-          }
-          defrange_target = 0;
-          defrange_target_is_param = 0;
-        }break;
-        
-        //- rjf: BLOCK32
-        case CV_SymKind_BLOCK32:
-        {
-          // rjf: unpack sym
-          CV_SymBlock32 *block32 = (CV_SymBlock32 *)sym_header_struct_base;
-          
-          // rjf: build scope, insert into current parent scope
-          RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
-          {
-            if(top_scope_node == 0)
-            {
-              // TODO(rjf): log
-            }
-            if(top_scope_node != 0)
-            {
-              RDIM_Scope *top_scope = top_scope_node->scope;
-              SLLQueuePush_N(top_scope->first_child, top_scope->last_child, scope, next_sibling);
-              scope->parent_scope = top_scope;
-              scope->symbol = top_scope->symbol;
-            }
-            COFF_SectionHeader *section = (0 < block32->sec && block32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[block32->sec-1] : 0;
-            if(section != 0)
-            {
-              U64 voff_first = section->voff + block32->off;
-              U64 voff_last = voff_first + block32->len;
-              RDIM_Rng1U64 voff_range = {voff_first, voff_last};
-              rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
-            }
-          }
-          
-          // rjf: push this scope to scope stack
-          {
-            P2R_ScopeNode *node = free_scope_node;
-            if(node != 0) { SLLStackPop(free_scope_node); }
-            else { node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1); }
-            node->scope = scope;
-            SLLStackPush(top_scope_node, node);
-          }
-        }break;
-        
-        //- rjf: LDATA32/GDATA32
-        case CV_SymKind_LDATA32:
-        case CV_SymKind_GDATA32:
-        {
-          // rjf: unpack sym
-          CV_SymData32 *data32 = (CV_SymData32 *)sym_header_struct_base;
-          String8 name = str8_cstring_capped(data32+1, sym_data_opl);
-          COFF_SectionHeader *section = (0 < data32->sec && data32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[data32->sec-1] : 0;
-          U64 voff = (section ? section->voff : 0) + data32->off;
-          
-          // rjf: determine if this is an exact duplicate global
-          //
-          // PDB likes to have duplicates of these spread across different
-          // symbol streams so we deduplicate across the entire translation
-          // context.
-          //
-          B32 is_duplicate = 0;
-          {
-            // TODO(rjf): @important global symbol dedup
-          }
-          
-          // rjf: is not duplicate -> push new global
-          if(!is_duplicate)
-          {
-            // rjf: unpack global variable's type
-            RDIM_Type *type = p2r_type_ptr_from_itype(data32->itype);
-            
-            // rjf: unpack global's container type
-            RDIM_Type *container_type = 0;
-            U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
-            if(container_name_opl > 2)
-            {
-              String8 container_name = str8(name.str, container_name_opl - 2);
-              CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, name, 0);
-              container_type = p2r_type_ptr_from_itype(cv_type_id);
-            }
-            
-            // rjf: unpack global's container symbol
-            RDIM_Symbol *container_symbol = 0;
-            if(container_type == 0 && top_scope_node != 0)
-            {
-              container_symbol = top_scope_node->scope->symbol;
-            }
-            
-            // rjf: build symbol
-            RDIM_Symbol *symbol = rdim_symbol_chunk_list_push(arena, &sym_global_variables, sym_global_variables_chunk_cap);
-            symbol->is_extern        = (kind == CV_SymKind_GDATA32);
-            symbol->name             = name;
-            symbol->type             = type;
-            symbol->offset           = voff;
-            symbol->container_symbol = container_symbol;
-            symbol->container_type   = container_type;
-          }
-        }break;
-        
-        //- rjf: LPROC32/GPROC32
-        case CV_SymKind_LPROC32:
-        case CV_SymKind_GPROC32:
-        {
-          // rjf: unpack sym
-          CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
-          String8 name = str8_cstring_capped(proc32+1, sym_data_opl);
-          RDIM_Type *type = p2r_type_ptr_from_itype(proc32->itype);
-          
-          // rjf: unpack proc's container type
-          RDIM_Type *container_type = 0;
-          U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
-          if(container_name_opl > 2)
-          {
-            String8 container_name = str8(name.str, container_name_opl - 2);
-            CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, name, 0);
-            container_type = p2r_type_ptr_from_itype(cv_type_id);
-          }
-          
-          // rjf: unpack proc's container symbol
-          RDIM_Symbol *container_symbol = 0;
-          if(container_type == 0 && top_scope_node != 0)
-          {
-            container_symbol = top_scope_node->scope->symbol;
-          }
-          
-          // rjf: build procedure's root scope
-          //
-          // NOTE: even if there could be a containing scope at this point (which should be
-          //       illegal in C/C++ but not necessarily in another language) we would not use
-          //       it here because these scopes refer to the ranges of code that make up a
-          //       procedure *not* the namespaces, so a procedure's root scope always has
-          //       no parent.
-          RDIM_Scope *procedure_root_scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
-          {
-            COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[proc32->sec-1] : 0;
-            if(section != 0)
-            {
-              U64 voff_first = section->voff + proc32->off;
-              U64 voff_last = voff_first + proc32->len;
-              RDIM_Rng1U64 voff_range = {voff_first, voff_last};
-              rdim_scope_push_voff_range(arena, &sym_scopes, procedure_root_scope, voff_range);
-            }
-          }
-          
-          // rjf: root scope voff minimum range -> link name
-          String8 link_name = {0};
-          if(procedure_root_scope->voff_ranges.min != 0)
-          {
-            U64 voff = procedure_root_scope->voff_ranges.min;
-            U64 hash = p2r_hash_from_voff(voff);
-            U64 bucket_idx = hash%in->link_name_map->buckets_count;
-            P2R_LinkNameNode *node = 0;
-            for(P2R_LinkNameNode *n = in->link_name_map->buckets[bucket_idx]; n != 0; n = n->next)
-            {
-              if(n->voff == voff)
-              {
-                link_name = n->name;
-                break;
-              }
-            }
-          }
-          
-          // rjf: build procedure symbol
-          RDIM_Symbol *procedure_symbol = rdim_symbol_chunk_list_push(arena, &sym_procedures, sym_procedures_chunk_cap);
-          procedure_symbol->is_extern        = (kind == CV_SymKind_GPROC32);
-          procedure_symbol->name             = name;
-          procedure_symbol->link_name        = link_name;
-          procedure_symbol->type             = type;
-          procedure_symbol->container_symbol = container_symbol;
-          procedure_symbol->container_type   = container_type;
-          procedure_symbol->root_scope       = procedure_root_scope;
-          
-          // rjf: fill root scope's symbol
-          procedure_root_scope->symbol = procedure_symbol;
-          
-          // rjf: push scope to scope stack
-          {
-            P2R_ScopeNode *node = free_scope_node;
-            if(node != 0) { SLLStackPop(free_scope_node); }
-            else { node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1); }
-            node->scope = procedure_root_scope;
-            SLLStackPush(top_scope_node, node);
-          }
-          
-          // rjf: increment procedure counter
-          procedure_num += 1;
-        }break;
-        
-        //- rjf: REGREL32
-        case CV_SymKind_REGREL32:
-        {
-          // TODO(rjf): apparently some of the information here may end up being
-          // redundant with "better" information from  CV_SymKind_LOCAL record.
-          // we don't currently handle this, but if those cases arise then it
-          // will obviously be better to prefer the better information from both
-          // records.
-          
-          // rjf: no containing scope? -> malformed data; locals cannot be produced
-          // outside of a containing scope
-          if(top_scope_node == 0)
-          {
-            break;
-          }
-          
-          // rjf: unpack sym
-          CV_SymRegrel32 *regrel32 = (CV_SymRegrel32 *)sym_header_struct_base;
-          String8 name = str8_cstring_capped(regrel32+1, sym_data_opl);
-          RDIM_Type *type = p2r_type_ptr_from_itype(regrel32->itype);
-          CV_Reg cv_reg = regrel32->reg;
-          U32 var_off = regrel32->reg_off;
-          
-          // rjf: determine if this is a parameter
-          RDI_LocalKind local_kind = RDI_LocalKind_Variable;
-          {
-            B32 is_stack_reg = 0;
-            switch(in->arch)
-            {
-              default:{}break;
-              case RDI_Arch_X86:{is_stack_reg = (cv_reg == CV_Regx86_ESP);}break;
-              case RDI_Arch_X64:{is_stack_reg = (cv_reg == CV_Regx64_RSP);}break;
-            }
-            if(is_stack_reg)
-            {
-              U32 frame_size = 0xFFFFFFFF;
-              if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
-              {
-                CV_SymFrameproc *frameproc = procedure_frameprocs[procedure_num-1];
-                frame_size = frameproc->frame_size;
-              }
-              if(var_off > frame_size)
-              {
-                local_kind = RDI_LocalKind_Parameter;
-              }
-            }
-          }
-          
-          // rjf: build local
-          RDIM_Scope *scope = top_scope_node->scope;
-          RDIM_Local *local = rdim_scope_push_local(arena, &sym_scopes, scope);
-          local->kind = local_kind;
-          local->name = name;
-          local->type = type;
-          
-          // rjf: add location info to local
-          {
-            // rjf: determine if we need an extra indirection to the value
-            B32 extra_indirection_to_value = 0;
-            switch(in->arch)
-            {
-              case RDI_Arch_X86:
-              {
-                extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 4 || !IsPow2OrZero(type->byte_size)));
-              }break;
-              case RDI_Arch_X64:
-              {
-                extra_indirection_to_value = (local_kind == RDI_LocalKind_Parameter && (type->byte_size > 8 || !IsPow2OrZero(type->byte_size)));
-              }break;
-            }
-            
-            // rjf: get raddbg register code
-            RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
-            // TODO(rjf): real byte_size & byte_pos from cv_reg goes here
-            U32 byte_size = 8;
-            U32 byte_pos = 0;
-            
-            // rjf: set location case
-            RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, in->arch, register_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
-            RDIM_Rng1U64 voff_range = {0, max_U64};
-            rdim_location_set_push_case(arena, &sym_scopes, &local->locset, voff_range, loc);
-          }
-        }break;
-        
-        //- rjf: LTHREAD32/GTHREAD32
-        case CV_SymKind_LTHREAD32:
-        case CV_SymKind_GTHREAD32:
-        {
-          // rjf: unpack sym
-          CV_SymThread32 *thread32 = (CV_SymThread32 *)sym_header_struct_base;
-          String8 name = str8_cstring_capped(thread32+1, sym_data_opl);
-          U32 tls_off = thread32->tls_off;
-          RDIM_Type *type = p2r_type_ptr_from_itype(thread32->itype);
-          
-          // rjf: unpack thread variable's container type
-          RDIM_Type *container_type = 0;
-          U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
-          if(container_name_opl > 2)
-          {
-            String8 container_name = str8(name.str, container_name_opl - 2);
-            CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, name, 0);
-            container_type = p2r_type_ptr_from_itype(cv_type_id);
-          }
-          
-          // rjf: unpack thread variable's container symbol
-          RDIM_Symbol *container_symbol = 0;
-          if(container_type == 0 && top_scope_node != 0)
-          {
-            container_symbol = top_scope_node->scope->symbol;
-          }
-          
-          // rjf: build symbol
-          RDIM_Symbol *tvar = rdim_symbol_chunk_list_push(arena, &sym_thread_variables, sym_thread_variables_chunk_cap);
-          tvar->name             = name;
-          tvar->type             = type;
-          tvar->is_extern        = (kind == CV_SymKind_GTHREAD32);
-          tvar->offset           = tls_off;
-          tvar->container_type   = container_type;
-          tvar->container_symbol = container_symbol;
-        }break;
-        
-        //- rjf: LOCAL
-        case CV_SymKind_LOCAL:
-        {
-          // rjf: no containing scope? -> malformed data; locals cannot be produced
-          // outside of a containing scope
-          if(top_scope_node == 0)
-          {
-            break;
-          }
-          
-          // rjf: unpack sym
-          CV_SymLocal *slocal = (CV_SymLocal *)sym_header_struct_base;
-          String8 name = str8_cstring_capped(slocal+1, sym_data_opl);
-          RDIM_Type *type = p2r_type_ptr_from_itype(slocal->itype);
-          
-          // rjf: determine if this symbol encodes the beginning of a global modification
-          B32 is_global_modification = 0;
-          if((slocal->flags & CV_LocalFlag_Global) ||
-             (slocal->flags & CV_LocalFlag_Static))
-          {
-            is_global_modification = 1;
-          }
-          
-          // rjf: is global modification -> emit global modification symbol
-          if(is_global_modification)
-          {
-            // TODO(rjf): add global modification symbols
-            defrange_target = 0;
-            defrange_target_is_param = 0;
-          }
-          
-          // rjf: is not a global modification -> emit a local variable
-          if(!is_global_modification)
-          {
-            // rjf: determine local kind
-            RDI_LocalKind local_kind = RDI_LocalKind_Variable;
-            if(slocal->flags & CV_LocalFlag_Param)
-            {
-              local_kind = RDI_LocalKind_Parameter;
-            }
-            
-            // rjf: build local
-            RDIM_Scope *scope = top_scope_node->scope;
-            RDIM_Local *local = rdim_scope_push_local(arena, &sym_scopes, scope);
-            local->kind = local_kind;
-            local->name = name;
-            local->type = type;
-            
-            // rjf: save defrange target, for subsequent defrange symbols
-            defrange_target = &local->locset;
-            defrange_target_is_param = (local_kind == RDI_LocalKind_Parameter);
-          }
-        }break;
-        
-        //- rjf: DEFRANGE_REGISTESR
-        case CV_SymKind_DEFRANGE_REGISTER:
-        {
-          // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
-          // a local - break immediately
-          if(defrange_target == 0)
-          {
-            break;
-          }
-          
-          // rjf: unpack sym
-          CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)sym_header_struct_base;
-          CV_Reg cv_reg = defrange_register->reg;
-          CV_LvarAddrRange *range = &defrange_register->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
-          CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register+1);
-          U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
-          
-          // rjf: build location
-          RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
-          
-          // rjf: emit locations over ranges
-          p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
-        }break;
-        
-        //- rjf: DEFRANGE_FRAMEPOINTER_REL
-        case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL:
-        {
-          // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
-          // a local - break immediately
-          if(defrange_target == 0)
-          {
-            break;
-          }
-          
-          // rjf: find current procedure's frameproc
-          CV_SymFrameproc *frameproc = 0;
-          if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
-          {
-            frameproc = procedure_frameprocs[procedure_num-1];
-          }
-          
-          // rjf: no current valid frameproc? -> somehow we got a to a framepointer-relative defrange
-          // without having an actually active procedure - break
-          if(frameproc == 0)
-          {
-            break;
-          }
-          
-          // rjf: unpack sym
-          CV_SymDefrangeFramepointerRel *defrange_fprel = (CV_SymDefrangeFramepointerRel*)sym_header_struct_base;
-          CV_LvarAddrRange *range = &defrange_fprel->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
-          CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_fprel + 1);
-          U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          
-          // rjf: select frame pointer register
-          CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
-          RDI_RegisterCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
-          
-          // rjf: build location
-          B32 extra_indirection = 0;
-          U32 byte_size = rdi_addr_size_from_arch(in->arch);
-          U32 byte_pos = 0;
-          S64 var_off = (S64)defrange_fprel->off;
-          RDIM_Location *location = p2r_location_from_addr_reg_off(arena, in->arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
-          
-          // rjf: emit locations over ranges
-          p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
-        }break;
-        
-        //- rjf: DEFRANGE_SUBFIELD_REGISTER
-        case CV_SymKind_DEFRANGE_SUBFIELD_REGISTER:
-        {
-          // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
-          // a local - break immediately
-          if(defrange_target == 0)
-          {
-            break;
-          }
-          
-          // rjf: unpack sym
-          CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)sym_header_struct_base;
-          CV_Reg cv_reg = defrange_subfield_register->reg;
-          CV_LvarAddrRange *range = &defrange_subfield_register->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
-          CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
-          U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
-          
-          // rjf: skip "subfield" location info - currently not supported
-          if(defrange_subfield_register->field_offset != 0)
-          {
-            break;
-          }
-          
-          // rjf: build location
-          RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
-          
-          // rjf: emit locations over ranges
-          p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
-        }break;
-        
-        //- rjf: DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE
-        case CV_SymKind_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE:
-        {
-          // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
-          // a local - break immediately
-          if(defrange_target == 0)
-          {
-            break;
-          }
-          
-          // rjf: find current procedure's frameproc
-          CV_SymFrameproc *frameproc = 0;
-          if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
-          {
-            frameproc = procedure_frameprocs[procedure_num-1];
-          }
-          
-          // rjf: no current valid frameproc? -> somehow we got a to a framepointer-relative defrange
-          // without having an actually active procedure - break
-          if(frameproc == 0)
-          {
-            break;
-          }
-          
-          // rjf: unpack sym
-          CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope = (CV_SymDefrangeFramepointerRelFullScope*)sym_header_struct_base;
-          CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
-          RDI_RegisterCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
-          
-          // rjf: build location
-          B32 extra_indirection = 0;
-          U32 byte_size = rdi_addr_size_from_arch(in->arch);
-          U32 byte_pos = 0;
-          S64 var_off = (S64)defrange_fprel_full_scope->off;
-          RDIM_Location *location = p2r_location_from_addr_reg_off(arena, in->arch, fp_register_code, byte_size, byte_pos, var_off, extra_indirection);
-          
-          // rjf: emit location over ranges
-          RDIM_Rng1U64 voff_range = {0, max_U64};
-          rdim_location_set_push_case(arena, &sym_scopes, defrange_target, voff_range, location);
-        }break;
-        
-        //- rjf: DEFRANGE_REGISTER_REL
-        case CV_SymKind_DEFRANGE_REGISTER_REL:
-        {
-          // rjf: no defrange target? -> somehow we got to a defrange symbol without first seeing
-          // a local - break immediately
-          if(defrange_target == 0)
-          {
-            break;
-          }
-          
-          // rjf: unpack sym
-          CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)sym_header_struct_base;
-          CV_Reg cv_reg = defrange_register_rel->reg;
-          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
-          CV_LvarAddrRange *range = &defrange_register_rel->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
-          CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
-          U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          
-          // rjf: build location
-          // TODO(rjf): offset & size from cv_reg code
-          U32 byte_size = rdi_addr_size_from_arch(in->arch);
-          U32 byte_pos = 0;
-          B32 extra_indirection_to_value = 0;
-          S64 var_off = defrange_register_rel->reg_off;
-          RDIM_Location *location = p2r_location_from_addr_reg_off(arena, in->arch, register_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
-          
-          // rjf: emit locations over ranges
-          p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
-        }break;
-        
-        //- rjf: FILESTATIC
-        case CV_SymKind_FILESTATIC:
-        {
-          CV_SymFileStatic *file_static = (CV_SymFileStatic*)sym_header_struct_base;
-          String8 name = str8_cstring_capped(file_static+1, sym_data_opl);
-          RDIM_Type *type = p2r_type_ptr_from_itype(file_static->itype);
-          // TODO(rjf): emit a global modifier symbol
-          defrange_target = 0;
-          defrange_target_is_param = 0;
-        }break;
-      }
-    }
-  }
-  
-  //////////////////////////
-  //- rjf: allocate & fill output
-  //
-  P2R_SymbolStreamConvertOut *out = push_array(arena, P2R_SymbolStreamConvertOut, 1);
-  {
-    out->procedures       = sym_procedures;
-    out->global_variables = sym_global_variables;
-    out->thread_variables = sym_thread_variables;
-    out->scopes           = sym_scopes;
-  }
-  
-#undef p2r_type_ptr_from_itype
-  scratch_end(scratch);
-  return out;
-}
-
-internal void
-p2r_symbol_stream_convert_task_thread__entry_point(void *p)
-{
-  P2R_SymbolStreamTaskBatch *batch = (P2R_SymbolStreamTaskBatch *)p;
-  ThreadName("[p2r] unit symbol thread");
-  for(;;)
-  {
-    U64 next_task_num = ins_atomic_u64_inc_eval(batch->num_tasks_taken_ptr);
-    if(next_task_num > batch->tasks_count || 1 > next_task_num)
-    {
-      break;
-    }
-    P2R_SymbolStreamTask *task = &batch->tasks[next_task_num-1];
-    ProfScope("convert (task #%I64u)", next_task_num)
-    {
-      task->convert_out = p2r_symbol_stream_convert(task->out_arena, &task->convert_in);
-    }
-  }
-}
-
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
@@ -2602,242 +2107,33 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   // this chain is walked, so that deeper dependencies are built first, and
   // as such, always show up *earlier* in the actually built types.
   //
-  typedef struct P2R_TypeIdChain P2R_TypeIdChain;
-  struct P2R_TypeIdChain
-  {
-    P2R_TypeIdChain *next;
-    CV_TypeId itype;
-  };
   P2R_TypeIdChain **itype_chains = 0;
   ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
   {
-    Temp scratch = scratch_begin(&arena, 1);
+    //- rjf: allocate itype chain table
     itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)itype_opl);
-    for(CV_TypeId itype = 0; itype < itype_opl; itype += 1)
+    
+    //- rjf: kick off tasks to fill itype chain table
+    U64 task_size_itypes = 4096;
+    U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
+    P2R_ITypeChainBuildIn *tasks_inputs = push_array(scratch.arena, P2R_ITypeChainBuildIn, tasks_count);
+    TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, tasks_count);
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
     {
-      //- rjf: push initial itype - should be final-visited-itype for this itype
-      {
-        P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-        c->itype = itype;
-        SLLStackPush(itype_chains[itype], c);
-      }
-      
-      //- rjf: skip basic types for dependency walk
-      if(itype < itype_first)
-      {
-        continue;
-      }
-      
-      //- rjf: walk dependent types, push to chain
-      P2R_TypeIdChain start_walk_task = {0, itype};
-      P2R_TypeIdChain *first_walk_task = &start_walk_task;
-      P2R_TypeIdChain *last_walk_task = &start_walk_task;
-      for(P2R_TypeIdChain *walk_task = first_walk_task;
-          walk_task != 0;
-          walk_task = walk_task->next)
-      {
-        CV_TypeId walk_itype = itype_fwd_map[walk_task->itype] ? itype_fwd_map[walk_task->itype] : walk_task->itype;
-        if(walk_itype < itype_first)
-        {
-          continue;
-        }
-        CV_RecRange *range = &tpi_leaf->leaf_ranges.ranges[walk_itype-itype_first];
-        CV_LeafKind kind = range->hdr.kind;
-        U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
-        if(range->off+range->hdr.size <= tpi_leaf->data.size &&
-           range->off+2+header_struct_size <= tpi_leaf->data.size &&
-           range->hdr.size >= 2)
-        {
-          U8 *itype_leaf_first = tpi_leaf->data.str + range->off+2;
-          U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
-          switch(kind)
-          {
-            default:{}break;
-            
-            //- rjf: MODIFIER
-            case CV_LeafKind_MODIFIER:
-            {
-              CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
-              
-              // rjf: push dependent itype to chain
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              
-              // rjf: push task to walk dependency itype
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-            }break;
-            
-            //- rjf: POINTER
-            case CV_LeafKind_POINTER:
-            {
-              CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
-              
-              // rjf: push dependent itype to chain
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              
-              // rjf: push task to walk dependency itype
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-            }break;
-            
-            //- rjf: PROCEDURE
-            case CV_LeafKind_PROCEDURE:
-            {
-              CV_LeafProcedure *lf = (CV_LeafProcedure *)itype_leaf_first;
-              
-              // rjf: push dependent itypes to chain
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->ret_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->arg_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              
-              // rjf: push task to walk dependency itypes
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->ret_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->arg_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-            }break;
-            
-            //- rjf: MFUNCTION
-            case CV_LeafKind_MFUNCTION:
-            {
-              CV_LeafMFunction *lf = (CV_LeafMFunction *)itype_leaf_first;
-              
-              // rjf: push dependent itypes to chain
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->ret_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->arg_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->this_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              
-              // rjf: push task to walk dependency itypes
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->ret_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->arg_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->this_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-            }break;
-            
-            //- rjf: BITFIELD
-            case CV_LeafKind_BITFIELD:
-            {
-              CV_LeafBitField *lf = (CV_LeafBitField *)itype_leaf_first;
-              
-              // rjf: push dependent itype to chain
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              
-              // rjf: push task to walk dependency itype
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-            }break;
-            
-            //- rjf: ARRAY
-            case CV_LeafKind_ARRAY:
-            {
-              CV_LeafArray *lf = (CV_LeafArray *)itype_leaf_first;
-              
-              // rjf: push dependent itypes to chain
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->entry_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->index_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              
-              // rjf: push task to walk dependency itypes
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->entry_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->index_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-            }break;
-            
-            //- rjf: ENUM
-            case CV_LeafKind_ENUM:
-            {
-              CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
-              
-              // rjf: push dependent itypes to chain
-              {
-                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-                c->itype = lf->base_itype;
-                SLLStackPush(itype_chains[itype], c);
-              }
-              
-              // rjf: push task to walk dependency itypes
-              {
-                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-                c->itype = lf->base_itype;
-                SLLQueuePush(first_walk_task, last_walk_task, c);
-              }
-            }break;
-          }
-        }
-      }
+      tasks_inputs[idx].tpi_leaf      = tpi_leaf;
+      tasks_inputs[idx].itype_first   = idx*task_size_itypes;
+      tasks_inputs[idx].itype_opl     = tasks_inputs[idx].itype_first + task_size_itypes;
+      tasks_inputs[idx].itype_opl     = ClampTop(tasks_inputs[idx].itype_opl, itype_opl);
+      tasks_inputs[idx].itype_chains  = itype_chains;
+      tasks_inputs[idx].itype_fwd_map = itype_fwd_map;
+      tasks_tickets[idx] = ts_kickoff(p2r_itype_chain_build_task__entry_point, &tasks_inputs[idx]);
     }
-    scratch_end(scratch);
+    
+    //- rjf: join all tasks
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    {
+      ts_join(tasks_tickets[idx], max_U64);
+    }
   }
   
   //////////////////////////////////////////////////////////////
