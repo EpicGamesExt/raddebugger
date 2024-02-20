@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RDI_FROM_PDB_H
-#define RDI_FROM_PDB_H
+#ifndef RADDBGI_FROM_PDB_H
+#define RADDBGI_FROM_PDB_H
 
 ////////////////////////////////
 //~ rjf: Conversion Inputs/Outputs
@@ -105,6 +105,22 @@ struct P2R_EXEHashTask
 {
   P2R_EXEHashIn in;
   U64 out;
+};
+
+//- rjf: symbol stream parsing
+
+typedef struct P2R_SymbolStreamParseIn P2R_SymbolStreamParseIn;
+struct P2R_SymbolStreamParseIn
+{
+  String8 data;
+};
+
+typedef struct P2R_SymbolStreamParseTask P2R_SymbolStreamParseTask;
+struct P2R_SymbolStreamParseTask
+{
+  P2R_SymbolStreamParseIn in;
+  Arena *out_arena;
+  CV_SymParsed *sym;
 };
 
 ////////////////////////////////
@@ -233,11 +249,12 @@ internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, C
 internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
 
 ////////////////////////////////
-//~ rjf: Initial Parsing & Preparation Pass Threads
+//~ rjf: Initial Parsing & Preparation Pass Tasks
 
-internal void p2r_tpi_hash_parse_thread__entry_point(void *p);
-internal void p2r_tpi_leaf_parse_thread__entry_point(void *p);
-internal void p2r_exe_hash_thread__entry_point(void *p);
+internal void *p2r_exe_hash_task__entry_point(Arena *arena, void *p);
+internal void *p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p);
+internal void *p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p);
+internal void *p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
 //~ rjf: Type Forward Resolution Map Build Path & Thread
@@ -256,4 +273,4 @@ internal void p2r_symbol_stream_convert_task_thread__entry_point(void *p);
 
 internal P2R_ConvertOut *p2r_convert(Arena *arena, P2R_ConvertIn *in);
 
-#endif // RDI_FROM_PDB_H
+#endif // RADDBGI_FROM_PDB_H

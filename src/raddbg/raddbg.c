@@ -347,6 +347,7 @@ entry_point(int argc, char **argv)
   
   //- rjf: initialize basic dependencies
   os_init(argc, argv);
+  ts_init();
   
   //- rjf: parse command line arguments
   CmdLine cmdln = cmd_line_from_string_list(scratch.arena, os_get_command_line_arguments());

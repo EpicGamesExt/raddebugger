@@ -13,6 +13,7 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "task_system/task_system.h"
 #include "raddbgi_make_local/raddbgi_make_local.h"
 #include "mdesk/mdesk.h"
 #include "hash_store/hash_store.h"
@@ -50,6 +51,7 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "task_system/task_system.c"
 #include "raddbgi_make_local/raddbgi_make_local.c"
 #include "mdesk/mdesk.c"
 #include "hash_store/hash_store.c"

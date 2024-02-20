@@ -8,6 +8,7 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "task_system/task_system.h"
 #include "raddbgi_make_local/raddbgi_make_local.h"
 #include "coff/coff.h"
 #include "codeview/codeview.h"
@@ -20,6 +21,7 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "task_system/task_system.c"
 #include "raddbgi_make_local/raddbgi_make_local.c"
 #include "coff/coff.c"
 #include "codeview/codeview.c"
@@ -48,6 +50,7 @@ main(int argc, char **argv)
   
   //- rjf: initialize dependencies
   os_init(argc, argv);
+  ts_init();
   
   //- rjf: initialize state, parse command line
   Arena *arena = arena_alloc();

@@ -540,30 +540,42 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDI
 }
 
 ////////////////////////////////
-//~ rjf: Initial PDB Parsing Pass Threads
+//~ rjf: Initial Parsing & Preparation Pass Tasks
 
-internal void
-p2r_tpi_hash_parse_thread__entry_point(void *p)
+internal void *
+p2r_exe_hash_task__entry_point(Arena *arena, void *p)
 {
-  ThreadName("[p2r] tpi hash parse thread");
-  P2R_TPIHashParseTask *task = (P2R_TPIHashParseTask *)p;
-  task->out = pdb_tpi_hash_from_data(task->out_arena, task->in.strtbl, task->in.tpi, task->in.hash_data, task->in.aux_data);
+  P2R_EXEHashIn *in = (P2R_EXEHashIn *)p;
+  U64 *out = push_array(arena, U64, 1);
+  ProfScope("hash exe") *out = rdi_hash(in->exe_data.str, in->exe_data.size);
+  return out;
 }
 
-internal void
-p2r_tpi_leaf_parse_thread__entry_point(void *p)
+internal void *
+p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p)
 {
-  ThreadName("[p2r] tpi leaf parse thread");
-  P2R_TPILeafParseTask *task = (P2R_TPILeafParseTask *)p;
-  task->out = cv_leaf_from_data(task->out_arena, task->in.leaf_data, task->in.itype_first);
+  P2R_TPIHashParseIn *in = (P2R_TPIHashParseIn *)p;
+  void *out = 0;
+  ProfScope("parse tpi hash") out = pdb_tpi_hash_from_data(arena, in->strtbl, in->tpi, in->hash_data, in->aux_data);
+  return out;
 }
 
-internal void
-p2r_exe_hash_thread__entry_point(void *p)
+internal void *
+p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p)
 {
-  ThreadName("[p2r] exe hash thread");
-  P2R_EXEHashTask *task = (P2R_EXEHashTask *)p;
-  ProfScope("hash exe") task->out = rdi_hash(task->in.exe_data.str, task->in.exe_data.size);
+  P2R_TPILeafParseIn *in = (P2R_TPILeafParseIn *)p;
+  void *out = 0;
+  ProfScope("parse tpi leaf") out = cv_leaf_from_data(arena, in->leaf_data, in->itype_first);
+  return out;
+}
+
+internal void *
+p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p)
+{
+  P2R_SymbolStreamParseIn *in = (P2R_SymbolStreamParseIn *)p;
+  void *out = 0;
+  ProfScope("parse symbol stream") out = cv_sym_from_data(arena, in->data, 4);
+  return out;
 }
 
 ////////////////////////////////
@@ -684,7 +696,7 @@ p2r_itype_fwd_map_fill(P2R_ITypeFwdMapFillIn *in)
     //- rjf: if the forwarded itype is nonzero & in TPI range -> save to map
     if(itype_fwd != 0 && itype_fwd < in->tpi_leaf->itype_opl)
     {
-      in->itype_fwd_map[itype-in->itype_first] = itype_fwd;
+      in->itype_fwd_map[itype] = itype_fwd;
     }
   }
 }
@@ -1557,79 +1569,46 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   CV_LeafParsed *ipi_leaf = 0;
   ProfScope("do independent parsing & preparation passess")
   {
-    //- rjf: kick off exe hash
-    OS_Handle exe_hash_thread = {0};
-    P2R_EXEHashTask exe_hash_task = {0};
+    //- rjf: form task inputs
+    P2R_EXEHashIn exe_hash_in = {in->input_exe_data};
+    P2R_TPIHashParseIn tpi_hash_in = {0};
     {
-      exe_hash_task.in.exe_data = in->input_exe_data;
-      exe_hash_thread = os_launch_thread(p2r_exe_hash_thread__entry_point, &exe_hash_task, 0);
+      tpi_hash_in.strtbl    = strtbl;
+      tpi_hash_in.tpi       = tpi;
+      tpi_hash_in.hash_data = msf_data_from_stream(msf, tpi->hash_sn);
+      tpi_hash_in.aux_data  = msf_data_from_stream(msf, tpi->hash_sn_aux);
+    }
+    P2R_TPILeafParseIn tpi_leaf_in = {0};
+    {
+      tpi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(tpi);
+      tpi_leaf_in.itype_first = tpi->itype_first;
+    }
+    P2R_TPIHashParseIn ipi_hash_in = {0};
+    {
+      ipi_hash_in.strtbl    = strtbl;
+      ipi_hash_in.tpi       = ipi;
+      ipi_hash_in.hash_data = msf_data_from_stream(msf, ipi->hash_sn);
+      ipi_hash_in.aux_data  = msf_data_from_stream(msf, ipi->hash_sn_aux);
+    }
+    P2R_TPILeafParseIn ipi_leaf_in = {0};
+    {
+      ipi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(ipi);
+      ipi_leaf_in.itype_first = ipi->itype_first;
     }
     
-    //- rjf: kick off tpi hash parse
-    OS_Handle tpi_hash_thread = {0};
-    P2R_TPIHashParseTask tpi_hash_task = {0};
-    if(tpi != 0)
-    {
-      tpi_hash_task.in.strtbl    = strtbl;
-      tpi_hash_task.in.tpi       = tpi;
-      tpi_hash_task.in.hash_data = msf_data_from_stream(msf, tpi->hash_sn);
-      tpi_hash_task.in.aux_data  = msf_data_from_stream(msf, tpi->hash_sn_aux);
-      tpi_hash_task.out_arena = arena_alloc();
-      tpi_hash_thread = os_launch_thread(p2r_tpi_hash_parse_thread__entry_point, &tpi_hash_task, 0);
-    }
+    //- rjf: kick off tasks
+    TS_Ticket exe_hash_ticket = ts_kickoff(p2r_exe_hash_task__entry_point, &exe_hash_in);
+    TS_Ticket tpi_hash_ticket = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, &tpi_hash_in);
+    TS_Ticket tpi_leaf_ticket = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, &tpi_leaf_in);
+    TS_Ticket ipi_hash_ticket = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, &ipi_hash_in);
+    TS_Ticket ipi_leaf_ticket = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, &ipi_leaf_in);
     
-    //- rjf: kick off tpi leaf parse
-    OS_Handle tpi_leaf_thread = {0};
-    P2R_TPILeafParseTask tpi_leaf_task = {0};
-    if(tpi != 0)
-    {
-      tpi_leaf_task.in.leaf_data   = pdb_leaf_data_from_tpi(tpi);
-      tpi_leaf_task.in.itype_first = tpi->itype_first;
-      tpi_leaf_task.out_arena = arena_alloc();
-      tpi_leaf_thread = os_launch_thread(p2r_tpi_leaf_parse_thread__entry_point, &tpi_leaf_task, 0);
-    }
-    
-    //- rjf: kick off ipi hash parse
-    OS_Handle ipi_hash_thread = {0};
-    P2R_TPIHashParseTask ipi_hash_task = {0};
-    if(ipi != 0)
-    {
-      ipi_hash_task.in.strtbl    = strtbl;
-      ipi_hash_task.in.tpi       = ipi;
-      ipi_hash_task.in.hash_data = msf_data_from_stream(msf, ipi->hash_sn);
-      ipi_hash_task.in.aux_data  = msf_data_from_stream(msf, ipi->hash_sn_aux);
-      ipi_hash_task.out_arena = arena_alloc();
-      ipi_hash_thread = os_launch_thread(p2r_tpi_hash_parse_thread__entry_point, &ipi_hash_task, 0);
-    }
-    
-    //- rjf: kick off ipi leaf parse
-    OS_Handle ipi_leaf_thread = {0};
-    P2R_TPILeafParseTask ipi_leaf_task = {0};
-    if(ipi != 0)
-    {
-      ipi_leaf_task.in.leaf_data   = pdb_leaf_data_from_tpi(ipi);
-      ipi_leaf_task.in.itype_first = ipi->itype_first;
-      ipi_leaf_task.out_arena = arena_alloc();
-      ipi_leaf_thread = os_launch_thread(p2r_tpi_leaf_parse_thread__entry_point, &ipi_leaf_task, 0);
-    }
-    
-    //- rjf: join all independent task threads
-    os_thread_wait(exe_hash_thread, max_U64);
-    os_thread_wait(tpi_hash_thread, max_U64);
-    os_thread_wait(tpi_leaf_thread, max_U64);
-    os_thread_wait(ipi_hash_thread, max_U64);
-    os_thread_wait(ipi_leaf_thread, max_U64);
-    
-    //- rjf: fill/absorb exports from completed tasks
-    exe_hash = exe_hash_task.out;
-    tpi_hash = tpi_hash_task.out;
-    tpi_leaf = tpi_leaf_task.out;
-    ipi_hash = ipi_hash_task.out;
-    ipi_leaf = ipi_leaf_task.out;
-    arena_absorb(arena, tpi_hash_task.out_arena);
-    arena_absorb(arena, tpi_leaf_task.out_arena);
-    arena_absorb(arena, ipi_hash_task.out_arena);
-    arena_absorb(arena, ipi_leaf_task.out_arena);
+    //- rjf: join tasks
+    exe_hash = *ts_join_struct(exe_hash_ticket, max_U64, U64);
+    tpi_hash =  ts_join_struct(tpi_hash_ticket, max_U64, PDB_TpiHashParsed);
+    tpi_leaf =  ts_join_struct(tpi_leaf_ticket, max_U64, CV_LeafParsed);
+    ipi_hash =  ts_join_struct(ipi_hash_ticket, max_U64, PDB_TpiHashParsed);
+    ipi_leaf =  ts_join_struct(ipi_leaf_ticket, max_U64, CV_LeafParsed);
   }
   
   //////////////////////////////////////////////////////////////
@@ -1915,6 +1894,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         task->fill_in.tpi_leaf    = tpi_leaf;
         task->fill_in.itype_first = task_idx*task_size_itypes;
         task->fill_in.itype_opl   = task->fill_in.itype_first + task_size_itypes;
+        task->fill_in.itype_opl   = ClampTop(task->fill_in.itype_opl, itype_opl);
         task->fill_in.itype_fwd_map = itype_fwd_map;
       }
     }
