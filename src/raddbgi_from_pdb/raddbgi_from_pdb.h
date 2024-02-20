@@ -100,6 +100,15 @@ struct P2R_CompUnitParseIn
   String8 data;
 };
 
+//- rjf: comp unit contribution table parsing
+
+typedef struct P2R_CompUnitContributionsParseIn P2R_CompUnitContributionsParseIn;
+struct P2R_CompUnitContributionsParseIn
+{
+  String8 data;
+  PDB_CoffSectionArray *coff_sections;
+};
+
 ////////////////////////////////
 //~ rjf: Conversion Data Structure Types
 
@@ -219,6 +228,7 @@ internal void *p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
+internal void *p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
 //~ rjf: Type Parsing/Conversion Tasks

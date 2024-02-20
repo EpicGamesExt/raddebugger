@@ -587,6 +587,15 @@ p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
+internal void *
+p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p)
+{
+  P2R_CompUnitContributionsParseIn *in = (P2R_CompUnitContributionsParseIn *)p;
+  void *out = 0;
+  ProfScope("parse comp unit contributions") out = pdb_comp_unit_contribution_array_from_data(arena, in->data, in->coff_sections);
+  return out;
+}
+
 ////////////////////////////////
 //~ rjf: Type Parsing/Conversion Tasks
 
@@ -1771,7 +1780,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: do independent parsing & preparation passes
+  //- rjf: do initial independent parsing & preparation passes
   //
   U64 exe_hash = 0;
   PDB_TpiHashParsed *tpi_hash = 0;
@@ -1781,7 +1790,9 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   CV_SymParsed *sym = 0;
   PDB_CompUnitArray *comp_units = 0;
   U64 comp_unit_count = 0;
-  ProfScope("do independent parsing & preparation passess")
+  PDB_CompUnitContributionArray *comp_unit_contributions = 0;
+  U64 comp_unit_contribution_count = 0;
+  ProfScope("do initial independent parsing & preparation passess")
   {
     //- rjf: form task inputs
     P2R_EXEHashIn exe_hash_in = {in->input_exe_data};
@@ -1811,37 +1822,29 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     }
     P2R_SymbolStreamParseIn sym_parse_in = {dbi ? msf_data_from_stream(msf, dbi->sym_sn) : str8_zero()};
     P2R_CompUnitParseIn comp_unit_parse_in = {dbi ? pdb_data_from_dbi_range(dbi, PDB_DbiRange_ModuleInfo) : str8_zero()};
+    P2R_CompUnitContributionsParseIn comp_unit_contributions_parse_in = {dbi ? pdb_data_from_dbi_range(dbi, PDB_DbiRange_SecCon) : str8_zero(), coff_sections};
     
     //- rjf: kick off tasks
-    TS_Ticket exe_hash_ticket        = ts_kickoff(p2r_exe_hash_task__entry_point, &exe_hash_in);
-    TS_Ticket tpi_hash_ticket        = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, &tpi_hash_in);
-    TS_Ticket tpi_leaf_ticket        = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, &tpi_leaf_in);
-    TS_Ticket ipi_hash_ticket        = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, &ipi_hash_in);
-    TS_Ticket ipi_leaf_ticket        = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, &ipi_leaf_in);
-    TS_Ticket sym_parse_ticket       = !dbi ? ts_ticket_zero() : ts_kickoff(p2r_symbol_stream_parse_task__entry_point, &sym_parse_in);
-    TS_Ticket comp_unit_parse_ticket = !dbi ? ts_ticket_zero() : ts_kickoff(p2r_comp_unit_parse_task__entry_point, &comp_unit_parse_in);
+    TS_Ticket exe_hash_ticket                      = ts_kickoff(p2r_exe_hash_task__entry_point, &exe_hash_in);
+    TS_Ticket tpi_hash_ticket                      = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, &tpi_hash_in);
+    TS_Ticket tpi_leaf_ticket                      = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, &tpi_leaf_in);
+    TS_Ticket ipi_hash_ticket                      = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, &ipi_hash_in);
+    TS_Ticket ipi_leaf_ticket                      = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, &ipi_leaf_in);
+    TS_Ticket sym_parse_ticket                     = !dbi ? ts_ticket_zero() : ts_kickoff(p2r_symbol_stream_parse_task__entry_point, &sym_parse_in);
+    TS_Ticket comp_unit_parse_ticket               = !dbi ? ts_ticket_zero() : ts_kickoff(p2r_comp_unit_parse_task__entry_point, &comp_unit_parse_in);
+    TS_Ticket comp_unit_contributions_parse_ticket = !dbi ? ts_ticket_zero() : ts_kickoff(p2r_comp_unit_contributions_parse_task__entry_point, &comp_unit_contributions_parse_in);
     
     //- rjf: join tasks
-    exe_hash   = *ts_join_struct(exe_hash_ticket,       max_U64, U64);
-    tpi_hash   =  ts_join_struct(tpi_hash_ticket,       max_U64, PDB_TpiHashParsed);
-    tpi_leaf   =  ts_join_struct(tpi_leaf_ticket,       max_U64, CV_LeafParsed);
-    ipi_hash   =  ts_join_struct(ipi_hash_ticket,       max_U64, PDB_TpiHashParsed);
-    ipi_leaf   =  ts_join_struct(ipi_leaf_ticket,       max_U64, CV_LeafParsed);
-    sym        =  ts_join_struct(sym_parse_ticket,      max_U64, CV_SymParsed);
-    comp_units =  ts_join_struct(comp_unit_parse_ticket,max_U64, PDB_CompUnitArray);
-    comp_unit_count = comp_units->count;
-  }
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: parse dbi's section contributions
-  //
-  PDB_CompUnitContributionArray *comp_unit_contributions = 0;
-  U64 comp_unit_contribution_count = 0;
-  if(dbi != 0 && coff_sections != 0) ProfScope("parse dbi section contributions")
-  {
-    String8 section_contribution_data = pdb_data_from_dbi_range(dbi, PDB_DbiRange_SecCon);
-    comp_unit_contributions = pdb_comp_unit_contribution_array_from_data(arena, section_contribution_data, coff_sections);
-    comp_unit_contribution_count = comp_unit_contributions->count;
+    exe_hash                = *ts_join_struct(exe_hash_ticket,                      max_U64, U64);
+    tpi_hash                =  ts_join_struct(tpi_hash_ticket,                      max_U64, PDB_TpiHashParsed);
+    tpi_leaf                =  ts_join_struct(tpi_leaf_ticket,                      max_U64, CV_LeafParsed);
+    ipi_hash                =  ts_join_struct(ipi_hash_ticket,                      max_U64, PDB_TpiHashParsed);
+    ipi_leaf                =  ts_join_struct(ipi_leaf_ticket,                      max_U64, CV_LeafParsed);
+    sym                     =  ts_join_struct(sym_parse_ticket,                     max_U64, CV_SymParsed);
+    comp_units              =  ts_join_struct(comp_unit_parse_ticket,               max_U64, PDB_CompUnitArray);
+    comp_unit_contributions =  ts_join_struct(comp_unit_contributions_parse_ticket, max_U64, PDB_CompUnitContributionArray);
+    comp_unit_count = comp_units ? comp_units->count : 0;
+    comp_unit_contribution_count = comp_unit_contributions ? comp_unit_contributions->count : 0;
   }
   
   //////////////////////////////////////////////////////////////
@@ -1850,11 +1853,20 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   CV_SymParsed **sym_for_unit = push_array(arena, CV_SymParsed*, comp_unit_count);
   if(comp_units != 0) ProfScope("parse syms for each compilation unit")
   {
-    PDB_CompUnit **unit_ptr = comp_units->units;
-    for(U64 i = 0; i < comp_unit_count; i += 1, unit_ptr += 1)
+    //- rjf: kick off parsing tasks
+    P2R_SymbolStreamParseIn *tasks_inputs = push_array(scratch.arena, P2R_SymbolStreamParseIn, comp_unit_count);
+    TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, comp_unit_count);
+    for(U64 idx = 0; idx < comp_unit_count; idx += 1)
     {
-      String8 sym_data = pdb_data_from_unit_range(msf, *unit_ptr, PDB_DbiCompUnitRange_Symbols);
-      sym_for_unit[i] = cv_sym_from_data(arena, sym_data, 4);
+      PDB_CompUnit *unit = comp_units->units[idx];
+      tasks_inputs[idx].data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_Symbols);
+      tasks_tickets[idx] = ts_kickoff(p2r_symbol_stream_parse_task__entry_point, &tasks_inputs[idx]);
+    }
+    
+    //- rjf: join tasks
+    for(U64 idx = 0; idx < comp_unit_count; idx += 1)
+    {
+      sym_for_unit[idx] = ts_join_struct(tasks_tickets[idx], max_U64, CV_SymParsed);
     }
   }
   
@@ -2149,7 +2161,6 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     P2R_TypeIdRevisitTask *next;
     RDIM_Type *base_type;
     CV_TypeId field_itype;
-    CV_TypeId this_itype;
   };
   P2R_TypeIdRevisitTask *first_itype_revisit_task = 0;
   P2R_TypeIdRevisitTask *last_itype_revisit_task = 0;
