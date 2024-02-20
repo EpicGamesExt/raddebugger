@@ -1,4 +1,14 @@
 ////////////////////////////////
+//~ rjf: Basic Type Functions
+
+internal TS_Ticket
+ts_ticket_zero(void)
+{
+  TS_Ticket ticket = {0};
+  return ticket;
+}
+
+////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
 internal void
@@ -93,21 +103,24 @@ ts_join(TS_Ticket ticket, U64 endt_us)
   TS_TaskArtifactSlot *slot = &ts_shared->artifact_slots[slot_idx];
   TS_TaskArtifactStripe *stripe = &ts_shared->artifact_stripes[stripe_idx];
   TS_TaskArtifact *artifact = (TS_TaskArtifact *)ticket.u64[1];
-  OS_MutexScopeR(stripe->rw_mutex) for(;;)
+  if(artifact != 0)
   {
-    B64 task_is_done = artifact->task_is_done;
-    if(task_is_done)
+    OS_MutexScopeR(stripe->rw_mutex) for(;;)
     {
-      OS_MutexScopeRWPromote(stripe->rw_mutex)
+      B64 task_is_done = artifact->task_is_done;
+      if(task_is_done)
       {
-        result = artifact->result;
-        SLLStackPush(stripe->free_artifact, artifact);
+        OS_MutexScopeRWPromote(stripe->rw_mutex)
+        {
+          result = artifact->result;
+          SLLStackPush(stripe->free_artifact, artifact);
+        }
+        break;
       }
-      break;
-    }
-    else
-    {
-      os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+      else
+      {
+        os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+      }
     }
   }
   return result;

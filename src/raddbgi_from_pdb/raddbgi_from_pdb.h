@@ -67,14 +67,6 @@ struct P2R_TPIHashParseIn
   String8 aux_data;
 };
 
-typedef struct P2R_TPIHashParseTask P2R_TPIHashParseTask;
-struct P2R_TPIHashParseTask
-{
-  P2R_TPIHashParseIn in;
-  Arena *out_arena;
-  PDB_TpiHashParsed *out;
-};
-
 //- rjf: tpi leaves parsing
 
 typedef struct P2R_TPILeafParseIn P2R_TPILeafParseIn;
@@ -82,14 +74,6 @@ struct P2R_TPILeafParseIn
 {
   String8 leaf_data;
   CV_TypeId itype_first;
-};
-
-typedef struct P2R_TPILeafParseTask P2R_TPILeafParseTask;
-struct P2R_TPILeafParseTask
-{
-  P2R_TPILeafParseIn in;
-  Arena *out_arena;
-  CV_LeafParsed *out;
 };
 
 //- rjf: exe hashing
@@ -100,13 +84,6 @@ struct P2R_EXEHashIn
   String8 exe_data;
 };
 
-typedef struct P2R_EXEHashTask P2R_EXEHashTask;
-struct P2R_EXEHashTask
-{
-  P2R_EXEHashIn in;
-  U64 out;
-};
-
 //- rjf: symbol stream parsing
 
 typedef struct P2R_SymbolStreamParseIn P2R_SymbolStreamParseIn;
@@ -115,12 +92,12 @@ struct P2R_SymbolStreamParseIn
   String8 data;
 };
 
-typedef struct P2R_SymbolStreamParseTask P2R_SymbolStreamParseTask;
-struct P2R_SymbolStreamParseTask
+//- rjf: comp unit parsing
+
+typedef struct P2R_CompUnitParseIn P2R_CompUnitParseIn;
+struct P2R_CompUnitParseIn
 {
-  P2R_SymbolStreamParseIn in;
-  Arena *out_arena;
-  CV_SymParsed *sym;
+  String8 data;
 };
 
 ////////////////////////////////
@@ -255,6 +232,7 @@ internal void *p2r_exe_hash_task__entry_point(Arena *arena, void *p);
 internal void *p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p);
+internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
 //~ rjf: Type Forward Resolution Map Build Path & Thread

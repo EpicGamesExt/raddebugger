@@ -93,6 +93,11 @@ struct TS_Shared
 global TS_Shared *ts_shared = 0;
 
 ////////////////////////////////
+//~ rjf: Basic Type Functions
+
+internal TS_Ticket ts_ticket_zero(void);
+
+////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
 internal void ts_init(void);
