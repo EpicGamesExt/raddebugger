@@ -82,23 +82,22 @@ main(int argc, char **argv)
   }
   
   //- rjf: bake
-  String8List bake_strings = {0};
+  P2R_BakeOut *bake_out = 0;
   ProfScope("bake")
   {
-    RDIM_BakeParams bake_params = {0};
+    P2R_BakeIn bake_in = {0};
     {
-      bake_params.top_level_info   = convert_out->top_level_info;
-      bake_params.binary_sections  = convert_out->binary_sections;
-      bake_params.units            = convert_out->units;
-      bake_params.types            = convert_out->types;
-      bake_params.udts             = convert_out->udts;
-      bake_params.global_variables = convert_out->global_variables;
-      bake_params.thread_variables = convert_out->thread_variables;
-      bake_params.procedures       = convert_out->procedures;
-      bake_params.scopes           = convert_out->scopes;
+      bake_in.top_level_info   = convert_out->top_level_info;
+      bake_in.binary_sections  = convert_out->binary_sections;
+      bake_in.units            = convert_out->units;
+      bake_in.types            = convert_out->types;
+      bake_in.udts             = convert_out->udts;
+      bake_in.global_variables = convert_out->global_variables;
+      bake_in.thread_variables = convert_out->thread_variables;
+      bake_in.procedures       = convert_out->procedures;
+      bake_in.scopes           = convert_out->scopes;
     }
-    RDIM_BakeSectionList sections = rdim_bake_sections_from_params(arena, &bake_params);
-    bake_strings = rdim_blobs_from_bake_sections(arena, &sections);
+    bake_out = p2r_bake(arena, &bake_in);
   }
   
   //- rjf: write
@@ -106,7 +105,7 @@ main(int argc, char **argv)
   {
     OS_Handle output_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, convert_in->output_name);
     U64 off = 0;
-    for(String8Node *n = bake_strings.first; n != 0; n = n->next)
+    for(String8Node *n = bake_out->blobs.first; n != 0; n = n->next)
     {
       os_file_write(output_file, r1u64(off, off+n->string.size), n->string.str);
       off += n->string.size;

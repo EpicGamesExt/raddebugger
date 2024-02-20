@@ -945,7 +945,29 @@ rdim_bake_section_list_push_new(RDIM_Arena *arena, RDIM_BakeSectionList *list, v
   return section;
 }
 
-//- rjf: interned string building
+//- rjf: interned string map reading/writing
+
+RDI_PROC RDI_U32
+rdim_idx_from_baked_string(RDIM_BakeStringMap *map, RDIM_String8 string)
+{
+  RDI_U64 hash = rdi_hash(string.RDIM_String8_BaseMember, string.RDIM_String8_SizeMember);
+  RDI_U64 slot_idx = hash%map->slots_count;
+  
+  // rjf: find existing node
+  RDIM_BakeStringNode *node = 0;
+  for(RDIM_BakeStringNode *n = map->slots[slot_idx]; n != 0; n = n->hash_next)
+  {
+    if(n->hash == hash && rdim_str8_match(n->string, string, 0))
+    {
+      node = n;
+      break;
+    }
+  }
+  
+  // rjf: node -> index
+  RDI_U32 result = node ? node->idx : 0;
+  return result;
+}
 
 RDI_PROC RDI_U32
 rdim_bake_string(RDIM_Arena *arena, RDIM_BakeStringMap *map, RDIM_String8 string)

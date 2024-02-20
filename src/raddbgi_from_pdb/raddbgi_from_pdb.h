@@ -54,6 +54,29 @@ struct P2R_ConvertOut
 };
 
 ////////////////////////////////
+//~ rjf: Baking Inputs/Outputs
+
+typedef struct P2R_BakeIn P2R_BakeIn;
+struct P2R_BakeIn
+{
+  RDIM_TopLevelInfo top_level_info;
+  RDIM_BinarySectionList binary_sections;
+  RDIM_UnitChunkList units;
+  RDIM_TypeChunkList types;
+  RDIM_UDTChunkList udts;
+  RDIM_SymbolChunkList global_variables;
+  RDIM_SymbolChunkList thread_variables;
+  RDIM_SymbolChunkList procedures;
+  RDIM_ScopeChunkList scopes;
+};
+
+typedef struct P2R_BakeOut P2R_BakeOut;
+struct P2R_BakeOut
+{
+  String8List blobs;
+};
+
+////////////////////////////////
 //~ rjf: Initial PDB Information Extraction & Conversion Preparation Task Types
 
 //- rjf: tpi hash parsing
@@ -139,6 +162,16 @@ struct P2R_LinkNameMap
   U64 buckets_count;
   U64 bucket_collision_count;
   U64 link_name_count;
+};
+
+//- rjf: link name map building tasks
+
+typedef struct P2R_LinkNameMapBuildIn P2R_LinkNameMapBuildIn;
+struct P2R_LinkNameMapBuildIn
+{
+  CV_SymParsed *sym;
+  PDB_CoffSectionArray *coff_sections;
+  P2R_LinkNameMap *link_name_map;
 };
 
 //- rjf: type forward resolution map build
@@ -242,6 +275,11 @@ internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
+//~ rjf: Link Name Map Building Task
+
+internal void *p2r_link_name_map_build_task__entry_point(Arena *arena, void *p);
+
+////////////////////////////////
 //~ rjf: Type Parsing/Conversion Tasks
 
 internal void *p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p);
@@ -256,5 +294,10 @@ internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p
 //~ rjf: Top-Level Conversion Entry Point
 
 internal P2R_ConvertOut *p2r_convert(Arena *arena, P2R_ConvertIn *in);
+
+////////////////////////////////
+//~ rjf: Top-Level Baking Entry Point
+
+internal P2R_BakeOut *p2r_bake(Arena *arena, P2R_BakeIn *in);
 
 #endif // RADDBGI_FROM_PDB_H

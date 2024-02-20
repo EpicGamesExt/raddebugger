@@ -1063,7 +1063,8 @@ RDI_PROC void rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList
 RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push(RDIM_Arena *arena, RDIM_BakeSectionList *list);
 RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_DataSectionTag tag);
 
-//- rjf: interned string building
+//- rjf: interned string map reading/writing
+RDI_PROC RDI_U32 rdim_idx_from_baked_string(RDIM_BakeStringMap *map, RDIM_String8 string);
 RDI_PROC RDI_U32 rdim_bake_string(RDIM_Arena *arena, RDIM_BakeStringMap *map, RDIM_String8 string);
 
 //- rjf: interned index run building

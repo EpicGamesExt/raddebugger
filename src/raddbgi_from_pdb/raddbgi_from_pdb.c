@@ -606,6 +606,62 @@ p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p)
 }
 
 ////////////////////////////////
+//~ rjf: Link Name Map Building Task
+
+internal void *
+p2r_link_name_map_build_task__entry_point(Arena *arena, void *p)
+{
+  P2R_LinkNameMapBuildIn *in = (P2R_LinkNameMapBuildIn *)p;
+  CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges;
+  CV_RecRange *rec_ranges_opl   = rec_ranges_first + in->sym->sym_ranges.count;
+  for(CV_RecRange *rec_range = rec_ranges_first;
+      rec_range < rec_ranges_opl;
+      rec_range += 1)
+  {
+    //- rjf: unpack symbol range info
+    CV_SymKind kind = rec_range->hdr.kind;
+    U64 header_struct_size = cv_header_struct_size_from_sym_kind(kind);
+    U8 *sym_first = in->sym->data.str + rec_range->off + 2;
+    U8 *sym_opl   = sym_first + rec_range->hdr.size;
+    
+    //- rjf: skip bad ranges
+    if(sym_opl > in->sym->data.str + in->sym->data.size || sym_first + header_struct_size > in->sym->data.str + in->sym->data.size)
+    {
+      continue;
+    }
+    
+    //- rjf: consume symbol
+    switch(kind)
+    {
+      default:{}break;
+      case CV_SymKind_PUB32:
+      {
+        // rjf: unpack sym
+        CV_SymPub32 *pub32 = (CV_SymPub32 *)sym_first;
+        String8 name = str8_cstring_capped(pub32+1, sym_opl);
+        COFF_SectionHeader *section = (0 < pub32->sec && pub32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[pub32->sec-1] : 0;
+        U64 voff = 0;
+        if(section != 0)
+        {
+          voff = section->voff + pub32->off;
+        }
+        
+        // rjf: commit to link name map
+        U64 hash = p2r_hash_from_voff(voff);
+        U64 bucket_idx = hash%in->link_name_map->buckets_count;
+        P2R_LinkNameNode *node = push_array(arena, P2R_LinkNameNode, 1);
+        SLLStackPush(in->link_name_map->buckets[bucket_idx], node);
+        node->voff = voff;
+        node->name = name;
+        in->link_name_map->link_name_count += 1;
+        in->link_name_map->bucket_collision_count += (node->next != 0);
+      }break;
+    }
+  }
+  return 0;
+}
+
+////////////////////////////////
 //~ rjf: Type Parsing/Conversion Tasks
 
 internal void *
@@ -2069,6 +2125,22 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   //////////////////////////////////////////////////////////////
+  //- rjf: kick off link name map production
+  //
+  P2R_LinkNameMap link_name_map__in_progress = {0};
+  P2R_LinkNameMapBuildIn link_name_map_build_in = {0};
+  TS_Ticket link_name_map_ticket = {0};
+  ProfScope("kick off link name map build task")
+  {
+    link_name_map__in_progress.buckets_count = symbol_count_prediction;
+    link_name_map__in_progress.buckets       = push_array(arena, P2R_LinkNameNode *, link_name_map__in_progress.buckets_count);
+    link_name_map_build_in.sym = sym;
+    link_name_map_build_in.coff_sections = coff_sections;
+    link_name_map_build_in.link_name_map = &link_name_map__in_progress;
+    link_name_map_ticket = ts_kickoff(p2r_link_name_map_build_task__entry_point, &link_name_map_build_in);
+  }
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: types pass 1: produce type forward resolution map
   //
   // this map is used to resolve usage of "incomplete structs" in codeview's
@@ -3172,59 +3244,13 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: produce link name map
+  //- rjf: join link name map building task
   //
-  P2R_LinkNameMap link_name_map = {0};
-  ProfScope("produce link name map")
+  P2R_LinkNameMap *link_name_map = 0;
+  ProfScope("join link name map building task")
   {
-    link_name_map.buckets_count = symbol_count_prediction;
-    link_name_map.buckets       = push_array(arena, P2R_LinkNameNode *, link_name_map.buckets_count);
-    CV_RecRange *rec_ranges_first = sym->sym_ranges.ranges;
-    CV_RecRange *rec_ranges_opl   = rec_ranges_first + sym->sym_ranges.count;
-    for(CV_RecRange *rec_range = rec_ranges_first;
-        rec_range < rec_ranges_opl;
-        rec_range += 1)
-    {
-      //- rjf: unpack symbol range info
-      CV_SymKind kind = rec_range->hdr.kind;
-      U64 header_struct_size = cv_header_struct_size_from_sym_kind(kind);
-      U8 *sym_first = sym->data.str + rec_range->off + 2;
-      U8 *sym_opl   = sym_first + rec_range->hdr.size;
-      
-      //- rjf: skip bad ranges
-      if(sym_opl > sym->data.str + sym->data.size || sym_first + header_struct_size > sym->data.str + sym->data.size)
-      {
-        continue;
-      }
-      
-      //- rjf: consume symbol
-      switch(kind)
-      {
-        default:{}break;
-        case CV_SymKind_PUB32:
-        {
-          // rjf: unpack sym
-          CV_SymPub32 *pub32 = (CV_SymPub32 *)sym_first;
-          String8 name = str8_cstring_capped(pub32+1, sym_opl);
-          COFF_SectionHeader *section = (0 < pub32->sec && pub32->sec <= coff_sections->count) ? &coff_sections->sections[pub32->sec-1] : 0;
-          U64 voff = 0;
-          if(section != 0)
-          {
-            voff = section->voff + pub32->off;
-          }
-          
-          // rjf: commit to link name map
-          U64 hash = p2r_hash_from_voff(voff);
-          U64 bucket_idx = hash%link_name_map.buckets_count;
-          P2R_LinkNameNode *node = push_array(arena, P2R_LinkNameNode, 1);
-          SLLStackPush(link_name_map.buckets[bucket_idx], node);
-          node->voff = voff;
-          node->name = name;
-          link_name_map.link_name_count += 1;
-          link_name_map.bucket_collision_count += (node->next != 0);
-        }break;
-      }
-    }
+    ts_join(link_name_map_ticket, max_U64);
+    link_name_map = &link_name_map__in_progress;
   }
   
   //////////////////////////////////////////////////////////////
@@ -3254,7 +3280,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
         tasks_inputs[idx].tpi_leaf        = tpi_leaf;
         tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
         tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
-        tasks_inputs[idx].link_name_map   = &link_name_map;
+        tasks_inputs[idx].link_name_map   = link_name_map;
         if(idx < global_stream_subdivision_tasks_count)
         {
           tasks_inputs[idx].sym             = sym;
@@ -3305,5 +3331,30 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   scratch_end(scratch);
+  return out;
+}
+
+////////////////////////////////
+//~ rjf: Top-Level Baking Entry Point
+
+internal P2R_BakeOut *
+p2r_bake(Arena *arena, P2R_BakeIn *in)
+{
+  RDIM_BakeParams bake_params = {0};
+  {
+    bake_params.top_level_info   = in->top_level_info;
+    bake_params.binary_sections  = in->binary_sections;
+    bake_params.units            = in->units;
+    bake_params.types            = in->types;
+    bake_params.udts             = in->udts;
+    bake_params.global_variables = in->global_variables;
+    bake_params.thread_variables = in->thread_variables;
+    bake_params.procedures       = in->procedures;
+    bake_params.scopes           = in->scopes;
+  }
+  RDIM_BakeSectionList sections = rdim_bake_sections_from_params(arena, &bake_params);
+  String8List bake_strings = rdim_blobs_from_bake_sections(arena, &sections);
+  P2R_BakeOut *out = push_array(arena, P2R_BakeOut, 1);
+  out->blobs = bake_strings;
   return out;
 }
