@@ -617,46 +617,35 @@ entry_point(int argc, char **argv)
       Temp scratch = scratch_begin(0, 0);
       
       //- rjf: parse arguments
-      P2R_ConvertIn *convert_in = p2r_convert_in_from_cmd_line(scratch.arena, &cmdln);
+      P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(scratch.arena, &cmdln);
       
       //- rjf: open output file
-      String8 output_name = push_str8_copy(scratch.arena, convert_in->output_name);
+      String8 output_name = push_str8_copy(scratch.arena, user2convert->output_name);
       OS_Handle out_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, output_name);
       B32 out_file_is_good = !os_handle_match(out_file, os_handle_zero());
       
       //- rjf: convert
-      P2R_ConvertOut *convert_out = 0;
+      P2R_Convert2Bake *convert2bake = 0;
       if(out_file_is_good)
       {
-        convert_out = p2r_convert(scratch.arena, convert_in);
+        convert2bake = p2r_convert(scratch.arena, user2convert);
       }
       
       //- rjf: bake
-      String8List bake_strings = {0};
-      if(convert_out != 0 && convert_in->output_name.size > 0)
+      P2R_Bake2Serialize *bake2srlz = 0;
+      ProfScope("bake")
       {
-        RDIM_BakeParams bake_params = {0};
-        {
-          bake_params.top_level_info   = convert_out->top_level_info;
-          bake_params.binary_sections  = convert_out->binary_sections;
-          bake_params.units            = convert_out->units;
-          bake_params.types            = convert_out->types;
-          bake_params.udts             = convert_out->udts;
-          bake_params.src_files        = convert_out->src_files;
-          bake_params.global_variables = convert_out->global_variables;
-          bake_params.thread_variables = convert_out->thread_variables;
-          bake_params.procedures       = convert_out->procedures;
-          bake_params.scopes           = convert_out->scopes;
-        }
-        RDIM_BakeSectionList sections = rdim_bake_sections_from_params(scratch.arena, &bake_params);
-        bake_strings = rdim_blobs_from_bake_sections(scratch.arena, &sections);
+        bake2srlz = p2r_bake(scratch.arena, convert2bake);
       }
+      
+      //- rjf: serialize
+      String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(scratch.arena, &convert2bake->bake_params, &bake2srlz->sections);
       
       //- rjf: write
       if(out_file_is_good)
       {
         U64 off = 0;
-        for(String8Node *n = bake_strings.first; n != 0; n = n->next)
+        for(String8Node *n = serialize_out.first; n != 0; n = n->next)
         {
           os_file_write(out_file, r1u64(off, off+n->string.size), n->string.str);
           off += n->string.size;

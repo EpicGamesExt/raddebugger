@@ -1818,13 +1818,67 @@ rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDI
 //- rjf: idx run map building
 
 RDI_PROC RDIM_BakeIdxRunMap *
-rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
+rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT], RDIM_BakeParams *params)
 {
   //- rjf: set up map
   RDIM_BakeIdxRunMap *idx_runs = rdim_push_array(arena, RDIM_BakeIdxRunMap, 1);
   idx_runs->slots_count = params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
   idx_runs->slots = rdim_push_array(arena, RDIM_BakeIdxRunNode *, idx_runs->slots_count);
   rdim_bake_idx_run_map_insert(arena, idx_runs, 0, 0);
+  
+  //- rjf: bake runs of function-type parameter lists
+  for(RDIM_TypeChunkNode *n = params->types.first; n != 0; n = n->next)
+  {
+    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
+    {
+      RDIM_Type *type = &n->v[chunk_idx];
+      if(type->kind == RDI_TypeKind_Function || type->kind == RDI_TypeKind_Method)
+      {
+        RDI_U32 param_idx_run_count = type->count;
+        RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
+        for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
+        {
+          param_idx_run[idx] = (RDI_U32)rdim_idx_from_type(type->param_types[idx]); // TODO(rjf): @u64_to_u32
+        }
+        rdim_bake_idx_run_map_insert(arena, idx_runs, param_idx_run, param_idx_run_count);
+      }
+    }
+  }
+  
+  //- rjf: bake runs of name map match lists
+  for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
+      k < RDI_NameMapKind_COUNT;
+      k = (RDI_NameMapKind)(k+1))
+  {
+    RDIM_BakeNameMap *name_map = name_maps[k];
+    if(name_map != 0 && name_map->name_count != 0)
+    {
+      for(RDIM_BakeNameMapNode *n = name_map->first; n != 0; n = n->order_next)
+      {
+        if(n->val_count > 1)
+        {
+          RDI_U32 *idx_run = rdim_push_array(arena, RDI_U32, n->val_count);
+          RDI_U64 val_idx = 0;
+          for(RDIM_BakeNameMapValNode *idxnode = n->val_first;
+              idxnode != 0;
+              idxnode = idxnode->next)
+          {
+            for(RDI_U32 i = 0; i < sizeof(idxnode->val)/sizeof(idxnode->val[0]); i += 1)
+            {
+              if(idxnode->val[i] == 0)
+              {
+                goto dblbreak;
+              }
+              idx_run[val_idx] = idxnode->val[i];
+              val_idx += 1;
+            }
+          }
+          dblbreak:;
+          rdim_bake_idx_run_map_insert(arena, idx_runs, idx_run, (RDI_U32)n->val_count); // TODO(rjf): @u64_to_u32
+        }
+      }
+    }
+  }
   
   return idx_runs;
 }

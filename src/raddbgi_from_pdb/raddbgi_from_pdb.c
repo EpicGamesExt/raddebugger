@@ -3443,20 +3443,6 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     rdim_bake_section_list_concat_in_place(&sections, &s);
   }
   
-  //- rjf: build interned idx run map
-  RDIM_BakeIdxRunMap *idx_runs = 0;
-  ProfScope("build interned idx run map")
-  {
-    idx_runs = rdim_bake_idx_run_map_from_params(arena, params);
-  }
-  
-  //- rjf: type nodes
-  ProfScope("type nodes")
-  {
-    RDIM_BakeSectionList s = rdim_bake_type_node_section_list_from_params(arena, strings, idx_runs, path_tree, params);
-    rdim_bake_section_list_concat_in_place(&sections, &s);
-  }
-  
   //- rjf: UDTs
   ProfScope("UDTs")
   {
@@ -3506,13 +3492,6 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     rdim_bake_section_list_concat_in_place(&sections, &s);
   }
   
-  //- rjf: name maps
-  ProfScope("name map")
-  {
-    RDIM_BakeSectionList s = rdim_bake_name_map_section_list_from_params_maps(arena, strings, idx_runs, params, name_maps);
-    rdim_bake_section_list_concat_in_place(&sections, &s);
-  }
-  
   //- rjf: file paths
   ProfScope("file paths")
   {
@@ -3524,6 +3503,27 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   ProfScope("strings")
   {
     RDIM_BakeSectionList s = rdim_bake_string_section_list_from_string_map(arena, strings);
+    rdim_bake_section_list_concat_in_place(&sections, &s);
+  }
+  
+  //- rjf: build interned idx run map
+  RDIM_BakeIdxRunMap *idx_runs = 0;
+  ProfScope("build interned idx run map")
+  {
+    idx_runs = rdim_bake_idx_run_map_from_params(arena, name_maps, params);
+  }
+  
+  //- rjf: type nodes
+  ProfScope("type nodes")
+  {
+    RDIM_BakeSectionList s = rdim_bake_type_node_section_list_from_params(arena, strings, idx_runs, path_tree, params);
+    rdim_bake_section_list_concat_in_place(&sections, &s);
+  }
+  
+  //- rjf: name maps
+  ProfScope("name map")
+  {
+    RDIM_BakeSectionList s = rdim_bake_name_map_section_list_from_params_maps(arena, strings, idx_runs, params, name_maps);
     rdim_bake_section_list_concat_in_place(&sections, &s);
   }
   

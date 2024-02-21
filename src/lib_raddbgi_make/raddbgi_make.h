@@ -1175,7 +1175,7 @@ RDI_PROC RDIM_BakeStringMap *rdim_bake_string_map_from_params(RDIM_Arena *arena,
 RDI_PROC RDIM_BakeNameMap *rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params);
 
 //- rjf: bake idx run map building
-RDI_PROC RDIM_BakeIdxRunMap *rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeIdxRunMap *rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT], RDIM_BakeParams *params);
 
 //- rjf: bake path tree building
 RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
