@@ -477,7 +477,7 @@ struct RDIM_SrcFileChunkNode
   RDI_U64 base_idx;
 };
 
-typedef struct RDIM_SrcFileChunkList RDIM_SrcFileChunkList;
+typedef struct  RDIM_SrcFileChunkList RDIM_SrcFileChunkList;
 struct RDIM_SrcFileChunkList
 {
   RDIM_SrcFileChunkNode *first;
@@ -896,7 +896,7 @@ struct RDIM_BakePathNode
   RDIM_BakePathNode *last_child;
   RDIM_BakePathNode *next_sibling;
   RDIM_String8 name;
-  struct RDIM_BakeSrcNode *src_file;
+  RDIM_SrcFile *src_file;
   RDI_U32 idx;
 };
 
@@ -907,35 +907,13 @@ struct RDIM_BakeLineMapFragment
   RDIM_LineSequence *seq;
 };
 
-typedef struct RDIM_BakeSrcNode RDIM_BakeSrcNode;
-struct RDIM_BakeSrcNode
-{
-  RDIM_BakeSrcNode *next;
-  RDIM_BakePathNode *path_node;
-  RDI_U32 idx;
-  RDIM_String8 normal_full_path;
-  
-  // rjf: line info attached to this src file
-  RDIM_BakeLineMapFragment *first_fragment;
-  RDIM_BakeLineMapFragment *last_fragment;
-  
-  // rjf: final baked version of this file's line map
-  RDI_U32 line_map_nums_data_idx;
-  RDI_U32 line_map_range_data_idx;
-  RDI_U32 line_map_count;
-  RDI_U32 line_map_voff_data_idx;
-};
-
 typedef struct RDIM_BakePathTree RDIM_BakePathTree;
 struct RDIM_BakePathTree
 {
+  RDIM_BakePathNode root;
   RDIM_BakePathNode *first;
   RDIM_BakePathNode *last;
   RDI_U32 count;
-  RDIM_BakePathNode root;
-  RDIM_BakeSrcNode *src_first;
-  RDIM_BakeSrcNode *src_last;
-  RDI_U32 src_count;
 };
 
 //- rjf: name maps
