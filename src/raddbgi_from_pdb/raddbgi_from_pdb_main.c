@@ -92,6 +92,7 @@ main(int argc, char **argv)
       bake_in.units            = convert_out->units;
       bake_in.types            = convert_out->types;
       bake_in.udts             = convert_out->udts;
+      bake_in.src_files        = convert_out->src_files;
       bake_in.global_variables = convert_out->global_variables;
       bake_in.thread_variables = convert_out->thread_variables;
       bake_in.procedures       = convert_out->procedures;

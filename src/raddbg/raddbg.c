@@ -642,6 +642,7 @@ entry_point(int argc, char **argv)
           bake_params.units            = convert_out->units;
           bake_params.types            = convert_out->types;
           bake_params.udts             = convert_out->udts;
+          bake_params.src_files        = convert_out->src_files;
           bake_params.global_variables = convert_out->global_variables;
           bake_params.thread_variables = convert_out->thread_variables;
           bake_params.procedures       = convert_out->procedures;

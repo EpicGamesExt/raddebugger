@@ -206,7 +206,7 @@ rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 //~ rjf: CodeView <-> RADDBGI Canonical Conversions
 
 internal RDI_Arch
-rdi_arch_from_cv_arch(CV_Arch cv_arch)
+p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
 {
   RDI_Arch result = 0;
   switch(cv_arch)
@@ -276,7 +276,7 @@ rdi_arch_from_cv_arch(CV_Arch cv_arch)
 }
 
 internal RDI_RegisterCode
-rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
+p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
 {
   RDI_RegisterCode result = 0;
   switch(arch)
@@ -304,7 +304,7 @@ rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
 }
 
 internal RDI_Language
-rdi_language_from_cv_language(CV_Language cv_language)
+p2r_rdi_language_from_cv_language(CV_Language cv_language)
 {
   RDI_Language result = 0;
   switch(cv_language)
@@ -331,7 +331,7 @@ rdi_language_from_cv_language(CV_Language cv_language)
 }
 
 internal RDI_TypeKind
-rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type)
+p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type)
 {
   RDI_TypeKind result = RDI_TypeKind_NULL;
   switch(basic_type)
@@ -1428,7 +1428,7 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
             }
             
             // rjf: get raddbg register code
-            RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+            RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
             // TODO(rjf): real byte_size & byte_pos from cv_reg goes here
             U32 byte_size = 8;
             U32 byte_pos = 0;
@@ -1548,7 +1548,7 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
           COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register+1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+          RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
           
           // rjf: build location
           RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
@@ -1620,7 +1620,7 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
           COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+          RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
           
           // rjf: skip "subfield" location info - currently not supported
           if(defrange_subfield_register->field_offset != 0)
@@ -1689,7 +1689,7 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
           // rjf: unpack sym
           CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)sym_header_struct_base;
           CV_Reg cv_reg = defrange_register_rel->reg;
-          RDI_RegisterCode register_code = rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+          RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
           CV_LvarAddrRange *range = &defrange_register_rel->range;
           COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
@@ -1979,7 +1979,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     {
       if(sym_for_unit[comp_unit_idx] != 0)
       {
-        arch = rdi_arch_from_cv_arch(sym_for_unit[comp_unit_idx]->info.arch);
+        arch = p2r_rdi_arch_from_cv_arch(sym_for_unit[comp_unit_idx]->info.arch);
         if(arch != RDI_Arch_NULL)
         {
           break;
@@ -2023,12 +2023,16 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: build units
+  //- rjf: build units, initial src file map, & collect unit source files
   //
-  RDIM_UnitChunkList units = {0};
-  ProfScope("build unit array")
+  P2R_SrcFileMap src_file_map = {0};
+  RDIM_UnitChunkList all_units = {0};
+  RDIM_SrcFileChunkList all_src_files = {0};
+  ProfScope("build units, initial src file map, & collect unit source files")
   {
     U64 units_chunk_cap = comp_unit_count;
+    src_file_map.slots_count = 65536;
+    src_file_map.slots = push_array(scratch.arena, P2R_SrcFileNode *, src_file_map.slots_count);
     
     //- rjf: pass 1: fill basic per-unit info & line info
     for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
@@ -2057,12 +2061,12 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
       }
       
       //- rjf: build unit
-      RDIM_Unit *dst_unit = rdim_unit_chunk_list_push(arena, &units, units_chunk_cap);
+      RDIM_Unit *dst_unit = rdim_unit_chunk_list_push(arena, &all_units, units_chunk_cap);
       dst_unit->unit_name     = unit_name;
       dst_unit->compiler_name = pdb_unit_sym->info.compiler_name;
       dst_unit->object_file   = obj_name;
       dst_unit->archive_file  = pdb_unit->group_name;
-      dst_unit->language      = rdi_language_from_cv_language(sym->info.language);
+      dst_unit->language      = p2r_rdi_language_from_cv_language(sym->info.language);
       
       //- rjf: fill unit line info
       for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
@@ -2076,8 +2080,42 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
               lines_n = lines_n->next)
           {
             CV_C13LinesParsed *lines = &lines_n->v;
+            
+            // rjf: file name -> normalized file path
+            String8 file_path = lines->file_name;
+            String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+            for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
+            {
+              if(file_path_normalized.str[idx] == '\\')
+              {
+                file_path_normalized.str[idx] = '/';
+              }
+            }
+            
+            // rjf: normalized file path -> source file node
+            U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
+            U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
+            P2R_SrcFileNode *src_file_node = 0;
+            for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+            {
+              if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
+              {
+                src_file_node = n;
+                break;
+              }
+            }
+            if(src_file_node == 0)
+            {
+              src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
+              SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
+              src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &all_src_files, 4096);
+              src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
+            }
+            
+            // rjf: build sequence
             RDIM_LineSequence *seq = rdim_line_sequence_list_push(arena, &dst_unit->line_sequences);
-            seq->file_name  = lines->file_name;
+            rdim_src_file_push_line_sequence(arena, &all_src_files, src_file_node->src_file, seq);
+            seq->src_file   = src_file_node->src_file;
             seq->voffs      = lines->voffs;
             seq->line_nums  = lines->line_nums;
             seq->col_nums   = lines->col_nums;
@@ -2094,7 +2132,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
     {
       if(contrib_ptr->mod < comp_unit_count)
       {
-        RDIM_Unit *unit = &units.first->v[contrib_ptr->mod];
+        RDIM_Unit *unit = &all_units.first->v[contrib_ptr->mod];
         RDIM_Rng1U64 range = {contrib_ptr->voff_first, contrib_ptr->voff_opl};
         rdim_rng1u64_list_push(arena, &unit->voff_ranges, range);
       }
@@ -2283,7 +2321,7 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
           RDIM_Type *basic_type = itype_type_ptrs[cv_basic_type_code];
           if(basic_type == 0)
           {
-            RDI_TypeKind type_kind = rdi_type_kind_from_cv_basic_type(cv_basic_type_code);
+            RDI_TypeKind type_kind = p2r_rdi_type_kind_from_cv_basic_type(cv_basic_type_code);
             U32 byte_size = rdi_size_from_basic_type_kind(type_kind);
             basic_type = dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
             if(byte_size == 0xffffffff)
@@ -3321,9 +3359,10 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   {
     out->top_level_info   = top_level_info;
     out->binary_sections  = binary_sections;
-    out->units            = units;
+    out->units            = all_units;
     out->types            = all_types;
     out->udts             = all_udts;
+    out->src_files        = all_src_files;
     out->global_variables = all_global_variables;
     out->thread_variables = all_thread_variables;
     out->procedures       = all_procedures;
@@ -3347,6 +3386,7 @@ p2r_bake(Arena *arena, P2R_BakeIn *in)
     bake_params.units            = in->units;
     bake_params.types            = in->types;
     bake_params.udts             = in->udts;
+    bake_params.src_files        = in->src_files;
     bake_params.global_variables = in->global_variables;
     bake_params.thread_variables = in->thread_variables;
     bake_params.procedures       = in->procedures;

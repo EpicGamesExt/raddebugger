@@ -449,12 +449,50 @@ struct RDIM_BinarySectionList
 };
 
 ////////////////////////////////
+//~ rjf: Source File Info Types
+
+typedef struct RDIM_SrcFileLineMapFragment RDIM_SrcFileLineMapFragment;
+struct RDIM_SrcFileLineMapFragment
+{
+  RDIM_SrcFileLineMapFragment *next;
+  struct RDIM_LineSequence *seq;
+};
+
+typedef struct RDIM_SrcFile RDIM_SrcFile;
+struct RDIM_SrcFile
+{
+  struct RDIM_SrcFileChunkNode *chunk;
+  RDIM_String8 normal_full_path;
+  RDIM_SrcFileLineMapFragment *first_line_map_fragment;
+  RDIM_SrcFileLineMapFragment *last_line_map_fragment;
+};
+
+typedef struct RDIM_SrcFileChunkNode RDIM_SrcFileChunkNode;
+struct RDIM_SrcFileChunkNode
+{
+  RDIM_SrcFileChunkNode *next;
+  RDIM_SrcFile *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_SrcFileChunkList RDIM_SrcFileChunkList;
+struct RDIM_SrcFileChunkList
+{
+  RDIM_SrcFileChunkNode *first;
+  RDIM_SrcFileChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+////////////////////////////////
 //~ rjf: Per-Compilation-Unit Info Types
 
 typedef struct RDIM_LineSequence RDIM_LineSequence;
 struct RDIM_LineSequence
 {
-  RDIM_String8 file_name;
+  RDIM_SrcFile *src_file;
   RDI_U64 *voffs;     // [line_count + 1] (sorted)
   RDI_U32 *line_nums; // [line_count]
   RDI_U16 *col_nums;  // [2*line_count]
@@ -586,7 +624,7 @@ struct RDIM_UDT
   RDIM_UDTEnumVal *last_enum_val;
   RDI_U32 member_count;
   RDI_U32 enum_val_count;
-  RDIM_String8 source_path;
+  RDIM_SrcFile *src_file;
   RDI_U32 line;
   RDI_U32 col;
 };
@@ -767,6 +805,7 @@ struct RDIM_BakeParams
   RDIM_UnitChunkList units;
   RDIM_TypeChunkList types;
   RDIM_UDTChunkList udts;
+  RDIM_SrcFileChunkList src_files;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList procedures;
@@ -1004,6 +1043,14 @@ RDI_PROC void rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, 
 RDI_PROC RDIM_BinarySection *rdim_binary_section_list_push(RDIM_Arena *arena, RDIM_BinarySectionList *list);
 
 ////////////////////////////////
+//~ rjf: Source File Info Building
+
+RDI_PROC RDIM_SrcFile *rdim_src_file_chunk_list_push(RDIM_Arena *arena, RDIM_SrcFileChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_src_file(RDIM_SrcFile *src_file);
+RDI_PROC void rdim_src_file_chunk_list_concat_in_place(RDIM_SrcFileChunkList *dst, RDIM_SrcFileChunkList *to_push);
+RDI_PROC void rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_files, RDIM_SrcFile *src_file, RDIM_LineSequence *seq);
+
+////////////////////////////////
 //~ rjf: Unit Info Building
 
 RDI_PROC RDIM_Unit *rdim_unit_chunk_list_push(RDIM_Arena *arena, RDIM_UnitChunkList *list, RDI_U64 cap);
@@ -1074,7 +1121,6 @@ RDI_PROC RDI_U32 rdim_bake_idx_run(RDIM_Arena *arena, RDIM_BakeIdxRunMap *map, R
 //- rjf: interned path/file building
 RDI_PROC RDIM_String8 rdim_normal_string_from_bake_path_node(RDIM_Arena *arena, RDIM_BakePathNode *node);
 RDI_PROC RDIM_BakePathNode *rdim_bake_path_node_from_string(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string);
-RDI_PROC RDIM_BakeSrcNode *rdim_bake_src_node_from_path_node(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_BakePathNode *path_node);
 RDI_PROC RDI_U32 rdim_bake_path(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_String8 string);
 
 //- rjf: name maps

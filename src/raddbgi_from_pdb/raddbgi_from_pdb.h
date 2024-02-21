@@ -47,6 +47,7 @@ struct P2R_ConvertOut
   RDIM_UnitChunkList units;
   RDIM_TypeChunkList types;
   RDIM_UDTChunkList udts;
+  RDIM_SrcFileChunkList src_files;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList procedures;
@@ -64,6 +65,7 @@ struct P2R_BakeIn
   RDIM_UnitChunkList units;
   RDIM_TypeChunkList types;
   RDIM_UDTChunkList udts;
+  RDIM_SrcFileChunkList src_files;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList procedures;
@@ -164,6 +166,22 @@ struct P2R_LinkNameMap
   U64 link_name_count;
 };
 
+//- rjf: normalized file path -> source file map
+
+typedef struct P2R_SrcFileNode P2R_SrcFileNode;
+struct P2R_SrcFileNode
+{
+  P2R_SrcFileNode *next;
+  RDIM_SrcFile *src_file;
+};
+
+typedef struct P2R_SrcFileMap P2R_SrcFileMap;
+struct P2R_SrcFileMap
+{
+  P2R_SrcFileNode **slots;
+  U64 slots_count;
+};
+
 //- rjf: link name map building tasks
 
 typedef struct P2R_LinkNameMapBuildIn P2R_LinkNameMapBuildIn;
@@ -250,10 +268,10 @@ internal RDI_BinarySectionFlags rdi_binary_section_flags_from_coff_section_flags
 ////////////////////////////////
 //~ rjf: CodeView => RADDBGI Canonical Conversions
 
-internal RDI_Arch         rdi_arch_from_cv_arch(CV_Arch arch);
-internal RDI_RegisterCode rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
-internal RDI_Language     rdi_language_from_cv_language(CV_Language language);
-internal RDI_TypeKind     rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
+internal RDI_Arch         p2r_rdi_arch_from_cv_arch(CV_Arch arch);
+internal RDI_RegisterCode p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
+internal RDI_Language     p2r_rdi_language_from_cv_language(CV_Language language);
+internal RDI_TypeKind     p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
 
 ////////////////////////////////
 //~ rjf: Location Info Building Helpers
