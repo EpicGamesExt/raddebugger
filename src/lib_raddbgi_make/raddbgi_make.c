@@ -998,8 +998,8 @@ rdim_bake_section_count_from_params(RDIM_BakeParams *params)
     section_count += params->src_files.total_count; // PER-SOURCE-FILE line map numbers
     section_count += params->src_files.total_count; // PER-SOURCE-FILE line map ranges
     section_count += params->src_files.total_count; // PER-SOURCE-FILE line map voffs
-    section_count += RDI_NameMapKind_COUNT;         // PER-NAME-MAP buckets section
-    section_count += RDI_NameMapKind_COUNT;         // PER-NAME-MAP nodes section
+    section_count += RDI_NameMapKind_COUNT-1;       // PER-NAME-MAP buckets section
+    section_count += RDI_NameMapKind_COUNT-1;       // PER-NAME-MAP nodes section
   }
   return section_count;
 }
@@ -1054,12 +1054,12 @@ rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSecti
     case RDI_DataSectionTag_NameMapBuckets:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 0*RDI_NameMapKind_COUNT + (idx-1)%RDI_NameMapKind_COUNT;
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 0*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
     }break;
     case RDI_DataSectionTag_NameMapNodes:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 1*RDI_NameMapKind_COUNT + (idx-1)%RDI_NameMapKind_COUNT;
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 1*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
     }break;
   }
   return result;
@@ -1693,6 +1693,7 @@ rdim_bake_string_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
         for(RDI_U64 idx = 0; idx < n->count; idx += 1)
         {
           rdim_bake_string_map_insert(arena, &strings, n->v[idx].name);
+          rdim_bake_string_map_insert(arena, &strings, n->v[idx].link_name);
         }
       }
     }
@@ -1716,15 +1717,111 @@ rdim_bake_string_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
   return strings;
 }
 
+//- rjf: bake name map building
+
+RDI_PROC RDIM_BakeNameMap
+rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params)
+{
+  RDIM_BakeNameMap map = {0};
+  switch(kind)
+  {
+    default:{}break;
+    case RDI_NameMapKind_GlobalVariables:
+    {
+      map.slots_count = params->global_variables.total_count*2;
+      map.slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map.slots_count);
+      for(RDIM_SymbolChunkNode *n = params->global_variables.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          RDI_U32 symbol_idx = (RDI_U32)rdim_idx_from_symbol(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          rdim_bake_name_map_push(arena, &map, n->v[idx].name, symbol_idx);
+        }
+      }
+    }break;
+    case RDI_NameMapKind_ThreadVariables:
+    {
+      map.slots_count = params->thread_variables.total_count*2;
+      map.slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map.slots_count);
+      for(RDIM_SymbolChunkNode *n = params->thread_variables.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          RDI_U32 symbol_idx = (RDI_U32)rdim_idx_from_symbol(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          rdim_bake_name_map_push(arena, &map, n->v[idx].name, symbol_idx);
+        }
+      }
+    }break;
+    case RDI_NameMapKind_Procedures:
+    {
+      map.slots_count = params->procedures.total_count*2;
+      map.slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map.slots_count);
+      for(RDIM_SymbolChunkNode *n = params->procedures.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          RDI_U32 symbol_idx = (RDI_U32)rdim_idx_from_symbol(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          rdim_bake_name_map_push(arena, &map, n->v[idx].name, symbol_idx);
+        }
+      }
+    }break;
+    case RDI_NameMapKind_Types:
+    {
+      map.slots_count = params->types.total_count;
+      map.slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map.slots_count);
+      for(RDIM_TypeChunkNode *n = params->types.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          RDI_U32 type_idx = (RDI_U32)rdim_idx_from_type(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          rdim_bake_name_map_push(arena, &map, n->v[idx].name, type_idx);
+        }
+      }
+    }break;
+    case RDI_NameMapKind_LinkNameProcedures:
+    {
+      map.slots_count = params->procedures.total_count*2;
+      map.slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map.slots_count);
+      for(RDIM_SymbolChunkNode *n = params->procedures.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          if(n->v[idx].link_name.size == 0) {continue;}
+          RDI_U32 symbol_idx = (RDI_U32)rdim_idx_from_symbol(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          rdim_bake_name_map_push(arena, &map, n->v[idx].link_name, symbol_idx);
+        }
+      }
+    }break;
+    case RDI_NameMapKind_NormalSourcePaths:
+    {
+      map.slots_count = params->src_files.total_count*2;
+      map.slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map.slots_count);
+      for(RDIM_SrcFileChunkNode *n = params->src_files.first; n != 0; n = n->next)
+      {
+        for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+        {
+          RDI_U32 src_file_idx = (RDI_U32)rdim_idx_from_src_file(&n->v[idx]); // TODO(rjf): @u64_to_u32
+          rdim_bake_name_map_push(arena, &map, n->v[idx].normal_full_path, src_file_idx);
+        }
+      }
+    }break;
+  }
+  return map;
+}
+
 //- rjf: idx run map building
 
 RDI_PROC RDIM_BakeIdxRunMap
 rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
 {
+  //- rjf: set up map
   RDIM_BakeIdxRunMap idx_runs = {0};
   idx_runs.slots_count = params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
   idx_runs.slots = rdim_push_array(arena, RDIM_BakeIdxRunNode *, idx_runs.slots_count);
   rdim_bake_idx_run_map_insert(arena, &idx_runs, 0, 0);
+  
+  
+  
   return idx_runs;
 }
 
@@ -1736,21 +1833,6 @@ rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
   RDIM_BakePathTree tree = {0};
   rdim_bake_path_tree_insert(arena, &tree, rdim_str8_lit("<nil>"));
   return tree;
-}
-
-//- rjf: bake name map building
-
-RDI_PROC RDIM_BakeNameMap
-rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params)
-{
-  RDIM_BakeNameMap map = {0};
-  map.slots_count = params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
-  map.slots = rdim_push_array(arena, RDIM_BakeNameMapNode *, map.slots_count);
-  switch(kind)
-  {
-    default:{}break;
-  }
-  return map;
 }
 
 ////////////////////////////////

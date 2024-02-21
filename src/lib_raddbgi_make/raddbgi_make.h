@@ -1171,14 +1171,14 @@ RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, 
 //- rjf: bake string map building
 RDI_PROC RDIM_BakeStringMap rdim_bake_string_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
+//- rjf: bake name map building
+RDI_PROC RDIM_BakeNameMap rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params);
+
 //- rjf: bake idx run map building
 RDI_PROC RDIM_BakeIdxRunMap rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: bake path tree building
 RDI_PROC RDIM_BakePathTree rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
-
-//- rjf: bake name map building
-RDI_PROC RDIM_BakeNameMap rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params);
 
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
