@@ -3379,12 +3379,140 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
 internal P2R_Bake2Serialize *
 p2r_bake(Arena *arena, P2R_Convert2Bake *in)
 {
+  RDIM_BakeParams *params = &in->bake_params;
+  
+  //////////////////////////////
+  //- rjf: build interned string map
+  //
+  RDIM_BakeStringMap strings = rdim_bake_string_map_from_params(arena, params);
+  
+  //////////////////////////////
+  //- rjf: build interned idx run map
+  //
+  RDIM_BakeIdxRunMap idx_runs = rdim_bake_idx_run_map_from_params(arena, params);
+  
+  //////////////////////////////
+  //- rjf: build interned path tree
+  //
+  RDIM_BakePathTree path_tree = rdim_bake_path_tree_from_params(arena, params);
+  
+  //////////////////////////////
+  //- rjf: build name maps
+  //
+  RDIM_BakeNameMap name_maps[RDI_NameMapKind_COUNT] = {0};
+  {
+    for(RDI_NameMapKind k = (RDI_NameMapKind)0; k < RDI_NameMapKind_COUNT; k = (RDI_NameMapKind)(k+1))
+    {
+      name_maps[k] = rdim_bake_name_map_from_kind_params(arena, k, params);
+    }
+  }
+  
   //////////////////////////////
   //- rjf: build all sections
   //
   RDIM_BakeSectionList sections = {0};
   {
+    //- rjf: top-level info
+    {
+      RDIM_BakeSectionList s = rdim_bake_top_level_info_section_list_from_params(arena, &strings, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
     
+    //- rjf: binary sections
+    {
+      RDIM_BakeSectionList s = rdim_bake_binary_section_section_list_from_params(arena, &strings, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: units
+    {
+      RDIM_BakeSectionList s = rdim_bake_unit_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: unit vmap
+    {
+      RDIM_BakeSectionList s = rdim_bake_unit_vmap_section_list_from_params(arena, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: source files
+    {
+      RDIM_BakeSectionList s = rdim_bake_src_file_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: type nodes
+    {
+      RDIM_BakeSectionList s = rdim_bake_type_node_section_list_from_params(arena, &strings, &idx_runs, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: UDTs
+    {
+      RDIM_BakeSectionList s = rdim_bake_udt_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: global variables
+    {
+      RDIM_BakeSectionList s = rdim_bake_global_variable_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: global vmap
+    {
+      RDIM_BakeSectionList s = rdim_bake_global_vmap_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: thread variables
+    {
+      RDIM_BakeSectionList s = rdim_bake_thread_variable_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: procedures
+    {
+      RDIM_BakeSectionList s = rdim_bake_procedure_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: scopes
+    {
+      RDIM_BakeSectionList s = rdim_bake_scope_section_list_from_params(arena, &strings, &path_tree, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: scope vmap
+    {
+      RDIM_BakeSectionList s = rdim_bake_scope_vmap_section_list_from_params(arena, params);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: name maps
+    {
+      RDIM_BakeSectionList s = rdim_bake_name_map_section_list_from_params_maps(arena, &strings, &idx_runs, params, name_maps);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: file paths
+    {
+      RDIM_BakeSectionList s = rdim_bake_file_path_section_list_from_path_tree(arena, &strings, &path_tree);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: strings
+    {
+      RDIM_BakeSectionList s = rdim_bake_string_section_list_from_string_map(arena, &strings);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
+    
+    //- rjf: index runs
+    {
+      RDIM_BakeSectionList s = rdim_bake_idx_run_section_list_from_idx_run_map(arena, &idx_runs);
+      rdim_bake_section_list_concat_in_place(&sections, &s);
+    }
   }
   
   //////////////////////////////
@@ -3394,3 +3522,4 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   out->sections = sections;
   return out;
 }
+

@@ -1223,7 +1223,7 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_scope_section_list_from_params(RDIM_Aren
 RDI_PROC RDIM_BakeSectionList rdim_bake_scope_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: name maps
-RDI_PROC RDIM_BakeSectionList rdim_bake_name_map_section_list_from_maps(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap name_maps[RDI_NameMapKind_COUNT]);
+RDI_PROC RDIM_BakeSectionList rdim_bake_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap name_maps[RDI_NameMapKind_COUNT]);
 
 //- rjf: file paths
 RDI_PROC RDIM_BakeSectionList rdim_bake_file_path_section_list_from_path_tree(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree);
