@@ -36,10 +36,10 @@ p2r_hash_from_voff(U64 voff)
 ////////////////////////////////
 //~ rjf: Command Line -> Conversion Inputs
 
-internal P2R_ConvertIn *
-p2r_convert_in_from_cmd_line(Arena *arena, CmdLine *cmdline)
+internal P2R_User2Convert *
+p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline)
 {
-  P2R_ConvertIn *result = push_array(arena, P2R_ConvertIn, 1);
+  P2R_User2Convert *result = push_array(arena, P2R_User2Convert, 1);
   
   //- rjf: get input pdb
   {
@@ -1740,8 +1740,8 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
-internal P2R_ConvertOut *
-p2r_convert(Arena *arena, P2R_ConvertIn *in)
+internal P2R_Convert2Bake *
+p2r_convert(Arena *arena, P2R_User2Convert *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -3355,18 +3355,18 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
   //////////////////////////////////////////////////////////////
   //- rjf: fill output
   //
-  P2R_ConvertOut *out = push_array(arena, P2R_ConvertOut, 1);
+  P2R_Convert2Bake *out = push_array(arena, P2R_Convert2Bake, 1);
   {
-    out->top_level_info   = top_level_info;
-    out->binary_sections  = binary_sections;
-    out->units            = all_units;
-    out->types            = all_types;
-    out->udts             = all_udts;
-    out->src_files        = all_src_files;
-    out->global_variables = all_global_variables;
-    out->thread_variables = all_thread_variables;
-    out->procedures       = all_procedures;
-    out->scopes           = all_scopes;
+    out->bake_params.top_level_info   = top_level_info;
+    out->bake_params.binary_sections  = binary_sections;
+    out->bake_params.units            = all_units;
+    out->bake_params.types            = all_types;
+    out->bake_params.udts             = all_udts;
+    out->bake_params.src_files        = all_src_files;
+    out->bake_params.global_variables = all_global_variables;
+    out->bake_params.thread_variables = all_thread_variables;
+    out->bake_params.procedures       = all_procedures;
+    out->bake_params.scopes           = all_scopes;
   }
   
   scratch_end(scratch);
@@ -3376,25 +3376,21 @@ p2r_convert(Arena *arena, P2R_ConvertIn *in)
 ////////////////////////////////
 //~ rjf: Top-Level Baking Entry Point
 
-internal P2R_BakeOut *
-p2r_bake(Arena *arena, P2R_BakeIn *in)
+internal P2R_Bake2Serialize *
+p2r_bake(Arena *arena, P2R_Convert2Bake *in)
 {
-  RDIM_BakeParams bake_params = {0};
+  //////////////////////////////
+  //- rjf: build all sections
+  //
+  RDIM_BakeSectionList sections = {0};
   {
-    bake_params.top_level_info   = in->top_level_info;
-    bake_params.binary_sections  = in->binary_sections;
-    bake_params.units            = in->units;
-    bake_params.types            = in->types;
-    bake_params.udts             = in->udts;
-    bake_params.src_files        = in->src_files;
-    bake_params.global_variables = in->global_variables;
-    bake_params.thread_variables = in->thread_variables;
-    bake_params.procedures       = in->procedures;
-    bake_params.scopes           = in->scopes;
+    
   }
-  RDIM_BakeSectionList sections = rdim_bake_sections_from_params(arena, &bake_params);
-  String8List bake_strings = rdim_blobs_from_bake_sections(arena, &sections);
-  P2R_BakeOut *out = push_array(arena, P2R_BakeOut, 1);
-  out->blobs = bake_strings;
+  
+  //////////////////////////////
+  //- rjf: fill & return
+  //
+  P2R_Bake2Serialize *out = push_array(arena, P2R_Bake2Serialize, 1);
+  out->sections = sections;
   return out;
 }

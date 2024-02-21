@@ -5,17 +5,16 @@
 #define RADDBGI_FROM_PDB_H
 
 ////////////////////////////////
-//~ rjf: Conversion Inputs/Outputs
+//~ rjf: Conversion Stage Inputs/Outputs
 
-typedef struct P2R_ConvertIn P2R_ConvertIn;
-struct P2R_ConvertIn
+typedef struct P2R_User2Convert P2R_User2Convert;
+struct P2R_User2Convert
 {
   String8 input_pdb_name;
   String8 input_pdb_data;
   String8 input_exe_name;
   String8 input_exe_data;
   String8 output_name;
-  
   struct
   {
     B8 input;
@@ -23,7 +22,6 @@ struct P2R_ConvertIn
     B8 parsing;
     B8 converting;
   } hide_errors;
-  
   B8 dump;
   B8 dump__first;
   B8 dump_coff_sections;
@@ -35,47 +33,19 @@ struct P2R_ConvertIn
   B8 dump_contributions;
   B8 dump_table_diagnostics;
   B8 dump__last;
-  
   String8List errors;
 };
 
-typedef struct P2R_ConvertOut P2R_ConvertOut;
-struct P2R_ConvertOut
+typedef struct P2R_Convert2Bake P2R_Convert2Bake;
+struct P2R_Convert2Bake
 {
-  RDIM_TopLevelInfo top_level_info;
-  RDIM_BinarySectionList binary_sections;
-  RDIM_UnitChunkList units;
-  RDIM_TypeChunkList types;
-  RDIM_UDTChunkList udts;
-  RDIM_SrcFileChunkList src_files;
-  RDIM_SymbolChunkList global_variables;
-  RDIM_SymbolChunkList thread_variables;
-  RDIM_SymbolChunkList procedures;
-  RDIM_ScopeChunkList scopes;
+  RDIM_BakeParams bake_params;
 };
 
-////////////////////////////////
-//~ rjf: Baking Inputs/Outputs
-
-typedef struct P2R_BakeIn P2R_BakeIn;
-struct P2R_BakeIn
+typedef struct P2R_Bake2Serialize P2R_Bake2Serialize;
+struct P2R_Bake2Serialize
 {
-  RDIM_TopLevelInfo top_level_info;
-  RDIM_BinarySectionList binary_sections;
-  RDIM_UnitChunkList units;
-  RDIM_TypeChunkList types;
-  RDIM_UDTChunkList udts;
-  RDIM_SrcFileChunkList src_files;
-  RDIM_SymbolChunkList global_variables;
-  RDIM_SymbolChunkList thread_variables;
-  RDIM_SymbolChunkList procedures;
-  RDIM_ScopeChunkList scopes;
-};
-
-typedef struct P2R_BakeOut P2R_BakeOut;
-struct P2R_BakeOut
-{
-  String8List blobs;
+  RDIM_BakeSectionList sections;
 };
 
 ////////////////////////////////
@@ -258,7 +228,7 @@ internal U64 p2r_hash_from_voff(U64 voff);
 ////////////////////////////////
 //~ rjf: Command Line -> Conversion Inputs
 
-internal P2R_ConvertIn *p2r_convert_in_from_cmd_line(Arena *arena, CmdLine *cmdline);
+internal P2R_User2Convert *p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline);
 
 ////////////////////////////////
 //~ rjf: COFF => RADDBGI Canonical Conversions
@@ -311,11 +281,11 @@ internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
-internal P2R_ConvertOut *p2r_convert(Arena *arena, P2R_ConvertIn *in);
+internal P2R_Convert2Bake *p2r_convert(Arena *arena, P2R_User2Convert *in);
 
 ////////////////////////////////
 //~ rjf: Top-Level Baking Entry Point
 
-internal P2R_BakeOut *p2r_bake(Arena *arena, P2R_BakeIn *in);
+internal P2R_Bake2Serialize *p2r_bake(Arena *arena, P2R_Convert2Bake *in);
 
 #endif // RADDBGI_FROM_PDB_H

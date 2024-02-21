@@ -57,7 +57,7 @@ main(int argc, char **argv)
   String8List args = os_string_list_from_argcv(arena, argc, argv);
   CmdLine cmdline = cmd_line_from_string_list(arena, args);
   B32 should_capture = cmd_line_has_flag(&cmdline, str8_lit("capture"));
-  P2R_ConvertIn *convert_in = p2r_convert_in_from_cmd_line(arena, &cmdline);
+  P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(arena, &cmdline);
   
   //- rjf: begin capture
   if(should_capture)
@@ -66,47 +66,37 @@ main(int argc, char **argv)
   }
   
   //- rjf: display errors with input
-  if(convert_in->errors.node_count > 0 && !convert_in->hide_errors.input)
+  if(user2convert->errors.node_count > 0 && !user2convert->hide_errors.input)
   {
-    for(String8Node *n = convert_in->errors.first; n != 0; n = n->next)
+    for(String8Node *n = user2convert->errors.first; n != 0; n = n->next)
     {
       fprintf(stderr, "error(input): %.*s\n", str8_varg(n->string));
     }
   }
   
   //- rjf: convert
-  P2R_ConvertOut *convert_out = 0;
+  P2R_Convert2Bake *convert2bake = 0;
   ProfScope("convert")
   {
-    convert_out = p2r_convert(arena, convert_in);
+    convert2bake = p2r_convert(arena, user2convert);
   }
   
   //- rjf: bake
-  P2R_BakeOut *bake_out = 0;
+  P2R_Bake2Serialize *bake2srlz = 0;
   ProfScope("bake")
   {
-    P2R_BakeIn bake_in = {0};
-    {
-      bake_in.top_level_info   = convert_out->top_level_info;
-      bake_in.binary_sections  = convert_out->binary_sections;
-      bake_in.units            = convert_out->units;
-      bake_in.types            = convert_out->types;
-      bake_in.udts             = convert_out->udts;
-      bake_in.src_files        = convert_out->src_files;
-      bake_in.global_variables = convert_out->global_variables;
-      bake_in.thread_variables = convert_out->thread_variables;
-      bake_in.procedures       = convert_out->procedures;
-      bake_in.scopes           = convert_out->scopes;
-    }
-    bake_out = p2r_bake(arena, &bake_in);
+    bake2srlz = p2r_bake(arena, convert2bake);
   }
+  
+  //- rjf: serialize
+  String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(arena, &convert2bake->bake_params, &bake2srlz->sections);
   
   //- rjf: write
   ProfScope("write")
   {
-    OS_Handle output_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, convert_in->output_name);
+    OS_Handle output_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, user2convert->output_name);
     U64 off = 0;
-    for(String8Node *n = bake_out->blobs.first; n != 0; n = n->next)
+    for(String8Node *n = serialize_out.first; n != 0; n = n->next)
     {
       os_file_write(output_file, r1u64(off, off+n->string.size), n->string.str);
       off += n->string.size;
