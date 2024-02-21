@@ -1169,16 +1169,16 @@ RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, 
 //~ rjf: [Baking] Build Artifacts -> Interned/Deduplicated Data Structures
 
 //- rjf: bake string map building
-RDI_PROC RDIM_BakeStringMap rdim_bake_string_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeStringMap *rdim_bake_string_map_from_params(RDIM_Arena *arena, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
 
 //- rjf: bake name map building
-RDI_PROC RDIM_BakeNameMap rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeNameMap *rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params);
 
 //- rjf: bake idx run map building
-RDI_PROC RDIM_BakeIdxRunMap rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeIdxRunMap *rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: bake path tree building
-RDI_PROC RDIM_BakePathTree rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
@@ -1223,7 +1223,7 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_scope_section_list_from_params(RDIM_Aren
 RDI_PROC RDIM_BakeSectionList rdim_bake_scope_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: name maps
-RDI_PROC RDIM_BakeSectionList rdim_bake_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap name_maps[RDI_NameMapKind_COUNT]);
+RDI_PROC RDIM_BakeSectionList rdim_bake_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
 
 //- rjf: file paths
 RDI_PROC RDIM_BakeSectionList rdim_bake_file_path_section_list_from_path_tree(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree);
