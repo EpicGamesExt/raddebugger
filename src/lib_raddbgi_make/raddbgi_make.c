@@ -1017,46 +1017,46 @@ rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSecti
     default:{}break;
     
     //- rjf: per-unit sections
-    case RDI_DataSectionTag_LineInfoVoffs:
+    case (RDI_U32)RDI_DataSectionTag_LineInfoVoffs:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 0*params->units.total_count + (idx-1)%params->units.total_count;
     }break;
-    case RDI_DataSectionTag_LineInfoData:
+    case (RDI_U32)RDI_DataSectionTag_LineInfoData:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 1*params->units.total_count + (idx-1)%params->units.total_count;
     }break;
-    case RDI_DataSectionTag_LineInfoColumns:
+    case (RDI_U32)RDI_DataSectionTag_LineInfoColumns:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 2*params->units.total_count + (idx-1)%params->units.total_count;
     }break;
     
     //- rjf: per-source-file sections
-    case RDI_DataSectionTag_LineMapNumbers:
+    case (RDI_U32)RDI_DataSectionTag_LineMapNumbers:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 0*params->src_files.total_count + (idx-1)%params->src_files.total_count;
     }break;
-    case RDI_DataSectionTag_LineMapRanges:
+    case (RDI_U32)RDI_DataSectionTag_LineMapRanges:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 1*params->src_files.total_count + (idx-1)%params->src_files.total_count;
     }break;
-    case RDI_DataSectionTag_LineMapVoffs:
+    case (RDI_U32)RDI_DataSectionTag_LineMapVoffs:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 2*params->src_files.total_count + (idx-1)%params->src_files.total_count;
     }break;
     
     //- rjf: per-name-map sections
-    case RDI_DataSectionTag_NameMapBuckets:
+    case (RDI_U32)RDI_DataSectionTag_NameMapBuckets:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 0*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
     }break;
-    case RDI_DataSectionTag_NameMapNodes:
+    case (RDI_U32)RDI_DataSectionTag_NameMapNodes:
     if(idx != 0)
     {
       result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 1*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
