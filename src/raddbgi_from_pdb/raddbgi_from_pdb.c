@@ -3518,11 +3518,11 @@ p2r_bake_type_nodes_task__entry_point(Arena *arena, void *p)
 }
 
 internal void *
-p2r_bake_name_maps_task__entry_point(Arena *arena, void *p)
+p2r_bake_name_map_task__entry_point(Arena *arena, void *p)
 {
-  P2R_BakeNameMapsIn *in = (P2R_BakeNameMapsIn *)p;
+  P2R_BakeNameMapIn *in = (P2R_BakeNameMapIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake name maps") *s = rdim_bake_name_map_section_list_from_params_maps(arena, in->strings, in->idx_runs, in->params, in->name_maps);
+  ProfScope("bake name map %i", in->kind) *s = rdim_bake_name_map_section_list_from_params_kind_map(arena, in->strings, in->idx_runs, in->params, in->kind, in->map);
   return s;
 }
 
@@ -3541,6 +3541,7 @@ p2r_bake_idx_runs_task__entry_point(Arena *arena, void *p)
 internal P2R_Bake2Serialize *
 p2r_bake(Arena *arena, P2R_Convert2Bake *in)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   RDIM_BakeParams *params = &in->bake_params;
   RDIM_BakeSectionList sections = {0};
   
@@ -3634,11 +3635,32 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: kick off pass 3 tasks
   P2R_BakeTypeNodesIn bake_type_nodes_in = {strings, idx_runs, params};
   TS_Ticket bake_type_nodes_ticket = ts_kickoff(p2r_bake_type_nodes_task__entry_point, 0, &bake_type_nodes_in);
-  P2R_BakeNameMapsIn bake_name_maps_in = {strings, idx_runs, params};
-  MemoryCopyArray(bake_name_maps_in.name_maps, name_maps);
-  TS_Ticket bake_name_maps_ticket = ts_kickoff(p2r_bake_name_maps_task__entry_point, 0, &bake_name_maps_in);
+  TS_TicketList bake_name_maps_tickets = {0};
+  for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
+      k < RDI_NameMapKind_COUNT;
+      k = (RDI_NameMapKind)(k+1))
+  {
+    if(name_maps[k] == 0 || name_maps[k]->name_count == 0)
+    {
+      continue;
+    }
+    P2R_BakeNameMapIn *in = push_array(scratch.arena, P2R_BakeNameMapIn, 1);
+    in->strings  = strings;
+    in->idx_runs = idx_runs;
+    in->params   = params;
+    in->kind     = k;
+    in->map      = name_maps[k];
+    ts_ticket_list_push(scratch.arena, &bake_name_maps_tickets, ts_kickoff(p2r_bake_name_map_task__entry_point, 0, in));
+  }
   P2R_BakeIdxRunsIn bake_idx_runs_in = {idx_runs};
   TS_Ticket bake_idx_runs_ticket = ts_kickoff(p2r_bake_idx_runs_task__entry_point, 0, &bake_idx_runs_in);
+  
+  //- rjf: bake top-level name maps section
+  ProfScope("top level name maps section")
+  {
+    RDIM_BakeSectionList s = rdim_bake_top_level_name_map_section_list_from_params_maps(arena, strings, idx_runs, params, name_maps);
+    rdim_bake_section_list_concat_in_place(&sections, &s);
+  }
   
   //- rjf: join units
   ProfScope("units")
@@ -3734,8 +3756,11 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: join name maps
   ProfScope("name map")
   {
-    RDIM_BakeSectionList *s = ts_join_struct(bake_name_maps_ticket, max_U64, RDIM_BakeSectionList);
-    rdim_bake_section_list_concat_in_place(&sections, s);
+    for(TS_TicketNode *n = bake_name_maps_tickets.first; n != 0; n = n->next)
+    {
+      RDIM_BakeSectionList *s = ts_join_struct(n->v, max_U64, RDIM_BakeSectionList);
+      rdim_bake_section_list_concat_in_place(&sections, s);
+    }
   }
   
   //- rjf: join index runs
@@ -3748,6 +3773,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: fill & return
   P2R_Bake2Serialize *out = push_array(arena, P2R_Bake2Serialize, 1);
   out->sections = sections;
+  scratch_end(scratch);
   return out;
 }
 

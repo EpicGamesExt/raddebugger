@@ -2959,7 +2959,7 @@ rdim_bake_scope_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams
 //- rjf: name maps
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT])
+rdim_bake_top_level_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT])
 {
   RDIM_BakeSectionList sections = {0};
   
@@ -2986,113 +2986,119 @@ rdim_bake_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStr
       RDI_NameMap *dst_map = &dst_maps[dst_map_idx];
       RDIM_BakeNameMap *src_map = name_maps[k];
       if(src_map == 0 || src_map->name_count == 0) { continue; }
-      
-      // rjf: bake name map
-      RDI_U32 baked_buckets_count = src_map->name_count;
-      RDI_U32 baked_nodes_count = src_map->name_count;
-      RDI_NameMapBucket *baked_buckets = rdim_push_array(arena, RDI_NameMapBucket, baked_buckets_count);
-      RDI_NameMapNode *baked_nodes = rdim_push_array_no_zero(arena, RDI_NameMapNode, baked_nodes_count);
-      {
-        RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
-        
-        // rjf: setup the final bucket layouts
-        typedef struct RDIM_NameMapSemiNode RDIM_NameMapSemiNode;
-        struct RDIM_NameMapSemiNode
-        {
-          RDIM_NameMapSemiNode *next;
-          RDIM_BakeNameMapNode *node;
-        };
-        typedef struct RDIM_NameMapSemiBucket RDIM_NameMapSemiBucket;
-        struct RDIM_NameMapSemiBucket
-        {
-          RDIM_NameMapSemiNode *first;
-          RDIM_NameMapSemiNode *last;
-          RDI_U64 count;
-        };
-        RDIM_NameMapSemiBucket *sbuckets = rdim_push_array(scratch.arena, RDIM_NameMapSemiBucket, baked_buckets_count);
-        for(RDIM_BakeNameMapNode *node = src_map->first;
-            node != 0;
-            node = node->order_next)
-        {
-          RDI_U64 hash = rdi_hash(node->string.str, node->string.size);
-          RDI_U64 bi = hash%baked_buckets_count;
-          RDIM_NameMapSemiNode *snode = rdim_push_array(scratch.arena, RDIM_NameMapSemiNode, 1);
-          SLLQueuePush(sbuckets[bi].first, sbuckets[bi].last, snode);
-          snode->node = node;
-          sbuckets[bi].count += 1;
-        }
-        
-        // rjf: convert to serialized buckets & nodes
-        {
-          RDI_NameMapBucket *bucket_ptr = baked_buckets;
-          RDI_NameMapNode *node_ptr = baked_nodes;
-          for(RDI_U32 i = 0; i < baked_buckets_count; i += 1, bucket_ptr += 1)
-          {
-            bucket_ptr->first_node = (RDI_U32)(node_ptr - baked_nodes);
-            bucket_ptr->node_count = sbuckets[i].count;
-            for(RDIM_NameMapSemiNode *snode = sbuckets[i].first;
-                snode != 0;
-                snode = snode->next)
-            {
-              RDIM_BakeNameMapNode *node = snode->node;
-              
-              // rjf: cons name and index(es)
-              RDI_U32 string_idx = rdim_bake_idx_from_string(strings, node->string);
-              RDI_U32 match_count = node->val_count;
-              RDI_U32 idx = 0;
-              if(match_count == 1)
-              {
-                idx = node->val_first->val[0];
-              }
-              else
-              {
-                RDI_U64 temp_pos = rdim_arena_pos(scratch.arena);
-                RDI_U32 *idx_run = rdim_push_array_no_zero(scratch.arena, RDI_U32, match_count);
-                RDI_U32 *idx_ptr = idx_run;
-                for(RDIM_BakeNameMapValNode *idxnode = node->val_first;
-                    idxnode != 0;
-                    idxnode = idxnode->next)
-                {
-                  for(RDI_U32 i = 0; i < sizeof(idxnode->val)/sizeof(idxnode->val[0]); i += 1)
-                  {
-                    if(idxnode->val[i] == 0)
-                    {
-                      goto dblbreak;
-                    }
-                    *idx_ptr = idxnode->val[i];
-                    idx_ptr += 1;
-                  }
-                }
-                dblbreak:;
-                idx = rdim_bake_idx_from_idx_run(idx_runs, idx_run, match_count);
-                rdim_arena_pop_to(scratch.arena, temp_pos);
-              }
-              
-              // rjf: write to node
-              node_ptr->string_idx = string_idx;
-              node_ptr->match_count = match_count;
-              node_ptr->match_idx_or_idx_run_first = idx;
-              node_ptr += 1;
-            }
-          }
-        }
-        rdim_scratch_end(scratch);
-      }
-      
-      // rjf: fill output header, and push sections for buckets/nodes
       dst_map->kind = k;
       dst_map->bucket_data_idx = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_NameMapBuckets, (RDI_U64)k); // TODO(rjf): @u64_to_u32
       dst_map->node_data_idx   = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_NameMapNodes,   (RDI_U64)k); // TODO(rjf): @u64_to_u32
-      rdim_bake_section_list_push_new(arena, &sections, baked_buckets, sizeof(RDI_NameMapBucket)* baked_buckets_count, RDI_DataSectionTag_NameMapBuckets, (RDI_U64)k);
-      rdim_bake_section_list_push_new(arena, &sections, baked_nodes,   sizeof(RDI_NameMapNode)  * baked_nodes_count,   RDI_DataSectionTag_NameMapNodes, (RDI_U64)k);
-      
-      // rjf: inc
       dst_map_idx += 1;
     }
   }
   
   // rjf: push section for all name maps
   rdim_bake_section_list_push_new(arena, &sections, dst_maps, sizeof(RDI_NameMap)*name_map_count, RDI_DataSectionTag_NameMaps, 0);
+  return sections;
+}
+
+RDI_PROC RDIM_BakeSectionList
+rdim_bake_name_map_section_list_from_params_kind_map(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDI_NameMapKind k, RDIM_BakeNameMap *map)
+{
+  RDIM_BakeSectionList sections = {0};
+  if(map != 0 && map->name_count != 0)
+  {
+    RDI_U32 baked_buckets_count = map->name_count;
+    RDI_U32 baked_nodes_count = map->name_count;
+    RDI_NameMapBucket *baked_buckets = rdim_push_array(arena, RDI_NameMapBucket, baked_buckets_count);
+    RDI_NameMapNode *baked_nodes = rdim_push_array_no_zero(arena, RDI_NameMapNode, baked_nodes_count);
+    {
+      RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+      
+      // rjf: setup the final bucket layouts
+      typedef struct RDIM_NameMapSemiNode RDIM_NameMapSemiNode;
+      struct RDIM_NameMapSemiNode
+      {
+        RDIM_NameMapSemiNode *next;
+        RDIM_BakeNameMapNode *node;
+      };
+      typedef struct RDIM_NameMapSemiBucket RDIM_NameMapSemiBucket;
+      struct RDIM_NameMapSemiBucket
+      {
+        RDIM_NameMapSemiNode *first;
+        RDIM_NameMapSemiNode *last;
+        RDI_U64 count;
+      };
+      RDIM_NameMapSemiBucket *sbuckets = rdim_push_array(scratch.arena, RDIM_NameMapSemiBucket, baked_buckets_count);
+      for(RDIM_BakeNameMapNode *node = map->first;
+          node != 0;
+          node = node->order_next)
+      {
+        RDI_U64 hash = rdi_hash(node->string.str, node->string.size);
+        RDI_U64 bi = hash%baked_buckets_count;
+        RDIM_NameMapSemiNode *snode = rdim_push_array(scratch.arena, RDIM_NameMapSemiNode, 1);
+        SLLQueuePush(sbuckets[bi].first, sbuckets[bi].last, snode);
+        snode->node = node;
+        sbuckets[bi].count += 1;
+      }
+      
+      // rjf: convert to serialized buckets & nodes
+      {
+        RDI_NameMapBucket *bucket_ptr = baked_buckets;
+        RDI_NameMapNode *node_ptr = baked_nodes;
+        for(RDI_U32 i = 0; i < baked_buckets_count; i += 1, bucket_ptr += 1)
+        {
+          bucket_ptr->first_node = (RDI_U32)(node_ptr - baked_nodes);
+          bucket_ptr->node_count = sbuckets[i].count;
+          for(RDIM_NameMapSemiNode *snode = sbuckets[i].first;
+              snode != 0;
+              snode = snode->next)
+          {
+            RDIM_BakeNameMapNode *node = snode->node;
+            
+            // rjf: cons name and index(es)
+            RDI_U32 string_idx = rdim_bake_idx_from_string(strings, node->string);
+            RDI_U32 match_count = node->val_count;
+            RDI_U32 idx = 0;
+            if(match_count == 1)
+            {
+              idx = node->val_first->val[0];
+            }
+            else
+            {
+              RDI_U64 temp_pos = rdim_arena_pos(scratch.arena);
+              RDI_U32 *idx_run = rdim_push_array_no_zero(scratch.arena, RDI_U32, match_count);
+              RDI_U32 *idx_ptr = idx_run;
+              for(RDIM_BakeNameMapValNode *idxnode = node->val_first;
+                  idxnode != 0;
+                  idxnode = idxnode->next)
+              {
+                for(RDI_U32 i = 0; i < sizeof(idxnode->val)/sizeof(idxnode->val[0]); i += 1)
+                {
+                  if(idxnode->val[i] == 0)
+                  {
+                    goto dblbreak;
+                  }
+                  *idx_ptr = idxnode->val[i];
+                  idx_ptr += 1;
+                }
+              }
+              dblbreak:;
+              idx = rdim_bake_idx_from_idx_run(idx_runs, idx_run, match_count);
+              rdim_arena_pop_to(scratch.arena, temp_pos);
+            }
+            
+            // rjf: write to node
+            node_ptr->string_idx = string_idx;
+            node_ptr->match_count = match_count;
+            node_ptr->match_idx_or_idx_run_first = idx;
+            node_ptr += 1;
+          }
+        }
+      }
+      rdim_scratch_end(scratch);
+    }
+    
+    // rjf: sections for buckets/nodes
+    rdim_bake_section_list_push_new(arena, &sections, baked_buckets, sizeof(RDI_NameMapBucket)* baked_buckets_count, RDI_DataSectionTag_NameMapBuckets, (RDI_U64)k);
+    rdim_bake_section_list_push_new(arena, &sections, baked_nodes,   sizeof(RDI_NameMapNode)  * baked_nodes_count,   RDI_DataSectionTag_NameMapNodes, (RDI_U64)k);
+  }
   return sections;
 }
 

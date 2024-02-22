@@ -326,13 +326,14 @@ struct P2R_BakeTypeNodesIn
   RDIM_BakeParams *params;
 };
 
-typedef struct P2R_BakeNameMapsIn P2R_BakeNameMapsIn;
-struct P2R_BakeNameMapsIn
+typedef struct P2R_BakeNameMapIn P2R_BakeNameMapIn;
+struct P2R_BakeNameMapIn
 {
   RDIM_BakeStringMap *strings;
   RDIM_BakeIdxRunMap *idx_runs;
   RDIM_BakeParams *params;
-  RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT];
+  RDI_NameMapKind kind;
+  RDIM_BakeNameMap *map;
 };
 
 typedef struct P2R_BakeIdxRunsIn P2R_BakeIdxRunsIn;
@@ -428,7 +429,7 @@ internal void *p2r_bake_strings_task__entry_point(Arena *arena, void *p);
 
 //- rjf: pass 3: idx-run-map-dependent debug info stream builds
 internal void *p2r_bake_type_nodes_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_name_maps_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_name_map_task__entry_point(Arena *arena, void *p);
 internal void *p2r_bake_idx_runs_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////

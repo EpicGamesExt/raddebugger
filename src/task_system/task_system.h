@@ -16,6 +16,21 @@ struct TS_Ticket
   U64 u64[2];
 };
 
+typedef struct TS_TicketNode TS_TicketNode;
+struct TS_TicketNode
+{
+  TS_TicketNode *next;
+  TS_Ticket v;
+};
+
+typedef struct TS_TicketList TS_TicketList;
+struct TS_TicketList
+{
+  TS_TicketNode *first;
+  TS_TicketNode *last;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Task Request Types
 
@@ -96,6 +111,7 @@ global TS_Shared *ts_shared = 0;
 //~ rjf: Basic Type Functions
 
 internal TS_Ticket ts_ticket_zero(void);
+internal void ts_ticket_list_push(Arena *arena, TS_TicketList *list, TS_Ticket ticket);
 
 ////////////////////////////////
 //~ rjf: Top-Level Layer Initialization

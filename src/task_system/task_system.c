@@ -8,6 +8,15 @@ ts_ticket_zero(void)
   return ticket;
 }
 
+internal void
+ts_ticket_list_push(Arena *arena, TS_TicketList *list, TS_Ticket ticket)
+{
+  TS_TicketNode *n = push_array(arena, TS_TicketNode, 1);
+  n->v = ticket;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
 ////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
