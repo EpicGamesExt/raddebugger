@@ -105,14 +105,14 @@ internal void ts_init(void);
 ////////////////////////////////
 //~ rjf: High-Level Task Kickoff / Joining
 
-internal TS_Ticket ts_kickoff(TS_TaskFunctionType *entry_point, void *p);
+internal TS_Ticket ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p);
 internal void *ts_join(TS_Ticket ticket, U64 endt_us);
 #define ts_join_struct(ticket, endt_us, type) (type *)ts_join((ticket), (endt_us))
 
 ////////////////////////////////
 //~ rjf: Task Threads
 
-internal void ts_u2t_dequeue_task(TS_TaskFunctionType **entry_point_out, void **p_out, TS_Ticket *ticket_out);
+internal void ts_u2t_dequeue_task(TS_TaskFunctionType **entry_point_out, Arena **arena_out, void **p_out, TS_Ticket *ticket_out);
 internal void ts_task_thread__entry_point(void *p);
 
 #endif // TASK_SYSTEM_H

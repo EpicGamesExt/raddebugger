@@ -44,7 +44,7 @@ ts_init(void)
 //~ rjf: High-Level Task Kickoff / Joining
 
 internal TS_Ticket
-ts_kickoff(TS_TaskFunctionType *entry_point, void *p)
+ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p)
 {
   // rjf: obtain number & slot/stripefor next artifact
   U64 artifact_num = ins_atomic_u64_inc_eval(&ts_shared->artifact_num_gen);
@@ -81,9 +81,19 @@ ts_kickoff(TS_TaskFunctionType *entry_point, void *p)
     U64 available_size = ts_shared->u2t_ring_size-unconsumed_size;
     if(available_size >= sizeof(entry_point) + sizeof(p) + sizeof(ticket))
     {
+      Arena *task_arena = 0;
+      if(optional_arena_ptr != 0)
+      {
+        task_arena = *optional_arena_ptr;
+      }
       ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &entry_point);
+      ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &task_arena);
       ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &p);
       ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &ticket);
+      if(optional_arena_ptr != 0)
+      {
+        *optional_arena_ptr = 0;
+      }
       break;
     }
     os_condition_variable_wait(ts_shared->u2t_ring_cv, ts_shared->u2t_ring_mutex, max_U64);
@@ -127,7 +137,7 @@ ts_join(TS_Ticket ticket, U64 endt_us)
 //~ rjf: Task Threads
 
 internal void
-ts_u2t_dequeue_task(TS_TaskFunctionType **entry_point_out, void **p_out, TS_Ticket *ticket_out)
+ts_u2t_dequeue_task(TS_TaskFunctionType **entry_point_out, Arena **arena_out, void **p_out, TS_Ticket *ticket_out)
 {
   OS_MutexScope(ts_shared->u2t_ring_mutex) for(;;)
   {
@@ -135,6 +145,7 @@ ts_u2t_dequeue_task(TS_TaskFunctionType **entry_point_out, void **p_out, TS_Tick
     if(unconsumed_size >= sizeof(*entry_point_out) + sizeof(*p_out) + sizeof(*ticket_out))
     {
       ts_shared->u2t_ring_read_pos += ring_read_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_read_pos, entry_point_out);
+      ts_shared->u2t_ring_read_pos += ring_read_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_read_pos, arena_out);
       ts_shared->u2t_ring_read_pos += ring_read_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_read_pos, p_out);
       ts_shared->u2t_ring_read_pos += ring_read_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_read_pos, ticket_out);
       break;
@@ -154,12 +165,19 @@ ts_task_thread__entry_point(void *p)
   {
     //- rjf: grab next task
     TS_TaskFunctionType *task_function = 0;
+    Arena *task_arena = 0;
     void *task_params = 0;
     TS_Ticket task_ticket = {0};
-    ts_u2t_dequeue_task(&task_function, &task_params, &task_ticket);
+    ts_u2t_dequeue_task(&task_function, &task_arena, &task_params, &task_ticket);
+    
+    //- rjf: use task thread's arena if none specified
+    if(task_arena == 0)
+    {
+      task_arena = thread->arena;
+    }
     
     //- rjf: run task
-    void *task_result = task_function(thread->arena, task_params);
+    void *task_result = task_function(task_arena, task_params);
     
     //- rjf: store into artifact
     U64 artifact_num = task_ticket.u64[0];
