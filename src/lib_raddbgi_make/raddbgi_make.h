@@ -795,6 +795,8 @@ struct RDIM_ScopeChunkList
 ////////////////////////////////
 //~ rjf: Baking Types
 
+//- rjf: baking parameters
+
 typedef struct RDIM_BakeParams RDIM_BakeParams;
 struct RDIM_BakeParams
 {
@@ -809,6 +811,8 @@ struct RDIM_BakeParams
   RDIM_SymbolChunkList procedures;
   RDIM_ScopeChunkList scopes;
 };
+
+//- rjf: data sections
 
 typedef struct RDIM_BakeSection RDIM_BakeSection;
 struct RDIM_BakeSection
@@ -833,55 +837,6 @@ struct RDIM_BakeSectionList
   RDIM_BakeSectionNode *last;
   RDI_U64 count;
 };
-
-////////////////////////////////
-//~ rjf: [OLD] Baking Types
-
-//- rjf: bake parameters
-
-#if 0
-typedef struct RDIM_BakeParams RDIM_BakeParams;
-struct RDIM_BakeParams
-{
-  RDIM_TopLevelInfo top_level_info;
-  RDIM_BinarySectionList binary_sections;
-  RDIM_UnitChunkList units;
-  RDIM_TypeChunkList types;
-  RDIM_UDTChunkList udts;
-  RDIM_SrcFileChunkList src_files;
-  RDIM_SymbolChunkList global_variables;
-  RDIM_SymbolChunkList thread_variables;
-  RDIM_SymbolChunkList procedures;
-  RDIM_ScopeChunkList scopes;
-};
-#endif
-
-//- rjf: data sections
-
-#if 0
-typedef struct RDIM_BakeSection RDIM_BakeSection;
-struct RDIM_BakeSection
-{
-  void *data;
-  RDI_U64 size;
-  RDI_DataSectionTag tag;
-};
-
-typedef struct RDIM_BakeSectionNode RDIM_BakeSectionNode;
-struct RDIM_BakeSectionNode
-{
-  RDIM_BakeSectionNode *next;
-  RDIM_BakeSection v;
-};
-
-typedef struct RDIM_BakeSectionList RDIM_BakeSectionList;
-struct RDIM_BakeSectionList
-{
-  RDIM_BakeSectionNode *first;
-  RDIM_BakeSectionNode *last;
-  RDI_U64 count;
-};
-#endif
 
 //- rjf: interned strings
 
