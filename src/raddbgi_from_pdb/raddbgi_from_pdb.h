@@ -420,6 +420,11 @@ internal void *p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p);
 internal void *p2r_itype_chain_build_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
+//~ rjf: UDT Conversion Tasks
+
+internal void *p2r_udt_convert_task__entry_point(Arena *arena, void *p);
+
+////////////////////////////////
 //~ rjf: Symbol Stream Conversion Tasks
 
 internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p);

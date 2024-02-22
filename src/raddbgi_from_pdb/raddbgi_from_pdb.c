@@ -1176,6 +1176,15 @@ p2r_itype_chain_build_task__entry_point(Arena *arena, void *p)
 }
 
 ////////////////////////////////
+//~ rjf: UDT Conversion Tasks
+
+internal void *
+p2r_udt_convert_task__entry_point(Arena *arena, void *p)
+{
+  
+}
+
+////////////////////////////////
 //~ rjf: Symbol Stream Conversion Path & Thread
 
 internal void *
@@ -2337,15 +2346,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   // subsequent passes, to build RADDBGI "UDT" information, which is distinct
   // from regular type info.
   //
-  typedef struct P2R_TypeIdRevisitTask P2R_TypeIdRevisitTask;
-  struct P2R_TypeIdRevisitTask
-  {
-    P2R_TypeIdRevisitTask *next;
-    RDIM_Type *base_type;
-    CV_TypeId field_itype;
-  };
-  P2R_TypeIdRevisitTask *first_itype_revisit_task = 0;
-  P2R_TypeIdRevisitTask *last_itype_revisit_task = 0;
   RDIM_Type **itype_type_ptrs = 0;
   RDIM_TypeChunkList all_types = {0};
 #define p2r_type_ptr_from_itype(itype) (((itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
@@ -2671,15 +2671,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                   dst_type->byte_size = (U32)size_u64;
                   dst_type->name      = name;
                 }
-                
-                // rjf: push revisit task for members
-                if(!(lf->props & CV_TypeProp_FwdRef))
-                {
-                  P2R_TypeIdRevisitTask *t = push_array(scratch.arena, P2R_TypeIdRevisitTask, 1);
-                  SLLQueuePush(first_itype_revisit_task, last_itype_revisit_task, t);
-                  t->base_type   = dst_type;
-                  t->field_itype = lf->field_itype;
-                }
               }break;
               
               //- rjf: CLASS2/STRUCT2
@@ -2709,15 +2700,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                   dst_type->byte_size = (U32)size_u64;
                   dst_type->name      = name;
                 }
-                
-                // rjf: push revisit task for members
-                if(!(lf->props & CV_TypeProp_FwdRef))
-                {
-                  P2R_TypeIdRevisitTask *t = push_array(scratch.arena, P2R_TypeIdRevisitTask, 1);
-                  SLLQueuePush(first_itype_revisit_task, last_itype_revisit_task, t);
-                  t->base_type   = dst_type;
-                  t->field_itype = lf->field_itype;
-                }
               }break;
               
               //- rjf: UNION
@@ -2746,15 +2728,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                   dst_type->byte_size = (U32)size_u64;
                   dst_type->name      = name;
                 }
-                
-                // rjf: push revisit task for members
-                if(!(lf->props & CV_TypeProp_FwdRef))
-                {
-                  P2R_TypeIdRevisitTask *t = push_array(scratch.arena, P2R_TypeIdRevisitTask, 1);
-                  SLLQueuePush(first_itype_revisit_task, last_itype_revisit_task, t);
-                  t->base_type   = dst_type;
-                  t->field_itype = lf->field_itype;
-                }
               }break;
               
               //- rjf: ENUM
@@ -2782,15 +2755,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                   dst_type->byte_size   = direct_type ? direct_type->byte_size : 0;
                   dst_type->name        = name;
                 }
-                
-                // rjf: push revisit task for enumerates
-                if(!(lf->props & CV_TypeProp_FwdRef))
-                {
-                  P2R_TypeIdRevisitTask *t = push_array(scratch.arena, P2R_TypeIdRevisitTask, 1);
-                  SLLQueuePush(first_itype_revisit_task, last_itype_revisit_task, t);
-                  t->base_type   = dst_type;
-                  t->field_itype = lf->field_itype;
-                }
               }break;
             }
           }
@@ -2809,19 +2773,64 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   ProfScope("types pass 4: build UDTs")
   {
     RDI_U64 udts_chunk_cap = 1024;
-    for(P2R_TypeIdRevisitTask *task = first_itype_revisit_task; task != 0; task = task->next)
+    for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
     {
-      RDIM_Type *dst_type = task->base_type;
-      switch(dst_type->kind)
+      //- rjf: grab type for this itype - skip if empty
+      RDIM_Type *dst_type = itype_type_ptrs[itype];
+      if(dst_type == 0) { continue; }
+      
+      //- rjf: unpack itype leaf range - skip if out-of-range
+      CV_RecRange *range = &tpi_leaf->leaf_ranges.ranges[itype-itype_first];
+      CV_LeafKind kind = range->hdr.kind;
+      U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+      U8 *itype_leaf_first = tpi_leaf->data.str + range->off+2;
+      U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+      if(range->off+range->hdr.size > tpi_leaf->data.size ||
+         range->off+2+header_struct_size > tpi_leaf->data.size ||
+         range->hdr.size < 2)
+      {
+        continue;
+      }
+      
+      //- rjf: build UDT
+      CV_TypeId field_itype = 0;
+      switch(kind)
       {
         default:{}break;
         
         ////////////////////////
         //- rjf: structs/unions/classes -> equip members
         //
-        case RDI_TypeKind_Struct:
-        case RDI_TypeKind_Union:
-        case RDI_TypeKind_Class:
+        case CV_LeafKind_CLASS:
+        case CV_LeafKind_STRUCTURE:
+        {
+          CV_LeafStruct *lf = (CV_LeafStruct *)itype_leaf_first;
+          if(lf->props & CV_TypeProp_FwdRef)
+          {
+            break;
+          }
+          field_itype = lf->field_itype;
+        }goto equip_members;
+        case CV_LeafKind_UNION:
+        {
+          CV_LeafUnion *lf = (CV_LeafUnion *)itype_leaf_first;
+          if(lf->props & CV_TypeProp_FwdRef)
+          {
+            break;
+          }
+          field_itype = lf->field_itype;
+        }goto equip_members;
+        case CV_LeafKind_CLASS2:
+        case CV_LeafKind_STRUCT2:
+        {
+          CV_LeafStruct2 *lf = (CV_LeafStruct2 *)itype_leaf_first;
+          if(lf->props & CV_TypeProp_FwdRef)
+          {
+            break;
+          }
+          field_itype = lf->field_itype;
+        }goto equip_members;
+        equip_members:
         {
           //- rjf: grab UDT info
           RDIM_UDT *dst_udt = dst_type->udt;
@@ -2838,7 +2847,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
             FieldListTask *next;
             CV_TypeId itype;
           };
-          FieldListTask start_fl_task = {0, task->field_itype};
+          FieldListTask start_fl_task = {0, field_itype};
           FieldListTask *fl_todo_stack = &start_fl_task;
           FieldListTask *fl_done_stack = 0;
           for(;fl_todo_stack != 0;)
@@ -3219,7 +3228,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         ////////////////////////
         //- rjf: enums -> equip enumerates
         //
-        case RDI_TypeKind_Enum:
+        case CV_LeafKind_ENUM:
         {
           //- rjf: grab UDT info
           RDIM_UDT *dst_udt = dst_type->udt;
@@ -3236,7 +3245,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
             FieldListTask *next;
             CV_TypeId itype;
           };
-          FieldListTask start_fl_task = {0, task->field_itype};
+          FieldListTask start_fl_task = {0, field_itype};
           FieldListTask *fl_todo_stack = &start_fl_task;
           FieldListTask *fl_done_stack = 0;
           for(;fl_todo_stack != 0;)
