@@ -152,6 +152,24 @@ struct P2R_SrcFileMap
   U64 slots_count;
 };
 
+//- rjf: unit conversion tasks
+
+typedef struct P2R_UnitConvertIn P2R_UnitConvertIn;
+struct P2R_UnitConvertIn
+{
+  PDB_CompUnitArray *comp_units;
+  PDB_CompUnitContributionArray *comp_unit_contributions;
+  CV_SymParsed **comp_unit_syms;
+  CV_C13Parsed **comp_unit_c13s;
+};
+
+typedef struct P2R_UnitConvertOut P2R_UnitConvertOut;
+struct P2R_UnitConvertOut
+{
+  RDIM_UnitChunkList units;
+  RDIM_SrcFileChunkList src_files;
+};
+
 //- rjf: link name map building tasks
 
 typedef struct P2R_LinkNameMapBuildIn P2R_LinkNameMapBuildIn;
@@ -386,7 +404,12 @@ internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
 internal void *p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
-//~ rjf: Link Name Map Building Task
+//~ rjf: Unit Conversion Tasks
+
+internal void *p2r_units_convert_task__entry_point(Arena *arena, void *p);
+
+////////////////////////////////
+//~ rjf: Link Name Map Building Tasks
 
 internal void *p2r_link_name_map_build_task__entry_point(Arena *arena, void *p);
 
