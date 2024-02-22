@@ -220,6 +220,128 @@ struct P2R_SymbolStreamConvertOut
 };
 
 ////////////////////////////////
+//~ rjf: Baking Task Types
+
+typedef struct P2R_BuildBakeStringMapIn P2R_BuildBakeStringMapIn;
+struct P2R_BuildBakeStringMapIn
+{
+  RDIM_BakePathTree *path_tree;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BuildBakeNameMapIn P2R_BuildBakeNameMapIn;
+struct P2R_BuildBakeNameMapIn
+{
+  RDI_NameMapKind k;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeUnitsIn P2R_BakeUnitsIn;
+struct P2R_BakeUnitsIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakePathTree *path_tree;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeUnitVMapIn P2R_BakeUnitVMapIn;
+struct P2R_BakeUnitVMapIn
+{
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeSrcFilesIn P2R_BakeSrcFilesIn;
+struct P2R_BakeSrcFilesIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakePathTree *path_tree;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeUDTsIn P2R_BakeUDTsIn;
+struct P2R_BakeUDTsIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeGlobalVariablesIn P2R_BakeGlobalVariablesIn;
+struct P2R_BakeGlobalVariablesIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeGlobalVMapIn P2R_BakeGlobalVMapIn;
+struct P2R_BakeGlobalVMapIn
+{
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeThreadVariablesIn P2R_BakeThreadVariablesIn;
+struct P2R_BakeThreadVariablesIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeProceduresIn P2R_BakeProceduresIn;
+struct P2R_BakeProceduresIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeScopesIn P2R_BakeScopesIn;
+struct P2R_BakeScopesIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeScopeVMapIn P2R_BakeScopeVMapIn;
+struct P2R_BakeScopeVMapIn
+{
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeFilePathsIn P2R_BakeFilePathsIn;
+struct P2R_BakeFilePathsIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakePathTree *path_tree;
+};
+
+typedef struct P2R_BakeStringsIn P2R_BakeStringsIn;
+struct P2R_BakeStringsIn
+{
+  RDIM_BakeStringMap *strings;
+};
+
+typedef struct P2R_BakeTypeNodesIn P2R_BakeTypeNodesIn;
+struct P2R_BakeTypeNodesIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakeIdxRunMap *idx_runs;
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeNameMapsIn P2R_BakeNameMapsIn;
+struct P2R_BakeNameMapsIn
+{
+  RDIM_BakeStringMap *strings;
+  RDIM_BakeIdxRunMap *idx_runs;
+  RDIM_BakeParams *params;
+  RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT];
+};
+
+typedef struct P2R_BakeIdxRunsIn P2R_BakeIdxRunsIn;
+struct P2R_BakeIdxRunsIn
+{
+  RDIM_BakeIdxRunMap *idx_runs;
+};
+
+////////////////////////////////
 //~ rjf: Basic Helpers
 
 internal U64 p2r_end_of_cplusplus_container_name(String8 str);
@@ -274,7 +396,7 @@ internal void *p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p);
 internal void *p2r_itype_chain_build_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
-//~ rjf: Symbol Stream Conversion Paths & Thread
+//~ rjf: Symbol Stream Conversion Tasks
 
 internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p);
 
@@ -282,6 +404,32 @@ internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p
 //~ rjf: Top-Level Conversion Entry Point
 
 internal P2R_Convert2Bake *p2r_convert(Arena *arena, P2R_User2Convert *in);
+
+////////////////////////////////
+//~ rjf: Baking Stage Tasks
+
+//- rjf: pass 1: interner/deduper map builds
+internal void *p2r_build_bake_string_map_task__entry_point(Arena *arena, void *p);
+internal void *p2r_build_bake_name_map_task__entry_point(Arena *arena, void *p);
+
+//- rjf: pass 2: string-map-dependent debug info stream builds
+internal void *p2r_bake_units_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_unit_vmap_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_src_files_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_udts_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_global_variables_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_global_vmap_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_thread_variables_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_procedures_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_scopes_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_scope_vmap_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_file_paths_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_strings_task__entry_point(Arena *arena, void *p);
+
+//- rjf: pass 3: idx-run-map-dependent debug info stream builds
+internal void *p2r_bake_type_nodes_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_name_maps_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_idx_runs_task__entry_point(Arena *arena, void *p);
 
 ////////////////////////////////
 //~ rjf: Top-Level Baking Entry Point

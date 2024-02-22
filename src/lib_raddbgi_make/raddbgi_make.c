@@ -1486,6 +1486,8 @@ rdim_bake_path_tree_insert(RDIM_Arena *arena, RDIM_BakePathTree *tree, RDIM_Stri
 RDI_PROC void
 rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, RDIM_String8 string, RDI_U32 idx)
 {
+  if(string.size == 0) {return;}
+  
   // rjf: hash
   RDI_U64 hash = rdi_hash(string.RDIM_String8_BaseMember, string.RDIM_String8_SizeMember);
   RDI_U64 slot_idx = hash%map->slots_count;
@@ -2379,7 +2381,7 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
 //- rjf: type nodes
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params)
 {
   //- rjf: build all type nodes
   RDI_TypeNode *type_nodes = push_array(arena, RDI_TypeNode, params->types.total_count+1);
@@ -2452,7 +2454,7 @@ rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringM
 //- rjf: UDTs
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_udt_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_udt_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeParams *params)
 {
   //- rjf: build tables
   RDI_UDT *       udts         = push_array(arena, RDI_UDT,        params->udts.total_count+1);
@@ -2522,7 +2524,7 @@ rdim_bake_udt_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *st
 //- rjf: global variables
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_global_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_global_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeParams *params)
 {
   //- rjf: build all global variables
   RDI_GlobalVariable *global_variables = push_array(arena, RDI_GlobalVariable, params->global_variables.total_count+1);
@@ -2564,7 +2566,7 @@ rdim_bake_global_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeS
 //- rjf: global vmap
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_global_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_global_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
 {
   //- rjf: build global vmap
   RDIM_BakeVMap global_vmap = {0};
@@ -2643,7 +2645,7 @@ rdim_bake_global_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStrin
 //- rjf: thread variables
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_thread_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_thread_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeParams *params)
 {
   //- rjf: build all thread variables
   RDI_ThreadVariable *thread_variables = push_array(arena, RDI_ThreadVariable, params->thread_variables.total_count+1);
@@ -2685,7 +2687,7 @@ rdim_bake_thread_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeS
 //- rjf: procedures
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_procedure_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_procedure_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeParams *params)
 {
   //- rjf: build all procedures
   RDI_Procedure *procedures = push_array(arena, RDI_Procedure, params->procedures.total_count+1);
@@ -2728,7 +2730,7 @@ rdim_bake_procedure_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringM
 //- rjf: scopes
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_scope_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_scope_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeParams *params)
 {
   RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   
