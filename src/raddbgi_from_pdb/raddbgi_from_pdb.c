@@ -1096,6 +1096,42 @@ p2r_itype_chain_build_task__entry_point(Arena *arena, void *p)
               c->itype = lf->this_itype;
               SLLQueuePush(first_walk_task, last_walk_task, c);
             }
+            
+            // rjf: unpack arglist range
+            CV_RecRange *arglist_range = &in->tpi_leaf->leaf_ranges.ranges[lf->arg_itype-in->tpi_leaf->itype_first];
+            if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
+               arglist_range->hdr.size<2 ||
+               arglist_range->off + arglist_range->hdr.size > in->tpi_leaf->data.size)
+            {
+              break;
+            }
+            U8 *arglist_first = in->tpi_leaf->data.str + arglist_range->off + 2;
+            U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
+            if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
+            {
+              break;
+            }
+            
+            // rjf: unpack arglist info
+            CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
+            CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
+            U32 arglist_itypes_count = arglist->count;
+            
+            // rjf: push arg types to chain
+            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+            {
+              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+              c->itype = arglist_itypes_base[idx];
+              SLLStackPush(in->itype_chains[itype], c);
+            }
+            
+            // rjf: push task to walk arg types
+            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+            {
+              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+              c->itype = arglist_itypes_base[idx];
+              SLLQueuePush(first_walk_task, last_walk_task, c);
+            }
           }break;
           
           //- rjf: BITFIELD
