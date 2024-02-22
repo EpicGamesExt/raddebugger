@@ -163,67 +163,49 @@ os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range)
 
 internal void
 os_mutex_take(OS_Handle mutex){
-  ProfBeginLockWait((void *)(mutex.u64[0]), "take mutex");
   os_mutex_take_(mutex);
-  ProfEndLockWait();
-  ProfLockTake((void *)(mutex.u64[0]), "take mutex");
 }
 
 internal void
 os_mutex_drop(OS_Handle mutex){
   os_mutex_drop_(mutex);
-  ProfLockDrop((void *)(mutex.u64[0]));
 }
 
 internal void
 os_rw_mutex_take_r(OS_Handle rw_mutex){
-  ProfBeginLockWait((void *)(rw_mutex.u64[0]), "rw mutex take r");
   os_rw_mutex_take_r_(rw_mutex);
-  ProfEndLockWait();
-  ProfLockTake((void *)(rw_mutex.u64[0]), "rw mutex take r");
 }
 
 internal void
 os_rw_mutex_drop_r(OS_Handle rw_mutex){
   os_rw_mutex_drop_r_(rw_mutex);
-  ProfLockDrop((void *)(rw_mutex.u64[0]));
 }
 
 internal void
 os_rw_mutex_take_w(OS_Handle rw_mutex){
-  ProfBeginLockWait((void *)(rw_mutex.u64[0]), "rw mutex take rw");
   os_rw_mutex_take_w_(rw_mutex);
-  ProfEndLockWait();
-  ProfLockTake((void *)(rw_mutex.u64[0]), "rw mutex take rw");
 }
 
 internal void
 os_rw_mutex_drop_w(OS_Handle rw_mutex){
   os_rw_mutex_drop_w_(rw_mutex);
-  ProfLockDrop((void *)(rw_mutex.u64[0]));
 }
 
 internal B32
 os_condition_variable_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us){
-  ProfLockDrop((void *)(mutex.u64[0]));
   B32 result = os_condition_variable_wait_(cv, mutex, endt_us);
-  ProfLockTake((void *)(mutex.u64[0]), "wait cv");
   return(result);
 }
 
 internal B32
 os_condition_variable_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us){
-  ProfLockDrop((void *)(mutex_rw.u64[0]));
   B32 result = os_condition_variable_wait_rw_r_(cv, mutex_rw, endt_us);
-  ProfLockTake((void *)(mutex_rw.u64[0]), "wait cv rw r");
   return(result);
 }
 
 internal B32
 os_condition_variable_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us){
-  ProfLockDrop((void *)(mutex_rw.u64[0]));
   B32 result = os_condition_variable_wait_rw_w_(cv, mutex_rw, endt_us);
-  ProfLockTake((void *)(mutex_rw.u64[0]), "wait cv rw w");
   return(result);
 }
 

@@ -1194,11 +1194,4 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_idx_run_section_list_from_idx_run_map(RD
 
 RDI_PROC RDIM_String8List rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeParams *params, RDIM_BakeSectionList *sections);
 
-////////////////////////////////
-//~ rjf: [OLD] Baking
-
-#if 0
-RDI_PROC RDIM_String8List rdim_blobs_from_bake_sections(RDIM_Arena *arena, RDIM_BakeSectionList *sections);
-#endif
-
 #endif // RADDBGI_MAKE_H

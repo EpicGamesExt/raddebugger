@@ -1257,7 +1257,7 @@ rdim_bake_string_map_insert(RDIM_Arena *arena, RDIM_BakeStringMap *map, RDIM_Str
   if(node == 0)
   {
     node = rdim_push_array(arena, RDIM_BakeStringNode, 1);
-    node->string = rdim_str8_copy(arena, string);
+    node->string = string;
     node->hash   = hash;
     node->idx    = map->count;
     map->count += 1;
