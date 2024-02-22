@@ -1181,7 +1181,614 @@ p2r_itype_chain_build_task__entry_point(Arena *arena, void *p)
 internal void *
 p2r_udt_convert_task__entry_point(Arena *arena, void *p)
 {
-  
+  P2R_UDTConvertIn *in = (P2R_UDTConvertIn *)p;
+#define p2r_type_ptr_from_itype(itype) (((itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
+  RDIM_UDTChunkList *udts = push_array(arena, RDIM_UDTChunkList, 1);
+  RDI_U64 udts_chunk_cap = 1024;
+  ProfScope("convert UDT info")
+  {
+    for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
+    {
+      //- rjf: skip basics
+      if(itype < in->tpi_leaf->itype_first) { continue; }
+      
+      //- rjf: grab type for this itype - skip if empty
+      RDIM_Type *dst_type = in->itype_type_ptrs[itype];
+      if(dst_type == 0) { continue; }
+      
+      //- rjf: unpack itype leaf range - skip if out-of-range
+      CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[itype-in->tpi_leaf->itype_first];
+      CV_LeafKind kind = range->hdr.kind;
+      U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+      U8 *itype_leaf_first = in->tpi_leaf->data.str + range->off+2;
+      U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+      if(range->off+range->hdr.size > in->tpi_leaf->data.size ||
+         range->off+2+header_struct_size > in->tpi_leaf->data.size ||
+         range->hdr.size < 2)
+      {
+        continue;
+      }
+      
+      //- rjf: build UDT
+      CV_TypeId field_itype = 0;
+      switch(kind)
+      {
+        default:{}break;
+        
+        ////////////////////////
+        //- rjf: structs/unions/classes -> equip members
+        //
+        case CV_LeafKind_CLASS:
+        case CV_LeafKind_STRUCTURE:
+        {
+          CV_LeafStruct *lf = (CV_LeafStruct *)itype_leaf_first;
+          if(lf->props & CV_TypeProp_FwdRef)
+          {
+            break;
+          }
+          field_itype = lf->field_itype;
+        }goto equip_members;
+        case CV_LeafKind_UNION:
+        {
+          CV_LeafUnion *lf = (CV_LeafUnion *)itype_leaf_first;
+          if(lf->props & CV_TypeProp_FwdRef)
+          {
+            break;
+          }
+          field_itype = lf->field_itype;
+        }goto equip_members;
+        case CV_LeafKind_CLASS2:
+        case CV_LeafKind_STRUCT2:
+        {
+          CV_LeafStruct2 *lf = (CV_LeafStruct2 *)itype_leaf_first;
+          if(lf->props & CV_TypeProp_FwdRef)
+          {
+            break;
+          }
+          field_itype = lf->field_itype;
+        }goto equip_members;
+        equip_members:
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          
+          //- rjf: grab UDT info
+          RDIM_UDT *dst_udt = dst_type->udt;
+          if(dst_udt == 0)
+          {
+            dst_udt = dst_type->udt = rdim_udt_chunk_list_push(arena, udts, udts_chunk_cap);
+            dst_udt->self_type = dst_type;
+          }
+          
+          //- rjf: gather all fields
+          typedef struct FieldListTask FieldListTask;
+          struct FieldListTask
+          {
+            FieldListTask *next;
+            CV_TypeId itype;
+          };
+          FieldListTask start_fl_task = {0, field_itype};
+          FieldListTask *fl_todo_stack = &start_fl_task;
+          FieldListTask *fl_done_stack = 0;
+          for(;fl_todo_stack != 0;)
+          {
+            //- rjf: take & unpack task
+            FieldListTask *fl_task = fl_todo_stack;
+            SLLStackPop(fl_todo_stack);
+            SLLStackPush(fl_done_stack, fl_task);
+            CV_TypeId field_list_itype = fl_task->itype;
+            
+            //- rjf: skip bad itypes
+            if(field_list_itype < in->tpi_leaf->itype_first || in->tpi_leaf->itype_opl <= field_list_itype)
+            {
+              continue;
+            }
+            
+            //- rjf: field list itype -> range
+            CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[field_list_itype-in->tpi_leaf->itype_first];
+            
+            //- rjf: skip bad headers
+            if(range->off+range->hdr.size > in->tpi_leaf->data.size ||
+               range->hdr.size < 2 ||
+               range->hdr.kind != CV_LeafKind_FIELDLIST)
+            {
+              continue;
+            }
+            
+            //- rjf: loop over all fields
+            {
+              U8 *field_list_first = in->tpi_leaf->data.str+range->off+2;
+              U8 *field_list_opl = field_list_first+range->hdr.size-2;
+              for(U8 *read_ptr = field_list_first, *next_read_ptr = field_list_opl;
+                  read_ptr < field_list_opl;
+                  read_ptr = next_read_ptr)
+              {
+                // rjf: unpack field
+                CV_LeafKind field_kind = *(CV_LeafKind *)read_ptr;
+                U64 field_leaf_header_size = cv_header_struct_size_from_leaf_kind(field_kind);
+                U8 *field_leaf_first = read_ptr+2;
+                U8 *field_leaf_opl   = field_leaf_first+range->hdr.size-2;
+                next_read_ptr = field_leaf_opl;
+                
+                // rjf: skip out-of-bounds fields
+                if(field_leaf_first+field_leaf_header_size > field_list_opl)
+                {
+                  continue;
+                }
+                
+                // rjf: process field
+                switch(field_kind)
+                {
+                  //- rjf: unhandled/invalid cases
+                  default:
+                  {
+                    // TODO(rjf): log
+                  }break;
+                  
+                  //- rjf: INDEX
+                  case CV_LeafKind_INDEX:
+                  {
+                    // rjf: unpack leaf
+                    CV_LeafIndex *lf = (CV_LeafIndex *)field_leaf_first;
+                    CV_TypeId new_itype = lf->itype;
+                    
+                    // rjf: determine if index itype is new
+                    B32 is_new = 1;
+                    for(FieldListTask *t = fl_done_stack; t != 0; t = t->next)
+                    {
+                      if(t->itype == new_itype)
+                      {
+                        is_new = 0;
+                        break;
+                      }
+                    }
+                    
+                    // rjf: if new -> push task to follow new itype
+                    if(is_new)
+                    {
+                      FieldListTask *new_task = push_array(scratch.arena, FieldListTask, 1);
+                      SLLStackPush(fl_todo_stack, new_task);
+                      new_task->itype = new_itype;
+                    }
+                  }break;
+                  
+                  //- rjf: MEMBER
+                  case CV_LeafKind_MEMBER:
+                  {
+                    // TODO(rjf): log on bad offset
+                    
+                    // rjf: unpack leaf
+                    CV_LeafMember *lf = (CV_LeafMember *)field_leaf_first;
+                    U8 *offset_ptr = (U8 *)(lf+1);
+                    CV_NumericParsed offset = cv_numeric_from_data_range(offset_ptr, field_leaf_opl);
+                    U64 offset64 = cv_u64_from_numeric(&offset);
+                    U8 *name_ptr = offset_ptr + offset.encoded_size;
+                    String8 name = str8_cstring_capped(name_ptr, field_leaf_opl);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = name.str+name.size+1;
+                    
+                    // rjf: emit member
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                    mem->kind = RDI_MemberKind_DataField;
+                    mem->name = name;
+                    mem->type = p2r_type_ptr_from_itype(lf->itype);
+                    mem->off  = (U32)offset64;
+                  }break;
+                  
+                  //- rjf: STMEMBER
+                  case CV_LeafKind_STMEMBER:
+                  {
+                    // TODO(rjf): handle attribs
+                    
+                    // rjf: unpack leaf
+                    CV_LeafStMember *lf = (CV_LeafStMember *)field_leaf_first;
+                    U8 *name_ptr = (U8 *)(lf+1);
+                    String8 name = str8_cstring_capped(name_ptr, field_leaf_opl);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = name.str+name.size+1;
+                    
+                    // rjf: emit member
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                    mem->kind = RDI_MemberKind_StaticData;
+                    mem->name = name;
+                    mem->type = p2r_type_ptr_from_itype(lf->itype);
+                  }break;
+                  
+                  //- rjf: METHOD
+                  case CV_LeafKind_METHOD:
+                  {
+                    // rjf: unpack leaf
+                    CV_LeafMethod *lf = (CV_LeafMethod *)field_leaf_first;
+                    U8 *name_ptr = (U8 *)(lf+1);
+                    String8 name = str8_cstring_capped(name_ptr, field_leaf_opl);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = name.str+name.size+1;
+                    
+                    //- rjf: method list itype -> range
+                    CV_RecRange *method_list_range = &in->tpi_leaf->leaf_ranges.ranges[lf->list_itype-in->tpi_leaf->itype_first];
+                    
+                    //- rjf: skip bad method lists
+                    if(method_list_range->off+method_list_range->hdr.size > in->tpi_leaf->data.size ||
+                       method_list_range->hdr.size < 2 ||
+                       method_list_range->hdr.kind != CV_LeafKind_METHODLIST)
+                    {
+                      break;
+                    }
+                    
+                    //- rjf: loop through all methods & emit members
+                    U8 *method_list_first = in->tpi_leaf->data.str + method_list_range->off + 2;
+                    U8 *method_list_opl   = method_list_first + method_list_range->hdr.size-2;
+                    for(U8 *method_read_ptr = method_list_first, *next_method_read_ptr = method_list_opl;
+                        method_read_ptr < method_list_opl;
+                        method_read_ptr = next_method_read_ptr)
+                    {
+                      CV_LeafMethodListMember *method = (CV_LeafMethodListMember*)method_read_ptr;
+                      CV_MethodProp prop = CV_FieldAttribs_ExtractMethodProp(method->attribs);
+                      RDIM_Type *method_type = p2r_type_ptr_from_itype(method->itype);
+                      next_method_read_ptr = (U8 *)(method+1);
+                      
+                      // TODO(allen): PROBLEM
+                      // We only get offsets for virtual functions (the "vbaseoff") from
+                      // "Intro" and "PureIntro". In C++ inheritance, when we have a chain
+                      // of inheritance (let's just talk single inheritance for now) the
+                      // first class in the chain that introduces a new virtual function
+                      // has this "Intro" method. If a later class in the chain redefines
+                      // the virtual function it only has a "Virtual" method which does
+                      // not update the offset. There is a "Virtual" and "PureVirtual"
+                      // variant of "Virtual". The "Pure" in either case means there
+                      // is no concrete procedure. When there is no "Pure" the method
+                      // should have a corresponding procedure symbol id.
+                      //
+                      // The issue is we will want to mark all of our virtual methods as
+                      // virtual and give them an offset, but that means we have to do
+                      // some extra figuring to propogate offsets from "Intro" methods
+                      // to "Virtual" methods in inheritance trees. That is - IF we want
+                      // to start preserving the offsets of virtuals. There is room in
+                      // the method struct to make this work, but for now I've just
+                      // decided to drop this information. It is not urgently useful to
+                      // us and greatly complicates matters.
+                      
+                      // rjf: read vbaseoff
+                      U32 vbaseoff = 0;
+                      if(prop == CV_MethodProp_Intro || prop == CV_MethodProp_PureIntro)
+                      {
+                        if(next_method_read_ptr+4 <= method_list_opl)
+                        {
+                          vbaseoff = *(U32 *)next_method_read_ptr;
+                        }
+                        next_method_read_ptr += 4;
+                      }
+                      
+                      // rjf: emit method
+                      switch(prop)
+                      {
+                        default:
+                        {
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                          mem->kind = RDI_MemberKind_Method;
+                          mem->name = name;
+                          mem->type = method_type;
+                        }break;
+                        case CV_MethodProp_Static:
+                        {
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                          mem->kind = RDI_MemberKind_StaticMethod;
+                          mem->name = name;
+                          mem->type = method_type;
+                        }break;
+                        case CV_MethodProp_Virtual:
+                        case CV_MethodProp_PureVirtual:
+                        case CV_MethodProp_Intro:
+                        case CV_MethodProp_PureIntro:
+                        {
+                          RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                          mem->kind = RDI_MemberKind_VirtualMethod;
+                          mem->name = name;
+                          mem->type = method_type;
+                        }break;
+                      }
+                    }
+                    
+                  }break;
+                  
+                  //- rjf: ONEMETHOD
+                  case CV_LeafKind_ONEMETHOD:
+                  {
+                    // TODO(rjf): handle attribs
+                    
+                    // rjf: unpack leaf
+                    CV_LeafOneMethod *lf = (CV_LeafOneMethod *)field_leaf_first;
+                    CV_MethodProp prop = CV_FieldAttribs_ExtractMethodProp(lf->attribs);
+                    U8 *vbaseoff_ptr = (U8 *)(lf+1);
+                    U8 *vbaseoff_opl_ptr = vbaseoff_ptr;
+                    U32 vbaseoff = 0;
+                    if(prop == CV_MethodProp_Intro || prop == CV_MethodProp_PureIntro)
+                    {
+                      vbaseoff = *(U32 *)(vbaseoff_ptr);
+                      vbaseoff_opl_ptr += sizeof(U32);
+                    }
+                    U8 *name_ptr = vbaseoff_opl_ptr;
+                    String8 name = str8_cstring_capped(name_ptr, field_leaf_opl);
+                    RDIM_Type *method_type = p2r_type_ptr_from_itype(lf->itype);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = name.str+name.size+1;
+                    
+                    // rjf: emit method
+                    switch(prop)
+                    {
+                      default:
+                      {
+                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                        mem->kind = RDI_MemberKind_Method;
+                        mem->name = name;
+                        mem->type = method_type;
+                      }break;
+                      
+                      case CV_MethodProp_Static:
+                      {
+                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                        mem->kind = RDI_MemberKind_StaticMethod;
+                        mem->name = name;
+                        mem->type = method_type;
+                      }break;
+                      
+                      case CV_MethodProp_Virtual:
+                      case CV_MethodProp_PureVirtual:
+                      case CV_MethodProp_Intro:
+                      case CV_MethodProp_PureIntro:
+                      {
+                        RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                        mem->kind = RDI_MemberKind_VirtualMethod;
+                        mem->name = name;
+                        mem->type = method_type;
+                      }break;
+                    }
+                  }break;
+                  
+                  //- rjf: NESTTYPE
+                  case CV_LeafKind_NESTTYPE:
+                  {
+                    // rjf: unpack leaf
+                    CV_LeafNestType *lf = (CV_LeafNestType *)field_leaf_first;
+                    U8 *name_ptr = (U8 *)(lf+1);
+                    String8 name = str8_cstring_capped(name_ptr, field_leaf_opl);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = name.str+name.size+1;
+                    
+                    // rjf: emit member
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                    mem->kind = RDI_MemberKind_NestedType;
+                    mem->name = name;
+                    mem->type = p2r_type_ptr_from_itype(lf->itype);
+                  }break;
+                  
+                  //- rjf: NESTTYPEEX
+                  case CV_LeafKind_NESTTYPEEX:
+                  {
+                    // TODO(rjf): handle attribs
+                    
+                    // rjf: unpack leaf
+                    CV_LeafNestTypeEx *lf = (CV_LeafNestTypeEx *)field_leaf_first;
+                    U8 *name_ptr = (U8 *)(lf+1);
+                    String8 name = str8_cstring_capped(name_ptr, field_leaf_opl);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = name.str+name.size+1;
+                    
+                    // rjf: emit member
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                    mem->kind = RDI_MemberKind_NestedType;
+                    mem->name = name;
+                    mem->type = p2r_type_ptr_from_itype(lf->itype);
+                  }break;
+                  
+                  //- rjf: BCLASS
+                  case CV_LeafKind_BCLASS:
+                  {
+                    // TODO(rjf): log on bad offset
+                    
+                    // rjf: unpack leaf
+                    CV_LeafBClass *lf = (CV_LeafBClass *)field_leaf_first;
+                    U8 *offset_ptr = (U8 *)(lf+1);
+                    CV_NumericParsed offset = cv_numeric_from_data_range(offset_ptr, field_leaf_opl);
+                    U64 offset64 = cv_u64_from_numeric(&offset);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = offset_ptr+offset.encoded_size;
+                    
+                    // rjf: emit member
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                    mem->kind = RDI_MemberKind_Base;
+                    mem->type = p2r_type_ptr_from_itype(lf->itype);
+                    mem->off  = (U32)offset64;
+                  }break;
+                  
+                  //- rjf: VBCLASS/IVBCLASS
+                  case CV_LeafKind_VBCLASS:
+                  case CV_LeafKind_IVBCLASS:
+                  {
+                    // TODO(rjf): log on bad offsets
+                    // TODO(rjf): handle attribs
+                    // TODO(rjf): offsets?
+                    
+                    // rjf: unpack leaf
+                    CV_LeafVBClass *lf = (CV_LeafVBClass *)field_leaf_first;
+                    U8 *num1_ptr = (U8 *)(lf+1);
+                    CV_NumericParsed num1 = cv_numeric_from_data_range(num1_ptr, field_leaf_opl);
+                    U8 *num2_ptr = num1_ptr + num1.encoded_size;
+                    CV_NumericParsed num2 = cv_numeric_from_data_range(num2_ptr, field_leaf_opl);
+                    
+                    // rjf: emit member
+                    RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
+                    mem->kind = RDI_MemberKind_VirtualBase;
+                    mem->type = p2r_type_ptr_from_itype(lf->itype);
+                  }break;
+                  
+                  //- rjf: VFUNCTAB
+                  case CV_LeafKind_VFUNCTAB:
+                  {
+                    CV_LeafVFuncTab *lf = (CV_LeafVFuncTab *)field_leaf_first;
+                    // NOTE(rjf): currently no-op this case
+                    (void)lf;
+                  }break;
+                }
+                
+                // rjf: align-up next field
+                next_read_ptr = (U8 *)AlignPow2((U64)next_read_ptr, 4);
+              }
+            }
+          }
+          
+          scratch_end(scratch);
+        }break;
+        
+        ////////////////////////
+        //- rjf: enums -> equip enumerates
+        //
+        case CV_LeafKind_ENUM:
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          
+          //- rjf: grab UDT info
+          RDIM_UDT *dst_udt = dst_type->udt;
+          if(dst_udt == 0)
+          {
+            dst_udt = dst_type->udt = rdim_udt_chunk_list_push(arena, udts, udts_chunk_cap);
+            dst_udt->self_type = dst_type;
+          }
+          
+          //- rjf: gather all fields
+          typedef struct FieldListTask FieldListTask;
+          struct FieldListTask
+          {
+            FieldListTask *next;
+            CV_TypeId itype;
+          };
+          FieldListTask start_fl_task = {0, field_itype};
+          FieldListTask *fl_todo_stack = &start_fl_task;
+          FieldListTask *fl_done_stack = 0;
+          for(;fl_todo_stack != 0;)
+          {
+            //- rjf: take & unpack task
+            FieldListTask *fl_task = fl_todo_stack;
+            SLLStackPop(fl_todo_stack);
+            SLLStackPush(fl_done_stack, fl_task);
+            CV_TypeId field_list_itype = fl_task->itype;
+            
+            //- rjf: skip bad itypes
+            if(field_list_itype < in->tpi_leaf->itype_first || in->tpi_leaf->itype_opl <= field_list_itype)
+            {
+              continue;
+            }
+            
+            //- rjf: field list itype -> range
+            CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[field_list_itype-in->tpi_leaf->itype_first];
+            
+            //- rjf: skip bad headers
+            if(range->off+range->hdr.size > in->tpi_leaf->data.size ||
+               range->hdr.size < 2 ||
+               range->hdr.kind != CV_LeafKind_FIELDLIST)
+            {
+              continue;
+            }
+            
+            //- rjf: loop over all fields
+            {
+              U8 *field_list_first = in->tpi_leaf->data.str+range->off+2;
+              U8 *field_list_opl = field_list_first+range->hdr.size-2;
+              for(U8 *read_ptr = field_list_first, *next_read_ptr = field_list_opl;
+                  read_ptr < field_list_opl;
+                  read_ptr = next_read_ptr)
+              {
+                // rjf: unpack field
+                CV_LeafKind field_kind = *(CV_LeafKind *)read_ptr;
+                U64 field_leaf_header_size = cv_header_struct_size_from_leaf_kind(field_kind);
+                U8 *field_leaf_first = read_ptr+2;
+                U8 *field_leaf_opl   = field_leaf_first+range->hdr.size-2;
+                next_read_ptr = field_leaf_opl;
+                
+                // rjf: skip out-of-bounds fields
+                if(field_leaf_first+field_leaf_header_size > field_list_opl)
+                {
+                  continue;
+                }
+                
+                // rjf: process field
+                switch(field_kind)
+                {
+                  //- rjf: unhandled/invalid cases
+                  default:
+                  {
+                    // TODO(rjf): log
+                  }break;
+                  
+                  //- rjf: INDEX
+                  case CV_LeafKind_INDEX:
+                  {
+                    // rjf: unpack leaf
+                    CV_LeafIndex *lf = (CV_LeafIndex *)field_leaf_first;
+                    CV_TypeId new_itype = lf->itype;
+                    
+                    // rjf: determine if index itype is new
+                    B32 is_new = 1;
+                    for(FieldListTask *t = fl_done_stack; t != 0; t = t->next)
+                    {
+                      if(t->itype == new_itype)
+                      {
+                        is_new = 0;
+                        break;
+                      }
+                    }
+                    
+                    // rjf: if new -> push task to follow new itype
+                    if(is_new)
+                    {
+                      FieldListTask *new_task = push_array(scratch.arena, FieldListTask, 1);
+                      SLLStackPush(fl_todo_stack, new_task);
+                      new_task->itype = new_itype;
+                    }
+                  }break;
+                  
+                  //- rjf: ENUMERATE
+                  case CV_LeafKind_ENUMERATE:
+                  {
+                    // TODO(rjf): attribs
+                    
+                    // rjf: unpack leaf
+                    CV_LeafEnumerate *lf = (CV_LeafEnumerate *)field_leaf_first;
+                    U8 *val_ptr = (U8 *)(lf+1);
+                    CV_NumericParsed val = cv_numeric_from_data_range(val_ptr, field_leaf_opl);
+                    U64 val64 = cv_u64_from_numeric(&val);
+                    U8 *name_ptr = val_ptr + val.encoded_size;
+                    String8 name = str8_cstring_capped(name_ptr, field_leaf_opl);
+                    
+                    // rjf: bump next read pointer past variable length parts
+                    next_read_ptr = name.str+name.size+1;
+                    
+                    // rjf: emit member
+                    RDIM_UDTEnumVal *enum_val = rdim_udt_push_enum_val(arena, udts, dst_udt);
+                    enum_val->name = name;
+                    enum_val->val  = val64;
+                  }break;
+                }
+                
+                // rjf: align-up next field
+                next_read_ptr = (U8 *)AlignPow2((U64)next_read_ptr, 4);
+              }
+            }
+          }
+          
+          scratch_end(scratch);
+        }break;
+      }
+    }
+  }
+#undef p2r_type_ptr_from_itype
+  return udts;
 }
 
 ////////////////////////////////
@@ -2772,6 +3379,30 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   RDIM_UDTChunkList all_udts = {0};
   ProfScope("types pass 4: build UDTs")
   {
+    //- rjf: kick off tasks
+    U64 task_size_itypes = 4096;
+    U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
+    P2R_UDTConvertIn *tasks_inputs = push_array(scratch.arena, P2R_UDTConvertIn, tasks_count);
+    TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, tasks_count);
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    {
+      tasks_inputs[idx].tpi_leaf        = tpi_leaf;
+      tasks_inputs[idx].itype_first     = idx*task_size_itypes;
+      tasks_inputs[idx].itype_opl       = tasks_inputs[idx].itype_first + task_size_itypes;
+      tasks_inputs[idx].itype_opl       = ClampTop(tasks_inputs[idx].itype_opl, itype_opl);
+      tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
+      tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
+      tasks_tickets[idx] = ts_kickoff(p2r_udt_convert_task__entry_point, 0, &tasks_inputs[idx]);
+    }
+    
+    //- rjf: join all tasks
+    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    {
+      RDIM_UDTChunkList *udts = ts_join_struct(tasks_tickets[idx], max_U64, RDIM_UDTChunkList);
+      rdim_udt_chunk_list_concat_in_place(&all_udts, udts);
+    }
+    
+#if 0
     RDI_U64 udts_chunk_cap = 1024;
     for(CV_TypeId itype = itype_first; itype < itype_opl; itype += 1)
     {
@@ -3361,6 +3992,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         }break;
       }
     }
+#endif
   }
   
   //////////////////////////////////////////////////////////////

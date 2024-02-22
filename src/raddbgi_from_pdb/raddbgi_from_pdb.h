@@ -211,6 +211,18 @@ struct P2R_ITypeChainBuildIn
   P2R_TypeIdChain **itype_chains;
 };
 
+//- rjf: udt conversion
+
+typedef struct P2R_UDTConvertIn P2R_UDTConvertIn;
+struct P2R_UDTConvertIn
+{
+  CV_LeafParsed *tpi_leaf;
+  CV_TypeId itype_first;
+  CV_TypeId itype_opl;
+  CV_TypeId *itype_fwd_map;
+  RDIM_Type **itype_type_ptrs;
+};
+
 //- rjf: symbol stream conversion
 
 typedef struct P2R_SymbolStreamConvertIn P2R_SymbolStreamConvertIn;
