@@ -6,6 +6,8 @@
 // op_string     - string for quick display of the operator
 EVAL_ExprKindTable:
 {
+  { Nil                 0         ""             }
+  
   { ArrayIndex          2         "[]"           }
   { MemberAccess        2         "."            }
   { Deref               1         "*"            }
