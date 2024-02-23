@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ MSF Parser Function
+//~ rjf: MSF Parser Functions
 
 internal MSF_Parsed*
 msf_parsed_from_data(Arena *arena, String8 msf_data)
@@ -199,7 +199,8 @@ msf_parsed_from_data(Arena *arena, String8 msf_data)
       U32 entry_cursor = all_stream_entries_off;
       U32 index_cursor = all_indices_off;
       String8 *stream_ptr = streams;
-      for (U32 i = 0; i < stream_count; i += 1){
+      for (U32 i = 0; i < stream_count; i += 1)
+      {
         // read stream size
         U32 stream_size_raw = *(U32*)(directory_buf + entry_cursor);
         if (stream_size_raw == 0xffffffff){
@@ -274,9 +275,11 @@ msf_parsed_from_data(Arena *arena, String8 msf_data)
 }
 
 internal String8
-msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn){
+msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn)
+{
   String8 result = {0};
-  if (sn < msf->stream_count){
+  if(sn < msf->stream_count)
+  {
     result = msf->streams[sn];
   }
   return(result);

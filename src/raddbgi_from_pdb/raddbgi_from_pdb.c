@@ -2921,7 +2921,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     itype_fwd_map = push_array(arena, CV_TypeId, (U64)itype_opl);
     
     //- rjf: kick off tasks to fill forward resolution map
-    U64 task_size_itypes = 4096;
+    U64 task_size_itypes = 1024;
     U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
     P2R_ITypeFwdMapFillIn *tasks_inputs = push_array(scratch.arena, P2R_ITypeFwdMapFillIn, tasks_count);
     TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, tasks_count);
@@ -2960,7 +2960,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)itype_opl);
     
     //- rjf: kick off tasks to fill itype chain table
-    U64 task_size_itypes = 4096;
+    U64 task_size_itypes = 1024;
     U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
     P2R_ITypeChainBuildIn *tasks_inputs = push_array(scratch.arena, P2R_ITypeChainBuildIn, tasks_count);
     TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, tasks_count);
@@ -3461,7 +3461,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     ////////////////////////////
     //- rjf: kick off all symbol conversion tasks
     //
-    U64 global_stream_subdivision_tasks_count = (sym->sym_ranges.count+65535)/65536;
+    U64 global_stream_subdivision_tasks_count = (sym->sym_ranges.count+16383)/16384;
     U64 global_stream_syms_per_task = sym->sym_ranges.count/global_stream_subdivision_tasks_count;
     U64 tasks_count = comp_unit_count + global_stream_subdivision_tasks_count;
     P2R_SymbolStreamConvertIn *tasks_inputs = push_array(scratch.arena, P2R_SymbolStreamConvertIn, tasks_count);
