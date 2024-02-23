@@ -1687,6 +1687,15 @@ p2r_udt_convert_task__entry_point(Arena *arena, void *p)
         //
         case CV_LeafKind_ENUM:
         {
+          CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
+          if(lf->props & CV_TypeProp_FwdRef)
+          {
+            break;
+          }
+          field_itype = lf->field_itype;
+        }goto equip_enum_vals;
+        equip_enum_vals:;
+        {
           Temp scratch = scratch_begin(&arena, 1);
           
           //- rjf: grab UDT info
