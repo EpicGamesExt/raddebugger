@@ -1584,7 +1584,6 @@ ui_layout_enforce_constraints__in_place_rec(UI_Box *root, Axis2 axis)
             F32 fixup_pct = (violation / total_weighted_size);
             fixup_pct = Clamp(0, fixup_pct, 1);
             child->fixed_size.v[axis] -= child_fixups[child_idx] * fixup_pct;
-            child->fixed_size.v[axis] = child->fixed_size.v[axis];
           }
         }
       }
