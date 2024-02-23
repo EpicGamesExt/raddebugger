@@ -136,6 +136,10 @@ ts_join(TS_Ticket ticket, U64 endt_us)
         }
         break;
       }
+      if(os_now_microseconds() >= endt_us)
+      {
+        break;
+      }
       os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
     }
   }
