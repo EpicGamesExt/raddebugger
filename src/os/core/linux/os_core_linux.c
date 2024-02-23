@@ -984,7 +984,7 @@ os_logical_core_count(void)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Process Info (Implemented Per-OS)
+//~ rjf: @os_hooks Process & Thread Info (Implemented Per-OS)
 
 internal String8List
 os_get_command_line_arguments(void)

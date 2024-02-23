@@ -410,7 +410,7 @@ main(int argc, char **argv){
   tmInitialize(tm_data_size, tm_data);
 #endif
   
-  ThreadName("[main]");
+  ThreadNameF("[main]");
   
   Arena *arena = arena_alloc();
   String8List args = os_string_list_from_argcv(arena, argc, argv);

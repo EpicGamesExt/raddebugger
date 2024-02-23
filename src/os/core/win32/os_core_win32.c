@@ -596,6 +596,54 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
 }
 
 ////////////////////////////////
+//~ rjf: @os_hooks Thread Names
+
+internal void
+os_set_thread_name(String8 name)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  // rjf: windows 10 style
+  {
+    String16 name16 = str16_from_8(scratch.arena, name);
+    HRESULT hr = SetThreadDescription(GetCurrentThread(), (WCHAR*)name16.str);
+  }
+  
+  // rjf: raise-exception style
+  {
+    String8 name_copy = push_str8_copy(scratch.arena, name);
+#pragma pack(push,8)
+    typedef struct THREADNAME_INFO THREADNAME_INFO;
+    struct THREADNAME_INFO
+    {
+      U32 dwType;     // Must be 0x1000.
+      char *szName;   // Pointer to name (in user addr space).
+      U32 dwThreadID; // Thread ID (-1=caller thread).
+      U32 dwFlags;    // Reserved for future use, must be zero.
+    };
+#pragma pack(pop)
+    THREADNAME_INFO info;
+    info.dwType = 0x1000;
+    info.szName = (char *)name_copy.str;
+    info.dwThreadID = os_get_tid();
+    info.dwFlags = 0;
+#pragma warning(push)
+#pragma warning(disable: 6320 6322)
+    __try
+    {
+      RaiseException(0x406D1388, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+    }
+#pragma warning(pop)
+  }
+  
+  scratch_end(scratch);
+}
+
+
+////////////////////////////////
 //~ rjf: @os_hooks Process Control (Implemented Per-OS)
 
 internal void

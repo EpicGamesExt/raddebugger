@@ -343,7 +343,7 @@ entry_point(int argc, char **argv)
   tmSetMaxThreadCount(1024);
   tmInitialize(sizeof(tm_data), (char *)tm_data);
 #endif
-  ThreadName("[main]");
+  ThreadNameF("[main]");
   
   //- rjf: initialize basic dependencies
   os_init(argc, argv);

@@ -9,7 +9,7 @@
 
 #include "base_context_cracking.h"
 #include "base_types.h"
-#include "base_markup.h"
+#include "base_profile.h"
 #include "base_ins.h"
 #include "base_linked_lists.h"
 #include "base_arena.h"
@@ -19,5 +19,6 @@
 #include "base_command_line.h"
 #include "base_arena_dev.h"
 #include "base_bits.h"
+#include "base_markup.h"
 
 #endif // BASE_INC_H

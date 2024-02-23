@@ -5,40 +5,41 @@
 //~ MSF Parser Function
 
 internal MSF_Parsed*
-msf_parsed_from_data(Arena *arena, String8 msf_data){
-  ProfBegin("msf_parsed_from_data");
-  
+msf_parsed_from_data(Arena *arena, String8 msf_data)
+{
   Temp scratch = scratch_begin(&arena, 1);
-  
   MSF_Parsed *result = 0;
   
   //- determine msf type
   U32 index_size = 0;
-  if (msf_data.size >= MSF_MIN_SIZE){
-    if (str8_match(msf_data, str8_lit(msf_msf20_magic),
-                   StringMatchFlag_RightSideSloppy)){
+  if(msf_data.size >= MSF_MIN_SIZE)
+  {
+    if(str8_match(msf_data, str8_lit(msf_msf20_magic), StringMatchFlag_RightSideSloppy))
+    {
       index_size = 2;
     }
-    else if (str8_match(msf_data, str8_lit(msf_msf70_magic),
-                        StringMatchFlag_RightSideSloppy)){
+    else if(str8_match(msf_data, str8_lit(msf_msf70_magic), StringMatchFlag_RightSideSloppy))
+    {
       index_size = 4;
     }
   }
   
-  if (index_size == 2 || index_size == 4){
-    
+  if(index_size == 2 || index_size == 4)
+  {
     //- extract info from header
     U32 block_size_raw = 0;
     U32 whole_file_block_count_raw = 0;
     U32 directory_size_raw = 0;
     U32 directory_super_map_raw = 0;
-    if (index_size == 2){
+    if(index_size == 2)
+    {
       MSF_Header20 *header = (MSF_Header20*)(msf_data.str + MSF_MSF20_MAGIC_SIZE);
       block_size_raw = header->block_size;
       whole_file_block_count_raw = header->block_count;
       directory_size_raw = header->directory_size;
     }
-    else if (index_size == 4){
+    else if(index_size == 4)
+    {
       MSF_Header70 *header = (MSF_Header70*)(msf_data.str + MSF_MSF70_MAGIC_SIZE);
       block_size_raw = header->block_size;
       whole_file_block_count_raw = header->block_count;
@@ -91,7 +92,6 @@ msf_parsed_from_data(Arena *arena, String8 msf_data){
     //- parse stream directory
     U8 *directory_buf = push_array(scratch.arena, U8, directory_size);
     B32 got_directory = 1;
-    
     {
       U32 directory_super_map_dummy = 0;
       U32 *directory_super_map = 0;
@@ -174,7 +174,8 @@ msf_parsed_from_data(Arena *arena, String8 msf_data){
     B32 got_streams = 0;
     String8 *streams = 0;
     
-    if (got_directory){
+    if(got_directory)
+    {
       got_streams = 1;
       
       // read stream count
@@ -258,7 +259,8 @@ msf_parsed_from_data(Arena *arena, String8 msf_data){
       parse_streams_done:;
     }
     
-    if (got_streams){
+    if(got_streams)
+    {
       result = push_array(arena, MSF_Parsed, 1);
       result->streams = streams;
       result->stream_count = stream_count;
@@ -268,10 +270,7 @@ msf_parsed_from_data(Arena *arena, String8 msf_data){
   }
   
   scratch_end(scratch);
-  
-  ProfEnd();
-  
-  return(result);
+  return result;
 }
 
 internal String8

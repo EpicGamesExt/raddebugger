@@ -1518,7 +1518,7 @@ ctrl_u2ms_dequeue_req(CTRL_MachineID *out_machine_id, CTRL_Handle *out_process, 
 internal void
 ctrl_thread__entry_point(void *p)
 {
-  ThreadName("[ctrl] thread");
+  ThreadNameF("[ctrl] thread");
   ProfBeginFunction();
   demon_primary_thread_begin();
   Temp scratch = scratch_begin(0, 0);

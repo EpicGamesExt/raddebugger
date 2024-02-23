@@ -232,13 +232,18 @@ internal U64          os_allocation_granularity(void);
 internal U64          os_logical_core_count(void);
 
 ////////////////////////////////
-//~ rjf: @os_hooks Process Info (Implemented Per-OS)
+//~ rjf: @os_hooks Process & Thread Info (Implemented Per-OS)
 
 internal String8List os_get_command_line_arguments(void);
 internal S32         os_get_pid(void);
 internal S32         os_get_tid(void);
 internal String8List os_get_environment(void);
 internal U64         os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *out);
+
+////////////////////////////////
+//~ rjf: @os_hooks Thread Names
+
+internal void os_set_thread_name(String8 string);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Process Control (Implemented Per-OS)

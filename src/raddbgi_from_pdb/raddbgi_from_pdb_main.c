@@ -46,7 +46,7 @@ main(int argc, char **argv)
   tmSetMaxThreadCount(1024);
   tmInitialize(tm_data_size, tm_data);
 #endif
-  ThreadName("[main]");
+  ThreadNameF("[main]");
   
   //- rjf: initialize dependencies
   os_init(argc, argv);

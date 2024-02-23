@@ -36,7 +36,7 @@ ts_init(void)
     ts_shared->artifact_stripes[idx].cv = os_condition_variable_alloc();
     ts_shared->artifact_stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
-  ts_shared->u2t_ring_size = KB(256);
+  ts_shared->u2t_ring_size = KB(1024);
   ts_shared->u2t_ring_base = push_array_no_zero(arena, U8, ts_shared->u2t_ring_size);
   ts_shared->u2t_ring_mutex = os_mutex_alloc();
   ts_shared->u2t_ring_cv = os_condition_variable_alloc();
@@ -168,7 +168,7 @@ internal void
 ts_task_thread__entry_point(void *p)
 {
   U64 thread_idx = (U64)p;
-  ThreadName("[ts] task thread #%I64u", thread_idx+1);
+  ThreadNameF("[ts] task thread #%I64u", thread_idx+1);
   TS_TaskThread *thread = &ts_shared->task_threads[thread_idx];
   for(;;)
   {

@@ -140,7 +140,7 @@ fs_u2s_dequeue_path(Arena *arena)
 internal void
 fs_streamer_thread__entry_point(void *p)
 {
-  ThreadName("[fs] streamer #%I64u", (U64)p);
+  ThreadNameF("[fs] streamer #%I64u", (U64)p);
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
