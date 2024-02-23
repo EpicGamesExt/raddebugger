@@ -3419,32 +3419,23 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: types pass 4: build UDTs
+  //- rjf: types pass 4: kick off UDT build
   //
-  RDIM_UDTChunkList all_udts = {0};
-  ProfScope("types pass 4: build UDTs")
+  U64 udt_task_size_itypes = 4096;
+  U64 udt_tasks_count = ((U64)itype_opl+(udt_task_size_itypes-1))/udt_task_size_itypes;
+  P2R_UDTConvertIn *udt_tasks_inputs = push_array(scratch.arena, P2R_UDTConvertIn, udt_tasks_count);
+  TS_Ticket *udt_tasks_tickets = push_array(scratch.arena, TS_Ticket, udt_tasks_count);
+  ProfScope("types pass 4: kick off UDT build")
   {
-    //- rjf: kick off tasks
-    U64 task_size_itypes = 4096;
-    U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
-    P2R_UDTConvertIn *tasks_inputs = push_array(scratch.arena, P2R_UDTConvertIn, tasks_count);
-    TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, tasks_count);
-    for(U64 idx = 0; idx < tasks_count; idx += 1)
+    for(U64 idx = 0; idx < udt_tasks_count; idx += 1)
     {
-      tasks_inputs[idx].tpi_leaf        = tpi_leaf;
-      tasks_inputs[idx].itype_first     = idx*task_size_itypes;
-      tasks_inputs[idx].itype_opl       = tasks_inputs[idx].itype_first + task_size_itypes;
-      tasks_inputs[idx].itype_opl       = ClampTop(tasks_inputs[idx].itype_opl, itype_opl);
-      tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
-      tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
-      tasks_tickets[idx] = ts_kickoff(p2r_udt_convert_task__entry_point, 0, &tasks_inputs[idx]);
-    }
-    
-    //- rjf: join all tasks
-    for(U64 idx = 0; idx < tasks_count; idx += 1)
-    {
-      RDIM_UDTChunkList *udts = ts_join_struct(tasks_tickets[idx], max_U64, RDIM_UDTChunkList);
-      rdim_udt_chunk_list_concat_in_place(&all_udts, udts);
+      udt_tasks_inputs[idx].tpi_leaf        = tpi_leaf;
+      udt_tasks_inputs[idx].itype_first     = idx*udt_task_size_itypes;
+      udt_tasks_inputs[idx].itype_opl       = udt_tasks_inputs[idx].itype_first + udt_task_size_itypes;
+      udt_tasks_inputs[idx].itype_opl       = ClampTop(udt_tasks_inputs[idx].itype_opl, itype_opl);
+      udt_tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
+      udt_tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
+      udt_tasks_tickets[idx] = ts_kickoff(p2r_udt_convert_task__entry_point, 0, &udt_tasks_inputs[idx]);
     }
   }
   
@@ -3529,6 +3520,16 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     P2R_UnitConvertOut *out = ts_join_struct(unit_convert_ticket, max_U64, P2R_UnitConvertOut);
     all_units = out->units;
     all_src_files = out->src_files;
+  }
+  
+  //////////////////////////////////////////////////////////////
+  //- rjf: types pass 5: join UDT build tasks
+  //
+  RDIM_UDTChunkList all_udts = {0};
+  for(U64 idx = 0; idx < udt_tasks_count; idx += 1)
+  {
+    RDIM_UDTChunkList *udts = ts_join_struct(udt_tasks_tickets[idx], max_U64, RDIM_UDTChunkList);
+    rdim_udt_chunk_list_concat_in_place(&all_udts, udts);
   }
   
   //////////////////////////////////////////////////////////////
