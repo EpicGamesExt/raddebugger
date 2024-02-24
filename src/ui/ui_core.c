@@ -2573,6 +2573,10 @@ ui_signal_from_box(UI_Box *box)
             }
             if(!(box->flags & UI_BoxFlag_ViewScrollY))
             {
+              if(box->flags & UI_BoxFlag_ViewScrollX)
+              {
+                delta.x = delta.y;
+              }
               delta.y = 0;
             }
             os_eat_event(events, event);
