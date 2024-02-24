@@ -2573,7 +2573,7 @@ ui_signal_from_box(UI_Box *box)
             }
             if(!(box->flags & UI_BoxFlag_ViewScrollY))
             {
-              if(box->flags & UI_BoxFlag_ViewScrollX)
+              if(delta.x == 0 && box->flags & UI_BoxFlag_ViewScrollX)
               {
                 delta.x = delta.y;
               }
