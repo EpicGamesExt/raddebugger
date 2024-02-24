@@ -85,12 +85,12 @@ dbgi_ensure_tctx_inited(void)
 //~ rjf: Helpers
 
 internal U64
-dbgi_hash_from_string(String8 string)
+dbgi_hash_from_string(String8 string, StringMatchFlags match_flags)
 {
   U64 result = 5381;
   for(U64 i = 0; i < string.size; i += 1)
   {
-    result = ((result << 5) + result) + string.str[i];
+    result = ((result << 5) + result) + ((match_flags & StringMatchFlag_CaseInsensitive) ? char_to_lower(string.str[i]) : string.str[i]);
   }
   return result;
 }
@@ -157,7 +157,7 @@ dbgi_fuzzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, DBGI_FuzzySe
 internal void
 dbgi_force_exe_path_dbg_path(String8 exe_path, String8 dbg_path)
 {
-  U64 hash = dbgi_hash_from_string(exe_path);
+  U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
   U64 slot_idx = hash%dbgi_shared->force_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
   DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
@@ -192,7 +192,7 @@ internal String8
 dbgi_forced_dbg_path_from_exe_path(Arena *arena, String8 exe_path)
 {
   String8 result = {0};
-  U64 hash = dbgi_hash_from_string(exe_path);
+  U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
   U64 slot_idx = hash%dbgi_shared->force_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
   DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
@@ -297,7 +297,7 @@ dbgi_binary_open(String8 exe_path)
 {
   Temp scratch = scratch_begin(0, 0);
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  U64 hash = dbgi_hash_from_string(exe_path);
+  U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
   U64 slot_idx = hash%dbgi_shared->binary_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
   DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -336,7 +336,7 @@ dbgi_binary_close(String8 exe_path)
 {
   Temp scratch = scratch_begin(0, 0);
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  U64 hash = dbgi_hash_from_string(exe_path);
+  U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
   U64 slot_idx = hash%dbgi_shared->binary_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
   DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -393,7 +393,7 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
   DBGI_Parse *parse = &dbgi_parse_nil;
   if(exe_path.size != 0)
   {
-    U64 hash = dbgi_hash_from_string(exe_path);
+    U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
     U64 slot_idx = hash%dbgi_shared->binary_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
     DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -640,7 +640,7 @@ dbgi_parse_thread_entry_point(void *p)
     //- rjf: grab next path & unpack
     String8 exe_path = dbgi_u2p_dequeue_exe_path(scratch.arena);
     ProfBegin("begin task for \"%.*s\"", str8_varg(exe_path));
-    U64 hash = dbgi_hash_from_string(exe_path);
+    U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
     U64 slot_idx = hash%dbgi_shared->binary_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
     DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
