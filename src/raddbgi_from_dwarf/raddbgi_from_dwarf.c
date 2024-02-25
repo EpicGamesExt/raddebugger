@@ -396,30 +396,13 @@ dump_entry_tree(Arena *arena, String8List *out,
 }
 #endif
 
-int
-main(int argc, char **argv){
-  local_persist TCTX main_thread_tctx = {0};
-  tctx_init_and_equip(&main_thread_tctx);
-  
-#if PROFILE_TELEMETRY
-  U64 tm_data_size = GB(1);
-  U8 *tm_data = os_reserve(tm_data_size);
-  os_commit(tm_data, tm_data_size);
-  tmLoadLibrary(TM_RELEASE);
-  tmSetMaxThreadCount(1024);
-  tmInitialize(tm_data_size, tm_data);
-#endif
-  
-  ThreadNameF("[main]");
-  
+internal void
+entry_point(CmdLine *cmd_line)
+{
   Arena *arena = arena_alloc();
-  String8List args = os_string_list_from_argcv(arena, argc, argv);
-  CmdLine cmdline = cmd_line_from_string_list(arena, args);
-  
-  ProfBeginCapture("raddbgi_from_dwarf");
   
   // parse arguments
-  DWARFCONV_Params *params = dwarf_convert_params_from_cmd_line(arena, &cmdline);
+  DWARFCONV_Params *params = dwarf_convert_params_from_cmd_line(arena, cmd_line);
   
   // show input errors
   if (params->errors.node_count > 0 &&
@@ -898,7 +881,4 @@ fprintf(stdout, "error(parsing): " fmt "\n", __VA_ARGS__); \
       fwrite(node->string.str, 1, node->string.size, stdout);
     }
   }
-  
-  ProfEndCapture();
-  return(0);
 }
