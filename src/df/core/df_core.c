@@ -3200,7 +3200,7 @@ df_symbol_name_from_binary_voff(Arena *arena, DF_Entity *binary, U64 voff)
     if(result.size == 0 && rdi->scope_vmap != 0)
     {
       U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, voff);
-      RDI_Scope *scope = &rdi->scopes[scope_idx];
+      RDI_Scope *scope = rdi_element_from_idx(rdi, scopes, scope_idx);
       U64 proc_idx = scope->proc_idx;
       RDI_Procedure *procedure = &rdi->procedures[proc_idx];
       U64 name_size = 0;
@@ -3210,7 +3210,7 @@ df_symbol_name_from_binary_voff(Arena *arena, DF_Entity *binary, U64 voff)
     if(result.size == 0 && rdi->global_vmap != 0)
     {
       U64 global_idx = rdi_vmap_idx_from_voff(rdi->global_vmap, rdi->global_vmap_count, voff);
-      RDI_GlobalVariable *global_var = &rdi->global_variables[global_idx];
+      RDI_GlobalVariable *global_var = rdi_element_from_idx(rdi, global_variables, global_idx);
       U64 name_size = 0;
       U8 *name_ptr = rdi_string_from_idx(rdi, global_var->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
