@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef BASE_STRING_H
-#define BASE_STRING_H
+#ifndef BASE_STRINGS_H
+#define BASE_STRINGS_H
 
 ////////////////////////////////
 //~ rjf: Third Party Includes
@@ -368,4 +368,4 @@ internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, Stri
 #define str8_deserial_read_array(string, off, ptr, count) str8_deserial_read((string), (off), (ptr), sizeof(*(ptr))*(count), sizeof(*(ptr)))
 #define str8_deserial_read_struct(string, off, ptr) str8_deserial_read((string), (off), (ptr), sizeof(*(ptr)), sizeof(*(ptr)))
 
-#endif // BASE_STRING_H
+#endif // BASE_STRINGS_H

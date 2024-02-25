@@ -34,6 +34,80 @@
 # define read_only
 #endif
 
+#if COMPILER_MSVC
+# define thread_static __declspec(thread)
+#elif COMPILER_CLANG || COMPILER_GCC
+# define thread_static __thread
+#endif
+
+////////////////////////////////
+//~ rjf: Linkage Keyword Macros
+
+#if OS_WINDOWS
+# define shared_function C_LINKAGE __declspec(dllexport)
+#else
+# define shared_function C_LINKAGE
+#endif
+
+#if LANG_CPP
+# define C_LINKAGE_BEGIN extern "C"{
+# define C_LINKAGE_END }
+# define C_LINKAGE extern "C"
+#else
+# define C_LINKAGE_BEGIN
+# define C_LINKAGE_END
+# define C_LINKAGE
+#endif
+
+////////////////////////////////
+//~ rjf: Units
+
+#define KB(n)  (((U64)(n)) << 10)
+#define MB(n)  (((U64)(n)) << 20)
+#define GB(n)  (((U64)(n)) << 30)
+#define TB(n)  (((U64)(n)) << 40)
+#define Thousand(n)   ((n)*1000)
+#define Million(n)    ((n)*1000000)
+#define Billion(n)    ((n)*1000000000)
+
+////////////////////////////////
+//~ rjf: Branch Predictor Hints
+
+#if defined(__clang__)
+# define Expect(expr, val) __builtin_expect((expr), (val))
+#else
+# define Expect(expr, val) (expr)
+#endif
+
+#define Likely(expr)            Expect(expr,1)
+#define Unlikely(expr)          Expect(expr,0)
+
+////////////////////////////////
+//~ rjf: Clamps, Mins, Maxes
+
+#define Min(A,B) (((A)<(B))?(A):(B))
+#define Max(A,B) (((A)>(B))?(A):(B))
+#define ClampTop(A,X) Min(A,X)
+#define ClampBot(X,B) Max(X,B)
+#define Clamp(A,X,B) (((X)<(A))?(A):((X)>(B))?(B):(X))
+
+////////////////////////////////
+//~ rjf: Member Offsets
+
+#define Member(T,m)                 (((T*)0)->m)
+#define OffsetOf(T,m)               IntFromPtr(&Member(T,m))
+#define MemberFromOffset(T,ptr,off) (T)((((U8 *)ptr)+(off)))
+#define CastFromMember(T,m,ptr)     (T*)(((U8*)ptr) - OffsetOf(T,m))
+
+////////////////////////////////
+//~ rjf: For-Loop Construct Macros
+
+#define DeferLoop(begin, end)        for(int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
+#define DeferLoopChecked(begin, end) for(int _i_ = 2 * !(begin); (_i_ == 2 ? ((end), 0) : !_i_); _i_ += 1, (end))
+
+#define EachEnumVal(type, it) type it = (type)0; it < type##_COUNT; it = (type)(it+1)
+#define EachNonZeroEnumVal(type, it) type it = (type)1; it < type##_COUNT; it = (type)(it+1)
+
 ////////////////////////////////
 //~ rjf: Memory Operation Macros
 
@@ -56,19 +130,7 @@
 #define MemoryMatchArray(a,b)   MemoryMatch((a),(b),sizeof(a))
 
 #define MemoryRead(T,p,e)    ( ((p)+sizeof(T)<=(e))?(*(T*)(p)):(0) )
-#define MemoryConsume(T,p,e) \
-( ((p)+sizeof(T)<=(e))?((p)+=sizeof(T),*(T*)((p)-sizeof(T))):((p)=(e),0) )
-
-////////////////////////////////
-//~ rjf: Units
-
-#define KB(n)  (((U64)(n)) << 10)
-#define MB(n)  (((U64)(n)) << 20)
-#define GB(n)  (((U64)(n)) << 30)
-#define TB(n)  (((U64)(n)) << 40)
-#define Thousand(n)   ((n)*1000)
-#define Million(n)    ((n)*1000000)
-#define Billion(n)    ((n)*1000000000)
+#define MemoryConsume(T,p,e) ( ((p)+sizeof(T)<=(e))?((p)+=sizeof(T),*(T*)((p)-sizeof(T))):((p)=(e),0) )
 
 ////////////////////////////////
 //~ rjf: Asserts
@@ -77,8 +139,8 @@
 # define Trap() __debugbreak()
 #elif COMPILER_CLANG || COMPILER_GCC
 # define Trap() __builtin_trap()
-# else
-# error "undefined trap"
+#else
+# error Unknown trap intrinsic for this compiler.
 #endif
 
 #define AssertAlways(x) do{if(!(x)) {Trap();}}while(0)
@@ -87,32 +149,136 @@
 #else
 # define Assert(x) (void)(x)
 #endif
-#define AssertImplies(a,b) Assert(!(a) || b)
-#define AssertIff(a,b)     Assert(!!(a) == !!(b))
 #define InvalidPath        Assert(!"Invalid Path!")
 #define NotImplemented     Assert(!"Not Implemented!")
 #define NoOp               ((void)0)
-
-#define StaticAssert(C,ID) global U8 Glue(ID,__LINE__)[(C)?1:-1]
+#define StaticAssert(C, ID) global U8 Glue(ID, __LINE__)[(C)?1:-1]
 
 ////////////////////////////////
-//~ rjf: Branch Predictor Hints
+//~ rjf: Atomic Operations
 
-#if defined(__clang__)
-# define Expect(expr, val) __builtin_expect((expr), (val))
+#if OS_WINDOWS
+# include <windows.h>
+# include <tmmintrin.h>
+# include <wmmintrin.h>
+# include <intrin.h>
+# if ARCH_X64
+#  define ins_atomic_u64_eval(x) InterlockedAdd64((volatile __int64 *)(x), 0)
+#  define ins_atomic_u64_inc_eval(x) InterlockedIncrement64((volatile __int64 *)(x))
+#  define ins_atomic_u64_dec_eval(x) InterlockedDecrement64((volatile __int64 *)(x))
+#  define ins_atomic_u64_eval_assign(x,c) InterlockedExchange64((volatile __int64 *)(x),(c))
+#  define ins_atomic_u64_add_eval(x,c) InterlockedAdd64((volatile __int64 *)(x), c)
+#  define ins_atomic_u32_eval_assign(x,c) InterlockedExchange((volatile LONG *)(x),(c))
+#  define ins_atomic_u32_eval_cond_assign(x,k,c) InterlockedCompareExchange((volatile LONG *)(x),(k),(c))
+#  define ins_atomic_ptr_eval_assign(x,c) (void*)ins_atomic_u64_eval_assign((volatile __int64 *)(x), (__int64)(c))
+# else
+#  error Atomic intrinsics not defined for this operating system / architecture combination.
+# endif
+#elif OS_LINUX
+# if ARCH_X64
+#  define ins_atomic_u64_inc_eval(x) __sync_fetch_and_add((volatile U64 *)(x), 1)
+# else
+#  error Atomic intrinsics not defined for this operating system / architecture combination.
+# endif
 #else
-# define Expect(expr, val) (expr)
+# error Atomic intrinsics not defined for this operating system.
 #endif
 
-#define Likely(expr)            Expect(expr,1)
-#define Unlikely(expr)          Expect(expr,0)
+////////////////////////////////
+//~ rjf: Linked List Building Macros
+
+//- rjf: linked list macro helpers
+#define CheckNil(nil,p) ((p) == 0 || (p) == nil)
+#define SetNil(nil,p) ((p) = nil)
+
+//- rjf: doubly-linked-lists
+#define DLLInsert_NPZ(nil,f,l,p,n,next,prev) (CheckNil(nil,f) ? \
+((f) = (l) = (n), SetNil(nil,(n)->next), SetNil(nil,(n)->prev)) :\
+CheckNil(nil,p) ? \
+((n)->next = (f), (f)->prev = (n), (f) = (n), SetNil(nil,(n)->prev)) :\
+((p)==(l)) ? \
+((l)->next = (n), (n)->prev = (l), (l) = (n), SetNil(nil, (n)->next)) :\
+(((!CheckNil(nil,p) && CheckNil(nil,(p)->next)) ? (0) : ((p)->next->prev = (n))), ((n)->next = (p)->next), ((p)->next = (n)), ((n)->prev = (p))))
+#define DLLPushBack_NPZ(nil,f,l,n,next,prev) DLLInsert_NPZ(nil,f,l,l,n,next,prev)
+#define DLLPushFront_NPZ(nil,f,l,n,next,prev) DLLInsert_NPZ(nil,l,f,f,n,prev,next)
+#define DLLRemove_NPZ(nil,f,l,n,next,prev) (((n) == (f) ? (f) = (n)->next : (0)),\
+((n) == (l) ? (l) = (l)->prev : (0)),\
+(CheckNil(nil,(n)->prev) ? (0) :\
+((n)->prev->next = (n)->next)),\
+(CheckNil(nil,(n)->next) ? (0) :\
+((n)->next->prev = (n)->prev)))
+
+//- rjf: singly-linked, doubly-headed lists (queues)
+#define SLLQueuePush_NZ(nil,f,l,n,next) (CheckNil(nil,f)?\
+((f)=(l)=(n),SetNil(nil,(n)->next)):\
+((l)->next=(n),(l)=(n),SetNil(nil,(n)->next)))
+#define SLLQueuePushFront_NZ(nil,f,l,n,next) (CheckNil(nil,f)?\
+((f)=(l)=(n),SetNil(nil,(n)->next)):\
+((n)->next=(f),(f)=(n)))
+#define SLLQueuePop_NZ(nil,f,l,next) ((f)==(l)?\
+(SetNil(nil,f),SetNil(nil,l)):\
+((f)=(f)->next))
+
+//- rjf: singly-linked, singly-headed lists (stacks)
+#define SLLStackPush_N(f,n,next) ((n)->next=(f), (f)=(n))
+#define SLLStackPop_N(f,next) ((f)=(f)->next)
+
+//- rjf: doubly-linked-list helpers
+#define DLLInsert_NP(f,l,p,n,next,prev) DLLInsert_NPZ(0,f,l,p,n,next,prev)
+#define DLLPushBack_NP(f,l,n,next,prev) DLLPushBack_NPZ(0,f,l,n,next,prev)
+#define DLLPushFront_NP(f,l,n,next,prev) DLLPushFront_NPZ(0,f,l,n,next,prev)
+#define DLLRemove_NP(f,l,n,next,prev) DLLRemove_NPZ(0,f,l,n,next,prev)
+#define DLLInsert(f,l,p,n) DLLInsert_NPZ(0,f,l,p,n,next,prev)
+#define DLLPushBack(f,l,n) DLLPushBack_NPZ(0,f,l,n,next,prev)
+#define DLLPushFront(f,l,n) DLLPushFront_NPZ(0,f,l,n,next,prev)
+#define DLLRemove(f,l,n) DLLRemove_NPZ(0,f,l,n,next,prev)
+
+//- rjf: singly-linked, doubly-headed list helpers
+#define SLLQueuePush_N(f,l,n,next) SLLQueuePush_NZ(0,f,l,n,next)
+#define SLLQueuePushFront_N(f,l,n,next) SLLQueuePushFront_NZ(0,f,l,n,next)
+#define SLLQueuePop_N(f,l,next) SLLQueuePop_NZ(0,f,l,next)
+#define SLLQueuePush(f,l,n) SLLQueuePush_NZ(0,f,l,n,next)
+#define SLLQueuePushFront(f,l,n) SLLQueuePushFront_NZ(0,f,l,n,next)
+#define SLLQueuePop(f,l) SLLQueuePop_NZ(0,f,l,next)
+
+//- rjf: singly-linked, singly-headed list helpers
+#define SLLStackPush(f,n) SLLStackPush_N(f,n,next)
+#define SLLStackPop(f) SLLStackPop_N(f,next)
+
+////////////////////////////////
+//~ rjf: Address Sanitizer Markup
+
+#if COMPILER_MSVC
+# if defined(__SANITIZE_ADDRESS__)
+#  define ASAN_ENABLED 1
+#  define NO_ASAN __declspec(no_sanitize_address)
+# else
+#  define NO_ASAN
+# endif
+#elif COMPILER_CLANG
+# if defined(__has_feature)
+#  if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
+#   define ASAN_ENABLED 1
+#  endif
+# endif
+# define NO_ASAN __attribute__((no_sanitize("address")))
+#else
+# error "NO_ASAN is not defined for this compiler."
+#endif
+
+#if ASAN_ENABLED
+#pragma comment(lib, "clang_rt.asan-x86_64.lib")
+C_LINKAGE void __asan_poison_memory_region(void const volatile *addr, size_t size);
+C_LINKAGE void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
+# define AsanPoisonMemoryRegion(addr, size)   __asan_poison_memory_region((addr), (size))
+# define AsanUnpoisonMemoryRegion(addr, size) __asan_unpoison_memory_region((addr), (size))
+#else
+# define AsanPoisonMemoryRegion(addr, size)   ((void)(addr), (void)(size))
+# define AsanUnpoisonMemoryRegion(addr, size) ((void)(addr), (void)(size))
+#endif
 
 ////////////////////////////////
 //~ rjf: Misc. Helper Macros
-
-#define ArrayCount(a) (sizeof(a) / sizeof((a)[0]))
-
-#define Stmnt(S) do{ S }while(0)
 
 #define Stringify_(S) #S
 #define Stringify(S) Stringify_(S)
@@ -120,35 +286,20 @@
 #define Glue_(A,B) A##B
 #define Glue(A,B) Glue_(A,B)
 
-#define Min(A,B) ( ((A)<(B))?(A):(B) )
-#define Max(A,B) ( ((A)>(B))?(A):(B) )
-
-#define ClampTop(A,X) Min(A,X)
-#define ClampBot(X,B) Max(X,B)
-#define Clamp(A,X,B) ( ((X)<(A))?(A):((X)>(B))?(B):(X) )
-
-#define PtrClampTop(A,X) ClampTop(A,X)
-#define PtrClampBot(X,B) ClampBot(X,B)
-#define PtrClamp(A,X,B)  Clamp(A,X,B)
+#define ArrayCount(a) (sizeof(a) / sizeof((a)[0]))
 
 #define CeilIntegerDiv(a,b) (((a) + (b) - 1)/(b))
 
-#define Swap(T,a,b) Stmnt( T t__ = a; a = b; b = t__; )
+#define Swap(T,a,b) do{T t__ = a; a = b; b = t__;}while(0)
 
 #if ARCH_64BIT
 # define IntFromPtr(ptr) ((U64)(ptr))
 #elif ARCH_32BIT
 # define IntFromPtr(ptr) ((U32)(ptr))
 #else
-# error missing ptr cast for this architecture
+# error Missing pointer-to-integer cast for this architecture.
 #endif
-
 #define PtrFromInt(i) (void*)((U8*)0 + (i))
-
-#define Member(T,m)                 (((T*)0)->m)
-#define OffsetOf(T,m)               IntFromPtr(&Member(T,m))
-#define MemberFromOffset(T,ptr,off) (T)((((U8 *)ptr)+(off)))
-#define CastFromMember(T,m,ptr)     (T*)(((U8*)ptr) - OffsetOf(T,m))
 
 #define Compose64Bit(a,b)  ((((U64)a) << 32) | ((U64)b));
 #define AlignPow2(x,b)     (((x) + (b) - 1)&(~((b) - 1)))
@@ -157,11 +308,7 @@
 #define IsPow2(x)          ((x)!=0 && ((x)&((x)-1))==0)
 #define IsPow2OrZero(x)    ((((x) - 1)&(x)) == 0)
 
-#define DeferLoop(begin, end)        for(int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
-#define DeferLoopChecked(begin, end) for(int _i_ = 2 * !(begin); (_i_ == 2 ? ((end), 0) : !_i_); _i_ += 1, (end))
-
-#define EachEnumVal(type, it) type it = (type)0; it < type##_COUNT; it = (type)(it+1)
-#define EachNonZeroEnumVal(type, it) type it = (type)1; it < type##_COUNT; it = (type)(it+1)
+#define ExtractBit(word, idx) (((word) >> (idx)) & 1)
 
 #if LANG_CPP
 # define zero_struct {}
@@ -173,66 +320,6 @@
 # define this_function_name "unknown"
 #else
 # define this_function_name __func__
-#endif
-
-#if LANG_CPP
-# define C_LINKAGE_BEGIN extern "C"{
-# define C_LINKAGE_END }
-# define C_LINKAGE extern "C"
-#else
-# define C_LINKAGE_BEGIN
-# define C_LINKAGE_END
-# define C_LINKAGE
-#endif
-
-#if COMPILER_MSVC
-# define thread_static __declspec(thread)
-#elif COMPILER_CLANG || COMPILER_GCC
-# define thread_static __thread
-#endif
-
-#if OS_WINDOWS
-# define shared_function C_LINKAGE __declspec(dllexport)
-#else
-# define shared_function C_LINKAGE
-#endif
-
-////////////////////////////////
-//~ ASAN
-
-#if COMPILER_MSVC
-# if defined(__SANITIZE_ADDRESS__)
-#   define ASAN_ENABLED 1
-#   define NO_ASAN __declspec(no_sanitize_address)
-# else
-#  define NO_ASAN
-# endif
-#elif COMPILER_CLANG
-#  if defined(__has_feature)
-#    if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
-#     define ASAN_ENABLED 1
-#    endif
-#  endif
-# define NO_ASAN __attribute__((no_sanitize("address")))
-#else
-# error "NO_ASAN is not defined"
-#endif
-
-#if ASAN_ENABLED
-
-#pragma comment(lib, "clang_rt.asan-x86_64.lib")
-
-C_LINKAGE_BEGIN
-void __asan_poison_memory_region(void const volatile *addr, size_t size);
-void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
-C_LINKAGE_END
-
-# define AsanPoisonMemoryRegion(addr, size)   __asan_poison_memory_region((addr), (size))
-# define AsanUnpoisonMemoryRegion(addr, size) __asan_unpoison_memory_region((addr), (size))
-#else
-# define AsanPoisonMemoryRegion(addr, size)   ((void)(addr), (void)(size))
-# define AsanUnpoisonMemoryRegion(addr, size) ((void)(addr), (void)(size))
-
 #endif
 
 ////////////////////////////////
@@ -252,10 +339,7 @@ typedef S32      B32;
 typedef S64      B64;
 typedef float    F32;
 typedef double   F64;
-
-////////////////////////////////
-//~ rjf: Large Base Types
-
+typedef void VoidProc(void);
 typedef struct U128 U128;
 struct U128
 {
@@ -264,8 +348,6 @@ struct U128
 
 ////////////////////////////////
 //~ rjf: Basic Types & Spaces
-
-typedef void VoidProc(void);
 
 typedef enum Dimension
 {
@@ -562,11 +644,13 @@ struct DateTime
   U16 min;  // [0,59]
   U16 hour; // [0,24]
   U16 day;  // [0,30]
-  union{
+  union
+  {
     WeekDay week_day;
     U32 wday;
   };
-  union{
+  union
+  {
     Month month;
     U32 mon;
   };
@@ -594,7 +678,7 @@ struct FileProperties
 };
 
 ////////////////////////////////
-//~ Safe Casts
+//~ rjf: Safe Casts
 
 internal U16 safe_cast_u16(U32 x);
 internal U32 safe_cast_u32(U64 x);
@@ -621,6 +705,15 @@ internal F32 neg_inf32(void);
 internal U16 bswap_u16(U16 x);
 internal U32 bswap_u32(U32 x);
 internal U64 bswap_u64(U64 x);
+
+internal U64 count_bits_set16(U16 val);
+internal U64 count_bits_set32(U32 val);
+internal U64 count_bits_set64(U64 val);
+
+internal U64 ctz32(U32 val);
+internal U64 ctz64(U64 val);
+internal U64 clz32(U32 val);
+internal U64 clz64(U64 val);
 
 ////////////////////////////////
 //~ rjf: Enum -> Sign
@@ -670,4 +763,4 @@ internal U64 ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_dat
 #define ring_write_struct(ring_base, ring_size, ring_pos, ptr) ring_write((ring_base), (ring_size), (ring_pos), (ptr), sizeof(*(ptr)))
 #define ring_read_struct(ring_base, ring_size, ring_pos, ptr) ring_read((ring_base), (ring_size), (ring_pos), (ptr), sizeof(*(ptr)))
 
-#endif // BASE_TYPES_H
+#endif // BASE_CORE_H

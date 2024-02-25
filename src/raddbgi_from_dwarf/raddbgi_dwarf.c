@@ -374,7 +374,7 @@ dwarf_names_from_data(Arena *arena, String8 data){
     U8 *augmentation_string = ptr;
     {
       U8 *ptr_raw = ptr + augmentation_string_size;
-      ptr = PtrClampTop(ptr_raw, unit_opl);
+      ptr = ClampTop(ptr_raw, unit_opl);
     }
     
     // offset size
@@ -555,7 +555,7 @@ dwarf_line_from_data(Arena *arena, String8 data){
         
         // header opl
         U8 *header_opl_raw = ptr + header_length;
-        U8 *header_opl = PtrClampTop(header_opl_raw, unit_opl);
+        U8 *header_opl = ClampTop(header_opl_raw, unit_opl);
         
         // minimum_instruction_length
         minimum_instruction_length = MemoryConsume(U8, ptr, header_opl);
@@ -662,7 +662,7 @@ dwarf_line_from_data(Arena *arena, String8 data){
         
         // header opl
         U8 *header_opl_raw = ptr + header_length;
-        U8 *header_opl = PtrClampTop(header_opl_raw, unit_opl);
+        U8 *header_opl = ClampTop(header_opl_raw, unit_opl);
         
         // minimum_instruction_length
         minimum_instruction_length = MemoryConsume(U8, ptr, header_opl);

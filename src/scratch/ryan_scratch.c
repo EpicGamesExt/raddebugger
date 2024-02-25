@@ -5,8 +5,8 @@
 #include "lib_raddbgi_format/raddbgi_format.c"
 #include "lib_raddbgi_format/raddbgi_format_parse.h"
 #include "lib_raddbgi_format/raddbgi_format_parse.c"
-#include "lib_raddbgi_cons/raddbgi_cons.h"
-#include "lib_raddbgi_cons/raddbgi_cons.c"
+#include "lib_raddbgi_make/raddbgi_make.h"
+#include "lib_raddbgi_make/raddbgi_make.c"
 
 int main(int argument_count, char **arguments)
 {
