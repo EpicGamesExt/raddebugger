@@ -83,7 +83,7 @@ pushd build
 popd
 
 :: --- Get Current Git Commit Id ----------------------------------------------
-for /f %%i in ('call git describe --always --dirty') do set compile=%compile% -DRADDBG_GIT=\"%%i\"
+for /f %%i in ('call git describe --always --dirty') do set compile=%compile% -DBUILD_GIT_HASH=\"%%i\"
 
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]

@@ -813,7 +813,7 @@ lnx_safe_call_sig_handler(int){
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
 internal void
-os_init(int argc, char **argv)
+os_init(void)
 {
   // NOTE(allen): Initialize linux layer mutex
   {

@@ -4,6 +4,11 @@
 ////////////////////////////////
 //~ rjf: Build Options
 
+#define BUILD_VERSION_MAJOR 0
+#define BUILD_VERSION_MINOR 9
+#define BUILD_VERSION_PATCH 8
+#define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
+#define BUILD_TITLE "raddbgi_from_pdb"
 #define BUILD_CONSOLE_INTERFACE 1
 
 ////////////////////////////////
@@ -42,37 +47,16 @@
 ////////////////////////////////
 //~ rjf: Entry Point
 
-int
-main(int argc, char **argv)
+internal void
+entry_point(CmdLine *cmdline)
 {
-  local_persist TCTX main_thread_tctx = {0};
-  tctx_init_and_equip(&main_thread_tctx);
-#if PROFILE_TELEMETRY
-  U64 tm_data_size = MB(512);
-  U8 *tm_data = os_reserve(tm_data_size);
-  os_commit(tm_data, tm_data_size);
-  tmLoadLibrary(TM_RELEASE);
-  tmSetMaxThreadCount(1024);
-  tmInitialize(tm_data_size, tm_data);
-#endif
-  ThreadNameF("[main]");
-  
   //- rjf: initialize dependencies
-  os_init(argc, argv);
+  os_init();
   ts_init();
   
-  //- rjf: initialize state, parse command line
+  //- rjf: initialize state, unpack command line
   Arena *arena = arena_alloc();
-  String8List args = os_string_list_from_argcv(arena, argc, argv);
-  CmdLine cmdline = cmd_line_from_string_list(arena, args);
-  B32 should_capture = cmd_line_has_flag(&cmdline, str8_lit("capture"));
-  P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(arena, &cmdline);
-  
-  //- rjf: begin capture
-  if(should_capture)
-  {
-    ProfBeginCapture(argv[0]);
-  }
+  P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(arena, cmdline);
   
   //- rjf: display errors with input
   if(user2convert->errors.node_count > 0 && !user2convert->hide_errors.input)
@@ -112,12 +96,4 @@ main(int argc, char **argv)
     }
     os_file_close(output_file);
   }
-  
-  //- rjf: end capture
-  if(should_capture)
-  {
-    ProfEndCapture();
-  }
-  
-  return 0;
 }

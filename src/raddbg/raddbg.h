@@ -401,26 +401,6 @@
 #define RADDBG_H
 
 ////////////////////////////////
-//~ rjf: Build Settings
-
-#define RADDBG_VERSION_MAJOR 0
-#define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 8
-#define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
-#if BUILD_DEBUG
-# define RADDBG_BUILD_STR " [Debug]"
-#else
-# define RADDBG_BUILD_STR ""
-#endif
-#if defined(RADDBG_GIT)
-# define RADDBG_GIT_STR " [" RADDBG_GIT "]"
-#else
-# define RADDBG_GIT_STR ""
-#endif
-#define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ "" RADDBG_GIT_STR RADDBG_BUILD_STR
-#define RADDBG_GITHUB_ISSUES "https://github.com/EpicGames/raddebugger/issues"
-
-////////////////////////////////
 //~ rjf: Top-Level Execution Types
 
 typedef enum ExecMode

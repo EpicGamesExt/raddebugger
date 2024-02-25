@@ -4,6 +4,11 @@
 ////////////////////////////////
 //~ rjf: Build Options
 
+#define BUILD_VERSION_MAJOR 0
+#define BUILD_VERSION_MINOR 9
+#define BUILD_VERSION_PATCH 8
+#define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
+#define BUILD_TITLE "raddbgi_dump"
 #define BUILD_CONSOLE_INTERFACE 1
 
 ////////////////////////////////
@@ -28,8 +33,8 @@
 ////////////////////////////////
 //~ rjf: Entry Point
 
-int
-main(int argc, char **argv)
+internal void
+entry_point(CmdLine *cmd_line)
 {
   //////////////////////////////
   //- rjf: set up
@@ -37,8 +42,6 @@ main(int argc, char **argv)
   local_persist TCTX main_thread_tctx = {0};
   tctx_init_and_equip(&main_thread_tctx);
   Arena *arena = arena_alloc();
-  String8List args = os_string_list_from_argcv(arena, argc, argv);
-  CmdLine cmdline = cmd_line_from_string_list(arena, args);
   String8List errors = {0};
   
   //////////////////////////////
@@ -69,14 +72,14 @@ main(int argc, char **argv)
   DumpFlags dump_flags = (U32)0xffffffff;
   {
     // rjf: extract input file path & load data
-    input_name = str8_list_first(&cmdline.inputs);
+    input_name = str8_list_first(&cmd_line->inputs);
     if(input_name.size > 0) { input_data = os_data_from_file_path(arena, input_name); }
     else {str8_list_pushf(arena, &errors, "error (input): No input RADDBGI file specified.");}
     if(input_name.size != 0 && input_data.size == 0) { str8_list_pushf(arena, &errors, "error (input): No input RADDBGI file successfully loaded; either the path or file contents are invalid."); }
     
     // rjf: extract dump options
     {
-      String8List dump_options = cmd_line_strings(&cmdline, str8_lit("dump"));
+      String8List dump_options = cmd_line_strings(cmd_line, str8_lit("dump"));
       if(dump_options.first != 0)
       {
         dump_flags = 0;
@@ -413,6 +416,4 @@ main(int argc, char **argv)
   {
     fwrite(n->string.str, 1, n->string.size, stdout);
   }
-  
-  return 0;
 }

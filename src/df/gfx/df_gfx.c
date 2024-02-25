@@ -945,7 +945,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->cfg_src = cfg_src;
   window->arena = arena_alloc();
   {
-    String8 title = str8_lit_comp(RADDBG_TITLE_STRING_LITERAL);
+    String8 title = str8_lit_comp(BUILD_TITLE_STRING_LITERAL);
     window->os = os_window_open(size, title);
   }
   window->r = r_window_equip(window->os);
@@ -4267,7 +4267,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(40.f, 1.f))
           {
             UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-              ui_label(str8_lit(RADDBG_TITLE_STRING_LITERAL));
+              ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
             ui_spacer(ui_em(0.25f, 1.f));
             UI_Row
               UI_PrefWidth(ui_text_dim(10, 1))

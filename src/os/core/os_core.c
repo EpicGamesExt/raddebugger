@@ -68,19 +68,6 @@ os_string_list_from_argcv(Arena *arena, int argc, char **argv)
 }
 
 ////////////////////////////////
-//~ rjf: Process Helpers (Helper, Implemented Once)
-
-internal void
-os_relaunch_self(void){
-  Temp scratch = scratch_begin(0, 0);
-  OS_LaunchOptions opts = {0};
-  opts.cmd_line = os_get_command_line_arguments();
-  opts.path = os_string_from_system_path(scratch.arena, OS_SystemPath_Initial);
-  os_launch_process(&opts, 0);
-  scratch_end(scratch);
-}
-
-////////////////////////////////
 //~ rjf: Filesystem Helpers (Helpers, Implemented Once)
 
 internal String8
