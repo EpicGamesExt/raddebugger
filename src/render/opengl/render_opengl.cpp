@@ -1,5 +1,13 @@
 #include <windows.h>
 
+#undef RADDBG_LAYER_COLOR
+#define RADDBG_LAYER_COLOR 0.80f, 0.10f, 0.20f
+
+////////////////////////////////
+//~ dmylo: Generated Code
+
+#include "generated/render_opengl.meta.c"
+
 ////////////////////////////////
 //~ dmylo: Helpers
 
@@ -23,7 +31,92 @@ r_ogl_handle_from_window(R_OGL_Window *window)
   return handle;
 }
 
-//- rjf: top-level layer initialization
+internal R_OGL_Tex2D *
+r_ogl_tex2d_from_handle(R_Handle handle)
+{
+  R_OGL_Tex2D *texture = (R_OGL_Tex2D *)handle.u64[0];
+  if(texture == 0 || texture->generation != handle.u64[1])
+  {
+    texture = &r_ogl_tex2d_nil;
+  }
+  return texture;
+}
+
+internal R_Handle
+r_ogl_handle_from_tex2d(R_OGL_Tex2D *texture)
+{
+  R_Handle handle = {0};
+  handle.u64[0] = (U64)texture;
+  handle.u64[1] = texture->generation;
+  return handle;
+}
+
+internal GLuint
+r_ogl_compile_shader(String8 common, String8 src, GLenum kind)
+{
+  auto& gl = r_ogl_state->gl.gl;
+
+  GLuint shader = gl.CreateShader(kind);
+
+  GLint src_sizes[2] = {
+    (GLint)common.size,
+    (GLint)src.size,
+  };
+
+  GLchar* src_ptrs[2] = {
+    (GLchar*)common.str,
+    (GLchar*)src.str,
+  };
+
+  gl.ShaderSource(shader, 2, src_ptrs, src_sizes);
+  gl.CompileShader(shader);
+
+  GLint success;
+  gl.GetShaderiv(shader, GL_COMPILE_STATUS, &success);
+  if(!success)
+  {
+      char compile_log[4096];
+      gl.GetShaderInfoLog(shader, ArrayCount(compile_log), 0, compile_log);
+      OutputDebugStringA(compile_log);
+      // os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), str8_cstring(compile_log));
+      exit(1);
+      return 0;
+  }
+  else
+  {
+    return shader;
+  }
+}
+
+internal GLuint
+r_ogl_link_shaders(GLuint vs, GLuint fs)
+{
+  auto& gl = r_ogl_state->gl.gl;
+  GLuint program = gl.CreateProgram();
+
+  gl.AttachShader(program, vs);
+  gl.AttachShader(program, fs);
+  gl.LinkProgram(program);
+
+  GLint success;
+  char compile_log[4096];
+  gl.GetProgramiv(program, GL_LINK_STATUS, &success);
+  if(!success)
+  {
+      char compile_log[4096];
+      gl.GetProgramInfoLog(program, ArrayCount(compile_log), 0, compile_log);
+      OutputDebugStringA(compile_log);
+      // os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), str8_cstring(compile_log));
+      exit(1);
+      return 0;
+  }
+  else
+  {
+    return program;
+  }
+}
+
+//- dmylo: top-level layer initialization
 r_hook void
 r_init(CmdLine *cmdln)
 {
@@ -34,6 +127,11 @@ r_init(CmdLine *cmdln)
 
   r_ogl_state->initialized = false;
   r_ogl_state->gl = {};
+
+  //- dmylo: initialize buffer flush state
+  {
+    r_ogl_state->buffer_flush_arena = arena_alloc();
+  }
 }
 
 typedef HGLRC WINAPI wgl_create_context_attribs_arb(HDC hDC, HGLRC hShareContext,
@@ -63,15 +161,17 @@ typedef BOOL wgl_choose_pixel_format_arb(HDC hdc, const int *piAttribIList,
 #define WGL_SAMPLE_BUFFERS_ARB                  0x2041
 #define WGL_SAMPLES_ARB                         0x2042
 
-//- rjf: window setup/teardown
+//- dmylo: window setup/teardown
 r_hook R_Handle
 r_window_equip(OS_Handle handle)
 {
   ProfBeginFunction();
   R_Handle result = {0};
+
+  bool just_initialized = false;
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
-    //- rjf: allocate per-window-state
+    //- dmylo: allocate per-window-state
     R_OGL_Window *window = r_ogl_state->first_free_window;
     {
       if(window == 0)
@@ -142,7 +242,7 @@ r_window_equip(OS_Handle handle)
       wglChoosePixelFormatARB = (wgl_choose_pixel_format_arb*)wglGetProcAddress("wglChoosePixelFormatARB");
     }
 
-    //- rjf: map os window handle -> hwnd
+    //- dmylo: map os window handle -> hwnd
     HWND hwnd = {0};
     {
       W32_Window *w32_layer_window = w32_window_from_os_window(handle);
@@ -194,17 +294,46 @@ r_window_equip(OS_Handle handle)
     }
 
     if(!r_ogl_state->initialized) {
+
+      //- dmylo: Load function pointers.
       HMODULE opengl_module = LoadLibraryA("opengl32.dll");
       for (U64 i = 0; i < ArrayCount(proc_names); i++)
       {
         GL3WglProc ptr = (GL3WglProc)wglGetProcAddress(proc_names[i]);
         if(!ptr) {
           ptr = (GL3WglProc)GetProcAddress(opengl_module, proc_names[i]);
+          Assert(ptr);
         }
         r_ogl_state->gl.ptr[i] = ptr;
       }
 
+      auto& gl = r_ogl_state->gl.gl;
+
+      //- dmylo: create buffers
+      {
+        gl.GenBuffers(1, &r_ogl_state->instance_scratch_buffer_64kb);
+        gl.BindBuffer(GL_ARRAY_BUFFER, r_ogl_state->instance_scratch_buffer_64kb);
+        gl.BufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
+      }
+
+      //- dmylo: create vao
+      {
+        gl.GenVertexArrays(1, &r_ogl_state->rect_vao);
+      }
+
+      //- dmylo: compile shaders
+      GLuint rect_vs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_vs_src, GL_VERTEX_SHADER);
+      GLuint rect_fs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_fs_src, GL_FRAGMENT_SHADER);
+      r_ogl_state->rect_shader = r_ogl_link_shaders(rect_vs, rect_fs);
+
+      //- dmylo: create uniform buffer and get its block index
+      gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
+      gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
+      gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_Rect), 0, GL_DYNAMIC_DRAW);
+      r_ogl_state->rect_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->rect_shader, "Globals");
+
       r_ogl_state->initialized = true;
+      just_initialized = true;
     }
 
     // Release DC
@@ -219,6 +348,19 @@ r_window_equip(OS_Handle handle)
     result = r_ogl_handle_from_window(window);
 
   }
+
+
+  //- rjf: create backup texture
+  if (just_initialized)
+  {
+    U32 backup_texture_data[] =
+    {
+      0xff00ffff, 0x330033ff,
+      0x330033ff, 0xff00ffff,
+    };
+    r_ogl_state->backup_texture = r_tex2d_alloc(R_Tex2DKind_Static, v2s32(2, 2), R_Tex2DFormat_RGBA8, backup_texture_data);
+  }
+  ProfEnd();
 
   return result;
 }
@@ -238,47 +380,140 @@ r_window_unequip(OS_Handle window, R_Handle equip_handle)
   ProfEnd();
 }
 
-//- rjf: textures
+//- dmylo: textures
 r_hook R_Handle
 r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
 {
-    R_Handle result = {0};
+  //- rjf: allocate
+  R_OGL_Tex2D *texture = 0;
+  OS_MutexScopeW(r_ogl_state->device_rw_mutex)
+  {
+    texture = r_ogl_state->first_free_tex2d;
+    if(texture == 0)
+    {
+      texture = push_array(r_ogl_state->arena, R_OGL_Tex2D, 1);
+    }
+    else
+    {
+      U64 gen = texture->generation;
+      SLLStackPop(r_ogl_state->first_free_tex2d);
+      MemoryZeroStruct(texture);
+      texture->generation = gen;
+    }
+    texture->generation += 1;
+  }
 
-    return result;
+  auto& gl = r_ogl_state->gl.gl;
+
+  gl.GenTextures(1, &texture->texture);
+  gl.BindTexture(GL_TEXTURE_2D, texture->texture);
+
+  //- dmylo: format -> OpenGL format :dedup
+  GLenum internal_format = GL_RGBA8;
+  GLenum data_format = GL_UNSIGNED_BYTE;
+  GLenum data_type = GL_UNSIGNED_BYTE;
+  {
+    switch(format)
+    {
+      default:{}break;
+      case R_Tex2DFormat_R8:     {internal_format = GL_R8;      data_format = GL_RED;  data_type = GL_UNSIGNED_BYTE; }break;
+      case R_Tex2DFormat_RG8:    {internal_format = GL_RG8;     data_format = GL_RG;   data_type = GL_UNSIGNED_BYTE; }break;
+      case R_Tex2DFormat_RGBA8:  {internal_format = GL_RGBA8;   data_format = GL_RGBA; data_type = GL_UNSIGNED_BYTE; }break;
+      case R_Tex2DFormat_BGRA8:  {internal_format = GL_RGBA8;   data_format = GL_BGRA; data_type = GL_UNSIGNED_BYTE; }break;
+      case R_Tex2DFormat_R16:    {internal_format = GL_R16;     data_format = GL_RED;  data_type = GL_UNSIGNED_SHORT;}break;
+      case R_Tex2DFormat_RGBA16: {internal_format = GL_RGBA16;  data_format = GL_RGBA; data_type = GL_UNSIGNED_SHORT;}break;
+      case R_Tex2DFormat_R32:    {internal_format = GL_R32F;     data_format = GL_RED; data_type = GL_FLOAT;         }break;
+      case R_Tex2DFormat_RG32:   {internal_format = GL_RG32F;   data_format = GL_RG;   data_type = GL_FLOAT;         }break;
+      case R_Tex2DFormat_RGBA32: {internal_format = GL_RGBA32F; data_format = GL_RGBA; data_type = GL_FLOAT;         }break;
+    }
+  }
+
+  gl.TexImage2D(GL_TEXTURE_2D, 0, internal_format, size.x, size.y, 0, data_format, data_type, data);
+
+  //- rjf: fill basics
+  {
+    texture->kind = kind;
+    texture->size = size;
+    texture->format = format;
+  }
+
+  gl.BindTexture(GL_TEXTURE_2D, 0);
+
+  R_Handle result = r_ogl_handle_from_tex2d(texture);
+  ProfEnd();
+  return result;
 }
 
 r_hook void
-r_tex2d_release(R_Handle texture)
+r_tex2d_release(R_Handle handle)
 {
-
+  ProfBeginFunction();
+  OS_MutexScopeW(r_ogl_state->device_rw_mutex)
+  {
+    R_OGL_Tex2D *texture = r_ogl_tex2d_from_handle(handle);
+    SLLStackPush(r_ogl_state->first_to_free_tex2d, texture);
+  }
+  ProfEnd();
 }
 
 r_hook R_Tex2DKind
-r_kind_from_tex2d(R_Handle texture)
+r_kind_from_tex2d(R_Handle handle)
 {
-    return {};
+  R_OGL_Tex2D *texture = r_ogl_tex2d_from_handle(handle);
+  return texture->kind;
 }
 
 r_hook Vec2S32
-r_size_from_tex2d(R_Handle texture)
+r_size_from_tex2d(R_Handle handle)
 {
-    return {};
+  R_OGL_Tex2D *texture = r_ogl_tex2d_from_handle(handle);
+  return texture->size;
 }
 
 r_hook R_Tex2DFormat
-r_format_from_tex2d(R_Handle texture)
+r_format_from_tex2d(R_Handle handle)
 {
-    return {};
+  R_OGL_Tex2D *texture = r_ogl_tex2d_from_handle(handle);
+  return texture->format;
 }
 
 r_hook void
-r_fill_tex2d_region(R_Handle texture, Rng2S32 subrect, void *data)
+r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
 {
+  ProfBeginFunction();
+  OS_MutexScopeW(r_ogl_state->device_rw_mutex)
+  {
+    R_OGL_Tex2D *texture = r_ogl_tex2d_from_handle(handle);
+    Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
 
+    //- dmylo: format -> OpenGL format :dedup
+    GLenum data_format = GL_UNSIGNED_BYTE;
+    GLenum data_type = GL_UNSIGNED_BYTE;
+    {
+      switch(texture->format)
+      {
+        default:{}break;
+        case R_Tex2DFormat_R8:     {data_format = GL_RED;  data_type = GL_UNSIGNED_BYTE; }break;
+        case R_Tex2DFormat_RG8:    {data_format = GL_RG;   data_type = GL_UNSIGNED_BYTE; }break;
+        case R_Tex2DFormat_RGBA8:  {data_format = GL_RGBA; data_type = GL_UNSIGNED_BYTE; }break;
+        case R_Tex2DFormat_BGRA8:  {data_format = GL_BGRA; data_type = GL_UNSIGNED_BYTE; }break;
+        case R_Tex2DFormat_R16:    {data_format = GL_RED;  data_type = GL_UNSIGNED_SHORT;}break;
+        case R_Tex2DFormat_RGBA16: {data_format = GL_RGBA; data_type = GL_UNSIGNED_SHORT;}break;
+        case R_Tex2DFormat_R32:    {data_format = GL_RED;  data_type = GL_FLOAT;         }break;
+        case R_Tex2DFormat_RG32:   {data_format = GL_RG;   data_type = GL_FLOAT;         }break;
+        case R_Tex2DFormat_RGBA32: {data_format = GL_RGBA; data_type = GL_FLOAT;         }break;
+      }
+    }
+
+    auto& gl = r_ogl_state->gl.gl;
+    gl.BindTexture(GL_TEXTURE_2D, texture->texture);
+    gl.TexSubImage2D(GL_TEXTURE_2D, 0, subrect.x0, subrect.y0, dim.x, dim.y, data_format, data_type, data);
+  }
+  ProfEnd();
 }
 
 
-//- rjf: buffers
+//- dmylo: buffers
 r_hook R_Handle
 r_buffer_alloc(R_BufferKind kind, U64 size, void *data)
 {
@@ -309,36 +544,37 @@ r_end_frame(void)
 {
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
-    // TODO(dmylo): free transient resources
-#if 0
-    for(R_D3D11_FlushBuffer *buffer = r_d3d11_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
+    auto& gl = r_ogl_state->gl.gl;
+
+    for(R_OGL_FlushBuffer *buffer = r_ogl_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
     {
-      buffer->buffer->Release();
+      gl.DeleteBuffers(1, &buffer->buffer);
     }
-    for(R_D3D11_Tex2D *tex = r_d3d11_state->first_to_free_tex2d, *next = 0;
+
+    for(R_OGL_Tex2D *tex = r_ogl_state->first_to_free_tex2d, *next = 0;
         tex != 0;
         tex = next)
     {
       next = tex->next;
-      tex->view->Release();
-      tex->texture->Release();
+      gl.DeleteTextures(1, &tex->texture);
       tex->generation += 1;
-      SLLStackPush(r_d3d11_state->first_free_tex2d, tex);
+      SLLStackPush(r_ogl_state->first_free_tex2d, tex);
     }
-    for(R_D3D11_Buffer *buf = r_d3d11_state->first_to_free_buffer, *next = 0;
+
+    for(R_OGL_Buffer *buf = r_ogl_state->first_to_free_buffer, *next = 0;
         buf != 0;
         buf = next)
     {
       next = buf->next;
-      buf->buffer->Release();
+      gl.DeleteBuffers(1, &buf->buffer);
       buf->generation += 1;
-      SLLStackPush(r_d3d11_state->first_free_buffer, buf);
+      SLLStackPush(r_ogl_state->first_free_buffer, buf);
     }
-    arena_clear(r_d3d11_state->buffer_flush_arena);
-    r_d3d11_state->first_buffer_to_flush = r_d3d11_state->last_buffer_to_flush = 0;
-    r_d3d11_state->first_to_free_tex2d  = 0;
-    r_d3d11_state->first_to_free_buffer = 0;
-#endif
+
+    arena_clear(r_ogl_state->buffer_flush_arena);
+    r_ogl_state->first_buffer_to_flush = r_ogl_state->last_buffer_to_flush = 0;
+    r_ogl_state->first_to_free_tex2d  = 0;
+    r_ogl_state->first_to_free_buffer = 0;
   }
 }
 
@@ -350,7 +586,7 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
   {
     R_OGL_Window *window = r_ogl_window_from_handle(window_equip);
 
-    //- rjf: map os window handle -> hwnd
+    //- dmylo: map os window handle -> hwnd
     HWND hwnd = {0};
     {
       W32_Window *w32_layer_window = w32_window_from_os_window(window_handle);
@@ -358,32 +594,280 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
     }
     HDC window_dc = GetDC(hwnd);
     bool ok = wglMakeCurrent(window_dc, window->glrc);
+    ReleaseDC(hwnd, window_dc);
 
     //- dmylo: get resolution
     Rng2F32 client_rect = os_client_rect_from_window(window_handle);
     Vec2S32 resolution = {(S32)(client_rect.x1 - client_rect.x0), (S32)(client_rect.y1 - client_rect.y0)};
 
+    //- dmylo: resolution change
+    if(window->last_resolution.x != resolution.x ||
+       window->last_resolution.y != resolution.y)
+    {
+      window->last_resolution = resolution;
+    }
 
     auto gl = &r_ogl_state->gl;
-    gl->gl.Viewport(0, 0, resolution.x, resolution.y);
-    gl->gl.ClearColor(0.5, 0.5, 0, 1.0);
+    gl->gl.Disable(GL_SCISSOR_TEST);
+    gl->gl.ClearColor(0.0, 0.0, 0.0, 0.0);
     gl->gl.Clear(GL_COLOR_BUFFER_BIT);
-    SwapBuffers(window_dc);
-
-    ReleaseDC(hwnd, window_dc);
   }
+  ProfEnd();
 }
 
 r_hook void
-r_window_end_frame(OS_Handle window, R_Handle window_equip)
+r_window_end_frame(OS_Handle window_handle, R_Handle window_equip)
 {
+  ProfBeginFunction();
+  OS_MutexScopeW(r_ogl_state->device_rw_mutex)
+  {
+    HWND hwnd = {0};
+    {
+      W32_Window *w32_layer_window = w32_window_from_os_window(window_handle);
+      hwnd = w32_hwnd_from_window(w32_layer_window);
+    }
+    HDC window_dc = GetDC(hwnd);
 
+    SwapBuffers(window_dc);
+    ReleaseDC(hwnd, window_dc);
+  }
+  ProfEnd();
 }
 
 
-//- rjf: render pass submission
+internal GLuint
+r_ogl_instance_buffer_from_size(U64 size)
+{
+  GLuint buffer = r_ogl_state->instance_scratch_buffer_64kb;
+  if(size > KB(64))
+  {
+    U64 flushed_buffer_size = size;
+    flushed_buffer_size += MB(1)-1;
+    flushed_buffer_size -= flushed_buffer_size%MB(1);
+
+    // dmylo: build buffer
+    {
+      auto gl = &r_ogl_state->gl;
+      gl->gl.GenBuffers(1, &buffer);
+      gl->gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
+      gl->gl.BufferData(GL_ARRAY_BUFFER, flushed_buffer_size, 0, GL_DYNAMIC_DRAW);
+    }
+
+    // dmylo: push buffer to flush list
+    R_OGL_FlushBuffer *n = push_array(r_ogl_state->buffer_flush_arena, R_OGL_FlushBuffer, 1);
+    n->buffer = buffer;
+    SLLQueuePush(r_ogl_state->first_buffer_to_flush, r_ogl_state->last_buffer_to_flush, n);
+  }
+
+  return buffer;
+}
+
+//- dmylo: render pass submission
 r_hook void
 r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
 {
+  ProfBeginFunction();
+  OS_MutexScopeW(r_ogl_state->device_rw_mutex)
+  {
+    ////////////////////////////
+    //- dmylo: unpack arguments
+    //
+    R_OGL_Window *wnd = r_ogl_window_from_handle(window_equip);
+    auto gl = &r_ogl_state->gl;
 
+    ////////////////////////////
+    //- dmylo: do passes
+    //
+    for(R_PassNode *pass_n = passes->first; pass_n != 0; pass_n = pass_n->next)
+    {
+      R_Pass *pass = &pass_n->v;
+      switch(pass->kind)
+      {
+        default:{}break;
+
+        case R_PassKind_UI:
+        {
+          //- dmylo: unpack params
+          R_PassParams_UI *params = pass->params_ui;
+          R_BatchGroup2DList *rect_batch_groups = &params->rects;
+
+          //- dmylo: set up rasterizer
+          Vec2S32 resolution = wnd->last_resolution;
+          gl->gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
+
+          // TODO(dmylo): staging render target
+
+          // - dmylo: culling
+          gl->gl.Enable(GL_CULL_FACE);
+          gl->gl.CullFace(GL_BACK);
+          gl->gl.FrontFace(GL_CW);
+
+          //- dmylo: depth
+          gl->gl.Disable(GL_DEPTH_TEST);
+          gl->gl.Disable(GL_STENCIL_TEST);
+
+          //- dmylo: blending
+          gl->gl.Enable(GL_BLEND);
+          gl->gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+          //- dmylo: shader
+          gl->gl.UseProgram(r_ogl_state->rect_shader);
+
+          //- dmylo: draw each batch group
+          for(R_BatchGroup2DNode *group_n = rect_batch_groups->first; group_n != 0; group_n = group_n->next)
+          {
+            R_BatchList *batches = &group_n->batches;
+            R_BatchGroup2DParams *group_params = &group_n->params;
+
+            //- dmylo: VAO
+            gl->gl.BindVertexArray(r_ogl_state->rect_vao);
+
+            // dmylo: get & fill buffer
+            GLuint buffer = r_ogl_instance_buffer_from_size(batches->byte_count);
+            {
+              gl->gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
+              U8* dst_ptr = (U8*)gl->gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+              U64 off = 0;
+              for(R_BatchNode *batch_n = batches->first; batch_n != 0; batch_n = batch_n->next)
+              {
+                MemoryCopy(dst_ptr+off, batch_n->v.v, batch_n->v.byte_count);
+                off += batch_n->v.byte_count;
+              }
+              gl->gl.UnmapBuffer(GL_ARRAY_BUFFER);
+            }
+
+            for(U32 i = 0; i < 8; i++) {
+              gl->gl.EnableVertexAttribArray(i);
+              gl->gl.VertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 8 * 16, (void*)(U64)(i * 16));
+              gl->gl.VertexAttribDivisor(i, 1);
+            }
+
+            // dmylo: get texture
+            R_Handle texture_handle = group_params->tex;
+            if(r_handle_match(texture_handle, r_handle_zero()))
+            {
+              texture_handle = r_ogl_state->backup_texture;
+            }
+            R_OGL_Tex2D *texture = r_ogl_tex2d_from_handle(texture_handle);
+
+            // dmylo: get texture sample map matrix, based on format
+            Vec4F32 texture_sample_channel_map[] =
+            {
+              {1, 0, 0, 0},
+              {0, 1, 0, 0},
+              {0, 0, 1, 0},
+              {0, 0, 0, 1},
+            };
+            switch(texture->format)
+            {
+              default: break;
+              case R_Tex2DFormat_R8:
+              {
+                MemoryZeroArray(texture_sample_channel_map);
+                texture_sample_channel_map[0] = v4f32(1, 1, 1, 1);
+              }break;
+            }
+
+            // dmylo: upload uniforms
+            R_OGL_Uniforms_Rect uniforms = {0};
+            {
+              uniforms.viewport_size             = v2f32(resolution.x, resolution.y);
+              uniforms.opacity                   = 1-group_params->transparency;
+              MemoryCopyArray(uniforms.texture_sample_channel_map, texture_sample_channel_map);
+              uniforms.texture_t2d_size          = v2f32(texture->size.x, texture->size.y);
+              uniforms.xform[0] = v4f32(group_params->xform.v[0][0], group_params->xform.v[1][0], group_params->xform.v[2][0], 0);
+              uniforms.xform[1] = v4f32(group_params->xform.v[0][1], group_params->xform.v[1][1], group_params->xform.v[2][1], 0);
+              uniforms.xform[2] = v4f32(group_params->xform.v[0][2], group_params->xform.v[1][2], group_params->xform.v[2][2], 0);
+              uniforms.xform[3] = v4f32(0, 0, 0, 1);
+              Vec2F32 xform_2x2_col0 = v2f32(uniforms.xform[0].x, uniforms.xform[1].x);
+              Vec2F32 xform_2x2_col1 = v2f32(uniforms.xform[0].y, uniforms.xform[1].y);
+              uniforms.xform_scale.x = length_2f32(xform_2x2_col0);
+              uniforms.xform_scale.y = length_2f32(xform_2x2_col1);
+            }
+
+            GLuint uniform_buffer = r_ogl_state->rect_uniform_buffer;
+            {
+              gl->gl.BindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
+              U8* dst_ptr = (U8*)gl->gl.MapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+              MemoryCopy((U8 *)dst_ptr, &uniforms, sizeof(uniforms));
+              gl->gl.UnmapBuffer(GL_UNIFORM_BUFFER);
+            }
+
+            //- dmylo: bind uniform buffer
+            gl->gl.UniformBlockBinding(r_ogl_state->rect_shader, r_ogl_state->rect_uniform_block_index, 0);
+            gl->gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
+
+            //- dmylo: activate and bind texture
+            gl->gl.ActiveTexture(GL_TEXTURE0);
+            gl->gl.BindTexture(GL_TEXTURE_2D, texture->texture);
+
+            //- dmylo: sampler mode
+            switch(group_params->tex_sample_kind) {
+              case R_Tex2DSampleKind_Nearest: {
+                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+              } break;
+              case R_Tex2DSampleKind_Linear: {
+                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+              }break;
+            }
+
+            //- dmylo: setup scissor rect
+            {
+              Rng2F32 clip = group_params->clip;
+
+              GLint x = 0, y = 0, width = 0, height = 0;
+              {
+                if(clip.x0 == 0 && clip.y0 == 0 && clip.x1 == 0 && clip.y1 == 0)
+                {
+                  x = 0;
+                  width = (GLint)wnd->last_resolution.x;
+                  y = 0;
+                  height = (GLint)wnd->last_resolution.y;
+                }
+                else if(clip.x0 > clip.x1 || clip.y0 > clip.y1)
+                {
+                  x = 0;
+                  width = 0;
+                  y = 0;
+                  height = 0;
+                }
+                else
+                {
+                  x = (GLint)clip.x0;
+                  width = (GLint)(clip.x1 - clip.x0);
+                  //- dmylo: Invert y because OpenGL scissor rect starts from bottom-left instead of top-left
+                  y = wnd->last_resolution.y - (GLint)clip.y1;
+                  height = (GLint)(clip.y1 - clip.y0);
+                }
+              }
+
+              gl->gl.Enable(GL_SCISSOR_TEST);
+              gl->gl.Scissor(x, y, width, height);
+            }
+
+            //- dmylo: draw instances
+            gl->gl.DrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, batches->byte_count / batches->bytes_per_inst);
+          }
+        } break;
+
+        ////////////////////////
+        //- dmylo: blur rendering pass
+        //
+        case R_PassKind_Blur:
+        {
+          R_PassParams_Blur *params = pass->params_blur;
+        }break;
+
+        ////////////////////////
+        //- dmylo: 3d geometry rendering pass
+        //
+        case R_PassKind_Geo3D:
+        {
+        }break;
+      }
+    }
+  }
+  ProfEnd();
 }
