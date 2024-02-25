@@ -1012,7 +1012,7 @@ df_window_from_os_handle(OS_Handle os)
   return result;
 }
 
-#if defined(_MSC_VER) && !defined(__clang__) && defined(NDEBUG)
+#if COMPILER_MSVC && !BUILD_DEBUG
 #pragma optimize("", off)
 #endif
 
@@ -6807,7 +6807,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   ProfEnd();
 }
 
-#if defined(_MSC_VER) && !defined(__clang__) && defined(NDEBUG)
+#if COMPILER_MSVC && !BUILD_DEBUG
 #pragma optimize("", on)
 #endif
 

@@ -407,10 +407,10 @@
 #define RADDBG_VERSION_MINOR 9
 #define RADDBG_VERSION_PATCH 8
 #define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
-#if defined(NDEBUG)
-# define RADDBG_BUILD_STR ""
-#else
+#if BUILD_DEBUG
 # define RADDBG_BUILD_STR " [Debug]"
+#else
+# define RADDBG_BUILD_STR ""
 #endif
 #if defined(RADDBG_GIT)
 # define RADDBG_GIT_STR " [" RADDBG_GIT "]"

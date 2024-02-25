@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Build Options
+
+#define BUILD_CONSOLE_INTERFACE 1
+
+////////////////////////////////
 //~ rjf: Includes
 
 //- rjf: headers

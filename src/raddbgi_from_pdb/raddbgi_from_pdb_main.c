@@ -1,6 +1,14 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+////////////////////////////////
+//~ rjf: Build Options
+
+#define BUILD_CONSOLE_INTERFACE 1
+
+////////////////////////////////
+//~ rjf: Includes
+
 //- rjf: [lib]
 #include "lib_raddbgi_format/raddbgi_format.h"
 #include "lib_raddbgi_format/raddbgi_format.c"
@@ -31,7 +39,8 @@
 #include "pdb/pdb_stringize.c"
 #include "raddbgi_from_pdb.c"
 
-//- rjf: entry point
+////////////////////////////////
+//~ rjf: Entry Point
 
 int
 main(int argc, char **argv)
@@ -110,5 +119,5 @@ main(int argc, char **argv)
     ProfEndCapture();
   }
   
-  return(0);
+  return 0;
 }

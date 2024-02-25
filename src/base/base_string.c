@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ rjf: Third Party Includes
 
-#if !SUPPLEMENT_UNIT
+#if !BUILD_SUPPLEMENTARY_UNIT
 # define STB_SPRINTF_IMPLEMENTATION
 # define STB_SPRINTF_STATIC
 # include "third_party/stb/stb_sprintf.h"

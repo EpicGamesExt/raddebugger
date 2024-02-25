@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Build Settings
+
+#define OS_FEATURE_GRAPHICAL 1
+
+////////////////////////////////
 //~ rjf: Includes
 
 //- rjf: [lib]

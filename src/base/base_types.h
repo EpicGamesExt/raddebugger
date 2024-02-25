@@ -14,17 +14,6 @@
 #include <stdint.h>
 
 ////////////////////////////////
-//~ rjf: Build Configuration
-
-#if !defined(ENABLE_DEV)
-# define ENABLE_DEV 0
-#endif
-
-#if !defined(SUPPLEMENT_UNIT)
-# define SUPPLEMENT_UNIT 0
-#endif
-
-////////////////////////////////
 //~ rjf: Codebase Keywords
 
 #define internal      static
@@ -93,7 +82,7 @@
 #endif
 
 #define AssertAlways(x) do{if(!(x)) {Trap();}}while(0)
-#if !defined(NDEBUG)
+#if BUILD_DEBUG
 # define Assert(x) AssertAlways(x)
 #else
 # define Assert(x) (void)(x)
