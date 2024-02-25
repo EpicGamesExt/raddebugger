@@ -107,7 +107,7 @@ main(int argc, char **argv)
   RDI_Parsed *raddbg = &raddbg_;
   {
     parse_status = rdi_parse(input_data.str, input_data.size, &raddbg_);
-    if(parse_status == RDI_ParseStatus_Good)
+    if(parse_status != RDI_ParseStatus_Good)
     {
       str8_list_pushf(arena, &errors, "error (parse): RADDBGI file wasn't parsed successfully. (0x%x)", parse_status);
     }
