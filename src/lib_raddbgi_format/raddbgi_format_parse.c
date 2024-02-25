@@ -5,7 +5,8 @@
 //~ RADDBG Parse API
 
 RDI_PROC RDI_ParseStatus
-rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out){
+rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
+{
   RDI_ParseStatus result = RDI_ParseStatus_Good;
   
   // out header
@@ -193,29 +194,29 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out){
         }
       }
     }
-    
-#if !defined(RDI_DISABLE_NILS)
-    if(out->binary_sections == 0)                { out->binary_sections        = &rdi_binary_section_nil;           out->binary_sections_count = 1; }
-    if(out->file_paths == 0)                     { out->file_paths             = &rdi_file_path_node_nil;           out->file_paths_count = 1; }
-    if(out->source_files == 0)                   { out->source_files           = &rdi_source_file_nil;              out->source_files_count = 1; }
-    if(out->units == 0)                          { out->units                  = &rdi_unit_nil;                     out->units_count = 1; }
-    if(out->unit_vmap == 0)                      { out->unit_vmap              = &rdi_vmap_entry_nil;               out->unit_vmap_count = 1; }
-    if(out->type_nodes == 0)                     { out->type_nodes             = &rdi_type_node_nil;                out->type_nodes_count = 1; }
-    if(out->udts == 0)                           { out->udts                   = &rdi_udt_nil;                      out->udts_count = 1; }
-    if(out->members == 0)                        { out->members                = &rdi_member_nil;                   out->members_count = 1; }
-    if(out->enum_members == 0)                   { out->enum_members           = &rdi_enum_member_nil;              out->enum_members_count = 1; }
-    if(out->global_variables == 0)               { out->global_variables       = &rdi_global_variable_nil;          out->global_variables_count = 1; }
-    if(out->global_vmap == 0)                    { out->global_vmap            = &rdi_vmap_entry_nil;               out->global_vmap_count = 1; }
-    if(out->thread_variables == 0)               { out->thread_variables       = &rdi_thread_variable_nil;          out->thread_variables_count = 1; }
-    if(out->procedures == 0)                     { out->procedures             = &rdi_procedure_nil;                out->procedures_count = 1; }
-    if(out->scopes == 0)                         { out->scopes                 = &rdi_scope_nil;                    out->scopes_count = 1; }
-    if(out->scope_voffs == 0)                    { out->scope_voffs            = &rdi_voff_nil;                     out->scope_voffs_count = 1; }
-    if(out->scope_vmap == 0)                     { out->scope_vmap             = &rdi_vmap_entry_nil;               out->scope_vmap_count = 1; }
-    if(out->locals == 0)                         { out->locals                 = &rdi_local_nil;                    out->locals_count = 1; }
-    if(out->location_blocks == 0)                { out->location_blocks        = &rdi_location_block_nil;           out->location_blocks_count = 1; }
-#endif
-    
   }
+  
+#if !defined(RDI_DISABLE_NILS)
+  if(out->top_level_info == 0)                 { out->top_level_info          = &rdi_top_level_info_nil; }
+  if(out->binary_sections == 0)                { out->binary_sections        = &rdi_binary_section_nil;           out->binary_sections_count = 1; }
+  if(out->file_paths == 0)                     { out->file_paths             = &rdi_file_path_node_nil;           out->file_paths_count = 1; }
+  if(out->source_files == 0)                   { out->source_files           = &rdi_source_file_nil;              out->source_files_count = 1; }
+  if(out->units == 0)                          { out->units                  = &rdi_unit_nil;                     out->units_count = 1; }
+  if(out->unit_vmap == 0)                      { out->unit_vmap              = &rdi_vmap_entry_nil;               out->unit_vmap_count = 1; }
+  if(out->type_nodes == 0)                     { out->type_nodes             = &rdi_type_node_nil;                out->type_nodes_count = 1; }
+  if(out->udts == 0)                           { out->udts                   = &rdi_udt_nil;                      out->udts_count = 1; }
+  if(out->members == 0)                        { out->members                = &rdi_member_nil;                   out->members_count = 1; }
+  if(out->enum_members == 0)                   { out->enum_members           = &rdi_enum_member_nil;              out->enum_members_count = 1; }
+  if(out->global_variables == 0)               { out->global_variables       = &rdi_global_variable_nil;          out->global_variables_count = 1; }
+  if(out->global_vmap == 0)                    { out->global_vmap            = &rdi_vmap_entry_nil;               out->global_vmap_count = 1; }
+  if(out->thread_variables == 0)               { out->thread_variables       = &rdi_thread_variable_nil;          out->thread_variables_count = 1; }
+  if(out->procedures == 0)                     { out->procedures             = &rdi_procedure_nil;                out->procedures_count = 1; }
+  if(out->scopes == 0)                         { out->scopes                 = &rdi_scope_nil;                    out->scopes_count = 1; }
+  if(out->scope_voffs == 0)                    { out->scope_voffs            = &rdi_voff_nil;                     out->scope_voffs_count = 1; }
+  if(out->scope_vmap == 0)                     { out->scope_vmap             = &rdi_vmap_entry_nil;               out->scope_vmap_count = 1; }
+  if(out->locals == 0)                         { out->locals                 = &rdi_local_nil;                    out->locals_count = 1; }
+  if(out->location_blocks == 0)                { out->location_blocks        = &rdi_location_block_nil;           out->location_blocks_count = 1; }
+#endif
   
   return(result);
 }
