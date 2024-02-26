@@ -1,18 +1,23 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 #ifndef RENDER_OPENGL_H
 #define RENDER_OPENGL_H
 
+#include <windows.h>
+
 #pragma comment(lib, "opengl32")
 
-#define IMGL3W_IMPL
-#include "render_opengl_defines.h"
+// #define IMGL3W_IMPL
+// #include "render_opengl_defines.h"
 
 ////////////////////////////////
-//~ rjf: Generated Code
+//~ dmylo: Generated Code
 
 #include "generated/render_opengl.meta.h"
 
 ////////////////////////////////
-//~ rjf: C-side Shader Types
+//~ dmylo: C-side Shader Types
 
 struct R_OGL_Uniforms_Rect
 {
@@ -23,7 +28,6 @@ struct R_OGL_Uniforms_Rect
   Vec4F32 texture_sample_channel_map[4];
 
   Vec2F32 texture_t2d_size;
-  // Vec2F32 translate;
   F32 _padding1;
   F32 _padding2;
 
@@ -33,6 +37,25 @@ struct R_OGL_Uniforms_Rect
   F32 _padding3;
   F32 _padding4;
 };
+
+struct R_OGL_Uniforms_BlurPass
+{
+  Rng2F32 rect;
+  Vec4F32 corner_radii;
+  Vec2F32 direction;
+  Vec2F32 viewport_size;
+  U32 blur_count;
+  // dmylo: Alignment on this structure is done at runtime on the OpenGL buffer,
+  //        because we need to query the alignment from the OpenGL context.
+};
+
+struct R_D3D11_Uniforms_Mesh
+{
+  Mat4x4F32 xform;
+};
+
+////////////////////////////////
+// dmylo: Main State Types
 
 struct R_OGL_Tex2D
 {
@@ -72,7 +95,7 @@ struct R_OGL_State
 {
   // dmylo: OpenGL loaded functions
   bool initialized;
-  ImGL3WProcs gl;
+  R_OGL_Functions gl;
 
   // dmylo: state
   Arena        *arena;
@@ -96,7 +119,7 @@ struct R_OGL_State
   // dmylo: backups
   R_Handle backup_texture;
 
-  // dmylo: buffers to flush at subsequent frame
+  //- dmylo: buffers to flush at subsequent frame
   Arena *buffer_flush_arena;
   R_OGL_FlushBuffer *first_buffer_to_flush;
   R_OGL_FlushBuffer *last_buffer_to_flush;
@@ -108,5 +131,10 @@ global R_OGL_State *r_ogl_state = 0;
 global R_OGL_Window r_ogl_window_nil = {&r_ogl_window_nil};
 global R_OGL_Tex2D r_ogl_tex2d_nil = {&r_ogl_tex2d_nil};
 global R_OGL_Buffer r_ogl_buffer_nil = {&r_ogl_buffer_nil};
+
+////////////////////////////////
+//~ dmylo: Helpers
+
+// TODO(dmylo): declare helpers here
 
 #endif // RENDER_OPENGL_H

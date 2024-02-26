@@ -1,4 +1,5 @@
-#include <windows.h>
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
 
 #undef RADDBG_LAYER_COLOR
 #define RADDBG_LAYER_COLOR 0.80f, 0.10f, 0.20f
@@ -51,10 +52,64 @@ r_ogl_handle_from_tex2d(R_OGL_Tex2D *texture)
   return handle;
 }
 
+internal R_OGL_Buffer *
+r_ogl_buffer_from_handle(R_Handle handle)
+{
+  R_OGL_Buffer *buffer = (R_OGL_Buffer *)handle.u64[0];
+  if(buffer == 0 || buffer->generation != handle.u64[1])
+  {
+    buffer = &r_ogl_buffer_nil;
+  }
+  return buffer;
+}
+
+internal R_Handle
+r_ogl_handle_from_buffer(R_OGL_Buffer *buffer)
+{
+  R_Handle handle = {0};
+  handle.u64[0] = (U64)buffer;
+  handle.u64[1] = buffer->generation;
+  return handle;
+}
+
+internal GLuint
+r_ogl_instance_buffer_from_size(U64 size)
+{
+  GLuint buffer = r_ogl_state->instance_scratch_buffer_64kb;
+
+  // Currently we always alloc a new buffer here, this seems to perform
+  // better with my driver. Likely because we are stalling on remapping
+  // the same buffer multiple times. Ideally we could have fewer large buffers and
+  // suballocate from them instead.
+
+  // if(size > KB(64))
+  {
+    U64 flushed_buffer_size = size;
+    flushed_buffer_size += MB(1)-1;
+    flushed_buffer_size -= flushed_buffer_size%MB(1);
+
+    // dmylo: build buffer
+    {
+      auto& gl = r_ogl_state->gl;
+      gl.GenBuffers(1, &buffer);
+      gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
+      gl.BufferData(GL_ARRAY_BUFFER, flushed_buffer_size, 0, GL_STREAM_DRAW);
+      gl.BindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    // dmylo: push buffer to flush list
+    R_OGL_FlushBuffer *n = push_array(r_ogl_state->buffer_flush_arena, R_OGL_FlushBuffer, 1);
+    n->buffer = buffer;
+    SLLQueuePush(r_ogl_state->first_buffer_to_flush, r_ogl_state->last_buffer_to_flush, n);
+  }
+
+  return buffer;
+}
+
 internal GLuint
 r_ogl_compile_shader(String8 common, String8 src, GLenum kind)
 {
-  auto& gl = r_ogl_state->gl.gl;
+  auto& gl = r_ogl_state->gl;
 
   GLuint shader = gl.CreateShader(kind);
 
@@ -91,7 +146,7 @@ r_ogl_compile_shader(String8 common, String8 src, GLenum kind)
 internal GLuint
 r_ogl_link_shaders(GLuint vs, GLuint fs)
 {
-  auto& gl = r_ogl_state->gl.gl;
+  auto& gl = r_ogl_state->gl;
   GLuint program = gl.CreateProgram();
 
   gl.AttachShader(program, vs);
@@ -116,7 +171,11 @@ r_ogl_link_shaders(GLuint vs, GLuint fs)
   }
 }
 
+////////////////////////////////
+//~ dmylo: Backend Hook Implementations
+
 //- dmylo: top-level layer initialization
+
 r_hook void
 r_init(CmdLine *cmdln)
 {
@@ -132,6 +191,9 @@ r_init(CmdLine *cmdln)
   {
     r_ogl_state->buffer_flush_arena = arena_alloc();
   }
+
+  //- dmylo: We need a window to initialize the OpenGL context, load functions,
+  //         and setup render passes, so we delay this to the first window creation.
 }
 
 typedef HGLRC WINAPI wgl_create_context_attribs_arb(HDC hDC, HGLRC hShareContext,
@@ -162,6 +224,7 @@ typedef BOOL wgl_choose_pixel_format_arb(HDC hdc, const int *piAttribIList,
 #define WGL_SAMPLES_ARB                         0x2042
 
 //- dmylo: window setup/teardown
+
 r_hook R_Handle
 r_window_equip(OS_Handle handle)
 {
@@ -187,6 +250,10 @@ r_window_equip(OS_Handle handle)
       }
       window->generation += 1;
     }
+
+    // TODO(dmylo):
+    // - do this only only on first window creation, then test this.
+    // - share opengl context to be able to share data between windows.
 
     wgl_create_context_attribs_arb *wglCreateContextAttribsARB = 0;
     wgl_choose_pixel_format_arb *wglChoosePixelFormatARB = 0;
@@ -259,7 +326,7 @@ r_window_equip(OS_Handle handle)
         WGL_COLOR_BITS_ARB, 32,
         WGL_DEPTH_BITS_ARB, 24,
         WGL_STENCIL_BITS_ARB, 8,
-        // WGL_SAMPLE_BUFFERS_ARB, 0, // Number of buffers (must be 1 at time of writing)
+        // WGL_SAMPLE_BUFFERS_ARB, 0, // Number of buffers
         // WGL_SAMPLES_ARB, 1,        // Number of samples
         0
     };
@@ -268,7 +335,7 @@ r_window_equip(OS_Handle handle)
     PIXELFORMATDESCRIPTOR SuggestedFormat;
     wglChoosePixelFormatARB(window_dc, PixelAttributes, 0, 1,
                                     &NewSuggestedFormatIndex, &NumSuggestions);
-    // NOTE(Flame): Letting window fill the old PIXELFORMATDESCRIPTOR struct
+    //- dmylo: Letting windows fill the old PIXELFORMATDESCRIPTOR struct
     DescribePixelFormat(window_dc, NewSuggestedFormatIndex,
                                 sizeof(PIXELFORMATDESCRIPTOR), &SuggestedFormat);
     SetPixelFormat(window_dc, NewSuggestedFormatIndex, &SuggestedFormat);
@@ -278,7 +345,7 @@ r_window_equip(OS_Handle handle)
         WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
         WGL_CONTEXT_MINOR_VERSION_ARB, 1,
         WGL_CONTEXT_FLAGS_ARB,
-        //IMPORTANT:WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB disable stuff prior to 3.0
+        //IMPORTANT: WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB disable stuff prior to 3.0
         /*WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB |*/ WGL_CONTEXT_DEBUG_BIT_ARB,
         WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
         0
@@ -297,23 +364,23 @@ r_window_equip(OS_Handle handle)
 
       //- dmylo: Load function pointers.
       HMODULE opengl_module = LoadLibraryA("opengl32.dll");
-      for (U64 i = 0; i < ArrayCount(proc_names); i++)
+      for (U64 i = 0; i < ArrayCount(r_ogl_g_function_names); i++)
       {
-        GL3WglProc ptr = (GL3WglProc)wglGetProcAddress(proc_names[i]);
+        void* ptr = wglGetProcAddress(r_ogl_g_function_names[i]);
         if(!ptr) {
-          ptr = (GL3WglProc)GetProcAddress(opengl_module, proc_names[i]);
+          ptr = GetProcAddress(opengl_module, r_ogl_g_function_names[i]);
           Assert(ptr);
         }
-        r_ogl_state->gl.ptr[i] = ptr;
+        r_ogl_state->gl._pointers[i] = ptr;
       }
 
-      auto& gl = r_ogl_state->gl.gl;
+      auto& gl = r_ogl_state->gl;
 
       //- dmylo: create buffers
       {
         gl.GenBuffers(1, &r_ogl_state->instance_scratch_buffer_64kb);
         gl.BindBuffer(GL_ARRAY_BUFFER, r_ogl_state->instance_scratch_buffer_64kb);
-        gl.BufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_DYNAMIC_DRAW);
+        gl.BufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_STREAM_DRAW);
       }
 
       //- dmylo: create vao
@@ -329,7 +396,7 @@ r_window_equip(OS_Handle handle)
       //- dmylo: create uniform buffer and get its block index
       gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
       gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
-      gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_Rect), 0, GL_DYNAMIC_DRAW);
+      gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_Rect), 0, GL_STREAM_DRAW);
       r_ogl_state->rect_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->rect_shader, "Globals");
 
       r_ogl_state->initialized = true;
@@ -381,6 +448,7 @@ r_window_unequip(OS_Handle window, R_Handle equip_handle)
 }
 
 //- dmylo: textures
+
 r_hook R_Handle
 r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
 {
@@ -403,7 +471,7 @@ r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
     texture->generation += 1;
   }
 
-  auto& gl = r_ogl_state->gl.gl;
+  auto& gl = r_ogl_state->gl;
 
   gl.GenTextures(1, &texture->texture);
   gl.BindTexture(GL_TEXTURE_2D, texture->texture);
@@ -505,27 +573,87 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
       }
     }
 
-    auto& gl = r_ogl_state->gl.gl;
+    auto& gl = r_ogl_state->gl;
     gl.BindTexture(GL_TEXTURE_2D, texture->texture);
     gl.TexSubImage2D(GL_TEXTURE_2D, 0, subrect.x0, subrect.y0, dim.x, dim.y, data_format, data_type, data);
+    gl.BindTexture(GL_TEXTURE_2D, 0);
   }
   ProfEnd();
 }
 
-
 //- dmylo: buffers
+
 r_hook R_Handle
 r_buffer_alloc(R_BufferKind kind, U64 size, void *data)
 {
-    R_Handle result = {0};
+  ProfBeginFunction();
 
-    return result;
+  //- dmylo: allocate
+  R_OGL_Buffer *buffer = 0;
+  OS_MutexScopeW(r_ogl_state->device_rw_mutex)
+  {
+    buffer = r_ogl_state->first_free_buffer;
+    if(buffer == 0)
+    {
+      buffer = push_array(r_ogl_state->arena, R_OGL_Buffer, 1);
+    }
+    else
+    {
+      U64 gen = buffer->generation;
+      SLLStackPop(r_ogl_state->first_free_buffer);
+      MemoryZeroStruct(buffer);
+      buffer->generation = gen;
+    }
+
+    buffer->generation += 1;
+  }
+
+  GLenum usage = GL_STATIC_DRAW;
+  {
+    switch(kind)
+    {
+      default:
+      case R_BufferKind_Static:
+      {
+        if(data == 0)
+        {
+          usage = GL_DYNAMIC_DRAW;
+        }
+      }break;
+      case R_BufferKind_Dynamic:
+      {
+        usage = GL_DYNAMIC_DRAW;
+      }break;
+    }
+  }
+
+  auto& gl = r_ogl_state->gl;
+  gl.GenBuffers(1, &buffer->buffer);
+  gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
+  gl.BufferData(GL_ARRAY_BUFFER, size, data, usage);
+  gl.BindBuffer(GL_ARRAY_BUFFER, 0);
+
+  //- rjf: fill basics
+  {
+    buffer->kind = kind;
+    buffer->size = size;
+  }
+
+  R_Handle result = r_ogl_handle_from_buffer(buffer);
+  ProfEnd();
+  return result;
 }
 
 r_hook void
-r_buffer_release(R_Handle buffer)
+r_buffer_release(R_Handle handle)
 {
-
+  ProfBeginFunction();
+  OS_MutexScopeW(r_ogl_state->device_rw_mutex)
+  {
+    R_OGL_Buffer *buffer = r_ogl_buffer_from_handle(handle);
+    SLLStackPush(r_ogl_state->first_to_free_buffer, buffer);
+  }
+  ProfEnd();
 }
 
 
@@ -544,7 +672,7 @@ r_end_frame(void)
 {
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
-    auto& gl = r_ogl_state->gl.gl;
+    auto& gl = r_ogl_state->gl;
 
     for(R_OGL_FlushBuffer *buffer = r_ogl_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
     {
@@ -607,10 +735,10 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
       window->last_resolution = resolution;
     }
 
-    auto gl = &r_ogl_state->gl;
-    gl->gl.Disable(GL_SCISSOR_TEST);
-    gl->gl.ClearColor(0.0, 0.0, 0.0, 0.0);
-    gl->gl.Clear(GL_COLOR_BUFFER_BIT);
+    auto& gl = r_ogl_state->gl;
+    gl.Disable(GL_SCISSOR_TEST);
+    gl.ClearColor(0.0, 0.0, 0.0, 0.0);
+    gl.Clear(GL_COLOR_BUFFER_BIT);
   }
   ProfEnd();
 }
@@ -635,33 +763,6 @@ r_window_end_frame(OS_Handle window_handle, R_Handle window_equip)
 }
 
 
-internal GLuint
-r_ogl_instance_buffer_from_size(U64 size)
-{
-  GLuint buffer = r_ogl_state->instance_scratch_buffer_64kb;
-  if(size > KB(64))
-  {
-    U64 flushed_buffer_size = size;
-    flushed_buffer_size += MB(1)-1;
-    flushed_buffer_size -= flushed_buffer_size%MB(1);
-
-    // dmylo: build buffer
-    {
-      auto gl = &r_ogl_state->gl;
-      gl->gl.GenBuffers(1, &buffer);
-      gl->gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
-      gl->gl.BufferData(GL_ARRAY_BUFFER, flushed_buffer_size, 0, GL_DYNAMIC_DRAW);
-    }
-
-    // dmylo: push buffer to flush list
-    R_OGL_FlushBuffer *n = push_array(r_ogl_state->buffer_flush_arena, R_OGL_FlushBuffer, 1);
-    n->buffer = buffer;
-    SLLQueuePush(r_ogl_state->first_buffer_to_flush, r_ogl_state->last_buffer_to_flush, n);
-  }
-
-  return buffer;
-}
-
 //- dmylo: render pass submission
 r_hook void
 r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
@@ -673,7 +774,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
     //- dmylo: unpack arguments
     //
     R_OGL_Window *wnd = r_ogl_window_from_handle(window_equip);
-    auto gl = &r_ogl_state->gl;
+    auto& gl = r_ogl_state->gl;
 
     ////////////////////////////
     //- dmylo: do passes
@@ -693,25 +794,25 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
 
           //- dmylo: set up rasterizer
           Vec2S32 resolution = wnd->last_resolution;
-          gl->gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
+          gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
 
           // TODO(dmylo): staging render target
 
           // - dmylo: culling
-          gl->gl.Enable(GL_CULL_FACE);
-          gl->gl.CullFace(GL_BACK);
-          gl->gl.FrontFace(GL_CW);
+          gl.Enable(GL_CULL_FACE);
+          gl.CullFace(GL_BACK);
+          gl.FrontFace(GL_CW);
 
           //- dmylo: depth
-          gl->gl.Disable(GL_DEPTH_TEST);
-          gl->gl.Disable(GL_STENCIL_TEST);
+          gl.Disable(GL_DEPTH_TEST);
+          gl.Disable(GL_STENCIL_TEST);
 
           //- dmylo: blending
-          gl->gl.Enable(GL_BLEND);
-          gl->gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+          gl.Enable(GL_BLEND);
+          gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
           //- dmylo: shader
-          gl->gl.UseProgram(r_ogl_state->rect_shader);
+          gl.UseProgram(r_ogl_state->rect_shader);
 
           //- dmylo: draw each batch group
           for(R_BatchGroup2DNode *group_n = rect_batch_groups->first; group_n != 0; group_n = group_n->next)
@@ -720,26 +821,26 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             R_BatchGroup2DParams *group_params = &group_n->params;
 
             //- dmylo: VAO
-            gl->gl.BindVertexArray(r_ogl_state->rect_vao);
+            gl.BindVertexArray(r_ogl_state->rect_vao);
 
             // dmylo: get & fill buffer
             GLuint buffer = r_ogl_instance_buffer_from_size(batches->byte_count);
             {
-              gl->gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
-              U8* dst_ptr = (U8*)gl->gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+              gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
+              U8* dst_ptr = (U8*)gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
               U64 off = 0;
               for(R_BatchNode *batch_n = batches->first; batch_n != 0; batch_n = batch_n->next)
               {
                 MemoryCopy(dst_ptr+off, batch_n->v.v, batch_n->v.byte_count);
                 off += batch_n->v.byte_count;
               }
-              gl->gl.UnmapBuffer(GL_ARRAY_BUFFER);
+              gl.UnmapBuffer(GL_ARRAY_BUFFER);
             }
 
             for(U32 i = 0; i < 8; i++) {
-              gl->gl.EnableVertexAttribArray(i);
-              gl->gl.VertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 8 * 16, (void*)(U64)(i * 16));
-              gl->gl.VertexAttribDivisor(i, 1);
+              gl.EnableVertexAttribArray(i);
+              gl.VertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 8 * 16, (void*)(U64)(i * 16));
+              gl.VertexAttribDivisor(i, 1);
             }
 
             // dmylo: get texture
@@ -787,29 +888,29 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
 
             GLuint uniform_buffer = r_ogl_state->rect_uniform_buffer;
             {
-              gl->gl.BindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
-              U8* dst_ptr = (U8*)gl->gl.MapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+              gl.BindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
+              U8* dst_ptr = (U8*)gl.MapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
               MemoryCopy((U8 *)dst_ptr, &uniforms, sizeof(uniforms));
-              gl->gl.UnmapBuffer(GL_UNIFORM_BUFFER);
+              gl.UnmapBuffer(GL_UNIFORM_BUFFER);
             }
 
             //- dmylo: bind uniform buffer
-            gl->gl.UniformBlockBinding(r_ogl_state->rect_shader, r_ogl_state->rect_uniform_block_index, 0);
-            gl->gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
+            gl.UniformBlockBinding(r_ogl_state->rect_shader, r_ogl_state->rect_uniform_block_index, 0);
+            gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
 
             //- dmylo: activate and bind texture
-            gl->gl.ActiveTexture(GL_TEXTURE0);
-            gl->gl.BindTexture(GL_TEXTURE_2D, texture->texture);
+            gl.ActiveTexture(GL_TEXTURE0);
+            gl.BindTexture(GL_TEXTURE_2D, texture->texture);
 
             //- dmylo: sampler mode
             switch(group_params->tex_sample_kind) {
               case R_Tex2DSampleKind_Nearest: {
-                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
               } break;
               case R_Tex2DSampleKind_Linear: {
-                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                gl->gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
               }break;
             }
 
@@ -843,12 +944,12 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                 }
               }
 
-              gl->gl.Enable(GL_SCISSOR_TEST);
-              gl->gl.Scissor(x, y, width, height);
+              gl.Enable(GL_SCISSOR_TEST);
+              gl.Scissor(x, y, width, height);
             }
 
             //- dmylo: draw instances
-            gl->gl.DrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, batches->byte_count / batches->bytes_per_inst);
+            gl.DrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, batches->byte_count / batches->bytes_per_inst);
           }
         } break;
 

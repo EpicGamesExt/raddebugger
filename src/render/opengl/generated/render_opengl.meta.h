@@ -6,6 +6,265 @@
 #ifndef RENDER_OPENGL_META_H
 #define RENDER_OPENGL_META_H
 
+// Adapted from Dear ImGui generated OpenGL bindings
+// Adapted from KHR/khrplatform.h to avoid including entire file.
+#ifndef __khrplatform_h_
+typedef          float         khronos_float_t;
+typedef signed   char          khronos_int8_t;
+typedef unsigned char          khronos_uint8_t;
+typedef signed   short int     khronos_int16_t;
+typedef unsigned short int     khronos_uint16_t;
+#ifdef _WIN64
+typedef signed   long long int khronos_intptr_t;
+typedef signed   long long int khronos_ssize_t;
+#else
+typedef signed   long  int     khronos_intptr_t;
+typedef signed   long  int     khronos_ssize_t;
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+typedef signed   __int64       khronos_int64_t;
+typedef unsigned __int64       khronos_uint64_t;
+#elif (defined(__clang__) || defined(__GNUC__)) && (__cplusplus < 201100)
+#include <stdint.h>
+typedef          int64_t       khronos_int64_t;
+typedef          uint64_t      khronos_uint64_t;
+#else
+typedef signed   long long     khronos_int64_t;
+typedef unsigned long long     khronos_uint64_t;
+#endif
+#endif  // __khrplatform_h_
+
+typedef void GLvoid;
+typedef unsigned int GLenum;
+typedef khronos_float_t GLfloat;
+typedef int GLint;
+typedef int GLsizei;
+typedef unsigned int GLbitfield;
+typedef double GLdouble;
+typedef unsigned int GLuint;
+typedef unsigned char GLboolean;
+typedef khronos_uint8_t GLubyte;
+typedef khronos_float_t GLclampf;
+typedef double GLclampd;
+typedef khronos_ssize_t GLsizeiptr;
+typedef khronos_intptr_t GLintptr;
+typedef char GLchar;
+typedef khronos_int16_t GLshort;
+typedef khronos_int8_t GLbyte;
+typedef khronos_uint16_t GLushort;
+typedef khronos_uint16_t GLhalf;
+typedef struct __GLsync *GLsync;
+typedef khronos_uint64_t GLuint64;
+typedef khronos_int64_t GLint64;
+typedef khronos_uint64_t GLuint64EXT;
+typedef khronos_int64_t GLint64EXT;
+
+typedef void (*PFNGL_DrawArrays) (GLenum mode, GLint first, GLsizei count);
+typedef void (*PFNGL_DrawElements) (GLenum mode, GLsizei count, GLenum type, const void *indices);
+typedef void (*PFNGL_GenBuffers) (GLsizei n, GLuint *buffers);
+typedef void (*PFNGL_BindBuffer) (GLenum target, GLuint buffer);
+typedef void (*PFNGL_BufferData) (GLenum target, GLsizeiptr size, const void *data, GLenum usage);
+typedef void (*PFNGL_DeleteShader) (GLuint shader);
+typedef GLuint (*PFNGL_CreateShader) (GLenum type);
+typedef void (*PFNGL_ShaderSource) (GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length);
+typedef void (*PFNGL_CompileShader) (GLuint shader);
+typedef void (*PFNGL_GetShaderiv) (GLuint shader, GLenum pname, GLint *params);
+typedef void (*PFNGL_GetShaderInfoLog) (GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
+typedef GLuint (*PFNGL_CreateProgram) (void);
+typedef void (*PFNGL_GetProgramInfoLog) (GLuint program, GLsizei bufSize, GLsizei *length, GLchar *infoLog);
+typedef void (*PFNGL_AttachShader) (GLuint program, GLuint shader);
+typedef void (*PFNGL_LinkProgram) (GLuint program);
+typedef void (*PFNGL_GetProgramiv) (GLuint program, GLenum pname, GLint *params);
+typedef void (*PFNGL_GenVertexArrays) (GLsizei n, GLuint *arrays);
+typedef GLuint (*PFNGL_GetUniformBlockIndex) (GLuint program, const GLchar* unifromBlockName);
+typedef void (*PFNGL_UniformBlockBinding) (GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding);
+typedef void (*PFNGL_GenTextures) (GLsizei n, GLuint *textures);
+typedef void (*PFNGL_BindTexture) (GLenum target, GLuint texture);
+typedef void (*PFNGL_TexImage2D) (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels);
+typedef void (*PFNGL_TexSubImage2D) (GLenum target, GLint level, GLint xofffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels);
+typedef void (*PFNGL_Disable) (GLenum cap);
+typedef void (*PFNGL_Enable) (GLenum cap);
+typedef void (*PFNGL_Clear) (GLbitfield mask);
+typedef void (*PFNGL_ClearColor) (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
+typedef void (*PFNGL_CullFace) (GLenum mode);
+typedef void (*PFNGL_FrontFace) (GLenum mode);
+typedef void (*PFNGL_BlendFunc) (GLenum sfactor, GLenum dfactor);
+typedef void (*PFNGL_Viewport) (GLint x, GLint y, GLsizei width, GLsizei height);
+typedef void (*PFNGL_UseProgram) (GLuint program);
+typedef void (*PFNGL_BindVertexArray) (GLuint array);
+typedef void (*PFNGL_ActiveTexture) (GLenum texture);
+typedef void (*PFNGL_DeleteBuffers) (GLsizei n, const GLuint *buffers);
+typedef void (*PFNGL_DeleteTextures) (GLsizei n, const GLuint *textures);
+typedef void* (*PFNGL_MapBuffer) (GLenum target, GLenum access);
+typedef GLboolean (*PFNGL_UnmapBuffer) (GLenum target);
+typedef void (*PFNGL_EnableVertexAttribArray) (GLuint index);
+typedef void (*PFNGL_VertexAttribDivisor) (GLuint index, GLuint divisor);
+typedef void (*PFNGL_VertexAttribPointer) (GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer);
+typedef void (*PFNGL_BindBufferBase) (GLenum target, GLuint index, GLuint buffer);
+typedef void (*PFNGL_TexParameteri) (GLenum target, GLenum pname, GLint param);
+typedef void (*PFNGL_Scissor) (GLint x, GLint y, GLsizei width, GLsizei height);
+typedef void (*PFNGL_DrawArraysInstanced) (GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
+
+const char* r_ogl_g_function_names[] = 
+{
+  "glDrawArrays",
+  "glDrawElements",
+  "glGenBuffers",
+  "glBindBuffer",
+  "glBufferData",
+  "glDeleteShader",
+  "glCreateShader",
+  "glShaderSource",
+  "glCompileShader",
+  "glGetShaderiv",
+  "glGetShaderInfoLog",
+  "glCreateProgram",
+  "glGetProgramInfoLog",
+  "glAttachShader",
+  "glLinkProgram",
+  "glGetProgramiv",
+  "glGenVertexArrays",
+  "glGetUniformBlockIndex",
+  "glUniformBlockBinding",
+  "glGenTextures",
+  "glBindTexture",
+  "glTexImage2D",
+  "glTexSubImage2D",
+  "glDisable",
+  "glEnable",
+  "glClear",
+  "glClearColor",
+  "glCullFace",
+  "glFrontFace",
+  "glBlendFunc",
+  "glViewport",
+  "glUseProgram",
+  "glBindVertexArray",
+  "glActiveTexture",
+  "glDeleteBuffers",
+  "glDeleteTextures",
+  "glMapBuffer",
+  "glUnmapBuffer",
+  "glEnableVertexAttribArray",
+  "glVertexAttribDivisor",
+  "glVertexAttribPointer",
+  "glBindBufferBase",
+  "glTexParameteri",
+  "glScissor",
+  "glDrawArraysInstanced",
+};
+
+typedef struct R_OGL_Functions R_OGL_Functions;
+struct R_OGL_Functions
+{
+  union
+  {
+    void* _pointers[ArrayCount(r_ogl_g_function_names)];
+    struct
+    {
+      PFNGL_DrawArrays DrawArrays;
+      PFNGL_DrawElements DrawElements;
+      PFNGL_GenBuffers GenBuffers;
+      PFNGL_BindBuffer BindBuffer;
+      PFNGL_BufferData BufferData;
+      PFNGL_DeleteShader DeleteShader;
+      PFNGL_CreateShader CreateShader;
+      PFNGL_ShaderSource ShaderSource;
+      PFNGL_CompileShader CompileShader;
+      PFNGL_GetShaderiv GetShaderiv;
+      PFNGL_GetShaderInfoLog GetShaderInfoLog;
+      PFNGL_CreateProgram CreateProgram;
+      PFNGL_GetProgramInfoLog GetProgramInfoLog;
+      PFNGL_AttachShader AttachShader;
+      PFNGL_LinkProgram LinkProgram;
+      PFNGL_GetProgramiv GetProgramiv;
+      PFNGL_GenVertexArrays GenVertexArrays;
+      PFNGL_GetUniformBlockIndex GetUniformBlockIndex;
+      PFNGL_UniformBlockBinding UniformBlockBinding;
+      PFNGL_GenTextures GenTextures;
+      PFNGL_BindTexture BindTexture;
+      PFNGL_TexImage2D TexImage2D;
+      PFNGL_TexSubImage2D TexSubImage2D;
+      PFNGL_Disable Disable;
+      PFNGL_Enable Enable;
+      PFNGL_Clear Clear;
+      PFNGL_ClearColor ClearColor;
+      PFNGL_CullFace CullFace;
+      PFNGL_FrontFace FrontFace;
+      PFNGL_BlendFunc BlendFunc;
+      PFNGL_Viewport Viewport;
+      PFNGL_UseProgram UseProgram;
+      PFNGL_BindVertexArray BindVertexArray;
+      PFNGL_ActiveTexture ActiveTexture;
+      PFNGL_DeleteBuffers DeleteBuffers;
+      PFNGL_DeleteTextures DeleteTextures;
+      PFNGL_MapBuffer MapBuffer;
+      PFNGL_UnmapBuffer UnmapBuffer;
+      PFNGL_EnableVertexAttribArray EnableVertexAttribArray;
+      PFNGL_VertexAttribDivisor VertexAttribDivisor;
+      PFNGL_VertexAttribPointer VertexAttribPointer;
+      PFNGL_BindBufferBase BindBufferBase;
+      PFNGL_TexParameteri TexParameteri;
+      PFNGL_Scissor Scissor;
+      PFNGL_DrawArraysInstanced DrawArraysInstanced;
+    };
+  };
+};
+
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_UNIFORM_BUFFER 0x8A11
+#define GL_STREAM_DRAW 0x88E0
+#define GL_STATIC_DRAW 0x88E4
+#define GL_DYNAMIC_DRAW 0x88E8
+#define GL_WRITE_ONLY 0x88B9
+#define GL_FRAGMENT_SHADER 0x8B30
+#define GL_VERTEX_SHADER 0X8B31
+#define GL_COMPILE_STATUS 0x8B81
+#define GL_LINK_STATUS 0x8B82
+#define GL_INFO_LOG_LENGTH 0x8B84
+#define GL_COLOR_BUFFER_BIT 0x00004000
+#define GL_FALSE 0
+#define GL_TRUE 1
+#define GL_TRIANGLES 0x0004
+#define GL_TRIANGLE_STRIP 0x0005
+#define GL_ONE 1
+#define GL_SRC_ALPHA 0x0302
+#define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#define GL_FRONT 0x0404
+#define GL_BACK 0x0405
+#define GL_FRONT_AND_BACK 0x0408
+#define GL_CULL_FACE 0x0B44
+#define GL_DEPTH_TEST 0x0B71
+#define GL_STENCIL_TEST 0x0B90
+#define GL_VIEWPORT 0x0BA2
+#define GL_BLEND 0x0BE2
+#define GL_SCISSOR_TEST 0x0C11
+#define GL_TEXTURE_2D 0X0DE1
+#define GL_UNSIGNED_BYTE 0x1401
+#define GL_UNSIGNED_SHORT 0x1403
+#define GL_UNSIGNED_INT 0x1405
+#define GL_FLOAT 0x1406
+#define GL_RGBA 0x1908
+#define GL_BGRA 0x80E1
+#define GL_RED 0x1903
+#define GL_RG 0x8227
+#define GL_R8 0x8229
+#define GL_RG8 0x822B
+#define GL_RGBA8 0x8058
+#define GL_R16 0x822A
+#define GL_RGBA16 0x805B
+#define GL_R32F 0x822E
+#define GL_RG32F 0x8230
+#define GL_RGBA32F 0x8814
+#define GL_NEAREST 0x2600
+#define GL_LINEAR 0x2601
+#define GL_TEXTURE_MAG_FILTER 0X2800
+#define GL_TEXTURE_MIN_FILTER 0X2801
+#define GL_CW 0x0900
+#define GL_TEXTURE0 0X84C0
+
+
 C_LINKAGE_BEGIN
 read_only global String8 r_ogl_g_rect_common_src =
 str8_lit_comp(

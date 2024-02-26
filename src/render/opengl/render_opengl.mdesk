@@ -1,6 +1,233 @@
 ////////////////////////////////
-//~ dmylo: UI Rectangle Shaders
+//~ dmylo: OpenGL bindings generator
+@table(ret, name, params) OGL_FunctionsTable:
+{
+  {void       DrawArrays              "GLenum mode, GLint first, GLsizei count"}
+  {void       DrawElements            "GLenum mode, GLsizei count, GLenum type, const void *indices"}
+  {void       GenBuffers              "GLsizei n, GLuint *buffers"}
+  {void       BindBuffer              "GLenum target, GLuint buffer"}
+  {void       BufferData              "GLenum target, GLsizeiptr size, const void *data, GLenum usage"}
+  {void       DeleteShader            "GLuint shader"}
+  {GLuint     CreateShader            "GLenum type"}
+  {void       ShaderSource            "GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length"}
+  {void       CompileShader           "GLuint shader"}
+  {void       GetShaderiv             "GLuint shader, GLenum pname, GLint *params"}
+  {void       GetShaderInfoLog        "GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *infoLog"}
+  {GLuint     CreateProgram           "void"}
+  {void       GetProgramInfoLog       "GLuint program, GLsizei bufSize, GLsizei *length, GLchar *infoLog"}
+  {void       AttachShader            "GLuint program, GLuint shader"}
+  {void       LinkProgram             "GLuint program"}
+  {void       GetProgramiv            "GLuint program, GLenum pname, GLint *params"}
+  {void       GenVertexArrays         "GLsizei n, GLuint *arrays"}
+  {GLuint     GetUniformBlockIndex    "GLuint program, const GLchar* unifromBlockName"}
+  {void       UniformBlockBinding     "GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding"}
+  {void       GenTextures             "GLsizei n, GLuint *textures"}
+  {void       BindTexture             "GLenum target, GLuint texture"}
+  {void       TexImage2D              "GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels"}
+  {void       TexSubImage2D           "GLenum target, GLint level, GLint xofffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels"}
+  {void       Disable                 "GLenum cap"}
+  {void       Enable                  "GLenum cap"}
+  {void       Clear                   "GLbitfield mask"}
+  {void       ClearColor              "GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha"}
+  {void       CullFace                "GLenum mode"}
+  {void       FrontFace               "GLenum mode"}
+  {void       BlendFunc               "GLenum sfactor, GLenum dfactor"}
+  {void       Viewport                "GLint x, GLint y, GLsizei width, GLsizei height"}
+  {void       UseProgram              "GLuint program"}
+  {void       BindVertexArray         "GLuint array"}
+  {void       ActiveTexture           "GLenum texture"}
+  {void       DeleteBuffers           "GLsizei n, const GLuint *buffers"}
+  {void       DeleteTextures          "GLsizei n, const GLuint *textures"}
+  {"void*"    MapBuffer               "GLenum target, GLenum access"}
+  {GLboolean  UnmapBuffer             "GLenum target"}
+  {void       EnableVertexAttribArray "GLuint index"}
+  {void       VertexAttribDivisor     "GLuint index, GLuint divisor"}
+  {void       VertexAttribPointer     "GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer"}
+  {void       BindBufferBase          "GLenum target, GLuint index, GLuint buffer"}
+  {void       TexParameteri           "GLenum target, GLenum pname, GLint param"}
+  {void       Scissor                 "GLint x, GLint y, GLsizei width, GLsizei height"}
+  {void       DrawArraysInstanced     "GLenum mode, GLint first, GLsizei count, GLsizei instancecount"}
+}
 
+@table(name, value) OGL_DefinesTable:
+{
+  {GL_ARRAY_BUFFER                       0x8892}
+  {GL_UNIFORM_BUFFER                     0x8A11}
+  {GL_STREAM_DRAW                        0x88E0}
+  {GL_STATIC_DRAW                        0x88E4}
+  {GL_DYNAMIC_DRAW                       0x88E8}
+  {GL_WRITE_ONLY                         0x88B9}
+  {GL_FRAGMENT_SHADER                    0x8B30}
+  {GL_VERTEX_SHADER                      0X8B31}
+  {GL_COMPILE_STATUS                     0x8B81}
+  {GL_LINK_STATUS                        0x8B82}
+  {GL_INFO_LOG_LENGTH                    0x8B84}
+  {GL_COLOR_BUFFER_BIT               0x00004000}
+  {GL_FALSE                                   0}
+  {GL_TRUE                                    1}
+  {GL_TRIANGLES                          0x0004}
+  {GL_TRIANGLE_STRIP                     0x0005}
+  {GL_ONE                                     1}
+  {GL_SRC_ALPHA                          0x0302}
+  {GL_ONE_MINUS_SRC_ALPHA                0x0303}
+  {GL_FRONT                              0x0404}
+  {GL_BACK                               0x0405}
+  {GL_FRONT_AND_BACK                     0x0408}
+  {GL_CULL_FACE                          0x0B44}
+  {GL_DEPTH_TEST                         0x0B71}
+  {GL_STENCIL_TEST                       0x0B90}
+  {GL_VIEWPORT                           0x0BA2}
+  {GL_BLEND                              0x0BE2}
+  {GL_SCISSOR_TEST                       0x0C11}
+  {GL_TEXTURE_2D                         0X0DE1}
+  {GL_UNSIGNED_BYTE                      0x1401}
+  {GL_UNSIGNED_SHORT                     0x1403}
+  {GL_UNSIGNED_INT                       0x1405}
+  {GL_FLOAT                              0x1406}
+  {GL_RGBA                               0x1908}
+  {GL_BGRA                               0x80E1}
+  {GL_RED                                0x1903}
+  {GL_RG                                 0x8227}
+  {GL_R8                                 0x8229}
+  {GL_RG8                                0x822B}
+  {GL_RGBA8                              0x8058}
+  {GL_R16                                0x822A}
+  {GL_RGBA16                             0x805B}
+  {GL_R32F                               0x822E}
+  {GL_RG32F                              0x8230}
+  {GL_RGBA32F                            0x8814}
+  {GL_NEAREST                            0x2600}
+  {GL_LINEAR                             0x2601}
+  {GL_TEXTURE_MAG_FILTER                 0X2800}
+  {GL_TEXTURE_MIN_FILTER                 0X2801}
+  {GL_CW                                 0x0900}
+  {GL_TEXTURE0                           0X84C0}
+}
+
+//- dmylo: base types
+@gen
+{
+  `// Adapted from Dear ImGui generated OpenGL bindings.
+  `// Adapted from KHR/khrplatform.h to avoid including entire file.`
+  `#ifndef __khrplatform_h_`
+  `typedef          float         khronos_float_t;`
+  `typedef signed   char          khronos_int8_t;`
+  `typedef unsigned char          khronos_uint8_t;`
+  `typedef signed   short int     khronos_int16_t;`
+  `typedef unsigned short int     khronos_uint16_t;`
+  `#ifdef _WIN64`
+  `typedef signed   long long int khronos_intptr_t;`
+  `typedef signed   long long int khronos_ssize_t;`
+  `#else`
+  `typedef signed   long  int     khronos_intptr_t;`
+  `typedef signed   long  int     khronos_ssize_t;`
+  `#endif`
+  ``
+  `#if defined(_MSC_VER) && !defined(__clang__)`
+  `typedef signed   __int64       khronos_int64_t;`
+  `typedef unsigned __int64       khronos_uint64_t;`
+  `#elif (defined(__clang__) || defined(__GNUC__)) && (__cplusplus < 201100)`
+  `#include <stdint.h>`
+  `typedef          int64_t       khronos_int64_t;`
+  `typedef          uint64_t      khronos_uint64_t;`
+  `#else`
+  `typedef signed   long long     khronos_int64_t;`
+  `typedef unsigned long long     khronos_uint64_t;`
+  `#endif`
+  `#endif  // __khrplatform_h_`
+  ``
+  `typedef void GLvoid;`
+  `typedef unsigned int GLenum;`
+  `typedef khronos_float_t GLfloat;`
+  `typedef int GLint;`
+  `typedef int GLsizei;`
+  `typedef unsigned int GLbitfield;`
+  `typedef double GLdouble;`
+  `typedef unsigned int GLuint;`
+  `typedef unsigned char GLboolean;`
+  `typedef khronos_uint8_t GLubyte;`
+  `typedef khronos_float_t GLclampf;`
+  `typedef double GLclampd;`
+  `typedef khronos_ssize_t GLsizeiptr;`
+  `typedef khronos_intptr_t GLintptr;`
+  `typedef char GLchar;`
+  `typedef khronos_int16_t GLshort;`
+  `typedef khronos_int8_t GLbyte;`
+  `typedef khronos_uint16_t GLushort;`
+  `typedef khronos_uint16_t GLhalf;`
+  `typedef struct __GLsync *GLsync;`
+  `typedef khronos_uint64_t GLuint64;`
+  `typedef khronos_int64_t GLint64;`
+  `typedef khronos_uint64_t GLuint64EXT;`
+  `typedef khronos_int64_t GLint64EXT;`
+}
+
+@gen{ `` }
+
+//- dmylo: Functions typedefs
+@gen
+{
+  @expand(OGL_FunctionsTable a) `typedef $(a.ret) (*PFNGL_$(a.name)) ($(a.params));`
+}
+
+@gen{ `` }
+
+//- dmylo: Function names
+@gen
+{
+  `const char* r_ogl_g_function_names[] = `
+  `{`
+}
+
+@gen
+{
+  @expand(OGL_FunctionsTable a) `  "gl$(a.name)",`,
+}
+
+@gen
+{
+  `};`
+}
+
+@gen{ `` }
+
+//- dmylo: Functions struct
+@gen
+{
+  `typedef struct R_OGL_Functions R_OGL_Functions;`
+  `struct R_OGL_Functions`
+  `{`
+  `  union`
+  `  {`
+  `    void* _pointers[ArrayCount(r_ogl_g_function_names)];`
+  `    struct`
+  `    {`
+}
+
+@gen
+{
+  @expand(OGL_FunctionsTable a) `      PFNGL_$(a.name) $(a.name);`,
+}
+
+@gen
+{
+  `    };`
+  `  };`
+  `};`
+}
+
+@gen{ `` }
+
+@gen
+{
+  @expand(OGL_DefinesTable a) `#define $(a.name) $(a.value)`
+}
+
+@gen{ `` }
+@gen{ `` }
+
+////////////////////////////////
+//~ dmylo: UI Rectangle Shaders
 @embed_string r_ogl_g_rect_common_src:
 """
 #version 330 core
