@@ -77,12 +77,7 @@ r_ogl_instance_buffer_from_size(U64 size)
 {
   GLuint buffer = r_ogl_state->instance_scratch_buffer_64kb;
 
-  // Currently we always alloc a new buffer here, this seems to perform
-  // better with my driver. Likely because we are stalling on remapping
-  // the same buffer multiple times. Ideally we could have fewer large buffers and
-  // suballocate from them instead.
-
-  // if(size > KB(64))
+  if(size > KB(64))
   {
     U64 flushed_buffer_size = size;
     flushed_buffer_size += MB(1)-1;
@@ -826,15 +821,32 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             // dmylo: get & fill buffer
             GLuint buffer = r_ogl_instance_buffer_from_size(batches->byte_count);
             {
-              gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
-              U8* dst_ptr = (U8*)gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+              Temp temp = temp_begin(r_ogl_state->arena);
+
+              U8* dst_ptr = (U8*)arena_push(r_ogl_state->arena, batches->byte_count);
               U64 off = 0;
               for(R_BatchNode *batch_n = batches->first; batch_n != 0; batch_n = batch_n->next)
               {
                 MemoryCopy(dst_ptr+off, batch_n->v.v, batch_n->v.byte_count);
                 off += batch_n->v.byte_count;
               }
-              gl.UnmapBuffer(GL_ARRAY_BUFFER);
+              gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
+              gl.BufferData(GL_ARRAY_BUFFER, batches->byte_count, dst_ptr, GL_STREAM_DRAW);
+
+              temp_end(temp);
+
+              //- dmylo: Equivalent mapping code, much slower on nvidia driver, likely forcing GPU synchronization
+              //         instead of providing a new driver-managed buffer for some reason.
+              //
+              // gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
+              // U8* dst_ptr = (U8*)gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+              // U64 off = 0;
+              // for(R_BatchNode *batch_n = batches->first; batch_n != 0; batch_n = batch_n->next)
+              // {
+              //   MemoryCopy(dst_ptr+off, batch_n->v.v, batch_n->v.byte_count);
+              //   off += batch_n->v.byte_count;
+              // }
+              // gl.UnmapBuffer(GL_ARRAY_BUFFER);
             }
 
             for(U32 i = 0; i < 8; i++) {
@@ -889,9 +901,14 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             GLuint uniform_buffer = r_ogl_state->rect_uniform_buffer;
             {
               gl.BindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
-              U8* dst_ptr = (U8*)gl.MapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-              MemoryCopy((U8 *)dst_ptr, &uniforms, sizeof(uniforms));
-              gl.UnmapBuffer(GL_UNIFORM_BUFFER);
+              gl.BufferData(GL_UNIFORM_BUFFER, sizeof(uniforms), &uniforms, GL_STREAM_DRAW);
+
+              //- dmylo: Equivalent mapping code, much slower on nvidia driver, likely forcing GPU synchronization
+              //         instead of providing a new driver-managed buffer for some reason.
+              //
+              // U8* dst_ptr = (U8*)gl.MapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+              // MemoryCopy((U8 *)dst_ptr, &uniforms, sizeof(uniforms));
+              // gl.UnmapBuffer(GL_UNIFORM_BUFFER);
             }
 
             //- dmylo: bind uniform buffer
@@ -938,7 +955,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                 {
                   x = (GLint)clip.x0;
                   width = (GLint)(clip.x1 - clip.x0);
-                  //- dmylo: Invert y because OpenGL scissor rect starts from bottom-left instead of top-left
+                  //- dmylo: Invert y because OpenGL scissor rect starts from bottom-left instead of top-left as in d3d11.
                   y = wnd->last_resolution.y - (GLint)clip.y1;
                   height = (GLint)(clip.y1 - clip.y0);
                 }
