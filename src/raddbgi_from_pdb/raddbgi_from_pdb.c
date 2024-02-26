@@ -3744,12 +3744,15 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: kick off pass 1 tasks
   P2R_BakeUnitIn *bake_units_in = push_array(scratch.arena, P2R_BakeUnitIn, params->units.total_count);
   TS_Ticket *bake_units_tickets = push_array(scratch.arena, TS_Ticket, params->units.total_count);
-  for(RDIM_UnitChunkNode *n = params->units.first; n != 0; n = n->next)
   {
-    for(U64 idx = 0; idx < n->count; idx += 1)
+    U64 idx = 0;
+    for(RDIM_UnitChunkNode *n = params->units.first; n != 0; n = n->next)
     {
-      bake_units_in[idx].unit = &n->v[idx];
-      bake_units_tickets[idx] = ts_kickoff(p2r_bake_unit_task__entry_point, 0, &bake_units_in[idx]);
+      for(U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, idx += 1)
+      {
+        bake_units_in[idx].unit = &n->v[chunk_idx];
+        bake_units_tickets[idx] = ts_kickoff(p2r_bake_unit_task__entry_point, 0, &bake_units_in[idx]);
+      }
     }
   }
   P2R_BuildBakeStringMapIn build_bake_string_map_in = {path_tree, params};
