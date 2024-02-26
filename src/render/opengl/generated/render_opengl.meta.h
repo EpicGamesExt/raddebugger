@@ -105,6 +105,10 @@ typedef void (*PFNGL_BindBufferBase) (GLenum target, GLuint index, GLuint buffer
 typedef void (*PFNGL_TexParameteri) (GLenum target, GLenum pname, GLint param);
 typedef void (*PFNGL_Scissor) (GLint x, GLint y, GLsizei width, GLsizei height);
 typedef void (*PFNGL_DrawArraysInstanced) (GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
+typedef void (*PFNGL_DeleteFramebuffers) (GLsizei n, const GLuint *framebuffers);
+typedef void (*PFNGL_GenFramebuffers) (GLsizei n, GLuint *ids);
+typedef void (*PFNGL_BindFramebuffer) (GLenum target, GLuint framebuffer);
+typedef void (*PFNGL_FramebufferTexture2D) (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
 
 const char* r_ogl_g_function_names[] = 
 {
@@ -153,6 +157,10 @@ const char* r_ogl_g_function_names[] =
   "glTexParameteri",
   "glScissor",
   "glDrawArraysInstanced",
+  "glDeleteFramebuffers",
+  "glGenFramebuffers",
+  "glBindFramebuffer",
+  "glFramebufferTexture2D",
 };
 
 typedef struct R_OGL_Functions R_OGL_Functions;
@@ -208,6 +216,10 @@ struct R_OGL_Functions
       PFNGL_TexParameteri TexParameteri;
       PFNGL_Scissor Scissor;
       PFNGL_DrawArraysInstanced DrawArraysInstanced;
+      PFNGL_DeleteFramebuffers DeleteFramebuffers;
+      PFNGL_GenFramebuffers GenFramebuffers;
+      PFNGL_BindFramebuffer BindFramebuffer;
+      PFNGL_FramebufferTexture2D FramebufferTexture2D;
     };
   };
 };
@@ -219,7 +231,7 @@ struct R_OGL_Functions
 #define GL_DYNAMIC_DRAW 0x88E8
 #define GL_WRITE_ONLY 0x88B9
 #define GL_FRAGMENT_SHADER 0x8B30
-#define GL_VERTEX_SHADER 0X8B31
+#define GL_VERTEX_SHADER 0x8B31
 #define GL_COMPILE_STATUS 0x8B81
 #define GL_LINK_STATUS 0x8B82
 #define GL_INFO_LOG_LENGTH 0x8B84
@@ -240,7 +252,7 @@ struct R_OGL_Functions
 #define GL_VIEWPORT 0x0BA2
 #define GL_BLEND 0x0BE2
 #define GL_SCISSOR_TEST 0x0C11
-#define GL_TEXTURE_2D 0X0DE1
+#define GL_TEXTURE_2D 0x0DE1
 #define GL_UNSIGNED_BYTE 0x1401
 #define GL_UNSIGNED_SHORT 0x1403
 #define GL_UNSIGNED_INT 0x1405
@@ -257,12 +269,18 @@ struct R_OGL_Functions
 #define GL_R32F 0x822E
 #define GL_RG32F 0x8230
 #define GL_RGBA32F 0x8814
+#define GL_UNSIGNED_INT_24_8 0x84fa
 #define GL_NEAREST 0x2600
 #define GL_LINEAR 0x2601
-#define GL_TEXTURE_MAG_FILTER 0X2800
-#define GL_TEXTURE_MIN_FILTER 0X2801
+#define GL_TEXTURE_MAG_FILTER 0x2800
+#define GL_TEXTURE_MIN_FILTER 0x2801
 #define GL_CW 0x0900
-#define GL_TEXTURE0 0X84C0
+#define GL_TEXTURE0 0x84C0
+#define GL_FRAMEBUFFER 0x8d40
+#define GL_COLOR_ATTACHMENT0 0x8ce0
+#define GL_DEPTH_STENCIL_ATTACHMENT 0x821a
+#define GL_DEPTH_STENCIL 0x84f9
+#define GL_DEPTH24_STENCIL8 0x88f0
 
 
 C_LINKAGE_BEGIN
@@ -457,6 +475,59 @@ str8_lit_comp(
 "  o_final_color.a *= opacity;\n"
 "  o_final_color.a *= corner_sdf_t;\n"
 "  o_final_color.a *= border_sdf_t;\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_finalize_common_src =
+str8_lit_comp(
+""
+"\n"
+"#version 330 core\n"
+"#define float2   vec2\n"
+"#define float3   vec3\n"
+"#define float4   vec4\n"
+"#define float3x3 mat3\n"
+"#define float4x4 mat4\n"
+""
+);
+
+read_only global String8 r_ogl_g_finalize_vs_src =
+str8_lit_comp(
+""
+"\n"
+"out Vertex2Pixel\n"
+"{\n"
+"  float2 uv;\n"
+"} v2p;\n"
+"\n"
+"void main()\n"
+"{\n"
+"  int vertex_id = gl_VertexID;\n"
+"  float2 uv = vec2(vertex_id & 1, vertex_id >> 1);\n"
+"\n"
+"  v2p.uv = uv;\n"
+"  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_finalize_fs_src =
+str8_lit_comp(
+""
+"\n"
+"in Vertex2Pixel\n"
+"{\n"
+"  float2 uv;\n"
+"} v2p;\n"
+"\n"
+"uniform sampler2D stage_t2d;\n"
+"\n"
+"out float4 o_final_color;\n"
+"\n"
+"void main()\n"
+"{\n"
+"  o_final_color = float4(texture(stage_t2d, v2p.uv).rgb, 1.0);\n"
 "}\n"
 ""
 );

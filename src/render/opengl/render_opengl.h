@@ -82,6 +82,14 @@ struct R_OGL_Window
   U64 generation;
   HGLRC glrc;
 
+  GLuint stage_scratch_fbo;
+  GLuint stage_scratch_color;
+  GLuint stage_fbo;
+  GLuint stage_color;
+  GLuint geo3d_fbo;
+  GLuint geo3d_color;
+  GLuint geo3d_depth;
+
   Vec2S32 last_resolution;
 };
 
@@ -109,12 +117,15 @@ struct R_OGL_State
   // dmylo: base OpenGL objects
   GLuint instance_scratch_buffer_64kb;
 
-  // dmylo: shaders
+  // dmylo: rect
   GLuint rect_shader;
   GLuint rect_vao;
   GLuint rect_uniform_buffer;
   GLuint rect_uniform_block_index;
   GLuint rect_texture_location;
+
+  // dmylo: finalize
+  GLuint finalize_shader;
 
   // dmylo: backups
   R_Handle backup_texture;

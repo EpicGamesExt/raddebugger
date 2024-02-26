@@ -388,6 +388,10 @@ r_window_equip(OS_Handle handle)
       GLuint rect_fs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_fs_src, GL_FRAGMENT_SHADER);
       r_ogl_state->rect_shader = r_ogl_link_shaders(rect_vs, rect_fs);
 
+      GLuint finalize_vs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_vs_src, GL_VERTEX_SHADER);
+      GLuint finalize_fs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_fs_src, GL_FRAGMENT_SHADER);
+      r_ogl_state->finalize_shader = r_ogl_link_shaders(finalize_vs, finalize_fs);
+
       //- dmylo: create uniform buffer and get its block index
       gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
       gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
@@ -723,16 +727,78 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
     Rng2F32 client_rect = os_client_rect_from_window(window_handle);
     Vec2S32 resolution = {(S32)(client_rect.x1 - client_rect.x0), (S32)(client_rect.y1 - client_rect.y0)};
 
+    auto& gl = r_ogl_state->gl;
+
     //- dmylo: resolution change
     if(window->last_resolution.x != resolution.x ||
        window->last_resolution.y != resolution.y)
     {
       window->last_resolution = resolution;
+
+      //- dmylo: resize buffers
+      if(window->stage_scratch_fbo)   { gl.DeleteFramebuffers(1, &window->stage_scratch_fbo); }
+      if(window->stage_scratch_color) { gl.DeleteTextures(1, &window->stage_scratch_color); }
+      if(window->stage_fbo)           { gl.DeleteFramebuffers(1, &window->stage_scratch_fbo); }
+      if(window->stage_color)         { gl.DeleteTextures(1, &window->stage_color); }
+      if(window->geo3d_fbo)           { gl.DeleteFramebuffers(1, &window->stage_scratch_fbo); }
+      if(window->geo3d_color)         { gl.DeleteTextures(1, &window->geo3d_color); }
+      if(window->geo3d_depth)         { gl.DeleteTextures(1, &window->geo3d_depth); }
+
+      //- dmylo: create stage framebuffer
+      {
+        // Stage
+        gl.GenFramebuffers(1, &window->stage_fbo);
+        gl.BindFramebuffer(GL_FRAMEBUFFER, window->stage_fbo);
+        gl.GenTextures(1, &window->stage_color);
+        gl.BindTexture(GL_TEXTURE_2D, window->stage_color);
+        gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolution.x, resolution.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, window->stage_color, 0);
+
+        // Stage scratch
+        gl.GenFramebuffers(1, &window->stage_scratch_fbo);
+        gl.BindFramebuffer(GL_FRAMEBUFFER, window->stage_scratch_fbo);
+        gl.GenTextures(1, &window->stage_scratch_color);
+        gl.BindTexture(GL_TEXTURE_2D, window->stage_scratch_color);
+        gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolution.x, resolution.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, window->stage_scratch_color, 0);
+      }
+
+      //- dmylo: create geo3d targets
+      {
+        gl.GenFramebuffers(1, &window->geo3d_fbo);
+        gl.BindFramebuffer(GL_FRAMEBUFFER, window->geo3d_fbo);
+
+        // Color
+        gl.GenTextures(1, &window->geo3d_color);
+        gl.BindTexture(GL_TEXTURE_2D, window->geo3d_color);
+        gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolution.x, resolution.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, window->geo3d_color, 0);
+
+        // Depth
+        gl.GenTextures(1, &window->geo3d_depth);
+        gl.BindTexture(GL_TEXTURE_2D, window->geo3d_depth);
+        gl.TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, resolution.x, resolution.y, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+        gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, window->geo3d_depth, 0);
+      }
+
+      gl.BindTexture(GL_TEXTURE_2D, 0);
     }
 
-    auto& gl = r_ogl_state->gl;
     gl.Disable(GL_SCISSOR_TEST);
     gl.ClearColor(0.0, 0.0, 0.0, 0.0);
+
+    //- dmylo: clear stage fbo
+    gl.BindFramebuffer(GL_FRAMEBUFFER, window->stage_fbo);
+    gl.Clear(GL_COLOR_BUFFER_BIT);
+
+    //- dmylo: clear window backbuffer
+    gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
     gl.Clear(GL_COLOR_BUFFER_BIT);
   }
   ProfEnd();
@@ -744,6 +810,32 @@ r_window_end_frame(OS_Handle window_handle, R_Handle window_equip)
   ProfBeginFunction();
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
+    R_OGL_Window *wnd = r_ogl_window_from_handle(window_equip);
+    auto& gl = r_ogl_state->gl;
+
+    ////////////////////////////
+    //- dmylo: finalize, by writing staging buffer out to window framebuffer
+    //
+    {
+      gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
+
+      gl.Disable(GL_DEPTH_TEST);
+      gl.Disable(GL_STENCIL_TEST);
+      gl.Disable(GL_SCISSOR_TEST);
+      gl.Disable(GL_CULL_FACE);
+      gl.Disable(GL_BLEND);
+
+      Vec2S32 resolution = wnd->last_resolution;
+      gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
+
+      gl.UseProgram(r_ogl_state->finalize_shader);
+
+      gl.ActiveTexture(GL_TEXTURE0);
+      gl.BindTexture(GL_TEXTURE_2D, wnd->stage_color);
+
+      gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+
     HWND hwnd = {0};
     {
       W32_Window *w32_layer_window = w32_window_from_os_window(window_handle);
@@ -791,9 +883,10 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
           Vec2S32 resolution = wnd->last_resolution;
           gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
 
-          // TODO(dmylo): staging render target
+          //- dmylo): set render target
+          gl.BindFramebuffer(GL_FRAMEBUFFER, wnd->stage_fbo);
 
-          // - dmylo: culling
+          //- dmylo: culling
           gl.Enable(GL_CULL_FACE);
           gl.CullFace(GL_BACK);
           gl.FrontFace(GL_CW);

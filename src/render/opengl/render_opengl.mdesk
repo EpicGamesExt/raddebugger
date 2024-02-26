@@ -47,6 +47,10 @@
   {void       TexParameteri           "GLenum target, GLenum pname, GLint param"}
   {void       Scissor                 "GLint x, GLint y, GLsizei width, GLsizei height"}
   {void       DrawArraysInstanced     "GLenum mode, GLint first, GLsizei count, GLsizei instancecount"}
+  {void       DeleteFramebuffers      "GLsizei n, const GLuint *framebuffers"}
+  {void       GenFramebuffers         "GLsizei n, GLuint *ids"}
+  {void       BindFramebuffer         "GLenum target, GLuint framebuffer"}
+  {void       FramebufferTexture2D    "GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level"}
 }
 
 @table(name, value) OGL_DefinesTable:
@@ -58,7 +62,7 @@
   {GL_DYNAMIC_DRAW                       0x88E8}
   {GL_WRITE_ONLY                         0x88B9}
   {GL_FRAGMENT_SHADER                    0x8B30}
-  {GL_VERTEX_SHADER                      0X8B31}
+  {GL_VERTEX_SHADER                      0x8B31}
   {GL_COMPILE_STATUS                     0x8B81}
   {GL_LINK_STATUS                        0x8B82}
   {GL_INFO_LOG_LENGTH                    0x8B84}
@@ -79,7 +83,7 @@
   {GL_VIEWPORT                           0x0BA2}
   {GL_BLEND                              0x0BE2}
   {GL_SCISSOR_TEST                       0x0C11}
-  {GL_TEXTURE_2D                         0X0DE1}
+  {GL_TEXTURE_2D                         0x0DE1}
   {GL_UNSIGNED_BYTE                      0x1401}
   {GL_UNSIGNED_SHORT                     0x1403}
   {GL_UNSIGNED_INT                       0x1405}
@@ -96,12 +100,18 @@
   {GL_R32F                               0x822E}
   {GL_RG32F                              0x8230}
   {GL_RGBA32F                            0x8814}
+  {GL_UNSIGNED_INT_24_8                  0x84fa}
   {GL_NEAREST                            0x2600}
   {GL_LINEAR                             0x2601}
-  {GL_TEXTURE_MAG_FILTER                 0X2800}
-  {GL_TEXTURE_MIN_FILTER                 0X2801}
+  {GL_TEXTURE_MAG_FILTER                 0x2800}
+  {GL_TEXTURE_MIN_FILTER                 0x2801}
   {GL_CW                                 0x0900}
-  {GL_TEXTURE0                           0X84C0}
+  {GL_TEXTURE0                           0x84C0}
+  {GL_FRAMEBUFFER                        0x8d40}
+  {GL_COLOR_ATTACHMENT0                  0x8ce0}
+  {GL_DEPTH_STENCIL_ATTACHMENT           0x821a}
+  {GL_DEPTH_STENCIL                      0x84f9}
+  {GL_DEPTH24_STENCIL8                   0x88f0}
 }
 
 //- dmylo: base types
@@ -411,5 +421,51 @@ void main()
   o_final_color.a *= opacity;
   o_final_color.a *= corner_sdf_t;
   o_final_color.a *= border_sdf_t;
+}
+"""
+
+////////////////////////////////
+//~ dmylo: UI Finalize Shaders
+@embed_string r_ogl_g_finalize_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+"""
+
+@embed_string r_ogl_g_finalize_vs_src:
+"""
+out Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+void main()
+{
+  int vertex_id = gl_VertexID;
+  float2 uv = vec2(vertex_id & 1, vertex_id >> 1);
+
+  v2p.uv = uv;
+  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+"""
+
+@embed_string r_ogl_g_finalize_fs_src:
+"""
+in Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+uniform sampler2D stage_t2d;
+
+out float4 o_final_color;
+
+void main()
+{
+  o_final_color = float4(texture(stage_t2d, v2p.uv).rgb, 1.0);
 }
 """
