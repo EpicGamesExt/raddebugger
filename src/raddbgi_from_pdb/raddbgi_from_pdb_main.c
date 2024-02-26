@@ -55,7 +55,7 @@ entry_point(CmdLine *cmdline)
   P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(arena, cmdline);
   
   //- rjf: display errors with input
-  if(user2convert->errors.node_count > 0 && !user2convert->hide_errors.input)
+  if(user2convert->errors.node_count > 0)
   {
     for(String8Node *n = user2convert->errors.first; n != 0; n = n->next)
     {

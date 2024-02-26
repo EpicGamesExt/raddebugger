@@ -7,6 +7,14 @@
 ////////////////////////////////
 //~ rjf: Conversion Stage Inputs/Outputs
 
+typedef U32 P2R_ConvertFlags;
+enum
+{
+  P2R_ConvertFlag_Types = (1<<0),
+  P2R_ConvertFlag_UDTs  = (1<<1),
+  P2R_ConvertFlag_All = 0xffffffff,
+};
+
 typedef struct P2R_User2Convert P2R_User2Convert;
 struct P2R_User2Convert
 {
@@ -15,24 +23,7 @@ struct P2R_User2Convert
   String8 input_exe_name;
   String8 input_exe_data;
   String8 output_name;
-  struct
-  {
-    B8 input;
-    B8 output;
-    B8 parsing;
-    B8 converting;
-  } hide_errors;
-  B8 dump;
-  B8 dump__first;
-  B8 dump_coff_sections;
-  B8 dump_msf;
-  B8 dump_sym;
-  B8 dump_tpi_hash;
-  B8 dump_leaf;
-  B8 dump_c13;
-  B8 dump_contributions;
-  B8 dump_table_diagnostics;
-  B8 dump__last;
+  P2R_ConvertFlags flags;
   String8List errors;
 };
 
@@ -392,7 +383,7 @@ internal P2R_User2Convert *p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cm
 ////////////////////////////////
 //~ rjf: COFF => RADDBGI Canonical Conversions
 
-internal RDI_BinarySectionFlags rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
+internal RDI_BinarySectionFlags p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
 
 ////////////////////////////////
 //~ rjf: CodeView => RADDBGI Canonical Conversions

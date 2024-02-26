@@ -84,97 +84,15 @@ p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline)
   //- rjf: get output name
   {
     result->output_name = cmd_line_string(cmdline, str8_lit("out"));
-  }
-  
-  //- rjf: error options
-  if(cmd_line_has_flag(cmdline, str8_lit("hide_errors")))
-  {
-    String8List vals = cmd_line_strings(cmdline, str8_lit("hide_errors"));
-    
-    // if no values - set all to hidden
-    if(vals.node_count == 0)
+    if(result->output_name.size == 0)
     {
-      B8 *ptr  = (B8*)&result->hide_errors;
-      B8 *opl = ptr + sizeof(result->hide_errors);
-      for(;ptr < opl; ptr += 1)
-      {
-        *ptr = 1;
-      }
-    }
-    
-    // for each explicit value set the corresponding flag to hidden
-    for(String8Node *node = vals.first; node != 0; node = node->next)
-    {
-      if(str8_match(node->string, str8_lit("input"), 0))
-      {
-        result->hide_errors.input = 1;
-      }
-      else if(str8_match(node->string, str8_lit("output"), 0))
-      {
-        result->hide_errors.output = 1;
-      }
-      else if(str8_match(node->string, str8_lit("parsing"), 0))
-      {
-        result->hide_errors.parsing = 1;
-      }
-      else if(str8_match(node->string, str8_lit("converting"), 0))
-      {
-        result->hide_errors.converting = 1;
-      }
+      str8_list_pushf(arena, &result->errors, "Missing required parameter: '--out:<output_path>'");
     }
   }
   
-  //- rjf: dump options
-  if(cmd_line_has_flag(cmdline, str8_lit("dump")))
+  //- rjf: get flags
   {
-    result->dump = 1;
-    String8List vals = cmd_line_strings(cmdline, str8_lit("dump"));
-    if(vals.first == 0)
-    {
-      B8 *ptr = &result->dump__first;
-      for(;ptr < &result->dump__last; ptr += 1)
-      {
-        *ptr = 1;
-      }
-    }
-    else
-    {
-      for(String8Node *node = vals.first; node != 0; node = node->next)
-      {
-        if(str8_match(node->string, str8_lit("coff_sections"), 0))
-        {
-          result->dump_coff_sections = 1;
-        }
-        else if(str8_match(node->string, str8_lit("msf"), 0))
-        {
-          result->dump_msf = 1;
-        }
-        else if(str8_match(node->string, str8_lit("sym"), 0))
-        {
-          result->dump_sym = 1;
-        }
-        else if(str8_match(node->string, str8_lit("tpi_hash"), 0))
-        {
-          result->dump_tpi_hash = 1;
-        }
-        else if(str8_match(node->string, str8_lit("leaf"), 0))
-        {
-          result->dump_leaf = 1;
-        }
-        else if(str8_match(node->string, str8_lit("c13"), 0))
-        {
-          result->dump_c13 = 1;
-        }
-        else if(str8_match(node->string, str8_lit("contributions"), 0))
-        {
-          result->dump_contributions = 1;
-        }
-        else if(str8_match(node->string, str8_lit("table_diagnostics"), 0))
-        {
-          result->dump_table_diagnostics = 1;
-        }
-      }
-    }
+    result->flags = P2R_ConvertFlag_All;
   }
   
   return result;
@@ -184,7 +102,7 @@ p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline)
 //~ rjf: COFF <-> RADDBGI Canonical Conversions
 
 internal RDI_BinarySectionFlags
-rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
+p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 {
   RDI_BinarySectionFlags result = 0;
   if(flags & COFF_SectionFlag_MEM_READ)
@@ -1218,7 +1136,7 @@ internal void *
 p2r_udt_convert_task__entry_point(Arena *arena, void *p)
 {
   P2R_UDTConvertIn *in = (P2R_UDTConvertIn *)p;
-#define p2r_type_ptr_from_itype(itype) (((itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
+#define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
   RDIM_UDTChunkList *udts = push_array(arena, RDIM_UDTChunkList, 1);
   RDI_U64 udts_chunk_cap = 1024;
   ProfScope("convert UDT info")
@@ -1844,7 +1762,7 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
 {
   Temp scratch = scratch_begin(&arena, 1);
   P2R_SymbolStreamConvertIn *in = (P2R_SymbolStreamConvertIn *)p;
-#define p2r_type_ptr_from_itype(itype) (((itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
+#define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
   
   //////////////////////////
   //- rjf: set up outputs for this sym stream
@@ -2223,6 +2141,7 @@ p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
           local->type = type;
           
           // rjf: add location info to local
+          if(type != 0)
           {
             // rjf: determine if we need an extra indirection to the value
             B32 extra_indirection_to_value = 0;
@@ -2665,45 +2584,49 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: kickoff TPI hash parse
   //
   P2R_TPIHashParseIn tpi_hash_in = {0};
+  TS_Ticket tpi_hash_ticket = {0};
   {
     tpi_hash_in.strtbl    = strtbl;
     tpi_hash_in.tpi       = tpi;
     tpi_hash_in.hash_data = msf_data_from_stream(msf, tpi->hash_sn);
     tpi_hash_in.aux_data  = msf_data_from_stream(msf, tpi->hash_sn_aux);
+    tpi_hash_ticket = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, 0, &tpi_hash_in);
   }
-  TS_Ticket tpi_hash_ticket = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, 0, &tpi_hash_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff TPI leaf parse
   //
   P2R_TPILeafParseIn tpi_leaf_in = {0};
+  TS_Ticket tpi_leaf_ticket = {0};
   {
     tpi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(tpi);
     tpi_leaf_in.itype_first = tpi->itype_first;
+    tpi_leaf_ticket = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, 0, &tpi_leaf_in);
   }
-  TS_Ticket tpi_leaf_ticket = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, 0, &tpi_leaf_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff IPI hash parse
   //
   P2R_TPIHashParseIn ipi_hash_in = {0};
+  TS_Ticket ipi_hash_ticket = {0};
   {
     ipi_hash_in.strtbl    = strtbl;
     ipi_hash_in.tpi       = ipi;
     ipi_hash_in.hash_data = msf_data_from_stream(msf, ipi->hash_sn);
     ipi_hash_in.aux_data  = msf_data_from_stream(msf, ipi->hash_sn_aux);
+    ipi_hash_ticket = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, 0, &ipi_hash_in);
   }
-  TS_Ticket ipi_hash_ticket = ts_kickoff(p2r_tpi_hash_parse_task__entry_point, 0, &ipi_hash_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff IPI leaf parse
   //
   P2R_TPILeafParseIn ipi_leaf_in = {0};
+  TS_Ticket ipi_leaf_ticket = {0};
   {
     ipi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(ipi);
     ipi_leaf_in.itype_first = ipi->itype_first;
+    ipi_leaf_ticket = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, 0, &ipi_leaf_in);
   }
-  TS_Ticket ipi_leaf_ticket = ts_kickoff(p2r_tpi_leaf_parse_task__entry_point, 0, &ipi_leaf_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff top-level global symbol stream parse
@@ -2840,7 +2763,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       char *name_opl   = name_first + sizeof(coff_ptr->name);
       RDIM_BinarySection *sec = rdim_binary_section_list_push(arena, &binary_sections);
       sec->name       = str8_cstring_capped(name_first, name_opl);
-      sec->flags      = rdi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
+      sec->flags      = p2r_rdi_binary_section_flags_from_coff_section_flags(coff_ptr->flags);
       sec->voff_first = coff_ptr->voff;
       sec->voff_opl   = coff_ptr->voff+coff_ptr->vsize;
       sec->foff_first = coff_ptr->foff;
@@ -2922,11 +2845,13 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   // possible, and so this map can be used to do that in subsequent stages.
   //
   CV_TypeId *itype_fwd_map = 0;
-  CV_TypeId itype_first = tpi_leaf->itype_first;
-  CV_TypeId itype_opl = tpi_leaf->itype_opl;
-  ProfScope("types pass 1: produce type forward resolution map")
+  CV_TypeId itype_first = 0;
+  CV_TypeId itype_opl = 0;
+  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 1: produce type forward resolution map")
   {
     //- rjf: allocate forward resolution map
+    itype_first = tpi_leaf->itype_first;
+    itype_opl = tpi_leaf->itype_opl;
     itype_fwd_map = push_array(arena, CV_TypeId, (U64)itype_opl);
     
     //- rjf: kick off tasks to fill forward resolution map
@@ -2963,7 +2888,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   // as such, always show up *earlier* in the actually built types.
   //
   P2R_TypeIdChain **itype_chains = 0;
-  ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
+  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
   {
     //- rjf: allocate itype chain table
     itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)itype_opl);
@@ -3000,8 +2925,8 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //
   RDIM_Type **itype_type_ptrs = 0;
   RDIM_TypeChunkList all_types = {0};
-#define p2r_type_ptr_from_itype(itype) (((itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
-  ProfScope("types pass 3: construct all root/stub types from TPI")
+#define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
+  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 3: construct all root/stub types from TPI")
   {
     itype_type_ptrs = push_array(arena, RDIM_Type *, (U64)(itype_opl));
     for(CV_TypeId root_itype = 0; root_itype < itype_opl; root_itype += 1)
@@ -3425,7 +3350,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   U64 udt_tasks_count = ((U64)itype_opl+(udt_task_size_itypes-1))/udt_task_size_itypes;
   P2R_UDTConvertIn *udt_tasks_inputs = push_array(scratch.arena, P2R_UDTConvertIn, udt_tasks_count);
   TS_Ticket *udt_tasks_tickets = push_array(scratch.arena, TS_Ticket, udt_tasks_count);
-  ProfScope("types pass 4: kick off UDT build")
+  if(in->flags & P2R_ConvertFlag_UDTs) ProfScope("types pass 4: kick off UDT build")
   {
     for(U64 idx = 0; idx < udt_tasks_count; idx += 1)
     {
