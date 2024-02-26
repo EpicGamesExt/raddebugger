@@ -6385,7 +6385,7 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
 //~ rjf: Main Layer Top-Level Calls
 
 internal void
-df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist)
+df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
 {
   Arena *arena = arena_alloc();
   df_state = push_array(arena, DF_State, 1);
@@ -6450,8 +6450,25 @@ df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist
   {
     Temp scratch = scratch_begin(0, 0);
     
+    // rjf: unpack command line arguments
+    String8 user_cfg_path = cmd_line_string(cmdln, str8_lit("user"));
+    String8 profile_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
+    {
+      String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
+      String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
+      os_make_directory(user_data_folder);
+      if(user_cfg_path.size == 0)
+      {
+        user_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
+      }
+      if(profile_cfg_path.size == 0)
+      {
+        profile_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_profile", user_data_folder);
+      }
+    }
+    
     // rjf: set up config path state
-    String8 cfg_src_paths[DF_CfgSrc_COUNT] = {user_path, profile_path};
+    String8 cfg_src_paths[DF_CfgSrc_COUNT] = {user_cfg_path, profile_cfg_path};
     for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
     {
       df_state->cfg_path_arenas[src] = arena_alloc();

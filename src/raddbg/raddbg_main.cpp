@@ -140,14 +140,8 @@ entry_point(CmdLine *cmd_line)
   SetStdHandle(STD_ERROR_HANDLE, 0);
 #endif
   
-  //- rjf: initialize basic dependencies
-  os_init();
-  ts_init();
-  
   //- rjf: unpack command line arguments
   ExecMode exec_mode = ExecMode_Normal;
-  String8 user_cfg_path = str8_lit("");
-  String8 profile_cfg_path = str8_lit("");
   B32 auto_run = 0;
   B32 auto_step = 0;
   B32 jit_attach = 0;
@@ -168,8 +162,6 @@ entry_point(CmdLine *cmd_line)
     {
       exec_mode = ExecMode_Help;
     }
-    user_cfg_path = cmd_line_string(cmd_line, str8_lit("user"));
-    profile_cfg_path = cmd_line_string(cmd_line, str8_lit("profile"));
     auto_run = cmd_line_has_flag(cmd_line, str8_lit("auto_run"));
     auto_step = cmd_line_has_flag(cmd_line, str8_lit("auto_step"));
     String8 jit_pid_string = cmd_line_string(cmd_line, str8_lit("jit_pid"));
@@ -181,20 +173,8 @@ entry_point(CmdLine *cmd_line)
     jit_attach = (jit_addr != 0);
   }
   
-  //- rjf: set default user/profile paths
-  {
-    String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
-    String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
-    os_make_directory(user_data_folder);
-    if(user_cfg_path.size == 0)
-    {
-      user_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
-    }
-    if(profile_cfg_path.size == 0)
-    {
-      profile_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_profile", user_data_folder);
-    }
-  }
+  //- rjf: set up layers
+  ctrl_set_wakeup_hook(wakeup_hook);
   
   //- rjf: dispatch to top-level codepath based on execution mode
   switch(exec_mode)
@@ -209,28 +189,6 @@ entry_point(CmdLine *cmd_line)
       OS_Handle ipc_semaphore = os_semaphore_alloc(1, 1, ipc_semaphore_name);
       IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
       ipc_info->msg_size = 0;
-      
-      //- rjf: initialize stuff we depend on
-      {
-        hs_init();
-        fs_init();
-        txt_init();
-        dbgi_init();
-        txti_init();
-        demon_init();
-        ctrl_init(wakeup_hook);
-        dasm_init();
-        os_graphical_init();
-        fp_init();
-        r_init(cmd_line);
-        tex_init();
-        geo_init();
-        f_init();
-        DF_StateDeltaHistory *hist = df_state_delta_history_alloc();
-        df_core_init(user_cfg_path, profile_cfg_path, hist);
-        df_gfx_init(update_and_render, hist);
-        os_set_cursor(OS_Cursor_Pointer);
-      }
       
       //- rjf: setup initial target from command line args
       {

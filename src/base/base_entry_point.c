@@ -18,6 +18,61 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   {
     ProfBeginCapture(arguments[0]);
   }
+#if defined(OS_CORE_H)
+  os_init();
+#endif
+#if defined(TASK_SYSTEM_H)
+  ts_init();
+#endif
+#if defined(HASH_STORE_H)
+  hs_init();
+#endif
+#if defined(FILE_STREAM_H)
+  fs_init();
+#endif
+#if defined(TEXT_CACHE_H)
+  txt_init();
+#endif
+#if defined(DBGI_H)
+  dbgi_init();
+#endif
+#if defined(TXTI_H)
+  txti_init();
+#endif
+#if defined(DEMON_CORE_H)
+  demon_init();
+#endif
+#if defined(CTRL_CORE_H)
+  ctrl_init();
+#endif
+#if defined(DASM_H)
+  dasm_init();
+#endif
+#if defined(OS_GRAPHICAL_H)
+  os_graphical_init();
+#endif
+#if defined(FONT_PROVIDER_H)
+  fp_init();
+#endif
+#if defined(RENDER_CORE_H)
+  r_init(&cmdline);
+#endif
+#if defined(TEXTURE_CACHE_H)
+  tex_init();
+#endif
+#if defined(GEO_CACHE_H)
+  geo_init();
+#endif
+#if defined(FONT_CACHE_H)
+  f_init();
+#endif
+#if defined(DF_CORE_H)
+  DF_StateDeltaHistory *hist = df_state_delta_history_alloc();
+  df_core_init(&cmdline, hist);
+#endif
+#if defined(DF_GFX_H)
+  df_gfx_init(update_and_render, df_state_delta_history());
+#endif
   entry_point(&cmdline);
   if(capture)
   {

@@ -50,10 +50,6 @@
 internal void
 entry_point(CmdLine *cmdline)
 {
-  //- rjf: initialize dependencies
-  os_init();
-  ts_init();
-  
   //- rjf: initialize state, unpack command line
   Arena *arena = arena_alloc();
   P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(arena, cmdline);

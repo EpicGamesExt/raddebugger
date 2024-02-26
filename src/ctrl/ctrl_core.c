@@ -10,12 +10,11 @@
 //~ rjf: Main Layer Initialization
 
 internal void
-ctrl_init(CTRL_WakeupFunctionType *wakeup_hook)
+ctrl_init(void)
 {
   Arena *arena = arena_alloc();
   ctrl_state = push_array(arena, CTRL_State, 1);
   ctrl_state->arena = arena;
-  ctrl_state->wakeup_hook = wakeup_hook;
   for(Architecture arch = (Architecture)0; arch < Architecture_COUNT; arch = (Architecture)(arch+1))
   {
     String8 *reg_names = regs_reg_code_string_table_from_architecture(arch);
@@ -70,6 +69,15 @@ ctrl_init(CTRL_WakeupFunctionType *wakeup_hook)
   {
     ctrl_state->ms_threads[idx] = os_launch_thread(ctrl_mem_stream_thread__entry_point, (void *)idx, 0);
   }
+}
+
+////////////////////////////////
+//~ rjf: Wakeup Callback Registration
+
+internal void
+ctrl_set_wakeup_hook(CTRL_WakeupFunctionType *wakeup_hook)
+{
+  ctrl_state->wakeup_hook = wakeup_hook;
 }
 
 ////////////////////////////////

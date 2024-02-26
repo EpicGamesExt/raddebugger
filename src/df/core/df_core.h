@@ -1690,7 +1690,7 @@ internal void df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec);
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist);
+internal void df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist);
 internal DF_CmdList df_core_gather_root_cmds(Arena *arena);
 internal void df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt);
 internal void df_core_end_frame(void);

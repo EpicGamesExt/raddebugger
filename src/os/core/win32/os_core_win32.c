@@ -1779,20 +1779,15 @@ int main(int argc, char **argv)
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
   SetUnhandledExceptionFilter(&win32_exception_filter);
-  Arena *args_arena = arena_alloc__sized(KB(64), KB(64));
-  WCHAR *command_line = GetCommandLineW();
-  int argc = 0;
-  WCHAR **argv_16 = CommandLineToArgvW(command_line, &argc);
-  char **argv = push_array(args_arena, char *, argc);
+  char **argv = __argv;
+  int argc = __argc;
   for(int i = 0; i < argc; i += 1)
   {
-    String16 arg16 = str16_cstring((U16 *)argv_16[i]);
-    String8 arg8 = str8_from_16(args_arena, arg16);
+    String8 arg8 = str8_cstring(argv[i]);
     if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive))
     {
       win32_g_is_quiet = 1;
     }
-    argv[i] = (char *)arg8.str;
   }
   main_thread_base_entry_point(entry_point, argv, (U64)argc);
   return 0;

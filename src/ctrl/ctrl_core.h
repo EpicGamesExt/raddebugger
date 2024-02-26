@@ -447,7 +447,12 @@ global CTRL_State *ctrl_state = 0;
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
 
-internal void ctrl_init(CTRL_WakeupFunctionType *wakeup_hook);
+internal void ctrl_init(void);
+
+////////////////////////////////
+//~ rjf: Wakeup Callback Registration
+
+internal void ctrl_set_wakeup_hook(CTRL_WakeupFunctionType *wakeup_hook);
 
 ////////////////////////////////
 //~ rjf: Basic Type Functions

@@ -39,8 +39,6 @@ entry_point(CmdLine *cmd_line)
   //////////////////////////////
   //- rjf: set up
   //
-  local_persist TCTX main_thread_tctx = {0};
-  tctx_init_and_equip(&main_thread_tctx);
   Arena *arena = arena_alloc();
   String8List errors = {0};
   
