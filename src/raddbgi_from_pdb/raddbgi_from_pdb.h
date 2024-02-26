@@ -266,12 +266,18 @@ struct P2R_BuildBakeNameMapIn
   RDIM_BakeParams *params;
 };
 
-typedef struct P2R_BakeUnitsIn P2R_BakeUnitsIn;
-struct P2R_BakeUnitsIn
+typedef struct P2R_BakeUnitsTopLevelIn P2R_BakeUnitsTopLevelIn;
+struct P2R_BakeUnitsTopLevelIn
 {
   RDIM_BakeStringMap *strings;
   RDIM_BakePathTree *path_tree;
   RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeUnitIn P2R_BakeUnitIn;
+struct P2R_BakeUnitIn
+{
+  RDIM_Unit *unit;
 };
 
 typedef struct P2R_BakeUnitVMapIn P2R_BakeUnitVMapIn;
@@ -454,7 +460,8 @@ internal void *p2r_build_bake_string_map_task__entry_point(Arena *arena, void *p
 internal void *p2r_build_bake_name_map_task__entry_point(Arena *arena, void *p);
 
 //- rjf: pass 2: string-map-dependent debug info stream builds
-internal void *p2r_bake_units_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_units_top_level_task__entry_point(Arena *arena, void *p);
+internal void *p2r_bake_unit_task__entry_point(Arena *arena, void *p);
 internal void *p2r_bake_unit_vmap_task__entry_point(Arena *arena, void *p);
 internal void *p2r_bake_src_files_task__entry_point(Arena *arena, void *p);
 internal void *p2r_bake_udts_task__entry_point(Arena *arena, void *p);

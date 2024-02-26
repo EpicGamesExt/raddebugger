@@ -1145,7 +1145,8 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_info_section_list_from_params(
 RDI_PROC RDIM_BakeSectionList rdim_bake_binary_section_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakeParams *params);
 
 //- rjf: units
-RDI_PROC RDIM_BakeSectionList rdim_bake_unit_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_section_list_from_unit(RDIM_Arena *arena, RDIM_Unit *unit);
+RDI_PROC RDIM_BakeSectionList rdim_bake_unit_top_level_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMap *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
 
 //- rjf: unit vmap
 RDI_PROC RDIM_BakeSectionList rdim_bake_unit_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
