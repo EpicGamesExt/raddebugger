@@ -197,16 +197,36 @@ entry_point(CmdLine *cmdline)
 {
   //- rjf: initialize state, unpack command line
   Arena *arena = arena_alloc();
+  B32 do_help = (cmd_line_has_flag(cmdline, str8_lit("help")) ||
+                 cmd_line_has_flag(cmdline, str8_lit("h")) ||
+                 cmd_line_has_flag(cmdline, str8_lit("?")));
   P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(arena, cmdline);
   user2convert->flags &= ~(P2R_ConvertFlag_Types|P2R_ConvertFlag_UDTs);
   
-  //- rjf: display errors with input
-  if(user2convert->errors.node_count > 0)
+  //- rjf: display help
+  if(do_help || user2convert->errors.node_count != 0)
   {
-    for(String8Node *n = user2convert->errors.first; n != 0; n = n->next)
+    fprintf(stderr, "--- breakpad_from_pdb ---------------------------------------------------------\n\n");
+    
+    fprintf(stderr, "This utility converts debug information from PDBs into the textual Breakpad\n");
+    fprintf(stderr, "symbol information format, used for various external utilities. The following\n");
+    fprintf(stderr, "arguments are accepted:\n\n");
+    
+    fprintf(stderr, "--exe:<path> [optional] Specifies the path of the executable file for which the\n");
+    fprintf(stderr, "                        debug info was generated.\n");
+    fprintf(stderr, "--pdb:<path>            Specifies the path of the PDB debug info file to\n");
+    fprintf(stderr, "                        convert.\n");
+    fprintf(stderr, "--out:<path>            Specifies the path at which the output Breakpad debug\n");
+    fprintf(stderr, "                        info will be written.\n\n");
+    
+    if(!do_help)
     {
-      fprintf(stderr, "error(input): %.*s\n", str8_varg(n->string));
+      for(String8Node *n = user2convert->errors.first; n != 0; n = n->next)
+      {
+        fprintf(stderr, "error(input): %.*s\n", str8_varg(n->string));
+      }
     }
+    os_exit_process(0);
   }
   
   //- rjf: convert
