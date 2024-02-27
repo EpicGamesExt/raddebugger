@@ -29,6 +29,7 @@
   {void       Enable                  "GLenum cap"}
   {void       Clear                   "GLbitfield mask"}
   {void       ClearColor              "GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha"}
+  {void       ClearDepth              "GLdouble depth"}
   {void       CullFace                "GLenum mode"}
   {void       FrontFace               "GLenum mode"}
   {void       BlendFunc               "GLenum sfactor, GLenum dfactor"}
@@ -52,12 +53,15 @@
   {void       BindFramebuffer         "GLenum target, GLuint framebuffer"}
   {void       FramebufferTexture2D    "GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level"}
   {void       Uniform2f               "GLint location, GLfloat v0, GLfloat v1"}
+  {void       UniformMatrix4fv        "GLint location, GLsizei count, GLboolean transpose, const GLfloat *value"}
   {GLint      GetUniformLocation      "GLuint program, const GLchar *name"}
+  {void       DepthFunc               "GLenum func"}
 }
 
 @table(name, value) OGL_DefinesTable:
 {
   {GL_ARRAY_BUFFER                       0x8892}
+  {GL_ELEMENT_ARRAY_BUFFER               0x8893}
   {GL_UNIFORM_BUFFER                     0x8A11}
   {GL_STREAM_DRAW                        0x88E0}
   {GL_STATIC_DRAW                        0x88E4}
@@ -114,6 +118,9 @@
   {GL_DEPTH_STENCIL_ATTACHMENT           0x821a}
   {GL_DEPTH_STENCIL                      0x84f9}
   {GL_DEPTH24_STENCIL8                   0x88f0}
+  {GL_DEPTH_BUFFER_BIT                   0x0100}
+  {GL_LESS                               0x0201}
+  {GL_GREATER                            0x0204}
 }
 
 //- dmylo: base types
@@ -589,5 +596,103 @@ void main()
   }
 
   o_final_color = float4(color, 1.f);
+}
+"""
+
+////////////////////////////////
+//~ dmylo: Mesh Shaders
+
+@embed_string r_ogl_g_mesh_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+"""
+
+@embed_string r_ogl_g_mesh_vs_src:
+"""
+uniform mat4 xform;
+
+layout(location=0) in float3 a_position;
+layout(location=1) in float3 a_normal;
+layout(location=2) in float2 a_texcoord;
+layout(location=3) in float3 a_color;
+
+out Vertex2Pixel
+{
+  float2 texcoord;
+  float4 color;
+} v2p;
+
+void main()
+{
+  gl_Position = xform * float4(a_position, 1.f);
+  v2p.texcoord = a_texcoord;
+  v2p.color    = float4(a_color, 1.f);
+}
+"""
+
+@embed_string r_ogl_g_mesh_fs_src:
+"""
+in Vertex2Pixel
+{
+  float2 texcoord;
+  float4 color;
+} v2p;
+
+out float4 o_final_color;
+
+void main()
+{
+  o_final_color = v2p.color;
+}
+""";
+
+////////////////////////////////
+//~ dmylo: Geo3D Composition Shaders
+@embed_string r_ogl_g_geo3dcomposite_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+"""
+
+@embed_string r_ogl_g_geo3dcomposite_vs_src:
+"""
+out Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+void main()
+{
+  int vertex_id = gl_VertexID;
+  float2 uv = vec2(vertex_id & 1, vertex_id >> 1);
+
+  v2p.uv = uv;
+  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+"""
+
+@embed_string r_ogl_g_geo3dcomposite_fs_src:
+"""
+in Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+uniform sampler2D stage_t2d;
+
+out float4 o_final_color;
+
+void main()
+{
+  o_final_color = float4(texture(stage_t2d, v2p.uv).rgb, 1.0);
 }
 """

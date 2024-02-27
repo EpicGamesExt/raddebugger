@@ -87,6 +87,7 @@ typedef void (*PFNGL_Disable) (GLenum cap);
 typedef void (*PFNGL_Enable) (GLenum cap);
 typedef void (*PFNGL_Clear) (GLbitfield mask);
 typedef void (*PFNGL_ClearColor) (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
+typedef void (*PFNGL_ClearDepth) (GLdouble depth);
 typedef void (*PFNGL_CullFace) (GLenum mode);
 typedef void (*PFNGL_FrontFace) (GLenum mode);
 typedef void (*PFNGL_BlendFunc) (GLenum sfactor, GLenum dfactor);
@@ -110,7 +111,9 @@ typedef void (*PFNGL_GenFramebuffers) (GLsizei n, GLuint *ids);
 typedef void (*PFNGL_BindFramebuffer) (GLenum target, GLuint framebuffer);
 typedef void (*PFNGL_FramebufferTexture2D) (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
 typedef void (*PFNGL_Uniform2f) (GLint location, GLfloat v0, GLfloat v1);
+typedef void (*PFNGL_UniformMatrix4fv) (GLint location, GLsizei count, GLboolean transpose, const GLfloat *value);
 typedef GLint (*PFNGL_GetUniformLocation) (GLuint program, const GLchar *name);
+typedef void (*PFNGL_DepthFunc) (GLenum func);
 
 const char* r_ogl_g_function_names[] = 
 {
@@ -141,6 +144,7 @@ const char* r_ogl_g_function_names[] =
   "glEnable",
   "glClear",
   "glClearColor",
+  "glClearDepth",
   "glCullFace",
   "glFrontFace",
   "glBlendFunc",
@@ -164,7 +168,9 @@ const char* r_ogl_g_function_names[] =
   "glBindFramebuffer",
   "glFramebufferTexture2D",
   "glUniform2f",
+  "glUniformMatrix4fv",
   "glGetUniformLocation",
+  "glDepthFunc",
 };
 
 typedef struct R_OGL_Functions R_OGL_Functions;
@@ -202,6 +208,7 @@ struct R_OGL_Functions
       PFNGL_Enable Enable;
       PFNGL_Clear Clear;
       PFNGL_ClearColor ClearColor;
+      PFNGL_ClearDepth ClearDepth;
       PFNGL_CullFace CullFace;
       PFNGL_FrontFace FrontFace;
       PFNGL_BlendFunc BlendFunc;
@@ -225,12 +232,15 @@ struct R_OGL_Functions
       PFNGL_BindFramebuffer BindFramebuffer;
       PFNGL_FramebufferTexture2D FramebufferTexture2D;
       PFNGL_Uniform2f Uniform2f;
+      PFNGL_UniformMatrix4fv UniformMatrix4fv;
       PFNGL_GetUniformLocation GetUniformLocation;
+      PFNGL_DepthFunc DepthFunc;
     };
   };
 };
 
 #define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
 #define GL_UNIFORM_BUFFER 0x8A11
 #define GL_STREAM_DRAW 0x88E0
 #define GL_STATIC_DRAW 0x88E4
@@ -287,6 +297,9 @@ struct R_OGL_Functions
 #define GL_DEPTH_STENCIL_ATTACHMENT 0x821a
 #define GL_DEPTH_STENCIL 0x84f9
 #define GL_DEPTH24_STENCIL8 0x88f0
+#define GL_DEPTH_BUFFER_BIT 0x0100
+#define GL_LESS 0x0201
+#define GL_GREATER 0x0204
 
 
 C_LINKAGE_BEGIN
@@ -661,6 +674,117 @@ str8_lit_comp(
 "  }\n"
 "\n"
 "  o_final_color = float4(color, 1.f);\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_mesh_common_src =
+str8_lit_comp(
+""
+"\n"
+"#version 330 core\n"
+"#define float2   vec2\n"
+"#define float3   vec3\n"
+"#define float4   vec4\n"
+"#define float3x3 mat3\n"
+"#define float4x4 mat4\n"
+""
+);
+
+read_only global String8 r_ogl_g_mesh_vs_src =
+str8_lit_comp(
+""
+"\n"
+"uniform mat4 xform;\n"
+"\n"
+"layout(location=0) in float3 a_position;\n"
+"layout(location=1) in float3 a_normal;\n"
+"layout(location=2) in float2 a_texcoord;\n"
+"layout(location=3) in float3 a_color;\n"
+"\n"
+"out Vertex2Pixel\n"
+"{\n"
+"  float2 texcoord;\n"
+"  float4 color;\n"
+"} v2p;\n"
+"\n"
+"void main()\n"
+"{\n"
+"  gl_Position = xform * float4(a_position, 1.f);\n"
+"  v2p.texcoord = a_texcoord;\n"
+"  v2p.color    = float4(a_color, 1.f);\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_mesh_fs_src =
+str8_lit_comp(
+""
+"\n"
+"in Vertex2Pixel\n"
+"{\n"
+"  float2 texcoord;\n"
+"  float4 color;\n"
+"} v2p;\n"
+"\n"
+"out float4 o_final_color;\n"
+"\n"
+"void main()\n"
+"{\n"
+"  o_final_color = v2p.color;\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_geo3dcomposite_common_src =
+str8_lit_comp(
+""
+"\n"
+"#version 330 core\n"
+"#define float2   vec2\n"
+"#define float3   vec3\n"
+"#define float4   vec4\n"
+"#define float3x3 mat3\n"
+"#define float4x4 mat4\n"
+""
+);
+
+read_only global String8 r_ogl_g_geo3dcomposite_vs_src =
+str8_lit_comp(
+""
+"\n"
+"out Vertex2Pixel\n"
+"{\n"
+"  float2 uv;\n"
+"} v2p;\n"
+"\n"
+"void main()\n"
+"{\n"
+"  int vertex_id = gl_VertexID;\n"
+"  float2 uv = vec2(vertex_id & 1, vertex_id >> 1);\n"
+"\n"
+"  v2p.uv = uv;\n"
+"  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_geo3dcomposite_fs_src =
+str8_lit_comp(
+""
+"\n"
+"in Vertex2Pixel\n"
+"{\n"
+"  float2 uv;\n"
+"} v2p;\n"
+"\n"
+"uniform sampler2D stage_t2d;\n"
+"\n"
+"out float4 o_final_color;\n"
+"\n"
+"void main()\n"
+"{\n"
+"  o_final_color = float4(texture(stage_t2d, v2p.uv).rgb, 1.0);\n"
 "}\n"
 ""
 );

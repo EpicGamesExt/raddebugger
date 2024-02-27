@@ -49,7 +49,7 @@ struct R_OGL_Uniforms_BlurPass
   Vec4F32 kernel[ArrayCount(R_Blur_Kernel::weights)];
 };
 
-struct R_D3D11_Uniforms_Mesh
+struct R_OGL_Uniforms_Mesh
 {
   Mat4x4F32 xform;
 };
@@ -70,6 +70,11 @@ struct R_OGL_Tex2D
 struct R_OGL_Buffer
 {
   R_OGL_Buffer *next;
+
+  //-dmylo: linked list of buffers to upload :sync_upload
+  R_OGL_Buffer *upload_next;
+  void* upload_data;
+
   U64 generation;
   GLuint buffer;
   R_BufferKind kind;
@@ -80,7 +85,6 @@ struct R_OGL_Window
 {
   R_OGL_Window *next;
   U64 generation;
-  HGLRC glrc;
 
   GLuint stage_scratch_fbo;
   GLuint stage_scratch_color;
@@ -99,11 +103,24 @@ struct R_OGL_FlushBuffer
   GLuint buffer;
 };
 
+typedef HGLRC WINAPI wgl_create_context_attribs_arb(HDC hDC, HGLRC hShareContext,
+                                                    const int *attribList);
+typedef BOOL wgl_choose_pixel_format_arb(HDC hdc, const int *piAttribIList,
+                                         const FLOAT *pfAttribFList, UINT nMaxFormats,
+                                         int *piFormats, UINT *nNumFormats);
+
 struct R_OGL_State
 {
   // dmylo: OpenGL loaded functions
   bool initialized;
   R_OGL_Functions gl;
+
+  // dmylo: win32 OpenGL initialization stuff
+  wgl_create_context_attribs_arb *wglCreateContextAttribsARB;
+  wgl_choose_pixel_format_arb *wglChoosePixelFormatARB;
+  HGLRC glrc;
+  HWND fake_window;
+  HGLRC fake_glrc;
 
   // dmylo: state
   Arena        *arena;
@@ -129,6 +146,12 @@ struct R_OGL_State
   GLuint blur_uniform_block_index;
   GLuint blur_direction_uniform_location;
 
+  // dmylo: geo3d
+  GLuint geo3d_shader;
+  GLuint geo3d_vao;
+  GLuint geo3d_uniform_location;
+  GLuint geo3dcomposite_shader;
+
   // dmylo: finalize
   GLuint finalize_shader;
 
@@ -139,6 +162,10 @@ struct R_OGL_State
   Arena *buffer_flush_arena;
   R_OGL_FlushBuffer *first_buffer_to_flush;
   R_OGL_FlushBuffer *last_buffer_to_flush;
+
+  //- dmylo: arena holding data to upload for current frame :sync_upload
+  Arena *upload_arena;
+  R_OGL_Buffer *first_buffer_to_upload;
 };
 
 ////////////////////////////////
