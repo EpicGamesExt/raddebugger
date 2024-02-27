@@ -1246,13 +1246,13 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             uniforms.passes[Axis2_X].viewport_size = v2f32(resolution.x, resolution.y);
             uniforms.passes[Axis2_X].rect          = params->rect;
             uniforms.passes[Axis2_X].direction     = v2f32(1.f / resolution.x, 0);
-            uniforms.passes[Axis2_X].blur_count    = 1 + blur_count / 2; // 2x smaller because of bilinear sampling
+            uniforms.passes[Axis2_X].blur_count    = 1 + kernel.blur_count / 2; // 2x smaller because of bilinear sampling
             MemoryCopyArray(uniforms.passes[Axis2_X].corner_radii.v, params->corner_radii);
             
             uniforms.passes[Axis2_Y].viewport_size = v2f32(resolution.x, resolution.y);
             uniforms.passes[Axis2_Y].rect          = params->rect;
             uniforms.passes[Axis2_Y].direction     = v2f32(0, 1.f / resolution.y);
-            uniforms.passes[Axis2_Y].blur_count    = 1 + blur_count / 2; // 2x smaller because of bilinear sampling
+            uniforms.passes[Axis2_Y].blur_count    = 1 + kernel.blur_count / 2; // 2x smaller because of bilinear sampling
             MemoryCopyArray(uniforms.passes[Axis2_Y].corner_radii.v, params->corner_radii);
             
             D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};
