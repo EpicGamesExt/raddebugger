@@ -109,6 +109,8 @@ typedef void (*PFNGL_DeleteFramebuffers) (GLsizei n, const GLuint *framebuffers)
 typedef void (*PFNGL_GenFramebuffers) (GLsizei n, GLuint *ids);
 typedef void (*PFNGL_BindFramebuffer) (GLenum target, GLuint framebuffer);
 typedef void (*PFNGL_FramebufferTexture2D) (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+typedef void (*PFNGL_Uniform2f) (GLint location, GLfloat v0, GLfloat v1);
+typedef GLint (*PFNGL_GetUniformLocation) (GLuint program, const GLchar *name);
 
 const char* r_ogl_g_function_names[] = 
 {
@@ -161,6 +163,8 @@ const char* r_ogl_g_function_names[] =
   "glGenFramebuffers",
   "glBindFramebuffer",
   "glFramebufferTexture2D",
+  "glUniform2f",
+  "glGetUniformLocation",
 };
 
 typedef struct R_OGL_Functions R_OGL_Functions;
@@ -220,6 +224,8 @@ struct R_OGL_Functions
       PFNGL_GenFramebuffers GenFramebuffers;
       PFNGL_BindFramebuffer BindFramebuffer;
       PFNGL_FramebufferTexture2D FramebufferTexture2D;
+      PFNGL_Uniform2f Uniform2f;
+      PFNGL_GetUniformLocation GetUniformLocation;
     };
   };
 };
@@ -528,6 +534,133 @@ str8_lit_comp(
 "void main()\n"
 "{\n"
 "  o_final_color = float4(texture(stage_t2d, v2p.uv).rgb, 1.0);\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_blur_common_src =
+str8_lit_comp(
+""
+"\n"
+"#version 330 core\n"
+"#define float2   vec2\n"
+"#define float3   vec3\n"
+"#define float4   vec4\n"
+"#define float3x3 mat3\n"
+"#define float4x4 mat4\n"
+"\n"
+"layout (std140) uniform Globals\n"
+"{\n"
+"  float4 rect;\n"
+"  float4 corner_radii_px;\n"
+"\n"
+"  float2 viewport_size;\n"
+"  uint blur_count;\n"
+"  uint _padding;\n"
+"\n"
+"  float4 kernel[32];\n"
+"};\n"
+""
+);
+
+read_only global String8 r_ogl_g_blur_vs_src =
+str8_lit_comp(
+""
+"\n"
+"out Vertex2Pixel\n"
+"{\n"
+"  float2 texcoord;\n"
+"  float2 sdf_sample_pos;\n"
+"  flat float2 rect_half_size;\n"
+"  float corner_radius;\n"
+"} v2p;\n"
+"\n"
+"void main()\n"
+"{\n"
+"  float2 vertex_positions_scrn[4];\n"
+"  vertex_positions_scrn[0] = rect.xw;\n"
+"  vertex_positions_scrn[1] = rect.xy;\n"
+"  vertex_positions_scrn[2] = rect.zw;\n"
+"  vertex_positions_scrn[3] = rect.zy;\n"
+"\n"
+"  float corner_radii_px[] = float[]\n"
+"  (\n"
+"    corner_radii_px.y,\n"
+"    corner_radii_px.x,\n"
+"    corner_radii_px.w,\n"
+"    corner_radii_px.z\n"
+"  );\n"
+"\n"
+"  int vertex_id = gl_VertexID;\n"
+"  float2 cornercoords_pct = float2(\n"
+"                                    (vertex_id >> 1) != 0 ? 1.f : 0.f,\n"
+"                                    (vertex_id & 1)  != 0 ? 0.f : 1.f);\n"
+"\n"
+"  float2 vertex_position_pct = vertex_positions_scrn[vertex_id] / viewport_size;\n"
+"  float2 vertex_position_scr = 2.f * vertex_position_pct - 1.f;\n"
+"\n"
+"  float2 rect_half_size = float2((rect.z-rect.x)/2, (rect.w-rect.y)/2);\n"
+"\n"
+"  {\n"
+"    gl_Position = float4(vertex_position_scr.x, -vertex_position_scr.y, 0.f, 1.f);\n"
+"    v2p.texcoord = vertex_position_pct;\n"
+"    v2p.texcoord.y = 1.0 - v2p.texcoord.y;\n"
+"    v2p.sdf_sample_pos = (2.f * cornercoords_pct - 1.f) * rect_half_size;\n"
+"    v2p.rect_half_size = rect_half_size - 2.f;\n"
+"    v2p.corner_radius = corner_radii_px[vertex_id];\n"
+"  }\n"
+"}\n"
+""
+);
+
+read_only global String8 r_ogl_g_blur_fs_src =
+str8_lit_comp(
+""
+"\n"
+"in Vertex2Pixel\n"
+"{\n"
+"  float2 texcoord;\n"
+"  float2 sdf_sample_pos;\n"
+"  flat float2 rect_half_size;\n"
+"  float corner_radius;\n"
+"} v2p;\n"
+"\n"
+"\n"
+"uniform vec2 u_direction;\n"
+"uniform sampler2D stage_t2d;\n"
+"\n"
+"out float4 o_final_color;\n"
+"\n"
+"float rect_sdf(float2 sample_pos, float2 rect_half_size, float r)\n"
+"{\n"
+"  return length(max(abs(sample_pos) - rect_half_size + r, 0.0)) - r;\n"
+"}\n"
+"\n"
+"void main()\n"
+"{\n"
+"  // rjf: blend weighted texture samples into color\n"
+"  float3 color = kernel[0].x * texture(stage_t2d, v2p.texcoord).rgb;\n"
+"\n"
+"  for(uint i = 1u; i < blur_count; i += 1u)\n"
+"  {\n"
+"    float weight = kernel[i].x;\n"
+"    float offset = kernel[i].y;\n"
+"    color += weight * texture(stage_t2d, v2p.texcoord - offset * u_direction).rgb;\n"
+"    color += weight * texture(stage_t2d, v2p.texcoord + offset * u_direction).rgb;\n"
+"  }\n"
+"\n"
+"  // rjf: sample for corners\n"
+"  float corner_sdf_s = rect_sdf(v2p.sdf_sample_pos, v2p.rect_half_size, v2p.corner_radius);\n"
+"  float corner_sdf_t = 1-smoothstep(0, 2, corner_sdf_s);\n"
+"\n"
+"  // rjf: weight output color by sdf\n"
+"  // this is doing alpha testing, leave blurring only where mostly opaque pixels are\n"
+"  if (corner_sdf_t < 0.9f)\n"
+"  {\n"
+"    discard;\n"
+"  }\n"
+"\n"
+"  o_final_color = float4(color, 1.f);\n"
 "}\n"
 ""
 );

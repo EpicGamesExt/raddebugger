@@ -42,11 +42,11 @@ struct R_OGL_Uniforms_BlurPass
 {
   Rng2F32 rect;
   Vec4F32 corner_radii;
-  Vec2F32 direction;
   Vec2F32 viewport_size;
   U32 blur_count;
-  // dmylo: Alignment on this structure is done at runtime on the OpenGL buffer,
-  //        because we need to query the alignment from the OpenGL context.
+  U32 _padding;
+
+  Vec4F32 kernel[ArrayCount(R_Blur_Kernel::weights)];
 };
 
 struct R_D3D11_Uniforms_Mesh
@@ -122,7 +122,12 @@ struct R_OGL_State
   GLuint rect_vao;
   GLuint rect_uniform_buffer;
   GLuint rect_uniform_block_index;
-  GLuint rect_texture_location;
+
+  // dmylo: blur
+  GLuint blur_shader;
+  GLuint blur_uniform_buffer;
+  GLuint blur_uniform_block_index;
+  GLuint blur_direction_uniform_location;
 
   // dmylo: finalize
   GLuint finalize_shader;

@@ -371,32 +371,49 @@ r_window_equip(OS_Handle handle)
 
       auto& gl = r_ogl_state->gl;
 
-      //- dmylo: create buffers
+      //- dmylo: UI pass
       {
+        // buffers
         gl.GenBuffers(1, &r_ogl_state->instance_scratch_buffer_64kb);
         gl.BindBuffer(GL_ARRAY_BUFFER, r_ogl_state->instance_scratch_buffer_64kb);
         gl.BufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_STREAM_DRAW);
-      }
 
-      //- dmylo: create vao
-      {
+        // vao
         gl.GenVertexArrays(1, &r_ogl_state->rect_vao);
+
+        // shaders
+        GLuint rect_vs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_vs_src, GL_VERTEX_SHADER);
+        GLuint rect_fs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_fs_src, GL_FRAGMENT_SHADER);
+        r_ogl_state->rect_shader = r_ogl_link_shaders(rect_vs, rect_fs);
+
+        // uniforms
+        gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
+        gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
+        gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_Rect), 0, GL_STREAM_DRAW);
+        r_ogl_state->rect_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->rect_shader, "Globals");
       }
 
-      //- dmylo: compile shaders
-      GLuint rect_vs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_vs_src, GL_VERTEX_SHADER);
-      GLuint rect_fs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_fs_src, GL_FRAGMENT_SHADER);
-      r_ogl_state->rect_shader = r_ogl_link_shaders(rect_vs, rect_fs);
+      //- dmylo: Blur pass
+      {
+        // shaders
+        GLuint blur_vs = r_ogl_compile_shader(r_ogl_g_blur_common_src, r_ogl_g_blur_vs_src, GL_VERTEX_SHADER);
+        GLuint blur_fs = r_ogl_compile_shader(r_ogl_g_blur_common_src, r_ogl_g_blur_fs_src, GL_FRAGMENT_SHADER);
+        r_ogl_state->blur_shader = r_ogl_link_shaders(blur_vs, blur_fs);
 
-      GLuint finalize_vs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_vs_src, GL_VERTEX_SHADER);
-      GLuint finalize_fs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_fs_src, GL_FRAGMENT_SHADER);
-      r_ogl_state->finalize_shader = r_ogl_link_shaders(finalize_vs, finalize_fs);
+        // uniforms
+        gl.GenBuffers(1, &r_ogl_state->blur_uniform_buffer);
+        gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->blur_uniform_buffer);
+        gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_BlurPass), 0, GL_STREAM_DRAW);
+        r_ogl_state->blur_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->blur_shader, "Globals");
+        r_ogl_state->blur_direction_uniform_location = gl.GetUniformLocation(r_ogl_state->blur_shader, "u_direction");
+      }
 
-      //- dmylo: create uniform buffer and get its block index
-      gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
-      gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
-      gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_Rect), 0, GL_STREAM_DRAW);
-      r_ogl_state->rect_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->rect_shader, "Globals");
+      //- dmylo: Finalize
+      {
+        GLuint finalize_vs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_vs_src, GL_VERTEX_SHADER);
+        GLuint finalize_fs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_fs_src, GL_FRAGMENT_SHADER);
+        r_ogl_state->finalize_shader = r_ogl_link_shaders(finalize_vs, finalize_fs);
+      }
 
       r_ogl_state->initialized = true;
       just_initialized = true;
@@ -752,8 +769,6 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
         gl.GenTextures(1, &window->stage_color);
         gl.BindTexture(GL_TEXTURE_2D, window->stage_color);
         gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolution.x, resolution.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, window->stage_color, 0);
 
         // Stage scratch
@@ -762,8 +777,6 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
         gl.GenTextures(1, &window->stage_scratch_color);
         gl.BindTexture(GL_TEXTURE_2D, window->stage_scratch_color);
         gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolution.x, resolution.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, window->stage_scratch_color, 0);
       }
 
@@ -776,8 +789,6 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
         gl.GenTextures(1, &window->geo3d_color);
         gl.BindTexture(GL_TEXTURE_2D, window->geo3d_color);
         gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, resolution.x, resolution.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, window->geo3d_color, 0);
 
         // Depth
@@ -832,6 +843,8 @@ r_window_end_frame(OS_Handle window_handle, R_Handle window_equip)
 
       gl.ActiveTexture(GL_TEXTURE0);
       gl.BindTexture(GL_TEXTURE_2D, wnd->stage_color);
+      gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
       gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     }
@@ -1069,6 +1082,65 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
         case R_PassKind_Blur:
         {
           R_PassParams_Blur *params = pass->params_blur;
+
+          {
+            //- dmylo: Common setup
+            gl.Disable(GL_DEPTH_TEST);
+            gl.Disable(GL_STENCIL_TEST);
+            gl.Disable(GL_SCISSOR_TEST);
+            gl.Disable(GL_CULL_FACE);
+            gl.Disable(GL_BLEND);
+
+            Vec2S32 resolution = wnd->last_resolution;
+            gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
+
+            gl.UseProgram(r_ogl_state->blur_shader);
+
+            //- dmylo: common uniform
+            R_OGL_Uniforms_BlurPass uniforms = {0};
+            {
+              R_Blur_Kernel kernel = {0};
+              r_fill_blur_kernel(params->blur_size, &kernel);
+
+              for(U64 i = 0; i < ArrayCount(uniforms.kernel); i++)
+              {
+                uniforms.kernel[i] = v4f32(kernel.weights[i].x, kernel.weights[i].y, 0, 0);
+              }
+
+              uniforms.viewport_size = v2f32(resolution.x, resolution.y);
+              uniforms.rect          = params->rect;
+              uniforms.blur_count    = 1 + kernel.blur_count / 2; // 2x smaller because of bilinear sampling
+              MemoryCopyArray(uniforms.corner_radii.v, params->corner_radii);
+            }
+
+            GLuint uniform_buffer = r_ogl_state->blur_uniform_buffer;
+            {
+              gl.BindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
+              gl.BufferData(GL_UNIFORM_BUFFER, sizeof(uniforms), &uniforms, GL_STREAM_DRAW);
+              gl.UniformBlockBinding(r_ogl_state->blur_shader, r_ogl_state->blur_uniform_block_index, 0);
+              gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
+            }
+
+            //- dmylo: Horizontal pass
+            gl.Uniform2f(r_ogl_state->blur_direction_uniform_location, 1.f / resolution.x, 0);
+            gl.BindFramebuffer(GL_FRAMEBUFFER, wnd->stage_scratch_fbo);
+            gl.ActiveTexture(GL_TEXTURE0);
+            gl.BindTexture(GL_TEXTURE_2D, wnd->stage_color);
+            gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+            //- dmylo: Vertical pass
+            gl.Uniform2f(r_ogl_state->blur_direction_uniform_location, 0.0f, 1.f / resolution.y);
+            gl.BindFramebuffer(GL_FRAMEBUFFER, wnd->stage_fbo);
+            gl.ActiveTexture(GL_TEXTURE0);
+            gl.BindTexture(GL_TEXTURE_2D, wnd->stage_scratch_color);
+            gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+          }
+
+
         }break;
 
         ////////////////////////

@@ -46,7 +46,7 @@ StaticAssert(sizeof(R_D3D11_Uniforms_BlurPass) % 256 == 0, NotAligned); // const
 struct R_D3D11_Uniforms_Blur
 {
   R_D3D11_Uniforms_BlurPass passes[Axis2_COUNT];
-  Vec4F32 kernel[32];
+  Vec4F32 kernel[ArrayCount(R_Blur_Kernel::weights)];
 };
 
 struct R_D3D11_Uniforms_Mesh
