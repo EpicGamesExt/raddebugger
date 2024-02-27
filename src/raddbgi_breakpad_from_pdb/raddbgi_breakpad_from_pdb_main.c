@@ -5,7 +5,7 @@
 #define BUILD_VERSION_MINOR 9
 #define BUILD_VERSION_PATCH 8
 #define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
-#define BUILD_TITLE "breakpad_from_pdb"
+#define BUILD_TITLE "raddbgi_breakpad_from_pdb"
 #define BUILD_CONSOLE_INTERFACE 1
 
 ////////////////////////////////
@@ -206,11 +206,11 @@ entry_point(CmdLine *cmdline)
   //- rjf: display help
   if(do_help || user2convert->errors.node_count != 0)
   {
-    fprintf(stderr, "--- breakpad_from_pdb ---------------------------------------------------------\n\n");
+    fprintf(stderr, "--- raddbgi_breakpad_from_pdb -------------------------------------------------\n\n");
     
     fprintf(stderr, "This utility converts debug information from PDBs into the textual Breakpad\n");
-    fprintf(stderr, "symbol information format, used for various external utilities. The following\n");
-    fprintf(stderr, "arguments are accepted:\n\n");
+    fprintf(stderr, "symbol information format, used for various external utilities, using the RAD\n");
+    fprintf(stderr, "Debug Info conversion systems. The following arguments are accepted:\n\n");
     
     fprintf(stderr, "--exe:<path> [optional] Specifies the path of the executable file for which the\n");
     fprintf(stderr, "                        debug info was generated.\n");
