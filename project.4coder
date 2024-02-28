@@ -47,7 +47,7 @@ commands =
 {
   .rjf_f1 =
   {
-    .win = "build raddbgi_breakpad_from_pdb telemetry release",
+    .win = "build raddbgi_from_pdb telemetry debug",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,

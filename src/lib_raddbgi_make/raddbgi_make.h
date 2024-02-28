@@ -840,13 +840,49 @@ struct RDIM_BakeSectionList
 
 //- rjf: interned strings
 
+typedef struct RDIM_BakeString RDIM_BakeString;
+struct RDIM_BakeString
+{
+  RDIM_String8 string;
+  RDI_U64 hash;
+};
+
+typedef struct RDIM_BakeStringChunkNode RDIM_BakeStringChunkNode;
+struct RDIM_BakeStringChunkNode
+{
+  RDIM_BakeStringChunkNode *next;
+  RDIM_BakeString *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+};
+
+typedef struct RDIM_BakeStringChunkList RDIM_BakeStringChunkList;
+struct RDIM_BakeStringChunkList
+{
+  RDIM_BakeStringChunkNode *first;
+  RDIM_BakeStringChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+typedef struct RDIM_BakeStringChunkListMapTopology RDIM_BakeStringChunkListMapTopology;
+struct RDIM_BakeStringChunkListMapTopology
+{
+  RDI_U64 slots_count;
+};
+
+typedef struct RDIM_BakeStringChunkListMap RDIM_BakeStringChunkListMap;
+struct RDIM_BakeStringChunkListMap
+{
+  RDIM_BakeStringChunkList *slots;
+};
+
 typedef struct RDIM_BakeStringNode RDIM_BakeStringNode;
 struct RDIM_BakeStringNode
 {
   RDIM_BakeStringNode *hash_next;
   RDIM_BakeStringNode *order_next;
-  RDIM_String8 string;
-  RDI_U64 hash;
+  RDIM_BakeString v;
   RDI_U32 idx;
 };
 
@@ -857,7 +893,6 @@ struct RDIM_BakeStringMap
   RDIM_BakeStringNode *order_last;
   RDIM_BakeStringNode **slots;
   RDI_U64 slots_count;
-  RDI_U64 slot_collision_count;
   RDI_U32 count;
 };
 
@@ -1095,6 +1130,15 @@ RDI_PROC RDIM_BakeVMap rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapM
 
 ////////////////////////////////
 //~ rjf: [Baking Helpers] Interned / Deduplicated Blob Data Structure Helpers
+
+//- rjf: bake string chunk lists
+RDI_PROC RDIM_BakeString *rdim_bake_string_chunk_list_push(RDIM_Arena *arena, RDIM_BakeStringChunkList *list, RDI_U64 cap);
+RDI_PROC void rdim_bake_string_chunk_list_concat_in_place(RDIM_BakeStringChunkList *dst, RDIM_BakeStringChunkList *to_push);
+RDI_PROC RDIM_BakeStringChunkList rdim_bake_string_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeStringChunkList *src);
+
+//- rjf: bake string chunk list maps
+RDI_PROC void rdim_bake_string_chunk_list_map_insert(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMap *map, RDI_U64 chunk_cap, RDIM_String8 string);
+RDI_PROC void rdim_bake_string_chunk_list_map_join_in_place(RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMap *dst, RDIM_BakeStringChunkListMap *src);
 
 //- rjf: bake string map reading/writing
 RDI_PROC RDI_U32 rdim_bake_idx_from_string(RDIM_BakeStringMap *map, RDIM_String8 string);

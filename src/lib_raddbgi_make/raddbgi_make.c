@@ -1212,6 +1212,167 @@ rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_So
 ////////////////////////////////
 //~ rjf: [Baking Helpers] Interned / Deduplicated Blob Data Structure Helpers
 
+//- rjf: bake string chunk lists
+
+RDI_PROC RDIM_BakeString *
+rdim_bake_string_chunk_list_push(RDIM_Arena *arena, RDIM_BakeStringChunkList *list, RDI_U64 cap)
+{
+  RDIM_BakeStringChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_BakeStringChunkNode, 1);
+    n->cap = cap;
+    n->v = rdim_push_array(arena, RDIM_BakeString, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_BakeString *s = &n->v[n->count];
+  n->count += 1;
+  list->total_count += 1;
+  return s;
+}
+
+RDI_PROC void
+rdim_bake_string_chunk_list_concat_in_place(RDIM_BakeStringChunkList *dst, RDIM_BakeStringChunkList *to_push)
+{
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->chunk_count += to_push->chunk_count;
+    dst->total_count += to_push->total_count;
+  }
+  else if(dst->first == 0)
+  {
+    rdim_memcpy_struct(dst, to_push);
+  }
+  rdim_memzero_struct(to_push);
+}
+
+RDI_PROC RDIM_BakeStringChunkList
+rdim_bake_string_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeStringChunkList *src)
+{
+  //- rjf: produce unsorted destination list with single chunk node
+  RDIM_BakeStringChunkList dst = {0};
+  for(RDIM_BakeStringChunkNode *n = src->first; n != 0; n = n->next)
+  {
+    for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+    {
+      RDIM_BakeString *src_str = &n->v[idx];
+      RDIM_BakeString *dst_str = rdim_bake_string_chunk_list_push(arena, &dst, src->total_count);
+      rdim_memcpy_struct(dst_str, src_str);
+    }
+  }
+  
+  //- rjf: sort chunk node
+  if(dst.first != 0)
+  {
+    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+    typedef struct SortTask SortTask;
+    struct SortTask
+    {
+      SortTask *next;
+      RDI_U64 string_off;
+      RDIM_BakeString *v;
+      RDI_U64 count;
+    };
+    SortTask start_task = {0, 0, dst.first->v, dst.first->count};
+    SortTask *first_task = &start_task;
+    SortTask *last_task = &start_task;
+    
+    //- rjf: for each sort task range:
+    for(SortTask *t = first_task; t != 0; t = t->next)
+    {
+      //- rjf: loop through range, drop each element into bucket according to byte in string at task offset
+      RDIM_BakeStringChunkList *buckets = rdim_push_array(scratch.arena, RDIM_BakeStringChunkList, 256);
+      for(RDI_U64 idx = 0; idx < t->count; idx += 1)
+      {
+        U8 byte = t->string_off < t->v[idx].string.size ? t->v[idx].string.str[t->string_off] : 0;
+        RDIM_BakeStringChunkList *bucket = &buckets[byte];
+        RDIM_BakeString *bstr = rdim_bake_string_chunk_list_push(scratch.arena, bucket, 8);
+        rdim_memcpy_struct(bstr, &t->v[idx]);
+      }
+      
+      //- rjf: in-place mutate the original source array to reflect the order per the buckets.
+      // build new sort tasks for buckets with many elements
+      {
+        RDI_U64 write_idx = 0;
+        for(U64 bucket_idx = 0; bucket_idx < 256; bucket_idx += 1)
+        {
+          // rjf: write each chunk node's array into original array, detect if there is size left to sort
+          RDI_U64 bucket_base_idx = write_idx;
+          RDI_U64 max_size_left_to_sort = 0;
+          for(RDIM_BakeStringChunkNode *n = buckets[bucket_idx].first; n != 0; n = n->next)
+          {
+            rdim_memcpy(t->v+write_idx, n->v, sizeof(n->v[0])*n->count);
+            write_idx += n->count;
+            for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+            {
+              if(n->v[idx].string.size > t->string_off+1)
+              {
+                max_size_left_to_sort = Max(max_size_left_to_sort, (n->v[idx].string.size - t->string_off+1));
+              }
+            }
+          }
+          
+          // rjf: if any bucket has >1 element & has some amount of size left to sort, push new task for this
+          // bucket's region in the array, and for remainder of keys
+          if(buckets[bucket_idx].total_count > 1 && max_size_left_to_sort > 0)
+          {
+            SortTask *new_task = rdim_push_array(scratch.arena, SortTask, 1);
+            RDIM_SLLQueuePush(first_task, last_task, new_task);
+            new_task->string_off = t->string_off+1;
+            new_task->v = t->v + bucket_base_idx;
+            new_task->count = write_idx-bucket_base_idx;
+          }
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  
+  return dst;
+}
+
+//- rjf: bake string chunk list maps
+
+RDI_PROC void
+rdim_bake_string_chunk_list_map_insert(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMap *map, RDI_U64 chunk_cap, RDIM_String8 string)
+{
+  RDI_U64 hash = rdi_hash(string.RDIM_String8_BaseMember, string.RDIM_String8_SizeMember);
+  RDI_U64 slot_idx = hash%map_topology->slots_count;
+  RDIM_BakeStringChunkList *slot = &map->slots[slot_idx];
+  RDI_S32 is_duplicate = 0;
+  for(RDIM_BakeStringChunkNode *n = slot->first; n != 0; n = n->next)
+  {
+    for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+    {
+      if(rdim_str8_match(n->v[idx].string, string, 0))
+      {
+        is_duplicate = 1;
+        goto break_all;
+      }
+    }
+  }
+  break_all:;
+  if(!is_duplicate)
+  {
+    RDIM_BakeString *bstr = rdim_bake_string_chunk_list_push(arena, slot, chunk_cap);
+    bstr->string = string;
+    bstr->hash = hash;
+  }
+}
+
+RDI_PROC void
+rdim_bake_string_chunk_list_map_join_in_place(RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMap *dst, RDIM_BakeStringChunkListMap *src)
+{
+  for(RDI_U64 idx = 0; idx < map_topology->slots_count; idx += 1)
+  {
+    rdim_bake_string_chunk_list_concat_in_place(&dst->slots[idx], &src->slots[idx]);
+  }
+  rdim_memzero_struct(src);
+}
+
 //- rjf: bake string map reading/writing
 
 RDI_PROC RDI_U32
@@ -1224,7 +1385,7 @@ rdim_bake_idx_from_string(RDIM_BakeStringMap *map, RDIM_String8 string)
   RDIM_BakeStringNode *node = 0;
   for(RDIM_BakeStringNode *n = map->slots[slot_idx]; n != 0; n = n->hash_next)
   {
-    if(n->hash == hash && rdim_str8_match(n->string, string, 0))
+    if(n->v.hash == hash && rdim_str8_match(n->v.string, string, 0))
     {
       node = n;
       break;
@@ -1246,7 +1407,7 @@ rdim_bake_string_map_insert(RDIM_Arena *arena, RDIM_BakeStringMap *map, RDIM_Str
   RDIM_BakeStringNode *node = 0;
   for(RDIM_BakeStringNode *n = map->slots[slot_idx]; n != 0; n = n->hash_next)
   {
-    if(n->hash == hash && rdim_str8_match(n->string, string, 0))
+    if(n->v.hash == hash && rdim_str8_match(n->v.string, string, 0))
     {
       node = n;
       break;
@@ -1257,13 +1418,12 @@ rdim_bake_string_map_insert(RDIM_Arena *arena, RDIM_BakeStringMap *map, RDIM_Str
   if(node == 0)
   {
     node = rdim_push_array(arena, RDIM_BakeStringNode, 1);
-    node->string = string;
-    node->hash   = hash;
-    node->idx    = map->count;
+    node->v.string = string;
+    node->v.hash   = hash;
+    node->idx      = map->count;
     map->count += 1;
     RDIM_SLLQueuePush_N(map->order_first, map->order_last, node, order_next);
     RDIM_SLLStackPush_N(map->slots[slot_idx], node, hash_next);
-    map->slot_collision_count += (node->hash_next != 0);
   }
   
   // rjf: node -> index
@@ -3277,7 +3437,7 @@ rdim_bake_string_section_list_from_string_map(RDIM_Arena *arena, RDIM_BakeString
         node != 0;
         node = node->order_next)
     {
-      off_cursor += node->string.size;
+      off_cursor += node->v.string.size;
       *off_ptr = off_cursor;
       off_ptr += 1;
     }
@@ -3289,8 +3449,8 @@ rdim_bake_string_section_list_from_string_map(RDIM_Arena *arena, RDIM_BakeString
         node != 0;
         node = node->order_next)
     {
-      rdim_memcpy(ptr, node->string.str, node->string.size);
-      ptr += node->string.size;
+      rdim_memcpy(ptr, node->v.string.str, node->v.string.size);
+      ptr += node->v.string.size;
     }
   }
   rdim_bake_section_list_push_new(arena, &sections, str_offs, sizeof(RDI_U32)*(strings->count+1), RDI_DataSectionTag_StringTable, 0);
