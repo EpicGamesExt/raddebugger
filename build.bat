@@ -33,6 +33,7 @@ if "%debug%"=="1"   set release=0 && echo [debug mode]
 if "%release%"=="1" set debug=0 && echo [release mode]
 if "%msvc%"=="1"    set clang=0 && echo [msvc compile]
 if "%clang%"=="1"   set msvc=0 && echo [clang compile]
+if "%opengl%"=="1"  echo [opengl backend]
 if "%~1"==""        echo [default mode, assuming `raddbg` build] && set raddbg=1
 
 :: --- Unpack Command Line Build Arguments ------------------------------------
@@ -41,7 +42,7 @@ if "%telemetry%"=="1" set auto_compile_flags=%auto_compile_flags% -DPROFILE_TELE
 if "%asan%"=="1"      set auto_compile_flags=%auto_compile_flags% -fsanitize=address && echo [asan enabled]
 
 :: --- Compile/Link Line Definitions ------------------------------------------
-set cl_common=     /I..\src\ /I..\local\ /nologo /FC /Z7 -DR_BACKEND=2
+set cl_common=     /I..\src\ /I..\local\ /nologo /FC /Z7
 set clang_common=  -I..\src\ -I..\local\ -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf
 set cl_debug=      call cl /Od /DBUILD_DEBUG=1 %cl_common% %auto_compile_flags%
 set cl_release=    call cl /O2 /DBUILD_DEBUG=0 %cl_common% %auto_compile_flags%
@@ -84,6 +85,9 @@ popd
 
 :: --- Get Current Git Commit Id ----------------------------------------------
 for /f %%i in ('call git describe --always --dirty') do set compile=%compile% -DBUILD_GIT_HASH=\"%%i\"
+
+:: --- Set rendering backend -----------------------------------------------
+if "%opengl%"=="1" set compile=%compile% -DR_BACKEND=2 -DBUILD_RENDERING_BACKEND=\"OpenGL\"
 
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]
