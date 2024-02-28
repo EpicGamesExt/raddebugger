@@ -12,6 +12,9 @@
 ////////////////////////////////
 //~ dmylo: Helpers
 
+//-dmylo shortcut to access function pointers
+#define gl r_ogl_state->gl_functions
+
 internal R_OGL_Window *
 r_ogl_window_from_handle(R_Handle handle)
 {
@@ -72,6 +75,34 @@ r_ogl_handle_from_buffer(R_OGL_Buffer *buffer)
   return handle;
 }
 
+internal void
+r_ogl_upload_buffer(R_OGL_Buffer *buffer)
+{
+  GLenum usage = GL_STATIC_DRAW;
+  {
+    switch(buffer->kind)
+    {
+      default:
+      case R_BufferKind_Static:
+      {
+        if(buffer->upload_data == 0)
+        {
+          usage = GL_DYNAMIC_DRAW;
+        }
+      }break;
+      case R_BufferKind_Dynamic:
+      {
+        usage = GL_DYNAMIC_DRAW;
+      }break;
+    }
+  }
+
+  gl.GenBuffers(1, &buffer->buffer);
+  gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
+  gl.BufferData(GL_ARRAY_BUFFER, buffer->size, buffer->upload_data, usage);
+  gl.BindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
 internal GLuint
 r_ogl_instance_buffer_from_size(U64 size)
 {
@@ -85,7 +116,6 @@ r_ogl_instance_buffer_from_size(U64 size)
 
     // dmylo: build buffer
     {
-      auto& gl = r_ogl_state->gl;
       gl.GenBuffers(1, &buffer);
       gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
       gl.BufferData(GL_ARRAY_BUFFER, flushed_buffer_size, 0, GL_STREAM_DRAW);
@@ -101,11 +131,62 @@ r_ogl_instance_buffer_from_size(U64 size)
   return buffer;
 }
 
+internal R_OGL_Tex2DFormat
+r_ogl_tex2d_format(R_Tex2DFormat format)
+{
+  //- dmylo: format -> OpenGL format
+  GLenum internal_format = GL_RGBA8;
+  GLenum data_format = GL_UNSIGNED_BYTE;
+  GLenum data_type = GL_UNSIGNED_BYTE;
+  switch(format)
+  {
+    default:{}break;
+    case R_Tex2DFormat_R8:     {internal_format = GL_R8;      data_format = GL_RED;  data_type = GL_UNSIGNED_BYTE; }break;
+    case R_Tex2DFormat_RG8:    {internal_format = GL_RG8;     data_format = GL_RG;   data_type = GL_UNSIGNED_BYTE; }break;
+    case R_Tex2DFormat_RGBA8:  {internal_format = GL_RGBA8;   data_format = GL_RGBA; data_type = GL_UNSIGNED_BYTE; }break;
+    case R_Tex2DFormat_BGRA8:  {internal_format = GL_RGBA8;   data_format = GL_BGRA; data_type = GL_UNSIGNED_BYTE; }break;
+    case R_Tex2DFormat_R16:    {internal_format = GL_R16;     data_format = GL_RED;  data_type = GL_UNSIGNED_SHORT;}break;
+    case R_Tex2DFormat_RGBA16: {internal_format = GL_RGBA16;  data_format = GL_RGBA; data_type = GL_UNSIGNED_SHORT;}break;
+    case R_Tex2DFormat_R32:    {internal_format = GL_R32F;    data_format = GL_RED;  data_type = GL_FLOAT;         }break;
+    case R_Tex2DFormat_RG32:   {internal_format = GL_RG32F;   data_format = GL_RG;   data_type = GL_FLOAT;         }break;
+    case R_Tex2DFormat_RGBA32: {internal_format = GL_RGBA32F; data_format = GL_RGBA; data_type = GL_FLOAT;         }break;
+  }
+
+  R_OGL_Tex2DFormat result = {0};
+  result.internal_format = internal_format;
+  result.data_format = data_format;
+  result.data_type = data_type;
+
+  return result;
+}
+
+internal void
+r_ogl_upload_texture(R_OGL_Tex2D *texture)
+{
+  gl.GenTextures(1, &texture->texture);
+  gl.BindTexture(GL_TEXTURE_2D, texture->texture);
+
+  R_OGL_Tex2DFormat format = r_ogl_tex2d_format(texture->format);
+
+  gl.TexImage2D(GL_TEXTURE_2D, 0, format.internal_format, texture->size.x, texture->size.y, 0, format.data_format, format.data_type, texture->upload_data);
+  gl.BindTexture(GL_TEXTURE_2D, 0);
+}
+
+internal void
+r_ogl_fill_tex2d_region(R_OGL_Tex2D* texture, Rng2S32 subrect, void *data)
+{
+  Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
+
+  R_OGL_Tex2DFormat format = r_ogl_tex2d_format(texture->format);
+
+  gl.BindTexture(GL_TEXTURE_2D, texture->texture);
+  gl.TexSubImage2D(GL_TEXTURE_2D, 0, subrect.x0, subrect.y0, dim.x, dim.y, format.data_format, format.data_type, data);
+  gl.BindTexture(GL_TEXTURE_2D, 0);
+}
+
 internal GLuint
 r_ogl_compile_shader(String8 common, String8 src, GLenum kind)
 {
-  auto& gl = r_ogl_state->gl;
-
   GLuint shader = gl.CreateShader(kind);
 
   GLint src_sizes[2] = {
@@ -127,9 +208,7 @@ r_ogl_compile_shader(String8 common, String8 src, GLenum kind)
   {
       char compile_log[4096];
       gl.GetShaderInfoLog(shader, ArrayCount(compile_log), 0, compile_log);
-      OutputDebugStringA(compile_log);
-      // os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), str8_cstring(compile_log));
-      exit(1);
+      os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), str8_cstring(compile_log));
       return 0;
   }
   else
@@ -141,7 +220,6 @@ r_ogl_compile_shader(String8 common, String8 src, GLenum kind)
 internal GLuint
 r_ogl_link_shaders(GLuint vs, GLuint fs)
 {
-  auto& gl = r_ogl_state->gl;
   GLuint program = gl.CreateProgram();
 
   gl.AttachShader(program, vs);
@@ -155,9 +233,7 @@ r_ogl_link_shaders(GLuint vs, GLuint fs)
   {
       char compile_log[4096];
       gl.GetProgramInfoLog(program, ArrayCount(compile_log), 0, compile_log);
-      OutputDebugStringA(compile_log);
-      // os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), str8_cstring(compile_log));
-      exit(1);
+      os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), str8_cstring(compile_log));
       return 0;
   }
   else
@@ -180,7 +256,7 @@ r_init(CmdLine *cmdln)
   r_ogl_state->device_rw_mutex = os_rw_mutex_alloc();
 
   r_ogl_state->initialized = false;
-  r_ogl_state->gl = {};
+  r_ogl_state->gl_functions = {};
 
   //- dmylo: initialize buffer flush state
   {
@@ -195,7 +271,6 @@ r_init(CmdLine *cmdln)
   //- dmylo: Create a fake window to initialize an old OpenGL context
   // and retrieve the functions required to initialize a modern one.
   {
-    // TODO(dmylo): error checking
     HINSTANCE instance = GetModuleHandleA(NULL);
 
     WNDCLASSEXA wcex = {};
@@ -241,6 +316,13 @@ r_init(CmdLine *cmdln)
     r_ogl_state->wglChoosePixelFormatARB = (wgl_choose_pixel_format_arb*)wglGetProcAddress("wglChoosePixelFormatARB");
 
     ReleaseDC(r_ogl_state->fake_window, fake_dc);
+
+    if(!ok) {
+      char buffer[256] = {0};
+      raddbg_snprintf(buffer, sizeof(buffer), "OpenGL fake context initialization failed (win32 error code: %d)", GetLastError());
+      os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      os_exit_process(1);
+    }
   }
 }
 
@@ -293,12 +375,10 @@ r_ogl_initialize_window(OS_Handle handle)
   };
   S32 suggested_format_index = 0;
   U32 num_suggestions = 0;
-  r_ogl_state->wglChoosePixelFormatARB(window_dc, pixel_attributes, 0, 1,
-                                       &suggested_format_index, &num_suggestions);
-  //- dmylo: Letting windows fill the PIXELFORMATDESCRIPTOR struct
+  r_ogl_state->wglChoosePixelFormatARB(window_dc, pixel_attributes, 0, 1, &suggested_format_index, &num_suggestions);
+
   PIXELFORMATDESCRIPTOR suggested_format = {};
-  DescribePixelFormat(window_dc, suggested_format_index,
-                      sizeof(PIXELFORMATDESCRIPTOR), &suggested_format);
+  DescribePixelFormat(window_dc, suggested_format_index, sizeof(PIXELFORMATDESCRIPTOR), &suggested_format);
   SetPixelFormat(window_dc, suggested_format_index, &suggested_format);
 
   ReleaseDC(hwnd, window_dc);
@@ -321,7 +401,7 @@ r_ogl_initialize(OS_Handle handle)
       WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
       WGL_CONTEXT_MINOR_VERSION_ARB, 1,
       WGL_CONTEXT_FLAGS_ARB,
-      //WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB disable stuff prior to 3.0
+      // WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB disable stuff prior to 3.0
       /*WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB |*/ WGL_CONTEXT_DEBUG_BIT_ARB,
       WGL_CONTEXT_PROFILE_MASK_ARB,
       WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
@@ -332,9 +412,9 @@ r_ogl_initialize(OS_Handle handle)
   bool ok = wglMakeCurrent(window_dc, glrc);
   ReleaseDC(hwnd, window_dc);
 
-  if(!ok || glrc == NULL) {
+  if(!ok) {
     char buffer[256] = {0};
-    raddbg_snprintf(buffer, sizeof(buffer), "OpenGL context creation failure. The process is terminating.");
+    raddbg_snprintf(buffer, sizeof(buffer), "OpenGL modern context initialization failed (win32 error code: %d)", GetLastError());
     os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     os_exit_process(1);
   }
@@ -354,13 +434,18 @@ r_ogl_initialize(OS_Handle handle)
   {
     void* ptr = wglGetProcAddress(r_ogl_g_function_names[i]);
     if(!ptr) {
+      //- dmylo: older functions are still in opengl32, so we also try that.
       ptr = GetProcAddress(opengl_module, r_ogl_g_function_names[i]);
-      Assert(ptr);
     }
-    r_ogl_state->gl._pointers[i] = ptr;
+    if(!ptr) {
+      //- dmylo: if still not found error out.
+      char buffer[256] = {0};
+      raddbg_snprintf(buffer, sizeof(buffer), "Failed to load OpenGL function: %s", r_ogl_g_function_names[i]);
+      os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      os_exit_process(1);
+    }
+    r_ogl_state->gl_functions._pointers[i] = ptr;
   }
-
-  auto& gl = r_ogl_state->gl;
 
   //- dmylo: UI pass
   {
@@ -500,11 +585,10 @@ r_window_unequip(OS_Handle window, R_Handle equip_handle)
 }
 
 //- dmylo: textures
-
 r_hook R_Handle
 r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
 {
-  //- rjf: allocate
+  //- dmylo: allocate
   R_OGL_Tex2D *texture = 0;
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
@@ -521,43 +605,23 @@ r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
       texture->generation = gen;
     }
     texture->generation += 1;
-  }
 
-  auto& gl = r_ogl_state->gl;
-
-  gl.GenTextures(1, &texture->texture);
-  gl.BindTexture(GL_TEXTURE_2D, texture->texture);
-
-  //- dmylo: format -> OpenGL format :dedup
-  GLenum internal_format = GL_RGBA8;
-  GLenum data_format = GL_UNSIGNED_BYTE;
-  GLenum data_type = GL_UNSIGNED_BYTE;
-  {
-    switch(format)
-    {
-      default:{}break;
-      case R_Tex2DFormat_R8:     {internal_format = GL_R8;      data_format = GL_RED;  data_type = GL_UNSIGNED_BYTE; }break;
-      case R_Tex2DFormat_RG8:    {internal_format = GL_RG8;     data_format = GL_RG;   data_type = GL_UNSIGNED_BYTE; }break;
-      case R_Tex2DFormat_RGBA8:  {internal_format = GL_RGBA8;   data_format = GL_RGBA; data_type = GL_UNSIGNED_BYTE; }break;
-      case R_Tex2DFormat_BGRA8:  {internal_format = GL_RGBA8;   data_format = GL_BGRA; data_type = GL_UNSIGNED_BYTE; }break;
-      case R_Tex2DFormat_R16:    {internal_format = GL_R16;     data_format = GL_RED;  data_type = GL_UNSIGNED_SHORT;}break;
-      case R_Tex2DFormat_RGBA16: {internal_format = GL_RGBA16;  data_format = GL_RGBA; data_type = GL_UNSIGNED_SHORT;}break;
-      case R_Tex2DFormat_R32:    {internal_format = GL_R32F;     data_format = GL_RED; data_type = GL_FLOAT;         }break;
-      case R_Tex2DFormat_RG32:   {internal_format = GL_RG32F;   data_format = GL_RG;   data_type = GL_FLOAT;         }break;
-      case R_Tex2DFormat_RGBA32: {internal_format = GL_RGBA32F; data_format = GL_RGBA; data_type = GL_FLOAT;         }break;
+    //- dmylo: currently no multithreading support, so we just copy the data and push this
+    // to a list that the main thread will upload to the gpu before rendering. :sync_upload
+    if(data) {
+      U64 size_in_bytes = r_tex2d_format_bytes_per_pixel_table[format] * size.x * size.y;
+      U8* ptr = (U8*)arena_push(r_ogl_state->upload_arena, size_in_bytes);
+      MemoryCopy(ptr, (U8 *)data, size_in_bytes);
+      texture->upload_data = ptr;
     }
-  }
 
-  gl.TexImage2D(GL_TEXTURE_2D, 0, internal_format, size.x, size.y, 0, data_format, data_type, data);
-
-  //- rjf: fill basics
-  {
+    // This must be set with the lock held because the main thread will read them :sync_upload
     texture->kind = kind;
     texture->size = size;
     texture->format = format;
-  }
 
-  gl.BindTexture(GL_TEXTURE_2D, 0);
+    SLLStackPush_N(r_ogl_state->first_texture_to_upload, texture, upload_next);
+  }
 
   R_Handle result = r_ogl_handle_from_tex2d(texture);
   ProfEnd();
@@ -604,62 +668,21 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
     R_OGL_Tex2D *texture = r_ogl_tex2d_from_handle(handle);
+
     Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
 
-    //- dmylo: format -> OpenGL format :dedup
-    GLenum data_format = GL_UNSIGNED_BYTE;
-    GLenum data_type = GL_UNSIGNED_BYTE;
-    {
-      switch(texture->format)
-      {
-        default:{}break;
-        case R_Tex2DFormat_R8:     {data_format = GL_RED;  data_type = GL_UNSIGNED_BYTE; }break;
-        case R_Tex2DFormat_RG8:    {data_format = GL_RG;   data_type = GL_UNSIGNED_BYTE; }break;
-        case R_Tex2DFormat_RGBA8:  {data_format = GL_RGBA; data_type = GL_UNSIGNED_BYTE; }break;
-        case R_Tex2DFormat_BGRA8:  {data_format = GL_BGRA; data_type = GL_UNSIGNED_BYTE; }break;
-        case R_Tex2DFormat_R16:    {data_format = GL_RED;  data_type = GL_UNSIGNED_SHORT;}break;
-        case R_Tex2DFormat_RGBA16: {data_format = GL_RGBA; data_type = GL_UNSIGNED_SHORT;}break;
-        case R_Tex2DFormat_R32:    {data_format = GL_RED;  data_type = GL_FLOAT;         }break;
-        case R_Tex2DFormat_RG32:   {data_format = GL_RG;   data_type = GL_FLOAT;         }break;
-        case R_Tex2DFormat_RGBA32: {data_format = GL_RGBA; data_type = GL_FLOAT;         }break;
-      }
-    }
+    U64 size_in_bytes = r_tex2d_format_bytes_per_pixel_table[texture->format] * dim.x * dim.y;
+    U8* ptr = (U8*)arena_push(r_ogl_state->upload_arena, size_in_bytes);
+    MemoryCopy(ptr, (U8 *)data, size_in_bytes);
 
-    auto& gl = r_ogl_state->gl;
-    gl.BindTexture(GL_TEXTURE_2D, texture->texture);
-    gl.TexSubImage2D(GL_TEXTURE_2D, 0, subrect.x0, subrect.y0, dim.x, dim.y, data_format, data_type, data);
-    gl.BindTexture(GL_TEXTURE_2D, 0);
+    R_OGL_Fill_Tex2D* fill = push_array(r_ogl_state->arena, R_OGL_Fill_Tex2D, 1);
+    fill->texture = texture;
+    fill->subrect = subrect;
+    fill->data = ptr;
+
+    SLLStackPush(r_ogl_state->first_texture_to_fill, fill);
   }
   ProfEnd();
-}
-
-internal void
-r_ogl_upload_buffer(R_OGL_Buffer *buffer)
-{
-  GLenum usage = GL_STATIC_DRAW;
-  {
-    switch(buffer->kind)
-    {
-      default:
-      case R_BufferKind_Static:
-      {
-        if(buffer->upload_data == 0)
-        {
-          usage = GL_DYNAMIC_DRAW;
-        }
-      }break;
-      case R_BufferKind_Dynamic:
-      {
-        usage = GL_DYNAMIC_DRAW;
-      }break;
-    }
-  }
-
-  auto& gl = r_ogl_state->gl;
-  gl.GenBuffers(1, &buffer->buffer);
-  gl.BindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
-  gl.BufferData(GL_ARRAY_BUFFER, buffer->size, buffer->upload_data, usage);
-  gl.BindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 //- dmylo: buffers
@@ -692,11 +715,12 @@ r_buffer_alloc(R_BufferKind kind, U64 size, void *data)
     U8* ptr = (U8*)arena_push(r_ogl_state->upload_arena, size);
     MemoryCopy(ptr, (U8 *)data, size);
     buffer->upload_data = ptr;
-    SLLStackPush_N(r_ogl_state->first_buffer_to_upload, buffer, upload_next);
 
     // This must be set with the lock held because the main thread will read them :sync_upload
     buffer->kind = kind;
     buffer->size = size;
+
+    SLLStackPush_N(r_ogl_state->first_buffer_to_upload, buffer, upload_next);
   }
 
   R_Handle result = r_ogl_handle_from_buffer(buffer);
@@ -732,13 +756,46 @@ r_end_frame(void)
 {
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
-    auto& gl = r_ogl_state->gl;
+    // Create, fill and destroy data that can be allocated asynchronously.
+    // We do all of these with the same lock held and in this order to avoid
+    // race conditions where data has been freed before being allocated.
 
+    //- dmylo: upload required buffers
+    for(;r_ogl_state->first_buffer_to_upload;)
+    {
+      R_OGL_Buffer* buffer = r_ogl_state->first_buffer_to_upload;
+      r_ogl_upload_buffer(buffer);
+
+      SLLStackPop_N(r_ogl_state->first_buffer_to_upload, upload_next);
+    }
+    //- dmylo: upload required texures
+    for(;r_ogl_state->first_texture_to_upload;)
+    {
+      R_OGL_Tex2D* texture = r_ogl_state->first_texture_to_upload;
+      r_ogl_upload_texture(texture);
+
+      SLLStackPop_N(r_ogl_state->first_texture_to_upload, upload_next);
+    }
+
+    //- dmylo: fill required textures
+    for(;r_ogl_state->first_texture_to_fill;)
+    {
+      R_OGL_Fill_Tex2D* fill = r_ogl_state->first_texture_to_fill;
+      r_ogl_fill_tex2d_region(fill->texture, fill->subrect, fill->data);
+
+      SLLStackPop(r_ogl_state->first_texture_to_fill);
+    }
+
+    //- dmylo: free upload scratch arena.
+    arena_clear(r_ogl_state->upload_arena);
+
+    //- dmylo: free flush buffers
     for(R_OGL_FlushBuffer *buffer = r_ogl_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
     {
       gl.DeleteBuffers(1, &buffer->buffer);
     }
 
+    //- dmylo: free allocated textures
     for(R_OGL_Tex2D *tex = r_ogl_state->first_to_free_tex2d, *next = 0;
         tex != 0;
         tex = next)
@@ -749,6 +806,7 @@ r_end_frame(void)
       SLLStackPush(r_ogl_state->first_free_tex2d, tex);
     }
 
+    //- dmylo: free allocated buffers
     for(R_OGL_Buffer *buf = r_ogl_state->first_to_free_buffer, *next = 0;
         buf != 0;
         buf = next)
@@ -789,8 +847,6 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
     //- dmylo: get resolution
     Rng2F32 client_rect = os_client_rect_from_window(window_handle);
     Vec2S32 resolution = {(S32)(client_rect.x1 - client_rect.x0), (S32)(client_rect.y1 - client_rect.y0)};
-
-    auto& gl = r_ogl_state->gl;
 
     //- dmylo: resolution change
     if(window->last_resolution.x != resolution.x ||
@@ -862,17 +918,6 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
     //- dmylo: clear window backbuffer
     gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
     gl.Clear(GL_COLOR_BUFFER_BIT);
-
-    //- dmylo: upload required buffers :sync_upload
-    for(;r_ogl_state->first_buffer_to_upload;)
-    {
-      R_OGL_Buffer* buffer = r_ogl_state->first_buffer_to_upload;
-      r_ogl_upload_buffer(buffer);
-
-      SLLStackPop_N(r_ogl_state->first_buffer_to_upload, upload_next);
-    }
-    //- dmylo: free upload scratch arena.
-    arena_clear(r_ogl_state->upload_arena);
   }
   ProfEnd();
 }
@@ -884,7 +929,6 @@ r_window_end_frame(OS_Handle window_handle, R_Handle window_equip)
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
     R_OGL_Window *wnd = r_ogl_window_from_handle(window_equip);
-    auto& gl = r_ogl_state->gl;
 
     ////////////////////////////
     //- dmylo: finalize, by writing staging buffer out to window framebuffer
@@ -936,7 +980,6 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
     //- dmylo: unpack arguments
     //
     R_OGL_Window *wnd = r_ogl_window_from_handle(window_equip);
-    auto& gl = r_ogl_state->gl;
 
     ////////////////////////////
     //- dmylo: do passes
@@ -1350,3 +1393,5 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
   }
   ProfEnd();
 }
+
+#undef gl

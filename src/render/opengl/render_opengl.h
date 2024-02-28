@@ -65,20 +65,24 @@ struct R_OGL_Tex2D
   R_Tex2DKind kind;
   Vec2S32 size;
   R_Tex2DFormat format;
+
+  //-dmylo: linked list of textures to upload :sync_upload
+  R_OGL_Tex2D *upload_next;
+  void* upload_data;
 };
 
 struct R_OGL_Buffer
 {
   R_OGL_Buffer *next;
 
-  //-dmylo: linked list of buffers to upload :sync_upload
-  R_OGL_Buffer *upload_next;
-  void* upload_data;
-
   U64 generation;
   GLuint buffer;
   R_BufferKind kind;
   U64 size;
+
+  //-dmylo: linked list of buffers to upload :sync_upload
+  R_OGL_Buffer *upload_next;
+  void* upload_data;
 };
 
 struct R_OGL_Window
@@ -103,6 +107,21 @@ struct R_OGL_FlushBuffer
   GLuint buffer;
 };
 
+// -dmylo: structure holding data for a synchronous fill operation :sync_upload
+struct R_OGL_Fill_Tex2D
+{
+  R_OGL_Fill_Tex2D *next;
+  R_OGL_Tex2D *texture;
+  Rng2S32 subrect;
+  void *data;
+};
+
+struct R_OGL_Tex2DFormat {
+  GLenum internal_format;
+  GLenum data_format;
+  GLenum data_type;
+};
+
 typedef HGLRC WINAPI wgl_create_context_attribs_arb(HDC hDC, HGLRC hShareContext,
                                                     const int *attribList);
 typedef BOOL wgl_choose_pixel_format_arb(HDC hdc, const int *piAttribIList,
@@ -113,7 +132,7 @@ struct R_OGL_State
 {
   // dmylo: OpenGL loaded functions
   bool initialized;
-  R_OGL_Functions gl;
+  R_OGL_Functions gl_functions;
 
   // dmylo: win32 OpenGL initialization stuff
   wgl_create_context_attribs_arb *wglCreateContextAttribsARB;
@@ -166,6 +185,8 @@ struct R_OGL_State
   //- dmylo: arena holding data to upload for current frame :sync_upload
   Arena *upload_arena;
   R_OGL_Buffer *first_buffer_to_upload;
+  R_OGL_Tex2D *first_texture_to_upload;
+  R_OGL_Fill_Tex2D *first_texture_to_fill;
 };
 
 ////////////////////////////////
@@ -178,6 +199,20 @@ global R_OGL_Buffer r_ogl_buffer_nil = {&r_ogl_buffer_nil};
 ////////////////////////////////
 //~ dmylo: Helpers
 
-// TODO(dmylo): declare helpers here
+internal R_OGL_Window * r_ogl_window_from_handle(R_Handle handle);
+internal R_Handle r_ogl_handle_from_window(R_OGL_Window *window);
+internal R_OGL_Tex2D * r_ogl_tex2d_from_handle(R_Handle handle);
+internal R_Handle r_ogl_handle_from_tex2d(R_OGL_Tex2D *texture);
+internal R_OGL_Buffer * r_ogl_buffer_from_handle(R_Handle handle);
+internal R_Handle r_ogl_handle_from_buffer(R_OGL_Buffer *buffer);
+internal GLuint r_ogl_instance_buffer_from_size(U64 size);
+internal GLuint r_ogl_compile_shader(String8 common, String8 src, GLenum kind);
+internal GLuint r_ogl_link_shaders(GLuint vs, GLuint fs);
+internal void r_ogl_initialize_window(OS_Handle handle);
+internal void r_ogl_initialize(OS_Handle handle);
+internal void r_ogl_upload_buffer(R_OGL_Buffer *buffer);
+internal void r_ogl_upload_texture(R_OGL_Tex2D *texture);
+internal void r_ogl_fill_tex2d_region(R_OGL_Tex2D *texture);
+internal R_OGL_Tex2DFormat r_ogl_tex2d_format(R_Tex2DFormat format);
 
 #endif // RENDER_OPENGL_H
