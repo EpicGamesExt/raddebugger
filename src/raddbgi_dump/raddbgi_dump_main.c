@@ -64,6 +64,7 @@ entry_point(CmdLine *cmd_line)
     DumpFlag_Scopes             = (1<<13),
     DumpFlag_ScopeVMap          = (1<<14),
     DumpFlag_NameMaps           = (1<<15),
+    DumpFlag_Strings            = (1<<16),
   };
   String8 input_name = {0};
   String8 input_data = {0};
@@ -402,6 +403,19 @@ entry_point(CmdLine *cmd_line)
           }
         }
         str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+      str8_list_push(arena, &dump, str8_lit("\n"));
+    }
+    
+    //- rjf: STRINGS
+    if(dump_flags & DumpFlag_Strings)
+    {
+      str8_list_pushf(arena, &dump, "# STRINGS:\n");
+      for(U64 string_idx = 0; string_idx < raddbg->string_count; string_idx += 1)
+      {
+        String8 string = {0};
+        string.str = rdi_string_from_idx(raddbg, string_idx, &string.size);
+        str8_list_pushf(arena, &dump, " string[%I64u]: \"%S\"\n", string_idx, string);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
