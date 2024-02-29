@@ -315,7 +315,7 @@ r_init(CmdLine *cmdln)
     r_ogl_state->wglCreateContextAttribsARB = (wgl_create_context_attribs_arb*)wglGetProcAddress("wglCreateContextAttribsARB");
     r_ogl_state->wglChoosePixelFormatARB = (wgl_choose_pixel_format_arb*)wglGetProcAddress("wglChoosePixelFormatARB");
 
-    ReleaseDC(r_ogl_state->fake_window, fake_dc);
+    r_ogl_state->fake_window_dc = fake_dc;
 
     if(!ok) {
       char buffer[256] = {0};
@@ -349,7 +349,7 @@ r_init(CmdLine *cmdln)
 #define WGL_SAMPLES_ARB                         0x2042
 
 internal void
-r_ogl_initialize_window(OS_Handle handle)
+r_ogl_initialize_window(OS_Handle handle, R_OGL_Window* window)
 {
   //- dmylo: map os window handle -> hwnd
   HWND hwnd = {0};
@@ -381,11 +381,11 @@ r_ogl_initialize_window(OS_Handle handle)
   DescribePixelFormat(window_dc, suggested_format_index, sizeof(PIXELFORMATDESCRIPTOR), &suggested_format);
   SetPixelFormat(window_dc, suggested_format_index, &suggested_format);
 
-  ReleaseDC(hwnd, window_dc);
+  window->dc = window_dc;
 }
 
 internal void
-r_ogl_initialize(OS_Handle handle)
+r_ogl_initialize(OS_Handle handle, R_OGL_Window *window)
 {
   //- dmylo: map os window handle -> hwnd
   HWND hwnd = {0};
@@ -393,7 +393,6 @@ r_ogl_initialize(OS_Handle handle)
     W32_Window *w32_layer_window = w32_window_from_os_window(handle);
     hwnd = w32_hwnd_from_window(w32_layer_window);
   }
-  HDC window_dc = GetDC(hwnd);
 
   // Create a modern context with the first window DC
   int attribs[] =
@@ -408,9 +407,8 @@ r_ogl_initialize(OS_Handle handle)
       0
   };
 
-  HGLRC glrc = r_ogl_state->wglCreateContextAttribsARB(window_dc, 0, attribs);
-  bool ok = wglMakeCurrent(window_dc, glrc);
-  ReleaseDC(hwnd, window_dc);
+  HGLRC glrc = r_ogl_state->wglCreateContextAttribsARB(window->dc, 0, attribs);
+  bool ok = wglMakeCurrent(window->dc, glrc);
 
   if(!ok) {
     char buffer[256] = {0};
@@ -424,8 +422,10 @@ r_ogl_initialize(OS_Handle handle)
 
   //- dmylo: Now that we have a modern context, cleanup the fake context and the fake window.
   wglDeleteContext(r_ogl_state->fake_glrc);
+  ReleaseDC(r_ogl_state->fake_window, r_ogl_state->fake_window_dc);
   DestroyWindow(r_ogl_state->fake_window);
   r_ogl_state->fake_glrc = 0;
+  r_ogl_state->fake_window_dc = 0;
   r_ogl_state->fake_window = 0;
 
   //- dmylo: Load function pointers.
@@ -452,7 +452,6 @@ r_ogl_initialize(OS_Handle handle)
     // buffers
     gl.GenBuffers(1, &r_ogl_state->instance_scratch_buffer_64kb);
     gl.BindBuffer(GL_ARRAY_BUFFER, r_ogl_state->instance_scratch_buffer_64kb);
-    gl.BufferData(GL_ARRAY_BUFFER, KB(64), 0, GL_STREAM_DRAW);
 
     // vao
     gl.GenVertexArrays(1, &r_ogl_state->rect_vao);
@@ -465,7 +464,6 @@ r_ogl_initialize(OS_Handle handle)
     // uniforms
     gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
     gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
-    gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_Rect), 0, GL_STREAM_DRAW);
     r_ogl_state->rect_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->rect_shader, "Globals");
   }
 
@@ -479,7 +477,6 @@ r_ogl_initialize(OS_Handle handle)
     // uniforms
     gl.GenBuffers(1, &r_ogl_state->blur_uniform_buffer);
     gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->blur_uniform_buffer);
-    gl.BufferData(GL_UNIFORM_BUFFER, sizeof(R_OGL_Uniforms_BlurPass), 0, GL_STREAM_DRAW);
     r_ogl_state->blur_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->blur_shader, "Globals");
     r_ogl_state->blur_direction_uniform_location = gl.GetUniformLocation(r_ogl_state->blur_shader, "u_direction");
   }
@@ -541,14 +538,14 @@ r_window_equip(OS_Handle handle)
       window->generation += 1;
     }
 
-    r_ogl_initialize_window(handle);
+    r_ogl_initialize_window(handle, window);
 
     //- dmylo: we delay OpenGL state initialization to the first time a window
     // is created, because we need a window with a modern context to load
     // the functions we need.
     if(!r_ogl_state->initialized)
     {
-      r_ogl_initialize(handle);
+      r_ogl_initialize(handle, window);
       r_ogl_state->initialized = true;
       just_initialized = true;
     }
@@ -572,13 +569,21 @@ r_window_equip(OS_Handle handle)
 }
 
 r_hook void
-r_window_unequip(OS_Handle window, R_Handle equip_handle)
+r_window_unequip(OS_Handle window_handle, R_Handle equip_handle)
 {
   ProfBeginFunction();
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
+    //- dmylo: map os window handle -> hwnd
+    HWND hwnd = {0};
+    {
+      W32_Window *w32_layer_window = w32_window_from_os_window(window_handle);
+      hwnd = w32_hwnd_from_window(w32_layer_window);
+    }
+
     R_OGL_Window *window = r_ogl_window_from_handle(equip_handle);
     window->generation += 1;
+    ReleaseDC(hwnd, window->dc);
     SLLStackPush(r_ogl_state->first_free_window, window);
   }
   ProfEnd();
@@ -840,9 +845,7 @@ r_window_begin_frame(OS_Handle window_handle, R_Handle window_equip)
     }
 
     //- dmylo: bind main context to the window.
-    HDC window_dc = GetDC(hwnd);
-    bool ok = wglMakeCurrent(window_dc, r_ogl_state->glrc);
-    ReleaseDC(hwnd, window_dc);
+    bool ok = wglMakeCurrent(window->dc, r_ogl_state->glrc);
 
     //- dmylo: get resolution
     Rng2F32 client_rect = os_client_rect_from_window(window_handle);
@@ -928,7 +931,7 @@ r_window_end_frame(OS_Handle window_handle, R_Handle window_equip)
   ProfBeginFunction();
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
-    R_OGL_Window *wnd = r_ogl_window_from_handle(window_equip);
+    R_OGL_Window *window = r_ogl_window_from_handle(window_equip);
 
     ////////////////////////////
     //- dmylo: finalize, by writing staging buffer out to window framebuffer
@@ -942,28 +945,20 @@ r_window_end_frame(OS_Handle window_handle, R_Handle window_equip)
       gl.Disable(GL_CULL_FACE);
       gl.Disable(GL_BLEND);
 
-      Vec2S32 resolution = wnd->last_resolution;
+      Vec2S32 resolution = window->last_resolution;
       gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
 
       gl.UseProgram(r_ogl_state->finalize_shader);
 
       gl.ActiveTexture(GL_TEXTURE0);
-      gl.BindTexture(GL_TEXTURE_2D, wnd->stage_color);
+      gl.BindTexture(GL_TEXTURE_2D, window->stage_color);
       gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
       gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
       gl.DrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     }
 
-    HWND hwnd = {0};
-    {
-      W32_Window *w32_layer_window = w32_window_from_os_window(window_handle);
-      hwnd = w32_hwnd_from_window(w32_layer_window);
-    }
-    HDC window_dc = GetDC(hwnd);
-
-    SwapBuffers(window_dc);
-    ReleaseDC(hwnd, window_dc);
+    SwapBuffers(window->dc);
   }
   ProfEnd();
 }
@@ -1045,19 +1040,6 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
               gl.BufferData(GL_ARRAY_BUFFER, batches->byte_count, dst_ptr, GL_STREAM_DRAW);
 
               temp_end(temp);
-
-              //- dmylo: Equivalent mapping code, much slower on nvidia driver, likely forcing GPU synchronization
-              //         instead of providing a new driver-managed buffer for some reason.
-              //
-              // gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
-              // U8* dst_ptr = (U8*)gl.MapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-              // U64 off = 0;
-              // for(R_BatchNode *batch_n = batches->first; batch_n != 0; batch_n = batch_n->next)
-              // {
-              //   MemoryCopy(dst_ptr+off, batch_n->v.v, batch_n->v.byte_count);
-              //   off += batch_n->v.byte_count;
-              // }
-              // gl.UnmapBuffer(GL_ARRAY_BUFFER);
             }
 
             for(U32 i = 0; i < 8; i++) {
@@ -1109,22 +1091,13 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
               uniforms.xform_scale.y = length_2f32(xform_2x2_col1);
             }
 
+            // dmylo: uniform
             GLuint uniform_buffer = r_ogl_state->rect_uniform_buffer;
             {
-              gl.BindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
+              gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
               gl.BufferData(GL_UNIFORM_BUFFER, sizeof(uniforms), &uniforms, GL_STREAM_DRAW);
-
-              // dmylo: Equivalent mapping code, much slower on nvidia driver, likely forcing GPU synchronization
-              //         instead of providing a new driver-managed buffer for some reason.
-              //
-              // U8* dst_ptr = (U8*)gl.MapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-              // MemoryCopy((U8 *)dst_ptr, &uniforms, sizeof(uniforms));
-              // gl.UnmapBuffer(GL_UNIFORM_BUFFER);
             }
-
-            // dmylo: bind uniform buffer
             gl.UniformBlockBinding(r_ogl_state->rect_shader, r_ogl_state->rect_uniform_block_index, 0);
-            gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
 
             // dmylo: activate and bind texture
             gl.ActiveTexture(GL_TEXTURE0);
@@ -1194,10 +1167,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             gl.Disable(GL_STENCIL_TEST);
             gl.Disable(GL_SCISSOR_TEST);
             gl.Disable(GL_CULL_FACE);
-
-            // dmylo: blending
-            gl.Enable(GL_BLEND);
-            gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            gl.Disable(GL_BLEND);
 
             Vec2S32 resolution = wnd->last_resolution;
             gl.Viewport(0, 0, (F32)resolution.x, (F32)resolution.y);
@@ -1223,10 +1193,9 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
 
             GLuint uniform_buffer = r_ogl_state->blur_uniform_buffer;
             {
-              gl.BindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
+              gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
               gl.BufferData(GL_UNIFORM_BUFFER, sizeof(uniforms), &uniforms, GL_STREAM_DRAW);
               gl.UniformBlockBinding(r_ogl_state->blur_shader, r_ogl_state->blur_uniform_block_index, 0);
-              gl.BindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer);
             }
 
             // dmylo: Horizontal pass

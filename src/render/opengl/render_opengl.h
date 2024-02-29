@@ -99,6 +99,8 @@ struct R_OGL_Window
   GLuint geo3d_depth;
 
   Vec2S32 last_resolution;
+
+  HDC dc;
 };
 
 struct R_OGL_FlushBuffer
@@ -139,6 +141,7 @@ struct R_OGL_State
   wgl_choose_pixel_format_arb *wglChoosePixelFormatARB;
   HGLRC glrc;
   HWND fake_window;
+  HDC fake_window_dc;
   HGLRC fake_glrc;
 
   // dmylo: state
@@ -208,8 +211,8 @@ internal R_Handle r_ogl_handle_from_buffer(R_OGL_Buffer *buffer);
 internal GLuint r_ogl_instance_buffer_from_size(U64 size);
 internal GLuint r_ogl_compile_shader(String8 common, String8 src, GLenum kind);
 internal GLuint r_ogl_link_shaders(GLuint vs, GLuint fs);
-internal void r_ogl_initialize_window(OS_Handle handle);
-internal void r_ogl_initialize(OS_Handle handle);
+internal void r_ogl_initialize_window(OS_Handle handle, R_OGL_Window* window);
+internal void r_ogl_initialize(OS_Handle handle, R_OGL_Window* window);
 internal void r_ogl_upload_buffer(R_OGL_Buffer *buffer);
 internal void r_ogl_upload_texture(R_OGL_Tex2D *texture);
 internal void r_ogl_fill_tex2d_region(R_OGL_Tex2D *texture);
