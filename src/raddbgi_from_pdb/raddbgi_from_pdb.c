@@ -3542,27 +3542,28 @@ p2r_bake_scopes_strings_task__entry_point(Arena *arena, void *p)
 internal void *
 p2r_bake_string_map_sort_task__entry_point(Arena *arena, void *p)
 {
-  P2R_SortBakeStringMapIn *in = (P2R_SortBakeStringMapIn *)p;
-  RDIM_BakeStringChunkListMap *dst = rdim_bake_string_chunk_list_map_make(arena, in->top);
-  ProfScope("sort bake string chunk list map")
+  P2R_SortBakeStringMapSlotsIn *in = (P2R_SortBakeStringMapSlotsIn *)p;
+  ProfScope("sort bake string chunk list map range")
   {
-    for(U64 slot_idx = 0; slot_idx < in->top->slots_count; slot_idx += 1)
+    for(U64 slot_idx = in->slot_idx;
+        slot_idx < in->slot_idx+in->slot_count;
+        slot_idx += 1)
     {
-      if(in->map->slots[slot_idx] != 0)
+      if(in->src_map->slots[slot_idx] != 0)
       {
-        if(in->map->slots[slot_idx]->total_count > 1)
+        if(in->src_map->slots[slot_idx]->total_count > 1)
         {
-          dst->slots[slot_idx] = push_array(arena, RDIM_BakeStringChunkList, 1);
-          *dst->slots[slot_idx] = rdim_bake_string_chunk_list_sorted_from_unsorted(arena, in->map->slots[slot_idx]);
+          in->dst_map->slots[slot_idx] = push_array(arena, RDIM_BakeStringChunkList, 1);
+          *in->dst_map->slots[slot_idx] = rdim_bake_string_chunk_list_sorted_from_unsorted(arena, in->src_map->slots[slot_idx]);
         }
         else
         {
-          dst->slots[slot_idx] = in->map->slots[slot_idx];;
+          in->dst_map->slots[slot_idx] = in->src_map->slots[slot_idx];
         }
       }
     }
   }
-  return dst;
+  return 0;
 }
 
 //- rjf: pass 1: interner/deduper map builds
@@ -3860,12 +3861,36 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
   }
   
-  //- rjf: kick off string map sorting task
-  P2R_SortBakeStringMapIn sort_bake_string_map_in = {&bake_string_chunk_list_map_topology, unsorted_bake_string_chunk_list_map};
-  TS_Ticket sort_bake_string_map_ticket = ts_kickoff(p2r_bake_string_map_sort_task__entry_point, 0, &sort_bake_string_map_in);
+  //- rjf: kick off string map sorting tasks
+  TS_TicketList sort_bake_string_map_task_tickets = {0};
+  RDIM_BakeStringChunkListMap *sorted_bake_string_chunk_list_map__in_progress = rdim_bake_string_chunk_list_map_make(arena, &bake_string_chunk_list_map_topology);
+  {
+    U64 slots_per_task = 65536;
+    U64 num_tasks = (bake_string_chunk_list_map_topology.slots_count+slots_per_task-1)/slots_per_task;
+    for(U64 task_idx = 0; task_idx < num_tasks; task_idx += 1)
+    {
+      P2R_SortBakeStringMapSlotsIn *in = push_array(scratch.arena, P2R_SortBakeStringMapSlotsIn, 1);
+      {
+        in->top = &bake_string_chunk_list_map_topology;
+        in->src_map = unsorted_bake_string_chunk_list_map;
+        in->dst_map = sorted_bake_string_chunk_list_map__in_progress;
+        in->slot_idx = task_idx*slots_per_task;
+        in->slot_count = slots_per_task;
+        if(in->slot_idx+in->slot_count > bake_string_chunk_list_map_topology.slots_count)
+        {
+          in->slot_count = bake_string_chunk_list_map_topology.slots_count - in->slot_idx;
+        }
+      }
+      ts_ticket_list_push(scratch.arena, &sort_bake_string_map_task_tickets, ts_kickoff(p2r_bake_string_map_sort_task__entry_point, 0, in));
+    }
+  }
   
-  //- rjf: join string map sorting task
-  RDIM_BakeStringChunkListMap *sorted_bake_string_chunk_list_map = ts_join_struct(sort_bake_string_map_ticket, max_U64, RDIM_BakeStringChunkListMap);
+  //- rjf: join string map sorting tasks
+  for(TS_TicketNode *n = sort_bake_string_map_task_tickets.first; n != 0; n = n->next)
+  {
+    ts_join(n->v, max_U64);
+  }
+  RDIM_BakeStringChunkListMap *sorted_bake_string_chunk_list_map = sorted_bake_string_chunk_list_map__in_progress;
   
   //- rjf: build finalized string map
   RDIM_BakeStringChunkListMapBaseIndices bake_string_chunk_list_map_base_idxes = rdim_bake_string_chunk_list_base_indices_from_map(arena, &bake_string_chunk_list_map_topology, sorted_bake_string_chunk_list_map);

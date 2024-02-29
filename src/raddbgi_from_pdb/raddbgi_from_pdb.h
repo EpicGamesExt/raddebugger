@@ -289,11 +289,14 @@ struct P2R_BakeScopesStringsIn
 
 //- rjf: string map sorting task types
 
-typedef struct P2R_SortBakeStringMapIn P2R_SortBakeStringMapIn;
-struct P2R_SortBakeStringMapIn
+typedef struct P2R_SortBakeStringMapSlotsIn P2R_SortBakeStringMapSlotsIn;
+struct P2R_SortBakeStringMapSlotsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap *map;
+  RDIM_BakeStringChunkListMap *src_map;
+  RDIM_BakeStringChunkListMap *dst_map;
+  U64 slot_idx;
+  U64 slot_count;
 };
 
 //- rjf: OLD string map baking types
