@@ -1861,47 +1861,47 @@ rdim_bake_string_chunk_list_map_push_path_tree(RDIM_Arena *arena, RDIM_BakeStrin
 //- rjf: chunk-granularity bake string gathering passes
 
 RDI_PROC void
-rdim_bake_string_chunk_list_map_push_src_file_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SrcFileChunkNode *chunk)
+rdim_bake_string_chunk_list_map_push_src_file_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SrcFile *v, RDI_U64 count)
 {
-  for(RDI_U64 idx = 0; idx < chunk->count; idx += 1)
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, chunk->v[idx].normal_full_path);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, v[idx].normal_full_path);
   }
 }
 
 RDI_PROC void
-rdim_bake_string_chunk_list_map_push_unit_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UnitChunkNode *chunk)
+rdim_bake_string_chunk_list_map_push_unit_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Unit *v, RDI_U64 count)
 {
-  for(RDI_U64 idx = 0; idx < chunk->count; idx += 1)
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, chunk->v[idx].unit_name);
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, chunk->v[idx].compiler_name);
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, chunk->v[idx].source_file);
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, chunk->v[idx].object_file);
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, chunk->v[idx].archive_file);
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, chunk->v[idx].build_path);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].unit_name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].compiler_name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].source_file);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].object_file);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].archive_file);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].build_path);
   }
 }
 
 RDI_PROC void
-rdim_bake_string_chunk_list_map_push_type_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_TypeChunkNode *chunk)
+rdim_bake_string_chunk_list_map_push_type_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Type *v, RDI_U64 count)
 {
-  for(RDI_U64 idx = 0; idx < chunk->count; idx += 1)
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 64, chunk->v[idx].name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 64, v[idx].name);
   }
 }
 
 RDI_PROC void
-rdim_bake_string_chunk_list_map_push_udt_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UDTChunkNode *chunk)
+rdim_bake_string_chunk_list_map_push_udt_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UDT *v, RDI_U64 count)
 {
-  for(RDI_U64 idx = 0; idx < chunk->count; idx += 1)
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    for(RDIM_UDTMember *mem = chunk->v[idx].first_member; mem != 0; mem = mem->next)
+    for(RDIM_UDTMember *mem = v[idx].first_member; mem != 0; mem = mem->next)
     {
       rdim_bake_string_chunk_list_map_insert(arena, top, map, 64, mem->name);
     }
-    for(RDIM_UDTEnumVal *mem = chunk->v[idx].first_enum_val; mem != 0; mem = mem->next)
+    for(RDIM_UDTEnumVal *mem = v[idx].first_enum_val; mem != 0; mem = mem->next)
     {
       rdim_bake_string_chunk_list_map_insert(arena, top, map, 64, mem->name);
     }
@@ -1909,21 +1909,21 @@ rdim_bake_string_chunk_list_map_push_udt_chunk(RDIM_Arena *arena, RDIM_BakeStrin
 }
 
 RDI_PROC void
-rdim_bake_string_chunk_list_map_push_symbol_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SymbolChunkNode *chunk)
+rdim_bake_string_chunk_list_map_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Symbol *v, RDI_U64 count)
 {
-  for(RDI_U64 idx = 0; idx < chunk->count; idx += 1)
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, chunk->v[idx].name);
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, chunk->v[idx].link_name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, v[idx].name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, v[idx].link_name);
   }
 }
 
 RDI_PROC void
-rdim_bake_string_chunk_list_map_push_scope_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_ScopeChunkNode *chunk)
+rdim_bake_string_chunk_list_map_push_scope_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Scope *v, RDI_U64 count)
 {
-  for(RDI_U64 idx = 0; idx < chunk->count; idx += 1)
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    for(RDIM_Local *local = chunk->v[idx].first_local; local != 0; local = local->next)
+    for(RDIM_Local *local = v[idx].first_local; local != 0; local = local->next)
     {
       rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, local->name);
     }
@@ -1937,7 +1937,7 @@ rdim_bake_string_chunk_list_map_push_src_files(RDIM_Arena *arena, RDIM_BakeStrin
 {
   for(RDIM_SrcFileChunkNode *n = list->first; n != 0; n = n->next)
   {
-    rdim_bake_string_chunk_list_map_push_src_file_chunk(arena, top, map, n);
+    rdim_bake_string_chunk_list_map_push_src_file_slice(arena, top, map, n->v, n->count);
   }
 }
 
@@ -1946,7 +1946,7 @@ rdim_bake_string_chunk_list_map_push_units(RDIM_Arena *arena, RDIM_BakeStringChu
 {
   for(RDIM_UnitChunkNode *n = list->first; n != 0; n = n->next)
   {
-    rdim_bake_string_chunk_list_map_push_unit_chunk(arena, top, map, n);
+    rdim_bake_string_chunk_list_map_push_unit_slice(arena, top, map, n->v, n->count);
   }
 }
 
@@ -1955,7 +1955,7 @@ rdim_bake_string_chunk_list_map_push_types(RDIM_Arena *arena, RDIM_BakeStringChu
 {
   for(RDIM_TypeChunkNode *n = list->first; n != 0; n = n->next)
   {
-    rdim_bake_string_chunk_list_map_push_type_chunk(arena, top, map, n);
+    rdim_bake_string_chunk_list_map_push_type_slice(arena, top, map, n->v, n->count);
   }
 }
 
@@ -1964,7 +1964,7 @@ rdim_bake_string_chunk_list_map_push_udts(RDIM_Arena *arena, RDIM_BakeStringChun
 {
   for(RDIM_UDTChunkNode *n = list->first; n != 0; n = n->next)
   {
-    rdim_bake_string_chunk_list_map_push_udt_chunk(arena, top, map, n);
+    rdim_bake_string_chunk_list_map_push_udt_slice(arena, top, map, n->v, n->count);
   }
 }
 
@@ -1973,7 +1973,7 @@ rdim_bake_string_chunk_list_map_push_symbols(RDIM_Arena *arena, RDIM_BakeStringC
 {
   for(RDIM_SymbolChunkNode *n = list->first; n != 0; n = n->next)
   {
-    rdim_bake_string_chunk_list_map_push_symbol_chunk(arena, top, map, n);
+    rdim_bake_string_chunk_list_map_push_symbol_slice(arena, top, map, n->v, n->count);
   }
 }
 
@@ -1982,7 +1982,7 @@ rdim_bake_string_chunk_list_map_push_scopes(RDIM_Arena *arena, RDIM_BakeStringCh
 {
   for(RDIM_ScopeChunkNode *n = list->first; n != 0; n = n->next)
   {
-    rdim_bake_string_chunk_list_map_push_scope_chunk(arena, top, map, n);
+    rdim_bake_string_chunk_list_map_push_scope_slice(arena, top, map, n->v, n->count);
   }
 }
 

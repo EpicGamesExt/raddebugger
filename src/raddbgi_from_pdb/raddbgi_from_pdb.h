@@ -259,11 +259,20 @@ struct P2R_BakeUnitsStringsIn
   RDIM_UnitChunkList *list;
 };
 
+typedef struct P2R_BakeTypesStringsInNode P2R_BakeTypesStringsInNode;
+struct P2R_BakeTypesStringsInNode
+{
+  P2R_BakeTypesStringsInNode *next;
+  RDIM_Type *v;
+  RDI_U64 count;
+};
+
 typedef struct P2R_BakeTypesStringsIn P2R_BakeTypesStringsIn;
 struct P2R_BakeTypesStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_TypeChunkList *list;
+  P2R_BakeTypesStringsInNode *first;
+  P2R_BakeTypesStringsInNode *last;
 };
 
 typedef struct P2R_BakeUDTsStringsIn P2R_BakeUDTsStringsIn;

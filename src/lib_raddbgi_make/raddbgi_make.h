@@ -585,13 +585,6 @@ struct RDIM_TypeChunkList
   RDI_U64 total_count;
 };
 
-typedef struct RDIM_TypeArray RDIM_TypeArray;
-struct RDIM_TypeArray
-{
-  RDIM_Type *v;
-  RDI_U64 count;
-};
-
 ////////////////////////////////
 //~ rjf: User-Defined-Type Info Types
 
@@ -1195,13 +1188,13 @@ RDI_PROC void rdim_bake_string_chunk_list_map_push_top_level_info(RDIM_Arena *ar
 RDI_PROC void rdim_bake_string_chunk_list_map_push_binary_sections(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_BinarySectionList *secs);
 RDI_PROC void rdim_bake_string_chunk_list_map_push_path_tree(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_BakePathTree *path_tree);
 
-//- rjf: chunk-granularity bake string gathering passes
-RDI_PROC void rdim_bake_string_chunk_list_map_push_src_file_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SrcFileChunkNode *chunk);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_unit_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UnitChunkNode *chunk);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_type_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_TypeChunkNode *chunk);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_udt_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UDTChunkNode *chunk);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_symbol_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SymbolChunkNode *chunk);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_scope_chunk(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_ScopeChunkNode *chunk);
+//- rjf: slice-granularity bake string gathering passes
+RDI_PROC void rdim_bake_string_chunk_list_map_push_src_file_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SrcFile *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_chunk_list_map_push_unit_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Unit *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_chunk_list_map_push_type_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Type *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_chunk_list_map_push_udt_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UDT *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_chunk_list_map_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Symbol *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_chunk_list_map_push_scope_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Scope *v, RDI_U64 count);
 
 //- rjf: list-granularity bake string gathering passes
 RDI_PROC void rdim_bake_string_chunk_list_map_push_src_files(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SrcFileChunkList *list);

@@ -839,288 +839,291 @@ p2r_itype_chain_build_task__entry_point(Arena *arena, void *p)
 {
   Temp scratch = scratch_begin(&arena, 1);
   P2R_ITypeChainBuildIn *in = (P2R_ITypeChainBuildIn *)p;
-  for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
+  ProfScope("dependency itype chain build")
   {
-    //- rjf: push initial itype - should be final-visited-itype for this itype
+    for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
     {
-      P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-      c->itype = itype;
-      SLLStackPush(in->itype_chains[itype], c);
-    }
-    
-    //- rjf: skip basic types for dependency walk
-    if(itype < in->tpi_leaf->itype_first)
-    {
-      continue;
-    }
-    
-    //- rjf: walk dependent types, push to chain
-    P2R_TypeIdChain start_walk_task = {0, itype};
-    P2R_TypeIdChain *first_walk_task = &start_walk_task;
-    P2R_TypeIdChain *last_walk_task = &start_walk_task;
-    for(P2R_TypeIdChain *walk_task = first_walk_task;
-        walk_task != 0;
-        walk_task = walk_task->next)
-    {
-      CV_TypeId walk_itype = in->itype_fwd_map[walk_task->itype] ? in->itype_fwd_map[walk_task->itype] : walk_task->itype;
-      if(walk_itype < in->tpi_leaf->itype_first)
+      //- rjf: push initial itype - should be final-visited-itype for this itype
+      {
+        P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+        c->itype = itype;
+        SLLStackPush(in->itype_chains[itype], c);
+      }
+      
+      //- rjf: skip basic types for dependency walk
+      if(itype < in->tpi_leaf->itype_first)
       {
         continue;
       }
-      CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[walk_itype-in->tpi_leaf->itype_first];
-      CV_LeafKind kind = range->hdr.kind;
-      U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
-      if(range->off+range->hdr.size <= in->tpi_leaf->data.size &&
-         range->off+2+header_struct_size <= in->tpi_leaf->data.size &&
-         range->hdr.size >= 2)
+      
+      //- rjf: walk dependent types, push to chain
+      P2R_TypeIdChain start_walk_task = {0, itype};
+      P2R_TypeIdChain *first_walk_task = &start_walk_task;
+      P2R_TypeIdChain *last_walk_task = &start_walk_task;
+      for(P2R_TypeIdChain *walk_task = first_walk_task;
+          walk_task != 0;
+          walk_task = walk_task->next)
       {
-        U8 *itype_leaf_first = in->tpi_leaf->data.str + range->off+2;
-        U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
-        switch(kind)
+        CV_TypeId walk_itype = in->itype_fwd_map[walk_task->itype] ? in->itype_fwd_map[walk_task->itype] : walk_task->itype;
+        if(walk_itype < in->tpi_leaf->itype_first)
         {
-          default:{}break;
-          
-          //- rjf: MODIFIER
-          case CV_LeafKind_MODIFIER:
+          continue;
+        }
+        CV_RecRange *range = &in->tpi_leaf->leaf_ranges.ranges[walk_itype-in->tpi_leaf->itype_first];
+        CV_LeafKind kind = range->hdr.kind;
+        U64 header_struct_size = cv_header_struct_size_from_leaf_kind(kind);
+        if(range->off+range->hdr.size <= in->tpi_leaf->data.size &&
+           range->off+2+header_struct_size <= in->tpi_leaf->data.size &&
+           range->hdr.size >= 2)
+        {
+          U8 *itype_leaf_first = in->tpi_leaf->data.str + range->off+2;
+          U8 *itype_leaf_opl   = itype_leaf_first + range->hdr.size-2;
+          switch(kind)
           {
-            CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+            default:{}break;
             
-            // rjf: push dependent itype to chain
+            //- rjf: MODIFIER
+            case CV_LeafKind_MODIFIER:
             {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
+              CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+              
+              // rjf: push dependent itype to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
             
-            // rjf: push task to walk dependency itype
+            //- rjf: POINTER
+            case CV_LeafKind_POINTER:
             {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-          }break;
-          
-          //- rjf: POINTER
-          case CV_LeafKind_POINTER:
-          {
-            CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+              CV_LeafModifier *lf = (CV_LeafModifier *)itype_leaf_first;
+              
+              // rjf: push dependent itype to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
             
-            // rjf: push dependent itype to chain
+            //- rjf: PROCEDURE
+            case CV_LeafKind_PROCEDURE:
             {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
+              CV_LeafProcedure *lf = (CV_LeafProcedure *)itype_leaf_first;
+              
+              // rjf: push return itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk return itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              
+              // rjf: unpack arglist range
+              CV_RecRange *arglist_range = &in->tpi_leaf->leaf_ranges.ranges[lf->arg_itype-in->tpi_leaf->itype_first];
+              if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
+                 arglist_range->hdr.size<2 ||
+                 arglist_range->off + arglist_range->hdr.size > in->tpi_leaf->data.size)
+              {
+                break;
+              }
+              U8 *arglist_first = in->tpi_leaf->data.str + arglist_range->off + 2;
+              U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
+              if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
+              {
+                break;
+              }
+              
+              // rjf: unpack arglist info
+              CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
+              CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
+              U32 arglist_itypes_count = arglist->count;
+              
+              // rjf: push arg types to chain
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk arg types
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
             
-            // rjf: push task to walk dependency itype
+            //- rjf: MFUNCTION
+            case CV_LeafKind_MFUNCTION:
             {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-          }break;
-          
-          //- rjf: PROCEDURE
-          case CV_LeafKind_PROCEDURE:
-          {
-            CV_LeafProcedure *lf = (CV_LeafProcedure *)itype_leaf_first;
+              CV_LeafMFunction *lf = (CV_LeafMFunction *)itype_leaf_first;
+              
+              // rjf: push dependent itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->arg_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->this_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itypes
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->ret_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->arg_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->this_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              
+              // rjf: unpack arglist range
+              CV_RecRange *arglist_range = &in->tpi_leaf->leaf_ranges.ranges[lf->arg_itype-in->tpi_leaf->itype_first];
+              if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
+                 arglist_range->hdr.size<2 ||
+                 arglist_range->off + arglist_range->hdr.size > in->tpi_leaf->data.size)
+              {
+                break;
+              }
+              U8 *arglist_first = in->tpi_leaf->data.str + arglist_range->off + 2;
+              U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
+              if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
+              {
+                break;
+              }
+              
+              // rjf: unpack arglist info
+              CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
+              CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
+              U32 arglist_itypes_count = arglist->count;
+              
+              // rjf: push arg types to chain
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk arg types
+              for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = arglist_itypes_base[idx];
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
             
-            // rjf: push return itypes to chain
+            //- rjf: BITFIELD
+            case CV_LeafKind_BITFIELD:
             {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->ret_itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
+              CV_LeafBitField *lf = (CV_LeafBitField *)itype_leaf_first;
+              
+              // rjf: push dependent itype to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itype
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
             
-            // rjf: push task to walk return itype
+            //- rjf: ARRAY
+            case CV_LeafKind_ARRAY:
             {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->ret_itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
+              CV_LeafArray *lf = (CV_LeafArray *)itype_leaf_first;
+              
+              // rjf: push dependent itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->entry_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->index_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itypes
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->entry_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->index_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
             
-            // rjf: unpack arglist range
-            CV_RecRange *arglist_range = &in->tpi_leaf->leaf_ranges.ranges[lf->arg_itype-in->tpi_leaf->itype_first];
-            if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
-               arglist_range->hdr.size<2 ||
-               arglist_range->off + arglist_range->hdr.size > in->tpi_leaf->data.size)
+            //- rjf: ENUM
+            case CV_LeafKind_ENUM:
             {
-              break;
-            }
-            U8 *arglist_first = in->tpi_leaf->data.str + arglist_range->off + 2;
-            U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
-            if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
-            {
-              break;
-            }
-            
-            // rjf: unpack arglist info
-            CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
-            CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
-            U32 arglist_itypes_count = arglist->count;
-            
-            // rjf: push arg types to chain
-            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = arglist_itypes_base[idx];
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            
-            // rjf: push task to walk arg types
-            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = arglist_itypes_base[idx];
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-          }break;
-          
-          //- rjf: MFUNCTION
-          case CV_LeafKind_MFUNCTION:
-          {
-            CV_LeafMFunction *lf = (CV_LeafMFunction *)itype_leaf_first;
-            
-            // rjf: push dependent itypes to chain
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->ret_itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->arg_itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->this_itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            
-            // rjf: push task to walk dependency itypes
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->ret_itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->arg_itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->this_itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-            
-            // rjf: unpack arglist range
-            CV_RecRange *arglist_range = &in->tpi_leaf->leaf_ranges.ranges[lf->arg_itype-in->tpi_leaf->itype_first];
-            if(arglist_range->hdr.kind != CV_LeafKind_ARGLIST ||
-               arglist_range->hdr.size<2 ||
-               arglist_range->off + arglist_range->hdr.size > in->tpi_leaf->data.size)
-            {
-              break;
-            }
-            U8 *arglist_first = in->tpi_leaf->data.str + arglist_range->off + 2;
-            U8 *arglist_opl   = arglist_first+arglist_range->hdr.size-2;
-            if(arglist_first + sizeof(CV_LeafArgList) > arglist_opl)
-            {
-              break;
-            }
-            
-            // rjf: unpack arglist info
-            CV_LeafArgList *arglist = (CV_LeafArgList*)arglist_first;
-            CV_TypeId *arglist_itypes_base = (CV_TypeId *)(arglist+1);
-            U32 arglist_itypes_count = arglist->count;
-            
-            // rjf: push arg types to chain
-            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = arglist_itypes_base[idx];
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            
-            // rjf: push task to walk arg types
-            for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = arglist_itypes_base[idx];
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-          }break;
-          
-          //- rjf: BITFIELD
-          case CV_LeafKind_BITFIELD:
-          {
-            CV_LeafBitField *lf = (CV_LeafBitField *)itype_leaf_first;
-            
-            // rjf: push dependent itype to chain
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            
-            // rjf: push task to walk dependency itype
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-          }break;
-          
-          //- rjf: ARRAY
-          case CV_LeafKind_ARRAY:
-          {
-            CV_LeafArray *lf = (CV_LeafArray *)itype_leaf_first;
-            
-            // rjf: push dependent itypes to chain
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->entry_itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->index_itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            
-            // rjf: push task to walk dependency itypes
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->entry_itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->index_itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-          }break;
-          
-          //- rjf: ENUM
-          case CV_LeafKind_ENUM:
-          {
-            CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
-            
-            // rjf: push dependent itypes to chain
-            {
-              P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
-              c->itype = lf->base_itype;
-              SLLStackPush(in->itype_chains[itype], c);
-            }
-            
-            // rjf: push task to walk dependency itypes
-            {
-              P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
-              c->itype = lf->base_itype;
-              SLLQueuePush(first_walk_task, last_walk_task, c);
-            }
-          }break;
+              CV_LeafEnum *lf = (CV_LeafEnum *)itype_leaf_first;
+              
+              // rjf: push dependent itypes to chain
+              {
+                P2R_TypeIdChain *c = push_array(arena, P2R_TypeIdChain, 1);
+                c->itype = lf->base_itype;
+                SLLStackPush(in->itype_chains[itype], c);
+              }
+              
+              // rjf: push task to walk dependency itypes
+              {
+                P2R_TypeIdChain *c = push_array(scratch.arena, P2R_TypeIdChain, 1);
+                c->itype = lf->base_itype;
+                SLLQueuePush(first_walk_task, last_walk_task, c);
+              }
+            }break;
+          }
         }
       }
     }
@@ -3506,7 +3509,13 @@ p2r_bake_types_strings_task__entry_point(Arena *arena, void *p)
 {
   P2R_BakeTypesStringsIn *in = (P2R_BakeTypesStringsIn *)p;
   RDIM_BakeStringChunkListMap *map = rdim_bake_string_chunk_list_map_make(arena, in->top);
-  ProfScope("bake type strings") rdim_bake_string_chunk_list_map_push_types(arena, in->top, map, in->list);
+  ProfScope("bake type strings")
+  {
+    for(P2R_BakeTypesStringsInNode *n = in->first; n != 0; n = n->next)
+    {
+      rdim_bake_string_chunk_list_map_push_type_slice(arena, in->top, map, n->v, n->count);
+    }
+  }
   return map;
 }
 
@@ -3791,10 +3800,21 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     
     // rjf: types
     {
-      P2R_BakeTypesStringsIn *in = push_array(scratch.arena, P2R_BakeTypesStringsIn, 1);
-      in->top = &bake_string_chunk_list_map_topology;
-      in->list = &params->types;
-      ts_ticket_list_push(scratch.arena, &bake_string_map_build_tickets, ts_kickoff(p2r_bake_types_strings_task__entry_point, 0, in));
+      for(RDIM_TypeChunkNode *chunk = params->types.first; chunk != 0; chunk = chunk->next)
+      {
+        U64 types_per_task = chunk->count;
+        U64 tasks_per_this_chunk = (chunk->count+types_per_task-1)/types_per_task;
+        for(U64 task_idx = 0; task_idx < tasks_per_this_chunk; task_idx += 1)
+        {
+          P2R_BakeTypesStringsIn *in = push_array(scratch.arena, P2R_BakeTypesStringsIn, 1);
+          in->top = &bake_string_chunk_list_map_topology;
+          P2R_BakeTypesStringsInNode *n = push_array(scratch.arena, P2R_BakeTypesStringsInNode, 1);
+          SLLQueuePush(in->first, in->last, n);
+          n->v = chunk->v + task_idx*types_per_task;
+          n->count = types_per_task;
+          ts_ticket_list_push(scratch.arena, &bake_string_map_build_tickets, ts_kickoff(p2r_bake_types_strings_task__entry_point, 0, in));
+        }
+      }
     }
     
     // rjf: UDTs
@@ -3838,7 +3858,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
   }
   
-  //- rjf: kick off pass 1 tasks
+  //- rjf: kick off name map building tasks
   P2R_BuildBakeNameMapIn build_bake_name_map_in[RDI_NameMapKind_COUNT] = {0};
   TS_Ticket build_bake_name_map_ticket[RDI_NameMapKind_COUNT] = {0};
   for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
@@ -3856,8 +3876,12 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   {
     for(TS_TicketNode *n = bake_string_map_build_tickets.first; n != 0; n = n->next)
     {
+      ProfBegin("waiting...");
       RDIM_BakeStringChunkListMap *map = ts_join_struct(n->v, max_U64, RDIM_BakeStringChunkListMap);
+      ProfEnd();
+      ProfBegin("joining map...");
       rdim_bake_string_chunk_list_map_join_in_place(&bake_string_chunk_list_map_topology, unsorted_bake_string_chunk_list_map, map);
+      ProfEnd();
     }
   }
   
@@ -3893,8 +3917,12 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   RDIM_BakeStringChunkListMap *sorted_bake_string_chunk_list_map = sorted_bake_string_chunk_list_map__in_progress;
   
   //- rjf: build finalized string map
+  ProfBegin("build finalized string map base indices");
   RDIM_BakeStringChunkListMapBaseIndices bake_string_chunk_list_map_base_idxes = rdim_bake_string_chunk_list_base_indices_from_map(arena, &bake_string_chunk_list_map_topology, sorted_bake_string_chunk_list_map);
+  ProfEnd();
+  ProfBegin("build finalized string map");
   RDIM_BakeStringMapFinal bake_strings = rdim_bake_string_map_final_from_chunk_list_map(arena, &bake_string_chunk_list_map_topology, &bake_string_chunk_list_map_base_idxes, sorted_bake_string_chunk_list_map);
+  ProfEnd();
   
   //- rjf: kick off pass 2 tasks
   P2R_BakeUnitsTopLevelIn bake_units_top_level_in = {&bake_strings, path_tree, params};
