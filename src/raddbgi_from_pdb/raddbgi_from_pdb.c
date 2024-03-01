@@ -3807,17 +3807,6 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       }
     }
     
-#if 0
-    // rjf: UDTs
-    {
-      P2R_BakeUDTsStringsIn *in = push_array(scratch.arena, P2R_BakeUDTsStringsIn, 1);
-      in->top = &bake_string_chunk_list_map_topology;
-      in->maps = bake_string_chunk_list_maps__in_progress;
-      in->list = &params->udts;
-      ts_ticket_list_push(scratch.arena, &bake_string_map_build_tickets, ts_kickoff(p2r_bake_udts_strings_task__entry_point, 0, in));
-    }
-#endif
-    
     // rjf: global variables
     {
       P2R_BakeSymbolsStringsIn *in = push_array(scratch.arena, P2R_BakeSymbolsStringsIn, 1);
@@ -3890,7 +3879,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   TS_TicketList sort_bake_string_map_task_tickets = {0};
   RDIM_BakeStringChunkListMap *sorted_bake_string_chunk_list_map__in_progress = rdim_bake_string_chunk_list_map_make(arena, &bake_string_chunk_list_map_topology);
   {
-    U64 slots_per_task = 65536;
+    U64 slots_per_task = 4096;
     U64 num_tasks = (bake_string_chunk_list_map_topology.slots_count+slots_per_task-1)/slots_per_task;
     for(U64 task_idx = 0; task_idx < num_tasks; task_idx += 1)
     {
@@ -3911,9 +3900,12 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   }
   
   //- rjf: join string map sorting tasks
-  for(TS_TicketNode *n = sort_bake_string_map_task_tickets.first; n != 0; n = n->next)
+  ProfScope("join string map sorting tasks")
   {
-    ts_join(n->v, max_U64);
+    for(TS_TicketNode *n = sort_bake_string_map_task_tickets.first; n != 0; n = n->next)
+    {
+      ts_join(n->v, max_U64);
+    }
   }
   RDIM_BakeStringChunkListMap *sorted_bake_string_chunk_list_map = sorted_bake_string_chunk_list_map__in_progress;
   
@@ -4138,4 +4130,3 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   scratch_end(scratch);
   return out;
 }
-
