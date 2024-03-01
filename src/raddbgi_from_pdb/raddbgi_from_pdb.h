@@ -249,6 +249,7 @@ typedef struct P2R_BakeSrcFilesStringsIn P2R_BakeSrcFilesStringsIn;
 struct P2R_BakeSrcFilesStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
+  RDIM_BakeStringChunkListMap **maps;
   RDIM_SrcFileChunkList *list;
 };
 
@@ -256,6 +257,7 @@ typedef struct P2R_BakeUnitsStringsIn P2R_BakeUnitsStringsIn;
 struct P2R_BakeUnitsStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
+  RDIM_BakeStringChunkListMap **maps;
   RDIM_UnitChunkList *list;
 };
 
@@ -271,21 +273,33 @@ typedef struct P2R_BakeTypesStringsIn P2R_BakeTypesStringsIn;
 struct P2R_BakeTypesStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
+  RDIM_BakeStringChunkListMap **maps;
   P2R_BakeTypesStringsInNode *first;
   P2R_BakeTypesStringsInNode *last;
+};
+
+typedef struct P2R_BakeUDTsStringsInNode P2R_BakeUDTsStringsInNode;
+struct P2R_BakeUDTsStringsInNode
+{
+  P2R_BakeUDTsStringsInNode *next;
+  RDIM_UDT *v;
+  RDI_U64 count;
 };
 
 typedef struct P2R_BakeUDTsStringsIn P2R_BakeUDTsStringsIn;
 struct P2R_BakeUDTsStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_UDTChunkList *list;
+  RDIM_BakeStringChunkListMap **maps;
+  P2R_BakeUDTsStringsInNode *first;
+  P2R_BakeUDTsStringsInNode *last;
 };
 
 typedef struct P2R_BakeSymbolsStringsIn P2R_BakeSymbolsStringsIn;
 struct P2R_BakeSymbolsStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
+  RDIM_BakeStringChunkListMap **maps;
   RDIM_SymbolChunkList *list;
 };
 
@@ -293,6 +307,7 @@ typedef struct P2R_BakeScopesStringsIn P2R_BakeScopesStringsIn;
 struct P2R_BakeScopesStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
+  RDIM_BakeStringChunkListMap **maps;
   RDIM_ScopeChunkList *list;
 };
 
