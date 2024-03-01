@@ -8,9 +8,6 @@
 
 #pragma comment(lib, "opengl32")
 
-// #define IMGL3W_IMPL
-// #include "render_opengl_defines.h"
-
 ////////////////////////////////
 //~ dmylo: Generated Code
 
@@ -55,7 +52,7 @@ struct R_OGL_Uniforms_Mesh
 };
 
 ////////////////////////////////
-// dmylo: Main State Types
+//~ dmylo: Main State Types
 
 struct R_OGL_Tex2D
 {
@@ -66,7 +63,7 @@ struct R_OGL_Tex2D
   Vec2S32 size;
   R_Tex2DFormat format;
 
-  //-dmylo: linked list of textures to upload :sync_upload
+  // dmylo: linked list of textures to upload :sync_upload
   R_OGL_Tex2D *upload_next;
   void* upload_data;
 };
@@ -80,7 +77,7 @@ struct R_OGL_Buffer
   R_BufferKind kind;
   U64 size;
 
-  //-dmylo: linked list of buffers to upload :sync_upload
+  // dmylo: linked list of buffers to upload :sync_upload
   R_OGL_Buffer *upload_next;
   void* upload_data;
 };
@@ -109,7 +106,7 @@ struct R_OGL_FlushBuffer
   GLuint buffer;
 };
 
-// -dmylo: structure holding data for a synchronous fill operation :sync_upload
+// dmylo: structure holding data for a synchronous fill operation :sync_upload
 struct R_OGL_Fill_Tex2D
 {
   R_OGL_Fill_Tex2D *next;
@@ -137,12 +134,14 @@ struct R_OGL_State
   R_OGL_Functions gl_functions;
 
   // dmylo: win32 OpenGL initialization stuff
+  HGLRC glrc;
   wgl_create_context_attribs_arb *wglCreateContextAttribsARB;
   wgl_choose_pixel_format_arb *wglChoosePixelFormatARB;
-  HGLRC glrc;
-  HWND fake_window;
-  HDC fake_window_dc;
-  HGLRC fake_glrc;
+  PIXELFORMATDESCRIPTOR pixel_format;
+  int pixel_format_index;
+  HWND dummy_window;
+  HDC dummy_window_dc;
+
 
   // dmylo: state
   Arena        *arena;
@@ -180,12 +179,12 @@ struct R_OGL_State
   // dmylo: backups
   R_Handle backup_texture;
 
-  //- dmylo: buffers to flush at subsequent frame
+  // dmylo: buffers to flush at subsequent frame
   Arena *buffer_flush_arena;
   R_OGL_FlushBuffer *first_buffer_to_flush;
   R_OGL_FlushBuffer *last_buffer_to_flush;
 
-  //- dmylo: arena holding data to upload for current frame :sync_upload
+  // dmylo: arena holding data to upload for current frame :sync_upload
   Arena *upload_arena;
   R_OGL_Buffer *first_buffer_to_upload;
   R_OGL_Tex2D *first_texture_to_upload;
@@ -211,8 +210,6 @@ internal R_Handle r_ogl_handle_from_buffer(R_OGL_Buffer *buffer);
 internal GLuint r_ogl_instance_buffer_from_size(U64 size);
 internal GLuint r_ogl_compile_shader(String8 common, String8 src, GLenum kind);
 internal GLuint r_ogl_link_shaders(GLuint vs, GLuint fs);
-internal void r_ogl_initialize_window(OS_Handle handle, R_OGL_Window* window);
-internal void r_ogl_initialize(OS_Handle handle, R_OGL_Window* window);
 internal void r_ogl_upload_buffer(R_OGL_Buffer *buffer);
 internal void r_ogl_upload_texture(R_OGL_Tex2D *texture);
 internal void r_ogl_fill_tex2d_region(R_OGL_Tex2D *texture);

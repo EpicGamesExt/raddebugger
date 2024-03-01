@@ -12,7 +12,7 @@
 ////////////////////////////////
 //~ dmylo: Helpers
 
-//-dmylo shortcut to access function pointers
+// dmylo shortcut to access function pointers
 #define gl r_ogl_state->gl_functions
 
 internal R_OGL_Window *
@@ -246,7 +246,6 @@ r_ogl_link_shaders(GLuint vs, GLuint fs)
 //~ dmylo: Backend Hook Implementations
 
 //- dmylo: top-level layer initialization
-
 r_hook void
 r_init(CmdLine *cmdln)
 {
@@ -279,18 +278,18 @@ r_init(CmdLine *cmdln)
     wcex.lpfnWndProc = DefWindowProcA;
     wcex.hInstance = instance;
     wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wcex.lpszClassName = "FakeOpenGLWindow";
+    wcex.lpszClassName = "DummyOpenGLWindowClass";
     RegisterClassExA(&wcex);
 
-    r_ogl_state->fake_window = CreateWindowExA(0,
-      "FakeOpenGLWindow", "Fake Window",      // window class, title
+    HWND old_window = CreateWindowExA(0,
+      "DummyOpenGLWindowClass", "old_dummy",  // window class, title
       WS_OVERLAPPEDWINDOW,                    // style
       CW_USEDEFAULT, CW_USEDEFAULT,           // position x, y
       1, 1,                                   // width, height
       NULL, NULL,                             // parent window, menu
       instance, NULL);                        // instance, param
 
-    HDC fake_dc = GetDC(r_ogl_state->fake_window);
+    HDC old_dc = GetDC(old_window);
 
     PIXELFORMATDESCRIPTOR desired_format = {};
     desired_format.nSize = sizeof(PIXELFORMATDESCRIPTOR);
@@ -303,19 +302,17 @@ r_init(CmdLine *cmdln)
     desired_format.cStencilBits = 8;
     desired_format.iLayerType = PFD_MAIN_PLANE;
 
-    int suggested_format_index = ChoosePixelFormat(fake_dc, &desired_format);
+    int suggested_format_index = ChoosePixelFormat(old_dc, &desired_format);
 
-    PIXELFORMATDESCRIPTOR suggested_format;
-    DescribePixelFormat(fake_dc, suggested_format_index, sizeof(PIXELFORMATDESCRIPTOR), &suggested_format);
-    SetPixelFormat(fake_dc, suggested_format_index, &suggested_format);
+    PIXELFORMATDESCRIPTOR suggested_format = {};
+    DescribePixelFormat(old_dc, suggested_format_index, sizeof(PIXELFORMATDESCRIPTOR), &suggested_format);
+    SetPixelFormat(old_dc, suggested_format_index, &suggested_format);
 
-    r_ogl_state->fake_glrc = wglCreateContext(fake_dc);
-    BOOL ok = wglMakeCurrent(fake_dc, r_ogl_state->fake_glrc);
+    HGLRC old_glrc = wglCreateContext(old_dc);
+    BOOL ok = wglMakeCurrent(old_dc, old_glrc);
 
     r_ogl_state->wglCreateContextAttribsARB = (wgl_create_context_attribs_arb*)wglGetProcAddress("wglCreateContextAttribsARB");
     r_ogl_state->wglChoosePixelFormatARB = (wgl_choose_pixel_format_arb*)wglGetProcAddress("wglChoosePixelFormatARB");
-
-    r_ogl_state->fake_window_dc = fake_dc;
 
     if(!ok) {
       char buffer[256] = {0};
@@ -323,8 +320,18 @@ r_init(CmdLine *cmdln)
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       os_exit_process(1);
     }
-  }
-}
+
+    // dmylo: Create an other dummy window with the modern context.
+    // This will persist for the whole duration of the application.
+    r_ogl_state->dummy_window = CreateWindowExA(0,
+      "DummyOpenGLWindowClass", "modern_dummy", // window class, title
+      WS_OVERLAPPEDWINDOW,                      // style
+      CW_USEDEFAULT, CW_USEDEFAULT,             // position x, y
+      1, 1,                                     // width, height
+      NULL, NULL,                               // parent window, menu
+      instance, NULL);                          // instance, param
+
+    r_ogl_state->dummy_window_dc = GetDC(r_ogl_state->dummy_window);
 
 #define WGL_DRAW_TO_WINDOW_ARB                  0x2001
 #define WGL_SUPPORT_OPENGL_ARB                  0x2010
@@ -335,6 +342,34 @@ r_init(CmdLine *cmdln)
 #define WGL_DEPTH_BITS_ARB                      0x2022
 #define WGL_STENCIL_BITS_ARB                    0x2023
 #define WGL_TYPE_RGBA_ARB                       0x202B
+#define WGL_SAMPLE_BUFFERS_ARB                  0x2041
+#define WGL_SAMPLES_ARB                         0x2042
+
+    // dmylo: set the pixel format of the new window, this is what
+    // every future window will also use.
+    const int pixel_attributes[] =
+    {
+        WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+        WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+        WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+        WGL_ALPHA_BITS_ARB,     8,
+        WGL_COLOR_BITS_ARB,     32,
+        WGL_DEPTH_BITS_ARB,     24,
+        WGL_STENCIL_BITS_ARB,   8,
+        // WGL_SAMPLE_BUFFERS_ARB, 0, // Number of buffers
+        // WGL_SAMPLES_ARB, 1,        // Number of samples
+        0
+    };
+
+    UINT num_suggestions;
+    r_ogl_state->wglChoosePixelFormatARB(r_ogl_state->dummy_window_dc, pixel_attributes, 0, 1, &suggested_format_index, &num_suggestions);
+    DescribePixelFormat(r_ogl_state->dummy_window_dc, suggested_format_index, sizeof(PIXELFORMATDESCRIPTOR), &suggested_format);
+    SetPixelFormat(r_ogl_state->dummy_window_dc, suggested_format_index, &suggested_format);
+
+    // dmylo: save pixel format information for future windows
+    r_ogl_state->pixel_format = suggested_format;
+    r_ogl_state->pixel_format_index = suggested_format_index;
 
 #define WGL_CONTEXT_MAJOR_VERSION_ARB           0x2091
 #define WGL_CONTEXT_MINOR_VERSION_ARB           0x2092
@@ -345,173 +380,129 @@ r_init(CmdLine *cmdln)
 #define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB  0x0002
 #define WGL_CONTEXT_CORE_PROFILE_BIT_ARB        0x0001
 #define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
-#define WGL_SAMPLE_BUFFERS_ARB                  0x2041
-#define WGL_SAMPLES_ARB                         0x2042
 
-internal void
-r_ogl_initialize_window(OS_Handle handle, R_OGL_Window* window)
-{
-  //- dmylo: map os window handle -> hwnd
-  HWND hwnd = {0};
-  {
-    W32_Window *w32_layer_window = w32_window_from_os_window(handle);
-    hwnd = w32_hwnd_from_window(w32_layer_window);
-  }
-  HDC window_dc = GetDC(hwnd);
+    // dmylo: create a modern context
+    int attribs[] =
+    {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+        WGL_CONTEXT_MINOR_VERSION_ARB, 1,
+        WGL_CONTEXT_FLAGS_ARB,
+        // WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB disable stuff prior to 3.0
+        /*WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB |*/ WGL_CONTEXT_DEBUG_BIT_ARB,
+        WGL_CONTEXT_PROFILE_MASK_ARB,
+        WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+        0
+    };
 
-  const int pixel_attributes[] =
-  {
-      WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-      WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-      WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-      WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-      WGL_ALPHA_BITS_ARB,     8,
-      WGL_COLOR_BITS_ARB,     32,
-      WGL_DEPTH_BITS_ARB,     24,
-      WGL_STENCIL_BITS_ARB,   8,
-      // WGL_SAMPLE_BUFFERS_ARB, 0, // Number of buffers
-      // WGL_SAMPLES_ARB, 1,        // Number of samples
-      0
-  };
-  S32 suggested_format_index = 0;
-  U32 num_suggestions = 0;
-  r_ogl_state->wglChoosePixelFormatARB(window_dc, pixel_attributes, 0, 1, &suggested_format_index, &num_suggestions);
-
-  PIXELFORMATDESCRIPTOR suggested_format = {};
-  DescribePixelFormat(window_dc, suggested_format_index, sizeof(PIXELFORMATDESCRIPTOR), &suggested_format);
-  SetPixelFormat(window_dc, suggested_format_index, &suggested_format);
-
-  window->dc = window_dc;
-}
-
-internal void
-r_ogl_initialize(OS_Handle handle, R_OGL_Window *window)
-{
-  //- dmylo: map os window handle -> hwnd
-  HWND hwnd = {0};
-  {
-    W32_Window *w32_layer_window = w32_window_from_os_window(handle);
-    hwnd = w32_hwnd_from_window(w32_layer_window);
-  }
-
-  // Create a modern context with the first window DC
-  int attribs[] =
-  {
-      WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-      WGL_CONTEXT_MINOR_VERSION_ARB, 1,
-      WGL_CONTEXT_FLAGS_ARB,
-      // WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB disable stuff prior to 3.0
-      /*WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB |*/ WGL_CONTEXT_DEBUG_BIT_ARB,
-      WGL_CONTEXT_PROFILE_MASK_ARB,
-      WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-      0
-  };
-
-  HGLRC glrc = r_ogl_state->wglCreateContextAttribsARB(window->dc, 0, attribs);
-  bool ok = wglMakeCurrent(window->dc, glrc);
-
-  if(!ok) {
-    char buffer[256] = {0};
-    raddbg_snprintf(buffer, sizeof(buffer), "OpenGL modern context initialization failed (win32 error code: %d)", GetLastError());
-    os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-    os_exit_process(1);
-  }
-
-  //- dmylo: init global context
-  r_ogl_state->glrc = glrc;
-
-  //- dmylo: Now that we have a modern context, cleanup the fake context and the fake window.
-  wglDeleteContext(r_ogl_state->fake_glrc);
-  ReleaseDC(r_ogl_state->fake_window, r_ogl_state->fake_window_dc);
-  DestroyWindow(r_ogl_state->fake_window);
-  r_ogl_state->fake_glrc = 0;
-  r_ogl_state->fake_window_dc = 0;
-  r_ogl_state->fake_window = 0;
-
-  //- dmylo: Load function pointers.
-  HMODULE opengl_module = LoadLibraryA("opengl32.dll");
-  for (U64 i = 0; i < ArrayCount(r_ogl_g_function_names); i++)
-  {
-    void* ptr = wglGetProcAddress(r_ogl_g_function_names[i]);
-    if(!ptr) {
-      //- dmylo: older functions are still in opengl32, so we also try that.
-      ptr = GetProcAddress(opengl_module, r_ogl_g_function_names[i]);
-    }
-    if(!ptr) {
-      //- dmylo: if still not found error out.
+    r_ogl_state->glrc = r_ogl_state->wglCreateContextAttribsARB(r_ogl_state->dummy_window_dc, 0, attribs);
+    ok = wglMakeCurrent(r_ogl_state->dummy_window_dc, r_ogl_state->glrc);
+    if(!ok) {
       char buffer[256] = {0};
-      raddbg_snprintf(buffer, sizeof(buffer), "Failed to load OpenGL function: %s", r_ogl_g_function_names[i]);
+      raddbg_snprintf(buffer, sizeof(buffer), "OpenGL modern context initialization failed (win32 error code: %d)", GetLastError());
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       os_exit_process(1);
     }
-    r_ogl_state->gl_functions._pointers[i] = ptr;
+
+    //- dmylo: Now that we have a modern context, cleanup the old context and the old window.
+    wglDeleteContext(old_glrc);
+    ReleaseDC(old_window, old_dc);
+    DestroyWindow(old_window);
   }
 
-  //- dmylo: UI pass
+  //-dmylo: Load OpenGL function and initialize state for the various passes
   {
-    // buffers
-    gl.GenBuffers(1, &r_ogl_state->instance_scratch_buffer_64kb);
-    gl.BindBuffer(GL_ARRAY_BUFFER, r_ogl_state->instance_scratch_buffer_64kb);
+    // dmylo: Load function pointers.
+    HMODULE opengl_module = LoadLibraryA("opengl32.dll");
+    for (U64 i = 0; i < ArrayCount(r_ogl_g_function_names); i++)
+    {
+      void* ptr = wglGetProcAddress(r_ogl_g_function_names[i]);
+      if(!ptr) {
+        // dmylo: older functions are still in opengl32, so we also try that.
+        ptr = GetProcAddress(opengl_module, r_ogl_g_function_names[i]);
+      }
+      if(!ptr) {
+        // dmylo: if still not found error out.
+        char buffer[256] = {0};
+        raddbg_snprintf(buffer, sizeof(buffer), "Failed to load OpenGL function: %s", r_ogl_g_function_names[i]);
+        os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+        os_exit_process(1);
+      }
+      r_ogl_state->gl_functions._pointers[i] = ptr;
+    }
 
-    // vao
-    gl.GenVertexArrays(1, &r_ogl_state->rect_vao);
+    //- dmylo: UI pass
+    {
+      // buffers
+      gl.GenBuffers(1, &r_ogl_state->instance_scratch_buffer_64kb);
+      gl.BindBuffer(GL_ARRAY_BUFFER, r_ogl_state->instance_scratch_buffer_64kb);
 
-    // shaders
-    GLuint rect_vs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_vs_src, GL_VERTEX_SHADER);
-    GLuint rect_fs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_fs_src, GL_FRAGMENT_SHADER);
-    r_ogl_state->rect_shader = r_ogl_link_shaders(rect_vs, rect_fs);
+      // vao
+      gl.GenVertexArrays(1, &r_ogl_state->rect_vao);
 
-    // uniforms
-    gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
-    gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
-    r_ogl_state->rect_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->rect_shader, "Globals");
+      // shaders
+      GLuint rect_vs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_vs_src, GL_VERTEX_SHADER);
+      GLuint rect_fs = r_ogl_compile_shader(r_ogl_g_rect_common_src, r_ogl_g_rect_fs_src, GL_FRAGMENT_SHADER);
+      r_ogl_state->rect_shader = r_ogl_link_shaders(rect_vs, rect_fs);
+
+      // uniforms
+      gl.GenBuffers(1, &r_ogl_state->rect_uniform_buffer);
+      gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->rect_uniform_buffer);
+      r_ogl_state->rect_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->rect_shader, "Globals");
+    }
+
+    //- dmylo: Blur pass
+    {
+      // shaders
+      GLuint blur_vs = r_ogl_compile_shader(r_ogl_g_blur_common_src, r_ogl_g_blur_vs_src, GL_VERTEX_SHADER);
+      GLuint blur_fs = r_ogl_compile_shader(r_ogl_g_blur_common_src, r_ogl_g_blur_fs_src, GL_FRAGMENT_SHADER);
+      r_ogl_state->blur_shader = r_ogl_link_shaders(blur_vs, blur_fs);
+
+      // uniforms
+      gl.GenBuffers(1, &r_ogl_state->blur_uniform_buffer);
+      gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->blur_uniform_buffer);
+      r_ogl_state->blur_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->blur_shader, "Globals");
+      r_ogl_state->blur_direction_uniform_location = gl.GetUniformLocation(r_ogl_state->blur_shader, "u_direction");
+    }
+
+    //- dmylo: Geo3D pass
+    {
+      // vao
+      gl.GenVertexArrays(1, &r_ogl_state->geo3d_vao);
+
+      // geo shaders
+      GLuint geo3d_vs = r_ogl_compile_shader(r_ogl_g_mesh_common_src, r_ogl_g_mesh_vs_src, GL_VERTEX_SHADER);
+      GLuint geo3d_fs = r_ogl_compile_shader(r_ogl_g_mesh_common_src, r_ogl_g_mesh_fs_src, GL_FRAGMENT_SHADER);
+      r_ogl_state->geo3d_shader = r_ogl_link_shaders(geo3d_vs, geo3d_fs);
+
+      // uniforms
+      r_ogl_state->geo3d_uniform_location = gl.GetUniformLocation(r_ogl_state->geo3d_shader, "xform");
+
+      // composite shaders
+      GLuint geo3dcomposite_vs = r_ogl_compile_shader(r_ogl_g_geo3dcomposite_common_src, r_ogl_g_geo3dcomposite_vs_src, GL_VERTEX_SHADER);
+      GLuint geo3dcomposite_fs = r_ogl_compile_shader(r_ogl_g_geo3dcomposite_common_src, r_ogl_g_geo3dcomposite_fs_src, GL_FRAGMENT_SHADER);
+      r_ogl_state->geo3dcomposite_shader = r_ogl_link_shaders(geo3dcomposite_vs, geo3dcomposite_fs);
+    }
+
+    //- dmylo: Finalize
+    {
+      GLuint finalize_vs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_vs_src, GL_VERTEX_SHADER);
+      GLuint finalize_fs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_fs_src, GL_FRAGMENT_SHADER);
+      r_ogl_state->finalize_shader = r_ogl_link_shaders(finalize_vs, finalize_fs);
+    }
+
+    //- dmylo: backup texture
+    {
+      U32 backup_texture_data[] =
+      {
+        0xff00ffff, 0x330033ff,
+        0x330033ff, 0xff00ffff,
+      };
+      r_ogl_state->backup_texture = r_tex2d_alloc(R_Tex2DKind_Static, v2s32(2, 2), R_Tex2DFormat_RGBA8, backup_texture_data);
+    }
   }
-
-  //- dmylo: Blur pass
-  {
-    // shaders
-    GLuint blur_vs = r_ogl_compile_shader(r_ogl_g_blur_common_src, r_ogl_g_blur_vs_src, GL_VERTEX_SHADER);
-    GLuint blur_fs = r_ogl_compile_shader(r_ogl_g_blur_common_src, r_ogl_g_blur_fs_src, GL_FRAGMENT_SHADER);
-    r_ogl_state->blur_shader = r_ogl_link_shaders(blur_vs, blur_fs);
-
-    // uniforms
-    gl.GenBuffers(1, &r_ogl_state->blur_uniform_buffer);
-    gl.BindBuffer(GL_UNIFORM_BUFFER, r_ogl_state->blur_uniform_buffer);
-    r_ogl_state->blur_uniform_block_index = gl.GetUniformBlockIndex(r_ogl_state->blur_shader, "Globals");
-    r_ogl_state->blur_direction_uniform_location = gl.GetUniformLocation(r_ogl_state->blur_shader, "u_direction");
-  }
-
-  //- dmylo: Geo3D pass
-  {
-    // vao
-    gl.GenVertexArrays(1, &r_ogl_state->geo3d_vao);
-
-    // geo shaders
-    GLuint geo3d_vs = r_ogl_compile_shader(r_ogl_g_mesh_common_src, r_ogl_g_mesh_vs_src, GL_VERTEX_SHADER);
-    GLuint geo3d_fs = r_ogl_compile_shader(r_ogl_g_mesh_common_src, r_ogl_g_mesh_fs_src, GL_FRAGMENT_SHADER);
-    r_ogl_state->geo3d_shader = r_ogl_link_shaders(geo3d_vs, geo3d_fs);
-
-    // uniforms
-    r_ogl_state->geo3d_uniform_location = gl.GetUniformLocation(r_ogl_state->geo3d_shader, "xform");
-
-    // composite shaders
-    GLuint geo3dcomposite_vs = r_ogl_compile_shader(r_ogl_g_geo3dcomposite_common_src, r_ogl_g_geo3dcomposite_vs_src, GL_VERTEX_SHADER);
-    GLuint geo3dcomposite_fs = r_ogl_compile_shader(r_ogl_g_geo3dcomposite_common_src, r_ogl_g_geo3dcomposite_fs_src, GL_FRAGMENT_SHADER);
-    r_ogl_state->geo3dcomposite_shader = r_ogl_link_shaders(geo3dcomposite_vs, geo3dcomposite_fs);
-  }
-
-  //- dmylo: Finalize
-  {
-    GLuint finalize_vs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_vs_src, GL_VERTEX_SHADER);
-    GLuint finalize_fs = r_ogl_compile_shader(r_ogl_g_finalize_common_src, r_ogl_g_finalize_fs_src, GL_FRAGMENT_SHADER);
-    r_ogl_state->finalize_shader = r_ogl_link_shaders(finalize_vs, finalize_fs);
-  }
-
-
 }
 
 //- dmylo: window setup/teardown
-
 r_hook R_Handle
 r_window_equip(OS_Handle handle)
 {
@@ -538,30 +529,18 @@ r_window_equip(OS_Handle handle)
       window->generation += 1;
     }
 
-    r_ogl_initialize_window(handle, window);
-
-    //- dmylo: we delay OpenGL state initialization to the first time a window
-    // is created, because we need a window with a modern context to load
-    // the functions we need.
-    if(!r_ogl_state->initialized)
+    //- dmylo: map os window handle -> hwnd
+    HWND hwnd = {0};
     {
-      r_ogl_initialize(handle, window);
-      r_ogl_state->initialized = true;
-      just_initialized = true;
+      W32_Window *w32_layer_window = w32_window_from_os_window(handle);
+      hwnd = w32_hwnd_from_window(w32_layer_window);
     }
 
-    result = r_ogl_handle_from_window(window);
-  }
+    //- dmylo: set pixel format on this window.
+    window->dc = GetDC(hwnd);
+    SetPixelFormat(window->dc, r_ogl_state->pixel_format_index, &r_ogl_state->pixel_format);
 
-  //- dmylo: do this after releasing the lock, as this is going to acquire it again.
-  if (just_initialized)
-  {
-    U32 backup_texture_data[] =
-    {
-      0xff00ffff, 0x330033ff,
-      0x330033ff, 0xff00ffff,
-    };
-    r_ogl_state->backup_texture = r_tex2d_alloc(R_Tex2DKind_Static, v2s32(2, 2), R_Tex2DFormat_RGBA8, backup_texture_data);
+    result = r_ogl_handle_from_window(window);
   }
 
   ProfEnd();
@@ -574,7 +553,7 @@ r_window_unequip(OS_Handle window_handle, R_Handle equip_handle)
   ProfBeginFunction();
   OS_MutexScopeW(r_ogl_state->device_rw_mutex)
   {
-    //- dmylo: map os window handle -> hwnd
+    // dmylo: map os window handle -> hwnd
     HWND hwnd = {0};
     {
       W32_Window *w32_layer_window = w32_window_from_os_window(window_handle);
@@ -583,6 +562,16 @@ r_window_unequip(OS_Handle window_handle, R_Handle equip_handle)
 
     R_OGL_Window *window = r_ogl_window_from_handle(equip_handle);
     window->generation += 1;
+
+    // dmylo: free buffers
+    if(window->stage_scratch_fbo)   { gl.DeleteFramebuffers(1, &window->stage_scratch_fbo); }
+    if(window->stage_scratch_color) { gl.DeleteTextures(1, &window->stage_scratch_color); }
+    if(window->stage_fbo)           { gl.DeleteFramebuffers(1, &window->stage_scratch_fbo); }
+    if(window->stage_color)         { gl.DeleteTextures(1, &window->stage_color); }
+    if(window->geo3d_fbo)           { gl.DeleteFramebuffers(1, &window->stage_scratch_fbo); }
+    if(window->geo3d_color)         { gl.DeleteTextures(1, &window->geo3d_color); }
+    if(window->geo3d_depth)         { gl.DeleteTextures(1, &window->geo3d_depth); }
+
     ReleaseDC(hwnd, window->dc);
     SLLStackPush(r_ogl_state->first_free_window, window);
   }
@@ -611,7 +600,7 @@ r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
     }
     texture->generation += 1;
 
-    //- dmylo: currently no multithreading support, so we just copy the data and push this
+    // dmylo: currently no multithreading support, so we just copy the data and push this
     // to a list that the main thread will upload to the gpu before rendering. :sync_upload
     if(data) {
       U64 size_in_bytes = r_tex2d_format_bytes_per_pixel_table[format] * size.x * size.y;
@@ -715,7 +704,7 @@ r_buffer_alloc(R_BufferKind kind, U64 size, void *data)
 
     buffer->generation += 1;
 
-    //- dmylo: currently no multithreading support, so we just copy the data and push this
+    // dmylo: currently no multithreading support, so we just copy the data and push this
     // to a list that the main thread will upload to the gpu before rendering. :sync_upload
     U8* ptr = (U8*)arena_push(r_ogl_state->upload_arena, size);
     MemoryCopy(ptr, (U8 *)data, size);
