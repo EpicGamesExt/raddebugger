@@ -473,39 +473,39 @@ internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkLis
 ////////////////////////////////
 //~ rjf: Initial Parsing & Preparation Pass Tasks
 
-internal void *p2r_exe_hash_task__entry_point(Arena *arena, void *p);
-internal void *p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p);
-internal void *p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p);
-internal void *p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p);
-internal void *p2r_c13_stream_parse_task__entry_point(Arena *arena, void *p);
-internal void *p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p);
-internal void *p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_exe_hash_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_tpi_hash_parse_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_tpi_leaf_parse_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_parse_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_c13_stream_parse_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_comp_unit_parse_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_comp_unit_contributions_parse_task__entry_point);
 
 ////////////////////////////////
 //~ rjf: Unit Conversion Tasks
 
-internal void *p2r_units_convert_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point);
 
 ////////////////////////////////
 //~ rjf: Link Name Map Building Tasks
 
-internal void *p2r_link_name_map_build_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_link_name_map_build_task__entry_point);
 
 ////////////////////////////////
 //~ rjf: Type Parsing/Conversion Tasks
 
-internal void *p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p);
-internal void *p2r_itype_chain_build_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_itype_fwd_map_fill_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_itype_chain_build_task__entry_point);
 
 ////////////////////////////////
 //~ rjf: UDT Conversion Tasks
 
-internal void *p2r_udt_convert_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_udt_convert_task__entry_point);
 
 ////////////////////////////////
 //~ rjf: Symbol Stream Conversion Tasks
 
-internal void *p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point);
 
 ////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
@@ -516,39 +516,39 @@ internal P2R_Convert2Bake *p2r_convert(Arena *arena, P2R_User2Convert *in);
 //~ rjf: Baking Stage Tasks
 
 //- rjf: unsorted bake string map building
-internal void *p2r_bake_src_files_strings_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_units_strings_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_types_strings_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_udts_strings_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_symbols_strings_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_scopes_strings_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_strings_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_units_strings_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_types_strings_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_strings_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_symbols_strings_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point);
 
 //- rjf: bake string map sorting
-internal void *p2r_bake_string_map_sort_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_sort_task__entry_point);
 
 //- rjf: pass 1: interner/deduper map builds
-internal void *p2r_build_bake_string_map_task__entry_point(Arena *arena, void *p);
-internal void *p2r_build_bake_name_map_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_build_bake_string_map_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_build_bake_name_map_task__entry_point);
 
 //- rjf: pass 2: string-map-dependent debug info stream builds
-internal void *p2r_bake_units_top_level_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_unit_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_unit_vmap_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_src_files_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_udts_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_global_variables_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_global_vmap_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_thread_variables_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_procedures_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_scopes_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_scope_vmap_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_file_paths_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_strings_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_units_top_level_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_vmap_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_global_variables_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_global_vmap_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_thread_variables_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_procedures_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_scope_vmap_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_file_paths_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_strings_task__entry_point);
 
 //- rjf: pass 3: idx-run-map-dependent debug info stream builds
-internal void *p2r_bake_type_nodes_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_name_map_task__entry_point(Arena *arena, void *p);
-internal void *p2r_bake_idx_runs_task__entry_point(Arena *arena, void *p);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_type_nodes_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_name_map_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_idx_runs_task__entry_point);
 
 ////////////////////////////////
 //~ rjf: Top-Level Baking Entry Point

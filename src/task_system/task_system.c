@@ -50,6 +50,15 @@ ts_init(void)
 }
 
 ////////////////////////////////
+//~ rjf: Top-Level Accessors
+
+internal U64
+ts_thread_count(void)
+{
+  return ts_shared->task_threads_count;
+}
+
+////////////////////////////////
 //~ rjf: High-Level Task Kickoff / Joining
 
 internal TS_Ticket
@@ -190,7 +199,7 @@ ts_task_thread__entry_point(void *p)
     }
     
     //- rjf: run task
-    void *task_result = task_function(task_arena, task_params);
+    void *task_result = task_function(task_arena, thread_idx, task_params);
     
     //- rjf: store into artifact
     U64 artifact_num = task_ticket.u64[0];

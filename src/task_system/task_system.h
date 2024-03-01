@@ -34,7 +34,8 @@ struct TS_TicketList
 ////////////////////////////////
 //~ rjf: Task Request Types
 
-typedef void *TS_TaskFunctionType(Arena *arena, void *user_data);
+#define TS_TASK_FUNCTION_DEF(name) void *name(Arena *arena, U64 thread_idx, void *p)
+typedef TS_TASK_FUNCTION_DEF(TS_TaskFunctionType);
 
 ////////////////////////////////
 //~ rjf: Task Artifact Cache Types
@@ -117,6 +118,11 @@ internal void ts_ticket_list_push(Arena *arena, TS_TicketList *list, TS_Ticket t
 //~ rjf: Top-Level Layer Initialization
 
 internal void ts_init(void);
+
+////////////////////////////////
+//~ rjf: Top-Level Accessors
+
+internal U64 ts_thread_count(void);
 
 ////////////////////////////////
 //~ rjf: High-Level Task Kickoff / Joining

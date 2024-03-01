@@ -460,8 +460,7 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDI
 ////////////////////////////////
 //~ rjf: Initial Parsing & Preparation Pass Tasks
 
-internal void *
-p2r_exe_hash_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_exe_hash_task__entry_point)
 {
   P2R_EXEHashIn *in = (P2R_EXEHashIn *)p;
   U64 *out = push_array(arena, U64, 1);
@@ -469,8 +468,7 @@ p2r_exe_hash_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
-internal void *
-p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_tpi_hash_parse_task__entry_point)
 {
   P2R_TPIHashParseIn *in = (P2R_TPIHashParseIn *)p;
   void *out = 0;
@@ -478,8 +476,7 @@ p2r_tpi_hash_parse_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
-internal void *
-p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_tpi_leaf_parse_task__entry_point)
 {
   P2R_TPILeafParseIn *in = (P2R_TPILeafParseIn *)p;
   void *out = 0;
@@ -487,8 +484,7 @@ p2r_tpi_leaf_parse_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
-internal void *
-p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_parse_task__entry_point)
 {
   P2R_SymbolStreamParseIn *in = (P2R_SymbolStreamParseIn *)p;
   void *out = 0;
@@ -496,8 +492,7 @@ p2r_symbol_stream_parse_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
-internal void *
-p2r_c13_stream_parse_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_c13_stream_parse_task__entry_point)
 {
   P2R_C13StreamParseIn *in = (P2R_C13StreamParseIn *)p;
   void *out = 0;
@@ -505,8 +500,7 @@ p2r_c13_stream_parse_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
-internal void *
-p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_comp_unit_parse_task__entry_point)
 {
   P2R_CompUnitParseIn *in = (P2R_CompUnitParseIn *)p;
   void *out = 0;
@@ -514,8 +508,7 @@ p2r_comp_unit_parse_task__entry_point(Arena *arena, void *p)
   return out;
 }
 
-internal void *
-p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_comp_unit_contributions_parse_task__entry_point)
 {
   P2R_CompUnitContributionsParseIn *in = (P2R_CompUnitContributionsParseIn *)p;
   void *out = 0;
@@ -526,8 +519,7 @@ p2r_comp_unit_contributions_parse_task__entry_point(Arena *arena, void *p)
 ////////////////////////////////
 //~ rjf: Unit Conversion Tasks
 
-internal void *
-p2r_units_convert_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
 {
   Temp scratch = scratch_begin(&arena, 1);
   P2R_UnitConvertIn *in = (P2R_UnitConvertIn *)p;
@@ -650,8 +642,7 @@ p2r_units_convert_task__entry_point(Arena *arena, void *p)
 ////////////////////////////////
 //~ rjf: Link Name Map Building Tasks
 
-internal void *
-p2r_link_name_map_build_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_link_name_map_build_task__entry_point)
 {
   P2R_LinkNameMapBuildIn *in = (P2R_LinkNameMapBuildIn *)p;
   CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges;
@@ -706,8 +697,7 @@ p2r_link_name_map_build_task__entry_point(Arena *arena, void *p)
 ////////////////////////////////
 //~ rjf: Type Parsing/Conversion Tasks
 
-internal void *
-p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_itype_fwd_map_fill_task__entry_point)
 {
   P2R_ITypeFwdMapFillIn *in = (P2R_ITypeFwdMapFillIn *)p;
   ProfScope("fill itype fwd map") for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
@@ -834,8 +824,7 @@ p2r_itype_fwd_map_fill_task__entry_point(Arena *arena, void *p)
   return 0;
 }
 
-internal void *
-p2r_itype_chain_build_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_itype_chain_build_task__entry_point)
 {
   Temp scratch = scratch_begin(&arena, 1);
   P2R_ITypeChainBuildIn *in = (P2R_ITypeChainBuildIn *)p;
@@ -1135,8 +1124,7 @@ p2r_itype_chain_build_task__entry_point(Arena *arena, void *p)
 ////////////////////////////////
 //~ rjf: UDT Conversion Tasks
 
-internal void *
-p2r_udt_convert_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_udt_convert_task__entry_point)
 {
   P2R_UDTConvertIn *in = (P2R_UDTConvertIn *)p;
 #define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
@@ -1760,8 +1748,7 @@ p2r_udt_convert_task__entry_point(Arena *arena, void *p)
 ////////////////////////////////
 //~ rjf: Symbol Stream Conversion Path & Thread
 
-internal void *
-p2r_symbol_stream_convert_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
 {
   Temp scratch = scratch_begin(&arena, 1);
   P2R_SymbolStreamConvertIn *in = (P2R_SymbolStreamConvertIn *)p;
@@ -3486,8 +3473,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
 
 //- rjf: bake string map building
 
-internal void *
-p2r_bake_src_files_strings_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_strings_task__entry_point)
 {
   P2R_BakeSrcFilesStringsIn *in = (P2R_BakeSrcFilesStringsIn *)p;
   RDIM_BakeStringChunkListMap *map = rdim_bake_string_chunk_list_map_make(arena, in->top);
@@ -3495,8 +3481,7 @@ p2r_bake_src_files_strings_task__entry_point(Arena *arena, void *p)
   return map;
 }
 
-internal void *
-p2r_bake_units_strings_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_units_strings_task__entry_point)
 {
   P2R_BakeUnitsStringsIn *in = (P2R_BakeUnitsStringsIn *)p;
   RDIM_BakeStringChunkListMap *map = rdim_bake_string_chunk_list_map_make(arena, in->top);
@@ -3504,8 +3489,7 @@ p2r_bake_units_strings_task__entry_point(Arena *arena, void *p)
   return map;
 }
 
-internal void *
-p2r_bake_types_strings_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_types_strings_task__entry_point)
 {
   P2R_BakeTypesStringsIn *in = (P2R_BakeTypesStringsIn *)p;
   RDIM_BakeStringChunkListMap *map = rdim_bake_string_chunk_list_map_make(arena, in->top);
@@ -3519,8 +3503,7 @@ p2r_bake_types_strings_task__entry_point(Arena *arena, void *p)
   return map;
 }
 
-internal void *
-p2r_bake_udts_strings_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_strings_task__entry_point)
 {
   P2R_BakeUDTsStringsIn *in = (P2R_BakeUDTsStringsIn *)p;
   RDIM_BakeStringChunkListMap *map = rdim_bake_string_chunk_list_map_make(arena, in->top);
@@ -3528,8 +3511,7 @@ p2r_bake_udts_strings_task__entry_point(Arena *arena, void *p)
   return map;
 }
 
-internal void *
-p2r_bake_symbols_strings_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_symbols_strings_task__entry_point)
 {
   P2R_BakeSymbolsStringsIn *in = (P2R_BakeSymbolsStringsIn *)p;
   RDIM_BakeStringChunkListMap *map = rdim_bake_string_chunk_list_map_make(arena, in->top);
@@ -3537,8 +3519,7 @@ p2r_bake_symbols_strings_task__entry_point(Arena *arena, void *p)
   return map;
 }
 
-internal void *
-p2r_bake_scopes_strings_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point)
 {
   P2R_BakeScopesStringsIn *in = (P2R_BakeScopesStringsIn *)p;
   RDIM_BakeStringChunkListMap *map = rdim_bake_string_chunk_list_map_make(arena, in->top);
@@ -3548,8 +3529,7 @@ p2r_bake_scopes_strings_task__entry_point(Arena *arena, void *p)
 
 //- rjf: bake string map sorting
 
-internal void *
-p2r_bake_string_map_sort_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_sort_task__entry_point)
 {
   P2R_SortBakeStringMapSlotsIn *in = (P2R_SortBakeStringMapSlotsIn *)p;
   ProfScope("sort bake string chunk list map range")
@@ -3577,8 +3557,7 @@ p2r_bake_string_map_sort_task__entry_point(Arena *arena, void *p)
 
 //- rjf: pass 1: interner/deduper map builds
 
-internal void *
-p2r_build_bake_string_map_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_build_bake_string_map_task__entry_point)
 {
   P2R_BuildBakeStringMapIn *in = (P2R_BuildBakeStringMapIn *)p;
   RDIM_BakeStringMap *strings = 0;
@@ -3586,8 +3565,7 @@ p2r_build_bake_string_map_task__entry_point(Arena *arena, void *p)
   return strings;
 }
 
-internal void *
-p2r_build_bake_name_map_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_build_bake_name_map_task__entry_point)
 {
   P2R_BuildBakeNameMapIn *in = (P2R_BuildBakeNameMapIn *)p;
   RDIM_BakeNameMap *name_map = 0;
@@ -3597,8 +3575,7 @@ p2r_build_bake_name_map_task__entry_point(Arena *arena, void *p)
 
 //- rjf: pass 2: string-map-dependent debug info stream builds
 
-internal void *
-p2r_bake_units_top_level_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_units_top_level_task__entry_point)
 {
   P2R_BakeUnitsTopLevelIn *in = (P2R_BakeUnitsTopLevelIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3606,8 +3583,7 @@ p2r_bake_units_top_level_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_unit_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_task__entry_point)
 {
   P2R_BakeUnitIn *in = (P2R_BakeUnitIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3615,8 +3591,7 @@ p2r_bake_unit_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_unit_vmap_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_vmap_task__entry_point)
 {
   P2R_BakeUnitVMapIn *in = (P2R_BakeUnitVMapIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3624,8 +3599,7 @@ p2r_bake_unit_vmap_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_src_files_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_task__entry_point)
 {
   P2R_BakeSrcFilesIn *in = (P2R_BakeSrcFilesIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3633,8 +3607,7 @@ p2r_bake_src_files_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_udts_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_task__entry_point)
 {
   P2R_BakeUDTsIn *in = (P2R_BakeUDTsIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3642,8 +3615,7 @@ p2r_bake_udts_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_global_variables_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_global_variables_task__entry_point)
 {
   P2R_BakeGlobalVariablesIn *in = (P2R_BakeGlobalVariablesIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3651,8 +3623,7 @@ p2r_bake_global_variables_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_global_vmap_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_global_vmap_task__entry_point)
 {
   P2R_BakeGlobalVMapIn *in = (P2R_BakeGlobalVMapIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3660,8 +3631,7 @@ p2r_bake_global_vmap_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_thread_variables_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_thread_variables_task__entry_point)
 {
   P2R_BakeThreadVariablesIn *in = (P2R_BakeThreadVariablesIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3669,8 +3639,7 @@ p2r_bake_thread_variables_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_procedures_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_procedures_task__entry_point)
 {
   P2R_BakeProceduresIn *in = (P2R_BakeProceduresIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3678,8 +3647,7 @@ p2r_bake_procedures_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_scopes_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_task__entry_point)
 {
   P2R_BakeScopesIn *in = (P2R_BakeScopesIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3687,8 +3655,7 @@ p2r_bake_scopes_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_scope_vmap_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_scope_vmap_task__entry_point)
 {
   P2R_BakeScopeVMapIn *in = (P2R_BakeScopeVMapIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3696,8 +3663,7 @@ p2r_bake_scope_vmap_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_file_paths_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_file_paths_task__entry_point)
 {
   P2R_BakeFilePathsIn *in = (P2R_BakeFilePathsIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3705,8 +3671,7 @@ p2r_bake_file_paths_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_strings_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_strings_task__entry_point)
 {
   P2R_BakeStringsIn *in = (P2R_BakeStringsIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3716,8 +3681,7 @@ p2r_bake_strings_task__entry_point(Arena *arena, void *p)
 
 //- rjf: pass 3: idx-run-map-dependent debug info stream builds
 
-internal void *
-p2r_bake_type_nodes_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_type_nodes_task__entry_point)
 {
   P2R_BakeTypeNodesIn *in = (P2R_BakeTypeNodesIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3725,8 +3689,7 @@ p2r_bake_type_nodes_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_name_map_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_name_map_task__entry_point)
 {
   P2R_BakeNameMapIn *in = (P2R_BakeNameMapIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
@@ -3734,8 +3697,7 @@ p2r_bake_name_map_task__entry_point(Arena *arena, void *p)
   return s;
 }
 
-internal void *
-p2r_bake_idx_runs_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_idx_runs_task__entry_point)
 {
   P2R_BakeIdxRunsIn *in = (P2R_BakeIdxRunsIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
