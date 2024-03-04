@@ -836,7 +836,6 @@ struct RDIM_BakeSectionList
 typedef struct RDIM_BakeString RDIM_BakeString;
 struct RDIM_BakeString
 {
-  struct RDIM_BakeStringChunkNode *chunk;
   RDI_U64 hash;
   RDIM_String8 string;
 };

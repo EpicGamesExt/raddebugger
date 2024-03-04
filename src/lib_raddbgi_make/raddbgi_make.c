@@ -1227,7 +1227,6 @@ rdim_bake_string_chunk_list_push(RDIM_Arena *arena, RDIM_BakeStringChunkList *li
     list->chunk_count += 1;
   }
   RDIM_BakeString *s = &n->v[n->count];
-  s->chunk = n;
   n->count += 1;
   list->total_count += 1;
   return s;
@@ -1691,7 +1690,7 @@ rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, RDIM_String8 s
   if(node == 0)
   {
     node = rdim_push_array(arena, RDIM_BakeNameMapNode, 1);
-    node->string = rdim_str8_copy(arena, string);
+    node->string = string;
     RDIM_SLLStackPush_N(map->slots[slot_idx], node, slot_next);
     RDIM_SLLQueuePush_N(map->first, map->last, node, order_next);
     map->name_count += 1;

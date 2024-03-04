@@ -3473,9 +3473,12 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
 
 //- rjf: bake string map building
 
+#define p2r_make_string_map_if_needed() do {if(in->maps[thread_idx] == 0) ProfScope("make map") {in->maps[thread_idx] = rdim_bake_string_map_loose_make(arena, in->top);}} while(0)
+
 internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_strings_task__entry_point)
 {
   P2R_BakeSrcFilesStringsIn *in = (P2R_BakeSrcFilesStringsIn *)p;
+  p2r_make_string_map_if_needed();
   ProfScope("bake src file strings") rdim_bake_string_map_loose_push_src_files(arena, in->top, in->maps[thread_idx], in->list);
   return 0;
 }
@@ -3483,6 +3486,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_strings_task__entry_point)
 internal TS_TASK_FUNCTION_DEF(p2r_bake_units_strings_task__entry_point)
 {
   P2R_BakeUnitsStringsIn *in = (P2R_BakeUnitsStringsIn *)p;
+  p2r_make_string_map_if_needed();
   ProfScope("bake unit strings") rdim_bake_string_map_loose_push_units(arena, in->top, in->maps[thread_idx], in->list);
   return 0;
 }
@@ -3490,6 +3494,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_units_strings_task__entry_point)
 internal TS_TASK_FUNCTION_DEF(p2r_bake_types_strings_task__entry_point)
 {
   P2R_BakeTypesStringsIn *in = (P2R_BakeTypesStringsIn *)p;
+  p2r_make_string_map_if_needed();
   ProfScope("bake type strings")
   {
     for(P2R_BakeTypesStringsInNode *n = in->first; n != 0; n = n->next)
@@ -3503,6 +3508,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_types_strings_task__entry_point)
 internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_strings_task__entry_point)
 {
   P2R_BakeUDTsStringsIn *in = (P2R_BakeUDTsStringsIn *)p;
+  p2r_make_string_map_if_needed();
   ProfScope("bake udt strings")
   {
     for(P2R_BakeUDTsStringsInNode *n = in->first; n != 0; n = n->next)
@@ -3516,6 +3522,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_strings_task__entry_point)
 internal TS_TASK_FUNCTION_DEF(p2r_bake_symbols_strings_task__entry_point)
 {
   P2R_BakeSymbolsStringsIn *in = (P2R_BakeSymbolsStringsIn *)p;
+  p2r_make_string_map_if_needed();
   ProfScope("bake symbol strings")
   {
     for(P2R_BakeSymbolsStringsInNode *n = in->first; n != 0; n = n->next)
@@ -3529,6 +3536,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_symbols_strings_task__entry_point)
 internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point)
 {
   P2R_BakeScopesStringsIn *in = (P2R_BakeScopesStringsIn *)p;
+  p2r_make_string_map_if_needed();
   ProfScope("bake scope strings")
   {
     for(P2R_BakeScopesStringsInNode *n = in->first; n != 0; n = n->next)
@@ -3538,6 +3546,8 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point)
   }
   return 0;
 }
+
+#undef p2r_make_string_map_if_needed
 
 //- rjf: bake string map joining
 
@@ -3772,17 +3782,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
                                                           params->thread_variables.total_count*1 +
                                                           params->types.total_count/2)};
   RDIM_BakeStringMapLoose **bake_string_maps__in_progress = push_array(scratch.arena, RDIM_BakeStringMapLoose *, ts_thread_count());
-  for(U64 idx = 0; idx < ts_thread_count(); idx += 1)
-  {
-    bake_string_maps__in_progress[idx] = rdim_bake_string_map_loose_make(arena, &bake_string_map_topology);
-  }
   TS_TicketList bake_string_map_build_tickets = {0};
   {
-    // rjf: basics
-    rdim_bake_string_map_loose_push_top_level_info(arena, &bake_string_map_topology, bake_string_maps__in_progress[0], &params->top_level_info);
-    rdim_bake_string_map_loose_push_binary_sections(arena, &bake_string_map_topology, bake_string_maps__in_progress[0], &params->binary_sections);
-    rdim_bake_string_map_loose_push_path_tree(arena, &bake_string_map_topology, bake_string_maps__in_progress[0], path_tree);
-    
     // rjf: src files
     ProfScope("kick off src files string map build task")
     {
@@ -3944,6 +3945,11 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     {
       ts_join(task_tickets[task_idx], max_U64);
     }
+    
+    // rjf: insert small top-level stuff
+    rdim_bake_string_map_loose_push_top_level_info(arena, &bake_string_map_topology, unsorted_bake_string_map, &params->top_level_info);
+    rdim_bake_string_map_loose_push_binary_sections(arena, &bake_string_map_topology, unsorted_bake_string_map, &params->binary_sections);
+    rdim_bake_string_map_loose_push_path_tree(arena, &bake_string_map_topology, unsorted_bake_string_map, path_tree);
   }
   
   //- rjf: kick off string map sorting tasks
