@@ -1888,7 +1888,7 @@ rdim_bake_string_chunk_list_map_push_type_slice(RDIM_Arena *arena, RDIM_BakeStri
 {
   for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 64, v[idx].name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].name);
   }
 }
 
@@ -1899,11 +1899,11 @@ rdim_bake_string_chunk_list_map_push_udt_slice(RDIM_Arena *arena, RDIM_BakeStrin
   {
     for(RDIM_UDTMember *mem = v[idx].first_member; mem != 0; mem = mem->next)
     {
-      rdim_bake_string_chunk_list_map_insert(arena, top, map, 64, mem->name);
+      rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, mem->name);
     }
     for(RDIM_UDTEnumVal *mem = v[idx].first_enum_val; mem != 0; mem = mem->next)
     {
-      rdim_bake_string_chunk_list_map_insert(arena, top, map, 64, mem->name);
+      rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, mem->name);
     }
   }
 }
@@ -1913,8 +1913,8 @@ rdim_bake_string_chunk_list_map_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeSt
 {
   for(RDI_U64 idx = 0; idx < count; idx += 1)
   {
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, v[idx].name);
-    rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, v[idx].link_name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].name);
+    rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, v[idx].link_name);
   }
 }
 
@@ -1925,7 +1925,7 @@ rdim_bake_string_chunk_list_map_push_scope_slice(RDIM_Arena *arena, RDIM_BakeStr
   {
     for(RDIM_Local *local = v[idx].first_local; local != 0; local = local->next)
     {
-      rdim_bake_string_chunk_list_map_insert(arena, top, map, 1, local->name);
+      rdim_bake_string_chunk_list_map_insert(arena, top, map, 4, local->name);
     }
   }
 }

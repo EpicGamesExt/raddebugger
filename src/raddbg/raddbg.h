@@ -49,7 +49,11 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] DBGI layer is case-sensitive even on case-insensitive systems
+// [ ] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
+// [ ] PDB files distributed with the build are not found by DbgHelp!!!
+// [ ] Jai compiler debugging crash
+// [ ] raddbgi file regeneration too strict
+//
 // [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
 // [ ] ** Thread/process control bullet-proofing, including solo-step mode
@@ -73,6 +77,8 @@
 // [ ] disasm animation & go-to-address
 //
 // [ ] visualize remapped files (via path map)
+//
+// [x] DBGI layer is case-sensitive even on case-insensitive systems
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)

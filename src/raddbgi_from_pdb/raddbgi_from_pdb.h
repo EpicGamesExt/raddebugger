@@ -295,12 +295,29 @@ struct P2R_BakeUDTsStringsIn
   P2R_BakeUDTsStringsInNode *last;
 };
 
+typedef struct P2R_BakeSymbolsStringsInNode P2R_BakeSymbolsStringsInNode;
+struct P2R_BakeSymbolsStringsInNode
+{
+  P2R_BakeSymbolsStringsInNode *next;
+  RDIM_Symbol *v;
+  RDI_U64 count;
+};
+
 typedef struct P2R_BakeSymbolsStringsIn P2R_BakeSymbolsStringsIn;
 struct P2R_BakeSymbolsStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
   RDIM_BakeStringChunkListMap **maps;
-  RDIM_SymbolChunkList *list;
+  P2R_BakeSymbolsStringsInNode *first;
+  P2R_BakeSymbolsStringsInNode *last;
+};
+
+typedef struct P2R_BakeScopesStringsInNode P2R_BakeScopesStringsInNode;
+struct P2R_BakeScopesStringsInNode
+{
+  P2R_BakeScopesStringsInNode *next;
+  RDIM_Scope *v;
+  RDI_U64 count;
 };
 
 typedef struct P2R_BakeScopesStringsIn P2R_BakeScopesStringsIn;
@@ -308,7 +325,20 @@ struct P2R_BakeScopesStringsIn
 {
   RDIM_BakeStringChunkListMapTopology *top;
   RDIM_BakeStringChunkListMap **maps;
-  RDIM_ScopeChunkList *list;
+  P2R_BakeScopesStringsInNode *first;
+  P2R_BakeScopesStringsInNode *last;
+};
+
+//- rjf: string map joining task types
+
+typedef struct P2R_JoinBakeStringMapSlotsIn P2R_JoinBakeStringMapSlotsIn;
+struct P2R_JoinBakeStringMapSlotsIn
+{
+  RDIM_BakeStringChunkListMapTopology *top;
+  RDIM_BakeStringChunkListMap **src_maps;
+  U64 src_maps_count;
+  RDIM_BakeStringChunkListMap *dst_map;
+  Rng1U64 slot_idx_range;
 };
 
 //- rjf: string map sorting task types
@@ -537,6 +567,9 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_types_strings_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_strings_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_symbols_strings_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point);
+
+//- rjf: bake string map joining
+internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_join_task__entry_point);
 
 //- rjf: bake string map sorting
 internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_sort_task__entry_point);
