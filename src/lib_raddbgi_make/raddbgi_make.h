@@ -860,50 +860,31 @@ struct RDIM_BakeStringChunkList
   RDI_U64 total_count;
 };
 
-typedef struct RDIM_BakeStringChunkListMapTopology RDIM_BakeStringChunkListMapTopology;
-struct RDIM_BakeStringChunkListMapTopology
+typedef struct RDIM_BakeStringMapTopology RDIM_BakeStringMapTopology;
+struct RDIM_BakeStringMapTopology
 {
   RDI_U64 slots_count;
 };
 
-typedef struct RDIM_BakeStringChunkListMapBaseIndices RDIM_BakeStringChunkListMapBaseIndices;
-struct RDIM_BakeStringChunkListMapBaseIndices
+typedef struct RDIM_BakeStringMapBaseIndices RDIM_BakeStringMapBaseIndices;
+struct RDIM_BakeStringMapBaseIndices
 {
   RDI_U64 *slots_base_idxs;
 };
 
-typedef struct RDIM_BakeStringChunkListMap RDIM_BakeStringChunkListMap;
-struct RDIM_BakeStringChunkListMap
+typedef struct RDIM_BakeStringMapLoose RDIM_BakeStringMapLoose;
+struct RDIM_BakeStringMapLoose
 {
   RDIM_BakeStringChunkList **slots;
 };
 
-typedef struct RDIM_BakeStringMapFinal RDIM_BakeStringMapFinal;
-struct RDIM_BakeStringMapFinal
+typedef struct RDIM_BakeStringMapTight RDIM_BakeStringMapTight;
+struct RDIM_BakeStringMapTight
 {
   RDIM_BakeStringChunkList *slots;
   RDI_U64 *slots_base_idxs;
   RDI_U64 slots_count;
   RDI_U64 total_count;
-};
-
-typedef struct RDIM_BakeStringNode RDIM_BakeStringNode;
-struct RDIM_BakeStringNode
-{
-  RDIM_BakeStringNode *hash_next;
-  RDIM_BakeStringNode *order_next;
-  RDIM_BakeString v;
-  RDI_U32 idx;
-};
-
-typedef struct RDIM_BakeStringMap RDIM_BakeStringMap;
-struct RDIM_BakeStringMap
-{
-  RDIM_BakeStringNode *order_first;
-  RDIM_BakeStringNode *order_last;
-  RDIM_BakeStringNode **slots;
-  RDI_U64 slots_count;
-  RDI_U32 count;
 };
 
 //- rjf: index runs
@@ -1147,18 +1128,14 @@ RDI_PROC void rdim_bake_string_chunk_list_concat_in_place(RDIM_BakeStringChunkLi
 RDI_PROC RDIM_BakeStringChunkList rdim_bake_string_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeStringChunkList *src);
 
 //- rjf: bake string chunk list maps
-RDI_PROC RDIM_BakeStringChunkListMap *rdim_bake_string_chunk_list_map_make(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top);
-RDI_PROC void rdim_bake_string_chunk_list_map_insert(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMap *map, RDI_U64 chunk_cap, RDIM_String8 string);
-RDI_PROC void rdim_bake_string_chunk_list_map_join_in_place(RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMap *dst, RDIM_BakeStringChunkListMap *src);
-RDI_PROC RDIM_BakeStringChunkListMapBaseIndices rdim_bake_string_chunk_list_base_indices_from_map(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMap *map);
+RDI_PROC RDIM_BakeStringMapLoose *rdim_bake_string_map_loose_make(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top);
+RDI_PROC void rdim_bake_string_map_loose_insert(RDIM_Arena *arena, RDIM_BakeStringMapTopology *map_topology, RDIM_BakeStringMapLoose *map, RDI_U64 chunk_cap, RDIM_String8 string);
+RDI_PROC void rdim_bake_string_map_loose_join_in_place(RDIM_BakeStringMapTopology *map_topology, RDIM_BakeStringMapLoose *dst, RDIM_BakeStringMapLoose *src);
+RDI_PROC RDIM_BakeStringMapBaseIndices rdim_bake_string_map_base_indices_from_map_loose(RDIM_Arena *arena, RDIM_BakeStringMapTopology *map_topology, RDIM_BakeStringMapLoose *map);
 
 //- rjf: finalized bake string map
-RDI_PROC RDIM_BakeStringMapFinal rdim_bake_string_map_final_from_chunk_list_map(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *map_topology, RDIM_BakeStringChunkListMapBaseIndices *map_base_indices, RDIM_BakeStringChunkListMap *map);
-RDI_PROC RDI_U64 rdim_bake_idx_from_string(RDIM_BakeStringMapFinal *map, RDIM_String8 string);
-
-//- rjf: bake string map reading/writing
-RDI_PROC RDI_U32 rdim_bake_idx_from_string_OLD(RDIM_BakeStringMap *map, RDIM_String8 string);
-RDI_PROC RDI_U32 rdim_bake_string_map_insert(RDIM_Arena *arena, RDIM_BakeStringMap *map, RDIM_String8 string);
+RDI_PROC RDIM_BakeStringMapTight rdim_bake_string_map_tight_from_loose(RDIM_Arena *arena, RDIM_BakeStringMapTopology *map_topology, RDIM_BakeStringMapBaseIndices *map_base_indices, RDIM_BakeStringMapLoose *map);
+RDI_PROC RDI_U64 rdim_bake_idx_from_string(RDIM_BakeStringMapTight *map, RDIM_String8 string);
 
 //- rjf: bake idx run map reading/writing
 RDI_PROC RDI_U64 rdim_hash_from_idx_run(RDI_U32 *idx_run, RDI_U32 count);
@@ -1184,28 +1161,25 @@ RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, 
 //~ rjf: [Baking] Build Artifacts -> Interned/Deduplicated Data Structures
 
 //- rjf: basic bake string gathering passes
-RDI_PROC void rdim_bake_string_chunk_list_map_push_top_level_info(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_TopLevelInfo *tli);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_binary_sections(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_BinarySectionList *secs);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_path_tree(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_BakePathTree *path_tree);
+RDI_PROC void rdim_bake_string_map_loose_push_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_TopLevelInfo *tli);
+RDI_PROC void rdim_bake_string_map_loose_push_binary_sections(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_BinarySectionList *secs);
+RDI_PROC void rdim_bake_string_map_loose_push_path_tree(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_BakePathTree *path_tree);
 
 //- rjf: slice-granularity bake string gathering passes
-RDI_PROC void rdim_bake_string_chunk_list_map_push_src_file_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SrcFile *v, RDI_U64 count);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_unit_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Unit *v, RDI_U64 count);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_type_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Type *v, RDI_U64 count);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_udt_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UDT *v, RDI_U64 count);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Symbol *v, RDI_U64 count);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_scope_slice(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_Scope *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_src_file_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_SrcFile *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_unit_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Unit *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_type_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Type *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_udt_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UDT *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Symbol *v, RDI_U64 count);
+RDI_PROC void rdim_bake_string_map_loose_push_scope_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Scope *v, RDI_U64 count);
 
 //- rjf: list-granularity bake string gathering passes
-RDI_PROC void rdim_bake_string_chunk_list_map_push_src_files(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SrcFileChunkList *list);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_units(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UnitChunkList *list);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_types(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_TypeChunkList *list);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_udts(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_UDTChunkList *list);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_symbols(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_SymbolChunkList *list);
-RDI_PROC void rdim_bake_string_chunk_list_map_push_scopes(RDIM_Arena *arena, RDIM_BakeStringChunkListMapTopology *top, RDIM_BakeStringChunkListMap *map, RDIM_ScopeChunkList *list);
-
-//- rjf: bake string map building
-RDI_PROC RDIM_BakeStringMap *rdim_bake_string_map_from_params(RDIM_Arena *arena, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
+RDI_PROC void rdim_bake_string_map_loose_push_src_files(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_SrcFileChunkList *list);
+RDI_PROC void rdim_bake_string_map_loose_push_units(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UnitChunkList *list);
+RDI_PROC void rdim_bake_string_map_loose_push_types(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_TypeChunkList *list);
+RDI_PROC void rdim_bake_string_map_loose_push_udts(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_UDTChunkList *list);
+RDI_PROC void rdim_bake_string_map_loose_push_symbols(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_SymbolChunkList *list);
+RDI_PROC void rdim_bake_string_map_loose_push_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_ScopeChunkList *list);
 
 //- rjf: bake name map building
 RDI_PROC RDIM_BakeNameMap *rdim_bake_name_map_from_kind_params(RDIM_Arena *arena, RDI_NameMapKind kind, RDIM_BakeParams *params);
@@ -1220,54 +1194,54 @@ RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, R
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
 
 //- rjf: top-level info
-RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_info_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_info_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
 //- rjf: binary sections
-RDI_PROC RDIM_BakeSectionList rdim_bake_binary_section_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_binary_section_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
 //- rjf: units
 RDI_PROC RDIM_BakeSectionList rdim_bake_section_list_from_unit(RDIM_Arena *arena, RDIM_Unit *unit);
-RDI_PROC RDIM_BakeSectionList rdim_bake_unit_top_level_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_unit_top_level_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
 
 //- rjf: unit vmap
 RDI_PROC RDIM_BakeSectionList rdim_bake_unit_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: source files
-RDI_PROC RDIM_BakeSectionList rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
 
 //- rjf: type nodes
-RDI_PROC RDIM_BakeSectionList rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params);
 
 //- rjf: UDTs
-RDI_PROC RDIM_BakeSectionList rdim_bake_udt_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_udt_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
 //- rjf: global variables
-RDI_PROC RDIM_BakeSectionList rdim_bake_global_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_global_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
 //- rjf: global vmap
 RDI_PROC RDIM_BakeSectionList rdim_bake_global_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: thread variables
-RDI_PROC RDIM_BakeSectionList rdim_bake_thread_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_thread_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
 //- rjf: procedures
-RDI_PROC RDIM_BakeSectionList rdim_bake_procedure_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_procedure_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
 //- rjf: scopes
-RDI_PROC RDIM_BakeSectionList rdim_bake_scope_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_scope_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
 //- rjf: scope vmap
 RDI_PROC RDIM_BakeSectionList rdim_bake_scope_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: name maps
-RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
-RDI_PROC RDIM_BakeSectionList rdim_bake_name_map_section_list_from_params_kind_map(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDI_NameMapKind k, RDIM_BakeNameMap *map);
+RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
+RDI_PROC RDIM_BakeSectionList rdim_bake_name_map_section_list_from_params_kind_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDI_NameMapKind k, RDIM_BakeNameMap *map);
 
 //- rjf: file paths
-RDI_PROC RDIM_BakeSectionList rdim_bake_file_path_section_list_from_path_tree(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings, RDIM_BakePathTree *path_tree);
+RDI_PROC RDIM_BakeSectionList rdim_bake_file_path_section_list_from_path_tree(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree);
 
 //- rjf: strings
-RDI_PROC RDIM_BakeSectionList rdim_bake_string_section_list_from_string_map(RDIM_Arena *arena, RDIM_BakeStringMapFinal *strings);
+RDI_PROC RDIM_BakeSectionList rdim_bake_string_section_list_from_string_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings);
 
 //- rjf: index runs
 RDI_PROC RDIM_BakeSectionList rdim_bake_idx_run_section_list_from_idx_run_map(RDIM_Arena *arena, RDIM_BakeIdxRunMap *idx_runs);

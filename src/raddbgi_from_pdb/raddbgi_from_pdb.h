@@ -248,16 +248,16 @@ struct P2R_SymbolStreamConvertOut
 typedef struct P2R_BakeSrcFilesStringsIn P2R_BakeSrcFilesStringsIn;
 struct P2R_BakeSrcFilesStringsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap **maps;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
   RDIM_SrcFileChunkList *list;
 };
 
 typedef struct P2R_BakeUnitsStringsIn P2R_BakeUnitsStringsIn;
 struct P2R_BakeUnitsStringsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap **maps;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
   RDIM_UnitChunkList *list;
 };
 
@@ -272,8 +272,8 @@ struct P2R_BakeTypesStringsInNode
 typedef struct P2R_BakeTypesStringsIn P2R_BakeTypesStringsIn;
 struct P2R_BakeTypesStringsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap **maps;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
   P2R_BakeTypesStringsInNode *first;
   P2R_BakeTypesStringsInNode *last;
 };
@@ -289,8 +289,8 @@ struct P2R_BakeUDTsStringsInNode
 typedef struct P2R_BakeUDTsStringsIn P2R_BakeUDTsStringsIn;
 struct P2R_BakeUDTsStringsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap **maps;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
   P2R_BakeUDTsStringsInNode *first;
   P2R_BakeUDTsStringsInNode *last;
 };
@@ -306,8 +306,8 @@ struct P2R_BakeSymbolsStringsInNode
 typedef struct P2R_BakeSymbolsStringsIn P2R_BakeSymbolsStringsIn;
 struct P2R_BakeSymbolsStringsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap **maps;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
   P2R_BakeSymbolsStringsInNode *first;
   P2R_BakeSymbolsStringsInNode *last;
 };
@@ -323,8 +323,8 @@ struct P2R_BakeScopesStringsInNode
 typedef struct P2R_BakeScopesStringsIn P2R_BakeScopesStringsIn;
 struct P2R_BakeScopesStringsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap **maps;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
   P2R_BakeScopesStringsInNode *first;
   P2R_BakeScopesStringsInNode *last;
 };
@@ -334,10 +334,10 @@ struct P2R_BakeScopesStringsIn
 typedef struct P2R_JoinBakeStringMapSlotsIn P2R_JoinBakeStringMapSlotsIn;
 struct P2R_JoinBakeStringMapSlotsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap **src_maps;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **src_maps;
   U64 src_maps_count;
-  RDIM_BakeStringChunkListMap *dst_map;
+  RDIM_BakeStringMapLoose *dst_map;
   Rng1U64 slot_idx_range;
 };
 
@@ -346,9 +346,9 @@ struct P2R_JoinBakeStringMapSlotsIn
 typedef struct P2R_SortBakeStringMapSlotsIn P2R_SortBakeStringMapSlotsIn;
 struct P2R_SortBakeStringMapSlotsIn
 {
-  RDIM_BakeStringChunkListMapTopology *top;
-  RDIM_BakeStringChunkListMap *src_map;
-  RDIM_BakeStringChunkListMap *dst_map;
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose *src_map;
+  RDIM_BakeStringMapLoose *dst_map;
   U64 slot_idx;
   U64 slot_count;
 };
@@ -374,7 +374,7 @@ struct P2R_BuildBakeNameMapIn
 typedef struct P2R_BakeUnitsTopLevelIn P2R_BakeUnitsTopLevelIn;
 struct P2R_BakeUnitsTopLevelIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakePathTree *path_tree;
   RDIM_BakeParams *params;
 };
@@ -394,7 +394,7 @@ struct P2R_BakeUnitVMapIn
 typedef struct P2R_BakeSrcFilesIn P2R_BakeSrcFilesIn;
 struct P2R_BakeSrcFilesIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakePathTree *path_tree;
   RDIM_BakeParams *params;
 };
@@ -402,14 +402,14 @@ struct P2R_BakeSrcFilesIn
 typedef struct P2R_BakeUDTsIn P2R_BakeUDTsIn;
 struct P2R_BakeUDTsIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeParams *params;
 };
 
 typedef struct P2R_BakeGlobalVariablesIn P2R_BakeGlobalVariablesIn;
 struct P2R_BakeGlobalVariablesIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeParams *params;
 };
 
@@ -422,21 +422,21 @@ struct P2R_BakeGlobalVMapIn
 typedef struct P2R_BakeThreadVariablesIn P2R_BakeThreadVariablesIn;
 struct P2R_BakeThreadVariablesIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeParams *params;
 };
 
 typedef struct P2R_BakeProceduresIn P2R_BakeProceduresIn;
 struct P2R_BakeProceduresIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeParams *params;
 };
 
 typedef struct P2R_BakeScopesIn P2R_BakeScopesIn;
 struct P2R_BakeScopesIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeParams *params;
 };
 
@@ -449,20 +449,20 @@ struct P2R_BakeScopeVMapIn
 typedef struct P2R_BakeFilePathsIn P2R_BakeFilePathsIn;
 struct P2R_BakeFilePathsIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakePathTree *path_tree;
 };
 
 typedef struct P2R_BakeStringsIn P2R_BakeStringsIn;
 struct P2R_BakeStringsIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
 };
 
 typedef struct P2R_BakeTypeNodesIn P2R_BakeTypeNodesIn;
 struct P2R_BakeTypeNodesIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeIdxRunMap *idx_runs;
   RDIM_BakeParams *params;
 };
@@ -470,7 +470,7 @@ struct P2R_BakeTypeNodesIn
 typedef struct P2R_BakeNameMapIn P2R_BakeNameMapIn;
 struct P2R_BakeNameMapIn
 {
-  RDIM_BakeStringMapFinal *strings;
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeIdxRunMap *idx_runs;
   RDIM_BakeParams *params;
   RDI_NameMapKind kind;
@@ -575,7 +575,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_join_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_sort_task__entry_point);
 
 //- rjf: pass 1: interner/deduper map builds
-internal TS_TASK_FUNCTION_DEF(p2r_build_bake_string_map_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_build_bake_name_map_task__entry_point);
 
 //- rjf: pass 2: string-map-dependent debug info stream builds
