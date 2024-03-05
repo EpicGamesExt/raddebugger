@@ -213,7 +213,7 @@ internal U64 eval_num_from_string(EVAL_String2NumMap *map, String8 string);
 
 //- rjf: string -> expr
 internal EVAL_String2ExprMap eval_string2expr_map_make(Arena *arena, U64 slot_count);
-internal void eval_string2expr_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string, EVAL_Expr *expr);
+internal void eval_string2expr_map_insert(Arena *arena, EVAL_String2ExprMap *map, String8 string, EVAL_Expr *expr);
 internal void eval_string2expr_map_inc_poison(EVAL_String2ExprMap *map, String8 string);
 internal void eval_string2expr_map_dec_poison(EVAL_String2ExprMap *map, String8 string);
 internal EVAL_Expr *eval_expr_from_string(EVAL_String2ExprMap *map, String8 string);
