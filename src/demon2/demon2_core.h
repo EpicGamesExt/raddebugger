@@ -7,10 +7,11 @@
 ////////////////////////////////
 //~ rjf: Handle Types
 
-typedef struct DMN_Handle DMN_Handle;
-struct DMN_Handle
+typedef union DMN_Handle DMN_Handle;
+union DMN_Handle
 {
   U32 u32[2];
+  U64 u64[1];
 };
 
 typedef struct DMN_HandleNode DMN_HandleNode;
@@ -178,20 +179,13 @@ internal B32 dmn_kill_process(DMN_Handle process, U32 exit_code);
 internal B32 dmn_detach_process(DMN_Handle process);
 
 ////////////////////////////////
-//~ rjf: @dmn_os_hooks Entities (Implemented Per-OS)
-
-//- rjf: basic entity info extraction
-internal Architecture dmn_arch_from_handle(DMN_Handle handle);
-internal String8      dmn_string_from_handle(Arena *arena, DMN_Handle handle);
+//~ rjf: @dmn_os_hooks Process/Thread Reads/Writes (Implemented Per-OS)
 
 //- rjf: processes
 internal U64          dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
 internal B32          dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 #define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 #define dmn_process_write_struct(process, vaddr, ptr) dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
-
-//- rjf: modules
-internal Rng1U64      dmn_vaddr_range_from_module(DMN_Handle handle);
 
 //- rjf: threads
 internal U64          dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
