@@ -9,6 +9,8 @@
 // [x] CRT asserts - stepping over int 29 should work just like stepping over
 //     an int3
 // [ ] committing needs to happen when navigating focus away for any reason
+// [ ] better discoverability for view rules - have better help hover tooltip,
+//     info on arguments, and better autocomplete lister
 //
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
