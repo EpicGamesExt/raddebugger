@@ -13,7 +13,7 @@ global DWORD demon_w32_resume_tid = 0;
 global B32   demon_w32_exception_not_handled = 0;
 global DEMON_Entity* demon_w32_halter_process = 0;
 global DWORD demon_w32_halter_thread_id = 0;
-.
+
 global B32   demon_w32_new_process_pending = 0;
 
 global Arena       *demon_w32_ext_arena = 0 ;

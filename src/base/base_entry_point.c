@@ -42,6 +42,9 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DEMON_CORE_H)
   demon_init();
 #endif
+#if defined(DEMON2_CORE_H)
+  dmn_init();
+#endif
 #if defined(CTRL_CORE_H)
   ctrl_init();
 #endif
