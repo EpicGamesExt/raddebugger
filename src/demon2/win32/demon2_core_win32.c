@@ -2,9 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Helpers
-
-//- rjf: entity id -> hash
+//~ rjf: Basic Helpers
 
 internal U64
 dmn_w32_hash_from_string(String8 string)
@@ -22,6 +20,9 @@ dmn_w32_hash_from_id(U64 id)
 {
   return dmn_w32_hash_from_string(str8_struct(&id));
 }
+
+////////////////////////////////
+//~ rjf: Entity Helpers
 
 //- rjf: entity <-> handle
 
@@ -198,7 +199,107 @@ dmn_w32_entity_from_kind_id(DMN_W32_EntityKind kind, U64 id)
   return result;
 }
 
-//- rjf: win32-level process reads/writes
+////////////////////////////////
+//~ rjf: Module Info Extraction
+
+internal String8
+dmn_w32_full_path_from_module(Arena *arena, DMN_W32_Entity *module)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: extract path from module
+  String16 path16 = {0};
+  String8 path8 = {0};
+  {
+    // rjf: handle -> full path
+    if(module->handle != 0)
+    {
+      DWORD cap16 = GetFinalPathNameByHandleW(module->handle, 0, 0, VOLUME_NAME_DOS);
+      U16 *buffer16 = push_array_no_zero(scratch.arena, U16, cap16);
+      DWORD size16 = GetFinalPathNameByHandleW(module->handle, (WCHAR*)buffer16, cap16, VOLUME_NAME_DOS);
+      path16 = str16(buffer16, size16);
+    }
+    
+    // rjf: fallback (main module only): process -> full path
+    if(path16.size == 0 && module->module.is_main)
+    {
+      DMN_W32_Entity *process = module->parent;
+      DWORD size = KB(4);
+      U16 *buf = push_array_no_zero(scratch.arena, U16, size);
+      if(QueryFullProcessImageNameW(process->handle, 0, (WCHAR*)buf, &size))
+      {
+        path16 = str16(buf, size);
+      }
+    }
+    
+    // rjf: fallback (any module - no guarantee): address_of_name -> full path
+    if(path16.size == 0 && module->module.address_of_name_pointer != 0)
+    {
+      DMN_W32_Entity *process = module->parent;
+      U64 ptr_size = bit_size_from_arch(process->arch)/8;
+      U64 name_pointer = 0;
+      if(dmn_w32_process_read(process->handle, r1u64(module->module.address_of_name_pointer, module->module.address_of_name_pointer+ptr_size), &name_pointer))
+      {
+        if(name_pointer != 0)
+        {
+          if(module->module.name_is_unicode)
+          {
+            path16 = dmn_w32_read_memory_str16(scratch.arena, process->handle, name_pointer);
+          }
+          else
+          {
+            path8 = dmn_w32_read_memory_str(scratch.arena, process->handle, name_pointer);
+          }
+        }
+      }
+    }
+  }
+  
+  // rjf: produce finalized result
+  String8 result = {0};
+  {
+    if(path16.size > 0)
+    {
+      // rjf: skip the extended path thing if necessary
+      if(path16.size >= 4 &&
+         path16.str[0] == L'\\' &&
+         path16.str[1] == L'\\' &&
+         path16.str[2] == L'?' &&
+         path16.str[3] == L'\\')
+      {
+        path16.size -= 4;
+        path16.str += 4;
+      }
+      
+      // rjf: convert to UTF-8
+      result = str8_from_16(arena, path16);
+    }
+    else
+    {
+      // rjf: skip the extended path thing if necessary
+      if (path8.size >= 4 &&
+          path8.str[0] == L'\\' &&
+          path8.str[1] == L'\\' &&
+          path8.str[2] == L'?' &&
+          path8.str[3] == L'\\')
+      {
+        path8.size -= 4;
+        path8.str += 4;
+      }
+      
+      // rjf: copy to output arena
+      result = push_str8_copy(arena, path8);
+    }
+  }
+  
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Win32-Level Process/Thread Reads/Writes
+
+//- rjf: processes
 
 internal U64
 dmn_w32_process_read(HANDLE process, Rng1U64 range, void *dst)
@@ -346,7 +447,78 @@ dmn_w32_read_memory_str16(Arena *arena, HANDLE process_handle, U64 address)
   return(result);
 }
 
-//- rjf: win32-level thread register reads/writes
+internal DMN_W32_ImageInfo
+dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
+{
+  // rjf: find PE offset
+  U32 pe_offset = 0;
+  {
+    U64 dos_magic_off = base_vaddr;
+    U16 dos_magic = 0;
+    dmn_w32_process_read_struct(process, dos_magic_off, &dos_magic);
+    if(dos_magic == PE_DOS_MAGIC)
+    {
+      U64 pe_offset_off = base_vaddr + OffsetOf(PE_DosHeader, coff_file_offset);
+      dmn_w32_process_read_struct(process, pe_offset_off, &pe_offset);
+    }
+  }
+  
+  // rjf: get COFF header
+  B32 got_coff_header = 0;
+  U64 coff_header_off = 0;
+  COFF_Header coff_header = {0};
+  if(pe_offset > 0)
+  {
+    U64 pe_magic_off = base_vaddr + pe_offset;
+    U32 pe_magic = 0;
+    dmn_w32_process_read_struct(process, pe_magic_off, &pe_magic);
+    if(pe_magic == PE_MAGIC)
+    {
+      coff_header_off = pe_magic_off + sizeof(pe_magic);
+      if(dmn_w32_process_read_struct(process, coff_header_off, &coff_header))
+      {
+        got_coff_header = 1;
+      }
+    }
+  }
+  
+  // rjf: get arch and size
+  DMN_W32_ImageInfo result = zero_struct;
+  if(got_coff_header)
+  {
+    U64 optional_size_off = 0;
+    Architecture arch = Architecture_Null;
+    switch(coff_header.machine)
+    {
+      case COFF_MachineType_X86:
+      {
+        arch = Architecture_x86;
+        optional_size_off = OffsetOf(PE_OptionalHeader32, sizeof_image);
+      }break;
+      case COFF_MachineType_X64:
+      {
+        arch = Architecture_x64;
+        optional_size_off = OffsetOf(PE_OptionalHeader32Plus, sizeof_image);
+      }break;
+      default:
+      {}break;
+    }
+    if(arch != Architecture_Null)
+    {
+      U64 optional_off = coff_header_off + sizeof(coff_header);
+      U32 size = 0;
+      if(dmn_w32_process_read_struct(process, optional_off+optional_size_off, &size) >= sizeof(size))
+      {
+        result.arch = arch;
+        result.size = size;
+      }
+    }
+  }
+  
+  return result;
+}
+
+//- rjf: threads
 
 internal U16
 dmn_w32_real_tag_word_from_xsave(XSAVE_FORMAT *fxsave)
@@ -872,7 +1044,7 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
   return result;
 }
 
-//- rjf: win32-level thread injection
+//- rjf: remote thread injection
 
 internal DWORD
 dmn_w32_inject_thread(HANDLE process, U64 start_address)
@@ -885,175 +1057,6 @@ dmn_w32_inject_thread(HANDLE process, U64 start_address)
     CloseHandle(thread);
   }
   return thread_id;
-}
-
-//- rjf: module image analysis
-
-internal DMN_W32_ImageInfo
-dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
-{
-  // rjf: find PE offset
-  U32 pe_offset = 0;
-  {
-    U64 dos_magic_off = base_vaddr;
-    U16 dos_magic = 0;
-    dmn_w32_process_read_struct(process, dos_magic_off, &dos_magic);
-    if(dos_magic == PE_DOS_MAGIC)
-    {
-      U64 pe_offset_off = base_vaddr + OffsetOf(PE_DosHeader, coff_file_offset);
-      dmn_w32_process_read_struct(process, pe_offset_off, &pe_offset);
-    }
-  }
-  
-  // rjf: get COFF header
-  B32 got_coff_header = 0;
-  U64 coff_header_off = 0;
-  COFF_Header coff_header = {0};
-  if(pe_offset > 0)
-  {
-    U64 pe_magic_off = base_vaddr + pe_offset;
-    U32 pe_magic = 0;
-    dmn_w32_process_read_struct(process, pe_magic_off, &pe_magic);
-    if(pe_magic == PE_MAGIC)
-    {
-      coff_header_off = pe_magic_off + sizeof(pe_magic);
-      if(dmn_w32_process_read_struct(process, coff_header_off, &coff_header))
-      {
-        got_coff_header = 1;
-      }
-    }
-  }
-  
-  // rjf: get arch and size
-  DMN_W32_ImageInfo result = zero_struct;
-  if(got_coff_header)
-  {
-    U64 optional_size_off = 0;
-    Architecture arch = Architecture_Null;
-    switch(coff_header.machine)
-    {
-      case COFF_MachineType_X86:
-      {
-        arch = Architecture_x86;
-        optional_size_off = OffsetOf(PE_OptionalHeader32, sizeof_image);
-      }break;
-      case COFF_MachineType_X64:
-      {
-        arch = Architecture_x64;
-        optional_size_off = OffsetOf(PE_OptionalHeader32Plus, sizeof_image);
-      }break;
-      default:
-      {}break;
-    }
-    if(arch != Architecture_Null)
-    {
-      U64 optional_off = coff_header_off + sizeof(coff_header);
-      U32 size = 0;
-      if(dmn_w32_process_read_struct(process, optional_off+optional_size_off, &size) >= sizeof(size))
-      {
-        result.arch = arch;
-        result.size = size;
-      }
-    }
-  }
-  
-  return result;
-}
-
-//- rjf: module full path extraction
-
-internal String8
-dmn_w32_full_path_from_module(Arena *arena, DMN_W32_Entity *module)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  //- rjf: extract path from module
-  String16 path16 = {0};
-  String8 path8 = {0};
-  {
-    // rjf: handle -> full path
-    if(module->handle != 0)
-    {
-      DWORD cap16 = GetFinalPathNameByHandleW(module->handle, 0, 0, VOLUME_NAME_DOS);
-      U16 *buffer16 = push_array_no_zero(scratch.arena, U16, cap16);
-      DWORD size16 = GetFinalPathNameByHandleW(module->handle, (WCHAR*)buffer16, cap16, VOLUME_NAME_DOS);
-      path16 = str16(buffer16, size16);
-    }
-    
-    // rjf: fallback (main module only): process -> full path
-    if(path16.size == 0 && module->module.is_main)
-    {
-      DMN_W32_Entity *process = module->parent;
-      DWORD size = KB(4);
-      U16 *buf = push_array_no_zero(scratch.arena, U16, size);
-      if(QueryFullProcessImageNameW(process->handle, 0, (WCHAR*)buf, &size))
-      {
-        path16 = str16(buf, size);
-      }
-    }
-    
-    // rjf: fallback (any module - no guarantee): address_of_name -> full path
-    if(path16.size == 0 && module->module.address_of_name_pointer != 0)
-    {
-      DMN_W32_Entity *process = module->parent;
-      U64 ptr_size = bit_size_from_arch(process->arch)/8;
-      U64 name_pointer = 0;
-      if(dmn_w32_process_read(process->handle, r1u64(module->module.address_of_name_pointer, module->module.address_of_name_pointer+ptr_size), &name_pointer))
-      {
-        if(name_pointer != 0)
-        {
-          if(module->module.name_is_unicode)
-          {
-            path16 = dmn_w32_read_memory_str16(scratch.arena, process->handle, name_pointer);
-          }
-          else
-          {
-            path8 = dmn_w32_read_memory_str(scratch.arena, process->handle, name_pointer);
-          }
-        }
-      }
-    }
-  }
-  
-  // rjf: produce finalized result
-  String8 result = {0};
-  {
-    if(path16.size > 0)
-    {
-      // rjf: skip the extended path thing if necessary
-      if(path16.size >= 4 &&
-         path16.str[0] == L'\\' &&
-         path16.str[1] == L'\\' &&
-         path16.str[2] == L'?' &&
-         path16.str[3] == L'\\')
-      {
-        path16.size -= 4;
-        path16.str += 4;
-      }
-      
-      // rjf: convert to UTF-8
-      result = str8_from_16(arena, path16);
-    }
-    else
-    {
-      // rjf: skip the extended path thing if necessary
-      if (path8.size >= 4 &&
-          path8.str[0] == L'\\' &&
-          path8.str[1] == L'\\' &&
-          path8.str[2] == L'?' &&
-          path8.str[3] == L'\\')
-      {
-        path8.size -= 4;
-        path8.str += 4;
-      }
-      
-      // rjf: copy to output arena
-      result = push_str8_copy(arena, path8);
-    }
-  }
-  
-  scratch_end(scratch);
-  return result;
 }
 
 ////////////////////////////////

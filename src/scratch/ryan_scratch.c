@@ -43,10 +43,10 @@
 #include "regs/raddbgi/regs_raddbgi.h"
 #include "type_graph/type_graph.h"
 #include "dbgi/dbgi.h"
-#include "demon/demon_inc.h"
+#include "demon2/demon2_inc.h"
 #include "eval/eval_inc.h"
 #include "unwind/unwind.h"
-#include "ctrl/ctrl_inc.h"
+#include "ctrl2/ctrl2_inc.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
@@ -71,10 +71,10 @@
 #include "regs/raddbgi/regs_raddbgi.c"
 #include "type_graph/type_graph.c"
 #include "dbgi/dbgi.c"
-#include "demon/demon_inc.c"
+#include "demon2/demon2_inc.c"
 #include "eval/eval_inc.c"
 #include "unwind/unwind.c"
-#include "ctrl/ctrl_inc.c"
+#include "ctrl2/ctrl2_inc.c"
 
 ////////////////////////////////
 //~ rjf: Entry Point

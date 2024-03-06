@@ -691,15 +691,6 @@ ctrl_halt(void)
   demon_halt(0, 0);
 }
 
-//- rjf: entity introspection
-
-internal U32
-ctrl_id_from_machine_entity(CTRL_MachineID id, DEMON_Handle handle)
-{
-  U32 result = 0;
-  return result;
-}
-
 //- rjf: exe -> dbg path mapping
 
 internal String8
