@@ -2025,7 +2025,7 @@ df_entity_equip_ctrl_machine_id(DF_Entity *entity, CTRL_MachineID machine_id)
 }
 
 internal void
-df_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle)
+df_entity_equip_ctrl_handle(DF_Entity *entity, DMN_Handle handle)
 {
   df_require_entity_nonnil(entity, return);
   entity->ctrl_handle = handle;
@@ -2419,7 +2419,7 @@ df_machine_entity_from_machine_id(CTRL_MachineID machine_id)
 }
 
 internal DF_Entity *
-df_entity_from_ctrl_handle(CTRL_MachineID machine_id, CTRL_Handle handle)
+df_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle)
 {
   DF_Entity *result = &df_g_nil_entity;
   if(handle.u64[0] != 0)
@@ -6417,7 +6417,7 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   // rjf: set up initial entities
   {
     DF_Entity *local_machine = df_entity_alloc(0, df_state->entities_root, DF_EntityKind_Machine);
-    df_entity_equip_ctrl_machine_id(local_machine, CTRL_MachineID_Client);
+    df_entity_equip_ctrl_machine_id(local_machine, CTRL_MachineID_Local);
     df_entity_equip_name(0, local_machine, str8_lit("This PC"));
   }
   
@@ -7512,7 +7512,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_FreezeLocalMachine:
         {
-          CTRL_MachineID machine_id = CTRL_MachineID_Client;
+          CTRL_MachineID machine_id = CTRL_MachineID_Local;
           DF_CmdParams params = df_cmd_params_zero();
           params.entity = df_handle_from_entity(df_machine_entity_from_machine_id(machine_id));
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
@@ -7520,7 +7520,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         case DF_CoreCmdKind_ThawLocalMachine:
         {
-          CTRL_MachineID machine_id = CTRL_MachineID_Client;
+          CTRL_MachineID machine_id = CTRL_MachineID_Local;
           DF_CmdParams params = df_cmd_params_zero();
           params.entity = df_handle_from_entity(df_machine_entity_from_machine_id(machine_id));
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);

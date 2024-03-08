@@ -179,7 +179,7 @@ dasm_inst_chunk_list_from_arch_addr_data(Arena *arena, U64 *bytes_processed_coun
 //- rjf: opening handles & correllation with module
 
 internal DASM_Handle
-dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, CTRL_Handle process, Rng1U64 vaddr_range)
+dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range)
 {
   DASM_Handle result = {0};
   if(machine != 0 && process.u64[0] != 0)
@@ -389,7 +389,7 @@ dasm_decode_thread_entry_point(void *p)
     //- rjf: request -> ctrl info
     B32 is_first_to_task = 0;
     CTRL_MachineID ctrl_machine_id = 0;
-    CTRL_Handle ctrl_process = {0};
+    DMN_Handle ctrl_process = {0};
     Rng1U64 vaddr_range = {0};
     Architecture arch = Architecture_Null;
     U64 *bytes_processed_counter = 0;

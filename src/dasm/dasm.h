@@ -77,7 +77,7 @@ struct DASM_Entity
   
   // rjf: key info
   CTRL_MachineID machine_id;
-  CTRL_Handle process;
+  DMN_Handle process;
   Rng1U64 vaddr_range;
   U64 id;
   
@@ -114,7 +114,7 @@ typedef struct DASM_BinaryInfo DASM_BinaryInfo;
 struct DASM_BinaryInfo
 {
   CTRL_MachineID machine_id;
-  CTRL_Handle process;
+  DMN_Handle process;
   Rng1U64 vaddr_range;
   U64 bytes_processed;
   U64 bytes_to_process;
@@ -187,7 +187,7 @@ internal DASM_InstChunkList dasm_inst_chunk_list_from_arch_addr_data(Arena *aren
 //~ rjf: Cache Lookups
 
 //- rjf: opening handles & correllation with module
-internal DASM_Handle dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, CTRL_Handle process, Rng1U64 vaddr_range);
+internal DASM_Handle dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range);
 
 //- rjf: asking for top-level info of a handle
 internal DASM_BinaryInfo dasm_binary_info_from_handle(Arena *arena, DASM_Handle handle);

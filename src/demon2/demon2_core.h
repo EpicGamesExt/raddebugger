@@ -182,16 +182,16 @@ internal B32 dmn_detach_process(DMN_Handle process);
 //~ rjf: @dmn_os_hooks Process/Thread Reads/Writes (Implemented Per-OS)
 
 //- rjf: processes
-internal U64          dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
-internal B32          dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
+internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
+internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 #define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 #define dmn_process_write_struct(process, vaddr, ptr) dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 
 //- rjf: threads
-internal U64          dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
-internal U64          dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
-internal B32          dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);
-internal B32          dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
+internal U64 dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
+internal U64 dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
+internal B32 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);
+internal B32 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
 
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks System Process Listing (Implemented Per-OS)

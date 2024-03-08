@@ -447,7 +447,7 @@ struct DF_Entity
   
   // rjf: ctrl entity equipment
   CTRL_MachineID ctrl_machine_id;
-  CTRL_Handle ctrl_handle;
+  DMN_Handle ctrl_handle;
   Architecture arch;
   U32 ctrl_id;
   U64 stack_base;
@@ -1447,7 +1447,7 @@ internal void df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src);
 
 //- rjf: control layer correllation equipment
 internal void df_entity_equip_ctrl_machine_id(DF_Entity *entity, CTRL_MachineID machine_id);
-internal void df_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle);
+internal void df_entity_equip_ctrl_handle(DF_Entity *entity, DMN_Handle handle);
 internal void df_entity_equip_arch(DF_Entity *entity, Architecture arch);
 internal void df_entity_equip_ctrl_id(DF_Entity *entity, U32 id);
 internal void df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base);
@@ -1468,7 +1468,7 @@ internal DF_Entity *df_entity_root(void);
 internal DF_EntityList df_push_entity_list_with_kind(Arena *arena, DF_EntityKind kind);
 internal DF_Entity *df_entity_from_id(DF_EntityID id);
 internal DF_Entity *df_machine_entity_from_machine_id(CTRL_MachineID machine_id);
-internal DF_Entity *df_entity_from_ctrl_handle(CTRL_MachineID machine_id, CTRL_Handle handle);
+internal DF_Entity *df_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 internal DF_Entity *df_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal DF_Entity *df_entity_from_name_and_kind(String8 string, DF_EntityKind kind);
 internal DF_Entity *df_entity_from_u64_and_kind(U64 u64, DF_EntityKind kind);
