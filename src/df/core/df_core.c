@@ -3717,7 +3717,7 @@ internal B32
 df_set_thread_rip(DF_Entity *thread, U64 vaddr)
 {
   Temp scratch = scratch_begin(0, 0);
-  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, thread->ctrl_machine_id, thread->ctrl_handle, max_U64);
+  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, thread->ctrl_machine_id, thread->ctrl_handle);
   regs_arch_block_write_rip(thread->arch, block, vaddr);
   B32 result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, block);
   

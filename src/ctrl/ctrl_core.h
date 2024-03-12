@@ -649,7 +649,7 @@ internal B32 ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, R
 //~ rjf: Thread Register Functions
 
 //- rjf: thread register cache reading
-internal void *ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us);
+internal void *ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread);
 internal U64 ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
 internal U64 ctrl_query_cached_rip_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
 internal U64 ctrl_query_cached_rsp_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);

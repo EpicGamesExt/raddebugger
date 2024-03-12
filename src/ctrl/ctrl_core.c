@@ -1274,7 +1274,7 @@ ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range,
 //- rjf: thread register cache reading
 
 internal void *
-ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us)
+ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread)
 {
   // TODO(rjf)
   return 0;
@@ -1332,7 +1332,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
     case Architecture_x64:
     {
       // rjf: grab initial register block
-      void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread, endt_us);
+      void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
       
       // rjf: grab initial memory view
       B32 stack_memview_good = 0;
@@ -2989,7 +2989,7 @@ ctrl_thread__run(CTRL_Msg *msg)
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       Architecture arch = thread->arch;
       U64 reg_size = regs_block_size_from_architecture(arch);
-      void *thread_regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, CTRL_MachineID_Local, event->thread, max_U64);
+      void *thread_regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, CTRL_MachineID_Local, event->thread);
       U64 thread_rip_vaddr = regs_rip_from_arch_block(arch, thread_regs_block);
       DMN_Handle module = {0};
       String8 module_name = {0};
