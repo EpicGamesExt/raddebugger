@@ -377,6 +377,7 @@ struct CTRL_ProcessMemoryRangeHashNode
   Rng1U64 vaddr_range_clamped;
   U128 hash;
   U64 memgen_idx;
+  U64 last_time_requested_us;
   B32 is_taken;
 };
 

@@ -1198,7 +1198,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
       {
         //- rjf: scan all processes
         for(DMN_W32_Entity *process = dmn_w32_shared->entities_base->first;
-            process != 0;
+            process != &dmn_w32_entity_nil;
             process = process->next)
         {
           if(process->kind != DMN_W32_EntityKind_Process) {continue;}
@@ -1345,7 +1345,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
       DEBUG_EVENT evt = {0};
       B32 evt_good = 0;
       {
-        B32 resume_good = 0;
+        B32 resume_good = 1;
         if(dmn_w32_shared->resume_needed)
         {
           dmn_w32_shared->resume_needed = 0;
@@ -1987,7 +1987,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
         {
           if(process->kind != DMN_W32_EntityKind_Process) { continue; }
           for(DMN_W32_Entity *thread = process->first;
-              thread != 0;
+              thread != &dmn_w32_entity_nil;
               thread = thread->next)
           {
             if(thread->kind != DMN_W32_EntityKind_Thread) { continue; }

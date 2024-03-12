@@ -970,6 +970,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     }
     
     //- rjf: not good -> create range node if necessary
+    U64 last_time_requested_us = 0;
     if(!is_good)
     {
       OS_MutexScopeW(process_stripe->rw_mutex)
@@ -985,6 +986,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
             {
               if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
               {
+                last_time_requested_us = range_n->last_time_requested_us;
                 range_node_exists = 1;
                 break;
               }
@@ -1009,9 +1011,29 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     }
     
     //- rjf: not good, or is stale -> submit hash request
-    if(!is_good || is_stale)
+    if((!is_good || is_stale) && os_now_microseconds() >= last_time_requested_us+10000)
     {
       ctrl_u2ms_enqueue_req(machine_id, process, range, zero_terminated, endt_us);
+      OS_MutexScopeW(process_stripe->rw_mutex)
+      {
+        for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+        {
+          if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+          {
+            U64 range_slot_idx = range_hash%n->range_hash_slots_count;
+            CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
+            B32 range_node_exists = 0;
+            for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+            {
+              if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
+              {
+                range_n->last_time_requested_us = os_now_microseconds();
+                break;
+              }
+            }
+          }
+        }
+      }
     }
     
     //- rjf: out of time? -> exit
@@ -3576,7 +3598,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     if(got_task && memgen_idx != preexisting_memgen_idx)
     {
       range_size = dim_1u64(vaddr_range_clamped);
-      U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, KB(64));
+      U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, os_page_size());
       range_arena = arena_alloc__sized(range_size+ARENA_HEADER_SIZE, range_size+ARENA_HEADER_SIZE);
       if(range_arena == 0)
       {
