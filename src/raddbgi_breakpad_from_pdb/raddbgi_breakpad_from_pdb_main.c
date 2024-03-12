@@ -61,8 +61,7 @@ struct P2B_BakeUnitVMapOut
   RDI_U64 vmap_entries_count;
 };
 
-internal void *
-p2b_bake_unit_vmap_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2b_bake_unit_vmap_task__entry_point)
 {
   P2B_BakeUnitVMapIn *in = (P2B_BakeUnitVMapIn *)p;
   P2B_BakeUnitVMapOut *out = push_array(arena, P2B_BakeUnitVMapOut, 1);
@@ -100,8 +99,7 @@ struct P2B_BakeUnitOut
   RDI_Line *unit_lines;
 };
 
-internal void *
-p2b_bake_unit_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2b_bake_unit_task__entry_point)
 {
   P2B_BakeUnitIn *in = (P2B_BakeUnitIn *)p;
   P2B_BakeUnitOut *out = push_array(arena, P2B_BakeUnitOut, 1);
@@ -138,8 +136,7 @@ struct P2B_DumpProcChunkIn
   RDIM_SymbolChunkNode *chunk;
 };
 
-internal void *
-p2b_dump_proc_chunk_task__entry_point(Arena *arena, void *p)
+internal TS_TASK_FUNCTION_DEF(p2b_dump_proc_chunk_task__entry_point)
 {
   P2B_DumpProcChunkIn *in = (P2B_DumpProcChunkIn *)p;
   String8List *out = push_array(arena, String8List, 1);
