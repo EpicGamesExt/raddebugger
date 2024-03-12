@@ -3656,7 +3656,7 @@ internal CTRL_Unwind
 df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
 {
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, thread->ctrl_machine_id, thread->ctrl_handle, 0);
+  CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
   return unwind;
 }
 
@@ -6398,6 +6398,7 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   df_state->entities_base = push_array(df_state->entities_arena, DF_Entity, 0);
   df_state->entities_count = 0;
   df_state->ctrl_msg_arena = arena_alloc();
+  df_state->ctrl_entity_store = ctrl_entity_store_alloc();
   df_state->ctrl_stop_arena = arena_alloc();
   df_state->entities_root = df_entity_alloc(0, &df_g_nil_entity, DF_EntityKind_Root);
   df_state->cmd_spec_table_size = 1024;
@@ -6549,6 +6550,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     
     //- rjf: consume & process events
     CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
+    ctrl_entity_store_apply_events(df_state->ctrl_entity_store, &events);
     for(CTRL_EventNode *event_n = events.first; event_n != 0; event_n = event_n->next)
     {
       CTRL_Event *event = &event_n->v;

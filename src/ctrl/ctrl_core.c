@@ -461,6 +461,233 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
 }
 
 ////////////////////////////////
+//~ rjf: Entity Type Functions
+
+//- rjf: cache creation/destruction
+
+internal CTRL_EntityStore *
+ctrl_entity_store_alloc(void)
+{
+  Arena *arena = arena_alloc();
+  CTRL_EntityStore *store = push_array(arena, CTRL_EntityStore, 1);
+  store->arena = arena;
+  return store;
+}
+
+internal void
+ctrl_entity_store_release(CTRL_EntityStore *cache)
+{
+  arena_release(cache->arena);
+}
+
+//- rjf: entity construction/deletion
+
+internal CTRL_Entity *
+ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, CTRL_MachineID machine_id, DMN_Handle handle)
+{
+  CTRL_Entity *entity = &ctrl_entity_nil;
+  {
+    // rjf: allocate
+    entity = store->free;
+    {
+      if(entity != 0)
+      {
+        SLLStackPop(store->free);
+      }
+      else
+      {
+        entity = push_array_no_zero(store->arena, CTRL_Entity, 1);
+      }
+      MemoryZeroStruct(entity);
+    }
+    
+    // rjf: fill
+    {
+      entity->kind        = kind;
+      entity->machine_id  = machine_id;
+      entity->handle      = handle;
+      entity->parent      = parent;
+      entity->next = entity->prev = entity->first = entity->last = &ctrl_entity_nil;
+      if(parent != &ctrl_entity_nil)
+      {
+        DLLPushBack_NPZ(&ctrl_entity_nil, parent->first, parent->last, entity, next, prev);
+      }
+    }
+    
+    // rjf: insert into hash map
+    {
+      U64 hash = ctrl_hash_from_machine_id_handle(machine_id, handle);
+      U64 slot_idx = hash%store->hash_slots_count;
+      CTRL_EntityHashSlot *slot = &store->hash_slots[slot_idx];
+      CTRL_EntityHashNode *node = 0;
+      for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(n->entity->machine_id == machine_id && dmn_handle_match(n->entity->handle, handle))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(node == 0)
+      {
+        node = store->hash_node_free;
+        if(node != 0)
+        {
+          SLLStackPop(store->hash_node_free);
+        }
+        else
+        {
+          node = push_array_no_zero(store->arena, CTRL_EntityHashNode, 1);
+        }
+        MemoryZeroStruct(node);
+        DLLPushBack(slot->first, slot->last, node);
+        node->entity = entity;
+      }
+    }
+  }
+  return entity;
+}
+
+internal void
+ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
+{
+  // rjf: unhook root
+  if(entity->parent != &ctrl_entity_nil)
+  {
+    DLLRemove_NPZ(&ctrl_entity_nil, entity->parent->first, entity->parent->last, entity, next, prev);
+  }
+  
+  // rjf: walk every entity in this tree, free each
+  if(entity != &ctrl_entity_nil)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      CTRL_Entity *e;
+    };
+    Task start_task = {0, entity};
+    Task *first_task = &start_task;
+    Task *last_task = &start_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      for(CTRL_Entity *child = entity->first; child != &ctrl_entity_nil; child = child->next)
+      {
+        Task *t = push_array(scratch.arena, Task, 1);
+        t->e = child;
+        SLLQueuePush(first_task, last_task, t);
+      }
+      
+      // rjf: free entity
+      SLLStackPush(store->free, t->e);
+      
+      // rjf: remove from hash map
+      {
+        U64 hash = ctrl_hash_from_machine_id_handle(t->e->machine_id, t->e->handle);
+        U64 slot_idx = hash%store->hash_slots_count;
+        CTRL_EntityHashSlot *slot = &store->hash_slots[slot_idx];
+        CTRL_EntityHashNode *node = 0;
+        for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
+        {
+          if(n->entity->machine_id == t->e->machine_id && dmn_handle_match(n->entity->handle, t->e->handle))
+          {
+            DLLRemove(slot->first, slot->last, n);
+            SLLStackPush(store->hash_node_free, n);
+            break;
+          }
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+}
+
+//- rjf: entity store lookups
+
+internal CTRL_Entity *
+ctrl_entity_from_machine_id_handle(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle handle)
+{
+  CTRL_Entity *entity = &ctrl_entity_nil;
+  {
+    U64 hash = ctrl_hash_from_machine_id_handle(machine_id, handle);
+    U64 slot_idx = hash%store->hash_slots_count;
+    CTRL_EntityHashSlot *slot = &store->hash_slots[slot_idx];
+    CTRL_EntityHashNode *node = 0;
+    for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(n->entity->machine_id == machine_id && dmn_handle_match(n->entity->handle, handle))
+      {
+        entity = n->entity;
+        break;
+      }
+    }
+  }
+  return entity;
+}
+
+//- rjf: applying events to entity caches
+
+internal void
+ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
+{
+  //- rjf: construct root-level entities
+  if(!store->root)
+  {
+    CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, 0, dmn_handle_zero());
+    CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, CTRL_MachineID_Local, dmn_handle_zero());
+    (void)local_machine;
+  }
+  
+  //- rjf: scan events & construct entities
+  for(CTRL_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    CTRL_Event *event = &n->v;
+    switch(event->kind)
+    {
+      //- rjf: processes
+      case CTRL_EventKind_NewProc:
+      {
+        CTRL_Entity *machine = ctrl_entity_from_machine_id_handle(store, event->machine_id, dmn_handle_zero());
+        CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->machine_id, event->entity);
+        process->arch = event->arch;
+      }break;
+      case CTRL_EventKind_EndProc:
+      {
+        CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
+        ctrl_entity_release(store, process);
+      }break;
+      
+      //- rjf: threads
+      case CTRL_EventKind_NewThread:
+      {
+        CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
+        CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->machine_id, event->entity);
+        thread->arch = event->arch;
+      }break;
+      case CTRL_EventKind_EndThread:
+      {
+        CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
+        ctrl_entity_release(store, thread);
+      }break;
+      
+      //- rjf: modules
+      case CTRL_EventKind_NewModule:
+      {
+        CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
+        CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->machine_id, event->entity);
+        module->arch = event->arch;
+      }break;
+      case CTRL_EventKind_EndModule:
+      {
+        CTRL_Entity *module = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
+        ctrl_entity_release(store, module);
+      }break;
+    }
+  }
+}
+
+////////////////////////////////
 //~ rjf: Main Layer Initialization
 
 internal void
@@ -504,11 +731,7 @@ ctrl_init(void)
     ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
     ctrl_state->thread_reg_cache.stripes[idx].arena = arena_alloc();
   }
-  ctrl_state->entity_rw_mutex = os_rw_mutex_alloc();
-  ctrl_state->entity_arena = arena_alloc();
-  ctrl_state->entity_root = &ctrl_entity_nil;
-  ctrl_state->entity_hash_slots_count = 4096;
-  ctrl_state->entity_hash_slots = push_array(arena, CTRL_EntityHashSlot, ctrl_state->entity_hash_slots_count);
+  ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
   ctrl_state->u2c_ring_size = KB(64);
   ctrl_state->u2c_ring_base = push_array_no_zero(arena, U8, ctrl_state->u2c_ring_size);
   ctrl_state->u2c_ring_mutex = os_mutex_alloc();
@@ -925,24 +1148,28 @@ ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range,
 internal void *
 ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us)
 {
+  // TODO(rjf)
   return 0;
 }
 
 internal U64
 ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
 {
+  // TODO(rjf)
   return 0;
 }
 
 internal U64
 ctrl_query_cached_rip_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
 {
+  // TODO(rjf)
   return 0;
 }
 
 internal U64
 ctrl_query_cached_rsp_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
 {
+  // TODO(rjf)
   return 0;
 }
 
@@ -960,12 +1187,12 @@ ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *
 //~ rjf: Unwinding Functions
 
 internal CTRL_Unwind
-ctrl_unwind_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us)
+ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   DBGI_Scope *scope = dbgi_scope_open();
-  CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(machine_id, thread);
+  CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
   CTRL_Entity *process_entity = thread_entity->parent;
   Architecture arch = thread_entity->arch;
   U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
@@ -1125,29 +1352,6 @@ ctrl_string2alias_from_arch(Architecture arch)
   return &ctrl_state->arch_string2alias_tables[arch];
 }
 
-//- rjf: entity state reading
-
-internal CTRL_Entity *
-ctrl_entity_from_machine_id_handle(CTRL_MachineID machine_id, DMN_Handle handle)
-{
-  CTRL_Entity *entity = &ctrl_entity_nil;
-  {
-    U64 hash = ctrl_hash_from_machine_id_handle(machine_id, handle);
-    U64 slot_idx = hash%ctrl_state->entity_hash_slots_count;
-    CTRL_EntityHashSlot *slot = &ctrl_state->entity_hash_slots[slot_idx];
-    CTRL_EntityHashNode *node = 0;
-    for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
-    {
-      if(n->entity->machine_id == machine_id && dmn_handle_match(n->entity->handle, handle))
-      {
-        entity = n->entity;
-        break;
-      }
-    }
-  }
-  return entity;
-}
-
 ////////////////////////////////
 //~ rjf: Control-Thread Functions
 
@@ -1220,6 +1424,7 @@ ctrl_c2u_push_events(CTRL_EventList *events)
 {
   if(events->count != 0) ProfScope("ctrl_c2u_push_events")
   {
+    ctrl_entity_store_apply_events(ctrl_state->ctrl_thread_entity_store, events);
     for(CTRL_EventNode *n = events->first; n != 0; n = n ->next)
     {
       Temp scratch = scratch_begin(0, 0);
@@ -1281,133 +1486,6 @@ ctrl_c2u_pop_events(Arena *arena)
   return events;
 }
 
-//- rjf: entity tree construction
-
-internal CTRL_Entity *
-ctrl_thread__entity_alloc(CTRL_Entity *parent, CTRL_EntityKind kind, CTRL_MachineID machine_id, DMN_Handle handle)
-{
-  CTRL_Entity *entity = &ctrl_entity_nil;
-  OS_MutexScopeW(ctrl_state->entity_rw_mutex)
-  {
-    // rjf: allocate
-    entity = ctrl_state->entity_free;
-    {
-      if(entity != 0)
-      {
-        SLLStackPop(ctrl_state->entity_free);
-      }
-      else
-      {
-        entity = push_array_no_zero(ctrl_state->entity_arena, CTRL_Entity, 1);
-      }
-      MemoryZeroStruct(entity);
-    }
-    
-    // rjf: fill
-    {
-      entity->kind        = kind;
-      entity->machine_id  = machine_id;
-      entity->handle      = handle;
-      entity->parent      = parent;
-      entity->next = entity->prev = entity->first = entity->last = &ctrl_entity_nil;
-      if(parent != &ctrl_entity_nil)
-      {
-        DLLPushBack_NPZ(&ctrl_entity_nil, parent->first, parent->last, entity, next, prev);
-      }
-    }
-    
-    // rjf: insert into hash map
-    {
-      U64 hash = ctrl_hash_from_machine_id_handle(machine_id, handle);
-      U64 slot_idx = hash%ctrl_state->entity_hash_slots_count;
-      CTRL_EntityHashSlot *slot = &ctrl_state->entity_hash_slots[slot_idx];
-      CTRL_EntityHashNode *node = 0;
-      for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
-      {
-        if(n->entity->machine_id == machine_id && dmn_handle_match(n->entity->handle, handle))
-        {
-          node = n;
-          break;
-        }
-      }
-      if(node == 0)
-      {
-        node = ctrl_state->entity_hash_node_free;
-        if(node != 0)
-        {
-          SLLStackPop(ctrl_state->entity_hash_node_free);
-        }
-        else
-        {
-          node = push_array_no_zero(ctrl_state->entity_arena, CTRL_EntityHashNode, 1);
-        }
-        MemoryZeroStruct(node);
-        DLLPushBack(slot->first, slot->last, node);
-        node->entity = entity;
-      }
-    }
-  }
-  return entity;
-}
-
-internal void
-ctrl_thread__entity_release(CTRL_Entity *entity)
-{
-  OS_MutexScopeW(ctrl_state->entity_rw_mutex)
-  {
-    // rjf: unhook root
-    if(entity->parent != &ctrl_entity_nil)
-    {
-      DLLRemove_NPZ(&ctrl_entity_nil, entity->parent->first, entity->parent->last, entity, next, prev);
-    }
-    
-    // rjf: walk every entity in this tree, free each
-    if(entity != &ctrl_entity_nil)
-    {
-      Temp scratch = scratch_begin(0, 0);
-      typedef struct Task Task;
-      struct Task
-      {
-        Task *next;
-        CTRL_Entity *e;
-      };
-      Task start_task = {0, entity};
-      Task *first_task = &start_task;
-      Task *last_task = &start_task;
-      for(Task *t = first_task; t != 0; t = t->next)
-      {
-        for(CTRL_Entity *child = entity->first; child != &ctrl_entity_nil; child = child->next)
-        {
-          Task *t = push_array(scratch.arena, Task, 1);
-          t->e = child;
-          SLLQueuePush(first_task, last_task, t);
-        }
-        
-        // rjf: free entity
-        SLLStackPush(ctrl_state->entity_free, t->e);
-        
-        // rjf: remove from hash map
-        {
-          U64 hash = ctrl_hash_from_machine_id_handle(t->e->machine_id, t->e->handle);
-          U64 slot_idx = hash%ctrl_state->entity_hash_slots_count;
-          CTRL_EntityHashSlot *slot = &ctrl_state->entity_hash_slots[slot_idx];
-          CTRL_EntityHashNode *node = 0;
-          for(CTRL_EntityHashNode *n = slot->first; n != 0; n = n->next)
-          {
-            if(n->entity->machine_id == t->e->machine_id && dmn_handle_match(n->entity->handle, t->e->handle))
-            {
-              DLLRemove(slot->first, slot->last, n);
-              SLLStackPush(ctrl_state->entity_hash_node_free, n);
-              break;
-            }
-          }
-        }
-      }
-      scratch_end(scratch);
-    }
-  }
-}
-
 //- rjf: entry point
 
 internal void
@@ -1415,13 +1493,6 @@ ctrl_thread__entry_point(void *p)
 {
   ThreadNameF("[ctrl] thread");
   ProfBeginFunction();
-  
-  //- rjf: set up initial entities
-  {
-    CTRL_Entity *root = ctrl_thread__entity_alloc(&ctrl_entity_nil, CTRL_EntityKind_Root, 0, dmn_handle_zero());
-    CTRL_Entity *local_machine = ctrl_thread__entity_alloc(root, CTRL_EntityKind_Machine, CTRL_MachineID_Local, dmn_handle_zero());
-    (void)local_machine;
-  }
   
   //- rjf: loop
   Temp scratch = scratch_begin(0, 0);
@@ -1479,7 +1550,7 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
 {
   Temp scratch = scratch_begin(&arena, 1);
   DBGI_Scope *scope = dbgi_scope_open();
-  CTRL_Entity *module_entity = ctrl_entity_from_machine_id_handle(machine_id, module);
+  CTRL_Entity *module_entity = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, machine_id, module);
   String8 exe_path = module_entity->name;
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
   RDI_Parsed *rdi = &dbgi->rdi;
@@ -1651,7 +1722,7 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
                (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
             {
               DBGI_Scope *scope = dbgi_scope_open();
-              CTRL_Entity *process = ctrl_entity_from_machine_id_handle(CTRL_MachineID_Local, ev->process);
+              CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, ev->process);
               CTRL_Entity *module = process->first;
               if(module != &ctrl_entity_nil)
               {
@@ -1735,7 +1806,7 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
       U64 size_of_spoof = 0;
       if(do_spoof) ProfScope("prep spoof")
       {
-        CTRL_Entity *spoof_process = ctrl_entity_from_machine_id_handle(CTRL_MachineID_Local, spoof->process);
+        CTRL_Entity *spoof_process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->process);
         Architecture arch = spoof_process->arch;
         size_of_spoof = bit_size_from_arch(arch)/8;
         dmn_process_read(spoof_process->handle, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
@@ -1788,7 +1859,7 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
   // simply been sent other debug events first
   if(spoof != 0)
   {
-    CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(CTRL_MachineID_Local, spoof->thread);
+    CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->thread);
     Architecture arch = thread->arch;
     void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_architecture(arch));
     dmn_thread_read_reg_block(spoof->thread, regs_block);
@@ -2165,7 +2236,7 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
           for(U64 process_idx = 0; process_idx < run_ctrls.run_entity_count; process_idx += 1)
           {
             //- rjf: unpack process & first module info
-            CTRL_Entity *process = ctrl_entity_from_machine_id_handle(CTRL_MachineID_Local, run_ctrls.run_entities[process_idx]);
+            CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, run_ctrls.run_entities[process_idx]);
             CTRL_Entity *module = process->first;
             U64 module_base_vaddr = module->vaddr_range.min;
             String8 exe_path = module->name;
@@ -2535,7 +2606,9 @@ ctrl_thread__run(CTRL_Msg *msg)
   //- rjf: gather all initial breakpoints
   //
   DMN_TrapChunkList user_traps = {0};
-  for(CTRL_Entity *machine = ctrl_state->entity_root->first; machine != &ctrl_entity_nil; machine = machine->next)
+  for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
+      machine != &ctrl_entity_nil;
+      machine = machine->next)
   {
     if(machine->kind != CTRL_EntityKind_Machine) { continue; }
     for(CTRL_Entity *process = machine->first; process != &ctrl_entity_nil; process = process->next)
@@ -2571,7 +2644,9 @@ ctrl_thread__run(CTRL_Msg *msg)
   {
     // rjf: gather stuck threads
     DMN_HandleList stuck_threads = {0};
-    for(CTRL_Entity *machine = ctrl_state->entity_root->first; machine != &ctrl_entity_nil; machine = machine->next)
+    for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
+        machine != &ctrl_entity_nil;
+        machine = machine->next)
     {
       if(machine->kind != CTRL_EntityKind_Machine) { continue; }
       for(CTRL_Entity *process = machine->first; process != &ctrl_entity_nil; process = process->next)
@@ -2783,7 +2858,7 @@ ctrl_thread__run(CTRL_Msg *msg)
       //////////////////////////
       //- rjf: unpack info about thread attached to event
       //
-      CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(CTRL_MachineID_Local, event->thread);
+      CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       Architecture arch = thread->arch;
       U64 reg_size = regs_block_size_from_architecture(arch);
       void *thread_regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, CTRL_MachineID_Local, event->thread, max_U64);
@@ -2793,7 +2868,7 @@ ctrl_thread__run(CTRL_Msg *msg)
       U64 module_base_vaddr = 0;
       U64 thread_rip_voff = 0;
       {
-        CTRL_Entity *process = ctrl_entity_from_machine_id_handle(CTRL_MachineID_Local, event->thread);
+        CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
         for(CTRL_Entity *module = process->first; module != &ctrl_entity_nil; module = module->next)
         {
           if(contains_1u64(module->vaddr_range, thread_rip_vaddr))

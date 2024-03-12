@@ -1179,6 +1179,7 @@ struct DF_State
   B32 ctrl_solo_stepping_mode;
   
   // rjf: control thread ctrl -> user reading state
+  CTRL_EntityStore *ctrl_entity_store;
   Arena *ctrl_stop_arena;
   CTRL_Event ctrl_last_stop_event;
   

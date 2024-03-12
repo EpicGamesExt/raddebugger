@@ -83,6 +83,17 @@ struct CTRL_EntityHashSlot
   CTRL_EntityHashNode *last;
 };
 
+typedef struct CTRL_EntityStore CTRL_EntityStore;
+struct CTRL_EntityStore
+{
+  Arena *arena;
+  CTRL_Entity *root;
+  CTRL_Entity *free;
+  CTRL_EntityHashSlot *hash_slots;
+  CTRL_EntityHashNode *hash_node_free;
+  U64 hash_slots_count;
+};
+
 ////////////////////////////////
 //~ rjf: Unwind Types
 
@@ -473,15 +484,6 @@ struct CTRL_State
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;
   
-  // rjf: entity tree
-  OS_Handle entity_rw_mutex;
-  Arena *entity_arena;
-  CTRL_Entity *entity_root;
-  CTRL_Entity *entity_free;
-  CTRL_EntityHashSlot *entity_hash_slots;
-  CTRL_EntityHashNode *entity_hash_node_free;
-  U64 entity_hash_slots_count;
-  
   // rjf: user -> ctrl msg ring buffer
   U64 u2c_ring_size;
   U8 *u2c_ring_base;
@@ -500,6 +502,7 @@ struct CTRL_State
   
   // rjf: ctrl thread state
   OS_Handle ctrl_thread;
+  CTRL_EntityStore *ctrl_thread_entity_store;
   Arena *dmn_event_arena;
   DMN_EventNode *first_dmn_event_node;
   DMN_EventNode *last_dmn_event_node;
@@ -586,6 +589,23 @@ internal String8 ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *eve
 internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 string);
 
 ////////////////////////////////
+//~ rjf: Entity Type Functions
+
+//- rjf: cache creation/destruction
+internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
+internal void ctrl_entity_store_release(CTRL_EntityStore *cache);
+
+//- rjf: entity construction/deletion
+internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, CTRL_MachineID machine_id, DMN_Handle handle);
+internal void ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity);
+
+//- rjf: entity store lookups
+internal CTRL_Entity *ctrl_entity_from_machine_id_handle(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle handle);
+
+//- rjf: applying events to entity caches
+internal void ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list);
+
+////////////////////////////////
 //~ rjf: Main Layer Initialization
 
 internal void ctrl_init(void);
@@ -624,7 +644,7 @@ internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle t
 ////////////////////////////////
 //~ rjf: Unwinding Functions
 
-internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us);
+internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Halting All Attached Processes
@@ -643,9 +663,6 @@ internal U64 ctrl_reggen_idx(void);
 internal EVAL_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);
 internal EVAL_String2NumMap *ctrl_string2alias_from_arch(Architecture arch);
 
-//- rjf: entity state reading
-internal CTRL_Entity *ctrl_entity_from_machine_id_handle(CTRL_MachineID machine_id, DMN_Handle handle);
-
 ////////////////////////////////
 //~ rjf: Control-Thread Functions
 
@@ -656,10 +673,6 @@ internal CTRL_MsgList ctrl_u2c_pop_msgs(Arena *arena);
 //- rjf: control -> user thread communication
 internal void ctrl_c2u_push_events(CTRL_EventList *events);
 internal CTRL_EventList ctrl_c2u_pop_events(Arena *arena);
-
-//- rjf: entity tree construction
-internal CTRL_Entity *ctrl_thread__entity_alloc(CTRL_Entity *parent, CTRL_EntityKind kind, CTRL_MachineID machine_id, DMN_Handle handle);
-internal void ctrl_thread__entity_release(CTRL_Entity *entity);
 
 //- rjf: entry point
 internal void ctrl_thread__entry_point(void *p);
