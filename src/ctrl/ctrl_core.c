@@ -1013,8 +1013,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     //- rjf: not good, or is stale -> submit hash request
     if((!is_good || is_stale) && os_now_microseconds() >= last_time_requested_us+10000)
     {
-      ctrl_u2ms_enqueue_req(machine_id, process, range, zero_terminated, endt_us);
-      OS_MutexScopeW(process_stripe->rw_mutex)
+      if(ctrl_u2ms_enqueue_req(machine_id, process, range, zero_terminated, endt_us)) OS_MutexScopeW(process_stripe->rw_mutex)
       {
         for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
         {
