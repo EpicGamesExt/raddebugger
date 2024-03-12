@@ -2333,6 +2333,13 @@ dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 
 //- rjf: threads
 
+internal Architecture
+dmn_arch_from_thread(DMN_Handle handle)
+{
+  DMN_W32_Entity *entity = dmn_w32_entity_from_handle(handle);
+  return entity->arch;
+}
+
 internal U64
 dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
 {

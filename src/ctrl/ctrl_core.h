@@ -65,7 +65,7 @@ struct CTRL_Entity
   CTRL_MachineID machine_id;
   DMN_Handle handle;
   Rng1U64 vaddr_range;
-  String8 name;
+  String8 string;
 };
 
 typedef struct CTRL_EntityHashNode CTRL_EntityHashNode;
@@ -83,6 +83,13 @@ struct CTRL_EntityHashSlot
   CTRL_EntityHashNode *last;
 };
 
+typedef struct CTRL_EntityStringChunkNode CTRL_EntityStringChunkNode;
+struct CTRL_EntityStringChunkNode
+{
+  CTRL_EntityStringChunkNode *next;
+  U64 size;
+};
+
 typedef struct CTRL_EntityStore CTRL_EntityStore;
 struct CTRL_EntityStore
 {
@@ -92,6 +99,7 @@ struct CTRL_EntityStore
   CTRL_EntityHashSlot *hash_slots;
   CTRL_EntityHashNode *hash_node_free;
   U64 hash_slots_count;
+  CTRL_EntityStringChunkNode *free_string_chunks[8];
 };
 
 ////////////////////////////////
@@ -593,11 +601,18 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 
 //- rjf: cache creation/destruction
 internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
-internal void ctrl_entity_store_release(CTRL_EntityStore *cache);
+internal void ctrl_entity_store_release(CTRL_EntityStore *store);
+
+//- rjf: string allocation/deletion
+internal String8 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string);
+internal void ctrl_entity_string_release(CTRL_EntityStore *store, String8 string);
 
 //- rjf: entity construction/deletion
-internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, CTRL_MachineID machine_id, DMN_Handle handle);
+internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle);
 internal void ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity);
+
+//- rjf: entity equipment
+internal void ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *entity, String8 string);
 
 //- rjf: entity store lookups
 internal CTRL_Entity *ctrl_entity_from_machine_id_handle(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle handle);

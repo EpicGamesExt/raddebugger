@@ -471,6 +471,8 @@ ctrl_entity_store_alloc(void)
   Arena *arena = arena_alloc();
   CTRL_EntityStore *store = push_array(arena, CTRL_EntityStore, 1);
   store->arena = arena;
+  store->hash_slots_count = 1024;
+  store->hash_slots = push_array(arena, CTRL_EntityHashSlot, store->hash_slots_count);
   return store;
 }
 
@@ -480,10 +482,101 @@ ctrl_entity_store_release(CTRL_EntityStore *cache)
   arena_release(cache->arena);
 }
 
+internal U64
+ctrl_name_bucket_idx_from_string_size(U64 size)
+{
+  U64 size_rounded = u64_up_to_pow2(size+1);
+  size_rounded = ClampBot((1<<4), size_rounded);
+  U64 bucket_idx = 0;
+  switch(size_rounded)
+  {
+    case 1<<4: {bucket_idx = 0;}break;
+    case 1<<5: {bucket_idx = 1;}break;
+    case 1<<6: {bucket_idx = 2;}break;
+    case 1<<7: {bucket_idx = 3;}break;
+    case 1<<8: {bucket_idx = 4;}break;
+    case 1<<9: {bucket_idx = 5;}break;
+    case 1<<10:{bucket_idx = 6;}break;
+    default:{bucket_idx = ArrayCount(((CTRL_EntityStore *)0)->free_string_chunks)-1;}break;
+  }
+  return bucket_idx;
+}
+
+internal String8
+ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string)
+{
+  if(string.size == 0) {return str8_zero();}
+  U64 bucket_idx = ctrl_name_bucket_idx_from_string_size(string.size);
+  CTRL_EntityStringChunkNode *node = store->free_string_chunks[bucket_idx];
+  
+  // rjf: pull from bucket free list
+  if(node != 0)
+  {
+    if(bucket_idx == ArrayCount(store->free_string_chunks)-1)
+    {
+      node = 0;
+      CTRL_EntityStringChunkNode *prev = 0;
+      for(CTRL_EntityStringChunkNode *n = store->free_string_chunks[bucket_idx];
+          n != 0;
+          prev = n, n = n->next)
+      {
+        if(n->size >= string.size+1)
+        {
+          if(prev == 0)
+          {
+            store->free_string_chunks[bucket_idx] = n->next;
+          }
+          else
+          {
+            prev->next = n->next;
+          }
+          node = n;
+          break;
+        }
+      }
+    }
+    else
+    {
+      SLLStackPop(store->free_string_chunks[bucket_idx]);
+    }
+  }
+  
+  // rjf: no found node -> allocate new
+  if(node == 0)
+  {
+    U64 chunk_size = 0;
+    if(bucket_idx < ArrayCount(store->free_string_chunks)-1)
+    {
+      chunk_size = 1<<(bucket_idx+4);
+    }
+    else
+    {
+      chunk_size = u64_up_to_pow2(string.size);
+    }
+    U8 *chunk_memory = push_array(store->arena, U8, chunk_size);
+    node = (CTRL_EntityStringChunkNode *)chunk_memory;
+  }
+  
+  // rjf: fill string & return
+  String8 allocated_string = str8((U8 *)node, string.size);
+  MemoryCopy((U8 *)node, string.str, string.size);
+  return allocated_string;
+}
+
+internal void
+ctrl_entity_string_release(CTRL_EntityStore *store, String8 string)
+{
+  if(string.size == 0) {return;}
+  U64 bucket_idx = ctrl_name_bucket_idx_from_string_size(string.size);
+  CTRL_EntityStringChunkNode *node = (CTRL_EntityStringChunkNode *)string.str;
+  node->size = u64_up_to_pow2(string.size);
+  SLLStackPush(store->free_string_chunks[bucket_idx], node);
+}
+
 //- rjf: entity construction/deletion
 
 internal CTRL_Entity *
-ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, CTRL_MachineID machine_id, DMN_Handle handle)
+ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle)
 {
   CTRL_Entity *entity = &ctrl_entity_nil;
   {
@@ -504,6 +597,7 @@ ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind 
     // rjf: fill
     {
       entity->kind        = kind;
+      entity->arch        = arch;
       entity->machine_id  = machine_id;
       entity->handle      = handle;
       entity->parent      = parent;
@@ -603,6 +697,18 @@ ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
   }
 }
 
+//- rjf: entity equipment
+
+internal void
+ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *entity, String8 string)
+{
+  if(entity->string.size != 0)
+  {
+    ctrl_entity_string_release(store, entity->string);
+  }
+  entity->string = ctrl_entity_string_alloc(store, string);
+}
+
 //- rjf: entity store lookups
 
 internal CTRL_Entity *
@@ -634,8 +740,8 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
   //- rjf: construct root-level entities
   if(!store->root)
   {
-    CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, 0, dmn_handle_zero());
-    CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, CTRL_MachineID_Local, dmn_handle_zero());
+    CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Architecture_Null, 0, dmn_handle_zero());
+    CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, architecture_from_context(), CTRL_MachineID_Local, dmn_handle_zero());
     (void)local_machine;
   }
   
@@ -649,8 +755,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       case CTRL_EventKind_NewProc:
       {
         CTRL_Entity *machine = ctrl_entity_from_machine_id_handle(store, event->machine_id, dmn_handle_zero());
-        CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->machine_id, event->entity);
-        process->arch = event->arch;
+        CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->machine_id, event->entity);
       }break;
       case CTRL_EventKind_EndProc:
       {
@@ -662,21 +767,25 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       case CTRL_EventKind_NewThread:
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
-        CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->machine_id, event->entity);
-        thread->arch = event->arch;
+        CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->machine_id, event->entity);
       }break;
       case CTRL_EventKind_EndThread:
       {
         CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
         ctrl_entity_release(store, thread);
       }break;
+      case CTRL_EventKind_ThreadName:
+      {
+        CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
+        ctrl_entity_equip_string(store, thread, event->string);
+      }break;
       
       //- rjf: modules
       case CTRL_EventKind_NewModule:
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
-        CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->machine_id, event->entity);
-        module->arch = event->arch;
+        CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->arch, event->machine_id, event->entity);
+        ctrl_entity_equip_string(store, module, event->string);
       }break;
       case CTRL_EventKind_EndModule:
       {
@@ -811,31 +920,23 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     B32 is_stale = 0;
     OS_MutexScopeR(process_stripe->rw_mutex)
     {
-      for(;;)
+      for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
       {
-        for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+        if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
         {
-          if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+          U64 range_slot_idx = range_hash%n->range_hash_slots_count;
+          CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
+          for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
           {
-            U64 range_slot_idx = range_hash%n->range_hash_slots_count;
-            CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
-            for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+            if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
             {
-              if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
-              {
-                result = range_n->hash;
-                is_good = 1;
-                is_stale = range_n->memgen_idx < ctrl_memgen_idx();
-                goto read_cache__break_all;
-              }
+              result = range_n->hash;
+              is_good = 1;
+              is_stale = (range_n->memgen_idx < ctrl_memgen_idx());
+              goto read_cache__break_all;
             }
           }
         }
-        if(os_now_microseconds() >= endt_us)
-        {
-          break;
-        }
-        os_condition_variable_wait_rw_r(process_stripe->cv, process_stripe->rw_mutex, endt_us);
       }
       read_cache__break_all:;
     }
@@ -915,6 +1016,12 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     
     //- rjf: out of time? -> exit
     if(os_now_microseconds() >= endt_us)
+    {
+      break;
+    }
+    
+    //- rjf: done? -> exit
+    if(is_good && !is_stale)
     {
       break;
     }
@@ -1245,7 +1352,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
           if(contains_1u64(m->vaddr_range, rip))
           {
             module = m->handle;
-            module_name = m->name;
+            module_name = m->string;
             module_vaddr_range = m->vaddr_range;
             break;
           }
@@ -1551,7 +1658,7 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
   Temp scratch = scratch_begin(&arena, 1);
   DBGI_Scope *scope = dbgi_scope_open();
   CTRL_Entity *module_entity = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, machine_id, module);
-  String8 exe_path = module_entity->name;
+  String8 exe_path = module_entity->string;
   DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
   RDI_Parsed *rdi = &dbgi->rdi;
   U64 base_vaddr = module_entity->vaddr_range.min;
@@ -1729,7 +1836,7 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
                 // rjf: determine base address of asan shadow space
                 U64 asan_shadow_base_vaddr = 0;
                 B32 asan_shadow_variable_exists_but_is_zero = 0;
-                String8 module_path = module->name;
+                String8 module_path = module->string;
                 DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, module_path, max_U64);
                 RDI_Parsed *rdi = &dbgi->rdi;
                 RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_GlobalVariables);
@@ -2239,7 +2346,7 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
             CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, run_ctrls.run_entities[process_idx]);
             CTRL_Entity *module = process->first;
             U64 module_base_vaddr = module->vaddr_range.min;
-            String8 exe_path = module->name;
+            String8 exe_path = module->string;
             DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
             RDI_Parsed *rdi = &dbgi->rdi;
             RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Procedures);
@@ -2873,7 +2980,7 @@ ctrl_thread__run(CTRL_Msg *msg)
         {
           if(contains_1u64(module->vaddr_range, thread_rip_vaddr))
           {
-            module_name = module->name;
+            module_name = module->string;
             module_base_vaddr = module->vaddr_range.min;
             thread_rip_voff = thread_rip_vaddr - module->vaddr_range.min;
             break;
