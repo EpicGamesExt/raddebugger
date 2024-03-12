@@ -1462,6 +1462,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
                 DMN_Event *e = dmn_event_list_push(arena, &events);
                 e->kind    = DMN_EventKind_CreateProcess;
                 e->process = dmn_w32_handle_from_entity(process);
+                e->arch    = image_info.arch;
                 e->code    = evt.dwProcessId;
               }
               
@@ -1471,6 +1472,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
                 e->kind    = DMN_EventKind_CreateThread;
                 e->process = dmn_w32_handle_from_entity(process);
                 e->thread  = dmn_w32_handle_from_entity(thread);
+                e->arch    = image_info.arch;
                 e->code    = evt.dwThreadId;
               }
               
@@ -1480,6 +1482,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
                 e->kind    = DMN_EventKind_LoadModule;
                 e->process = dmn_w32_handle_from_entity(process);
                 e->module  = dmn_w32_handle_from_entity(module);
+                e->arch    = image_info.arch;
                 e->address = module_base;
                 e->size    = image_info.size;
                 e->string  = dmn_w32_full_path_from_module(arena, module);
@@ -1543,6 +1546,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
             DMN_W32_Entity *thread = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Thread, evt.dwThreadId);
             {
               thread->handle                   = evt.u.CreateThread.hThread;
+              thread->arch                     = process->arch;
               thread->thread.thread_local_base = (U64)evt.u.CreateThread.lpThreadLocalBase;
             }
             
@@ -1573,6 +1577,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
               e->kind = DMN_EventKind_CreateThread;
               e->process = dmn_w32_handle_from_entity(process);
               e->thread  = dmn_w32_handle_from_entity(thread);
+              e->arch    = thread->arch;
               e->code    = evt.dwThreadId;
               e->string  = thread_name;
             }
@@ -1627,6 +1632,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
             DMN_W32_Entity *module = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Module, module_base);
             {
               module->handle                         = evt.u.LoadDll.hFile;
+              module->arch                           = image_info.arch;
               module->module.vaddr_range             = r1u64(module_base, module_base+image_info.size);
               module->module.address_of_name_pointer = (U64)evt.u.LoadDll.lpImageName;
               module->module.name_is_unicode         = (evt.u.LoadDll.fUnicode != 0);
@@ -1638,6 +1644,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
               e->kind = DMN_EventKind_LoadModule;
               e->process = dmn_w32_handle_from_entity(process);
               e->module  = dmn_w32_handle_from_entity(module);
+              e->arch    = module->arch;
               e->address = module_base;
               e->size    = image_info.size;
               e->string  = dmn_w32_full_path_from_module(arena, module);
@@ -2299,6 +2306,8 @@ dmn_detach_process(DMN_Handle process)
   {
     dmn_handle_list_push(dmn_w32_shared->detach_arena, &dmn_w32_shared->detach_processes, process);
   }
+  
+  return result;
 }
 
 ////////////////////////////////

@@ -473,6 +473,15 @@ struct CTRL_State
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;
   
+  // rjf: entity tree
+  OS_Handle entity_rw_mutex;
+  Arena *entity_arena;
+  CTRL_Entity *entity_root;
+  CTRL_Entity *entity_free;
+  CTRL_EntityHashSlot *entity_hash_slots;
+  CTRL_EntityHashNode *entity_hash_node_free;
+  U64 entity_hash_slots_count;
+  
   // rjf: user -> ctrl msg ring buffer
   U64 u2c_ring_size;
   U8 *u2c_ring_base;
@@ -491,12 +500,6 @@ struct CTRL_State
   
   // rjf: ctrl thread state
   OS_Handle ctrl_thread;
-  Arena *ctrl_entity_arena;
-  CTRL_Entity *ctrl_entity_root;
-  CTRL_Entity *ctrl_entity_free;
-  CTRL_EntityHashSlot *ctrl_entity_hash_slots;
-  CTRL_EntityHashNode *ctrl_entity_hash_node_free;
-  U64 ctrl_entity_hash_slots_count;
   Arena *dmn_event_arena;
   DMN_EventNode *first_dmn_event_node;
   DMN_EventNode *last_dmn_event_node;
@@ -557,8 +560,6 @@ internal CTRL_TrapList ctrl_trap_list_copy(Arena *arena, CTRL_TrapList *src);
 
 internal void ctrl_user_breakpoint_list_push(Arena *arena, CTRL_UserBreakpointList *list, CTRL_UserBreakpoint *bp);
 internal CTRL_UserBreakpointList ctrl_user_breakpoint_list_copy(Arena *arena, CTRL_UserBreakpointList *src);
-internal void ctrl_append_resolved_module_user_bp_traps(Arena *arena, DMN_Handle process, DMN_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
-internal void ctrl_append_resolved_process_user_bp_traps(Arena *arena, DMN_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 
 ////////////////////////////////
 //~ rjf: Message Type Functions
@@ -614,6 +615,8 @@ internal B32 ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, R
 //- rjf: thread register cache reading
 internal void *ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us);
 internal U64 ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
+internal U64 ctrl_query_cached_rip_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
+internal U64 ctrl_query_cached_rsp_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
 
 //- rjf: thread register writing
 internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *block);
@@ -621,7 +624,7 @@ internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle t
 ////////////////////////////////
 //~ rjf: Unwinding Functions
 
-internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread);
+internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Halting All Attached Processes
@@ -640,6 +643,9 @@ internal U64 ctrl_reggen_idx(void);
 internal EVAL_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);
 internal EVAL_String2NumMap *ctrl_string2alias_from_arch(Architecture arch);
 
+//- rjf: entity state reading
+internal CTRL_Entity *ctrl_entity_from_machine_id_handle(CTRL_MachineID machine_id, DMN_Handle handle);
+
 ////////////////////////////////
 //~ rjf: Control-Thread Functions
 
@@ -654,10 +660,13 @@ internal CTRL_EventList ctrl_c2u_pop_events(Arena *arena);
 //- rjf: entity tree construction
 internal CTRL_Entity *ctrl_thread__entity_alloc(CTRL_Entity *parent, CTRL_EntityKind kind, CTRL_MachineID machine_id, DMN_Handle handle);
 internal void ctrl_thread__entity_release(CTRL_Entity *entity);
-internal CTRL_Entity *ctrl_thread__entity_from_machine_id_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 
 //- rjf: entry point
 internal void ctrl_thread__entry_point(void *p);
+
+//- rjf: breakpoint resolution
+internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 
 //- rjf: attached process running/event gathering
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);

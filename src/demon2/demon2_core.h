@@ -54,6 +54,7 @@ struct DMN_Event
   DMN_Handle process;
   DMN_Handle thread;
   DMN_Handle module;
+  Architecture arch;
   U64 address;
   U64 size;
   String8 string;
