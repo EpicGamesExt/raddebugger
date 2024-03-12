@@ -79,6 +79,7 @@ struct DASM_Entity
   CTRL_MachineID machine_id;
   DMN_Handle process;
   Rng1U64 vaddr_range;
+  Architecture arch;
   U64 id;
   
   // rjf: top-level info
@@ -187,7 +188,7 @@ internal DASM_InstChunkList dasm_inst_chunk_list_from_arch_addr_data(Arena *aren
 //~ rjf: Cache Lookups
 
 //- rjf: opening handles & correllation with module
-internal DASM_Handle dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range);
+internal DASM_Handle dasm_handle_from_ctrl_process_range_arch(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range, Architecture arch);
 
 //- rjf: asking for top-level info of a handle
 internal DASM_BinaryInfo dasm_binary_info_from_handle(Arena *arena, DASM_Handle handle);

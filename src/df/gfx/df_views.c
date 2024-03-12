@@ -240,9 +240,9 @@ df_process_info_list_from_query(Arena *arena, String8 query)
   //- rjf: build list
   DF_ProcessInfoList list = {0};
   {
-    DEMON_ProcessIter iter = {0};
-    demon_proc_iter_begin(&iter);
-    for(DEMON_ProcessInfo info = {0}; demon_proc_iter_next(scratch.arena, &iter, &info);)
+    DMN_ProcessIter iter = {0};
+    dmn_process_iter_begin(&iter);
+    for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &iter, &info);)
     {
       // rjf: skip root-level or otherwise 0-pid processes
       if(info.pid == 0)
@@ -290,7 +290,7 @@ df_process_info_list_from_query(Arena *arena, String8 query)
         list.count += 1;
       }
     }
-    demon_proc_iter_end(&iter);
+    dmn_process_iter_end(&iter);
   }
   
   scratch_end(scratch);
@@ -7552,8 +7552,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Memory)
 
 DF_VIEW_UI_FUNCTION_DEF(Memory)
 {
-  Temp scratch = scratch_begin(0, 0);
   ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
   
   //////////////////////////////
   //- rjf: unpack state
@@ -7766,8 +7767,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       // rjf: try to read new memory for this range
       U64 bytes_to_read = dim_1u64(chunk_aligned_range_bytes);
       U8 *buffer = push_array_no_zero(scratch.arena, U8, bytes_to_read);
-      U64 half1_bytes_read = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min, chunk_aligned_range_bytes.min+bytes_to_read/2), buffer+0);
-      U64 half2_bytes_read = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min+bytes_to_read/2, chunk_aligned_range_bytes.max), buffer+bytes_to_read/2);
+      U64 half1_bytes_read = dmn_process_read(process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min, chunk_aligned_range_bytes.min+bytes_to_read/2), buffer+0);
+      U64 half2_bytes_read = dmn_process_read(process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min+bytes_to_read/2, chunk_aligned_range_bytes.max), buffer+bytes_to_read/2);
       
       // rjf: worked? -> clear cache & store
       if(half1_bytes_read+half2_bytes_read >= bytes_to_read)
@@ -8340,6 +8341,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     }
   }
   
+  hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
 }

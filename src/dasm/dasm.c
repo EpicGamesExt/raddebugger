@@ -179,7 +179,7 @@ dasm_inst_chunk_list_from_arch_addr_data(Arena *arena, U64 *bytes_processed_coun
 //- rjf: opening handles & correllation with module
 
 internal DASM_Handle
-dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range)
+dasm_handle_from_ctrl_process_range_arch(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range, Architecture arch)
 {
   DASM_Handle result = {0};
   if(machine != 0 && process.u64[0] != 0)
@@ -196,7 +196,8 @@ dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, DMN_Handle process, 
       {
         if(e->machine_id == machine &&
            ctrl_handle_match(e->process, process) &&
-           MemoryMatchStruct(&e->vaddr_range, &vaddr_range))
+           MemoryMatchStruct(&e->vaddr_range, &vaddr_range) &&
+           e->arch == arch)
         {
           entity = e;
           break;
@@ -209,6 +210,7 @@ dasm_handle_from_ctrl_process_range(CTRL_MachineID machine, DMN_Handle process, 
         entity->machine_id = machine;
         entity->process    = process;
         entity->vaddr_range= vaddr_range;
+        entity->arch       = arch;
         entity->id         = ins_atomic_u64_inc_eval(&dasm_shared->entity_id_gen);
         entity->decode_inst_arena = arena_alloc__sized(MB(256), KB(64));
         entity->decode_string_arena = arena_alloc__sized(GB(1), KB(64));
@@ -413,7 +415,7 @@ dasm_decode_thread_entry_point(void *p)
           ctrl_machine_id = entity->machine_id;
           ctrl_process = entity->process;
           vaddr_range = entity->vaddr_range;
-          arch = ctrl_arch_from_handle(ctrl_machine_id, ctrl_process);
+          arch = entity->arch;
           bytes_processed_counter = &entity->bytes_processed;
           U64 bytes_to_process = dim_1u64(vaddr_range);
           ins_atomic_u64_eval_assign(&entity->bytes_processed, 0);
@@ -465,7 +467,7 @@ dasm_decode_thread_entry_point(void *p)
         if(good_task)
         {
           data.str = push_array_no_zero(scratch.arena, U8, dim_1u64(chunk_vaddr_range));
-          data.size = ctrl_process_read(ctrl_machine_id, ctrl_process, chunk_vaddr_range, data.str);
+          data.size = dmn_process_read(ctrl_process, chunk_vaddr_range, data.str);
           if(data.size != 0)
           {
             inst_list = dasm_inst_chunk_list_from_arch_addr_data(scratch.arena, bytes_processed_counter, arch, chunk_vaddr_range.min, data);

@@ -1404,7 +1404,7 @@ internal DASM_Handle
 df_dasm_handle_from_process_vaddr(DF_Entity *process, U64 vaddr)
 {
   Rng1U64 disasm_vaddr_rng = r1u64(AlignDownPow2(vaddr, KB(4)), AlignDownPow2(vaddr, KB(4)) + KB(16));
-  DASM_Handle dasm_handle = dasm_handle_from_ctrl_process_range(process->ctrl_machine_id, process->ctrl_handle, disasm_vaddr_rng);
+  DASM_Handle dasm_handle = dasm_handle_from_ctrl_process_range_arch(process->ctrl_machine_id, process->ctrl_handle, disasm_vaddr_rng, process->arch);
   return dasm_handle;
 }
 
@@ -2710,11 +2710,9 @@ df_debug_info_path_from_module(Arena *arena, DF_Entity *module)
   }
   else
   {
-    Temp scratch = scratch_begin(&arena, 1);
     String8 exe_path = module->name;
-    String8 dbg_path = ctrl_og_dbg_path_from_exe_path(arena, exe_path);
+    String8 dbg_path = push_str8f(arena, "%S.pdb", str8_chop_last_dot(exe_path));
     result = dbg_path;
-    scratch_end(scratch);
   }
   ProfEnd();
   return result;
@@ -2830,8 +2828,8 @@ df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread)
   String8 machine_code = {0};
   {
     Rng1U64 rng = r1u64(ip_vaddr, ip_vaddr+max_instruction_size_from_arch(arch));
-    machine_code.str = push_array_no_zero(scratch.arena, U8, max_instruction_size_from_arch(arch));
-    machine_code.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, rng, machine_code.str);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, rng, max_U64);
+    machine_code = machine_code_slice.data;
   }
   
   // rjf: build traps if machine code was read successfully
@@ -2897,8 +2895,8 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   String8 machine_code = {0};
   if(good_line_info)
   {
-    machine_code.str = push_array_no_zero(scratch.arena, U8, dim_1u64(line_vaddr_rng));
-    machine_code.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, machine_code.str);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, max_U64);
+    machine_code = machine_code_slice.data;
   }
   
   // rjf: machine code => ctrl flow analysis
@@ -3022,8 +3020,8 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   String8 machine_code = {0};
   if(good_line_info)
   {
-    machine_code.str = push_array_no_zero(scratch.arena, U8, dim_1u64(line_vaddr_rng));
-    machine_code.size = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, machine_code.str);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, max_U64);
+    machine_code = machine_code_slice.data;
   }
   
   // rjf: machine code => ctrl flow analysis
@@ -3581,10 +3579,10 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
   //- rjf: read module's TLS index
   U64 tls_index = 0;
   {
-    U64 bytes_read = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, &tls_index);
-    if(bytes_read < sizeof(U64))
+    CTRL_ProcessMemorySlice tls_index_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, max_U64);
+    if(tls_index_slice.data.size >= addr_size)
     {
-      tls_index = 0;
+      tls_index = *(U64 *)tls_index_slice.data.str;
     }
   }
   
@@ -3658,14 +3656,14 @@ internal CTRL_Unwind
 df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
 {
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  CTRL_Unwind unwind = ctrl_unwind_from_process_thread(arena, thread->ctrl_machine_id, process->ctrl_handle, thread->ctrl_handle);
+  CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, thread->ctrl_machine_id, thread->ctrl_handle, 0);
   return unwind;
 }
 
 internal U64
 df_rip_from_thread(DF_Entity *thread)
 {
-  U64 result = ctrl_rip_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 result = ctrl_query_cached_rip_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
   return result;
 }
 
@@ -3718,7 +3716,10 @@ df_push_member_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *
 internal B32
 df_set_thread_rip(DF_Entity *thread, U64 vaddr)
 {
-  B32 result = ctrl_thread_write_rip(thread->ctrl_machine_id, thread->ctrl_handle, vaddr);
+  Temp scratch = scratch_begin(0, 0);
+  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, thread->ctrl_machine_id, thread->ctrl_handle, max_U64);
+  regs_arch_block_write_rip(thread->arch, block, vaddr);
+  B32 result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, block);
   
   // rjf: early mutation of unwind cache for immediate frontend effect
   if(result)
@@ -3738,6 +3739,7 @@ df_set_thread_rip(DF_Entity *thread, U64 vaddr)
     }
   }
   
+  scratch_end(scratch);
   return result;
 }
 
@@ -4134,7 +4136,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   
   //- rjf: unpack arguments
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-  U64 tls_root_vaddr = ctrl_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
   DF_Entity *process = thread->parent;
   U64 unwind_count = ctrl_ctx->unwind_count;
   CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);

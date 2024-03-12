@@ -144,7 +144,7 @@ struct DF_EntityListerItemArray
 typedef struct DF_ProcessInfo DF_ProcessInfo;
 struct DF_ProcessInfo
 {
-  DEMON_ProcessInfo info;
+  DMN_ProcessInfo info;
   B32 is_attached;
   FuzzyMatchRangeList attached_match_ranges;
   FuzzyMatchRangeList name_match_ranges;

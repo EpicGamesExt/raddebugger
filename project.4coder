@@ -47,7 +47,7 @@ commands =
 {
   .rjf_f1 =
   {
-    .win = "build ryan_scratch",
+    .win = "build raddbg",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
