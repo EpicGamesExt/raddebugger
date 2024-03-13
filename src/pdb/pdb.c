@@ -310,7 +310,7 @@ pdb_tpi_hash_from_data(Arena *arena, PDB_Strtbl *strtbl, PDB_TpiParsed *tpi, Str
   
   U32 stride = tpi->hash_key_size;
   U32 bucket_count = tpi->hash_bucket_count;
-  if (1 <= stride && stride <= 8 && bucket_count > 0){
+  if (1 <= stride && stride <= 8 && bucket_count > 0 && data.str != 0){
     
     // allocate buckets
     PDB_TpiHashBlock **buckets = push_array(arena, PDB_TpiHashBlock*, bucket_count);
