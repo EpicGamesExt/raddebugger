@@ -1,6 +1,11 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+// TODO(rjf): eliminate redundant null checks, just always allocate
+// empty results, and have nulls gracefully fall through
+//
+// (search for != 0 instances, inserted to prevent prior crashes)
+
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
@@ -525,6 +530,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
   P2R_UnitConvertIn *in = (P2R_UnitConvertIn *)p;
   P2R_UnitConvertOut *out = push_array(arena, P2R_UnitConvertOut, 1);
   ProfScope("build units, initial src file map, & collect unit source files")
+    if(in->comp_units != 0)
   {
     U64 units_chunk_cap = in->comp_units->count;
     P2R_SrcFileMap src_file_map = {0};
@@ -2575,6 +2581,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //
   P2R_TPIHashParseIn tpi_hash_in = {0};
   TS_Ticket tpi_hash_ticket = {0};
+  if(tpi != 0)
   {
     tpi_hash_in.strtbl    = strtbl;
     tpi_hash_in.tpi       = tpi;
@@ -2588,6 +2595,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //
   P2R_TPILeafParseIn tpi_leaf_in = {0};
   TS_Ticket tpi_leaf_ticket = {0};
+  if(tpi != 0)
   {
     tpi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(tpi);
     tpi_leaf_in.itype_first = tpi->itype_first;
@@ -2599,6 +2607,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //
   P2R_TPIHashParseIn ipi_hash_in = {0};
   TS_Ticket ipi_hash_ticket = {0};
+  if(ipi != 0)
   {
     ipi_hash_in.strtbl    = strtbl;
     ipi_hash_in.tpi       = ipi;
@@ -2612,6 +2621,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //
   P2R_TPILeafParseIn ipi_leaf_in = {0};
   TS_Ticket ipi_leaf_ticket = {0};
+  if(ipi != 0)
   {
     ipi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(ipi);
     ipi_leaf_in.itype_first = ipi->itype_first;
@@ -2681,7 +2691,8 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: calculate EXE's max voff
   //
   U64 exe_voff_max = 0;
-  {        
+  if(coff_sections != 0)
+  {
     COFF_SectionHeader *coff_sec_ptr = coff_sections->sections;
     COFF_SectionHeader *coff_ptr_opl = coff_sec_ptr + coff_section_count;
     for(;coff_sec_ptr < coff_ptr_opl; coff_sec_ptr += 1)
@@ -2743,7 +2754,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: build binary sections list
   //
   RDIM_BinarySectionList binary_sections = {0};
-  ProfScope("build binary section list")
+  if(coff_sections != 0) ProfScope("build binary section list")
   {
     COFF_SectionHeader *coff_ptr = coff_sections->sections;
     COFF_SectionHeader *coff_opl = coff_ptr + coff_section_count;
@@ -2801,7 +2812,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   P2R_LinkNameMap link_name_map__in_progress = {0};
   P2R_LinkNameMapBuildIn link_name_map_build_in = {0};
   TS_Ticket link_name_map_ticket = {0};
-  ProfScope("kick off link name map build task")
+  if(sym != 0) ProfScope("kick off link name map build task")
   {
     link_name_map__in_progress.buckets_count = symbol_count_prediction;
     link_name_map__in_progress.buckets       = push_array(arena, P2R_LinkNameNode *, link_name_map__in_progress.buckets_count);
@@ -3376,8 +3387,8 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     ////////////////////////////
     //- rjf: kick off all symbol conversion tasks
     //
-    U64 global_stream_subdivision_tasks_count = (sym->sym_ranges.count+16383)/16384;
-    U64 global_stream_syms_per_task = sym->sym_ranges.count/global_stream_subdivision_tasks_count;
+    U64 global_stream_subdivision_tasks_count = sym ? (sym->sym_ranges.count+16383)/16384 : 0;
+    U64 global_stream_syms_per_task = sym ? sym->sym_ranges.count/global_stream_subdivision_tasks_count : 0;
     U64 tasks_count = comp_unit_count + global_stream_subdivision_tasks_count;
     P2R_SymbolStreamConvertIn *tasks_inputs = push_array(scratch.arena, P2R_SymbolStreamConvertIn, tasks_count);
     TS_Ticket *tasks_tickets = push_array(scratch.arena, TS_Ticket, tasks_count);
