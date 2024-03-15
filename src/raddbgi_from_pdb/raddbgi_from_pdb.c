@@ -3571,11 +3571,13 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_join_task__entry_point)
     {
       for(U64 slot_idx = in->slot_idx_range.min; slot_idx < in->slot_idx_range.max; slot_idx += 1)
       {
-        if(in->dst_map->slots[slot_idx] == 0)
+        B32 src_slots_good = (in->src_maps[src_map_idx] != 0 && in->src_maps[src_map_idx]->slots != 0);
+        B32 dst_slot_is_zero = (in->dst_map->slots[slot_idx] == 0);
+        if(src_slots_good && dst_slot_is_zero)
         {
           in->dst_map->slots[slot_idx] = in->src_maps[src_map_idx]->slots[slot_idx];
         }
-        else if(in->src_maps[src_map_idx]->slots[slot_idx] != 0)
+        else if(src_slots_good && in->src_maps[src_map_idx]->slots[slot_idx] != 0)
         {
           rdim_bake_string_chunk_list_concat_in_place(in->dst_map->slots[slot_idx], in->src_maps[src_map_idx]->slots[slot_idx]);
         }
