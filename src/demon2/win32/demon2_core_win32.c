@@ -2354,7 +2354,6 @@ dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
   {
     DMN_W32_Entity *process = thread->parent;
     U64 tlb = thread->thread.thread_local_base;
-    U64 result = 0;
     switch(thread->arch)
     {
       case Architecture_Null:
