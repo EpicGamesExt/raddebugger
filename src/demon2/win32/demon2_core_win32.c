@@ -40,7 +40,7 @@ dmn_w32_entity_from_handle(DMN_Handle handle)
 {
   U32 idx = handle.u32[0];
   U32 gen = handle.u32[1];
-  DMN_W32_Entity *entity = dmn_w32_shared->entities_base;
+  DMN_W32_Entity *entity = dmn_w32_shared->entities_base + idx;
   if(entity->gen != gen)
   {
     entity = &dmn_w32_entity_nil;
@@ -141,7 +141,7 @@ dmn_w32_entity_release(DMN_W32_Entity *entity)
     Task *last_task = &start_task;
     for(Task *t = first_task; t != 0; t = t->next)
     {
-      for(DMN_W32_Entity *child = entity->first; child != &dmn_w32_entity_nil; child = child->next)
+      for(DMN_W32_Entity *child = t->e->first; child != &dmn_w32_entity_nil; child = child->next)
       {
         Task *t = push_array(scratch.arena, Task, 1);
         t->e = child;
@@ -581,9 +581,10 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
     //- rjf: unimplemented win32/arch combos
     //
     case Architecture_Null:
+    case Architecture_COUNT:
+    {}break;
     case Architecture_arm64:
     case Architecture_arm32:
-    case Architecture_COUNT:
     {NotImplemented;}break;
     
     ////////////////////////////
@@ -824,9 +825,10 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
     //- rjf: unimplemented win32/arch combos
     //
     case Architecture_Null:
+    case Architecture_COUNT:
+    {}break;
     case Architecture_arm64:
     case Architecture_arm32:
-    case Architecture_COUNT:
     {NotImplemented;}break;
     
     ////////////////////////////
@@ -1148,9 +1150,10 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
         {
           //- rjf: unimplemented win32/arch combos
           case Architecture_Null:
+          case Architecture_COUNT:
+          {}break;
           case Architecture_arm64:
           case Architecture_arm32:
-          case Architecture_COUNT:
           {NotImplemented;}break;
           
           //- rjf: x86/64
@@ -1219,7 +1222,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
           
           //- rjf: scan all threads in this process
           for(DMN_W32_Entity *thread = process->first;
-              thread != 0;
+              thread != &dmn_w32_entity_nil;
               thread = thread->next)
           {
             if(thread->kind != DMN_W32_EntityKind_Thread) {continue;}
@@ -1432,6 +1435,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
               process->handle = process_handle;
               process->arch   = image_info.arch;
               thread->handle                   = thread_handle;
+              thread->arch                     = image_info.arch;
               thread->thread.thread_local_base = tls_base;
               module->handle                         = module_handle;
               module->module.vaddr_range             = r1u64(module_base, image_info.size);
@@ -2050,9 +2054,10 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
         {
           //- rjf: unimplemented win32/arch combos
           case Architecture_Null:
+          case Architecture_COUNT:
+          {}break;
           case Architecture_arm64:
           case Architecture_arm32:
-          case Architecture_COUNT:
           {NotImplemented;}break;
           
           //- rjf: x86/64
@@ -2353,9 +2358,10 @@ dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
     switch(thread->arch)
     {
       case Architecture_Null:
+      case Architecture_COUNT:
+      {}break;
       case Architecture_arm64:
       case Architecture_arm32:
-      case Architecture_COUNT:
       {NotImplemented;}break;
       case Architecture_x64:
       {

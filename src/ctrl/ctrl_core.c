@@ -666,7 +666,7 @@ ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
     Task *last_task = &start_task;
     for(Task *t = first_task; t != 0; t = t->next)
     {
-      for(CTRL_Entity *child = entity->first; child != &ctrl_entity_nil; child = child->next)
+      for(CTRL_Entity *child = t->e->first; child != &ctrl_entity_nil; child = child->next)
       {
         Task *t = push_array(scratch.arena, Task, 1);
         t->e = child;
@@ -786,6 +786,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
         CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->arch, event->machine_id, event->entity);
         ctrl_entity_equip_string(store, module, event->string);
+        module->vaddr_range = event->vaddr_rng;
       }break;
       case CTRL_EventKind_EndModule:
       {
@@ -1276,8 +1277,73 @@ ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range,
 internal void *
 ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread)
 {
-  // TODO(rjf)
-  return 0;
+  CTRL_ThreadRegCache *cache = &ctrl_state->thread_reg_cache;
+  Architecture arch = dmn_arch_from_thread(thread);
+  U64 reg_block_size = regs_block_size_from_architecture(arch);
+  U64 hash = ctrl_hash_from_machine_id_handle(machine_id, thread);
+  U64 slot_idx = hash%cache->slots_count;
+  U64 stripe_idx = slot_idx%cache->stripes_count;
+  CTRL_ThreadRegCacheSlot *slot = &cache->slots[slot_idx];
+  CTRL_ThreadRegCacheStripe *stripe = &cache->stripes[stripe_idx];
+  void *result = push_array(arena, U8, reg_block_size);
+  OS_MutexScopeR(stripe->rw_mutex)
+  {
+    // rjf: find existing node
+    CTRL_ThreadRegCacheNode *node = 0;
+    for(CTRL_ThreadRegCacheNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(n->machine_id == machine_id && dmn_handle_match(n->thread, thread))
+      {
+        node = n;
+        break;
+      }
+    }
+    
+    // rjf: allocate existing node
+    if(!node)
+    {
+      OS_MutexScopeRWPromote(stripe->rw_mutex)
+      {
+        for(CTRL_ThreadRegCacheNode *n = slot->first; n != 0; n = n->next)
+        {
+          if(n->machine_id == machine_id && dmn_handle_match(n->thread, thread))
+          {
+            node = n;
+            break;
+          }
+        }
+        if(!node)
+        {
+          node = push_array(stripe->arena, CTRL_ThreadRegCacheNode, 1);
+          DLLPushBack(slot->first, slot->last, node);
+          node->machine_id = machine_id;
+          node->thread     = thread;
+          node->block_size = reg_block_size;
+          node->block      = push_array(stripe->arena, U8, reg_block_size);
+        }
+      }
+      for(CTRL_ThreadRegCacheNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(n->machine_id == machine_id && dmn_handle_match(n->thread, thread))
+        {
+          node = n;
+          break;
+        }
+      }
+    }
+    
+    // rjf: copy from node
+    if(node)
+    {
+      U64 current_reggen_idx = ctrl_reggen_idx();
+      if(node->reggen_idx != current_reggen_idx && dmn_thread_read_reg_block(thread, node->block))
+      {
+        node->reggen_idx = current_reggen_idx;
+      }
+      MemoryCopy(result, node->block, reg_block_size);
+    }
+  }
+  return result;
 }
 
 internal U64
@@ -1290,15 +1356,23 @@ ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, DMN_Hand
 internal U64
 ctrl_query_cached_rip_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
 {
-  // TODO(rjf)
-  return 0;
+  Temp scratch = scratch_begin(0, 0);
+  Architecture arch = dmn_arch_from_thread(thread);
+  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
+  U64 result = regs_rip_from_arch_block(arch, block);
+  scratch_end(scratch);
+  return result;
 }
 
 internal U64
 ctrl_query_cached_rsp_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
 {
-  // TODO(rjf)
-  return 0;
+  Temp scratch = scratch_begin(0, 0);
+  Architecture arch = dmn_arch_from_thread(thread);
+  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
+  U64 result = regs_rsp_from_arch_block(arch, block);
+  scratch_end(scratch);
+  return result;
 }
 
 //- rjf: thread register writing
@@ -1370,7 +1444,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
         Rng1U64 module_vaddr_range = {0};
         for(CTRL_Entity *m = process_entity->first; m != &ctrl_entity_nil; m = m->next)
         {
-          if(contains_1u64(m->vaddr_range, rip))
+          if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, rip))
           {
             module = m->handle;
             module_name = m->string;
@@ -1851,7 +1925,15 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
             {
               DBGI_Scope *scope = dbgi_scope_open();
               CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, ev->process);
-              CTRL_Entity *module = process->first;
+              CTRL_Entity *module = &ctrl_entity_nil;
+              for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+              {
+                if(child->kind == CTRL_EntityKind_Module)
+                {
+                  module = child;
+                  break;
+                }
+              }
               if(module != &ctrl_entity_nil)
               {
                 // rjf: determine base address of asan shadow space
@@ -2365,7 +2447,15 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
           {
             //- rjf: unpack process & first module info
             CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, run_ctrls.run_entities[process_idx]);
-            CTRL_Entity *module = process->first;
+            CTRL_Entity *module = &ctrl_entity_nil;
+            for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+            {
+              if(child->kind == CTRL_EntityKind_Module)
+              {
+                module = child;
+                break;
+              }
+            }
             U64 module_base_vaddr = module->vaddr_range.min;
             String8 exe_path = module->string;
             DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
@@ -2999,7 +3089,7 @@ ctrl_thread__run(CTRL_Msg *msg)
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
         for(CTRL_Entity *module = process->first; module != &ctrl_entity_nil; module = module->next)
         {
-          if(contains_1u64(module->vaddr_range, thread_rip_vaddr))
+          if(module->kind == CTRL_EntityKind_Module && contains_1u64(module->vaddr_range, thread_rip_vaddr))
           {
             module_name = module->string;
             module_base_vaddr = module->vaddr_range.min;
@@ -3129,7 +3219,7 @@ ctrl_thread__run(CTRL_Msg *msg)
               if(bytecode.size != 0)
               {
                 U64 module_base = module_base_vaddr;
-                U64 tls_base = 0; // TODO(rjf)
+                U64 tls_base = ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID_Local, event->thread);
                 EVAL_Machine machine = {0};
                 machine.u = &event->process;
                 machine.arch = arch;

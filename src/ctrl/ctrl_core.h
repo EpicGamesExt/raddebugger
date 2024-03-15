@@ -441,7 +441,9 @@ struct CTRL_ThreadRegCacheNode
   CTRL_ThreadRegCacheNode *prev;
   CTRL_MachineID machine_id;
   DMN_Handle thread;
-  U128 regs_hash;
+  U64 block_size;
+  void *block;
+  U64 reggen_idx;
 };
 
 typedef struct CTRL_ThreadRegCacheSlot CTRL_ThreadRegCacheSlot;
