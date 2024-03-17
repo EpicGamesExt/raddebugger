@@ -6931,8 +6931,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           break;
         }
       }
-      df_state->unwind_cache_memgen_idx = new_memgen_idx;
-      df_state->unwind_cache_reggen_idx = new_reggen_idx;
+      if(good)
+      {
+        df_state->unwind_cache_memgen_idx = new_memgen_idx;
+        df_state->unwind_cache_reggen_idx = new_reggen_idx;
+      }
     }
     
     //- rjf: clear tls base cache
