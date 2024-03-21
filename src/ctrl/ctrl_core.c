@@ -1344,11 +1344,15 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id,
     if(node)
     {
       U64 current_reg_gen = dmn_reg_gen();
-      if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(thread, node->block))
+      if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(thread, result))
       {
         node->reg_gen = current_reg_gen;
+        MemoryCopy(node->block, result, reg_block_size);
       }
-      MemoryCopy(result, node->block, reg_block_size);
+      else
+      {
+        MemoryCopy(result, node->block, reg_block_size);
+      }
     }
   }
   return result;
