@@ -933,7 +933,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
             {
               result = range_n->hash;
               is_good = 1;
-              is_stale = (range_n->memgen_idx < ctrl_memgen_idx());
+              is_stale = (range_n->mem_gen != dmn_mem_gen());
               goto read_cache__break_all;
             }
           }
@@ -1169,6 +1169,20 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     result.data.size = dim_1u64(range);
     result.byte_bad_flags = byte_bad_flags;
     result.byte_changed_flags = byte_changed_flags;
+    if(byte_bad_flags != 0)
+    {
+      for(U64 idx = 0; idx < (dim_1u64(range)+63)/64; idx += 1)
+      {
+        result.any_byte_bad = result.any_byte_bad || !!result.byte_bad_flags[idx];
+      }
+    }
+    if(byte_changed_flags != 0)
+    {
+      for(U64 idx = 0; idx < (dim_1u64(range)+63)/64; idx += 1)
+      {
+        result.any_byte_changed = result.any_byte_changed || !!result.byte_changed_flags[idx];
+      }
+    }
     
     hs_scope_close(scope);
     scratch_end(scratch);
@@ -1198,12 +1212,6 @@ ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range,
 {
   ProfBeginFunction();
   B32 result = dmn_process_write(process, range, src);
-  
-  //- rjf: success -> increment memgen
-  if(result)
-  {
-    ins_atomic_u64_inc_eval(&ctrl_state->memgen_idx);
-  }
   
   //- rjf: success -> wait for cache updates, for small regions - prefer relatively seamless
   // writes within calling frame's "view" of the memory, at the expense of a small amount of
@@ -1335,10 +1343,10 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id,
     // rjf: copy from node
     if(node)
     {
-      U64 current_reggen_idx = ctrl_reggen_idx();
-      if(node->reggen_idx != current_reggen_idx && dmn_thread_read_reg_block(thread, node->block))
+      U64 current_reg_gen = dmn_reg_gen();
+      if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(thread, node->block))
       {
-        node->reggen_idx = current_reggen_idx;
+        node->reg_gen = current_reg_gen;
       }
       MemoryCopy(result, node->block, reg_block_size);
     }
@@ -1381,7 +1389,6 @@ internal B32
 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *block)
 {
   B32 good = dmn_thread_write_reg_block(thread, block);
-  ins_atomic_u64_inc_eval(&ctrl_state->reggen_idx);
   return good;
 }
 
@@ -1421,7 +1428,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
         {
           CTRL_ProcessMemorySlice stack_memory_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, machine_id, process_entity->handle, r1u64(stack_top, stack_top+stack_size), endt_us);
           String8 stack_memory = stack_memory_slice.data;
-          if(stack_memory.size != 0)
+          if(stack_memory.size != 0 && !stack_memory_slice.any_byte_bad)
           {
             stack_memview_good = 1;
             stack_memview.data = stack_memory.str;
@@ -1517,26 +1524,26 @@ ctrl_halt(void)
 ////////////////////////////////
 //~ rjf: Shared Accessor Functions
 
-//- rjf: run indices
+//- rjf: run generation counter
 
 internal U64
-ctrl_run_idx(void)
+ctrl_run_gen(void)
 {
-  U64 result = ins_atomic_u64_eval(&ctrl_state->run_idx);
+  U64 result = dmn_run_gen();
   return result;
 }
 
 internal U64
-ctrl_memgen_idx(void)
+ctrl_mem_gen(void)
 {
-  U64 result = ins_atomic_u64_eval(&ctrl_state->memgen_idx);
+  U64 result = dmn_mem_gen();
   return result;
 }
 
 internal U64
-ctrl_reggen_idx(void)
+ctrl_reg_gen(void)
 {
-  U64 result = ins_atomic_u64_eval(&ctrl_state->reggen_idx);
+  U64 result = dmn_reg_gen();
   return result;
 }
 
@@ -2053,13 +2060,6 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
       if(do_spoof) ProfScope("unset spoof")
       {
         dmn_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
-      }
-      
-      // rjf: inc generation counters
-      {
-        ins_atomic_u64_inc_eval(&ctrl_state->run_idx);
-        ins_atomic_u64_inc_eval(&ctrl_state->memgen_idx);
-        ins_atomic_u64_inc_eval(&ctrl_state->reggen_idx);
       }
     }
   }
@@ -3651,7 +3651,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     
     //- rjf: take task
     B32 got_task = 0;
-    U64 preexisting_memgen_idx = 0;
+    U64 preexisting_mem_gen = 0;
     U128 preexisting_hash = {0};
     Rng1U64 vaddr_range_clamped = {0};
     OS_MutexScopeW(process_stripe->rw_mutex)
@@ -3667,7 +3667,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
             if(MemoryMatchStruct(&range_n->vaddr_range, &vaddr_range) && range_n->zero_terminated == zero_terminated)
             {
               got_task = !ins_atomic_u32_eval_cond_assign(&range_n->is_taken, 1, 0);
-              preexisting_memgen_idx = range_n->memgen_idx;
+              preexisting_mem_gen = range_n->mem_gen;
               preexisting_hash = range_n->hash;
               vaddr_range_clamped = range_n->vaddr_range_clamped;
               goto take_task__break_all;
@@ -3683,8 +3683,8 @@ ctrl_mem_stream_thread__entry_point(void *p)
     Arena *range_arena = 0;
     void *range_base = 0;
     U64 zero_terminated_size = 0;
-    U64 memgen_idx = ctrl_memgen_idx();
-    if(got_task && memgen_idx != preexisting_memgen_idx)
+    U64 mem_gen = dmn_mem_gen();
+    if(got_task && mem_gen != preexisting_mem_gen)
     {
       range_size = dim_1u64(vaddr_range_clamped);
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, os_page_size());
@@ -3746,7 +3746,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
               if(!u128_match(u128_zero(), hash))
               {
                 range_n->hash = hash;
-                range_n->memgen_idx = memgen_idx;
+                range_n->mem_gen = mem_gen;
               }
               ins_atomic_u32_eval_assign(&range_n->is_taken, 0);
               goto commit__break_all;

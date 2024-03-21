@@ -565,7 +565,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
   Vec4F32 rgba = {0};
   Vec4F32 hsva = {0};
   {
-    if(state->memgen_idx >= ctrl_memgen_idx())
+    if(state->memgen_idx >= ctrl_mem_gen())
     {
       hsva = state->hsva;
       rgba = rgba_from_hsva(hsva);
@@ -575,7 +575,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
       DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
       rgba = df_view_rule_hooks__rgba_from_eval(value_eval, parse_ctx->type_graph, parse_ctx->rdi, process);
       state->hsva = hsva = hsva_from_rgba(rgba);
-      state->memgen_idx = ctrl_memgen_idx();
+      state->memgen_idx = ctrl_mem_gen();
     }
   }
   Vec4F32 initial_hsva = hsva;
@@ -624,7 +624,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
   {
     Vec4F32 rgba = rgba_from_hsva(hsva);
     df_view_rule_hooks__eval_commit_rgba(eval, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, rgba);
-    state->memgen_idx = ctrl_memgen_idx();
+    state->memgen_idx = ctrl_mem_gen();
   }
   
   //- rjf: commit possible edited value to state

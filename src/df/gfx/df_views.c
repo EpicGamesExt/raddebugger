@@ -7756,7 +7756,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   U8 *visible_memory = 0;
   {
     Rng1U64 chunk_aligned_range_bytes = r1u64(AlignDownPow2(viz_range_bytes.min, KB(4)), AlignPow2(viz_range_bytes.max, KB(4)));
-    U64 current_memgen_idx = ctrl_memgen_idx();
+    U64 current_memgen_idx = ctrl_mem_gen();
     B32 range_changed = (chunk_aligned_range_bytes.min != mv->last_viewed_memory_cache_range.min ||
                          chunk_aligned_range_bytes.max != mv->last_viewed_memory_cache_range.max);
     B32 mem_changed = (current_memgen_idx != mv->last_viewed_memory_cache_memgen_idx);

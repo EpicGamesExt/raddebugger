@@ -194,6 +194,11 @@ struct DMN_W32_Shared
   Arena *arena;
   String8List env_strings;
   
+  // rjf: run/mem/reg gens
+  U64 run_gen;
+  U64 mem_gen;
+  U64 reg_gen;
+  
   // rjf: detaching info
   Arena *detach_arena;
   DMN_HandleList detach_processes;

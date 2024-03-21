@@ -2895,7 +2895,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   String8 machine_code = {0};
   if(good_line_info)
   {
-    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, os_now_microseconds()+50000);
     machine_code = machine_code_slice.data;
   }
   
@@ -3656,7 +3656,7 @@ internal CTRL_Unwind
 df_push_unwind_from_thread(Arena *arena, DF_Entity *thread)
 {
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
+  CTRL_Unwind unwind = ctrl_unwind_from_thread(arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+5000);
   return unwind;
 }
 
@@ -6545,8 +6545,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     Temp scratch = scratch_begin(&arena, 1);
     
     //- rjf: grab next reggen/memgen
-    U64 new_memgen_idx = ctrl_memgen_idx();
-    U64 new_reggen_idx = ctrl_reggen_idx();
+    U64 new_mem_gen = ctrl_mem_gen();
+    U64 new_reg_gen = ctrl_reg_gen();
     
     //- rjf: consume & process events
     CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
@@ -6908,8 +6908,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     }
     
     //- rjf: refresh unwind cache
-    if((df_state->unwind_cache_memgen_idx != new_memgen_idx ||
-        df_state->unwind_cache_reggen_idx != new_reggen_idx) &&
+    if((df_state->unwind_cache_memgen_idx != new_mem_gen ||
+        df_state->unwind_cache_reggen_idx != new_reg_gen) &&
        !df_ctrl_targets_running()) ProfScope("per-thread unwind gather")
     {
       B32 good = 1;
@@ -6935,41 +6935,44 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           break;
         }
       }
-      df_state->unwind_cache_memgen_idx = new_memgen_idx;
-      df_state->unwind_cache_reggen_idx = new_reggen_idx;
+      if(good)
+      {
+        df_state->unwind_cache_memgen_idx = new_mem_gen;
+        df_state->unwind_cache_reggen_idx = new_reg_gen;
+      }
     }
     
     //- rjf: clear tls base cache
-    if((df_state->tls_base_cache_reggen_idx != new_reggen_idx ||
-        df_state->tls_base_cache_memgen_idx != new_memgen_idx) &&
+    if((df_state->tls_base_cache_reggen_idx != new_reg_gen ||
+        df_state->tls_base_cache_memgen_idx != new_mem_gen) &&
        !df_ctrl_targets_running())
     {
       DF_RunTLSBaseCache *cache = &df_state->tls_base_cache;
       arena_clear(cache->arena);
       cache->slots_count = 0;
       cache->slots = 0;
-      df_state->tls_base_cache_reggen_idx = new_reggen_idx;
-      df_state->tls_base_cache_memgen_idx = new_memgen_idx;
+      df_state->tls_base_cache_reggen_idx = new_reg_gen;
+      df_state->tls_base_cache_memgen_idx = new_mem_gen;
     }
     
     //- rjf: clear locals cache
-    if(df_state->locals_cache_reggen_idx != new_reggen_idx && !df_ctrl_targets_running())
+    if(df_state->locals_cache_reggen_idx != new_reg_gen && !df_ctrl_targets_running())
     {
       DF_RunLocalsCache *cache = &df_state->locals_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
-      df_state->locals_cache_reggen_idx = new_reggen_idx;
+      df_state->locals_cache_reggen_idx = new_reg_gen;
     }
     
     //- rjf: clear members cache
-    if(df_state->member_cache_reggen_idx != new_reggen_idx && !df_ctrl_targets_running())
+    if(df_state->member_cache_reggen_idx != new_reg_gen && !df_ctrl_targets_running())
     {
       DF_RunLocalsCache *cache = &df_state->member_cache;
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
-      df_state->member_cache_reggen_idx = new_reggen_idx;
+      df_state->member_cache_reggen_idx = new_reg_gen;
     }
     
     scratch_end(scratch);

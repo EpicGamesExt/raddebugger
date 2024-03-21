@@ -166,6 +166,13 @@ internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
 internal void dmn_init(void);
 
 ////////////////////////////////
+//~ rjf: @dmn_os_hooks Run/Memory/Register Counters
+
+internal U64 dmn_run_gen(void);
+internal U64 dmn_mem_gen(void);
+internal U64 dmn_reg_gen(void);
+
+////////////////////////////////
 //~ rjf: @dmn_os_hooks Running/Halting (Implemented Per-OS)
 
 internal DMN_EventList dmn_run(Arena *arena, DMN_RunCtrls *ctrls);

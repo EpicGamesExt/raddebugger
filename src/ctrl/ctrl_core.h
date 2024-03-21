@@ -376,7 +376,7 @@ struct CTRL_ProcessMemoryRangeHashNode
   B32 zero_terminated;
   Rng1U64 vaddr_range_clamped;
   U128 hash;
-  U64 memgen_idx;
+  U64 mem_gen;
   U64 last_time_requested_us;
   B32 is_taken;
 };
@@ -429,6 +429,8 @@ struct CTRL_ProcessMemorySlice
   String8 data;
   U64 *byte_bad_flags;
   U64 *byte_changed_flags;
+  B32 any_byte_bad;
+  B32 any_byte_changed;
 };
 
 ////////////////////////////////
@@ -443,7 +445,7 @@ struct CTRL_ThreadRegCacheNode
   DMN_Handle thread;
   U64 block_size;
   void *block;
-  U64 reggen_idx;
+  U64 reg_gen;
 };
 
 typedef struct CTRL_ThreadRegCacheSlot CTRL_ThreadRegCacheSlot;
@@ -483,9 +485,6 @@ struct CTRL_State
 {
   Arena *arena;
   CTRL_WakeupFunctionType *wakeup_hook;
-  U64 run_idx;
-  U64 memgen_idx;
-  U64 reggen_idx;
   
   // rjf: name -> register/alias hash tables for eval
   EVAL_String2NumMap arch_string2reg_tables[Architecture_COUNT];
@@ -672,10 +671,10 @@ internal void ctrl_halt(void);
 ////////////////////////////////
 //~ rjf: Shared Accessor Functions
 
-//- rjf: run indices
-internal U64 ctrl_run_idx(void);
-internal U64 ctrl_memgen_idx(void);
-internal U64 ctrl_reggen_idx(void);
+//- rjf: generation counters
+internal U64 ctrl_run_gen(void);
+internal U64 ctrl_mem_gen(void);
+internal U64 ctrl_reg_gen(void);
 
 //- rjf: name -> register/alias hash tables, for eval
 internal EVAL_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);

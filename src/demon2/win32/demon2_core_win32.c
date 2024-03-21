@@ -343,6 +343,7 @@ dmn_w32_process_write(HANDLE process, Rng1U64 range, void *src)
     ptr += actual_write;
     cursor += actual_write;
   }
+  ins_atomic_u64_inc_eval(&dmn_w32_shared->mem_gen);
   return result;
 }
 
@@ -953,6 +954,7 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
       //- rjf: bad context -> abort
       if(ctx == 0)
       {
+        DWORD error = GetLastError();
         break;
       }
       
@@ -1043,6 +1045,7 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
       scratch_end(scratch);
     }break;
   }
+  ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
   return result;
 }
 
@@ -1102,6 +1105,30 @@ dmn_init(void)
       }
     }
   }
+}
+
+////////////////////////////////
+//~ rjf: @dmn_os_hooks Run/Memory/Register Counters
+
+internal U64
+dmn_run_gen(void)
+{
+  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->run_gen);
+  return result;
+}
+
+internal U64
+dmn_mem_gen(void)
+{
+  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->mem_gen);
+  return result;
+}
+
+internal U64
+dmn_reg_gen(void)
+{
+  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->reg_gen);
+  return result;
 }
 
 ////////////////////////////////
@@ -1366,6 +1393,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
             dmn_w32_shared->resume_pid = evt.dwProcessId;
             dmn_w32_shared->resume_tid = evt.dwThreadId;
           }
+          ins_atomic_u64_inc_eval(&dmn_w32_shared->run_gen);
         }
       }
       
@@ -1776,7 +1804,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
               {
                 post_trap_rip = regs_rip_from_arch_block(thread->arch, regs_block);
                 regs_arch_block_write_rip(thread->arch, regs_block, instruction_pointer);
-                dmn_w32_thread_write_reg_block(thread->arch, thread, regs_block);
+                dmn_w32_thread_write_reg_block(thread->arch, thread->handle, regs_block);
               }
               temp_end(temp);
             }
