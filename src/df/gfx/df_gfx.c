@@ -2131,7 +2131,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = (unwind_count == 0 ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
+            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);

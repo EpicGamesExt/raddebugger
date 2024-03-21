@@ -472,34 +472,6 @@ struct CTRL_ThreadRegCache
 };
 
 ////////////////////////////////
-//~ rjf: Unwind Cache Types
-
-typedef struct CTRL_UnwindCacheNode CTRL_UnwindCacheNode;
-struct CTRL_UnwindCacheNode
-{
-  CTRL_UnwindCacheNode *next;
-  CTRL_UnwindCacheNode *prev;
-  
-  // rjf: key
-  CTRL_MachineID machine_id;
-  DMN_Handle thread;
-  U64 run_gen;
-  U64 mem_gen;
-  U64 reg_gen;
-  
-  // rjf: artifacts
-  CTRL_Unwind unwind;
-  U64 tls_base_vaddr;
-};
-
-typedef struct CTRL_UnwindCacheSlot CTRL_UnwindCacheSlot;
-struct CTRL_UnwindCacheSlot
-{
-  CTRL_UnwindCacheNode *first;
-  CTRL_UnwindCacheNode *last;
-};
-
-////////////////////////////////
 //~ rjf: Wakeup Hook Function Types
 
 #define CTRL_WAKEUP_FUNCTION_DEF(name) void name(void)
