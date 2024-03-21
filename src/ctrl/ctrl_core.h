@@ -472,6 +472,34 @@ struct CTRL_ThreadRegCache
 };
 
 ////////////////////////////////
+//~ rjf: Unwind Cache Types
+
+typedef struct CTRL_UnwindCacheNode CTRL_UnwindCacheNode;
+struct CTRL_UnwindCacheNode
+{
+  CTRL_UnwindCacheNode *next;
+  CTRL_UnwindCacheNode *prev;
+  
+  // rjf: key
+  CTRL_MachineID machine_id;
+  DMN_Handle thread;
+  U64 run_gen;
+  U64 mem_gen;
+  U64 reg_gen;
+  
+  // rjf: artifacts
+  CTRL_Unwind unwind;
+  U64 tls_base_vaddr;
+};
+
+typedef struct CTRL_UnwindCacheSlot CTRL_UnwindCacheSlot;
+struct CTRL_UnwindCacheSlot
+{
+  CTRL_UnwindCacheNode *first;
+  CTRL_UnwindCacheNode *last;
+};
+
+////////////////////////////////
 //~ rjf: Wakeup Hook Function Types
 
 #define CTRL_WAKEUP_FUNCTION_DEF(name) void name(void)
@@ -554,7 +582,6 @@ read_only global CTRL_Entity ctrl_entity_nil =
 internal U64 ctrl_hash_from_string(String8 string);
 internal U64 ctrl_hash_from_machine_id_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 internal CTRL_EventCause ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind);
-internal B32 ctrl_handle_match(DMN_Handle a, DMN_Handle b);
 
 ////////////////////////////////
 //~ rjf: Machine/Handle Pair Type Functions

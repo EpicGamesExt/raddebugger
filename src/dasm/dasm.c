@@ -195,7 +195,7 @@ dasm_handle_from_ctrl_process_range_arch(CTRL_MachineID machine, DMN_Handle proc
       for(DASM_Entity *e = slot->first; e != 0; e = e->next)
       {
         if(e->machine_id == machine &&
-           ctrl_handle_match(e->process, process) &&
+           dmn_handle_match(e->process, process) &&
            MemoryMatchStruct(&e->vaddr_range, &vaddr_range) &&
            e->arch == arch)
         {

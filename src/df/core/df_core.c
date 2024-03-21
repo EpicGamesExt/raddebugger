@@ -6931,7 +6931,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         if(cache_node->unwind.error != 0)
         {
           good = 0;
-          break;
         }
       }
       if(good)

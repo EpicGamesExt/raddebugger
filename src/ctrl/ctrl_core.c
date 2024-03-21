@@ -43,12 +43,6 @@ ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind)
   return cause;
 }
 
-internal B32
-ctrl_handle_match(DMN_Handle a, DMN_Handle b)
-{
-  return MemoryMatchStruct(&a, &b);
-}
-
 ////////////////////////////////
 //~ rjf: Machine/Handle Pair Type Functions
 
@@ -923,7 +917,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     {
       for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
       {
-        if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+        if(n->machine_id == machine_id && dmn_handle_match(n->process, process))
         {
           U64 range_slot_idx = range_hash%n->range_hash_slots_count;
           CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
@@ -950,7 +944,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
         B32 process_node_exists = 0;
         for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
         {
-          if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+          if(n->machine_id == machine_id && dmn_handle_match(n->process, process))
           {
             process_node_exists = 1;
             break;
@@ -978,7 +972,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
       {
         for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
         {
-          if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+          if(n->machine_id == machine_id && dmn_handle_match(n->process, process))
           {
             U64 range_slot_idx = range_hash%n->range_hash_slots_count;
             CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
@@ -1018,7 +1012,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
       {
         for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
         {
-          if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+          if(n->machine_id == machine_id && dmn_handle_match(n->process, process))
           {
             U64 range_slot_idx = range_hash%n->range_hash_slots_count;
             CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
@@ -3662,7 +3656,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     {
       for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
       {
-        if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+        if(n->machine_id == machine_id && dmn_handle_match(n->process, process))
         {
           U64 range_slot_idx = range_hash%n->range_hash_slots_count;
           CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
@@ -3739,7 +3733,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     {
       for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
       {
-        if(n->machine_id == machine_id && ctrl_handle_match(n->process, process))
+        if(n->machine_id == machine_id && dmn_handle_match(n->process, process))
         {
           U64 range_slot_idx = range_hash%n->range_hash_slots_count;
           CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
