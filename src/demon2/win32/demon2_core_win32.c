@@ -1144,6 +1144,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
   //
   typedef enum DMN_W32_EventGenPath
   {
+    DMN_W32_EventGenPath_NotAttached,
     DMN_W32_EventGenPath_Run,
     DMN_W32_EventGenPath_DetachProcesses,
   }
@@ -1153,12 +1154,41 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
   {
     event_gen_path = DMN_W32_EventGenPath_DetachProcesses;
   }
+  else
+  {
+    B32 any_processes_live = dmn_w32_shared->new_process_pending;
+    if(!any_processes_live)
+    {
+      for(DMN_W32_Entity *process = dmn_w32_shared->entities_base->first; process != &dmn_w32_entity_nil; process = process->next)
+      {
+        if(process->kind == DMN_W32_EntityKind_Process)
+        {
+          any_processes_live = 1;
+          break;
+        }
+      }
+    }
+    if(!any_processes_live)
+    {
+      event_gen_path = DMN_W32_EventGenPath_NotAttached;
+    }
+  }
   
   //////////////////////////////
   //- rjf: produce debug events
   //
   switch(event_gen_path)
   {
+    ////////////////////////////
+    //- rjf: produce not-attached error events
+    //
+    case DMN_W32_EventGenPath_NotAttached:
+    {
+      DMN_Event *e = dmn_event_list_push(arena, &events);
+      e->kind       = DMN_EventKind_Error;
+      e->error_kind = DMN_ErrorKind_NotAttached;
+    }break;
+    
     ////////////////////////////
     //- rjf: produce debug events from regular running
     //
@@ -1394,6 +1424,8 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
             dmn_w32_shared->resume_tid = evt.dwThreadId;
           }
           ins_atomic_u64_inc_eval(&dmn_w32_shared->run_gen);
+          ins_atomic_u64_inc_eval(&dmn_w32_shared->mem_gen);
+          ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
         }
       }
       
@@ -2166,7 +2198,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
 internal void
 dmn_halt(U64 code, U64 user_data)
 {
-  if(!dmn_handle_match(dmn_handle_zero(), dmn_w32_shared->halter_process))
+  if(dmn_handle_match(dmn_handle_zero(), dmn_w32_shared->halter_process))
   {
     DMN_W32_Entity *process = &dmn_w32_entity_nil;
     for(DMN_W32_Entity *entity = dmn_w32_shared->entities_base->first;
