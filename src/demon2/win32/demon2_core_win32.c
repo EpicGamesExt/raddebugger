@@ -2525,6 +2525,23 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
     if(entity->kind == DMN_W32_EntityKind_Thread)
     {
       result = entity->thread.thread_local_base;
+      switch(entity->arch)
+      {
+        case Architecture_Null:
+        case Architecture_COUNT:
+        {}break;
+        case Architecture_arm64:
+        case Architecture_arm32:
+        {NotImplemented;}break;
+        case Architecture_x64:
+        {
+          result += 88;
+        }break;
+        case Architecture_x86:
+        {
+          result += 44;
+        }break;
+      }
     }
   }
   return result;
