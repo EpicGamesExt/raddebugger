@@ -172,28 +172,26 @@ internal U64 dmn_rsp_from_thread(DMN_Handle thread);
 internal void dmn_init(void);
 
 ////////////////////////////////
-//~ rjf: @dmn_os_hooks Run/Memory/Register Counters
-
-internal U64 dmn_run_gen(void);
-internal U64 dmn_mem_gen(void);
-internal U64 dmn_reg_gen(void);
-
-////////////////////////////////
-//~ rjf: @dmn_os_hooks Running/Halting (Implemented Per-OS)
-
-internal DMN_EventList dmn_run(Arena *arena, DMN_RunCtrls *ctrls);
-internal void dmn_halt(U64 code, U64 user_data);
-
-////////////////////////////////
-//~ rjf: @dmn_os_hooks Process Launching/Attaching/Killing/Detaching (Implemented Per-OS)
+//~ rjf: @dmn_os_hooks Blocking Control Thread Operations (Implemented Per-OS)
 
 internal U32 dmn_launch_process(OS_LaunchOptions *options);
 internal B32 dmn_attach_process(U32 pid);
 internal B32 dmn_kill_process(DMN_Handle process, U32 exit_code);
 internal B32 dmn_detach_process(DMN_Handle process);
+internal DMN_EventList dmn_run(Arena *arena, DMN_RunCtrls *ctrls);
 
 ////////////////////////////////
-//~ rjf: @dmn_os_hooks Process/Thread Reads/Writes (Implemented Per-OS)
+//~ rjf: @dmn_os_hooks Halting (Implemented Per-OS)
+
+internal void dmn_halt(U64 code, U64 user_data);
+
+////////////////////////////////
+//~ rjf: @dmn_os_hooks Introspection Functions (Implemented Per-OS)
+
+//- rjf: run/memory/register counters
+internal U64 dmn_run_gen(void);
+internal U64 dmn_mem_gen(void);
+internal U64 dmn_reg_gen(void);
 
 //- rjf: processes
 internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
@@ -208,9 +206,7 @@ internal U64 dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
 internal B32 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);
 internal B32 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
 
-////////////////////////////////
-//~ rjf: @dmn_os_hooks System Process Listing (Implemented Per-OS)
-
+//- rjf: system process listing
 internal void dmn_process_iter_begin(DMN_ProcessIter *iter);
 internal B32  dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out);
 internal void dmn_process_iter_end(DMN_ProcessIter *iter);

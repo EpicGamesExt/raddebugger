@@ -1108,31 +1108,158 @@ dmn_init(void)
 }
 
 ////////////////////////////////
-//~ rjf: @dmn_os_hooks Run/Memory/Register Counters
+//~ rjf: @dmn_os_hooks Blocking Control Thread Operations (Implemented Per-OS)
 
-internal U64
-dmn_run_gen(void)
+internal U32
+dmn_launch_process(OS_LaunchOptions *options)
 {
-  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->run_gen);
+  Temp scratch = scratch_begin(0, 0);
+  U32 result = 0;
+  
+  //- rjf: produce exe / arguments string
+  String8 cmd = {0};
+  if(options->cmd_line.first != 0)
+  {
+    String8List args = {0};
+    String8 exe_path = options->cmd_line.first->string;
+    str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
+    for(String8Node *n = options->cmd_line.first->next; n != 0; n = n->next)
+    {
+      str8_list_push(scratch.arena, &args, n->string);
+    }
+    StringJoin join_params = {0};
+    join_params.sep = str8_lit(" ");
+    cmd = str8_list_join(scratch.arena, &args, &join_params);
+  }
+  
+  //- rjf: produce environment strings
+  String8 env = {0};
+  {
+    String8List all_opts = options->env;
+    if(options->inherit_env != 0)
+    {
+      MemoryZeroStruct(&all_opts);
+      str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
+      for(String8Node *n = options->env.first; n != 0; n = n->next)
+      {
+        str8_list_push(scratch.arena, &all_opts, n->string);
+      }
+      for(String8Node *n = dmn_w32_shared->env_strings.first; n != 0; n = n->next)
+      {
+        str8_list_push(scratch.arena, &all_opts, n->string);
+      }
+    }
+    StringJoin join_params2 = {0};
+    join_params2.sep = str8_lit("\0");
+    join_params2.post = str8_lit("\0");
+    env = str8_list_join(scratch.arena, &all_opts, &join_params2);
+  }
+  
+  //- rjf: produce utf-16 strings
+  String16 cmd16 = str16_from_8(scratch.arena, cmd);
+  String16 dir16 = str16_from_8(scratch.arena, options->path);
+  String16 env16 = str16_from_8(scratch.arena, env);
+  
+  //- rjf: launch
+  DWORD access_flags = CREATE_UNICODE_ENVIRONMENT|DEBUG_PROCESS;
+  STARTUPINFOW startup_info = {sizeof(startup_info)};
+  PROCESS_INFORMATION process_info = {0};
+  AllocConsole();
+  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, access_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
+  {
+    // check if we are 32-bit app, and just close it immediately
+    BOOL is_wow = 0;
+    IsWow64Process(process_info.hProcess, &is_wow);
+    if(is_wow)
+    {
+      MessageBox(0, "Sorry, The RAD Debugger only debugs 64-bit applications currently.", "Process error", MB_OK|MB_ICONSTOP);
+      DebugActiveProcessStop(process_info.dwProcessId);
+      TerminateProcess(process_info.hProcess,0xffffffff);
+    }
+    else
+    {
+      result = process_info.dwProcessId;
+      dmn_w32_shared->new_process_pending = 1;
+    }
+    CloseHandle(process_info.hProcess);
+    CloseHandle(process_info.hThread);
+  }
+  else
+  {
+    MessageBox(0, "Error starting process.", "Process error", MB_OK|MB_ICONSTOP);
+  }
+  FreeConsole();
+  
+  //- rjf: eliminate all handles which have stuck around from the AllocConsole
+  {
+    SetStdHandle(STD_INPUT_HANDLE, 0);
+    SetStdHandle(STD_OUTPUT_HANDLE, 0);
+    SetStdHandle(STD_ERROR_HANDLE, 0);
+  }
+  
+  scratch_end(scratch);
   return result;
 }
 
-internal U64
-dmn_mem_gen(void)
+internal B32
+dmn_attach_process(U32 pid)
 {
-  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->mem_gen);
+  B32 result = 0;
+  if(DebugActiveProcess((DWORD)pid))
+  {
+    result = 1;
+    dmn_w32_shared->new_process_pending = 1;
+  }
   return result;
 }
 
-internal U64
-dmn_reg_gen(void)
+internal B32
+dmn_kill_process(DMN_Handle process, U32 exit_code)
 {
-  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->reg_gen);
+  B32 result = 0;
+  DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+  if(TerminateProcess(process_entity->handle, exit_code))
+  {
+    result = 1;
+  }
   return result;
 }
 
-////////////////////////////////
-//~ rjf: @dmn_os_hooks Running/Halting (Implemented Per-OS)
+internal B32
+dmn_detach_process(DMN_Handle process)
+{
+  B32 result = 0;
+  DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+  
+  // rjf: resume threads
+  for(DMN_W32_Entity *child = process_entity->first;
+      child != &dmn_w32_entity_nil;
+      child = child->next)
+  {
+    if(child->kind == DMN_W32_EntityKind_Thread)
+    {
+      DWORD resume_result = ResumeThread(child->handle);
+      (void)resume_result;
+    }
+  }
+  
+  // rjf: detach
+  {
+    DWORD pid = (DWORD)process_entity->id;
+    if(DebugActiveProcessStop(pid))
+    {
+      result = 1;
+    }
+  }
+  
+  // rjf: push into list of processes to generate events for later
+  if(result != 0)
+  {
+    dmn_handle_list_push(dmn_w32_shared->detach_arena, &dmn_w32_shared->detach_processes, process);
+  }
+  
+  return result;
+}
 
 internal DMN_EventList
 dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
@@ -2195,6 +2322,9 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
   return events;
 }
 
+////////////////////////////////
+//~ rjf: @dmn_os_hooks Halting (Implemented Per-OS)
+
 internal void
 dmn_halt(U64 code, U64 user_data)
 {
@@ -2223,161 +2353,30 @@ dmn_halt(U64 code, U64 user_data)
 }
 
 ////////////////////////////////
-//~ rjf: @dmn_os_hooks Process Launching/Attaching/Killing/Detaching (Implemented Per-OS)
+//~ rjf: @dmn_os_hooks Introspection Functions (Implemented Per-OS)
 
-internal U32
-dmn_launch_process(OS_LaunchOptions *options)
+//- rjf: run/memory/register counters
+
+internal U64
+dmn_run_gen(void)
 {
-  Temp scratch = scratch_begin(0, 0);
-  U32 result = 0;
-  
-  //- rjf: produce exe / arguments string
-  String8 cmd = {0};
-  if(options->cmd_line.first != 0)
-  {
-    String8List args = {0};
-    String8 exe_path = options->cmd_line.first->string;
-    str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
-    for(String8Node *n = options->cmd_line.first->next; n != 0; n = n->next)
-    {
-      str8_list_push(scratch.arena, &args, n->string);
-    }
-    StringJoin join_params = {0};
-    join_params.sep = str8_lit(" ");
-    cmd = str8_list_join(scratch.arena, &args, &join_params);
-  }
-  
-  //- rjf: produce environment strings
-  String8 env = {0};
-  {
-    String8List all_opts = options->env;
-    if(options->inherit_env != 0)
-    {
-      MemoryZeroStruct(&all_opts);
-      str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
-      for(String8Node *n = options->env.first; n != 0; n = n->next)
-      {
-        str8_list_push(scratch.arena, &all_opts, n->string);
-      }
-      for(String8Node *n = dmn_w32_shared->env_strings.first; n != 0; n = n->next)
-      {
-        str8_list_push(scratch.arena, &all_opts, n->string);
-      }
-    }
-    StringJoin join_params2 = {0};
-    join_params2.sep = str8_lit("\0");
-    join_params2.post = str8_lit("\0");
-    env = str8_list_join(scratch.arena, &all_opts, &join_params2);
-  }
-  
-  //- rjf: produce utf-16 strings
-  String16 cmd16 = str16_from_8(scratch.arena, cmd);
-  String16 dir16 = str16_from_8(scratch.arena, options->path);
-  String16 env16 = str16_from_8(scratch.arena, env);
-  
-  //- rjf: launch
-  DWORD access_flags = CREATE_UNICODE_ENVIRONMENT|DEBUG_PROCESS;
-  STARTUPINFOW startup_info = {sizeof(startup_info)};
-  PROCESS_INFORMATION process_info = {0};
-  AllocConsole();
-  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, access_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
-  {
-    // check if we are 32-bit app, and just close it immediately
-    BOOL is_wow = 0;
-    IsWow64Process(process_info.hProcess, &is_wow);
-    if(is_wow)
-    {
-      MessageBox(0, "Sorry, The RAD Debugger only debugs 64-bit applications currently.", "Process error", MB_OK|MB_ICONSTOP);
-      DebugActiveProcessStop(process_info.dwProcessId);
-      TerminateProcess(process_info.hProcess,0xffffffff);
-    }
-    else
-    {
-      result = process_info.dwProcessId;
-      dmn_w32_shared->new_process_pending = 1;
-    }
-    CloseHandle(process_info.hProcess);
-    CloseHandle(process_info.hThread);
-  }
-  else
-  {
-    MessageBox(0, "Error starting process.", "Process error", MB_OK|MB_ICONSTOP);
-  }
-  FreeConsole();
-  
-  //- rjf: eliminate all handles which have stuck around from the AllocConsole
-  {
-    SetStdHandle(STD_INPUT_HANDLE, 0);
-    SetStdHandle(STD_OUTPUT_HANDLE, 0);
-    SetStdHandle(STD_ERROR_HANDLE, 0);
-  }
-  
-  scratch_end(scratch);
+  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->run_gen);
   return result;
 }
 
-internal B32
-dmn_attach_process(U32 pid)
+internal U64
+dmn_mem_gen(void)
 {
-  B32 result = 0;
-  if(DebugActiveProcess((DWORD)pid))
-  {
-    result = 1;
-    dmn_w32_shared->new_process_pending = 1;
-  }
+  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->mem_gen);
   return result;
 }
 
-internal B32
-dmn_kill_process(DMN_Handle process, U32 exit_code)
+internal U64
+dmn_reg_gen(void)
 {
-  B32 result = 0;
-  DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
-  if(TerminateProcess(process_entity->handle, exit_code))
-  {
-    result = 1;
-  }
+  U64 result = ins_atomic_u64_eval(&dmn_w32_shared->reg_gen);
   return result;
 }
-
-internal B32
-dmn_detach_process(DMN_Handle process)
-{
-  B32 result = 0;
-  DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
-  
-  // rjf: resume threads
-  for(DMN_W32_Entity *child = process_entity->first;
-      child != &dmn_w32_entity_nil;
-      child = child->next)
-  {
-    if(child->kind == DMN_W32_EntityKind_Thread)
-    {
-      DWORD resume_result = ResumeThread(child->handle);
-      (void)resume_result;
-    }
-  }
-  
-  // rjf: detach
-  {
-    DWORD pid = (DWORD)process_entity->id;
-    if(DebugActiveProcessStop(pid))
-    {
-      result = 1;
-    }
-  }
-  
-  // rjf: push into list of processes to generate events for later
-  if(result != 0)
-  {
-    dmn_handle_list_push(dmn_w32_shared->detach_arena, &dmn_w32_shared->detach_processes, process);
-  }
-  
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: @dmn_os_hooks Process/Thread Reads/Writes (Implemented Per-OS)
 
 //- rjf: processes
 
@@ -2466,8 +2465,7 @@ dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block)
   return result;
 }
 
-////////////////////////////////
-//~ rjf: @dmn_os_hooks System Process Listing (Implemented Per-OS)
+//- rjf: system process listing
 
 internal void
 dmn_process_iter_begin(DMN_ProcessIter *iter)
