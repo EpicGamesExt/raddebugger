@@ -447,7 +447,7 @@ struct DF_Entity
   
   // rjf: ctrl entity equipment
   CTRL_MachineID ctrl_machine_id;
-  CTRL_Handle ctrl_handle;
+  DMN_Handle ctrl_handle;
   Architecture arch;
   U32 ctrl_id;
   U64 stack_base;
@@ -940,7 +940,6 @@ struct DF_RunUnwindCacheNode
   DF_RunUnwindCacheNode *hash_next;
   DF_Handle thread;
   CTRL_Unwind unwind;
-  U64 tls_base_vaddr;
 };
 
 typedef struct DF_RunUnwindCacheSlot DF_RunUnwindCacheSlot;
@@ -954,8 +953,8 @@ typedef struct DF_RunUnwindCache DF_RunUnwindCache;
 struct DF_RunUnwindCache
 {
   Arena *arena;
-  U64 table_size;
-  DF_RunUnwindCacheSlot *table;
+  U64 slots_count;
+  DF_RunUnwindCacheSlot *slots;
 };
 
 //- rjf: per-run tls-base-vaddr cache
@@ -1136,14 +1135,18 @@ struct DF_State
   // rjf: per-run caches
   U64 unwind_cache_reggen_idx;
   U64 unwind_cache_memgen_idx;
-  DF_RunUnwindCache unwind_cache;
+  DF_RunUnwindCache unwind_caches[2];
+  U64 unwind_cache_gen;
   U64 tls_base_cache_reggen_idx;
   U64 tls_base_cache_memgen_idx;
-  DF_RunTLSBaseCache tls_base_cache;
+  DF_RunTLSBaseCache tls_base_caches[2];
+  U64 tls_base_cache_gen;
   U64 locals_cache_reggen_idx;
-  DF_RunLocalsCache locals_cache;
+  DF_RunLocalsCache locals_caches[2];
+  U64 locals_cache_gen;
   U64 member_cache_reggen_idx;
-  DF_RunLocalsCache member_cache;
+  DF_RunLocalsCache member_caches[2];
+  U64 member_cache_gen;
   
   // rjf: eval view cache
   DF_EvalViewCache eval_view_cache;
@@ -1179,6 +1182,7 @@ struct DF_State
   B32 ctrl_solo_stepping_mode;
   
   // rjf: control thread ctrl -> user reading state
+  CTRL_EntityStore *ctrl_entity_store;
   Arena *ctrl_stop_arena;
   CTRL_Event ctrl_last_stop_event;
   
@@ -1447,7 +1451,7 @@ internal void df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src);
 
 //- rjf: control layer correllation equipment
 internal void df_entity_equip_ctrl_machine_id(DF_Entity *entity, CTRL_MachineID machine_id);
-internal void df_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle);
+internal void df_entity_equip_ctrl_handle(DF_Entity *entity, DMN_Handle handle);
 internal void df_entity_equip_arch(DF_Entity *entity, Architecture arch);
 internal void df_entity_equip_ctrl_id(DF_Entity *entity, U32 id);
 internal void df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base);
@@ -1468,7 +1472,7 @@ internal DF_Entity *df_entity_root(void);
 internal DF_EntityList df_push_entity_list_with_kind(Arena *arena, DF_EntityKind kind);
 internal DF_Entity *df_entity_from_id(DF_EntityID id);
 internal DF_Entity *df_machine_entity_from_machine_id(CTRL_MachineID machine_id);
-internal DF_Entity *df_entity_from_ctrl_handle(CTRL_MachineID machine_id, CTRL_Handle handle);
+internal DF_Entity *df_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 internal DF_Entity *df_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal DF_Entity *df_entity_from_name_and_kind(String8 string, DF_EntityKind kind);
 internal DF_Entity *df_entity_from_u64_and_kind(U64 u64, DF_EntityKind kind);
@@ -1533,7 +1537,6 @@ internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_
 
 //- rjf: voff -> src lookups
 internal DF_TextLineDasm2SrcInfo df_text_line_dasm2src_info_from_binary_voff(DF_Entity *binary, U64 voff);
-internal DF_TextLineDasm2SrcInfoList df_text_line_dasm2src_info_from_voff(Arena *arena, U64 voff);
 
 //- rjf: symbol -> voff lookups
 internal U64 df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name);
@@ -1547,9 +1550,6 @@ internal DF_Entity *df_module_from_process_vaddr(DF_Entity *process, U64 vaddr);
 internal DF_Entity *df_module_from_thread(DF_Entity *thread);
 internal U64 df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal Architecture df_architecture_from_entity(DF_Entity *entity);
-internal CTRL_Unwind df_push_unwind_from_thread(Arena *arena, DF_Entity *thread);
-internal U64 df_rip_from_thread(DF_Entity *thread);
-internal U64 df_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
 internal EVAL_String2NumMap *df_push_locals_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *binary, U64 voff);
 internal EVAL_String2NumMap *df_push_member_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *binary, U64 voff);
 internal B32 df_set_thread_rip(DF_Entity *thread, U64 vaddr);

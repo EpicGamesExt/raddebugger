@@ -2131,7 +2131,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = (unwind_count == 0 ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
+            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -3111,8 +3111,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
           ui_labelf("Target Hz: %.2f", 1.f/df_dt());
-          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_idx());
-          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_memgen_idx());
+          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
+          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
           ui_labelf("Window %p", window);
           ui_set_next_pref_width(ui_children_sum(1));
           ui_set_next_pref_height(ui_children_sum(1));

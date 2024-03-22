@@ -2,12 +2,17 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Demon2 Pass Tasks
+//
+// [ ] TLS eval -> in-process-memory EXE info
+// [ ] unwinding -> in-process-memory EXE info
+// [x] solidify synchronization mechanisms for usage of demon2 layer
+// [x] TLS eval correctness
+// [x] freezing thread while running -> soft-halt
+
+////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
-// [x] hover-eval when window is not focused - maybe just start directly
-//     using mouse-move events here
-// [x] CRT asserts - stepping over int 29 should work just like stepping over
-//     an int3
 // [ ] committing needs to happen when navigating focus away for any reason
 // [ ] better discoverability for view rules - have better help hover tooltip,
 //     info on arguments, and better autocomplete lister
@@ -79,8 +84,6 @@
 // [ ] disasm animation & go-to-address
 //
 // [ ] visualize remapped files (via path map)
-//
-// [x] DBGI layer is case-sensitive even on case-insensitive systems
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)

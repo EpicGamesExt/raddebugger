@@ -116,3 +116,38 @@ dmn_event_list_push(Arena *arena, DMN_EventList *list)
   DMN_Event *result = &n->v;
   return result;
 }
+
+////////////////////////////////
+//~ rjf: Thread Reading Helper Functions (Helpers, Implemented Once)
+
+internal U64
+dmn_rip_from_thread(DMN_Handle thread)
+{
+  U64 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  {
+    Architecture arch = dmn_arch_from_thread(thread);
+    U64 reg_block_size = regs_block_size_from_architecture(arch);
+    void *reg_block = push_array(scratch.arena, U8, reg_block_size);
+    dmn_thread_read_reg_block(thread, reg_block);
+    result = regs_rip_from_arch_block(arch, reg_block);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal U64
+dmn_rsp_from_thread(DMN_Handle thread)
+{
+  U64 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  {
+    Architecture arch = dmn_arch_from_thread(thread);
+    U64 reg_block_size = regs_block_size_from_architecture(arch);
+    void *reg_block = push_array(scratch.arena, U8, reg_block_size);
+    dmn_thread_read_reg_block(thread, reg_block);
+    result = regs_rsp_from_arch_block(arch, reg_block);
+  }
+  scratch_end(scratch);
+  return result;
+}

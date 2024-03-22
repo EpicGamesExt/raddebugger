@@ -6,7 +6,7 @@
 
 #define BUILD_VERSION_MAJOR 0
 #define BUILD_VERSION_MINOR 9
-#define BUILD_VERSION_PATCH 8
+#define BUILD_VERSION_PATCH 9
 #define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
 #define BUILD_TITLE "The RAD Debugger"
 #define OS_FEATURE_GRAPHICAL 1
@@ -43,7 +43,7 @@
 #include "regs/raddbgi/regs_raddbgi.h"
 #include "type_graph/type_graph.h"
 #include "dbgi/dbgi.h"
-#include "demon/demon_inc.h"
+#include "demon2/demon2_inc.h"
 #include "eval/eval_inc.h"
 #include "unwind/unwind.h"
 #include "ctrl/ctrl_inc.h"
@@ -81,7 +81,7 @@
 #include "regs/raddbgi/regs_raddbgi.c"
 #include "type_graph/type_graph.c"
 #include "dbgi/dbgi.c"
-#include "demon/demon_inc.c"
+#include "demon2/demon2_inc.c"
 #include "eval/eval_inc.c"
 #include "unwind/unwind.c"
 #include "ctrl/ctrl_inc.c"

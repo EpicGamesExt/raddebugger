@@ -46,7 +46,7 @@
 #include "demon2/demon2_inc.h"
 #include "eval/eval_inc.h"
 #include "unwind/unwind.h"
-#include "ctrl2/ctrl2_inc.h"
+#include "ctrl/ctrl_inc.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
@@ -74,7 +74,7 @@
 #include "demon2/demon2_inc.c"
 #include "eval/eval_inc.c"
 #include "unwind/unwind.c"
-#include "ctrl2/ctrl2_inc.c"
+#include "ctrl/ctrl_inc.c"
 
 ////////////////////////////////
 //~ rjf: Entry Point

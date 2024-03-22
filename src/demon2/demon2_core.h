@@ -5,6 +5,20 @@
 #define DEMON2_CORE_H
 
 ////////////////////////////////
+//~ rjf: Control-Thread-Only Context
+//
+// An instance of this struct must ONLY be returned by dmn_ctrl_begin, and only
+// used by the thread which called it. All APIs which can ONLY run on the
+// control thread, which blocks to control & receive events, will take this
+// parameter. All other APIs can be called from any thread.
+
+typedef struct DMN_CtrlCtx DMN_CtrlCtx;
+struct DMN_CtrlCtx
+{
+  U64 u64 [1];
+};
+
+////////////////////////////////
 //~ rjf: Handle Types
 
 typedef union DMN_Handle DMN_Handle;
@@ -54,6 +68,7 @@ struct DMN_Event
   DMN_Handle process;
   DMN_Handle thread;
   DMN_Handle module;
+  Architecture arch;
   U64 address;
   U64 size;
   String8 string;
@@ -160,42 +175,61 @@ internal DMN_HandleArray dmn_handle_array_copy(Arena *arena, DMN_HandleArray *sr
 internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
 
 ////////////////////////////////
+//~ rjf: Thread Reading Helper Functions (Helpers, Implemented Once)
+
+internal U64 dmn_rip_from_thread(DMN_Handle thread);
+internal U64 dmn_rsp_from_thread(DMN_Handle thread);
+
+////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)
 
 internal void dmn_init(void);
 
 ////////////////////////////////
-//~ rjf: @dmn_os_hooks Running/Halting (Implemented Per-OS)
+//~ rjf: @dmn_os_hooks Blocking Control Thread Operations (Implemented Per-OS)
 
-internal DMN_EventList dmn_run(Arena *arena, DMN_RunCtrls *ctrls);
+internal DMN_CtrlCtx *dmn_ctrl_begin(void);
+internal void dmn_ctrl_exclusive_access_begin(void);
+internal void dmn_ctrl_exclusive_access_end(void);
+#define DMN_CtrlExclusiveAccessScope DeferLoop(dmn_ctrl_exclusive_access_begin(), dmn_ctrl_exclusive_access_end())
+internal U32 dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options);
+internal B32 dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid);
+internal B32 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code);
+internal B32 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process);
+internal DMN_EventList dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls);
+
+////////////////////////////////
+//~ rjf: @dmn_os_hooks Halting (Implemented Per-OS)
+
 internal void dmn_halt(U64 code, U64 user_data);
 
 ////////////////////////////////
-//~ rjf: @dmn_os_hooks Process Launching/Attaching/Killing/Detaching (Implemented Per-OS)
+//~ rjf: @dmn_os_hooks Introspection Functions (Implemented Per-OS)
 
-internal U32 dmn_launch_process(OS_LaunchOptions *options);
-internal B32 dmn_attach_process(U32 pid);
-internal B32 dmn_kill_process(DMN_Handle process, U32 exit_code);
-internal B32 dmn_detach_process(DMN_Handle process);
+//- rjf: run/memory/register counters
+internal U64 dmn_run_gen(void);
+internal U64 dmn_mem_gen(void);
+internal U64 dmn_reg_gen(void);
 
-////////////////////////////////
-//~ rjf: @dmn_os_hooks Process/Thread Reads/Writes (Implemented Per-OS)
+//- rjf: non-blocking-control-thread access barriers
+internal B32 dmn_access_open(void);
+internal void dmn_access_close(void);
+#define DMN_AccessScope DeferLoopChecked(dmn_access_open(), dmn_access_close())
 
 //- rjf: processes
-internal U64          dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
-internal B32          dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
+internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
+internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 #define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 #define dmn_process_write_struct(process, vaddr, ptr) dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 
 //- rjf: threads
-internal U64          dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
-internal U64          dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
-internal B32          dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);
-internal B32          dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
+internal Architecture dmn_arch_from_thread(DMN_Handle handle);
+internal U64 dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
+internal U64 dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
+internal B32 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);
+internal B32 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
 
-////////////////////////////////
-//~ rjf: @dmn_os_hooks System Process Listing (Implemented Per-OS)
-
+//- rjf: system process listing
 internal void dmn_process_iter_begin(DMN_ProcessIter *iter);
 internal B32  dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out);
 internal void dmn_process_iter_end(DMN_ProcessIter *iter);

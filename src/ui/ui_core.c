@@ -2635,7 +2635,8 @@ ui_signal_from_box(UI_Box *box)
   //- rjf: mouse is over this box's rect, no other hot key? -> set hot key, mark hovering
   //
   {
-    if(contains_2f32(rect, ui_state->mouse) &&
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       contains_2f32(rect, ui_state->mouse) &&
        !contains_2f32(blacklist_rect, ui_state->mouse) &&
        (ui_key_match(ui_state->hot_box_key, ui_key_zero()) || ui_key_match(ui_state->hot_box_key, box->key)) &&
        (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key)) &&
