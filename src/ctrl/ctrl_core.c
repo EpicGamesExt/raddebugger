@@ -819,7 +819,7 @@ ctrl_init(void)
   }
   ctrl_state->process_memory_cache.slots_count = 256;
   ctrl_state->process_memory_cache.slots = push_array(arena, CTRL_ProcessMemoryCacheSlot, ctrl_state->process_memory_cache.slots_count);
-  ctrl_state->process_memory_cache.stripes_count = 8;
+  ctrl_state->process_memory_cache.stripes_count = os_logical_core_count();
   ctrl_state->process_memory_cache.stripes = push_array(arena, CTRL_ProcessMemoryCacheStripe, ctrl_state->process_memory_cache.stripes_count);
   for(U64 idx = 0; idx < ctrl_state->process_memory_cache.stripes_count; idx += 1)
   {
@@ -828,14 +828,13 @@ ctrl_init(void)
   }
   ctrl_state->thread_reg_cache.slots_count = 1024;
   ctrl_state->thread_reg_cache.slots = push_array(arena, CTRL_ThreadRegCacheSlot, ctrl_state->thread_reg_cache.slots_count);
-  ctrl_state->thread_reg_cache.stripes_count = 8;
+  ctrl_state->thread_reg_cache.stripes_count = os_logical_core_count();
   ctrl_state->thread_reg_cache.stripes = push_array(arena, CTRL_ThreadRegCacheStripe, ctrl_state->thread_reg_cache.stripes_count);
   for(U64 idx = 0; idx < ctrl_state->thread_reg_cache.stripes_count; idx += 1)
   {
-    ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
     ctrl_state->thread_reg_cache.stripes[idx].arena = arena_alloc();
+    ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
-  ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
   ctrl_state->u2c_ring_size = KB(64);
   ctrl_state->u2c_ring_base = push_array_no_zero(arena, U8, ctrl_state->u2c_ring_size);
   ctrl_state->u2c_ring_mutex = os_mutex_alloc();
@@ -844,6 +843,7 @@ ctrl_init(void)
   ctrl_state->c2u_ring_base = push_array_no_zero(arena, U8, ctrl_state->c2u_ring_size);
   ctrl_state->c2u_ring_mutex = os_mutex_alloc();
   ctrl_state->c2u_ring_cv = os_condition_variable_alloc();
+  ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))

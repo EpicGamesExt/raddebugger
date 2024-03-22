@@ -3558,7 +3558,7 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
   //- rjf: read module's TLS index
   U64 tls_index = 0;
   {
-    CTRL_ProcessMemorySlice tls_index_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice tls_index_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, 0);
     if(tls_index_slice.data.size >= addr_size)
     {
       tls_index = *(U64 *)tls_index_slice.data.str;
@@ -3571,13 +3571,13 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
     U64 thread_info_addr = root_vaddr;
     U64 tls_addr_off = tls_index*addr_size;
     U64 tls_addr_array = 0;
-    CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size), os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
     String8 tls_addr_array_data = tls_addr_array_slice.data;
     if(tls_addr_array_data.size >= 8)
     {
       MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
     }
-    CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), os_now_microseconds()+5000);
+    CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0);
     String8 result_data = result_slice.data;
     if(result_data.size >= 8)
     {
@@ -3666,7 +3666,7 @@ df_set_thread_rip(DF_Entity *thread, U64 vaddr)
   // rjf: early mutation of unwind cache for immediate frontend effect
   if(result)
   {
-    DF_RunUnwindCache *unwind_cache = &df_state->unwind_cache;
+    DF_RunUnwindCache *unwind_cache = &df_state->unwind_caches[df_state->unwind_cache_gen%ArrayCount(df_state->unwind_caches)];
     if(unwind_cache->slots_count != 0)
     {
       DF_Handle thread_handle = df_handle_from_entity(thread);
@@ -6135,40 +6135,49 @@ df_push_active_target_list(Arena *arena)
 internal CTRL_Unwind
 df_query_cached_unwind_from_thread(DF_Entity *thread)
 {
-  DF_RunUnwindCache *cache = &df_state->unwind_cache;
-  if(cache->slots_count == 0)
-  {
-    cache->slots_count = 1024;
-    cache->slots = push_array(cache->arena, DF_RunUnwindCacheSlot, cache->slots_count);
-  }
+  CTRL_Unwind result = {0};
   DF_Handle handle = df_handle_from_entity(thread);
   U64 hash = df_hash_from_string(str8_struct(&handle));
-  U64 slot_idx = hash % cache->slots_count;
-  DF_RunUnwindCacheSlot *slot = &cache->slots[slot_idx];
-  DF_RunUnwindCacheNode *node = 0;
-  for(DF_RunUnwindCacheNode *n = slot->first; n != 0; n = n->hash_next)
+  for(U64 cache_idx = 0; cache_idx < ArrayCount(df_state->unwind_caches); cache_idx += 1)
   {
-    if(df_handle_match(n->thread, handle))
+    DF_RunUnwindCache *cache = &df_state->unwind_caches[(df_state->unwind_cache_gen+cache_idx)%ArrayCount(df_state->unwind_caches)];
+    if(cache_idx == 0 && cache->slots_count == 0)
     {
-      node = n;
+      cache->slots_count = 1024;
+      cache->slots = push_array(cache->arena, DF_RunUnwindCacheSlot, cache->slots_count);
+    }
+    else if(cache->slots_count == 0)
+    {
       break;
     }
-  }
-  CTRL_Unwind result = {0};
-  if(node == 0)
-  {
-    result = ctrl_unwind_from_thread(cache->arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
-    if(!result.error)
+    U64 slot_idx = hash%cache->slots_count;
+    DF_RunUnwindCacheSlot *slot = &cache->slots[slot_idx];
+    DF_RunUnwindCacheNode *node = 0;
+    for(DF_RunUnwindCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      node = push_array(cache->arena, DF_RunUnwindCacheNode, 1);
-      SLLQueuePush_N(slot->first, slot->last, node, hash_next);
-      node->thread = handle;
-      node->unwind = result;
+      if(df_handle_match(n->thread, handle))
+      {
+        node = n;
+        break;
+      }
     }
-  }
-  else
-  {
-    result = node->unwind;
+    if(node != 0)
+    {
+      result = node->unwind;
+      break;
+    }
+    else
+    {
+      result = ctrl_unwind_from_thread(cache->arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
+      if(!result.error)
+      {
+        node = push_array(cache->arena, DF_RunUnwindCacheNode, 1);
+        SLLQueuePush_N(slot->first, slot->last, node, hash_next);
+        node->thread = handle;
+        node->unwind = result;
+        break;
+      }
+    }
   }
   return result;
 }
@@ -6176,12 +6185,7 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
 internal U64
 df_query_cached_rip_from_thread(DF_Entity *thread)
 {
-  U64 result = 0;
-  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
-  if(unwind.first != 0)
-  {
-    result = unwind.first->rip;
-  }
+  U64 result = df_query_cached_rip_from_thread_unwind(thread, 0);
   return result;
 }
 
@@ -6405,7 +6409,10 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   }
   
   // rjf: set up per-run caches
-  df_state->unwind_cache.arena = arena_alloc();
+  for(U64 idx = 0; idx < ArrayCount(df_state->unwind_caches); idx += 1)
+  {
+    df_state->unwind_caches[idx].arena = arena_alloc();
+  }
   df_state->tls_base_cache.arena = arena_alloc();
   df_state->locals_cache.arena = arena_alloc();
   df_state->member_cache.arena = arena_alloc();
@@ -6880,7 +6887,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         df_state->unwind_cache_reggen_idx != new_reg_gen) &&
        !df_ctrl_targets_running()) ProfScope("per-thread unwind gather")
     {
-      DF_RunUnwindCache *cache = &df_state->unwind_cache;
+      df_state->unwind_cache_gen += 1;
+      DF_RunUnwindCache *cache = &df_state->unwind_caches[df_state->unwind_cache_gen%ArrayCount(df_state->unwind_caches)];
       arena_clear(cache->arena);
       cache->slots_count = 0;
       cache->slots = 0;

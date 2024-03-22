@@ -6235,6 +6235,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     }
     
     // rjf: find live threads mapping to this disassembly
+    ProfScope("find live threads mapping to this disassembly")
     {
       DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
       DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
@@ -6243,7 +6244,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         DF_Entity *thread = thread_n->entity;
         U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
         U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
-        if(contains_1u64(disasm_vaddr_rng, rip_vaddr))
+        if(contains_1u64(disasm_vaddr_rng, rip_vaddr)) ProfScope("in-range rip scan")
         {
           U64 rip_off = rip_vaddr - disasm_vaddr_rng.min;
           S64 line_num = dasm_inst_array_idx_from_off__linear_scan(&insts, rip_off)+1;
@@ -6257,6 +6258,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     }
     
     // rjf: find breakpoints mapping to this disassembly
+    ProfScope("find breakpoints mapping to this disassembly")
     {
       DF_EntityList bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
       for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
@@ -6277,6 +6279,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     }
     
     // rjf: find watch pins mapping to this disassembly
+    ProfScope("find watch pins mapping to this disassembly")
     {
       DF_EntityList pins = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
       for(DF_EntityNode *n = pins.first; n != 0; n = n->next)
