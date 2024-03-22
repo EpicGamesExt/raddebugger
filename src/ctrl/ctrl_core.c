@@ -1717,6 +1717,7 @@ ctrl_thread__entry_point(void *p)
 {
   ThreadNameF("[ctrl] thread");
   ProfBeginFunction();
+  DMN_CtrlCtx *ctrl_ctx = dmn_ctrl_begin();
   
   //- rjf: loop
   Temp scratch = scratch_begin(0, 0);
@@ -1746,13 +1747,13 @@ ctrl_thread__entry_point(void *p)
           case CTRL_MsgKind_COUNT:{}break;
           
           //- rjf: target operations
-          case CTRL_MsgKind_LaunchAndHandshake:{ctrl_thread__launch_and_handshake(msg);}break;
-          case CTRL_MsgKind_LaunchAndInit:     {ctrl_thread__launch_and_init     (msg);}break;
-          case CTRL_MsgKind_Attach:            {ctrl_thread__attach              (msg);}break;
-          case CTRL_MsgKind_Kill:              {ctrl_thread__kill                (msg);}break;
-          case CTRL_MsgKind_Detach:            {ctrl_thread__detach              (msg);}break;
-          case CTRL_MsgKind_Run:               {ctrl_thread__run                 (msg); done = 1;}break;
-          case CTRL_MsgKind_SingleStep:        {ctrl_thread__single_step         (msg); done = 1;}break;
+          case CTRL_MsgKind_LaunchAndHandshake:{ctrl_thread__launch_and_handshake(ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_LaunchAndInit:     {ctrl_thread__launch_and_init     (ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_Attach:            {ctrl_thread__attach              (ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_Kill:              {ctrl_thread__kill                (ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_Detach:            {ctrl_thread__detach              (ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_Run:               {ctrl_thread__run                 (ctrl_ctx, msg); done = 1;}break;
+          case CTRL_MsgKind_SingleStep:        {ctrl_thread__single_step         (ctrl_ctx, msg); done = 1;}break;
           
           //- rjf: configuration
           case CTRL_MsgKind_SetUserEntryPoints:
@@ -1899,7 +1900,7 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID 
 //- rjf: attached process running/event gathering
 
 internal DMN_Event *
-ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof)
+ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof)
 {
   ProfBeginFunction();
   DMN_Event *event = push_array(arena, DMN_Event, 1);
@@ -2042,8 +2043,8 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
       }
     }
     
-    //- rjf: no event -> dmn_run for a new one
-    if(got_event == 0) ProfScope("no event -> dmn_run for a new one")
+    //- rjf: no event -> dmn_ctrl_run for a new one
+    if(got_event == 0) ProfScope("no event -> dmn_ctrl_run for a new one")
     {
       // rjf: prep spoof
       B32 do_spoof = (spoof != 0 && dmn_handle_match(run_ctrls->single_step_thread, dmn_handle_zero()));
@@ -2065,7 +2066,7 @@ ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls
       // rjf: run for new events
       ProfScope("run for new events")
       {
-        DMN_EventList events = dmn_run(scratch.arena, run_ctrls);
+        DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
         for(DMN_EventNode *src_n = events.first; src_n != 0; src_n = src_n->next)
         {
           DMN_EventNode *dst_n = ctrl_state->free_dmn_event_node;
@@ -2255,7 +2256,7 @@ ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 //- rjf: msg kind implementations
 
 internal void
-ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
+ctrl_thread__launch_and_handshake(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -2269,7 +2270,7 @@ ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
     opts.env         = msg->env_string_list;
     opts.inherit_env = msg->env_inherit;
   }
-  U32 id = dmn_launch_process(&opts);
+  U32 id = dmn_ctrl_launch(ctrl_ctx, &opts);
   
   //- rjf: record start
   {
@@ -2296,7 +2297,7 @@ ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
     // rjf: run until handshake-signifying events
     for(B32 done = 0; done == 0;)
     {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, 0);
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
       switch(event->kind)
       {
         default:{}break;
@@ -2363,7 +2364,7 @@ ctrl_thread__launch_and_handshake(CTRL_Msg *msg)
 }
 
 internal void
-ctrl_thread__launch_and_init(CTRL_Msg *msg)
+ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -2378,7 +2379,7 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     opts.env         = msg->env_string_list;
     opts.inherit_env = msg->env_inherit;
   }
-  U32 id = dmn_launch_process(&opts);
+  U32 id = dmn_ctrl_launch(ctrl_ctx, &opts);
   
   //////////////////////////////
   //- rjf: record start
@@ -2402,7 +2403,7 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
     run_ctrls.run_entities_are_processes = 1;
     for(B32 done = 0; done == 0;)
     {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, 0);
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
       switch(event->kind)
       {
         default:{}break;
@@ -2686,14 +2687,14 @@ ctrl_thread__launch_and_init(CTRL_Msg *msg)
 }
 
 internal void
-ctrl_thread__attach(CTRL_Msg *msg)
+ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DBGI_Scope *scope = dbgi_scope_open();
   
   //- rjf: attach
-  B32 attach_successful = dmn_attach_process(msg->entity_id);
+  B32 attach_successful = dmn_ctrl_attach(ctrl_ctx, msg->entity_id);
   
   //- rjf: run to handshake
   if(attach_successful)
@@ -2704,7 +2705,7 @@ ctrl_thread__attach(CTRL_Msg *msg)
     run_ctrls.run_entities_are_processes = 1;
     for(B32 done = 0; done == 0;)
     {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, 0);
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
       switch(event->kind)
       {
         default:{}break;
@@ -2739,7 +2740,7 @@ ctrl_thread__attach(CTRL_Msg *msg)
 }
 
 internal void
-ctrl_thread__kill(CTRL_Msg *msg)
+ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -2748,7 +2749,7 @@ ctrl_thread__kill(CTRL_Msg *msg)
   U32 exit_code = msg->exit_code;
   
   //- rjf: send kill
-  B32 kill_worked = dmn_kill_process(process, exit_code);
+  B32 kill_worked = dmn_ctrl_kill(ctrl_ctx, process, exit_code);
   
   //- rjf: wait for process to be dead
   if(kill_worked)
@@ -2760,7 +2761,7 @@ ctrl_thread__kill(CTRL_Msg *msg)
     run_ctrls.run_entity_count = 1;
     for(B32 done = 0; done == 0;)
     {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, 0);
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
       if(event->kind == DMN_EventKind_ExitProcess && dmn_handle_match(event->process, process))
       {
         done = 1;
@@ -2788,7 +2789,7 @@ ctrl_thread__kill(CTRL_Msg *msg)
 }
 
 internal void
-ctrl_thread__detach(CTRL_Msg *msg)
+ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -2796,7 +2797,7 @@ ctrl_thread__detach(CTRL_Msg *msg)
   DMN_Handle process = msg->entity;
   
   //- rjf: detach
-  B32 detach_worked = dmn_detach_process(process);
+  B32 detach_worked = dmn_ctrl_detach(ctrl_ctx, process);
   
   //- rjf: wait for process to be dead
   if(detach_worked)
@@ -2808,7 +2809,7 @@ ctrl_thread__detach(CTRL_Msg *msg)
     run_ctrls.run_entity_count = 1;
     for(B32 done = 0; done == 0;)
     {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, 0);
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
       if(event->kind == DMN_EventKind_ExitProcess && dmn_handle_match(event->process, process))
       {
         done = 1;
@@ -2836,7 +2837,7 @@ ctrl_thread__detach(CTRL_Msg *msg)
 }
 
 internal void
-ctrl_thread__run(CTRL_Msg *msg)
+ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -2959,7 +2960,7 @@ ctrl_thread__run(CTRL_Msg *msg)
       run_ctrls.single_step_thread = node->v;
       for(B32 done = 0; done == 0;)
       {
-        DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, 0);
+        DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
         switch(event->kind)
         {
           default:{}break;
@@ -3062,7 +3063,7 @@ ctrl_thread__run(CTRL_Msg *msg)
       //////////////////////////
       //- rjf: get next event
       //
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, run_spoof);
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, run_spoof);
       
       //////////////////////////
       //- rjf: determine event handling
@@ -3298,7 +3299,7 @@ ctrl_thread__run(CTRL_Msg *msg)
         single_step_ctrls.single_step_thread = event->thread;
         for(B32 single_step_done = 0; single_step_done == 0;)
         {
-          DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &single_step_ctrls, 0);
+          DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
           switch(event->kind)
           {
             default:{}break;
@@ -3369,7 +3370,7 @@ ctrl_thread__run(CTRL_Msg *msg)
           single_step_ctrls.single_step_thread = target_thread;
           for(B32 single_step_done = 0; single_step_done == 0;)
           {
-            DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &single_step_ctrls, 0);
+            DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
             switch(event->kind)
             {
               default:{}break;
@@ -3454,7 +3455,7 @@ ctrl_thread__run(CTRL_Msg *msg)
         single_step_ctrls.single_step_thread = event->thread;
         for(B32 single_step_done = 0; single_step_done == 0;)
         {
-          DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &single_step_ctrls, 0);
+          DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
           switch(event->kind)
           {
             default:{}break;
@@ -3539,7 +3540,7 @@ ctrl_thread__run(CTRL_Msg *msg)
 }
 
 internal void
-ctrl_thread__single_step(CTRL_Msg *msg)
+ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -3561,7 +3562,7 @@ ctrl_thread__single_step(CTRL_Msg *msg)
     run_ctrls.single_step_thread = msg->entity;
     for(B32 done = 0; done == 0;)
     {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, msg, &run_ctrls, 0);
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
       switch(event->kind)
       {
         default:{}break;

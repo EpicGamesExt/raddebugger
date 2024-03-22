@@ -1073,6 +1073,7 @@ dmn_init(void)
   Arena *arena = arena_alloc();
   dmn_w32_shared = push_array(arena, DMN_W32_Shared, 1);
   dmn_w32_shared->arena = arena;
+  dmn_w32_shared->access_mutex = os_mutex_alloc();
   dmn_w32_shared->detach_arena = arena_alloc();
   dmn_w32_shared->entities_arena = arena_alloc__sized(GB(8), KB(64));
   dmn_w32_shared->entities_base = dmn_w32_entity_alloc(&dmn_w32_entity_nil, DMN_W32_EntityKind_Root, 0);
@@ -1110,102 +1111,111 @@ dmn_init(void)
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Blocking Control Thread Operations (Implemented Per-OS)
 
+internal DMN_CtrlCtx *
+dmn_ctrl_begin(void)
+{
+  DMN_CtrlCtx *ctx = (DMN_CtrlCtx *)1;
+  dmn_w32_ctrl_thread = 1;
+  return ctx;
+}
+
 internal U32
-dmn_launch_process(OS_LaunchOptions *options)
+dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
 {
   Temp scratch = scratch_begin(0, 0);
   U32 result = 0;
-  
-  //- rjf: produce exe / arguments string
-  String8 cmd = {0};
-  if(options->cmd_line.first != 0)
+  DMN_AccessScope
   {
-    String8List args = {0};
-    String8 exe_path = options->cmd_line.first->string;
-    str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
-    for(String8Node *n = options->cmd_line.first->next; n != 0; n = n->next)
+    //- rjf: produce exe / arguments string
+    String8 cmd = {0};
+    if(options->cmd_line.first != 0)
     {
-      str8_list_push(scratch.arena, &args, n->string);
-    }
-    StringJoin join_params = {0};
-    join_params.sep = str8_lit(" ");
-    cmd = str8_list_join(scratch.arena, &args, &join_params);
-  }
-  
-  //- rjf: produce environment strings
-  String8 env = {0};
-  {
-    String8List all_opts = options->env;
-    if(options->inherit_env != 0)
-    {
-      MemoryZeroStruct(&all_opts);
-      str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
-      for(String8Node *n = options->env.first; n != 0; n = n->next)
+      String8List args = {0};
+      String8 exe_path = options->cmd_line.first->string;
+      str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
+      for(String8Node *n = options->cmd_line.first->next; n != 0; n = n->next)
       {
-        str8_list_push(scratch.arena, &all_opts, n->string);
+        str8_list_push(scratch.arena, &args, n->string);
       }
-      for(String8Node *n = dmn_w32_shared->env_strings.first; n != 0; n = n->next)
-      {
-        str8_list_push(scratch.arena, &all_opts, n->string);
-      }
+      StringJoin join_params = {0};
+      join_params.sep = str8_lit(" ");
+      cmd = str8_list_join(scratch.arena, &args, &join_params);
     }
-    StringJoin join_params2 = {0};
-    join_params2.sep = str8_lit("\0");
-    join_params2.post = str8_lit("\0");
-    env = str8_list_join(scratch.arena, &all_opts, &join_params2);
-  }
-  
-  //- rjf: produce utf-16 strings
-  String16 cmd16 = str16_from_8(scratch.arena, cmd);
-  String16 dir16 = str16_from_8(scratch.arena, options->path);
-  String16 env16 = str16_from_8(scratch.arena, env);
-  
-  //- rjf: launch
-  DWORD access_flags = CREATE_UNICODE_ENVIRONMENT|DEBUG_PROCESS;
-  STARTUPINFOW startup_info = {sizeof(startup_info)};
-  PROCESS_INFORMATION process_info = {0};
-  AllocConsole();
-  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, access_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
-  {
-    // check if we are 32-bit app, and just close it immediately
-    BOOL is_wow = 0;
-    IsWow64Process(process_info.hProcess, &is_wow);
-    if(is_wow)
+    
+    //- rjf: produce environment strings
+    String8 env = {0};
     {
-      MessageBox(0, "Sorry, The RAD Debugger only debugs 64-bit applications currently.", "Process error", MB_OK|MB_ICONSTOP);
-      DebugActiveProcessStop(process_info.dwProcessId);
-      TerminateProcess(process_info.hProcess,0xffffffff);
+      String8List all_opts = options->env;
+      if(options->inherit_env != 0)
+      {
+        MemoryZeroStruct(&all_opts);
+        str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
+        for(String8Node *n = options->env.first; n != 0; n = n->next)
+        {
+          str8_list_push(scratch.arena, &all_opts, n->string);
+        }
+        for(String8Node *n = dmn_w32_shared->env_strings.first; n != 0; n = n->next)
+        {
+          str8_list_push(scratch.arena, &all_opts, n->string);
+        }
+      }
+      StringJoin join_params2 = {0};
+      join_params2.sep = str8_lit("\0");
+      join_params2.post = str8_lit("\0");
+      env = str8_list_join(scratch.arena, &all_opts, &join_params2);
+    }
+    
+    //- rjf: produce utf-16 strings
+    String16 cmd16 = str16_from_8(scratch.arena, cmd);
+    String16 dir16 = str16_from_8(scratch.arena, options->path);
+    String16 env16 = str16_from_8(scratch.arena, env);
+    
+    //- rjf: launch
+    DWORD access_flags = CREATE_UNICODE_ENVIRONMENT|DEBUG_PROCESS;
+    STARTUPINFOW startup_info = {sizeof(startup_info)};
+    PROCESS_INFORMATION process_info = {0};
+    AllocConsole();
+    if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, access_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
+    {
+      // check if we are 32-bit app, and just close it immediately
+      BOOL is_wow = 0;
+      IsWow64Process(process_info.hProcess, &is_wow);
+      if(is_wow)
+      {
+        MessageBox(0, "Sorry, The RAD Debugger only debugs 64-bit applications currently.", "Process error", MB_OK|MB_ICONSTOP);
+        DebugActiveProcessStop(process_info.dwProcessId);
+        TerminateProcess(process_info.hProcess,0xffffffff);
+      }
+      else
+      {
+        result = process_info.dwProcessId;
+        dmn_w32_shared->new_process_pending = 1;
+      }
+      CloseHandle(process_info.hProcess);
+      CloseHandle(process_info.hThread);
     }
     else
     {
-      result = process_info.dwProcessId;
-      dmn_w32_shared->new_process_pending = 1;
+      MessageBox(0, "Error starting process.", "Process error", MB_OK|MB_ICONSTOP);
     }
-    CloseHandle(process_info.hProcess);
-    CloseHandle(process_info.hThread);
+    FreeConsole();
+    
+    //- rjf: eliminate all handles which have stuck around from the AllocConsole
+    {
+      SetStdHandle(STD_INPUT_HANDLE, 0);
+      SetStdHandle(STD_OUTPUT_HANDLE, 0);
+      SetStdHandle(STD_ERROR_HANDLE, 0);
+    }
   }
-  else
-  {
-    MessageBox(0, "Error starting process.", "Process error", MB_OK|MB_ICONSTOP);
-  }
-  FreeConsole();
-  
-  //- rjf: eliminate all handles which have stuck around from the AllocConsole
-  {
-    SetStdHandle(STD_INPUT_HANDLE, 0);
-    SetStdHandle(STD_OUTPUT_HANDLE, 0);
-    SetStdHandle(STD_ERROR_HANDLE, 0);
-  }
-  
   scratch_end(scratch);
   return result;
 }
 
 internal B32
-dmn_attach_process(U32 pid)
+dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
 {
   B32 result = 0;
-  if(DebugActiveProcess((DWORD)pid))
+  DMN_AccessScope if(DebugActiveProcess((DWORD)pid))
   {
     result = 1;
     dmn_w32_shared->new_process_pending = 1;
@@ -1214,57 +1224,63 @@ dmn_attach_process(U32 pid)
 }
 
 internal B32
-dmn_kill_process(DMN_Handle process, U32 exit_code)
+dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code)
 {
   B32 result = 0;
-  DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
-  if(TerminateProcess(process_entity->handle, exit_code))
+  DMN_AccessScope
   {
-    result = 1;
+    DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+    if(TerminateProcess(process_entity->handle, exit_code))
+    {
+      result = 1;
+    }
   }
   return result;
 }
 
 internal B32
-dmn_detach_process(DMN_Handle process)
+dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process)
 {
   B32 result = 0;
-  DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
-  
-  // rjf: resume threads
-  for(DMN_W32_Entity *child = process_entity->first;
-      child != &dmn_w32_entity_nil;
-      child = child->next)
+  DMN_AccessScope
   {
-    if(child->kind == DMN_W32_EntityKind_Thread)
+    DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+    
+    // rjf: resume threads
+    for(DMN_W32_Entity *child = process_entity->first;
+        child != &dmn_w32_entity_nil;
+        child = child->next)
     {
-      DWORD resume_result = ResumeThread(child->handle);
-      (void)resume_result;
+      if(child->kind == DMN_W32_EntityKind_Thread)
+      {
+        DWORD resume_result = ResumeThread(child->handle);
+        (void)resume_result;
+      }
+    }
+    
+    // rjf: detach
+    {
+      DWORD pid = (DWORD)process_entity->id;
+      if(DebugActiveProcessStop(pid))
+      {
+        result = 1;
+      }
+    }
+    
+    // rjf: push into list of processes to generate events for later
+    if(result != 0)
+    {
+      dmn_handle_list_push(dmn_w32_shared->detach_arena, &dmn_w32_shared->detach_processes, process);
     }
   }
-  
-  // rjf: detach
-  {
-    DWORD pid = (DWORD)process_entity->id;
-    if(DebugActiveProcessStop(pid))
-    {
-      result = 1;
-    }
-  }
-  
-  // rjf: push into list of processes to generate events for later
-  if(result != 0)
-  {
-    dmn_handle_list_push(dmn_w32_shared->detach_arena, &dmn_w32_shared->detach_processes, process);
-  }
-  
   return result;
 }
 
 internal DMN_EventList
-dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
+dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 {
   DMN_EventList events = {0};
+  dmn_access_open();
   
   //////////////////////////////
   //- rjf: determine event generation path
@@ -2319,6 +2335,7 @@ dmn_run(Arena *arena, DMN_RunCtrls *ctrls)
     }break;
   }
   
+  dmn_access_close();
   return events;
 }
 
@@ -2378,21 +2395,56 @@ dmn_reg_gen(void)
   return result;
 }
 
+//- rjf: non-blocking-control-thread access barriers
+
+internal B32
+dmn_access_open(void)
+{
+  B32 result = 0;
+  if(dmn_w32_ctrl_thread)
+  {
+    result = 1;
+  }
+  else
+  {
+    os_mutex_take(dmn_w32_shared->access_mutex);
+    result = !dmn_w32_shared->access_run_state;
+  }
+  return result;
+}
+
+internal void
+dmn_access_close(void)
+{
+  if(!dmn_w32_ctrl_thread)
+  {
+    os_mutex_drop(dmn_w32_shared->access_mutex);
+  }
+}
+
 //- rjf: processes
 
 internal U64
 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst)
 {
-  DMN_W32_Entity *entity = dmn_w32_entity_from_handle(process);
-  U64 result = dmn_w32_process_read(entity->handle, range, dst);
+  U64 result = 0;
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *entity = dmn_w32_entity_from_handle(process);
+    result = dmn_w32_process_read(entity->handle, range, dst);
+  }
   return result;
 }
 
 internal B32
 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 {
-  DMN_W32_Entity *entity = dmn_w32_entity_from_handle(process);
-  B32 result = dmn_w32_process_write(entity->handle, range, src);
+  B32 result = 0;
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *entity = dmn_w32_entity_from_handle(process);
+    result = dmn_w32_process_write(entity->handle, range, src);
+  }
   return result;
 }
 
@@ -2401,37 +2453,45 @@ dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 internal Architecture
 dmn_arch_from_thread(DMN_Handle handle)
 {
-  DMN_W32_Entity *entity = dmn_w32_entity_from_handle(handle);
-  return entity->arch;
+  Architecture arch = Architecture_Null;
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *entity = dmn_w32_entity_from_handle(handle);
+    arch = entity->arch;
+  }
+  return arch;
 }
 
 internal U64
 dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
 {
   U64 result = 0;
-  DMN_W32_Entity *thread = dmn_w32_entity_from_handle(handle);
-  if(thread->kind == DMN_W32_EntityKind_Thread)
+  DMN_AccessScope
   {
-    DMN_W32_Entity *process = thread->parent;
-    U64 tlb = thread->thread.thread_local_base;
-    switch(thread->arch)
+    DMN_W32_Entity *thread = dmn_w32_entity_from_handle(handle);
+    if(thread->kind == DMN_W32_EntityKind_Thread)
     {
-      case Architecture_Null:
-      case Architecture_COUNT:
-      {}break;
-      case Architecture_arm64:
-      case Architecture_arm32:
-      {NotImplemented;}break;
-      case Architecture_x64:
+      DMN_W32_Entity *process = thread->parent;
+      U64 tlb = thread->thread.thread_local_base;
+      switch(thread->arch)
       {
-        U64 stack_base_addr = tlb + 0x8;
-        dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+8), &result);
-      }break;
-      case Architecture_x86:
-      {
-        U64 stack_base_addr = tlb + 0x4;
-        dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+4), &result);
-      }break;
+        case Architecture_Null:
+        case Architecture_COUNT:
+        {}break;
+        case Architecture_arm64:
+        case Architecture_arm32:
+        {NotImplemented;}break;
+        case Architecture_x64:
+        {
+          U64 stack_base_addr = tlb + 0x8;
+          dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+8), &result);
+        }break;
+        case Architecture_x86:
+        {
+          U64 stack_base_addr = tlb + 0x4;
+          dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+4), &result);
+        }break;
+      }
     }
   }
   return result;
@@ -2441,10 +2501,13 @@ internal U64
 dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
 {
   U64 result = 0;
-  DMN_W32_Entity *entity = dmn_w32_entity_from_handle(handle);
-  if(entity->kind == DMN_W32_EntityKind_Thread)
+  DMN_AccessScope
   {
-    result = entity->thread.thread_local_base;
+    DMN_W32_Entity *entity = dmn_w32_entity_from_handle(handle);
+    if(entity->kind == DMN_W32_EntityKind_Thread)
+    {
+      result = entity->thread.thread_local_base;
+    }
   }
   return result;
 }
@@ -2452,16 +2515,24 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
 internal B32
 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block)
 {
-  DMN_W32_Entity *thread = dmn_w32_entity_from_handle(handle);
-  B32 result = dmn_w32_thread_read_reg_block(thread->arch, thread->handle, reg_block);
+  B32 result = 0;
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *thread = dmn_w32_entity_from_handle(handle);
+    result = dmn_w32_thread_read_reg_block(thread->arch, thread->handle, reg_block);
+  }
   return result;
 }
 
 internal B32
 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block)
 {
-  DMN_W32_Entity *thread = dmn_w32_entity_from_handle(handle);
-  B32 result = dmn_w32_thread_write_reg_block(thread->arch, thread->handle, reg_block);
+  B32 result = 0;
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *thread = dmn_w32_entity_from_handle(handle);
+    result = dmn_w32_thread_write_reg_block(thread->arch, thread->handle, reg_block);
+  }
   return result;
 }
 

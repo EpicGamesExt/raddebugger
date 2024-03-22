@@ -699,23 +699,23 @@ internal CTRL_EventList ctrl_c2u_pop_events(Arena *arena);
 internal void ctrl_thread__entry_point(void *p);
 
 //- rjf: breakpoint resolution
-internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
-internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_MachineID machine_id, DMN_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 
 //- rjf: attached process running/event gathering
-internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);
+internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);
 
 //- rjf: eval helpers
 internal B32 ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size);
 
 //- rjf: msg kind implementations
-internal void ctrl_thread__launch_and_handshake(CTRL_Msg *msg);
-internal void ctrl_thread__launch_and_init(CTRL_Msg *msg);
-internal void ctrl_thread__attach(CTRL_Msg *msg);
-internal void ctrl_thread__kill(CTRL_Msg *msg);
-internal void ctrl_thread__detach(CTRL_Msg *msg);
-internal void ctrl_thread__run(CTRL_Msg *msg);
-internal void ctrl_thread__single_step(CTRL_Msg *msg);
+internal void ctrl_thread__launch_and_handshake(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 
 ////////////////////////////////
 //~ rjf: Memory-Stream Thread Functions
