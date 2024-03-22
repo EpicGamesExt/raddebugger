@@ -1421,7 +1421,8 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
   
   //- rjf: grab initial register block
-  void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
+  void *regs_block = push_array(scratch.arena, U8, arch_reg_block_size);
+  B32 regs_block_good = dmn_thread_read_reg_block(thread, regs_block);
   
   //- rjf: grab initial memory view
   B32 stack_memview_good = 0;
@@ -1434,9 +1435,10 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
     U64 stack_size = stack_base - stack_top;
     if(stack_base >= stack_top)
     {
-      CTRL_ProcessMemorySlice stack_memory_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, machine_id, process_entity->handle, r1u64(stack_top, stack_top+stack_size), endt_us);
-      String8 stack_memory = stack_memory_slice.data;
-      if(stack_memory.size != 0 && !stack_memory_slice.any_byte_bad && !stack_memory_slice.stale)
+      U8 *stack_memory_base = push_array(scratch.arena, U8, stack_size);
+      U64 actual_stack_bytes_read = dmn_process_read(process_entity->handle, r1u64(stack_top, stack_top+stack_size), stack_memory_base);
+      String8 stack_memory = str8(stack_memory_base, actual_stack_bytes_read);
+      if(stack_memory.size >= stack_size)
       {
         stack_memview_good = 1;
         stack_memview.data = stack_memory.str;
@@ -1448,7 +1450,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   
   //- rjf: loop & unwind
   UNW_MemView memview = stack_memview;
-  if(stack_memview_good) switch(arch)
+  if(regs_block_good && stack_memview_good) switch(arch)
   {
     default:{}break;
     case Architecture_x64:

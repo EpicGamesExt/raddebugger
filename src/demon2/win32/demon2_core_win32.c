@@ -2254,6 +2254,7 @@ dmn_launch_process(OS_LaunchOptions *options)
     if(options->inherit_env != 0)
     {
       MemoryZeroStruct(&all_opts);
+      str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
       for(String8Node *n = options->env.first; n != 0; n = n->next)
       {
         str8_list_push(scratch.arena, &all_opts, n->string);
