@@ -2822,7 +2822,7 @@ df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread)
   // rjf: thread => unpacked info
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   Architecture arch = df_architecture_from_entity(thread);
-  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   
   // rjf: ip => machine code
   String8 machine_code = {0};
@@ -2861,7 +2861,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   DF_Entity *module = df_module_from_thread(thread);
   DF_Entity *binary = df_binary_file_from_module(module);
   Architecture arch = df_architecture_from_entity(thread);
-  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   
   // rjf: ip => line vaddr range
   Rng1U64 line_vaddr_rng = {0};
@@ -2986,7 +2986,7 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   DF_Entity *module = df_module_from_thread(thread);
   DF_Entity *binary = df_binary_file_from_module(module);
   Architecture arch = df_architecture_from_entity(thread);
-  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 ip_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   
   // rjf: ip => line vaddr range
   Rng1U64 line_vaddr_rng = {0};
@@ -3659,7 +3659,7 @@ internal B32
 df_set_thread_rip(DF_Entity *thread, U64 vaddr)
 {
   Temp scratch = scratch_begin(0, 0);
-  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, thread->ctrl_machine_id, thread->ctrl_handle);
+  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   regs_arch_block_write_rip(thread->arch, block, vaddr);
   B32 result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, block);
   
@@ -4081,7 +4081,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   
   //- rjf: unpack arguments
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   DF_Entity *process = thread->parent;
   U64 unwind_count = ctrl_ctx->unwind_count;
   CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
@@ -6195,7 +6195,7 @@ df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count)
   U64 result = 0;
   if(unwind_count == 0)
   {
-    result = ctrl_query_cached_rip_from_thread(thread->ctrl_machine_id, thread->ctrl_handle);
+    result = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   }
   else
   {
@@ -6599,7 +6599,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           // rjf: thread hit user breakpoint -> increment breakpoint hit count
           if(event->cause == CTRL_EventCause_UserBreakpoint)
           {
-            U64 stop_thread_vaddr = ctrl_query_cached_rip_from_thread(stop_thread->ctrl_machine_id, stop_thread->ctrl_handle);
+            U64 stop_thread_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, stop_thread->ctrl_machine_id, stop_thread->ctrl_handle);
             DF_Entity *process = df_entity_ancestor_from_kind(stop_thread, DF_EntityKind_Process);
             DF_Entity *module = df_module_from_process_vaddr(process, stop_thread_vaddr);
             DF_Entity *binary = df_binary_file_from_module(module);

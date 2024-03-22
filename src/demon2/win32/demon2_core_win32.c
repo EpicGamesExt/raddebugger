@@ -1119,6 +1119,24 @@ dmn_ctrl_begin(void)
   return ctx;
 }
 
+internal void
+dmn_ctrl_exclusive_access_begin(void)
+{
+  OS_MutexScope(dmn_w32_shared->access_mutex)
+  {
+    dmn_w32_shared->access_run_state = 1;
+  }
+}
+
+internal void
+dmn_ctrl_exclusive_access_end(void)
+{
+  OS_MutexScope(dmn_w32_shared->access_mutex)
+  {
+    dmn_w32_shared->access_run_state = 0;
+  }
+}
+
 internal U32
 dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
 {

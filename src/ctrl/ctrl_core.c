@@ -800,7 +800,6 @@ ctrl_init(void)
   Arena *arena = arena_alloc();
   ctrl_state = push_array(arena, CTRL_State, 1);
   ctrl_state->arena = arena;
-  ctrl_state->ctrl_run_mutex = os_mutex_alloc();
   for(Architecture arch = (Architecture)0; arch < Architecture_COUNT; arch = (Architecture)(arch+1))
   {
     String8 *reg_names = regs_reg_code_string_table_from_architecture(arch);
@@ -1284,10 +1283,11 @@ ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range,
 //- rjf: thread register cache reading
 
 internal void *
-ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread)
+ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread)
 {
   CTRL_ThreadRegCache *cache = &ctrl_state->thread_reg_cache;
-  Architecture arch = dmn_arch_from_thread(thread);
+  CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
+  Architecture arch = thread_entity->arch;
   U64 reg_block_size = regs_block_size_from_architecture(arch);
   U64 hash = ctrl_hash_from_machine_id_handle(machine_id, thread);
   U64 slot_idx = hash%cache->slots_count;
@@ -1346,14 +1346,11 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id,
     {
       U64 current_reg_gen = dmn_reg_gen();
       B32 need_stale = 1;
-      if(node->reg_gen != current_reg_gen)
+      if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(thread, result))
       {
-        OS_MutexScope(ctrl_state->ctrl_run_mutex) if(ctrl_state->ctrl_run_state == 0 && dmn_thread_read_reg_block(thread, result))
-        {
-          need_stale = 0;
-          node->reg_gen = current_reg_gen;
-          MemoryCopy(node->block, result, reg_block_size);
-        }
+        need_stale = 0;
+        node->reg_gen = current_reg_gen;
+        MemoryCopy(node->block, result, reg_block_size);
       }
       if(need_stale)
       {
@@ -1365,30 +1362,20 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id,
 }
 
 internal U64
-ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
+ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread)
 {
   U64 result = dmn_tls_root_vaddr_from_thread(thread);
   return result;
 }
 
 internal U64
-ctrl_query_cached_rip_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
+ctrl_query_cached_rip_from_thread(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread)
 {
   Temp scratch = scratch_begin(0, 0);
-  Architecture arch = dmn_arch_from_thread(thread);
-  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
+  CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
+  Architecture arch = thread_entity->arch;
+  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, store, machine_id, thread);
   U64 result = regs_rip_from_arch_block(arch, block);
-  scratch_end(scratch);
-  return result;
-}
-
-internal U64
-ctrl_query_cached_rsp_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
-{
-  Temp scratch = scratch_begin(0, 0);
-  Architecture arch = dmn_arch_from_thread(thread);
-  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
-  U64 result = regs_rsp_from_arch_block(arch, block);
   scratch_end(scratch);
   return result;
 }
@@ -1728,13 +1715,8 @@ ctrl_thread__entry_point(void *p)
     //- rjf: get next messages
     CTRL_MsgList msgs = ctrl_u2c_pop_msgs(scratch.arena);
     
-    //- rjf: begin run state
-    OS_MutexScope(ctrl_state->ctrl_run_mutex)
-    {
-      ctrl_state->ctrl_run_state = 1;
-    }
-    
     //- rjf: process messages
+    DMN_CtrlExclusiveAccessScope
     {
       B32 done = 0;
       for(CTRL_MsgNode *msg_n = msgs.first; msg_n != 0 && done == 0; msg_n = msg_n->next)
@@ -1767,12 +1749,6 @@ ctrl_thread__entry_point(void *p)
           }break;
         }
       }
-    }
-    
-    //- rjf: end run state
-    OS_MutexScope(ctrl_state->ctrl_run_mutex)
-    {
-      ctrl_state->ctrl_run_state = 0;
     }
   }
   

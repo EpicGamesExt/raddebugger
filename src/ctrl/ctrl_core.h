@@ -491,10 +491,6 @@ struct CTRL_State
   EVAL_String2NumMap arch_string2reg_tables[Architecture_COUNT];
   EVAL_String2NumMap arch_string2alias_tables[Architecture_COUNT];
   
-  // rjf: access locking mechanism
-  OS_Handle ctrl_run_mutex;
-  B32 ctrl_run_state;
-  
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;
@@ -654,10 +650,9 @@ internal B32 ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, R
 //~ rjf: Thread Register Functions
 
 //- rjf: thread register cache reading
-internal void *ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id, DMN_Handle thread);
-internal U64 ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
-internal U64 ctrl_query_cached_rip_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
-internal U64 ctrl_query_cached_rsp_from_thread(CTRL_MachineID machine_id, DMN_Handle thread);
+internal void *ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread);
+internal U64 ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread);
+internal U64 ctrl_query_cached_rip_from_thread(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread);
 
 //- rjf: thread register writing
 internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *block);
