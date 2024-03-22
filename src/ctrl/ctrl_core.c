@@ -1367,8 +1367,8 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id,
 internal U64
 ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID machine_id, DMN_Handle thread)
 {
-  // TODO(rjf)
-  return 0;
+  U64 result = dmn_tls_root_vaddr_from_thread(thread);
+  return result;
 }
 
 internal U64
