@@ -429,6 +429,7 @@ struct CTRL_ProcessMemorySlice
   String8 data;
   U64 *byte_bad_flags;
   U64 *byte_changed_flags;
+  B32 stale;
   B32 any_byte_bad;
   B32 any_byte_changed;
 };
@@ -636,7 +637,7 @@ internal void ctrl_set_wakeup_hook(CTRL_WakeupFunctionType *wakeup_hook);
 
 //- rjf: process memory cache interaction
 internal U128 ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated);
-internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated, U64 endt_us);
+internal U128 ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated, B32 *out_is_stale, U64 endt_us);
 
 //- rjf: process memory cache reading helpers
 internal CTRL_ProcessMemorySlice ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, U64 endt_us);

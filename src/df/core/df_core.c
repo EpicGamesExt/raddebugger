@@ -6867,7 +6867,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
           }
           
-          // rjf: collect s top info
+          // rjf: collect stop info
           arena_clear(df_state->ctrl_stop_arena);
           MemoryCopyStruct(&df_state->ctrl_last_stop_event, event);
           df_state->ctrl_last_stop_event.string = push_str8_copy(df_state->ctrl_stop_arena, df_state->ctrl_last_stop_event.string);

@@ -896,7 +896,7 @@ ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Hand
 }
 
 internal U128
-ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated, U64 endt_us)
+ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated, B32 *out_is_stale, U64 endt_us)
 {
   U128 result = {0};
   U64 size = dim_1u64(range);
@@ -1033,6 +1033,10 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     //- rjf: out of time? -> exit
     if(os_now_microseconds() >= endt_us)
     {
+      if(is_good && is_stale && out_is_stale)
+      {
+        out_is_stale[0] = 1;
+      }
       break;
     }
     
@@ -1072,8 +1076,10 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     {
       U64 page_base_vaddr = page_range.min + page_idx*page_size;
       U128 page_key = ctrl_hash_store_key_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
-      U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, endt_us);
+      B32 page_is_stale = 0;
+      U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, &page_is_stale, endt_us);
       U128 page_last_hash = hs_hash_from_key(page_key, 1);
+      result.stale = (result.stale || page_is_stale);
       page_hashes[page_idx] = page_hash;
       page_last_hashes[page_idx] = page_last_hash;
     }
@@ -1399,49 +1405,51 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   DBGI_Scope *scope = dbgi_scope_open();
+  CTRL_Unwind unwind = {0};
+  unwind.error = 1;
+  
+  //- rjf: unpack args
   CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
   CTRL_Entity *process_entity = thread_entity->parent;
   Architecture arch = thread_entity->arch;
   U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
-  CTRL_Unwind unwind = {0};
-  unwind.error = 1;
-  switch(arch)
+  
+  //- rjf: grab initial register block
+  void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
+  
+  //- rjf: grab initial memory view
+  B32 stack_memview_good = 0;
+  UNW_MemView stack_memview = {0};
+  {
+    U64 stack_base_unrounded = dmn_stack_base_vaddr_from_thread(thread);
+    U64 stack_top_unrounded = regs_rsp_from_arch_block(arch, regs_block);
+    U64 stack_base = AlignPow2(stack_base_unrounded, KB(4));
+    U64 stack_top = AlignDownPow2(stack_top_unrounded, KB(4));
+    U64 stack_size = stack_base - stack_top;
+    if(stack_base >= stack_top)
+    {
+      CTRL_ProcessMemorySlice stack_memory_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, machine_id, process_entity->handle, r1u64(stack_top, stack_top+stack_size), endt_us);
+      String8 stack_memory = stack_memory_slice.data;
+      if(stack_memory.size != 0 && !stack_memory_slice.any_byte_bad && !stack_memory_slice.stale)
+      {
+        stack_memview_good = 1;
+        stack_memview.data = stack_memory.str;
+        stack_memview.addr_first = stack_top;
+        stack_memview.addr_opl = stack_base;
+      }
+    }
+  }
+  
+  //- rjf: loop & unwind
+  UNW_MemView memview = stack_memview;
+  if(stack_memview_good) switch(arch)
   {
     default:{}break;
     case Architecture_x64:
     {
-      // rjf: grab initial register block
-      void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, machine_id, thread);
-      
-      // rjf: grab initial memory view
-      B32 stack_memview_good = 0;
-      UNW_MemView stack_memview = {0};
+      unwind.error = 0;
+      for(;;)
       {
-        U64 stack_base_unrounded = dmn_stack_base_vaddr_from_thread(thread);
-        U64 stack_top_unrounded = regs_rsp_from_arch_block(arch, regs_block);
-        U64 stack_base = AlignPow2(stack_base_unrounded, KB(4));
-        U64 stack_top = AlignDownPow2(stack_top_unrounded, KB(4));
-        U64 stack_size = stack_base - stack_top;
-        if(stack_base >= stack_top)
-        {
-          CTRL_ProcessMemorySlice stack_memory_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, machine_id, process_entity->handle, r1u64(stack_top, stack_top+stack_size), endt_us);
-          String8 stack_memory = stack_memory_slice.data;
-          if(stack_memory.size != 0 && !stack_memory_slice.any_byte_bad)
-          {
-            stack_memview_good = 1;
-            stack_memview.data = stack_memory.str;
-            stack_memview.addr_first = stack_top;
-            stack_memview.addr_opl = stack_base;
-          }
-        }
-      }
-      
-      // rjf: loop & unwind
-      UNW_MemView memview = stack_memview;
-      if(stack_memview_good) for(;;)
-      {
-        unwind.error = 0;
-        
         // rjf: regs -> rip*module
         U64 rip = regs_rip_from_arch_block(arch, regs_block);
         DMN_Handle module = {0};
@@ -1504,6 +1512,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       }
     }break;
   }
+  
   dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
