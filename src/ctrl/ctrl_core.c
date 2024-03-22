@@ -800,6 +800,7 @@ ctrl_init(void)
   Arena *arena = arena_alloc();
   ctrl_state = push_array(arena, CTRL_State, 1);
   ctrl_state->arena = arena;
+  ctrl_state->ctrl_run_mutex = os_mutex_alloc();
   for(Architecture arch = (Architecture)0; arch < Architecture_COUNT; arch = (Architecture)(arch+1))
   {
     String8 *reg_names = regs_reg_code_string_table_from_architecture(arch);
@@ -1344,12 +1345,17 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_MachineID machine_id,
     if(node)
     {
       U64 current_reg_gen = dmn_reg_gen();
-      if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(thread, result))
+      B32 need_stale = 1;
+      if(node->reg_gen != current_reg_gen)
       {
-        node->reg_gen = current_reg_gen;
-        MemoryCopy(node->block, result, reg_block_size);
+        OS_MutexScope(ctrl_state->ctrl_run_mutex) if(ctrl_state->ctrl_run_state == 0 && dmn_thread_read_reg_block(thread, result))
+        {
+          need_stale = 0;
+          node->reg_gen = current_reg_gen;
+          MemoryCopy(node->block, result, reg_block_size);
+        }
       }
-      else
+      if(need_stale)
       {
         MemoryCopy(result, node->block, reg_block_size);
       }
@@ -1719,6 +1725,12 @@ ctrl_thread__entry_point(void *p)
     //- rjf: get next messages
     CTRL_MsgList msgs = ctrl_u2c_pop_msgs(scratch.arena);
     
+    //- rjf: begin run state
+    OS_MutexScope(ctrl_state->ctrl_run_mutex)
+    {
+      ctrl_state->ctrl_run_state = 1;
+    }
+    
     //- rjf: process messages
     {
       B32 done = 0;
@@ -1752,6 +1764,12 @@ ctrl_thread__entry_point(void *p)
           }break;
         }
       }
+    }
+    
+    //- rjf: end run state
+    OS_MutexScope(ctrl_state->ctrl_run_mutex)
+    {
+      ctrl_state->ctrl_run_state = 0;
     }
   }
   
@@ -2879,7 +2897,7 @@ ctrl_thread__run(CTRL_Msg *msg)
         if(process->kind != CTRL_EntityKind_Process) { continue; }
         for(CTRL_Entity *thread = process->first; thread != &ctrl_entity_nil; thread = thread->next)
         {
-          U64 rip = ctrl_query_cached_rip_from_thread(thread->machine_id, thread->handle);
+          U64 rip = dmn_rip_from_thread(thread->handle);
           
           // rjf: determine if thread is frozen
           B32 thread_is_frozen = !msg->freeze_state_is_frozen;
@@ -2998,7 +3016,7 @@ ctrl_thread__run(CTRL_Msg *msg)
   //
   if(stop_event == 0)
   {
-    U64 sp_check_value = ctrl_query_cached_rsp_from_thread(CTRL_MachineID_Local, target_thread);
+    U64 sp_check_value = dmn_rsp_from_thread(target_thread);
     B32 spoof_mode = 0;
     CTRL_Spoof spoof = {0};
     for(;;)
@@ -3085,9 +3103,7 @@ ctrl_thread__run(CTRL_Msg *msg)
       //
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       Architecture arch = thread->arch;
-      U64 reg_size = regs_block_size_from_architecture(arch);
-      void *thread_regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, CTRL_MachineID_Local, event->thread);
-      U64 thread_rip_vaddr = regs_rip_from_arch_block(arch, thread_regs_block);
+      U64 thread_rip_vaddr = dmn_rsp_from_thread(event->thread);
       DMN_Handle module = {0};
       String8 module_name = {0};
       U64 module_base_vaddr = 0;
@@ -3226,15 +3242,16 @@ ctrl_thread__run(CTRL_Msg *msg)
               if(bytecode.size != 0)
               {
                 U64 module_base = module_base_vaddr;
-                U64 tls_base = ctrl_query_cached_tls_root_vaddr_from_thread(CTRL_MachineID_Local, event->thread);
+                U64 tls_base = dmn_tls_root_vaddr_from_thread(event->thread);
                 EVAL_Machine machine = {0};
                 machine.u = &event->process;
                 machine.arch = arch;
                 machine.memory_read = ctrl_eval_memory_read;
-                machine.reg_data = thread_regs_block;
-                machine.reg_size = reg_size;
+                machine.reg_size = regs_block_size_from_architecture(arch);
+                machine.reg_data = push_array(scratch.arena, U8, machine.reg_size);
                 machine.module_base = &module_base;
                 machine.tls_base = &tls_base;
+                dmn_thread_read_reg_block(event->thread, machine.reg_data);
                 eval = eval_interpret(&machine, bytecode);
               }
               if(eval.code == EVAL_ResultCode_Good && eval.value.u64 == 0)
@@ -3335,7 +3352,7 @@ ctrl_thread__run(CTRL_Msg *msg)
       B32 stack_pointer_matches = 0;
       if(use_trap_net_logic)
       {
-        U64 sp = ctrl_query_cached_rsp_from_thread(CTRL_MachineID_Local, target_thread);
+        U64 sp = dmn_rsp_from_thread(target_thread);
         stack_pointer_matches = (sp == sp_check_value);
       }
       
@@ -3383,7 +3400,7 @@ ctrl_thread__run(CTRL_Msg *msg)
         {
           // rjf: setup spoof mode
           begin_spoof_mode = 1;
-          U64 spoof_sp = ctrl_query_cached_rsp_from_thread(CTRL_MachineID_Local, target_thread);
+          U64 spoof_sp = dmn_rsp_from_thread(target_thread);
           spoof_mode = 1;
           spoof.process = target_process;
           spoof.thread  = target_thread;
@@ -3401,7 +3418,7 @@ ctrl_thread__run(CTRL_Msg *msg)
           if(stack_pointer_matches)
           {
             save_stack_pointer = 1;
-            sp_check_value = ctrl_query_cached_rsp_from_thread(CTRL_MachineID_Local, target_thread);
+            sp_check_value = dmn_rsp_from_thread(target_thread);
           }
         }
       }

@@ -161,6 +161,12 @@ internal DMN_HandleArray dmn_handle_array_copy(Arena *arena, DMN_HandleArray *sr
 internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
 
 ////////////////////////////////
+//~ rjf: Thread Reading Helper Functions (Helpers, Implemented Once)
+
+internal U64 dmn_rip_from_thread(DMN_Handle thread);
+internal U64 dmn_rsp_from_thread(DMN_Handle thread);
+
+////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)
 
 internal void dmn_init(void);

@@ -6244,7 +6244,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         DF_Entity *thread = thread_n->entity;
         U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
         U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
-        if(contains_1u64(disasm_vaddr_rng, rip_vaddr)) ProfScope("in-range rip scan")
+        if(contains_1u64(disasm_vaddr_rng, rip_vaddr))
         {
           U64 rip_off = rip_vaddr - disasm_vaddr_rng.min;
           S64 line_num = dasm_inst_array_idx_from_off__linear_scan(&insts, rip_off)+1;

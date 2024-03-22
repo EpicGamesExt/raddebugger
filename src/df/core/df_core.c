@@ -6217,12 +6217,17 @@ internal U64
 df_query_cached_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr)
 {
   U64 result = 0;
+  for(U64 cache_idx = 0; cache_idx < ArrayCount(df_state->tls_base_caches); cache_idx += 1)
   {
-    DF_RunTLSBaseCache *cache = &df_state->tls_base_cache;
-    if(cache->slots_count == 0)
+    DF_RunTLSBaseCache *cache = &df_state->tls_base_caches[(df_state->tls_base_cache_gen+cache_idx)%ArrayCount(df_state->tls_base_caches)];
+    if(cache_idx == 0 && cache->slots_count == 0)
     {
       cache->slots_count = 256;
       cache->slots = push_array(cache->arena, DF_RunTLSBaseCacheSlot, cache->slots_count);
+    }
+    else if(cache->slots_count == 0)
+    {
+      break;
     }
     DF_Handle handle = df_handle_from_entity(process);
     U64 hash = df_hash_from_seed_string(df_hash_from_string(str8_struct(&handle)), str8_struct(&rip_vaddr));
@@ -6239,14 +6244,22 @@ df_query_cached_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 roo
     }
     if(node == 0)
     {
-      node = push_array(cache->arena, DF_RunTLSBaseCacheNode, 1);
-      SLLQueuePush_N(slot->first, slot->last, node, hash_next);
-      node->process = handle;
-      node->root_vaddr = root_vaddr;
-      node->rip_vaddr = rip_vaddr;
-      node->tls_base_vaddr = df_tls_base_vaddr_from_process_root_rip(process, root_vaddr, rip_vaddr);
+      U64 tls_base_vaddr = df_tls_base_vaddr_from_process_root_rip(process, root_vaddr, rip_vaddr);
+      if(tls_base_vaddr != 0)
+      {
+        node = push_array(cache->arena, DF_RunTLSBaseCacheNode, 1);
+        SLLQueuePush_N(slot->first, slot->last, node, hash_next);
+        node->process = handle;
+        node->root_vaddr = root_vaddr;
+        node->rip_vaddr = rip_vaddr;
+        node->tls_base_vaddr = tls_base_vaddr;
+      }
     }
-    result = node->tls_base_vaddr;
+    if(node != 0 && node->tls_base_vaddr != 0)
+    {
+      result = node->tls_base_vaddr;
+      break;
+    }
   }
   return result;
 }
@@ -6256,12 +6269,17 @@ df_query_cached_locals_map_from_binary_voff(DF_Entity *binary, U64 voff)
 {
   ProfBeginFunction();
   EVAL_String2NumMap *map = &eval_string2num_map_nil;
+  for(U64 cache_idx = 0; cache_idx < ArrayCount(df_state->locals_caches); cache_idx += 1)
   {
-    DF_RunLocalsCache *cache = &df_state->locals_cache;
-    if(cache->table_size == 0)
+    DF_RunLocalsCache *cache = &df_state->locals_caches[(df_state->locals_cache_gen+cache_idx)%ArrayCount(df_state->locals_caches)];
+    if(cache_idx == 0 && cache->table_size == 0)
     {
       cache->table_size = 256;
       cache->table = push_array(cache->arena, DF_RunLocalsCacheSlot, cache->table_size);
+    }
+    else if(cache->table_size == 0)
+    {
+      break;
     }
     DF_Handle handle = df_handle_from_entity(binary);
     U64 hash = df_hash_from_string(str8_struct(&handle));
@@ -6290,9 +6308,10 @@ df_query_cached_locals_map_from_binary_voff(DF_Entity *binary, U64 voff)
       }
       dbgi_scope_close(scope);
     }
-    if(node != 0)
+    if(node != 0 && node->locals_map->slots_count != 0)
     {
       map = node->locals_map;
+      break;
     }
   }
   ProfEnd();
@@ -6413,8 +6432,14 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   {
     df_state->unwind_caches[idx].arena = arena_alloc();
   }
-  df_state->tls_base_cache.arena = arena_alloc();
-  df_state->locals_cache.arena = arena_alloc();
+  for(U64 idx = 0; idx < ArrayCount(df_state->tls_base_caches); idx += 1)
+  {
+    df_state->tls_base_caches[idx].arena = arena_alloc();
+  }
+  for(U64 idx = 0; idx < ArrayCount(df_state->locals_caches); idx += 1)
+  {
+    df_state->locals_caches[idx].arena = arena_alloc();
+  }
   df_state->member_cache.arena = arena_alloc();
   
   // rjf: set up eval view cache
@@ -6901,7 +6926,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         df_state->tls_base_cache_memgen_idx != new_mem_gen) &&
        !df_ctrl_targets_running())
     {
-      DF_RunTLSBaseCache *cache = &df_state->tls_base_cache;
+      df_state->tls_base_cache_gen += 1;
+      DF_RunTLSBaseCache *cache = &df_state->tls_base_caches[df_state->tls_base_cache_gen%ArrayCount(df_state->tls_base_caches)];
       arena_clear(cache->arena);
       cache->slots_count = 0;
       cache->slots = 0;
@@ -6910,9 +6936,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     }
     
     //- rjf: clear locals cache
-    if(df_state->locals_cache_reggen_idx != new_reg_gen && !df_ctrl_targets_running())
+    if(df_state->locals_cache_reggen_idx != new_reg_gen &&
+       !df_ctrl_targets_running())
     {
-      DF_RunLocalsCache *cache = &df_state->locals_cache;
+      df_state->locals_cache_gen += 1;
+      DF_RunLocalsCache *cache = &df_state->locals_caches[df_state->locals_cache_gen%ArrayCount(df_state->locals_caches)];
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;

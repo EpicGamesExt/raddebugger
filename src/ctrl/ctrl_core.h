@@ -491,6 +491,10 @@ struct CTRL_State
   EVAL_String2NumMap arch_string2reg_tables[Architecture_COUNT];
   EVAL_String2NumMap arch_string2alias_tables[Architecture_COUNT];
   
+  // rjf: access locking mechanism
+  OS_Handle ctrl_run_mutex;
+  B32 ctrl_run_state;
+  
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;

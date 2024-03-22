@@ -1139,9 +1139,11 @@ struct DF_State
   U64 unwind_cache_gen;
   U64 tls_base_cache_reggen_idx;
   U64 tls_base_cache_memgen_idx;
-  DF_RunTLSBaseCache tls_base_cache;
+  DF_RunTLSBaseCache tls_base_caches[2];
+  U64 tls_base_cache_gen;
   U64 locals_cache_reggen_idx;
-  DF_RunLocalsCache locals_cache;
+  DF_RunLocalsCache locals_caches[2];
+  U64 locals_cache_gen;
   U64 member_cache_reggen_idx;
   DF_RunLocalsCache member_cache;
   
