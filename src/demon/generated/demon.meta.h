@@ -3,8 +3,8 @@
 
 //- GENERATED CODE
 
-#ifndef DEMON2_META_H
-#define DEMON2_META_H
+#ifndef DEMON_META_H
+#define DEMON_META_H
 
 typedef enum DMN_EventKind
 {
@@ -60,4 +60,4 @@ DMN_ExceptionKind_COUNT,
 C_LINKAGE_BEGIN
 C_LINKAGE_END
 
-#endif // DEMON2_META_H
+#endif // DEMON_META_H

@@ -2,11 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Demon2 Pass Tasks
+//~ rjf: Demon Pass Tasks
 //
 // [ ] TLS eval -> in-process-memory EXE info
 // [ ] unwinding -> in-process-memory EXE info
-// [x] solidify synchronization mechanisms for usage of demon2 layer
+// [x] solidify synchronization mechanisms for usage of demon layer
 // [x] TLS eval correctness
 // [x] freezing thread while running -> soft-halt
 
