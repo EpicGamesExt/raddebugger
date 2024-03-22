@@ -1145,7 +1145,8 @@ struct DF_State
   DF_RunLocalsCache locals_caches[2];
   U64 locals_cache_gen;
   U64 member_cache_reggen_idx;
-  DF_RunLocalsCache member_cache;
+  DF_RunLocalsCache member_caches[2];
+  U64 member_cache_gen;
   
   // rjf: eval view cache
   DF_EvalViewCache eval_view_cache;

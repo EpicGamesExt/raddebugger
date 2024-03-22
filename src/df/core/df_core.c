@@ -6323,12 +6323,17 @@ df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff)
 {
   ProfBeginFunction();
   EVAL_String2NumMap *map = &eval_string2num_map_nil;
+  for(U64 cache_idx = 0; cache_idx < ArrayCount(df_state->member_caches); cache_idx += 1)
   {
-    DF_RunLocalsCache *cache = &df_state->member_cache;
-    if(cache->table_size == 0)
+    DF_RunLocalsCache *cache = &df_state->member_caches[(df_state->member_cache_gen+cache_idx)%ArrayCount(df_state->member_caches)];
+    if(cache_idx == 0 && cache->table_size == 0)
     {
       cache->table_size = 256;
       cache->table = push_array(cache->arena, DF_RunLocalsCacheSlot, cache->table_size);
+    }
+    else if(cache->table_size == 0)
+    {
+      break;
     }
     DF_Handle handle = df_handle_from_entity(binary);
     U64 hash = df_hash_from_string(str8_struct(&handle));
@@ -6357,9 +6362,10 @@ df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff)
       }
       dbgi_scope_close(scope);
     }
-    if(node != 0)
+    if(node != 0 && node->locals_map->slots_count != 0)
     {
       map = node->locals_map;
+      break;
     }
   }
   ProfEnd();
@@ -6440,7 +6446,10 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   {
     df_state->locals_caches[idx].arena = arena_alloc();
   }
-  df_state->member_cache.arena = arena_alloc();
+  for(U64 idx = 0; idx < ArrayCount(df_state->member_caches); idx += 1)
+  {
+    df_state->member_caches[idx].arena = arena_alloc();
+  }
   
   // rjf: set up eval view cache
   df_state->eval_view_cache.slots_count = 4096;
@@ -6950,7 +6959,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     //- rjf: clear members cache
     if(df_state->member_cache_reggen_idx != new_reg_gen && !df_ctrl_targets_running())
     {
-      DF_RunLocalsCache *cache = &df_state->member_cache;
+      df_state->member_cache_gen += 1;
+      DF_RunLocalsCache *cache = &df_state->member_caches[df_state->member_cache_gen%ArrayCount(df_state->member_caches)];
       arena_clear(cache->arena);
       cache->table_size = 0;
       cache->table = 0;
