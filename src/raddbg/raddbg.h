@@ -4,8 +4,8 @@
 ////////////////////////////////
 //~ rjf: Demon2 Pass Tasks
 //
-// [ ] solidify synchronization mechanisms for usage of demon2 layer
-// [ ] TLS eval correctness
+// [x] solidify synchronization mechanisms for usage of demon2 layer
+// [x] TLS eval correctness
 // [ ] TLS eval -> in-process-memory EXE info
 // [ ] unwinding -> in-process-memory EXE info
 // [ ] freezing thread while running -> soft-halt

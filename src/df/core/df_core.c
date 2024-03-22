@@ -2520,11 +2520,13 @@ df_set_thread_freeze_state(DF_Entity *thread, B32 frozen)
     }
     node->handle = thread_handle;
     df_handle_list_push_node(&df_state->frozen_threads, node);
+    df_state->entities_mut_soft_halt = 1;
   }
   
   // rjf: frozen => not frozen
   if(is_frozen && !should_be_frozen)
   {
+    df_state->entities_mut_soft_halt = 1;
     df_handle_list_remove(&df_state->frozen_threads, already_frozen_node);
     SLLStackPush(df_state->free_handle_node, already_frozen_node);
   }
@@ -3542,83 +3544,84 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
   U64 base_vaddr = 0;
   Temp scratch = scratch_begin(0, 0);
   DBGI_Scope *scope = dbgi_scope_open();
-  
-  //- rjf: unpack thread info
-  DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-  DF_Entity *binary = df_binary_file_from_module(module);
-  DBGI_Parse *dbgi = df_dbgi_parse_from_binary_file(scope, binary);
-  String8 bin_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
-  PE_BinInfo *bin = &dbgi->pe;
-  B32 bin_is_pe = 1; // TODO(rjf): this path needs to change for ELF
-  U64 addr_size = bit_size_from_arch(bin->arch)/8;
-  
-  //- rjf: grab tls range
-  Rng1U64 tls_vaddr_range = pe_tls_rng_from_bin_base_vaddr(bin_data, bin, df_base_vaddr_from_module(module));
-  
-  //- rjf: read module's TLS index
-  U64 tls_index = 0;
+  if(!df_ctrl_targets_running())
   {
-    CTRL_ProcessMemorySlice tls_index_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, 0);
-    if(tls_index_slice.data.size >= addr_size)
-    {
-      tls_index = *(U64 *)tls_index_slice.data.str;
-    }
-  }
-  
-  //- rjf: PE path
-  if(bin_is_pe)
-  {
-    U64 thread_info_addr = root_vaddr;
-    U64 tls_addr_off = tls_index*addr_size;
-    U64 tls_addr_array = 0;
-    CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
-    String8 tls_addr_array_data = tls_addr_array_slice.data;
-    if(tls_addr_array_data.size >= 8)
-    {
-      MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
-    }
-    CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0);
-    String8 result_data = result_slice.data;
-    if(result_data.size >= 8)
-    {
-      MemoryCopy(&base_vaddr, result_data.str, sizeof(U64));
-    }
-  }
-  
-  //- rjf: non-PE path (not implemented)
-  if(!bin_is_pe)
-  {
-    // TODO(rjf): not supported. old code from the prototype that Nick had sketched out:
-#if 0
-    // TODO(nick): This code works only if the linked c runtime library is glibc.
-    // Implement CRT detection here.
+    //- rjf: unpack thread info
+    DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
+    DF_Entity *binary = df_binary_file_from_module(module);
+    DBGI_Parse *dbgi = df_dbgi_parse_from_binary_file(scope, binary);
+    String8 bin_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
+    PE_BinInfo *bin = &dbgi->pe;
+    B32 bin_is_pe = 1; // TODO(rjf): this path needs to change for ELF
+    U64 addr_size = bit_size_from_arch(bin->arch)/8;
     
-    U64 dtv_addr = UINT64_MAX;
-    demon_read_memory(process->demon_handle, &dtv_addr, thread_info_addr, addr_size);
+    //- rjf: grab tls range
+    Rng1U64 tls_vaddr_range = pe_tls_rng_from_bin_base_vaddr(bin_data, bin, df_base_vaddr_from_module(module));
     
-    /*
-      union delta_thread_vector
+    //- rjf: read module's TLS index
+    U64 tls_index = 0;
+    {
+      CTRL_ProcessMemorySlice tls_index_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, 0);
+      if(tls_index_slice.data.size >= addr_size)
       {
-        size_t counter;
-        struct
-        {
-          void *value;
-          void *to_free;
-        } pointer;
-      };
-    */
-    
-    U64 dtv_size = 16;
-    U64 dtv_count = 0;
-    demon_read_memory(process->demon_handle, &dtv_count, dtv_addr - dtv_size, addr_size);
-    
-    if (tls_index > 0 && tls_index < dtv_count)
-    {
-      demon_read_memory(process->demon_handle, &result, dtv_addr + dtv_size*tls_index, addr_size);
+        tls_index = *(U64 *)tls_index_slice.data.str;
+      }
     }
+    
+    //- rjf: PE path
+    if(bin_is_pe)
+    {
+      U64 thread_info_addr = root_vaddr;
+      U64 tls_addr_off = tls_index*addr_size;
+      U64 tls_addr_array = 0;
+      CTRL_ProcessMemorySlice tls_addr_array_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(thread_info_addr, thread_info_addr+addr_size), 0);
+      String8 tls_addr_array_data = tls_addr_array_slice.data;
+      if(tls_addr_array_data.size >= 8)
+      {
+        MemoryCopy(&tls_addr_array, tls_addr_array_data.str, sizeof(U64));
+      }
+      CTRL_ProcessMemorySlice result_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, r1u64(tls_addr_array + tls_addr_off, tls_addr_array + tls_addr_off + addr_size), 0);
+      String8 result_data = result_slice.data;
+      if(result_data.size >= 8)
+      {
+        MemoryCopy(&base_vaddr, result_data.str, sizeof(U64));
+      }
+    }
+    
+    //- rjf: non-PE path (not implemented)
+    if(!bin_is_pe)
+    {
+      // TODO(rjf): not supported. old code from the prototype that Nick had sketched out:
+#if 0
+      // TODO(nick): This code works only if the linked c runtime library is glibc.
+      // Implement CRT detection here.
+      
+      U64 dtv_addr = UINT64_MAX;
+      demon_read_memory(process->demon_handle, &dtv_addr, thread_info_addr, addr_size);
+      
+      /*
+        union delta_thread_vector
+        {
+          size_t counter;
+          struct
+          {
+            void *value;
+            void *to_free;
+          } pointer;
+        };
+      */
+      
+      U64 dtv_size = 16;
+      U64 dtv_count = 0;
+      demon_read_memory(process->demon_handle, &dtv_count, dtv_addr - dtv_size, addr_size);
+      
+      if (tls_index > 0 && tls_index < dtv_count)
+      {
+        demon_read_memory(process->demon_handle, &result, dtv_addr + dtv_size*tls_index, addr_size);
+      }
 #endif
+    }
   }
-  
   dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
