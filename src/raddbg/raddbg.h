@@ -2,10 +2,12 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Demon Pass Tasks
+//~ rjf: Demon/Cleanup Pass Tasks
 //
 // [ ] TLS eval -> in-process-memory EXE info
 // [ ] unwinding -> in-process-memory EXE info
+// [ ] "root" concept in hash store, which buckets keys & allows usage code to
+//     jettison a collection of keys in retained mode fashion
 // [x] solidify synchronization mechanisms for usage of demon layer
 // [x] TLS eval correctness
 // [x] freezing thread while running -> soft-halt

@@ -1715,6 +1715,11 @@ ctrl_thread__entry_point(void *p)
     //- rjf: get next messages
     CTRL_MsgList msgs = ctrl_u2c_pop_msgs(scratch.arena);
     
+    //- rjf: enable stuck-thread-step behavior in all cases - can be silently enabled by launch_and_init for subsequent messages
+    {
+      ctrl_state->disable_stuck_thread_step = 0;
+    }
+    
     //- rjf: process messages
     DMN_CtrlExclusiveAccessScope
     {
@@ -2658,6 +2663,13 @@ ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
+  //////////////////////////////
+  //- rjf: disable 'step-over-stuck' behavior
+  //
+  {
+    ctrl_state->disable_stuck_thread_step = 1;
+  }
+  
   scratch_end(scratch);
   ProfEnd();
 }
@@ -2862,7 +2874,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   // the user breakpoint.
   //
   B32 target_thread_is_on_user_bp_and_trap_net_trap = 0;
-  if(stop_event == 0)
+  if(ctrl_state->disable_stuck_thread_step)
+  {
+    ctrl_state->disable_stuck_thread_step = 0;
+  }
+  else if(stop_event == 0 && !ctrl_state->disable_stuck_thread_step)
   {
     // rjf: gather stuck threads
     DMN_HandleList stuck_threads = {0};
