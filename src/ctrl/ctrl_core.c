@@ -2862,6 +2862,15 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   
   //////////////////////////////
+  //- rjf: read initial stack-pointer-check value
+  //
+  // This MUST happen before any threads move, including single-stepping stuck
+  // threads, because otherwise, their stack pointer may change, if single-stepping
+  // causes e.g. entrance into a function via a call instruction.
+  //
+  U64 sp_check_value = dmn_rsp_from_thread(target_thread);
+  
+  //////////////////////////////
   //- rjf: single step "stuck threads"
   //
   // "Stuck threads" are threads that are already on a User BP and would hit
@@ -3011,7 +3020,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   //
   if(stop_event == 0)
   {
-    U64 sp_check_value = dmn_rsp_from_thread(target_thread);
     B32 spoof_mode = 0;
     CTRL_Spoof spoof = {0};
     for(;;)
