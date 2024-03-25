@@ -2144,6 +2144,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 //- rjf: unhandled exception case
                 default:
                 {
+                  e->exception_repeated = (edi->dwFirstChance == 0);
                   dmn_w32_shared->exception_not_handled = (edi->dwFirstChance != 0);
                 }break;
               }
