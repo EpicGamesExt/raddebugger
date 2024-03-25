@@ -1485,13 +1485,13 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       unwind.count += 1;
       
       // rjf: unwind one step
-      UNW_Result unwind_step = {0};
+      UNW_Step unwind_step = {0};
       switch(arch)
       {
         default:{unwind_step.dead = 1;}break;
         case Architecture_x64:
         {
-          unwind_step = unw_pe_x64(binary_data, &dbgi->pe, module_vaddr_range.min, &memview, (UNW_X64_Regs *)regs_block);
+          unwind_step = unw_unwind_pe_x64(binary_data, &dbgi->pe, module_vaddr_range.min, &memview, (REGS_RegBlockX64 *)regs_block);
         }break;
       }
       
