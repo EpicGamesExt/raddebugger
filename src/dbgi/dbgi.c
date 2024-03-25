@@ -831,7 +831,7 @@ dbgi_parse_thread_entry_point(void *p)
     }
     
     //- rjf: if raddbg file is up to date based on timestamp, check the
-    // encoding generation number, to see if we need to regenerate it
+    // encoding generation number & size, to see if we need to regenerate it
     // regardless
     if(do_task && raddbgi_file_is_up_to_date)
     {

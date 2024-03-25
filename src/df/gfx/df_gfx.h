@@ -1020,6 +1020,12 @@ internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
 internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source);
 
 ////////////////////////////////
+//~ rjf: Process Control Info Stringification
+
+internal String8 df_string_from_exception_code(U32 code);
+internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, DF_IconKind *icon_out);
+
+////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void df_cmd_binding_button(DF_CmdSpec *spec);

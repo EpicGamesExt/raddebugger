@@ -4684,107 +4684,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             Temp scratch = scratch_begin(&arena, 1);
             DF_IconKind icon = DF_IconKind_Null;
             String8 explanation = str8_lit("Not running");
-            DF_Entity *thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
-            String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
-            switch(stop_event.kind)
             {
-              default:
+              String8 stop_explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
+              if(stop_explanation.size != 0)
               {
-                switch(stop_event.cause)
-                {
-                  default:{}break;
-                  case CTRL_EventCause_Finished:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      explanation = push_str8f(scratch.arena, "%S completed step", thread_display_string);
-                    }
-                    else
-                    {
-                      explanation = str8_lit("Stopped");
-                    }
-                  }break;
-                  case CTRL_EventCause_UserBreakpoint:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      icon = DF_IconKind_CircleFilled;
-                      explanation = push_str8f(scratch.arena, "%S hit a breakpoint", thread_display_string);
-                    }
-                  }break;
-                  case CTRL_EventCause_InterruptedByException:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      icon = DF_IconKind_WarningBig;
-                      switch(stop_event.exception_kind)
-                      {
-                        default:
-                        {
-                          explanation = push_str8f(scratch.arena, "%S interrupted - 0x%x", thread_display_string, stop_event.exception_code);
-                        }break;
-                        case CTRL_ExceptionKind_CppThrow:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x", thread_display_string, stop_event.exception_code);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryRead:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation reading 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryWrite:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation writing 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryExecute:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation executing 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                      }
-                    }
-                    else
-                    {
-                      icon = DF_IconKind_Pause;
-                      explanation = str8_lit("Interrupted");
-                    }
-                  }break;
-                  case CTRL_EventCause_InterruptedByTrap:
-                  {
-                    icon = DF_IconKind_WarningBig;
-                    explanation = push_str8f(scratch.arena, "%S interrupted by trap - 0x%x", thread_display_string, stop_event.exception_code);
-                  }break;
-                  case CTRL_EventCause_InterruptedByHalt:
-                  {
-                    icon = DF_IconKind_Pause;
-                    explanation = str8_lit("Halted");
-                  }break;
-                }
-              }break;
-              case CTRL_EventKind_LaunchAndInitDone:
-              case CTRL_EventKind_LaunchAndHandshakeDone:
-              {
-                explanation = str8_lit("Launched");
-              }break;
-              case CTRL_EventKind_AttachDone:
-              {
-                explanation = str8_lit("Attached");
-              }break;
-              case CTRL_EventKind_DetachDone:
-              {
-                explanation = str8_lit("Detached");
-              }break;
-              case CTRL_EventKind_KillDone:
-              {
-                explanation = str8_lit("Killed");
-              }break;
+                explanation = stop_explanation;
+              }
             }
             if(icon != DF_IconKind_Null)
             {
@@ -8484,6 +8389,141 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
 }
 
 ////////////////////////////////
+//~ rjf: Process Control Info Stringification
+
+internal String8
+df_string_from_exception_code(U32 code)
+{
+  String8 string = {0};
+  for(EachNonZeroEnumVal(CTRL_ExceptionCodeKind, k))
+  {
+    if(code == ctrl_exception_code_kind_code_table[k])
+    {
+      string = ctrl_exception_code_kind_display_string_table[k];
+      break;
+    }
+  }
+  return string;
+}
+
+internal String8
+df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, DF_IconKind *icon_out)
+{
+  DF_IconKind icon = DF_IconKind_Null;
+  String8 explanation = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
+  String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
+  switch(event->kind)
+  {
+    default:
+    {
+      switch(event->cause)
+      {
+        default:{}break;
+        case CTRL_EventCause_Finished:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            explanation = push_str8f(arena, "%S completed step", thread_display_string);
+          }
+          else
+          {
+            explanation = str8_lit("Stopped");
+          }
+        }break;
+        case CTRL_EventCause_UserBreakpoint:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            icon = DF_IconKind_CircleFilled;
+            explanation = push_str8f(arena, "%S hit a breakpoint", thread_display_string);
+          }
+        }break;
+        case CTRL_EventCause_InterruptedByException:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            icon = DF_IconKind_WarningBig;
+            switch(event->exception_kind)
+            {
+              default:
+              {
+                String8 exception_code_string = df_string_from_exception_code(event->exception_code);
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", thread_display_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
+              }break;
+              case CTRL_ExceptionKind_CppThrow:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", thread_display_string, event->exception_code);
+              }break;
+              case CTRL_ExceptionKind_MemoryRead:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation reading 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+              case CTRL_ExceptionKind_MemoryWrite:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation writing 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+              case CTRL_ExceptionKind_MemoryExecute:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation executing 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+            }
+          }
+          else
+          {
+            icon = DF_IconKind_Pause;
+            explanation = str8_lit("Interrupted");
+          }
+        }break;
+        case CTRL_EventCause_InterruptedByTrap:
+        {
+          icon = DF_IconKind_WarningBig;
+          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", thread_display_string, event->exception_code);
+        }break;
+        case CTRL_EventCause_InterruptedByHalt:
+        {
+          icon = DF_IconKind_Pause;
+          explanation = str8_lit("Halted");
+        }break;
+      }
+    }break;
+    case CTRL_EventKind_LaunchAndInitDone:
+    case CTRL_EventKind_LaunchAndHandshakeDone:
+    {
+      explanation = str8_lit("Launched");
+    }break;
+    case CTRL_EventKind_AttachDone:
+    {
+      explanation = str8_lit("Attached");
+    }break;
+    case CTRL_EventKind_DetachDone:
+    {
+      explanation = str8_lit("Detached");
+    }break;
+    case CTRL_EventKind_KillDone:
+    {
+      explanation = str8_lit("Killed");
+    }break;
+  }
+  scratch_end(scratch);
+  if(icon_out)
+  {
+    *icon_out = icon;
+  }
+  return explanation;
+}
+
+////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void
@@ -9270,6 +9310,29 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: build per-line background colors
+  //
+  Vec4F32 *line_bg_colors = push_array(scratch.arena, Vec4F32, dim_1s64(params->line_num_range)+1);
+  {
+    //- rjf: color line with stopper-thread red
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      DF_EntityList threads = params->line_ips[line_idx];
+      for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
+      {
+        if(n->entity == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+        {
+          line_bg_colors[line_idx] = df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
+          line_bg_colors[line_idx].w *= 0.25f;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build per-line context menus
   //
   UI_Key *ctx_menu_keys = push_array(scratch.arena, UI_Key, dim_1s64(params->line_num_range)+1);
@@ -9711,6 +9774,49 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: build exception annotations
+  //
+  UI_Focus(UI_FocusKind_Off)
+  {
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      DF_EntityList threads = params->line_ips[line_idx];
+      for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
+      {
+        DF_Entity *thread = n->entity;
+        if(thread == stopper_thread &&
+           (stop_event.cause == CTRL_EventCause_InterruptedByException ||
+            stop_event.cause == CTRL_EventCause_InterruptedByTrap))
+        {
+          DF_IconKind icon = DF_IconKind_WarningBig;
+          String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
+          UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+          {
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_Clickable, "###exception_info");
+            UI_Parent(box)
+            {
+              UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+                UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
+              }
+              UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+                UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                ui_label(explanation);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build watch pin annotations
   //
   UI_Focus(UI_FocusKind_Off)
@@ -10139,6 +10245,12 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         TXTI_TokenArray *line_tokens = &params->line_tokens[line_idx];
         ui_set_next_text_padding(-2);
         UI_Key line_key = ui_key_from_stringf(top_container_box->key, "ln_%I64x", line_num);
+        Vec4F32 line_bg_color = line_bg_colors[line_idx];
+        if(line_bg_color.w != 0)
+        {
+          ui_set_next_background_color(line_bg_color);
+          ui_set_next_flags(UI_BoxFlag_DrawBackground);
+        }
         UI_Box *line_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, line_key);
         D_Bucket *line_bucket = d_bucket_make();
         d_push_bucket(line_bucket);

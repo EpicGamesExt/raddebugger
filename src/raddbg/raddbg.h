@@ -56,7 +56,7 @@
 //       start with brighter color, but sometimes with darker - shouldn't it
 //       always have the same color ordering?
 //
-//  [ ]  middle mouse button on tab should close it
+//  [x]  middle mouse button on tab should close it
 // [ ] pipe failure-to-launch errors back to frontend
 
 ////////////////////////////////
