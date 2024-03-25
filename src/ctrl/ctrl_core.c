@@ -1437,75 +1437,79 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   
   //- rjf: loop & unwind
   UNW_MemView memview = stack_memview;
-  if(regs_block_good && stack_memview_good) switch(arch)
+  if(regs_block_good && stack_memview_good)
   {
-    default:{}break;
-    case Architecture_x64:
+    unwind.error = 0;
+    for(;;)
     {
-      unwind.error = 0;
-      for(;;)
+      // rjf: regs -> rip*module
+      U64 rip = regs_rip_from_arch_block(arch, regs_block);
+      DMN_Handle module = {0};
+      String8 module_name = {0};
+      Rng1U64 module_vaddr_range = {0};
+      for(CTRL_Entity *m = process_entity->first; m != &ctrl_entity_nil; m = m->next)
       {
-        // rjf: regs -> rip*module
-        U64 rip = regs_rip_from_arch_block(arch, regs_block);
-        DMN_Handle module = {0};
-        String8 module_name = {0};
-        Rng1U64 module_vaddr_range = {0};
-        for(CTRL_Entity *m = process_entity->first; m != &ctrl_entity_nil; m = m->next)
+        if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, rip))
         {
-          if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, rip))
-          {
-            module = m->handle;
-            module_name = m->string;
-            module_vaddr_range = m->vaddr_range;
-            break;
-          }
-        }
-        
-        // rjf: cancel on 0 rip
-        if(rip == 0)
-        {
-          break;
-        }
-        
-        // rjf: module -> all the binary info
-        String8 binary_full_path = module_name;
-        DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
-        String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
-        
-        // rjf: cancel on bad data
-        if(binary_data.size == 0)
-        {
-          unwind.error = 1;
-          break;
-        }
-        
-        // rjf: valid step -> push frame
-        CTRL_UnwindFrame *frame = push_array(arena, CTRL_UnwindFrame, 1);
-        frame->rip = rip;
-        frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
-        MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
-        DLLPushBack(unwind.first, unwind.last, frame);
-        unwind.count += 1;
-        
-        // rjf: unwind one step
-        UNW_Result unwind_step = unw_pe_x64(binary_data, &dbgi->pe, module_vaddr_range.min, &memview, (UNW_X64_Regs *)regs_block);
-        
-        // rjf: cancel on bad step
-        if(unwind_step.dead != 0)
-        {
-          break;
-        }
-        if(unwind_step.missed_read != 0)
-        {
-          unwind.error = 1;
-          break;
-        }
-        if(unwind_step.stack_pointer == 0)
-        {
+          module = m->handle;
+          module_name = m->string;
+          module_vaddr_range = m->vaddr_range;
           break;
         }
       }
-    }break;
+      
+      // rjf: cancel on 0 rip
+      if(rip == 0)
+      {
+        break;
+      }
+      
+      // rjf: module -> all the binary info
+      String8 binary_full_path = module_name;
+      DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
+      String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
+      
+      // rjf: cancel on bad data
+      if(binary_data.size == 0)
+      {
+        unwind.error = 1;
+        break;
+      }
+      
+      // rjf: valid step -> push frame
+      CTRL_UnwindFrame *frame = push_array(arena, CTRL_UnwindFrame, 1);
+      frame->rip = rip;
+      frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
+      MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
+      DLLPushBack(unwind.first, unwind.last, frame);
+      unwind.count += 1;
+      
+      // rjf: unwind one step
+      UNW_Result unwind_step = {0};
+      switch(arch)
+      {
+        default:{unwind_step.dead = 1;}break;
+        case Architecture_x64:
+        {
+          unwind_step = unw_pe_x64(binary_data, &dbgi->pe, module_vaddr_range.min, &memview, (UNW_X64_Regs *)regs_block);
+        }break;
+      }
+      
+      // rjf: cancel on bad step
+      if(unwind_step.dead != 0)
+      {
+        break;
+      }
+      if(unwind_step.missed_read != 0)
+      {
+        unwind.error = 1;
+        break;
+      }
+      if(unwind_step.stack_pointer == 0)
+      {
+        break;
+      }
+    }
   }
   
   dbgi_scope_close(scope);
