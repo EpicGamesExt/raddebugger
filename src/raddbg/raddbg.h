@@ -213,7 +213,7 @@
 // [ ] @feature disasm keyboard navigation & copy/paste
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
-// [ ] run-to-line needs to work if no processes are running
+// [x] run-to-line needs to work if no processes are running
 //     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
 //
@@ -240,11 +240,11 @@
 //      expandable? It seems like this should be consistent (one way to edit,
 //      one way to expand/collapse, that are distinct)
 //
-//  [ ] I didn't understand the terminology "Equip With Color". Does that just
+//  [x] I didn't understand the terminology "Equip With Color". Does that just
 //      mean specify the color used to display it? Is "Apply Color" perhaps a
 //      bit more user-friendly?
 //
-//  [ ] The cursor feels a bit too huge vertically.
+//  [x] The cursor feels a bit too huge vertically.
 //
 //  [ ] The hex format for color values in the config file was a real
 //      mindbender. It's prefixed with "0x", so I was assuming it was either
