@@ -8790,6 +8790,25 @@ df_entity_tooltips(DF_Entity *entity)
         }
         UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
       }
+      {
+        CTRL_Event stop_event = df_ctrl_last_stop_event();
+        DF_Entity *stopper_thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
+        if(stopper_thread == entity)
+        {
+          ui_spacer(ui_em(1.5f, 1.f));
+          DF_IconKind icon_kind = DF_IconKind_Null;
+          String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon_kind);
+          if(explanation.size != 0)
+          {
+            UI_PrefWidth(ui_children_sum(1)) UI_Row UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+            {
+              UI_PrefWidth(ui_em(1.5f, 1.f)) UI_Font(df_font_from_slot(DF_FontSlot_Icons)) ui_label(df_g_icon_kind_text_table[icon_kind]);
+              UI_PrefWidth(ui_text_dim(10, 1)) ui_label(explanation);
+            }
+          }
+        }
+      }
+      ui_spacer(ui_em(1.5f, 1.f));
       UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
         UI_PrefWidth(ui_em(18.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("TID: ");
