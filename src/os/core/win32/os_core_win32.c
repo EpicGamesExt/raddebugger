@@ -1648,7 +1648,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
         if(!raddbg_pdb_valid)
         {
           buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen,
-                               L"\nThe PDB debug information file for this executable is not valid or was not found. Please rebuild binary to get call stack.\n");
+                               L"\nThe PDB debug information file for this executable is not valid or was not found. Please rebuild binary to get the call stack.\n");
         }
         else
         {
@@ -1696,9 +1696,13 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
             
             if(idx==0)
             {
+#if BUILD_CONSOLE_INTERFACE
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nCreate a new issue with this report at %S.\n\n", BUILD_ISSUES_LINK_STRING_LITERAL);
+#else
               buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen,
-                                   L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue in\n"
+                                   L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue at\n"
                                    L"<a href=\"%S\">%S</a>\n\n", BUILD_ISSUES_LINK_STRING_LITERAL, BUILD_ISSUES_LINK_STRING_LITERAL);
+#endif
               buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"Call stack:\n");
             }
             
@@ -1745,6 +1749,10 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   
   buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nVersion: %S%S", BUILD_VERSION_STRING_LITERAL, BUILD_GIT_HASH_STRING_LITERAL_APPEND);
   
+#if BUILD_CONSOLE_INTERFACE
+  fwprintf(stderr, L"\n--- Fatal Exception ---\n");
+  fwprintf(stderr, L"%s\n\n", buffer);
+#else
   TASKDIALOGCONFIG dialog = {0};
   dialog.cbSize = sizeof(dialog);
   dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
@@ -1754,6 +1762,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
   dialog.pszContent = buffer;
   dialog.pfCallback = &win32_dialog_callback;
   TaskDialogIndirect(&dialog, 0, 0, 0);
+#endif
   
   ExitProcess(1);
 }
