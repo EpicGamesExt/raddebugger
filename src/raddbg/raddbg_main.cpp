@@ -205,11 +205,21 @@ entry_point(CmdLine *cmd_line)
             str8_list_push(scratch.arena, &passthrough_args_list, n->string);
           }
           
+          // rjf: get current path
+          String8 current_path = os_string_from_system_path(scratch.arena, OS_SystemPath_Current);
+          
           // rjf: equip exe
           if(args.first->string.size != 0)
           {
+            String8 exe_name = args.first->string;
             DF_Entity *exe = df_entity_alloc(0, target, DF_EntityKind_Executable);
-            df_entity_equip_name(0, exe, args.first->string);
+            PathStyle style = path_style_from_str8(exe_name);
+            if(style == PathStyle_Relative)
+            {
+              exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
+              exe_name = path_normalized_from_string(scratch.arena, exe_name);
+            }
+            df_entity_equip_name(0, exe, exe_name);
           }
           
           // rjf: equip path

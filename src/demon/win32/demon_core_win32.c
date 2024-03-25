@@ -1087,7 +1087,7 @@ dmn_init(void)
   
   // rjf: setup environment variables
   {
-    CHAR *this_proc_env = GetEnvironmentStrings();
+    WCHAR *this_proc_env = GetEnvironmentStringsW();
     U64 start_idx = 0;
     for(U64 idx = 0;; idx += 1)
     {
@@ -1099,7 +1099,8 @@ dmn_init(void)
         }
         else
         {
-          String8 string = str8((U8 *)this_proc_env + start_idx, idx - start_idx);
+          String16 string16 = str16((U16 *)this_proc_env + start_idx, idx - start_idx);
+          String8 string = str8_from_16(dmn_w32_shared->arena, string16);
           str8_list_push(dmn_w32_shared->arena, &dmn_w32_shared->env_strings, string);
           start_idx = idx+1;
         }

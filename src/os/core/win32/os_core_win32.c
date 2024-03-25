@@ -217,7 +217,7 @@ os_init(void)
   
   // rjf: setup environment variables
   {
-    CHAR *this_proc_env = GetEnvironmentStrings();
+    WCHAR *this_proc_env = GetEnvironmentStringsW();
     U64 start_idx = 0;
     for(U64 idx = 0;; idx += 1)
     {
@@ -229,7 +229,8 @@ os_init(void)
         }
         else
         {
-          String8 string = str8((U8 *)this_proc_env + start_idx, idx - start_idx);
+          String16 string16 = str16((U16 *)this_proc_env + start_idx, idx - start_idx);
+          String8 string = str8_from_16(w32_perm_arena, string16);
           str8_list_push(w32_perm_arena, &w32_environment, string);
           start_idx = idx+1;
         }
@@ -1223,7 +1224,7 @@ os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out){
     env16 = str16_from_8(scratch.arena, env);
   }
   
-  DWORD creation_flags = 0;
+  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
   if(options->consoleless)
   {
     creation_flags |= CREATE_NO_WINDOW;
@@ -1760,36 +1761,35 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
 #undef OS_WINDOWS // shlwapi uses its own OS_WINDOWS include inside
 #define OS_WINDOWS 1
 
-#if BUILD_CONSOLE_INTERFACE
-int main(int argc, char **argv)
+internal void
+w32_entry_point_caller(int argc, WCHAR **wargv)
 {
   SetUnhandledExceptionFilter(&win32_exception_filter);
+  Arena *args_arena = arena_alloc__sized(MB(1), KB(32));
+  char **argv = push_array(args_arena, char *, argc);
   for(int i = 0; i < argc; i += 1)
   {
-    String8 arg8 = str8_cstring(argv[i]);
+    String16 arg16 = str16_cstring((U16 *)wargv[i]);
+    String8 arg8 = str8_from_16(args_arena, arg16);
     if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive))
     {
       win32_g_is_quiet = 1;
     }
+    argv[i] = (char *)arg8.str;
   }
   main_thread_base_entry_point(entry_point, argv, (U64)argc);
+}
+
+#if BUILD_CONSOLE_INTERFACE
+int wmain(int argc, WCHAR **argv)
+{
+  w32_entry_point_caller(argc, argv);
   return 0;
 }
 #else
-int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
-  SetUnhandledExceptionFilter(&win32_exception_filter);
-  char **argv = __argv;
-  int argc = __argc;
-  for(int i = 0; i < argc; i += 1)
-  {
-    String8 arg8 = str8_cstring(argv[i]);
-    if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive))
-    {
-      win32_g_is_quiet = 1;
-    }
-  }
-  main_thread_base_entry_point(entry_point, argv, (U64)argc);
+  w32_entry_point_caller(__argc, __wargv);
   return 0;
 }
 #endif
