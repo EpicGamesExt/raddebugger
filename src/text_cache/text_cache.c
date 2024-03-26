@@ -26,7 +26,25 @@ txt_lang_kind_from_extension(String8 extension)
   {
     kind = TXT_LangKind_CPlusPlus;
   }
+  else if(str8_match(extension, str8_lit("odin"), StringMatchFlag_CaseInsensitive))
+  {
+    kind = TXT_LangKind_Odin;
+  }
   return kind;
+}
+
+internal TXT_LangLexFunctionType *
+txt_lex_function_from_lang_kind(TXT_LangKind kind)
+{
+  TXT_LangLexFunctionType *fn = 0;
+  switch(kind)
+  {
+    default:{}break;
+    case TXT_LangKind_C:           {fn = txt_token_array_from_string__c_cpp;}break;
+    case TXT_LangKind_CPlusPlus:   {fn = txt_token_array_from_string__c_cpp;}break;
+    case TXT_LangKind_Odin:        {fn = txt_token_array_from_string__odin;}break;
+  }
+  return fn;
 }
 
 ////////////////////////////////
@@ -195,7 +213,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
           }break;
           case TXT_TokenKind_Numeric:
           {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.');
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.' && byte != '\'');
           }break;
           case TXT_TokenKind_String:
           {
@@ -349,6 +367,234 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
           for(U64 keyword_idx = 0; keyword_idx < ArrayCount(cpp_keywords); keyword_idx += 1)
           {
             if(str8_match(cpp_keywords[keyword_idx], token_string, 0))
+            {
+              token.kind = TXT_TokenKind_Keyword;
+              break;
+            }
+          }
+        }
+        
+        // rjf: push
+        txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        
+        // rjf: increment by ender padding
+        idx += ender_pad;
+      }
+      
+      // rjf: advance by 1 byte if we haven't found an ender
+      if(!ender_found)
+      {
+        idx += 1;
+      }
+      escaped = next_escaped;
+    }
+  }
+  
+  //- rjf: token list -> token array
+  TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
+  scratch_end(scratch);
+  return result;
+}
+
+internal TXT_TokenArray
+txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: generate token list
+  TXT_TokenChunkList tokens = {0};
+  {
+    B32 comment_is_single_line = 0;
+    B32 string_is_char = 0;
+    TXT_TokenKind active_token_kind = TXT_TokenKind_Null;
+    U64 active_token_start_idx = 0;
+    B32 escaped = 0;
+    B32 next_escaped = 0;
+    U64 byte_process_start_idx = 0;
+    for(U64 idx = 0; idx <= string.size;)
+    {
+      U8 byte      = (idx+0 < string.size) ? (string.str[idx+0]) : 0;
+      U8 next_byte = (idx+1 < string.size) ? (string.str[idx+1]) : 0;
+      
+      // rjf: update counter
+      if(bytes_processed_counter != 0 && ((idx-byte_process_start_idx) >= 1000 || idx == string.size))
+      {
+        ins_atomic_u64_add_eval(bytes_processed_counter, (idx-byte_process_start_idx));
+        byte_process_start_idx = idx;
+      }
+      
+      // rjf: escaping
+      if(escaped && (byte != '\r' && byte != '\n'))
+      {
+        next_escaped = 0;
+      }
+      else if(!escaped && byte == '\\')
+      {
+        next_escaped = 1;
+      }
+      
+      // rjf: take starter, determine active token kind
+      if(active_token_kind == TXT_TokenKind_Null)
+      {
+        // rjf: use next bytes to start a new token
+        if(0){}
+        else if(char_is_space(byte))             { active_token_kind = TXT_TokenKind_Whitespace; }
+        else if(byte == '_' ||
+                byte == '$' ||
+                char_is_alpha(byte))             { active_token_kind = TXT_TokenKind_Identifier; }
+        else if(char_is_digit(byte, 10) ||
+                (byte == '.' &&
+                 char_is_digit(next_byte, 10)))  { active_token_kind = TXT_TokenKind_Numeric; }
+        else if(byte == '"')                     { active_token_kind = TXT_TokenKind_String; string_is_char = 0; }
+        else if(byte == '\'')                    { active_token_kind = TXT_TokenKind_String; string_is_char = 1; }
+        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 1; }
+        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 0; }
+        else if(byte == '~' || byte == '!' ||
+                byte == '%' || byte == '^' ||
+                byte == '&' || byte == '*' ||
+                byte == '(' || byte == ')' ||
+                byte == '-' || byte == '=' ||
+                byte == '+' || byte == '[' ||
+                byte == ']' || byte == '{' ||
+                byte == '}' || byte == ':' ||
+                byte == ';' || byte == ',' ||
+                byte == '.' || byte == '<' ||
+                byte == '>' || byte == '/' ||
+                byte == '?' || byte == '|')      { active_token_kind = TXT_TokenKind_Symbol; }
+        else if(byte == '#')                     { active_token_kind = TXT_TokenKind_Meta; }
+        
+        // rjf: start new token
+        if(active_token_kind != TXT_TokenKind_Null)
+        {
+          active_token_start_idx = idx;
+        }
+        
+        // rjf: invalid token kind -> emit error
+        else
+        {
+          TXT_Token token = {TXT_TokenKind_Error, r1u64(idx, idx+1)};
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        }
+      }
+      
+      // rjf: look for ender
+      U64 ender_pad = 0;
+      B32 ender_found = 0;
+      if(active_token_kind != TXT_TokenKind_Null && idx>active_token_start_idx)
+      {
+        if(idx == string.size)
+        {
+          ender_pad = 0;
+          ender_found = 1;
+        }
+        else switch(active_token_kind)
+        {
+          default:break;
+          case TXT_TokenKind_Whitespace:
+          {
+            ender_found = !char_is_space(byte);
+          }break;
+          case TXT_TokenKind_Identifier:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+          }break;
+          case TXT_TokenKind_Numeric:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.' && byte != '\'');
+          }break;
+          case TXT_TokenKind_String:
+          {
+            ender_found = (!escaped && ((!string_is_char && byte == '"') || (string_is_char && byte == '\'')));
+            ender_pad += 1;
+          }break;
+          case TXT_TokenKind_Symbol:
+          {
+            ender_found = (byte != '~' && byte != '!' &&
+                           byte != '%' && byte != '^' &&
+                           byte != '&' && byte != '*' &&
+                           byte != '(' && byte != ')' &&
+                           byte != '-' && byte != '=' &&
+                           byte != '+' && byte != '[' &&
+                           byte != ']' && byte != '{' &&
+                           byte != '}' && byte != ':' &&
+                           byte != ';' && byte != ',' &&
+                           byte != '.' && byte != '<' &&
+                           byte != '>' && byte != '/' &&
+                           byte != '?' && byte != '|');
+          }break;
+          case TXT_TokenKind_Comment:
+          {
+            if(comment_is_single_line)
+            {
+              ender_found = (!escaped && (byte == '\r' || byte == '\n'));
+            }
+            else
+            {
+              ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
+              ender_pad += 2;
+            }
+          }break;
+          case TXT_TokenKind_Meta:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+          }break;
+        }
+      }
+      
+      // rjf: next byte is ender => emit token
+      if(ender_found)
+      {
+        TXT_Token token = {active_token_kind, r1u64(active_token_start_idx, idx+ender_pad)};
+        active_token_kind = TXT_TokenKind_Null;
+        
+        // rjf: identifier -> keyword in special cases
+        if(token.kind == TXT_TokenKind_Identifier)
+        {
+          read_only local_persist String8 odin_keywords[] =
+          {
+            str8_lit_comp("asm"),
+            str8_lit_comp("auto_cast"),
+            str8_lit_comp("bit_set"),
+            str8_lit_comp("break"),
+            str8_lit_comp("case"),
+            str8_lit_comp("cast"),
+            str8_lit_comp("context"),
+            str8_lit_comp("continue"),
+            str8_lit_comp("defer"),
+            str8_lit_comp("distinct"),
+            str8_lit_comp("do"),
+            str8_lit_comp("dynamic"),
+            str8_lit_comp("else"),
+            str8_lit_comp("enum"),
+            str8_lit_comp("fallthrough"),
+            str8_lit_comp("for"),
+            str8_lit_comp("foreign"),
+            str8_lit_comp("if"),
+            str8_lit_comp("in"),
+            str8_lit_comp("map"),
+            str8_lit_comp("matrix"),
+            str8_lit_comp("not_in"),
+            str8_lit_comp("or_break"),
+            str8_lit_comp("or_continue"),
+            str8_lit_comp("or_else"),
+            str8_lit_comp("or_return"),
+            str8_lit_comp("package"),
+            str8_lit_comp("proc"),
+            str8_lit_comp("return"),
+            str8_lit_comp("struct"),
+            str8_lit_comp("switch"),
+            str8_lit_comp("transmute"),
+            str8_lit_comp("typeid"),
+            str8_lit_comp("union"),
+            str8_lit_comp("using"),
+            str8_lit_comp("when"),
+            str8_lit_comp("where"),
+            str8_lit_comp("import"),
+          };
+          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
+          for(U64 keyword_idx = 0; keyword_idx < ArrayCount(odin_keywords); keyword_idx += 1)
+          {
+            if(str8_match(odin_keywords[keyword_idx], token_string, 0))
             {
               token.kind = TXT_TokenKind_Keyword;
               break;
@@ -674,8 +920,6 @@ txt_u2p_dequeue_req(U128 *key_out, U128 *hash_out, TXT_LangKind *lang_out)
 internal void
 txt_parse_thread__entry_point(void *p)
 {
-  TCTX tctx_ = {0};
-  tctx_init_and_equip(&tctx_);
   for(;;)
   {
     HS_Scope *scope = hs_scope_open();
@@ -786,16 +1030,7 @@ txt_parse_thread__entry_point(void *p)
       }
       
       //- rjf: lang -> lex function
-      TXT_LangLexFunctionType *lex_function = 0;
-      switch(lang)
-      {
-        default:{}break;
-        case TXT_LangKind_C:
-        case TXT_LangKind_CPlusPlus:
-        {
-          lex_function = txt_token_array_from_string__c_cpp;
-        }break;
-      }
+      TXT_LangLexFunctionType *lex_function = txt_lex_function_from_lang_kind(lang);
       
       //- rjf: lex function * data -> tokens
       TXT_TokenArray tokens = {0};

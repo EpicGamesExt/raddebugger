@@ -381,137 +381,213 @@ cv_string_from_sym_kind:
 }
 
 ////////////////////////////////
-//~ rjf: CV Leaf
+//~ rjf: CV Basic Types
 
-@table(name val)
+@table(name val type_name)
+CV_BasicTypeTable:
+{
+  {NOTYPE     0x00    ""                         }
+  {ABS        0x01    ""                         }
+  {SEGMENT    0x02    ""                         }
+  {VOID       0x03    "void"                     }
+  {CURRENCY   0x04    ""                         }
+  {NBASICSTR  0x05    ""                         }
+  {FBASICSTR  0x06    ""                         }
+  {NOTTRANS   0x07    ""                         }
+  {HRESULT    0x08    "HRESULT"                  }
+  {CHAR       0x10    "char"                     }
+  {SHORT      0x11    "S16"                      }
+  {LONG       0x12    "S32"                      }
+  {QUAD       0x13    "S64"                      }
+  {OCT        0x14    "S128"                     }
+  {UCHAR      0x20    "UCHAR"                    }
+  {USHORT     0x21    "U16"                      }
+  {ULONG      0x22    "U32"                      }
+  {UQUAD      0x23    "U64"                      }
+  {UOCT       0x24    "U128"                     }
+  {BOOL8      0x30    "B8"                       }
+  {BOOL16     0x31    "B16"                      }
+  {BOOL32     0x32    "B32"                      }
+  {BOOL64     0x33    "B64"                      }
+  {FLOAT32    0x40    "F32"                      }
+  {FLOAT64    0x41    "F64"                      }
+  {FLOAT80    0x42    "F80"                      }
+  {FLOAT128   0x43    "F128"                     }
+  {FLOAT48    0x44    "F48"                      }
+  {FLOAT32PP  0x45    "F32PP"                    }
+  {FLOAT16    0x46    "F16"                      }
+  {COMPLEX32  0x50    "ComplexF32"               }
+  {COMPLEX64  0x51    "ComplexF64"               }
+  {COMPLEX80  0x52    "ComplexF80"               }
+  {COMPLEX128 0x53    "ComplexF128"              }
+  {BIT        0x60    ""                         }
+  {PASCHAR    0x61    ""                         }
+  {BOOL32FF   0x62    "B32FF"                    }
+  {INT8       0x68    "S8"                       }
+  {UINT8      0x69    "U8"                       }
+  {RCHAR      0x70    "char"                     }
+  {WCHAR      0x71    "WCHAR"                    }
+  {INT16      0x72    "S16"                      }
+  {UINT16     0x73    "U16"                      }
+  {INT32      0x74    "S32"                      }
+  {UINT32     0x75    "U32"                      }
+  {INT64      0x76    "S64"                      }
+  {UINT64     0x77    "U64"                      }
+  {INT128     0x78    "S128"                     }
+  {UINT128    0x79    "U128"                     }
+  {CHAR16     0x7a    "CHAR16"                   }
+  {CHAR32     0x7b    "CHAR32"                   }
+  {CHAR8      0x7c    "char"                     }
+  {PTR        0xf0    "PTR"                      }
+}
+
+@enum(U8) CV_BasicType:
+{
+  @expand(CV_BasicTypeTable a) `$(a.name) = $(a.val)`
+}
+
+@enum2string_switch(CV_BasicType) cv_string_from_basic_type:
+{
+  @expand(CV_BasicTypeTable a) `case CV_BasicType_$(a.name):{result = str8_lit("$(a.name)");}break`
+}
+
+@enum2string_switch(CV_BasicType) cv_type_name_from_basic_type:
+{
+  @expand(CV_BasicTypeTable a) `case CV_BasicType_$(a.name):{result = str8_lit("$(a.type_name)");}break`
+}
+
+////////////////////////////////
+//~ rjf: CV Leaf Kinds
+
+@table(name  header_type_name  val)
 CV_LeafKindTable:
 {
-  {MODIFIER_16t  0x0001}
-  {POINTER_16t   0x0002}
-  {ARRAY_16t     0x0003}
-  {CLASS_16t     0x0004}
-  {STRUCTURE_16t 0x0005}
-  {UNION_16t     0x0006}
-  {ENUM_16t      0x0007}
-  {PROCEDURE_16t 0x0008}
-  {MFUNCTION_16t 0x0009}
-  {VTSHAPE       0x000a}
-  {COBOL0_16t    0x000b}
-  {COBOL1        0x000c}
-  {BARRAY_16t    0x000d}
-  {LABEL         0x000e}
-  {NULL          0x000f}
-  {NOTTRAN       0x0010}
-  {DIMARRAY_16t  0x0011}
-  {VFTPATH_16t   0x0012}
-  {PRECOMP_16t   0x0013}
-  {ENDPRECOMP    0x0014}
-  {OEM_16t       0x0015}
-  {TYPESERVER_ST 0x0016}
-  {SKIP_16t      0x0200}
-  {ARGLIST_16t   0x0201}
-  {DEFARG_16t    0x0202}
-  {LIST          0x0203}
-  {FIELDLIST_16t 0x0204}
-  {DERIVED_16t   0x0205}
-  {BITFIELD_16t  0x0206}
-  {METHODLIST_16t 0x0207}
-  {DIMCONU_16t   0x0208}
-  {DIMCONLU_16t  0x0209}
-  {DIMVARU_16t   0x020a}
-  {DIMVARLU_16t  0x020b}
-  {REFSYM        0x020c}
-  {BCLASS_16t    0x0400}
-  {VBCLASS_16t   0x0401}
-  {IVBCLASS_16t  0x0402}
-  {ENUMERATE_ST  0x0403}
-  {FRIENDFCN_16t 0x0404}
-  {INDEX_16t     0x0405}
-  {MEMBER_16t    0x0406}
-  {STMEMBER_16t  0x0407}
-  {METHOD_16t    0x0408}
-  {NESTTYPE_16t  0x0409}
-  {VFUNCTAB_16t  0x040a}
-  {FRIENDCLS_16t 0x040b}
-  {ONEMETHOD_16t 0x040c}
-  {VFUNCOFF_16t  0x040d}
-  {TI16_MAX      0x1000}
-  {MODIFIER      0x1001}
-  {POINTER       0x1002}
-  {ARRAY_ST      0x1003}
-  {CLASS_ST      0x1004}
-  {STRUCTURE_ST  0x1005}
-  {UNION_ST      0x1006}
-  {ENUM_ST       0x1007}
-  {PROCEDURE     0x1008}
-  {MFUNCTION     0x1009}
-  {COBOL0        0x100a}
-  {BARRAY        0x100b}
-  {DIMARRAY_ST   0x100c}
-  {VFTPATH       0x100d}
-  {PRECOMP_ST    0x100e}
-  {OEM           0x100f}
-  {ALIAS_ST      0x1010}
-  {OEM2          0x1011}
-  {SKIP          0x1200}
-  {ARGLIST       0x1201}
-  {DEFARG_ST     0x1202}
-  {FIELDLIST     0x1203}
-  {DERIVED       0x1204}
-  {BITFIELD      0x1205}
-  {METHODLIST    0x1206}
-  {DIMCONU       0x1207}
-  {DIMCONLU      0x1208}
-  {DIMVARU       0x1209}
-  {DIMVARLU      0x120a}
-  {BCLASS        0x1400}
-  {VBCLASS       0x1401}
-  {IVBCLASS      0x1402}
-  {FRIENDFCN_ST  0x1403}
-  {INDEX         0x1404}
-  {MEMBER_ST     0x1405}
-  {STMEMBER_ST   0x1406}
-  {METHOD_ST     0x1407}
-  {NESTTYPE_ST   0x1408}
-  {VFUNCTAB      0x1409}
-  {FRIENDCLS     0x140a}
-  {ONEMETHOD_ST  0x140b}
-  {VFUNCOFF      0x140c}
-  {NESTTYPEEX_ST 0x140d}
-  {MEMBERMODIFY_ST 0x140e}
-  {MANAGED_ST    0x140f}
-  {ST_MAX        0x1500}
-  {TYPESERVER    0x1501}
-  {ENUMERATE     0x1502}
-  {ARRAY         0x1503}
-  {CLASS         0x1504}
-  {STRUCTURE     0x1505}
-  {UNION         0x1506}
-  {ENUM          0x1507}
-  {DIMARRAY      0x1508}
-  {PRECOMP       0x1509}
-  {ALIAS         0x150a}
-  {DEFARG        0x150b}
-  {FRIENDFCN     0x150c}
-  {MEMBER        0x150d}
-  {STMEMBER      0x150e}
-  {METHOD        0x150f}
-  {NESTTYPE      0x1510}
-  {ONEMETHOD     0x1511}
-  {NESTTYPEEX    0x1512}
-  {MEMBERMODIFY  0x1513}
-  {MANAGED       0x1514}
-  {TYPESERVER2   0x1515}
-  {STRIDED_ARRAY 0x1516}
-  {HLSL          0x1517}
-  {MODIFIER_EX   0x1518}
-  {INTERFACE     0x1519}
-  {BINTERFACE    0x151a}
-  {VECTOR        0x151b}
-  {MATRIX        0x151c}
-  {VFTABLE       0x151d}
-  {CLASS2        0x1608}
-  {STRUCT2       0x1609}
+  {MODIFIER_16t                  -                            0x0001}
+  {POINTER_16t                   -                            0x0002}
+  {ARRAY_16t                     -                            0x0003}
+  {CLASS_16t                     -                            0x0004}
+  {STRUCTURE_16t                 -                            0x0005}
+  {UNION_16t                     -                            0x0006}
+  {ENUM_16t                      -                            0x0007}
+  {PROCEDURE_16t                 -                            0x0008}
+  {MFUNCTION_16t                 -                            0x0009}
+  {VTSHAPE                       VTShape                      0x000a}
+  {COBOL0_16t                    -                            0x000b}
+  {COBOL1                        -                            0x000c}
+  {BARRAY_16t                    -                            0x000d}
+  {LABEL                         Label                        0x000e}
+  {NULL                          -                            0x000f}
+  {NOTTRAN                       -                            0x0010}
+  {DIMARRAY_16t                  -                            0x0011}
+  {VFTPATH_16t                   -                            0x0012}
+  {PRECOMP_16t                   -                            0x0013}
+  {ENDPRECOMP                    -                            0x0014}
+  {OEM_16t                       -                            0x0015}
+  {TYPESERVER_ST                 -                            0x0016}
+  {SKIP_16t                      -                            0x0200}
+  {ARGLIST_16t                   -                            0x0201}
+  {DEFARG_16t                    -                            0x0202}
+  {LIST                          -                            0x0203}
+  {FIELDLIST_16t                 -                            0x0204}
+  {DERIVED_16t                   -                            0x0205}
+  {BITFIELD_16t                  -                            0x0206}
+  {METHODLIST_16t                -                            0x0207}
+  {DIMCONU_16t                   -                            0x0208}
+  {DIMCONLU_16t                  -                            0x0209}
+  {DIMVARU_16t                   -                            0x020a}
+  {DIMVARLU_16t                  -                            0x020b}
+  {REFSYM                        -                            0x020c}
+  {BCLASS_16t                    -                            0x0400}
+  {VBCLASS_16t                   -                            0x0401}
+  {IVBCLASS_16t                  -                            0x0402}
+  {ENUMERATE_ST                  -                            0x0403}
+  {FRIENDFCN_16t                 -                            0x0404}
+  {INDEX_16t                     -                            0x0405}
+  {MEMBER_16t                    -                            0x0406}
+  {STMEMBER_16t                  -                            0x0407}
+  {METHOD_16t                    -                            0x0408}
+  {NESTTYPE_16t                  -                            0x0409}
+  {VFUNCTAB_16t                  -                            0x040a}
+  {FRIENDCLS_16t                 -                            0x040b}
+  {ONEMETHOD_16t                 -                            0x040c}
+  {VFUNCOFF_16t                  -                            0x040d}
+  {TI16_MAX                      -                            0x1000}
+  {MODIFIER                      Modifier                     0x1001}
+  {POINTER                       Pointer                      0x1002}
+  {ARRAY_ST                      -                            0x1003}
+  {CLASS_ST                      -                            0x1004}
+  {STRUCTURE_ST                  -                            0x1005}
+  {UNION_ST                      -                            0x1006}
+  {ENUM_ST                       -                            0x1007}
+  {PROCEDURE                     Procedure                    0x1008}
+  {MFUNCTION                     MFunction                    0x1009}
+  {COBOL0                        -                            0x100a}
+  {BARRAY                        -                            0x100b}
+  {DIMARRAY_ST                   -                            0x100c}
+  {VFTPATH                       VFPath                       0x100d}
+  {PRECOMP_ST                    -                            0x100e}
+  {OEM                           -                            0x100f}
+  {ALIAS_ST                      -                            0x1010}
+  {OEM2                          -                            0x1011}
+  {SKIP                          Skip                         0x1200}
+  {ARGLIST                       ArgList                      0x1201}
+  {DEFARG_ST                     -                            0x1202}
+  {FIELDLIST                     -                            0x1203}
+  {DERIVED                       -                            0x1204}
+  {BITFIELD                      BitField                     0x1205}
+  {METHODLIST                    MethodListMember             0x1206}
+  {DIMCONU                       -                            0x1207}
+  {DIMCONLU                      -                            0x1208}
+  {DIMVARU                       -                            0x1209}
+  {DIMVARLU                      -                            0x120a}
+  {BCLASS                        BClass                       0x1400}
+  {VBCLASS                       VBClass                      0x1401}
+  {IVBCLASS                      -                            0x1402}
+  {FRIENDFCN_ST                  -                            0x1403}
+  {INDEX                         Index                        0x1404}
+  {MEMBER_ST                     -                            0x1405}
+  {STMEMBER_ST                   -                            0x1406}
+  {METHOD_ST                     -                            0x1407}
+  {NESTTYPE_ST                   -                            0x1408}
+  {VFUNCTAB                      VFuncTab                     0x1409}
+  {FRIENDCLS                     -                            0x140a}
+  {ONEMETHOD_ST                  -                            0x140b}
+  {VFUNCOFF                      VFuncOff                     0x140c}
+  {NESTTYPEEX_ST                 -                            0x140d}
+  {MEMBERMODIFY_ST               -                            0x140e}
+  {MANAGED_ST                    -                            0x140f}
+  {ST_MAX                        -                            0x1500}
+  {TYPESERVER                    TypeServer                   0x1501}
+  {ENUMERATE                     Enumerate                    0x1502}
+  {ARRAY                         Array                        0x1503}
+  {CLASS                         Struct                       0x1504}
+  {STRUCTURE                     Struct                       0x1505}
+  {UNION                         Union                        0x1506}
+  {ENUM                          Enum                         0x1507}
+  {DIMARRAY                      -                            0x1508}
+  {PRECOMP                       PreComp                      0x1509}
+  {ALIAS                         Alias                        0x150a}
+  {DEFARG                        -                            0x150b}
+  {FRIENDFCN                     -                            0x150c}
+  {MEMBER                        Member                       0x150d}
+  {STMEMBER                      StMember                     0x150e}
+  {METHOD                        Method                       0x150f}
+  {NESTTYPE                      NestType                     0x1510}
+  {ONEMETHOD                     OneMethod                    0x1511}
+  {NESTTYPEEX                    NestTypeEx                   0x1512}
+  {MEMBERMODIFY                  -                            0x1513}
+  {MANAGED                       -                            0x1514}
+  {TYPESERVER2                   TypeServer2                  0x1515}
+  {STRIDED_ARRAY                 -                            0x1516}
+  {HLSL                          -                            0x1517}
+  {MODIFIER_EX                   -                            0x1518}
+  {INTERFACE                     Struct                       0x1519}
+  {BINTERFACE                    -                            0x151a}
+  {VECTOR                        -                            0x151b}
+  {MATRIX                        -                            0x151c}
+  {VFTABLE                       -                            0x151d}
+  {CLASS2                        Struct2                      0x1608}
+  {STRUCT2                       Struct2                      0x1609}
 }
 
 @enum(U16) CV_LeafKind:
@@ -523,4 +599,24 @@ CV_LeafKindTable:
 cv_string_from_leaf_kind:
 {
   @expand(CV_LeafKindTable a) `case CV_LeafKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+@gen(functions)
+{
+  `internal U64 cv_header_struct_size_from_leaf_kind(CV_LeafKind v);`;
+}
+
+@gen(functions) @c_file
+{
+  `internal U64`;
+  `cv_header_struct_size_from_leaf_kind(CV_LeafKind v)`;
+  `{`;
+    `U64 result = 0;`;
+    `switch(v)`;
+    `{`;
+      `default:{}break;`;
+      @expand(CV_LeafKindTable a) `$(a.header_type_name != "-" -> "case CV_LeafKind_"..a.name..":{result = sizeof(CV_Leaf"..a.header_type_name..");}break;")`;
+      `}`;
+    `return result;`;
+    `}`;
 }

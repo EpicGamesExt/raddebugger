@@ -49,17 +49,6 @@ cv_stringize_lvar_addr_gap_list(Arena *arena, String8List *out, void *first, voi
 }
 
 internal String8
-cv_string_from_basic_type(CV_BasicType basic_type){
-  String8 result = str8_lit("UNRECOGNIZED_BASIC_TYPE");
-  switch (basic_type){
-#define X(N,c) case CV_BasicType_##N: result = str8_lit(#N); break;
-    CV_BasicTypeXList(X)
-#undef X
-  }
-  return(result);
-}
-
-internal String8
 cv_string_from_c13_sub_section_kind(CV_C13_SubSectionKind kind){
   String8 result = str8_lit("UNRECOGNIZED_C13_SUB_SECTION_KIND");
   switch (kind){

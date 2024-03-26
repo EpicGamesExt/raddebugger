@@ -969,7 +969,9 @@ struct CV_RecHeader
 
 ////////////////////////////////
 //~ rjf: CodeView Format "Sym" Types
+//
 // (per-compilation-unit info, variables, procedures, etc.)
+//
 
 typedef U8 CV_ProcFlags;
 enum
@@ -1931,8 +1933,10 @@ struct CV_SymInlinees
 };
 
 ////////////////////////////////
-//~ CodeView Format "Leaf" Types
+//~ rjf: CodeView Format "Leaf" Types
+//
 //   (type info)
+//
 
 #define CV_LeafIDKindXList(X) \
 X(FUNC_ID, 0x1601)\
@@ -1951,70 +1955,6 @@ typedef enum CV_LeafIDKindEnum
 #undef X
 }
 CV_LeafIDKindEnum;
-
-#define CV_BasicTypeXList(X) \
-X(NOTYPE,     0x00)\
-X(ABS,        0x01)\
-X(SEGMENT,    0x02)\
-X(VOID,       0x03)\
-X(CURRENCY,   0x04)\
-X(NBASICSTR,  0x05)\
-X(FBASICSTR,  0x06)\
-X(NOTTRANS,   0x07)\
-X(HRESULT,    0x08)\
-X(CHAR,       0x10)\
-X(SHORT,      0x11)\
-X(LONG,       0x12)\
-X(QUAD,       0x13)\
-X(OCT,        0x14)\
-X(UCHAR,      0x20)\
-X(USHORT,     0x21)\
-X(ULONG,      0x22)\
-X(UQUAD,      0x23)\
-X(UOCT,       0x24)\
-X(BOOL8,      0x30)\
-X(BOOL16,     0x31)\
-X(BOOL32,     0x32)\
-X(BOOL64,     0x33)\
-X(FLOAT32,    0x40)\
-X(FLOAT64,    0x41)\
-X(FLOAT80,    0x42)\
-X(FLOAT128,   0x43)\
-X(FLOAT48,    0x44)\
-X(FLOAT32PP,  0x45)\
-X(FLOAT16,    0x46)\
-X(COMPLEX32,  0x50)\
-X(COMPLEX64,  0x51)\
-X(COMPLEX80,  0x52)\
-X(COMPLEX128, 0x53)\
-X(BIT,        0x60)\
-X(PASCHAR,    0x61)\
-X(BOOL32FF,   0x62)\
-X(INT8,       0x68)\
-X(UINT8,      0x69)\
-X(RCHAR,      0x70)\
-X(WCHAR,      0x71)\
-X(INT16,      0x72)\
-X(UINT16,     0x73)\
-X(INT32,      0x74)\
-X(UINT32,     0x75)\
-X(INT64,      0x76)\
-X(UINT64,     0x77)\
-X(INT128,     0x78)\
-X(UINT128,    0x79)\
-X(CHAR16,     0x7a)\
-X(CHAR32,     0x7b)\
-X(CHAR8,      0x7c)\
-X(PTR,        0xf0)
-
-typedef U8 CV_BasicType;
-typedef enum CV_BasicTypeEnum
-{
-#define X(N,c) CV_BasicType_##N = c,
-  CV_BasicTypeXList(X)
-#undef X
-}
-CV_BasicTypeEnum;
 
 #define CV_TypeId_Variadic 0
 
@@ -2061,22 +2001,21 @@ CV_MoComUDTKindEnum;
 typedef U16 CV_TypeProps;
 enum
 {
-  CV_TypeProp_Packed = (1 << 0),
-  CV_TypeProp_HasConstructorsDestructors = (1 << 1),
-  CV_TypeProp_OverloadedOperators  = (1 <<  2),
-  CV_TypeProp_IsNested             = (1 <<  3),
-  CV_TypeProp_ContainsNested       = (1 <<  4),
-  CV_TypeProp_OverloadedAssignment = (1 <<  5),
-  CV_TypeProp_OverloadedCasting    = (1 <<  6),
-  CV_TypeProp_FwdRef               = (1 <<  7),
-  CV_TypeProp_Scoped               = (1 <<  8),
-  CV_TypeProp_HasUniqueName        = (1 <<  9),
-  CV_TypeProp_Sealed               = (1 << 10),
+  CV_TypeProp_Packed                     = (1<<0),
+  CV_TypeProp_HasConstructorsDestructors = (1<<1),
+  CV_TypeProp_OverloadedOperators        = (1<<2),
+  CV_TypeProp_IsNested                   = (1<<3),
+  CV_TypeProp_ContainsNested             = (1<<4),
+  CV_TypeProp_OverloadedAssignment       = (1<<5),
+  CV_TypeProp_OverloadedCasting          = (1<<6),
+  CV_TypeProp_FwdRef                     = (1<<7),
+  CV_TypeProp_Scoped                     = (1<<8),
+  CV_TypeProp_HasUniqueName              = (1<<9),
+  CV_TypeProp_Sealed                     = (1<<10),
   // HFA: 11,12
-  CV_TypeProp_Intrinsic            = (1 << 13),
+  CV_TypeProp_Intrinsic                  = (1<<13),
   // MOCOM: 14,15
 };
-
 #define CV_TypeProps_ExtractHFA(f)   (((f)>>11)&0x3)
 #define CV_TypeProps_ExtractMOCOM(f) (((f)>>14)&0x3)
 
@@ -2128,11 +2067,11 @@ CV_MemberPointerKindEnum;
 typedef U32 CV_VirtualTableShape;
 typedef enum CV_VirtualTableShapeEnum
 {
-  CV_VirtualTableShape_Near, // 16 bit ptr
-  CV_VirtualTableShape_Far,  // 16:16 bit ptr
-  CV_VirtualTableShape_Thin, // ???
-  CV_VirtualTableShape_Outer, // address point displacment to outermost class entry[-1]
-  CV_VirtualTableShape_Meta,  // far pointer to metaclass descriptor entry[-2]
+  CV_VirtualTableShape_Near,    // 16 bit ptr
+  CV_VirtualTableShape_Far,     // 16:16 bit ptr
+  CV_VirtualTableShape_Thin,    // ???
+  CV_VirtualTableShape_Outer,   // address point displacment to outermost class entry[-1]
+  CV_VirtualTableShape_Meta,    // far pointer to metaclass descriptor entry[-2]
   CV_VirtualTableShape_Near32,  // 32 bit ptr
   CV_VirtualTableShape_Far32,   // ???
 }
@@ -2165,11 +2104,11 @@ enum
 {
   // Access: 0,1
   // MethodProp: [2:4]
-  CV_FieldAttrib_Pseudo      = (1 << 5),
-  CV_FieldAttrib_NoInherit   = (1 << 6),
-  CV_FieldAttrib_NoConstruct = (1 << 7),
-  CV_FieldAttrib_CompilerGenated = (1 << 8),
-  CV_FieldAttrib_Sealed      = (1 << 9),
+  CV_FieldAttrib_Pseudo          = (1<<5),
+  CV_FieldAttrib_NoInherit       = (1<<6),
+  CV_FieldAttrib_NoConstruct     = (1<<7),
+  CV_FieldAttrib_CompilerGenated = (1<<8),
+  CV_FieldAttrib_Sealed          = (1<<9),
 };
 #define CV_FieldAttribs_ExtractAccess(f) ((f)&0x3)
 #define CV_FieldAttribs_ExtractMethodProp(f) (((f)>>2)&0x7)
@@ -2185,9 +2124,9 @@ CV_LabelKindEnum;
 typedef U8 CV_FunctionAttribs;
 enum
 {
-  CV_FunctionAttrib_CxxReturnUDT = (1 << 0),
-  CV_FunctionAttrib_Constructor  = (1 << 1),
-  CV_FunctionAttrib_ConstructorVBase = (1 << 2),
+  CV_FunctionAttrib_CxxReturnUDT     = (1<<0),
+  CV_FunctionAttrib_Constructor      = (1<<1),
+  CV_FunctionAttrib_ConstructorVBase = (1<<2),
 };
 
 typedef U8 CV_CallKind;

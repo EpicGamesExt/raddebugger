@@ -945,7 +945,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->cfg_src = cfg_src;
   window->arena = arena_alloc();
   {
-    String8 title = str8_lit_comp(RADDBG_TITLE_STRING_LITERAL);
+    String8 title = str8_lit_comp(BUILD_TITLE_STRING_LITERAL);
     window->os = os_window_open(size, title);
   }
   window->r = r_window_equip(window->os);
@@ -1012,7 +1012,7 @@ df_window_from_os_handle(OS_Handle os)
   return result;
 }
 
-#if defined(_MSC_VER) && !defined(__clang__) && defined(NDEBUG)
+#if COMPILER_MSVC && !BUILD_DEBUG
 #pragma optimize("", off)
 #endif
 
@@ -2131,7 +2131,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = (unwind_count == 0 ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
+            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -3111,8 +3111,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
           ui_labelf("Target Hz: %.2f", 1.f/df_dt());
-          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_idx());
-          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_memgen_idx());
+          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
+          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
           ui_labelf("Window %p", window);
           ui_set_next_pref_width(ui_children_sum(1));
           ui_set_next_pref_height(ui_children_sum(1));
@@ -4267,7 +4267,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(40.f, 1.f))
           {
             UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-              ui_label(str8_lit(RADDBG_TITLE_STRING_LITERAL));
+              ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
             ui_spacer(ui_em(0.25f, 1.f));
             UI_Row
               UI_PrefWidth(ui_text_dim(10, 1))
@@ -4684,107 +4684,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             Temp scratch = scratch_begin(&arena, 1);
             DF_IconKind icon = DF_IconKind_Null;
             String8 explanation = str8_lit("Not running");
-            DF_Entity *thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
-            String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
-            switch(stop_event.kind)
             {
-              default:
+              String8 stop_explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
+              if(stop_explanation.size != 0)
               {
-                switch(stop_event.cause)
-                {
-                  default:{}break;
-                  case CTRL_EventCause_Finished:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      explanation = push_str8f(scratch.arena, "%S completed step", thread_display_string);
-                    }
-                    else
-                    {
-                      explanation = str8_lit("Stopped");
-                    }
-                  }break;
-                  case CTRL_EventCause_UserBreakpoint:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      icon = DF_IconKind_CircleFilled;
-                      explanation = push_str8f(scratch.arena, "%S hit a breakpoint", thread_display_string);
-                    }
-                  }break;
-                  case CTRL_EventCause_InterruptedByException:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      icon = DF_IconKind_WarningBig;
-                      switch(stop_event.exception_kind)
-                      {
-                        default:
-                        {
-                          explanation = push_str8f(scratch.arena, "%S interrupted - 0x%x", thread_display_string, stop_event.exception_code);
-                        }break;
-                        case CTRL_ExceptionKind_CppThrow:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x", thread_display_string, stop_event.exception_code);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryRead:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation reading 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryWrite:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation writing 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryExecute:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation executing 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                      }
-                    }
-                    else
-                    {
-                      icon = DF_IconKind_Pause;
-                      explanation = str8_lit("Interrupted");
-                    }
-                  }break;
-                  case CTRL_EventCause_InterruptedByTrap:
-                  {
-                    icon = DF_IconKind_WarningBig;
-                    explanation = push_str8f(scratch.arena, "%S interrupted by trap - 0x%x", thread_display_string, stop_event.exception_code);
-                  }break;
-                  case CTRL_EventCause_InterruptedByHalt:
-                  {
-                    icon = DF_IconKind_Pause;
-                    explanation = str8_lit("Halted");
-                  }break;
-                }
-              }break;
-              case CTRL_EventKind_LaunchAndInitDone:
-              case CTRL_EventKind_LaunchAndHandshakeDone:
-              {
-                explanation = str8_lit("Launched");
-              }break;
-              case CTRL_EventKind_AttachDone:
-              {
-                explanation = str8_lit("Attached");
-              }break;
-              case CTRL_EventKind_DetachDone:
-              {
-                explanation = str8_lit("Detached");
-              }break;
-              case CTRL_EventKind_KillDone:
-              {
-                explanation = str8_lit("Killed");
-              }break;
+                explanation = stop_explanation;
+              }
             }
             if(icon != DF_IconKind_Null)
             {
@@ -6822,7 +6727,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   ProfEnd();
 }
 
-#if defined(_MSC_VER) && !defined(__clang__) && defined(NDEBUG)
+#if COMPILER_MSVC && !BUILD_DEBUG
 #pragma optimize("", on)
 #endif
 
@@ -6885,13 +6790,13 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
     if(opt_member != 0)
     {
       U64 member_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdi, opt_member->type_key);
-      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u byte%s)", opt_member->off, member_byte_size, member_byte_size > 1 ? "s" : "");
+      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u byte%s)", opt_member->off, member_byte_size, member_byte_size == 1 ? "s" : "");
     }
     else
     {
       String8 basic_type_kind_string = tg_kind_basic_string_table[tg_kind_from_key(eval.type_key)];
       U64 byte_size = tg_byte_size_from_graph_rdi_key(graph, rdi, eval.type_key);
-      str8_list_pushf(arena, &list, "%S (%I64u byte%s)", basic_type_kind_string, byte_size, byte_size > 1 ? "s" : "");
+      str8_list_pushf(arena, &list, "%S (%I64u byte%s)", basic_type_kind_string, byte_size, byte_size == 1 ? "s" : "");
     }
   }
   
@@ -7768,8 +7673,6 @@ df_text_search_little_hash_from_hash(U128 hash)
 internal void
 df_text_search_thread_entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
 #if 0
   // TODO(rjf): [ ] @de2ctrl text searcher -- wound up in DE_Hash
   
@@ -8168,18 +8071,18 @@ df_rgba_from_theme_color(DF_ThemeColor color)
 }
 
 internal DF_ThemeColor
-df_theme_color_from_txti_token_kind(TXTI_TokenKind kind)
+df_theme_color_from_txt_token_kind(TXT_TokenKind kind)
 {
   DF_ThemeColor color = DF_ThemeColor_CodeDefault;
   switch(kind)
   {
     default:break;
-    case TXTI_TokenKind_Keyword:{color = DF_ThemeColor_CodeKeyword;}break;
-    case TXTI_TokenKind_Numeric:{color = DF_ThemeColor_CodeNumeric;}break;
-    case TXTI_TokenKind_String: {color = DF_ThemeColor_CodeString;}break;
-    case TXTI_TokenKind_Meta:   {color = DF_ThemeColor_CodeMeta;}break;
-    case TXTI_TokenKind_Comment:{color = DF_ThemeColor_CodeComment;}break;
-    case TXTI_TokenKind_Symbol: {color = DF_ThemeColor_CodeSymbol;}break;
+    case TXT_TokenKind_Keyword:{color = DF_ThemeColor_CodeKeyword;}break;
+    case TXT_TokenKind_Numeric:{color = DF_ThemeColor_CodeNumeric;}break;
+    case TXT_TokenKind_String: {color = DF_ThemeColor_CodeString;}break;
+    case TXT_TokenKind_Meta:   {color = DF_ThemeColor_CodeMeta;}break;
+    case TXT_TokenKind_Comment:{color = DF_ThemeColor_CodeComment;}break;
+    case TXT_TokenKind_Symbol: {color = DF_ThemeColor_CodeSymbol;}break;
   }
   return color;
 }
@@ -8501,6 +8404,141 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
 }
 
 ////////////////////////////////
+//~ rjf: Process Control Info Stringification
+
+internal String8
+df_string_from_exception_code(U32 code)
+{
+  String8 string = {0};
+  for(EachNonZeroEnumVal(CTRL_ExceptionCodeKind, k))
+  {
+    if(code == ctrl_exception_code_kind_code_table[k])
+    {
+      string = ctrl_exception_code_kind_display_string_table[k];
+      break;
+    }
+  }
+  return string;
+}
+
+internal String8
+df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, DF_IconKind *icon_out)
+{
+  DF_IconKind icon = DF_IconKind_Null;
+  String8 explanation = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
+  String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
+  switch(event->kind)
+  {
+    default:
+    {
+      switch(event->cause)
+      {
+        default:{}break;
+        case CTRL_EventCause_Finished:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            explanation = push_str8f(arena, "%S completed step", thread_display_string);
+          }
+          else
+          {
+            explanation = str8_lit("Stopped");
+          }
+        }break;
+        case CTRL_EventCause_UserBreakpoint:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            icon = DF_IconKind_CircleFilled;
+            explanation = push_str8f(arena, "%S hit a breakpoint", thread_display_string);
+          }
+        }break;
+        case CTRL_EventCause_InterruptedByException:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            icon = DF_IconKind_WarningBig;
+            switch(event->exception_kind)
+            {
+              default:
+              {
+                String8 exception_code_string = df_string_from_exception_code(event->exception_code);
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", thread_display_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
+              }break;
+              case CTRL_ExceptionKind_CppThrow:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", thread_display_string, event->exception_code);
+              }break;
+              case CTRL_ExceptionKind_MemoryRead:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation reading 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+              case CTRL_ExceptionKind_MemoryWrite:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation writing 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+              case CTRL_ExceptionKind_MemoryExecute:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation executing 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+            }
+          }
+          else
+          {
+            icon = DF_IconKind_Pause;
+            explanation = str8_lit("Interrupted");
+          }
+        }break;
+        case CTRL_EventCause_InterruptedByTrap:
+        {
+          icon = DF_IconKind_WarningBig;
+          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", thread_display_string, event->exception_code);
+        }break;
+        case CTRL_EventCause_InterruptedByHalt:
+        {
+          icon = DF_IconKind_Pause;
+          explanation = str8_lit("Halted");
+        }break;
+      }
+    }break;
+    case CTRL_EventKind_LaunchAndInitDone:
+    case CTRL_EventKind_LaunchAndHandshakeDone:
+    {
+      explanation = str8_lit("Launched");
+    }break;
+    case CTRL_EventKind_AttachDone:
+    {
+      explanation = str8_lit("Attached");
+    }break;
+    case CTRL_EventKind_DetachDone:
+    {
+      explanation = str8_lit("Detached");
+    }break;
+    case CTRL_EventKind_KillDone:
+    {
+      explanation = str8_lit("Killed");
+    }break;
+  }
+  scratch_end(scratch);
+  if(icon_out)
+  {
+    *icon_out = icon;
+  }
+  return explanation;
+}
+
+////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void
@@ -8767,6 +8805,25 @@ df_entity_tooltips(DF_Entity *entity)
         }
         UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
       }
+      {
+        CTRL_Event stop_event = df_ctrl_last_stop_event();
+        DF_Entity *stopper_thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
+        if(stopper_thread == entity)
+        {
+          ui_spacer(ui_em(1.5f, 1.f));
+          DF_IconKind icon_kind = DF_IconKind_Null;
+          String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon_kind);
+          if(explanation.size != 0)
+          {
+            UI_PrefWidth(ui_children_sum(1)) UI_Row UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+            {
+              UI_PrefWidth(ui_em(1.5f, 1.f)) UI_Font(df_font_from_slot(DF_FontSlot_Icons)) ui_label(df_g_icon_kind_text_table[icon_kind]);
+              UI_PrefWidth(ui_text_dim(10, 1)) ui_label(explanation);
+            }
+          }
+        }
+      }
+      ui_spacer(ui_em(1.5f, 1.f));
       UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
         UI_PrefWidth(ui_em(18.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("TID: ");
@@ -9287,6 +9344,29 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: build per-line background colors
+  //
+  Vec4F32 *line_bg_colors = push_array(scratch.arena, Vec4F32, dim_1s64(params->line_num_range)+1);
+  {
+    //- rjf: color line with stopper-thread red
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      DF_EntityList threads = params->line_ips[line_idx];
+      for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
+      {
+        if(n->entity == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+        {
+          line_bg_colors[line_idx] = df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
+          line_bg_colors[line_idx].w *= 0.25f;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build per-line context menus
   //
   UI_Key *ctx_menu_keys = push_array(scratch.arena, UI_Key, dim_1s64(params->line_num_range)+1);
@@ -9728,6 +9808,49 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: build exception annotations
+  //
+  UI_Focus(UI_FocusKind_Off)
+  {
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      DF_EntityList threads = params->line_ips[line_idx];
+      for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
+      {
+        DF_Entity *thread = n->entity;
+        if(thread == stopper_thread &&
+           (stop_event.cause == CTRL_EventCause_InterruptedByException ||
+            stop_event.cause == CTRL_EventCause_InterruptedByTrap))
+        {
+          DF_IconKind icon = DF_IconKind_WarningBig;
+          String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
+          UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+          {
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_Clickable, "###exception_info");
+            UI_Parent(box)
+            {
+              UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+                UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
+              }
+              UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+                UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                ui_label(explanation);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build watch pin annotations
   //
   UI_Focus(UI_FocusKind_Off)
@@ -9955,7 +10078,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     {
       U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
       String8 line_text = params->line_text[line_slice_idx];
-      TXTI_TokenArray line_tokens = params->line_tokens[line_slice_idx];
+      TXT_TokenArray line_tokens = params->line_tokens[line_slice_idx];
       Rng1U64 line_range = params->line_ranges[line_slice_idx];
       U64 mouse_pt_off = line_range.min + (mouse_pt.column-1);
       Rng1U64 expr_off_rng = txti_expr_range_from_line_off_range_string_tokens(mouse_pt_off, line_range, line_text, &line_tokens);
@@ -10153,9 +10276,15 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       {
         String8 line_string = params->line_text[line_idx];
         Rng1U64 line_range = params->line_ranges[line_idx];
-        TXTI_TokenArray *line_tokens = &params->line_tokens[line_idx];
+        TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
         ui_set_next_text_padding(-2);
         UI_Key line_key = ui_key_from_stringf(top_container_box->key, "ln_%I64x", line_num);
+        Vec4F32 line_bg_color = line_bg_colors[line_idx];
+        if(line_bg_color.w != 0)
+        {
+          ui_set_next_background_color(line_bg_color);
+          ui_set_next_flags(UI_BoxFlag_DrawBackground);
+        }
         UI_Box *line_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, line_key);
         D_Bucket *line_bucket = d_bucket_make();
         d_push_bucket(line_bucket);
@@ -10178,9 +10307,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           }
           else
           {
-            TXTI_Token *line_tokens_first = line_tokens->v;
-            TXTI_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
-            for(TXTI_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
+            TXT_Token *line_tokens_first = line_tokens->v;
+            TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
+            for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
             {
               // rjf: token -> token string
               String8 token_string = {0};
@@ -10200,9 +10329,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               // rjf: token -> token color
               Vec4F32 token_color = df_rgba_from_theme_color(DF_ThemeColor_CodeDefault);
               {
-                DF_ThemeColor new_color_kind = df_theme_color_from_txti_token_kind(token->kind);
+                DF_ThemeColor new_color_kind = df_theme_color_from_txt_token_kind(token->kind);
                 F32 mix_t = 1.f;
-                if(token->kind == TXTI_TokenKind_Identifier)
+                if(token->kind == TXT_TokenKind_Identifier)
                 {
                   B32 mapped_special = 0;
                   for(DF_EntityNode *n = params->relevant_binaries.first; n != 0; n = n->next)
@@ -10694,12 +10823,12 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
 {
   Temp scratch = scratch_begin(&arena, 1);
   D_FancyStringList fancy_strings = {0};
-  TXTI_TokenArray tokens = txti_token_array_from_string__cpp(scratch.arena, 0, string);
-  TXTI_Token *tokens_opl = tokens.v+tokens.count;
+  TXT_TokenArray tokens = txt_token_array_from_string__c_cpp(scratch.arena, 0, string);
+  TXT_Token *tokens_opl = tokens.v+tokens.count;
   S32 indirection_counter = 0;
-  for(TXTI_Token *token = tokens.v; token < tokens_opl; token += 1)
+  for(TXT_Token *token = tokens.v; token < tokens_opl; token += 1)
   {
-    DF_ThemeColor token_color = df_theme_color_from_txti_token_kind(token->kind);
+    DF_ThemeColor token_color = df_theme_color_from_txt_token_kind(token->kind);
     Vec4F32 token_color_rgba = df_rgba_from_theme_color(token_color);
     token_color_rgba.w *= alpha;
     String8 token_string = str8_substr(string, token->range);
@@ -10719,7 +10848,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
       }break;
-      case TXTI_TokenKind_Identifier:
+      case TXT_TokenKind_Identifier:
       {
         D_FancyString fancy_string =
         {
@@ -10730,7 +10859,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
       }break;
-      case TXTI_TokenKind_Numeric:
+      case TXT_TokenKind_Numeric:
       {
         Vec4F32 token_color_rgba_alt = token_color_rgba;
         token_color_rgba_alt.x *= 0.7f;

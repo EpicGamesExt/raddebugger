@@ -128,6 +128,7 @@ typedef struct RDI_ParsedNameMap{
 //~ Global Nils
 
 #if !defined(RDI_DISABLE_NILS)
+static RDI_TopLevelInfo rdi_top_level_info_nil = {0};
 static RDI_BinarySection rdi_binary_section_nil = {0};
 static RDI_FilePathNode rdi_file_path_node_nil = {0};
 static RDI_SourceFile rdi_source_file_nil = {0};

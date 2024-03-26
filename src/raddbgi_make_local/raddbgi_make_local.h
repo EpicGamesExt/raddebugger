@@ -41,6 +41,10 @@
 #define rdim_scratch_begin   scratch_begin
 #define rdim_scratch_end     scratch_end
 
+// rjf: base layer profiling markup overrides
+#define RDIM_ProfBegin(...) ProfBeginDynamic(__VA_ARGS__)
+#define RDIM_ProfEnd(...) ProfEnd()
+
 #include "lib_raddbgi_make/raddbgi_make.h"
 
 #endif // RDI_CONS_LOCAL_H

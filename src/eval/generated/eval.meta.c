@@ -4,8 +4,9 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-U8 eval_expr_kind_child_counts[39] =
+U8 eval_expr_kind_child_counts[40] =
 {
+0,
 2,
 2,
 1,
@@ -47,8 +48,9 @@ U8 eval_expr_kind_child_counts[39] =
 0,
 };
 
-String8 eval_expr_kind_strings[39] =
+String8 eval_expr_kind_strings[40] =
 {
+str8_lit_comp("Nil"),
 str8_lit_comp("ArrayIndex"),
 str8_lit_comp("MemberAccess"),
 str8_lit_comp("Deref"),
@@ -105,8 +107,9 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-String8 eval_expr_op_strings[39] =
+String8 eval_expr_op_strings[40] =
 {
+str8_lit_comp(""),
 str8_lit_comp("[]"),
 str8_lit_comp("."),
 str8_lit_comp("*"),

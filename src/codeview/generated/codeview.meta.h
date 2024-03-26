@@ -320,6 +320,64 @@ CV_SymKind_FASTLINK = 0x1167,
 CV_SymKind_INLINEES = 0x1168,
 } CV_SymKindEnum;
 
+typedef U8 CV_BasicType;
+typedef enum CV_BasicTypeEnum
+{
+CV_BasicType_NOTYPE = 0x00,
+CV_BasicType_ABS = 0x01,
+CV_BasicType_SEGMENT = 0x02,
+CV_BasicType_VOID = 0x03,
+CV_BasicType_CURRENCY = 0x04,
+CV_BasicType_NBASICSTR = 0x05,
+CV_BasicType_FBASICSTR = 0x06,
+CV_BasicType_NOTTRANS = 0x07,
+CV_BasicType_HRESULT = 0x08,
+CV_BasicType_CHAR = 0x10,
+CV_BasicType_SHORT = 0x11,
+CV_BasicType_LONG = 0x12,
+CV_BasicType_QUAD = 0x13,
+CV_BasicType_OCT = 0x14,
+CV_BasicType_UCHAR = 0x20,
+CV_BasicType_USHORT = 0x21,
+CV_BasicType_ULONG = 0x22,
+CV_BasicType_UQUAD = 0x23,
+CV_BasicType_UOCT = 0x24,
+CV_BasicType_BOOL8 = 0x30,
+CV_BasicType_BOOL16 = 0x31,
+CV_BasicType_BOOL32 = 0x32,
+CV_BasicType_BOOL64 = 0x33,
+CV_BasicType_FLOAT32 = 0x40,
+CV_BasicType_FLOAT64 = 0x41,
+CV_BasicType_FLOAT80 = 0x42,
+CV_BasicType_FLOAT128 = 0x43,
+CV_BasicType_FLOAT48 = 0x44,
+CV_BasicType_FLOAT32PP = 0x45,
+CV_BasicType_FLOAT16 = 0x46,
+CV_BasicType_COMPLEX32 = 0x50,
+CV_BasicType_COMPLEX64 = 0x51,
+CV_BasicType_COMPLEX80 = 0x52,
+CV_BasicType_COMPLEX128 = 0x53,
+CV_BasicType_BIT = 0x60,
+CV_BasicType_PASCHAR = 0x61,
+CV_BasicType_BOOL32FF = 0x62,
+CV_BasicType_INT8 = 0x68,
+CV_BasicType_UINT8 = 0x69,
+CV_BasicType_RCHAR = 0x70,
+CV_BasicType_WCHAR = 0x71,
+CV_BasicType_INT16 = 0x72,
+CV_BasicType_UINT16 = 0x73,
+CV_BasicType_INT32 = 0x74,
+CV_BasicType_UINT32 = 0x75,
+CV_BasicType_INT64 = 0x76,
+CV_BasicType_UINT64 = 0x77,
+CV_BasicType_INT128 = 0x78,
+CV_BasicType_UINT128 = 0x79,
+CV_BasicType_CHAR16 = 0x7a,
+CV_BasicType_CHAR32 = 0x7b,
+CV_BasicType_CHAR8 = 0x7c,
+CV_BasicType_PTR = 0xf0,
+} CV_BasicTypeEnum;
+
 typedef U16 CV_LeafKind;
 typedef enum CV_LeafKindEnum
 {
@@ -454,8 +512,11 @@ CV_LeafKind_STRUCT2 = 0x1609,
 internal String8 cv_string_from_numeric_kind(CV_NumericKind v);
 internal String8 cv_string_from_arch(CV_Arch v);
 internal String8 cv_string_from_sym_kind(CV_SymKind v);
+internal String8 cv_string_from_basic_type(CV_BasicType v);
+internal String8 cv_type_name_from_basic_type(CV_BasicType v);
 internal String8 cv_string_from_leaf_kind(CV_LeafKind v);
 internal U64 cv_header_struct_size_from_sym_kind(CV_SymKind v);
+internal U64 cv_header_struct_size_from_leaf_kind(CV_LeafKind v);
 C_LINKAGE_BEGIN
 C_LINKAGE_END
 

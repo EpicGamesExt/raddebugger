@@ -36,7 +36,6 @@ struct Arena
   U64 cmt;
   U64 res;
   U64 align;
-  struct ArenaDev *dev;
   B8 grow;
   B8 large_pages;
 };
@@ -82,13 +81,7 @@ internal B32 ensure_commit(void **cmt, void *pos, U64 cmt_block_size);
 ////////////////////////////////
 //~ NOTE(allen): Main API Macros
 
-#if !ENABLE_DEV
-# define push_array_no_zero(a,T,c) (T*)arena_push((a), sizeof(T)*(c))
-#else
-# define push_array_no_zero(a,T,c) (tctx_write_this_srcloc(), (T*)arena_push((a), sizeof(T)*(c)))
-#endif
-#define push_array_no_zero__no_annotation(a,T,c) (T*)arena_push__impl((a), sizeof(T)*(c))
-
+#define push_array_no_zero(a,T,c) (T*)arena_push((a), sizeof(T)*(c))
 #define push_array(a,T,c) (T*)MemoryZero(push_array_no_zero(a,T,c), sizeof(T)*(c))
 
 #endif // BASE_ARENA_H

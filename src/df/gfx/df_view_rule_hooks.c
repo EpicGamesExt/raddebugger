@@ -565,7 +565,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
   Vec4F32 rgba = {0};
   Vec4F32 hsva = {0};
   {
-    if(state->memgen_idx >= ctrl_memgen_idx())
+    if(state->memgen_idx >= ctrl_mem_gen())
     {
       hsva = state->hsva;
       rgba = rgba_from_hsva(hsva);
@@ -575,7 +575,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
       DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
       rgba = df_view_rule_hooks__rgba_from_eval(value_eval, parse_ctx->type_graph, parse_ctx->rdi, process);
       state->hsva = hsva = hsva_from_rgba(rgba);
-      state->memgen_idx = ctrl_memgen_idx();
+      state->memgen_idx = ctrl_mem_gen();
     }
   }
   Vec4F32 initial_hsva = hsva;
@@ -624,7 +624,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
   {
     Vec4F32 rgba = rgba_from_hsva(hsva);
     df_view_rule_hooks__eval_commit_rgba(eval, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, rgba);
-    state->memgen_idx = ctrl_memgen_idx();
+    state->memgen_idx = ctrl_mem_gen();
   }
   
   //- rjf: commit possible edited value to state
@@ -700,7 +700,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     }
     
     //- rjf: address range -> hash
-    U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1, 0);
+    U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1, 0, 0);
     
     //- rjf: hash -> data
     String8 data = hs_data_from_hash(hs_scope, hash);
@@ -715,7 +715,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
       code_slice_params.line_num_range = r1s64(1, info.lines_count);
       code_slice_params.line_text = push_array(scratch.arena, String8, info.lines_count);
       code_slice_params.line_ranges = push_array(scratch.arena, Rng1U64, info.lines_count);
-      code_slice_params.line_tokens = push_array(scratch.arena, TXTI_TokenArray, info.lines_count);
+      code_slice_params.line_tokens = push_array(scratch.arena, TXT_TokenArray, info.lines_count);
       code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, info.lines_count);
       code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, info.lines_count);
       code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, info.lines_count);
@@ -891,7 +891,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   }
   
   //- rjf: address range -> hash
-  U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0, 0);
+  U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0, 0, 0);
   
   //- rjf: hash & topology -> texture
   TEX_Topology topology = tex_topology_make(v2s32((S32)topology_info.width, (S32)topology_info.height), topology_info.fmt);
@@ -1151,8 +1151,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
   }
   
   //- rjf: address range -> hash
-  U128 index_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, index_buffer_vaddr_range, 0, 0);
-  U128 vertex_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vertex_buffer_vaddr_range, 0, 0);
+  U128 index_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, index_buffer_vaddr_range, 0, 0, 0);
+  U128 vertex_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vertex_buffer_vaddr_range, 0, 0, 0);
   
   //- rjf: get gpu buffers
   R_Handle index_buffer = geo_buffer_from_key_hash(geo_scope, index_buffer_key, index_buffer_hash);

@@ -167,7 +167,10 @@ w32_thread_base(void *ptr){
   OS_ThreadFunctionType *func = entity->thread.func;
   void *thread_ptr = entity->thread.ptr;
   
+  TCTX tctx_;
+  tctx_init_and_equip(&tctx_);
   func(thread_ptr);
+  tctx_release();
   
   // remove my bit
   LONG result = InterlockedAnd((LONG*)&entity->reference_mask, ~0x2);
@@ -182,7 +185,8 @@ w32_thread_base(void *ptr){
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
 internal void
-os_init(int argc, char **argv){
+os_init(void)
+{
   // Load Fancy Memory Functions
   {
     HMODULE module = LoadLibraryA("kernel32.dll");
@@ -211,12 +215,9 @@ os_init(int argc, char **argv){
   // Setup initial path
   w32_initial_path = os_string_from_system_path(w32_perm_arena, OS_SystemPath_Current);
   
-  // Setup command line arguments
-  w32_cmd_line_args = os_string_list_from_argcv(w32_perm_arena, argc, argv);
-  
   // rjf: setup environment variables
   {
-    CHAR *this_proc_env = GetEnvironmentStrings();
+    WCHAR *this_proc_env = GetEnvironmentStringsW();
     U64 start_idx = 0;
     for(U64 idx = 0;; idx += 1)
     {
@@ -228,7 +229,8 @@ os_init(int argc, char **argv){
         }
         else
         {
-          String8 string = str8((U8 *)this_proc_env + start_idx, idx - start_idx);
+          String16 string16 = str16((U16 *)this_proc_env + start_idx, idx - start_idx);
+          String8 string = str8_from_16(w32_perm_arena, string16);
           str8_list_push(w32_perm_arena, &w32_environment, string);
           start_idx = idx+1;
         }
@@ -467,12 +469,6 @@ os_logical_core_count(void)
 ////////////////////////////////
 //~ rjf: @os_hooks Process Info (Implemented Per-OS)
 
-internal String8List
-os_get_command_line_arguments(void)
-{
-  return w32_cmd_line_args;
-}
-
 internal S32
 os_get_pid(void){
   DWORD id = GetCurrentProcessId();
@@ -591,6 +587,54 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
   scratch_end(scratch);
   return(result);
 }
+
+////////////////////////////////
+//~ rjf: @os_hooks Thread Names
+
+internal void
+os_set_thread_name(String8 name)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  // rjf: windows 10 style
+  {
+    String16 name16 = str16_from_8(scratch.arena, name);
+    HRESULT hr = SetThreadDescription(GetCurrentThread(), (WCHAR*)name16.str);
+  }
+  
+  // rjf: raise-exception style
+  {
+    String8 name_copy = push_str8_copy(scratch.arena, name);
+#pragma pack(push,8)
+    typedef struct THREADNAME_INFO THREADNAME_INFO;
+    struct THREADNAME_INFO
+    {
+      U32 dwType;     // Must be 0x1000.
+      char *szName;   // Pointer to name (in user addr space).
+      U32 dwThreadID; // Thread ID (-1=caller thread).
+      U32 dwFlags;    // Reserved for future use, must be zero.
+    };
+#pragma pack(pop)
+    THREADNAME_INFO info;
+    info.dwType = 0x1000;
+    info.szName = (char *)name_copy.str;
+    info.dwThreadID = os_get_tid();
+    info.dwFlags = 0;
+#pragma warning(push)
+#pragma warning(disable: 6320 6322)
+    __try
+    {
+      RaiseException(0x406D1388, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+    }
+#pragma warning(pop)
+  }
+  
+  scratch_end(scratch);
+}
+
 
 ////////////////////////////////
 //~ rjf: @os_hooks Process Control (Implemented Per-OS)
@@ -1180,7 +1224,7 @@ os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out){
     env16 = str16_from_8(scratch.arena, env);
   }
   
-  DWORD creation_flags = 0;
+  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
   if(options->consoleless)
   {
     creation_flags |= CREATE_NO_WINDOW;
@@ -1231,6 +1275,19 @@ os_launch_thread(OS_ThreadFunctionType *func, void *ptr, void *params){
   entity->thread.handle = CreateThread(0, 0, w32_thread_base, entity, 0, &entity->thread.tid);
   OS_Handle result = {IntFromPtr(entity)};
   return(result);
+}
+
+internal B32
+os_thread_wait(OS_Handle handle, U64 endt_us)
+{
+  DWORD sleep_ms = w32_sleep_ms_from_endt_us(endt_us);
+  W32_Entity *entity = (W32_Entity *)PtrFromInt(handle.u64[0]);
+  DWORD wait_result = WAIT_OBJECT_0;
+  if(entity != 0)
+  {
+    wait_result = WaitForSingleObject(entity->thread.handle, sleep_ms);
+  }
+  return (wait_result == WAIT_OBJECT_0);
 }
 
 internal void
@@ -1491,7 +1548,8 @@ os_make_guid(void)
   OS_Guid result; MemoryZeroStruct(&result);
   UUID uuid;
   RPC_STATUS rpc_status = UuidCreate(&uuid);
-  if (rpc_status == RPC_S_OK) {
+  if(rpc_status == RPC_S_OK)
+  {
     result.data1 = uuid.Data1;
     result.data2 = uuid.Data2;
     result.data3 = uuid.Data3;
@@ -1500,3 +1558,247 @@ os_make_guid(void)
   return result;
 }
 
+////////////////////////////////
+//~ rjf: @os_hooks Entry Points (Implemented Per-OS)
+
+#include <dbghelp.h>
+#undef OS_WINDOWS // shlwapi uses its own OS_WINDOWS include inside
+#include <shlwapi.h>
+
+internal B32 win32_g_is_quiet = 0;
+
+internal HRESULT WINAPI
+win32_dialog_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, LONG_PTR data)
+{
+  if(msg == TDN_HYPERLINK_CLICKED)
+  {
+    ShellExecuteW(NULL, L"open", (LPWSTR)lparam, NULL, NULL, SW_SHOWNORMAL);
+  }
+  return S_OK;
+}
+
+internal LONG WINAPI
+win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
+{
+  if(win32_g_is_quiet)
+  {
+    ExitProcess(1);
+  }
+  
+  static volatile LONG first = 0;
+  if(InterlockedCompareExchange(&first, 1, 0) != 0)
+  {
+    // prevent failures in other threads to popup same message box
+    // this handler just shows first thread that crashes
+    // we are terminating afterwards anyway
+    for (;;) Sleep(1000);
+  }
+  
+  WCHAR buffer[4096] = {0};
+  int buflen = 0;
+  
+  DWORD exception_code = exception_ptrs->ExceptionRecord->ExceptionCode;
+  buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"A fatal exception (code 0x%x) occurred. The process is terminating.\n", exception_code);
+  
+  // load dbghelp dynamically just in case if it is missing
+  HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
+  if(dbghelp)
+  {
+    DWORD (WINAPI *dbg_SymSetOptions)(DWORD SymOptions);
+    BOOL (WINAPI *dbg_SymInitializeW)(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeProcess);
+    BOOL (WINAPI *dbg_StackWalk64)(DWORD MachineType, HANDLE hProcess, HANDLE hThread,
+                                   LPSTACKFRAME64 StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine,
+                                   PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine,
+                                   PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
+    PVOID (WINAPI *dbg_SymFunctionTableAccess64)(HANDLE hProcess, DWORD64 AddrBase);
+    DWORD64 (WINAPI *dbg_SymGetModuleBase64)(HANDLE hProcess, DWORD64 qwAddr);
+    BOOL (WINAPI *dbg_SymFromAddrW)(HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFOW Symbol);
+    BOOL (WINAPI *dbg_SymGetLineFromAddrW64)(HANDLE hProcess, DWORD64 dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINEW64 Line);
+    BOOL (WINAPI *dbg_SymGetModuleInfoW64)(HANDLE hProcess, DWORD64 qwAddr, PIMAGEHLP_MODULEW64 ModuleInfo);
+    
+    *(FARPROC*)&dbg_SymSetOptions            = GetProcAddress(dbghelp, "SymSetOptions");
+    *(FARPROC*)&dbg_SymInitializeW           = GetProcAddress(dbghelp, "SymInitializeW");
+    *(FARPROC*)&dbg_StackWalk64              = GetProcAddress(dbghelp, "StackWalk64");
+    *(FARPROC*)&dbg_SymFunctionTableAccess64 = GetProcAddress(dbghelp, "SymFunctionTableAccess64");
+    *(FARPROC*)&dbg_SymGetModuleBase64       = GetProcAddress(dbghelp, "SymGetModuleBase64");
+    *(FARPROC*)&dbg_SymFromAddrW             = GetProcAddress(dbghelp, "SymFromAddrW");
+    *(FARPROC*)&dbg_SymGetLineFromAddrW64    = GetProcAddress(dbghelp, "SymGetLineFromAddrW64");
+    *(FARPROC*)&dbg_SymGetModuleInfoW64      = GetProcAddress(dbghelp, "SymGetModuleInfoW64");
+    
+    if(dbg_SymSetOptions && dbg_SymInitializeW && dbg_StackWalk64 && dbg_SymFunctionTableAccess64 && dbg_SymGetModuleBase64 && dbg_SymFromAddrW && dbg_SymGetLineFromAddrW64 && dbg_SymGetModuleInfoW64)
+    {
+      HANDLE process = GetCurrentProcess();
+      HANDLE thread = GetCurrentThread();
+      CONTEXT* context = exception_ptrs->ContextRecord;
+      
+      dbg_SymSetOptions(SYMOPT_EXACT_SYMBOLS | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+      if(dbg_SymInitializeW(process, L"", TRUE))
+      {
+        // check that raddbg.pdb file is good
+        B32 raddbg_pdb_valid = 0;
+        {
+          IMAGEHLP_MODULEW64 module = {0};
+          module.SizeOfStruct = sizeof(module);
+          if(dbg_SymGetModuleInfoW64(process, (DWORD64)&win32_exception_filter, &module))
+          {
+            raddbg_pdb_valid = (module.SymType == SymPdb);
+          }
+        }
+        
+        if(!raddbg_pdb_valid)
+        {
+          buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen,
+                               L"\nThe PDB debug information file for this executable is not valid or was not found. Please rebuild binary to get the call stack.\n");
+        }
+        else
+        {
+          STACKFRAME64 frame = {0};
+          DWORD image_type;
+#if defined(_M_AMD64)
+          image_type = IMAGE_FILE_MACHINE_AMD64;
+          frame.AddrPC.Offset = context->Rip;
+          frame.AddrPC.Mode = AddrModeFlat;
+          frame.AddrFrame.Offset = context->Rbp;
+          frame.AddrFrame.Mode = AddrModeFlat;
+          frame.AddrStack.Offset = context->Rsp;
+          frame.AddrStack.Mode = AddrModeFlat;
+#elif defined(_M_ARM64)
+          image_type = IMAGE_FILE_MACHINE_ARM64;
+          frame.AddrPC.Offset = context->Pc;
+          frame.AddrPC.Mode = AddrModeFlat;
+          frame.AddrFrame.Offset = context->Fp;
+          frame.AddrFrame.Mode = AddrModeFlat;
+          frame.AddrStack.Offset = context->Sp;
+          frame.AddrStack.Mode = AddrModeFlat;
+#else
+#  error Architecture not supported!
+#endif
+          
+          for(U32 idx=0; ;idx++)
+          {
+            const U32 max_frames = 32;
+            if(idx == max_frames)
+            {
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"...");
+              break;
+            }
+            
+            if(!dbg_StackWalk64(image_type, process, thread, &frame, context, 0, dbg_SymFunctionTableAccess64, dbg_SymGetModuleBase64, 0))
+            {
+              break;
+            }
+            
+            U64 address = frame.AddrPC.Offset;
+            if(address == 0)
+            {
+              break;
+            }
+            
+            if(idx==0)
+            {
+#if BUILD_CONSOLE_INTERFACE
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nCreate a new issue with this report at %S.\n\n", BUILD_ISSUES_LINK_STRING_LITERAL);
+#else
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen,
+                                   L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue at\n"
+                                   L"<a href=\"%S\">%S</a>\n\n", BUILD_ISSUES_LINK_STRING_LITERAL, BUILD_ISSUES_LINK_STRING_LITERAL);
+#endif
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"Call stack:\n");
+            }
+            
+            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"%u. [0x%I64x]", idx + 1, address);
+            
+            struct {
+              SYMBOL_INFOW info;
+              WCHAR name[MAX_SYM_NAME];
+            } symbol = {0};
+            
+            symbol.info.SizeOfStruct = sizeof(symbol.info);
+            symbol.info.MaxNameLen = MAX_SYM_NAME;
+            
+            DWORD64 displacement = 0;
+            if(dbg_SymFromAddrW(process, address, &displacement, &symbol.info))
+            {
+              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L" %s +%u", symbol.info.Name, (DWORD)displacement);
+              
+              IMAGEHLP_LINEW64 line = {0};
+              line.SizeOfStruct = sizeof(line);
+              
+              DWORD line_displacement = 0;
+              if(dbg_SymGetLineFromAddrW64(process, address, &line_displacement, &line))
+              {
+                buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L", %s line %u", PathFindFileNameW(line.FileName), line.LineNumber);
+              }
+            }
+            else
+            {
+              IMAGEHLP_MODULEW64 module = {0};
+              module.SizeOfStruct = sizeof(module);
+              if(dbg_SymGetModuleInfoW64(process, address, &module))
+              {
+                buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L" %s", module.ModuleName);
+              }
+            }
+            
+            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\n");
+          }
+        }
+      }
+    }
+  }
+  
+  buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nVersion: %S%S", BUILD_VERSION_STRING_LITERAL, BUILD_GIT_HASH_STRING_LITERAL_APPEND);
+  
+#if BUILD_CONSOLE_INTERFACE
+  fwprintf(stderr, L"\n--- Fatal Exception ---\n");
+  fwprintf(stderr, L"%s\n\n", buffer);
+#else
+  TASKDIALOGCONFIG dialog = {0};
+  dialog.cbSize = sizeof(dialog);
+  dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
+  dialog.pszMainIcon = TD_ERROR_ICON;
+  dialog.dwCommonButtons = TDCBF_CLOSE_BUTTON;
+  dialog.pszWindowTitle = L"Fatal Exception";
+  dialog.pszContent = buffer;
+  dialog.pfCallback = &win32_dialog_callback;
+  TaskDialogIndirect(&dialog, 0, 0, 0);
+#endif
+  
+  ExitProcess(1);
+}
+
+#undef OS_WINDOWS // shlwapi uses its own OS_WINDOWS include inside
+#define OS_WINDOWS 1
+
+internal void
+w32_entry_point_caller(int argc, WCHAR **wargv)
+{
+  SetUnhandledExceptionFilter(&win32_exception_filter);
+  Arena *args_arena = arena_alloc__sized(MB(1), KB(32));
+  char **argv = push_array(args_arena, char *, argc);
+  for(int i = 0; i < argc; i += 1)
+  {
+    String16 arg16 = str16_cstring((U16 *)wargv[i]);
+    String8 arg8 = str8_from_16(args_arena, arg16);
+    if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive))
+    {
+      win32_g_is_quiet = 1;
+    }
+    argv[i] = (char *)arg8.str;
+  }
+  main_thread_base_entry_point(entry_point, argv, (U64)argc);
+}
+
+#if BUILD_CONSOLE_INTERFACE
+int wmain(int argc, WCHAR **argv)
+{
+  w32_entry_point_caller(argc, argv);
+  return 0;
+}
+#else
+int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
+{
+  w32_entry_point_caller(__argc, __wargv);
+  return 0;
+}
+#endif

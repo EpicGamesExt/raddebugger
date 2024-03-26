@@ -377,7 +377,7 @@ internal void dbgi_ensure_tctx_inited(void);
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal U64 dbgi_hash_from_string(String8 string);
+internal U64 dbgi_hash_from_string(String8 string, StringMatchFlags match_flags);
 internal U64 dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemArray *array, U64 element_idx);
 internal String8 dbgi_fuzzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, DBGI_FuzzySearchTarget target, U64 element_idx);
 

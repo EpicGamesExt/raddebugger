@@ -144,7 +144,7 @@ struct DF_EntityListerItemArray
 typedef struct DF_ProcessInfo DF_ProcessInfo;
 struct DF_ProcessInfo
 {
-  DEMON_ProcessInfo info;
+  DMN_ProcessInfo info;
   B32 is_attached;
   FuzzyMatchRangeList attached_match_ranges;
   FuzzyMatchRangeList name_match_ranges;
@@ -438,7 +438,7 @@ internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityLi
 ////////////////////////////////
 //~ rjf: Disassembly View
 
-internal TXTI_TokenArray df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string);
+internal TXT_TokenArray df_txt_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string);
 
 ////////////////////////////////
 //~ rjf: Eval/Watch Views

@@ -85,12 +85,12 @@ dbgi_ensure_tctx_inited(void)
 //~ rjf: Helpers
 
 internal U64
-dbgi_hash_from_string(String8 string)
+dbgi_hash_from_string(String8 string, StringMatchFlags match_flags)
 {
   U64 result = 5381;
   for(U64 i = 0; i < string.size; i += 1)
   {
-    result = ((result << 5) + result) + string.str[i];
+    result = ((result << 5) + result) + ((match_flags & StringMatchFlag_CaseInsensitive) ? char_to_lower(string.str[i]) : string.str[i]);
   }
   return result;
 }
@@ -157,7 +157,8 @@ dbgi_fuzzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, DBGI_FuzzySe
 internal void
 dbgi_force_exe_path_dbg_path(String8 exe_path, String8 dbg_path)
 {
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->force_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
   DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
@@ -167,7 +168,7 @@ dbgi_force_exe_path_dbg_path(String8 exe_path, String8 dbg_path)
     DBGI_ForceNode *node = 0;
     for(DBGI_ForceNode *n = slot->first; n != 0; n = n->next)
     {
-      if(str8_match(n->exe_path, exe_path, 0))
+      if(str8_match(n->exe_path, exe_path, match_flags))
       {
         node = n;
         break;
@@ -192,7 +193,8 @@ internal String8
 dbgi_forced_dbg_path_from_exe_path(Arena *arena, String8 exe_path)
 {
   String8 result = {0};
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->force_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
   DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
@@ -202,7 +204,7 @@ dbgi_forced_dbg_path_from_exe_path(Arena *arena, String8 exe_path)
     DBGI_ForceNode *node = 0;
     for(DBGI_ForceNode *n = slot->first; n != 0; n = n->next)
     {
-      if(str8_match(exe_path, n->exe_path, 0))
+      if(str8_match(exe_path, n->exe_path, match_flags))
       {
         node = n;
         break;
@@ -297,7 +299,8 @@ dbgi_binary_open(String8 exe_path)
 {
   Temp scratch = scratch_begin(0, 0);
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->binary_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
   DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -308,7 +311,7 @@ dbgi_binary_open(String8 exe_path)
     DBGI_Binary *binary = 0;
     for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
     {
-      if(str8_match(bin->exe_path, exe_path, 0))
+      if(str8_match(bin->exe_path, exe_path, match_flags))
       {
         binary = bin;
         break;
@@ -336,7 +339,8 @@ dbgi_binary_close(String8 exe_path)
 {
   Temp scratch = scratch_begin(0, 0);
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->binary_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
   DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -346,7 +350,7 @@ dbgi_binary_close(String8 exe_path)
     DBGI_Binary *binary = 0;
     for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
     {
-      if(str8_match(bin->exe_path, exe_path, 0))
+      if(str8_match(bin->exe_path, exe_path, match_flags))
       {
         binary = bin;
         break;
@@ -393,7 +397,8 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
   DBGI_Parse *parse = &dbgi_parse_nil;
   if(exe_path.size != 0)
   {
-    U64 hash = dbgi_hash_from_string(exe_path);
+    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+    U64 hash = dbgi_hash_from_string(exe_path, match_flags);
     U64 slot_idx = hash%dbgi_shared->binary_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
     DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -404,7 +409,7 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
       DBGI_Binary *binary = 0;
       for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           binary = bin;
           break;
@@ -446,6 +451,7 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
   Temp scratch = scratch_begin(0, 0);
   DBGI_FuzzySearchItemArray items = {0};
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
   {
     //- rjf: unpack key
     U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
@@ -481,7 +487,7 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
       
       // rjf: try to grab last valid results for this key/query; determine if stale
       B32 stale = 1;
-      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, 0) &&
+      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, match_flags) &&
          target == node->buckets[node->gen%ArrayCount(node->buckets)].target &&
          node->gen != 0)
       {
@@ -632,17 +638,16 @@ dbgi_p2u_pop_events(Arena *arena, U64 endt_us)
 internal void
 dbgi_parse_thread_entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  ProfThreadName("[dbgi] parse #%I64U", (U64)p);
+  ThreadNameF("[dbgi] parse #%I64U", (U64)p);
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
     
     //- rjf: grab next path & unpack
     String8 exe_path = dbgi_u2p_dequeue_exe_path(scratch.arena);
+    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
     ProfBegin("begin task for \"%.*s\"", str8_varg(exe_path));
-    U64 hash = dbgi_hash_from_string(exe_path);
+    U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
     U64 slot_idx = hash%dbgi_shared->binary_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
     DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -656,7 +661,7 @@ dbgi_parse_thread_entry_point(void *p)
       DBGI_Binary *binary = 0;
       for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           binary = bin;
           break;
@@ -826,7 +831,7 @@ dbgi_parse_thread_entry_point(void *p)
     }
     
     //- rjf: if raddbg file is up to date based on timestamp, check the
-    // encoding generation number, to see if we need to regenerate it
+    // encoding generation number & size, to see if we need to regenerate it
     // regardless
     if(do_task && raddbgi_file_is_up_to_date)
     {
@@ -944,7 +949,7 @@ dbgi_parse_thread_entry_point(void *p)
       {
         OS_MutexScopeR(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
         {
-          if(str8_match(bin->exe_path, exe_path, 0) &&
+          if(str8_match(bin->exe_path, exe_path, match_flags) &&
              bin->scope_touch_count == 0)
           {
             done = 1;
@@ -963,7 +968,7 @@ dbgi_parse_thread_entry_point(void *p)
     {
       OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           if(bin->refcount == 0)
           {
@@ -1034,7 +1039,7 @@ dbgi_parse_thread_entry_point(void *p)
     {
       OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           String8 dbg_path = og_dbg_path;
           if(dbg_path.size == 0)
@@ -1071,7 +1076,7 @@ dbgi_parse_thread_entry_point(void *p)
     {
       OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           bin->flags &= ~DBGI_BinaryFlag_ParseInFlight;
           break;
@@ -1154,9 +1159,7 @@ dbgi_qsort_compare_fuzzy_search_items(DBGI_FuzzySearchItem *a, DBGI_FuzzySearchI
 internal void
 dbgi_fuzzy_thread__entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  ProfThreadName("[dbgi] fuzzy search #%I64U", (U64)p);
+  ThreadNameF("[dbgi] fuzzy search #%I64U", (U64)p);
   DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[(U64)p];
   for(;;)
   {

@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef BASE_STRING_H
-#define BASE_STRING_H
+#ifndef BASE_STRINGS_H
+#define BASE_STRINGS_H
 
 ////////////////////////////////
 //~ rjf: Third Party Includes
@@ -327,6 +327,11 @@ internal String8 push_file_name_date_time_string(Arena *arena, DateTime *date_ti
 internal String8 string_from_elapsed_time(Arena *arena, DateTime dt);
 
 ////////////////////////////////
+//~ rjf: Textual String Wrapping
+
+internal String8List wrapped_lines_from_string(Arena *arena, String8 string, U64 first_line_max_width, U64 max_width, U64 wrap_indent);
+
+////////////////////////////////
 //~ rjf: String <-> Color
 
 internal String8 hex_string_from_rgba_4f32(Arena *arena, Vec4F32 rgba);
@@ -368,4 +373,4 @@ internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, Stri
 #define str8_deserial_read_array(string, off, ptr, count) str8_deserial_read((string), (off), (ptr), sizeof(*(ptr))*(count), sizeof(*(ptr)))
 #define str8_deserial_read_struct(string, off, ptr) str8_deserial_read((string), (off), (ptr), sizeof(*(ptr)), sizeof(*(ptr)))
 
-#endif // BASE_STRING_H
+#endif // BASE_STRINGS_H

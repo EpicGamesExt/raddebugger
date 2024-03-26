@@ -9,6 +9,7 @@
 typedef U32 EVAL_ExprKind;
 typedef enum EVAL_ExprKindEnum
 {
+EVAL_ExprKind_Nil,
 EVAL_ExprKind_ArrayIndex,
 EVAL_ExprKind_MemberAccess,
 EVAL_ExprKind_Deref,
@@ -68,10 +69,10 @@ EVAL_ResultCode_COUNT,
 } EVAL_ResultCode;
 
 C_LINKAGE_BEGIN
-extern U8 eval_expr_kind_child_counts[39];
-extern String8 eval_expr_kind_strings[39];
+extern U8 eval_expr_kind_child_counts[40];
+extern String8 eval_expr_kind_strings[40];
 extern String8 eval_result_code_display_strings[11];
-extern String8 eval_expr_op_strings[39];
+extern String8 eval_expr_op_strings[40];
 C_LINKAGE_END
 
 #endif // EVAL_META_H

@@ -1091,11 +1091,11 @@ tg_data_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rd
     {
       if(members.count+padding_idx > n->prev_member_idx+1)
       {
-        MemoryCopy(new_members.v + n->prev_member_idx + 2,
-                   new_members.v + n->prev_member_idx + 1,
-                   sizeof(TG_Member) * (members.count + padding_idx - (n->prev_member_idx+1)));
+        MemoryCopy(new_members.v + n->prev_member_idx + padding_idx + 2,
+                   new_members.v + n->prev_member_idx + padding_idx + 1,
+                   sizeof(TG_Member) * (members.count + padding_idx - (n->prev_member_idx + padding_idx + 1)));
       }
-      TG_Member *padding_member = &new_members.v[n->prev_member_idx+1];
+      TG_Member *padding_member = &new_members.v[n->prev_member_idx+padding_idx+1];
       MemoryZeroStruct(padding_member);
       padding_member->kind = TG_MemberKind_Padding;
       padding_member->type_key = tg_cons_type_make(graph, TG_Kind_Array, tg_key_basic(TG_Kind_U8), n->size);

@@ -5,7 +5,7 @@
 
 internal U64 regs_block_size_from_architecture(Architecture arch)
 {
-U64 result = 0;
+U64 result = 8;
 switch(arch)
 {
 default:{}break;

@@ -2,13 +2,26 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Demon/Cleanup Pass Tasks
+//
+// [ ] TLS eval -> in-process-memory EXE info
+// [ ] unwinding -> in-process-memory EXE info
+// [ ] "root" concept in hash store, which buckets keys & allows usage code to
+//     jettison a collection of keys in retained mode fashion
+// [x] solidify synchronization mechanisms for usage of demon layer
+// [x] TLS eval correctness
+// [x] freezing thread while running -> soft-halt
+
+////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
-// [x] hover-eval when window is not focused - maybe just start directly
-//     using mouse-move events here
-// [x] CRT asserts - stepping over int 29 should work just like stepping over
-//     an int3
+// [ ] n-row table selection, in watch window & other UIs, multi-selection
+//     ctrl+C
+// [ ] UI_NavActions, OS_Event -> UI_Event (single event stream)
+//
 // [ ] committing needs to happen when navigating focus away for any reason
+// [ ] better discoverability for view rules - have better help hover tooltip,
+//     info on arguments, and better autocomplete lister
 //
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
@@ -43,11 +56,16 @@
 //       start with brighter color, but sometimes with darker - shouldn't it
 //       always have the same color ordering?
 //
-//  [ ]  middle mouse button on tab should close it
+//  [x]  middle mouse button on tab should close it
 // [ ] pipe failure-to-launch errors back to frontend
 
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
+//
+// [ ] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
+// [ ] PDB files distributed with the build are not found by DbgHelp!!!
+// [ ] Jai compiler debugging crash
+// [ ] raddbgi file regeneration too strict
 //
 // [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
@@ -195,7 +213,7 @@
 // [ ] @feature disasm keyboard navigation & copy/paste
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
-// [ ] run-to-line needs to work if no processes are running
+// [x] run-to-line needs to work if no processes are running
 //     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
 //
@@ -222,11 +240,11 @@
 //      expandable? It seems like this should be consistent (one way to edit,
 //      one way to expand/collapse, that are distinct)
 //
-//  [ ] I didn't understand the terminology "Equip With Color". Does that just
+//  [x] I didn't understand the terminology "Equip With Color". Does that just
 //      mean specify the color used to display it? Is "Apply Color" perhaps a
 //      bit more user-friendly?
 //
-//  [ ] The cursor feels a bit too huge vertically.
+//  [x] The cursor feels a bit too huge vertically.
 //
 //  [ ] The hex format for color values in the config file was a real
 //      mindbender. It's prefixed with "0x", so I was assuming it was either
@@ -398,26 +416,6 @@
 
 #ifndef RADDBG_H
 #define RADDBG_H
-
-////////////////////////////////
-//~ rjf: Build Settings
-
-#define RADDBG_VERSION_MAJOR 0
-#define RADDBG_VERSION_MINOR 9
-#define RADDBG_VERSION_PATCH 8
-#define RADDBG_VERSION_STRING_LITERAL Stringify(RADDBG_VERSION_MAJOR) "." Stringify(RADDBG_VERSION_MINOR) "." Stringify(RADDBG_VERSION_PATCH)
-#if defined(NDEBUG)
-# define RADDBG_BUILD_STR ""
-#else
-# define RADDBG_BUILD_STR " [Debug]"
-#endif
-#if defined(RADDBG_GIT)
-# define RADDBG_GIT_STR " [" RADDBG_GIT "]"
-#else
-# define RADDBG_GIT_STR ""
-#endif
-#define RADDBG_TITLE_STRING_LITERAL "The RAD Debugger (" RADDBG_VERSION_STRING_LITERAL " ALPHA) - " __DATE__ "" RADDBG_GIT_STR RADDBG_BUILD_STR
-#define RADDBG_GITHUB_ISSUES "https://github.com/EpicGames/raddebugger/issues"
 
 ////////////////////////////////
 //~ rjf: Top-Level Execution Types

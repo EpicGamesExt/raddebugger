@@ -82,6 +82,7 @@ internal CmdLine
 cmd_line_from_string_list(Arena *arena, String8List command_line)
 {
   CmdLine parsed = {0};
+  parsed.exe_name = command_line.first->string;
   
   // NOTE(rjf): Set up config option table.
   {

@@ -240,9 +240,9 @@ df_process_info_list_from_query(Arena *arena, String8 query)
   //- rjf: build list
   DF_ProcessInfoList list = {0};
   {
-    DEMON_ProcessIter iter = {0};
-    demon_proc_iter_begin(&iter);
-    for(DEMON_ProcessInfo info = {0}; demon_proc_iter_next(scratch.arena, &iter, &info);)
+    DMN_ProcessIter iter = {0};
+    dmn_process_iter_begin(&iter);
+    for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &iter, &info);)
     {
       // rjf: skip root-level or otherwise 0-pid processes
       if(info.pid == 0)
@@ -290,7 +290,7 @@ df_process_info_list_from_query(Arena *arena, String8 query)
         list.count += 1;
       }
     }
-    demon_proc_iter_end(&iter);
+    dmn_process_iter_end(&iter);
   }
   
   scratch_end(scratch);
@@ -372,13 +372,13 @@ df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray 
 ////////////////////////////////
 //~ rjf: Disassembly View
 
-internal TXTI_TokenArray
-df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string)
+internal TXT_TokenArray
+df_txt_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  TXTI_TokenChunkList tokens = {0};
+  TXT_TokenChunkList tokens = {0};
   {
-    TXTI_TokenKind active_token_kind = TXTI_TokenKind_Null;
+    TXT_TokenKind active_token_kind = TXT_TokenKind_Null;
     U64 active_token_start_off = 0;
     U64 off = 0;
     B32 escaped = 0;
@@ -388,8 +388,8 @@ df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, Strin
       U8 byte      = (off+0 < string.size) ? string.str[off+0] : 0;
       U8 next_byte = (off+1 < string.size) ? string.str[off+1] : 0;
       B32 ender_found = 0;
-      advance = (active_token_kind != TXTI_TokenKind_Null ? 1 : 0);
-      if(off == string.size && active_token_kind != TXTI_TokenKind_Null)
+      advance = (active_token_kind != TXT_TokenKind_Null ? 1 : 0);
+      if(off == string.size && active_token_kind != TXT_TokenKind_Null)
       {
         ender_found = 1;
         advance = 1;
@@ -397,38 +397,38 @@ df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, Strin
       switch(active_token_kind)
       {
         default:
-        case TXTI_TokenKind_Null:
+        case TXT_TokenKind_Null:
         {
           if(byte == ' ' || byte == '\t' || byte == '\v' || byte == '\f' || byte == '\r' || byte == '\n')
           {
             active_token_start_off = off;
-            active_token_kind = TXTI_TokenKind_Whitespace;
+            active_token_kind = TXT_TokenKind_Whitespace;
             advance = 1;
           }
           else if(('a' <= byte && byte <= 'z') || ('A' <= byte && byte <= 'Z') || byte == '_')
           {
             active_token_start_off = off;
-            active_token_kind = TXTI_TokenKind_Identifier;
+            active_token_kind = TXT_TokenKind_Identifier;
             advance = 1;
           }
           else if(byte == '\'')
           {
             active_token_start_off = off;
-            active_token_kind = TXTI_TokenKind_String;
+            active_token_kind = TXT_TokenKind_String;
             advance = 1;
             string_is_char = 1;
           }
           else if(byte == '"')
           {
             active_token_start_off = off;
-            active_token_kind = TXTI_TokenKind_String;
+            active_token_kind = TXT_TokenKind_String;
             advance = 1;
             string_is_char = 0;
           }
           else if(('0' <= byte && byte <= '9') || (byte == '.' && '0' <= next_byte && next_byte <= '9'))
           {
             active_token_start_off = off;
-            active_token_kind = TXTI_TokenKind_Numeric;
+            active_token_kind = TXT_TokenKind_Numeric;
             advance = 1;
           }
           else if(byte == '~' || byte == '!' || byte == '%' || byte == '^' ||
@@ -439,29 +439,29 @@ df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, Strin
                   byte == '>' || byte == ',' || byte == '.')
           {
             active_token_start_off = off;
-            active_token_kind = TXTI_TokenKind_Symbol;
+            active_token_kind = TXT_TokenKind_Symbol;
             advance = 1;
           }
           else
           {
             active_token_start_off = off;
-            active_token_kind = TXTI_TokenKind_Error;
+            active_token_kind = TXT_TokenKind_Error;
             advance = 1;
           }
         }break;
-        case TXTI_TokenKind_Whitespace:
+        case TXT_TokenKind_Whitespace:
         if(byte != ' ' && byte != '\t' && byte != '\v' && byte != '\f')
         {
           ender_found = 1;
           advance = 0;
         }break;
-        case TXTI_TokenKind_Identifier:
+        case TXT_TokenKind_Identifier:
         if((byte < 'a' || 'z' < byte) && (byte < 'A' || 'Z' < byte) && (byte < '0' || '9' < byte) && byte != '_')
         {
           ender_found = 1;
           advance = 0;
         }break;
-        case TXTI_TokenKind_String:
+        case TXT_TokenKind_String:
         {
           U8 ender_byte = string_is_char ? '\'' : '"';
           if(!escaped && byte == ender_byte)
@@ -488,13 +488,13 @@ df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, Strin
             }
           }
         }break;
-        case TXTI_TokenKind_Numeric:
+        case TXT_TokenKind_Numeric:
         if((byte < 'a' || 'z' < byte) && (byte < 'A' || 'Z' < byte) && (byte < '0' || '9' < byte) && byte != '.')
         {
           ender_found = 1;
           advance = 0;
         }break;
-        case TXTI_TokenKind_Symbol:
+        case TXT_TokenKind_Symbol:
         if(1)
         {
           // NOTE(rjf): avoiding maximum munch rule for now
@@ -511,7 +511,7 @@ df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, Strin
           ender_found = 1;
           advance = 0;
         }break;
-        case TXTI_TokenKind_Error:
+        case TXT_TokenKind_Error:
         {
           ender_found = 1;
           advance = 0;
@@ -519,22 +519,22 @@ df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, Strin
       }
       if(ender_found != 0)
       {
-        TXTI_Token token = {active_token_kind, r1u64(active_token_start_off, off+advance)};
-        if(active_token_kind == TXTI_TokenKind_Identifier)
+        TXT_Token token = {active_token_kind, r1u64(active_token_start_off, off+advance)};
+        if(active_token_kind == TXT_TokenKind_Identifier)
         {
           String8 token_string = str8_substr(string, token.range);
           if(df_info_summary_from_string(arch, token_string).size != 0)
           {
-            token.kind = TXTI_TokenKind_Keyword;
+            token.kind = TXT_TokenKind_Keyword;
           }
         }
-        txti_token_chunk_list_push(arena, &tokens, 1024, &token);
-        active_token_kind = TXTI_TokenKind_Null;
+        txt_token_chunk_list_push(arena, &tokens, 1024, &token);
+        active_token_kind = TXT_TokenKind_Null;
         active_token_start_off = token.range.max;
       }
     }
   }
-  TXTI_TokenArray result = txti_token_array_from_chunk_list(arena, &tokens);
+  TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
   scratch_end(scratch);
   return result;
 }
@@ -5844,8 +5844,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
         ui_labelf("%s",
-                  info.line_end_kind == TXTI_LineEndKind_LF   ? "lf" :
-                  info.line_end_kind == TXTI_LineEndKind_CRLF ? "crlf" :
+                  info.line_end_kind == TXT_LineEndKind_LF   ? "lf" :
+                  info.line_end_kind == TXT_LineEndKind_CRLF ? "crlf" :
                   "bin");
       }
     }
@@ -6185,7 +6185,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
-    code_slice_params.line_tokens               = push_array(scratch.arena, TXTI_TokenArray, visible_line_count);
+    code_slice_params.line_tokens               = push_array(scratch.arena, TXT_TokenArray, visible_line_count);
     code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, visible_line_count);
@@ -6230,11 +6230,12 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
     {
       U64 idx = line_num-visible_line_num_range.min;
-      TXTI_TokenArray tokens = df_txti_token_array_from_dasm_arch_string(scratch.arena, df_architecture_from_entity(process), code_slice_params.line_text[idx]);
+      TXT_TokenArray tokens = df_txt_token_array_from_dasm_arch_string(scratch.arena, df_architecture_from_entity(process), code_slice_params.line_text[idx]);
       code_slice_params.line_tokens[idx] = tokens;
     }
     
     // rjf: find live threads mapping to this disassembly
+    ProfScope("find live threads mapping to this disassembly")
     {
       DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
       DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
@@ -6257,6 +6258,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     }
     
     // rjf: find breakpoints mapping to this disassembly
+    ProfScope("find breakpoints mapping to this disassembly")
     {
       DF_EntityList bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
       for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
@@ -6277,6 +6279,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     }
     
     // rjf: find watch pins mapping to this disassembly
+    ProfScope("find watch pins mapping to this disassembly")
     {
       DF_EntityList pins = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
       for(DF_EntityNode *n = pins.first; n != 0; n = n->next)
@@ -7552,8 +7555,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Memory)
 
 DF_VIEW_UI_FUNCTION_DEF(Memory)
 {
-  Temp scratch = scratch_begin(0, 0);
   ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
   
   //////////////////////////////
   //- rjf: unpack state
@@ -7755,7 +7759,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   U8 *visible_memory = 0;
   {
     Rng1U64 chunk_aligned_range_bytes = r1u64(AlignDownPow2(viz_range_bytes.min, KB(4)), AlignPow2(viz_range_bytes.max, KB(4)));
-    U64 current_memgen_idx = ctrl_memgen_idx();
+    U64 current_memgen_idx = ctrl_mem_gen();
     B32 range_changed = (chunk_aligned_range_bytes.min != mv->last_viewed_memory_cache_range.min ||
                          chunk_aligned_range_bytes.max != mv->last_viewed_memory_cache_range.max);
     B32 mem_changed = (current_memgen_idx != mv->last_viewed_memory_cache_memgen_idx);
@@ -7766,8 +7770,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       // rjf: try to read new memory for this range
       U64 bytes_to_read = dim_1u64(chunk_aligned_range_bytes);
       U8 *buffer = push_array_no_zero(scratch.arena, U8, bytes_to_read);
-      U64 half1_bytes_read = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min, chunk_aligned_range_bytes.min+bytes_to_read/2), buffer+0);
-      U64 half2_bytes_read = ctrl_process_read(process->ctrl_machine_id, process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min+bytes_to_read/2, chunk_aligned_range_bytes.max), buffer+bytes_to_read/2);
+      U64 half1_bytes_read = dmn_process_read(process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min, chunk_aligned_range_bytes.min+bytes_to_read/2), buffer+0);
+      U64 half2_bytes_read = dmn_process_read(process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min+bytes_to_read/2, chunk_aligned_range_bytes.max), buffer+bytes_to_read/2);
       
       // rjf: worked? -> clear cache & store
       if(half1_bytes_read+half2_bytes_read >= bytes_to_read)
@@ -8340,6 +8344,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     }
   }
   
+  hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
 }

@@ -4,7 +4,7 @@
 ////////////////////////////////
 //~ rjf: Third Party Includes
 
-#if !SUPPLEMENT_UNIT
+#if !BUILD_SUPPLEMENTARY_UNIT
 # define STB_SPRINTF_IMPLEMENTATION
 # define STB_SPRINTF_STATIC
 # include "third_party/stb/stb_sprintf.h"
@@ -1563,6 +1563,64 @@ string_from_elapsed_time(Arena *arena, DateTime dt){
   String8 result = str8_list_join(arena, &list, &join);
   scratch_end(scratch);
   return(result);
+}
+
+////////////////////////////////
+//~ rjf: Textual String Wrapping
+
+internal String8List
+wrapped_lines_from_string(Arena *arena, String8 string, U64 first_line_max_width, U64 max_width, U64 wrap_indent)
+{
+  String8List list = {0};
+  Rng1U64 line_range = r1u64(0, 0);
+  U64 wrapped_indent_level = 0;
+  static char *spaces = "                                                                ";
+  for (U64 idx = 0; idx <= string.size; idx += 1){
+    U8 chr = idx < string.size ? string.str[idx] : 0;
+    if (chr == '\n'){
+      Rng1U64 candidate_line_range = line_range;
+      candidate_line_range.max = idx;
+      // NOTE(nick): when wrapping is interrupted with \n we emit a string without including \n
+      // because later tool_fprint_list inserts separator after each node
+      // except for last node, so don't strip last \n.
+      if (idx + 1 == string.size){
+        candidate_line_range.max += 1;
+      }
+      String8 substr = str8_substr(string, candidate_line_range);
+      str8_list_push(arena, &list, substr);
+      line_range = r1u64(idx+1,idx+1);
+    }
+    else
+      if (char_is_space(chr) || chr == 0){
+      Rng1U64 candidate_line_range = line_range;
+      candidate_line_range.max = idx;
+      String8 substr = str8_substr(string, candidate_line_range);
+      U64 width_this_line = max_width-wrapped_indent_level;
+      if (list.node_count == 0){
+        width_this_line = first_line_max_width;
+      }
+      if (substr.size > width_this_line){
+        String8 line = str8_substr(string, line_range);
+        if (wrapped_indent_level > 0){
+          line = push_str8f(arena, "%.*s%S", wrapped_indent_level, spaces, line);
+        }
+        str8_list_push(arena, &list, line);
+        line_range = r1u64(line_range.max+1, candidate_line_range.max);
+        wrapped_indent_level = ClampTop(64, wrap_indent);
+      }
+      else{
+        line_range = candidate_line_range;
+      }
+    }
+  }
+  if (line_range.min < string.size && line_range.max > line_range.min){
+    String8 line = str8_substr(string, line_range);
+    if (wrapped_indent_level > 0){
+      line = push_str8f(arena, "%.*s%S", wrapped_indent_level, spaces, line);
+    }
+    str8_list_push(arena, &list, line);
+  }
+  return list;
 }
 
 ////////////////////////////////

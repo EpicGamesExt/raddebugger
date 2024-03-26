@@ -1584,7 +1584,6 @@ ui_layout_enforce_constraints__in_place_rec(UI_Box *root, Axis2 axis)
             F32 fixup_pct = (violation / total_weighted_size);
             fixup_pct = Clamp(0, fixup_pct, 1);
             child->fixed_size.v[axis] -= child_fixups[child_idx] * fixup_pct;
-            child->fixed_size.v[axis] = child->fixed_size.v[axis];
           }
         }
       }
@@ -2524,10 +2523,18 @@ ui_signal_from_box(UI_Box *box)
       }
       if(!(box->flags & UI_BoxFlag_ViewScrollX))
       {
+        if(delta.y == 0)
+        {
+          delta.y = delta.x;
+        }
         delta.x = 0;
       }
       if(!(box->flags & UI_BoxFlag_ViewScrollY))
       {
+        if(delta.x == 0)
+        {
+          delta.x = delta.y;
+        }
         delta.y = 0;
       }
       os_eat_event(ui_state->events, evt);
@@ -2636,7 +2643,8 @@ ui_signal_from_box(UI_Box *box)
   //- rjf: mouse is over this box's rect, no other hot key? -> set hot key, mark hovering
   //
   {
-    if(contains_2f32(rect, ui_state->mouse) &&
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       contains_2f32(rect, ui_state->mouse) &&
        !contains_2f32(blacklist_rect, ui_state->mouse) &&
        (ui_key_match(ui_state->hot_box_key, ui_key_zero()) || ui_key_match(ui_state->hot_box_key, box->key)) &&
        (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key)) &&

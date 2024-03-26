@@ -5,7 +5,7 @@
 // NOTE(allen): Thread Context Functions
 
 C_LINKAGE thread_static TCTX* tctx_thread_local;
-#if !SUPPLEMENT_UNIT
+#if !BUILD_SUPPLEMENTARY_UNIT
 C_LINKAGE thread_static TCTX* tctx_thread_local = 0;
 #endif
 
@@ -17,6 +17,15 @@ tctx_init_and_equip(TCTX *tctx){
     *arena_ptr = arena_alloc();
   }
   tctx_thread_local = tctx;
+}
+
+internal void
+tctx_release(void)
+{
+  for(U64 i = 0; i < ArrayCount(tctx_thread_local->arenas); i += 1)
+  {
+    arena_release(tctx_thread_local->arenas[i]);
+  }
 }
 
 internal TCTX*

@@ -1,4 +1,4 @@
-#define SUPPLEMENT_UNIT 1
+#define BUILD_SUPPLEMENTARY_UNIT 1
 
 #include "base/base_inc.h"
 #include "os/os_inc.h"
