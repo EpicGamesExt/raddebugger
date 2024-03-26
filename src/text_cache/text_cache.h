@@ -263,6 +263,15 @@ internal TXT_TextInfo txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, 
 internal TXT_TextInfo txt_text_info_from_key_lang(TXT_Scope *scope, U128 key, TXT_LangKind lang, U128 *hash_out);
 
 ////////////////////////////////
+//~ rjf: Text Info Extractor Helpers
+
+internal U64 txt_off_from_info_pt(TXT_TextInfo *info, TxtPt pt);
+internal TxtPt txt_pt_from_info_off__linear_scan(TXT_TextInfo *info, U64 off);
+internal TXT_TokenArray txt_token_array_from_info_line_num__linear_scan(TXT_TextInfo *info, S64 line_num);
+internal Rng1U64 txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXT_TokenArray *line_tokens);
+internal Rng1U64 txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String8 data, TxtPt pt);
+
+////////////////////////////////
 //~ rjf: Transfer Threads
 
 internal B32 txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us);

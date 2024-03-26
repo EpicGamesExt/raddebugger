@@ -4958,46 +4958,92 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
       case DF_CoreCmdKind_GoToNameAtCursor:
       {
         Temp scratch = scratch_begin(0, 0);
-        TXTI_Handle txti_handle = df_txti_handle_from_entity(entity);
-        TxtRng expr_range = txt_rng(tv->cursor, tv->mark);
-        if(txt_pt_match(tv->cursor, tv->mark))
+        TXT_Scope *txt_scope = txt_scope_open();
+        HS_Scope *hs_scope = hs_scope_open();
         {
-          expr_range = txti_expr_range_from_handle_pt(txti_handle, tv->cursor);
+          // rjf: unpack entity info
+          String8 path = df_full_path_from_entity(scratch.arena, entity);
+          U128 key = fs_key_from_path(path);
+          TXT_LangKind lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
+          U128 hash = {0};
+          TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          
+          // rjf: determine expression range
+          Rng1U64 expr_range = {0};
+          {
+            TxtRng selection_range = txt_rng(tv->cursor, tv->mark);
+            if(txt_pt_match(selection_range.min, selection_range.max))
+            {
+              expr_range = txt_expr_off_range_from_info_data_pt(&text_info, data, tv->cursor);
+            }
+            else
+            {
+              expr_range = r1u64(txt_off_from_info_pt(&text_info, selection_range.min), txt_off_from_info_pt(&text_info, selection_range.max));
+            }
+          }
+          
+          // rjf: expression range -> text
+          String8 expr_text = str8_substr(data, expr_range);
+          
+          // rjf: go to name
+          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+          params.entity = df_handle_from_entity(entity);
+          params.string = expr_text;
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
         }
-        String8 expr_text = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_range);
-        
-        // rjf: go to name
-        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-        params.entity = df_handle_from_entity(entity);
-        params.string = expr_text;
-        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
-        
+        hs_scope_close(hs_scope);
+        txt_scope_close(txt_scope);
         scratch_end(scratch);
       }break;
       case DF_CoreCmdKind_ToggleWatchExpressionAtCursor:
       {
         Temp scratch = scratch_begin(0, 0);
-        TXTI_Handle txti_handle = df_txti_handle_from_entity(entity);
-        TxtRng expr_range = txt_rng(tv->cursor, tv->mark);
-        if(txt_pt_match(tv->cursor, tv->mark))
+        TXT_Scope *txt_scope = txt_scope_open();
+        HS_Scope *hs_scope = hs_scope_open();
         {
-          expr_range = txti_expr_range_from_handle_pt(txti_handle, tv->cursor);
+          // rjf: unpack entity info
+          String8 path = df_full_path_from_entity(scratch.arena, entity);
+          U128 key = fs_key_from_path(path);
+          TXT_LangKind lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
+          U128 hash = {0};
+          TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          
+          // rjf: determine expression range
+          Rng1U64 expr_range = {0};
+          {
+            TxtRng selection_range = txt_rng(tv->cursor, tv->mark);
+            if(txt_pt_match(selection_range.min, selection_range.max))
+            {
+              expr_range = txt_expr_off_range_from_info_data_pt(&text_info, data, tv->cursor);
+            }
+            else
+            {
+              expr_range = r1u64(txt_off_from_info_pt(&text_info, selection_range.min), txt_off_from_info_pt(&text_info, selection_range.max));
+            }
+          }
+          
+          // rjf: expression range -> text
+          String8 expr_text = str8_substr(data, expr_range);
+          
+          // rjf: toggle watch expr
+          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+          params.string = expr_text;
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
+          
+          // rjf: flash marker for grabbed expr
+          DF_Entity *flash_marker = df_entity_alloc(0, entity, DF_EntityKind_FlashMarker);
+          df_entity_equip_death_timer(flash_marker, 0.5f);
+          df_entity_equip_txt_pt(flash_marker, txt_pt_from_info_off__linear_scan(&text_info, expr_range.min));
+          df_entity_equip_txt_pt_alt(flash_marker, txt_pt_from_info_off__linear_scan(&text_info, expr_range.max));
+          df_entity_equip_color_rgba(flash_marker, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+          scratch_end(scratch);
         }
-        String8 expr_text = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_range);
-        
-        // rjf: toggle watch expr
-        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-        params.string = expr_text;
-        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
-        
-        // rjf: flash marker for grabbed expr
-        DF_Entity *flash_marker = df_entity_alloc(0, entity, DF_EntityKind_FlashMarker);
-        df_entity_equip_death_timer(flash_marker, 0.5f);
-        df_entity_equip_txt_pt(flash_marker, expr_range.min);
-        df_entity_equip_txt_pt_alt(flash_marker, expr_range.max);
-        df_entity_equip_color_rgba(flash_marker, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+        hs_scope_close(hs_scope);
+        txt_scope_close(txt_scope);
         scratch_end(scratch);
       }break;
       case DF_CoreCmdKind_PickFile:

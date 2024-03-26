@@ -74,7 +74,8 @@ internal void fs_init(void);
 ////////////////////////////////
 //~ rjf: Cache Interaction
 
-internal U128 fs_hash_from_path(String8 path, U64 rewind_count, U64 endt_us);
+internal U128 fs_hash_from_path(String8 path, U64 endt_us);
+internal U128 fs_key_from_path(String8 path);
 
 ////////////////////////////////
 //~ rjf: Streamer Threads

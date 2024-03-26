@@ -842,6 +842,191 @@ txt_text_info_from_key_lang(TXT_Scope *scope, U128 key, TXT_LangKind lang, U128 
 }
 
 ////////////////////////////////
+//~ rjf: Text Info Extractor Helpers
+
+internal U64
+txt_off_from_info_pt(TXT_TextInfo *info, TxtPt pt)
+{
+  U64 off = 0;
+  if(1 <= pt.line && pt.line <= info->lines_count)
+  {
+    Rng1U64 line_range = info->lines_ranges[pt.line-1];
+    off = line_range.min + (pt.column-1);
+  }
+  return off;
+}
+
+internal TxtPt
+txt_pt_from_info_off__linear_scan(TXT_TextInfo *info, U64 off)
+{
+  TxtPt pt = {0};
+  {
+    for(U64 line_idx = 0; line_idx < info->lines_count; line_idx += 1)
+    {
+      if(contains_1u64(info->lines_ranges[line_idx], off))
+      {
+        pt.line = (S64)line_idx + 1;
+        pt.column = (S64)(off - info->lines_ranges[line_idx].min) + 1;
+      }
+    }
+  }
+  return pt;
+}
+
+internal TXT_TokenArray
+txt_token_array_from_info_line_num__linear_scan(TXT_TextInfo *info, S64 line_num)
+{
+  TXT_TokenArray line_tokens = {0};
+  if(1 <= line_num && line_num <= info->lines_count)
+  {
+    Rng1U64 line_range = info->lines_ranges[line_num-1];
+    for(U64 token_idx = 0; token_idx < info->tokens.count; token_idx += 1)
+    {
+      Rng1U64 token_range = info->tokens.v[token_idx].range;
+      Rng1U64 token_x_line = intersect_1u64(token_range, line_range);
+      if(token_x_line.max > token_x_line.min)
+      {
+        if(line_tokens.v == 0)
+        {
+          line_tokens.v = info->tokens.v+token_idx;
+        }
+        line_tokens.count += 1;
+      }
+      else if(line_tokens.v != 0)
+      {
+        break;
+      }
+    }
+  }
+  return line_tokens;
+}
+
+internal Rng1U64
+txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXT_TokenArray *line_tokens)
+{
+  Rng1U64 result = {0};
+  Temp scratch = scratch_begin(0, 0);
+  {
+    // rjf: unpack line info
+    TXT_Token *line_tokens_first = line_tokens->v;
+    TXT_Token *line_tokens_opl = line_tokens->v+line_tokens->count;
+    
+    // rjf: find token containing `off`
+    TXT_Token *pt_token = 0;
+    for(TXT_Token *token = line_tokens_first;
+        token < line_tokens_opl;
+        token += 1)
+    {
+      if(contains_1u64(token->range, off))
+      {
+        Rng1U64 token_range_clamped = intersect_1u64(line_range, token->range);
+        String8 token_string = str8_substr(line_text, r1u64(token_range_clamped.max - line_range.min, token_range_clamped.max - line_range.min));
+        B32 token_ender = 0;
+        switch(token->kind)
+        {
+          default:{}break;
+          case TXT_TokenKind_Symbol:
+          {
+            token_ender = (str8_match(token_string, str8_lit("]"), 0));
+          }break;
+          case TXT_TokenKind_Identifier:
+          case TXT_TokenKind_Keyword:
+          case TXT_TokenKind_String:
+          case TXT_TokenKind_Meta:
+          {
+            token_ender = 1;
+          }break;
+        }
+        if(token_ender)
+        {
+          pt_token = token;
+        }
+        break;
+      }
+    }
+    
+    // rjf: found token containing `off`? -> mark that as our initial range
+    if(pt_token != 0)
+    {
+      result = pt_token->range;
+    }
+    
+    // rjf: walk back from pt_token - try to find plausible start of expression
+    if(pt_token != 0)
+    {
+      B32 walkback_done = 0;
+      S32 nest = 0;
+      for(TXT_Token *wb_token = pt_token;
+          wb_token >= line_tokens_first && walkback_done == 0;
+          wb_token -= 1)
+      {
+        Rng1U64 wb_token_range_clamped = intersect_1u64(line_range, wb_token->range);
+        String8 wb_token_string = str8_substr(line_text, r1u64(wb_token_range_clamped.min - line_range.min, wb_token_range_clamped.max - line_range.min));
+        B32 include_wb_token = 0;
+        switch(wb_token->kind)
+        {
+          default:{}break;
+          case TXT_TokenKind_Symbol:
+          {
+            B32 is_scope_resolution = str8_match(wb_token_string, str8_lit("::"), 0);
+            B32 is_dot = str8_match(wb_token_string, str8_lit("."), 0);
+            B32 is_arrow = str8_match(wb_token_string, str8_lit("->"), 0);
+            B32 is_open_bracket = str8_match(wb_token_string, str8_lit("["), 0);
+            B32 is_close_bracket = str8_match(wb_token_string, str8_lit("]"), 0);
+            nest -= !!(is_open_bracket);
+            nest += !!(is_close_bracket);
+            if(is_scope_resolution ||
+               is_dot ||
+               is_arrow ||
+               is_open_bracket||
+               is_close_bracket)
+            {
+              include_wb_token = 1;
+            }
+          }break;
+          case TXT_TokenKind_Identifier:
+          {
+            include_wb_token = 1;
+          }break;
+        }
+        if(include_wb_token)
+        {
+          result = union_1u64(result, wb_token->range);
+        }
+        else if(nest == 0)
+        {
+          walkback_done = 1;
+        }
+      }
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal Rng1U64
+txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String8 data, TxtPt pt)
+{
+  Rng1U64 result = {0};
+  Temp scratch = scratch_begin(0, 0);
+  if(1 <= pt.line && pt.line <= info->lines_count)
+  {
+    // rjf: unpack line info
+    Rng1U64 line_range = info->lines_ranges[pt.line-1];
+    String8 line_text = str8_substr(data, line_range);
+    TXT_TokenArray line_tokens = txt_token_array_from_info_line_num__linear_scan(info, pt.line);
+    TXT_Token *line_tokens_first = line_tokens.v;
+    TXT_Token *line_tokens_opl = line_tokens.v+line_tokens.count;
+    U64 pt_off = line_range.min + (pt.column-1);
+    
+    // rjf: grab offset range of expression
+    result = txt_expr_off_range_from_line_off_range_string_tokens(pt_off, line_range, line_text, &line_tokens);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Transfer Threads
 
 internal B32
