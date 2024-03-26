@@ -114,21 +114,6 @@ typedef TXT_TokenArray TXT_LangLexFunctionType(Arena *arena, U64 *bytes_processe
 ////////////////////////////////
 //~ rjf: Cache Types
 
-typedef struct TXT_KeyFallbackNode TXT_KeyFallbackNode;
-struct TXT_KeyFallbackNode
-{
-  TXT_KeyFallbackNode *next;
-  U128 key;
-  U128 hash;
-};
-
-typedef struct TXT_KeyFallbackSlot TXT_KeyFallbackSlot;
-struct TXT_KeyFallbackSlot
-{
-  TXT_KeyFallbackNode *first;
-  TXT_KeyFallbackNode *last;
-};
-
 typedef struct TXT_Node TXT_Node;
 struct TXT_Node
 {
@@ -206,12 +191,6 @@ struct TXT_Shared
   TXT_Stripe *stripes;
   TXT_Node **stripes_free_nodes;
   
-  // rjf: fallback cache
-  U64 fallback_slots_count;
-  U64 fallback_stripes_count;
-  TXT_KeyFallbackSlot *fallback_slots;
-  TXT_Stripe *fallback_stripes;
-  
   // rjf: user -> parse thread
   U64 u2p_ring_size;
   U8 *u2p_ring_base;
@@ -280,13 +259,14 @@ internal void txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node 
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal TXT_TextInfo txt_text_info_from_key_hash_lang(TXT_Scope *scope, U128 key, U128 hash, TXT_LangKind lang);
+internal TXT_TextInfo txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang);
+internal TXT_TextInfo txt_text_info_from_key_lang(TXT_Scope *scope, U128 key, TXT_LangKind lang, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads
 
-internal B32 txt_u2p_enqueue_req(U128 key, U128 hash, TXT_LangKind lang, U64 endt_us);
-internal void txt_u2p_dequeue_req(U128 *key_out, U128 *hash_out, TXT_LangKind *lang_out);
+internal B32 txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us);
+internal void txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out);
 internal void txt_parse_thread__entry_point(void *p);
 
 ////////////////////////////////

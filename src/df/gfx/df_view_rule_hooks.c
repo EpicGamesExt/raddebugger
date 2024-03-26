@@ -686,27 +686,13 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
     DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
     
-    //- rjf: unique identifying info about this address -> unique key
-    U128 text_key = {0};
-    {
-      U64 data[] =
-      {
-        (U64)process->ctrl_machine_id,
-        (U64)process->ctrl_handle.u64[0],
-        vaddr_range.min,
-        vaddr_range.max,
-      };
-      text_key = hs_hash_from_data(str8((U8 *)data, sizeof(data)));
-    }
+    //- rjf: unpack key for this region in memory
+    U128 text_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1);
     
-    //- rjf: address range -> hash
-    U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1, 0, 0);
-    
-    //- rjf: hash -> data
-    String8 data = hs_data_from_hash(hs_scope, hash);
-    
-    //- rjf: key * hash -> parsed text info
-    TXT_TextInfo info = txt_text_info_from_key_hash_lang(txt_scope, text_key, hash, top.lang);
+    //- rjf: key -> parsed text info
+    U128 text_hash = {0};
+    TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, top.lang, &text_hash);
+    String8 data = hs_data_from_hash(hs_scope, text_hash);
     
     //- rjf: info -> code slice info
     DF_CodeSliceParams code_slice_params = {0};

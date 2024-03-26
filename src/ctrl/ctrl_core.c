@@ -1055,7 +1055,7 @@ internal U128
 ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated)
 {
   U128 key = ctrl_calc_hash_store_key_from_process_vaddr_range(machine_id, process, range, zero_terminated);
-  ctrl_stored_hash_from_process_vaddr_range(machine_id, process, range, 0, 0, 0);
+  ctrl_stored_hash_from_process_vaddr_range(machine_id, process, range, zero_terminated, 0, 0);
   return key;
 }
 

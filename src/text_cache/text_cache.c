@@ -644,16 +644,6 @@ txt_init(void)
     txt_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
     txt_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
-  txt_shared->fallback_slots_count = 256;
-  txt_shared->fallback_stripes_count = Min(txt_shared->fallback_slots_count, os_logical_core_count());
-  txt_shared->fallback_slots = push_array(arena, TXT_KeyFallbackSlot, txt_shared->fallback_slots_count);
-  txt_shared->fallback_stripes = push_array(arena, TXT_Stripe, txt_shared->fallback_stripes_count);
-  for(U64 idx = 0; idx < txt_shared->fallback_stripes_count; idx += 1)
-  {
-    txt_shared->fallback_stripes[idx].arena = arena_alloc();
-    txt_shared->fallback_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    txt_shared->fallback_stripes[idx].cv = os_condition_variable_alloc();
-  }
   txt_shared->u2p_ring_size = KB(64);
   txt_shared->u2p_ring_base = push_array_no_zero(arena, U8, txt_shared->u2p_ring_size);
   txt_shared->u2p_ring_cv = os_condition_variable_alloc();
@@ -767,7 +757,7 @@ txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node *node)
 //~ rjf: Cache Lookups
 
 internal TXT_TextInfo
-txt_text_info_from_key_hash_lang(TXT_Scope *scope, U128 key, U128 hash, TXT_LangKind lang)
+txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
 {
   TXT_TextInfo info = {0};
   if(!u128_match(hash, u128_zero()))
@@ -825,63 +815,46 @@ txt_text_info_from_key_hash_lang(TXT_Scope *scope, U128 key, U128 hash, TXT_Lang
     }
     if(node_is_new)
     {
-      txt_u2p_enqueue_req(key, hash, lang, max_U64);
-    }
-    if(!found)
-    {
-      U128 fallback_hash = {0};
-      TXT_LangKind fallback_lang = TXT_LangKind_Null;
-      U64 fallback_slot_idx = key.u64[1]%txt_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%txt_shared->fallback_stripes_count;
-      TXT_KeyFallbackSlot *fallback_slot = &txt_shared->fallback_slots[fallback_slot_idx];
-      TXT_Stripe *fallback_stripe = &txt_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeR(fallback_stripe->rw_mutex) for(TXT_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(key, n->key))
-        {
-          fallback_hash = n->hash;
-          break;
-        }
-      }
-      if(!u128_match(fallback_hash, u128_zero()))
-      {
-        U64 retry_slot_idx = fallback_hash.u64[1]%txt_shared->slots_count;
-        U64 retry_stripe_idx = retry_slot_idx%txt_shared->stripes_count;
-        TXT_Slot *retry_slot = &txt_shared->slots[retry_slot_idx];
-        TXT_Stripe *retry_stripe = &txt_shared->stripes[retry_stripe_idx];
-        OS_MutexScopeR(retry_stripe->rw_mutex)
-        {
-          for(TXT_Node *n = retry_slot->first; n != 0; n = n->next)
-          {
-            if(u128_match(fallback_hash, n->hash) && fallback_lang == n->lang)
-            {
-              MemoryCopyStruct(&info, &n->info);
-              txt_scope_touch_node__stripe_r_guarded(scope, n);
-              break;
-            }
-          }
-        }
-      }
+      txt_u2p_enqueue_req(hash, lang, max_U64);
     }
   }
   return info;
+}
+
+internal TXT_TextInfo
+txt_text_info_from_key_lang(TXT_Scope *scope, U128 key, TXT_LangKind lang, U128 *hash_out)
+{
+  TXT_TextInfo result = {0};
+  for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+  {
+    U128 hash = hs_hash_from_key(key, rewind_idx);
+    result = txt_text_info_from_hash_lang(scope, hash, lang);
+    if(result.lines_count != 0)
+    {
+      if(hash_out)
+      {
+        *hash_out = hash;
+      }
+      break;
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
 //~ rjf: Transfer Threads
 
 internal B32
-txt_u2p_enqueue_req(U128 key, U128 hash, TXT_LangKind lang, U64 endt_us)
+txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us)
 {
   B32 good = 0;
   OS_MutexScope(txt_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
     U64 available_size = txt_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(key)+sizeof(hash))
+    if(available_size >= sizeof(hash)+sizeof(lang))
     {
       good = 1;
-      txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &key);
       txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &hash);
       txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &lang);
       break;
@@ -900,14 +873,13 @@ txt_u2p_enqueue_req(U128 key, U128 hash, TXT_LangKind lang, U64 endt_us)
 }
 
 internal void
-txt_u2p_dequeue_req(U128 *key_out, U128 *hash_out, TXT_LangKind *lang_out)
+txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out)
 {
   OS_MutexScope(txt_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
-    if(unconsumed_size >= sizeof(*key_out) + sizeof(*hash_out))
+    if(unconsumed_size >= sizeof(*hash_out) + sizeof(*lang_out))
     {
-      txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, key_out);
       txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, hash_out);
       txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, lang_out);
       break;
@@ -925,10 +897,9 @@ txt_parse_thread__entry_point(void *p)
     HS_Scope *scope = hs_scope_open();
     
     //- rjf: get next key
-    U128 key = {0};
     U128 hash = {0};
     TXT_LangKind lang = TXT_LangKind_Null;
-    txt_u2p_dequeue_req(&key, &hash, &lang);
+    txt_u2p_dequeue_req(&hash, &lang);
     
     //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
@@ -1054,34 +1025,6 @@ txt_parse_thread__entry_point(void *p)
           ins_atomic_u64_inc_eval(&n->load_count);
           break;
         }
-      }
-    }
-    
-    //- rjf: commit this key/hash pair to fallback cache
-    if(got_task && !u128_match(key, u128_zero()) && !u128_match(hash, u128_zero()))
-    {
-      U64 fallback_slot_idx = key.u64[1]%txt_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%txt_shared->fallback_stripes_count;
-      TXT_KeyFallbackSlot *fallback_slot = &txt_shared->fallback_slots[fallback_slot_idx];
-      TXT_Stripe *fallback_stripe = &txt_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeW(fallback_stripe->rw_mutex)
-      {
-        TXT_KeyFallbackNode *node = 0;
-        for(TXT_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-        {
-          if(u128_match(n->key, key))
-          {
-            node = n;
-            break;
-          }
-        }
-        if(node == 0)
-        {
-          node = push_array(fallback_stripe->arena, TXT_KeyFallbackNode, 1);
-          SLLQueuePush(fallback_slot->first, fallback_slot->last, node);
-        }
-        node->key = key;
-        node->hash = hash;
       }
     }
     
