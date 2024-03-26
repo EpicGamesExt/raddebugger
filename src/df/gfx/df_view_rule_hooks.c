@@ -693,6 +693,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     U128 text_hash = {0};
     TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, top.lang, &text_hash);
     String8 data = hs_data_from_hash(hs_scope, text_hash);
+    TXT_LineTokensSlice line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &info, data, r1s64(1, info.lines_count));
     
     //- rjf: info -> code slice info
     DF_CodeSliceParams code_slice_params = {0};
@@ -711,6 +712,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
       {
         code_slice_params.line_text[line_idx] = str8_substr(data, info.lines_ranges[line_idx]);
         code_slice_params.line_ranges[line_idx] = info.lines_ranges[line_idx];
+        code_slice_params.line_tokens[line_idx] = line_tokens_slice.line_tokens[line_idx];
       }
       code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
       code_slice_params.font_size = ui_top_font_size();
