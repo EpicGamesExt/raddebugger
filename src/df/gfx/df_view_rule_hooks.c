@@ -879,32 +879,10 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   
   //- rjf: obtain key for this data range
   U128 texture_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
-  // HACK(rjf): we should not need to explicitly inform the process memory cache layer here -
-  // want a joined "get me the key & load it" operation here
-  ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0, 0, 0);
   
   //- rjf: hash & topology -> texture
   TEX_Topology topology = tex_topology_make(v2s32((S32)topology_info.width, (S32)topology_info.height), topology_info.fmt);
   R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology);
-  
-#if 0
-  //- rjf: unique identifying info about this address -> unique key
-  U128 texture_key = {0};
-  {
-    U64 data[] =
-    {
-      (U64)process->ctrl_machine_id,
-      (U64)process->ctrl_handle.u64[0],
-      vaddr_range.min,
-      vaddr_range.max,
-    };
-    texture_key = hs_hash_from_data(str8((U8 *)data, sizeof(data)));
-  }
-  
-  //- rjf: address range -> hash
-  U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0, 0, 0);
-  R_Handle texture = tex_texture_from_key_hash_topology(tex_scope, texture_key, hash, topology);
-#endif
   
   //- rjf: build preview
   F32 rate = 1 - pow_f32(2, (-15.f * df_dt()));

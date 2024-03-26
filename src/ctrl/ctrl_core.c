@@ -881,7 +881,7 @@ ctrl_set_wakeup_hook(CTRL_WakeupFunctionType *wakeup_hook)
 //- rjf: process memory cache interaction
 
 internal U128
-ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated)
+ctrl_calc_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated)
 {
   U64 key_hash_data[] =
   {
@@ -1049,6 +1049,16 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
   return result;
 }
 
+//- rjf: bundled key/stream helper
+
+internal U128
+ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 zero_terminated)
+{
+  U128 key = ctrl_calc_hash_store_key_from_process_vaddr_range(machine_id, process, range, zero_terminated);
+  ctrl_stored_hash_from_process_vaddr_range(machine_id, process, range, 0, 0, 0);
+  return key;
+}
+
 //- rjf: process memory cache reading helpers
 
 internal CTRL_ProcessMemorySlice
@@ -1075,7 +1085,7 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
     for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
     {
       U64 page_base_vaddr = page_range.min + page_idx*page_size;
-      U128 page_key = ctrl_hash_store_key_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
+      U128 page_key = ctrl_calc_hash_store_key_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
       B32 page_is_stale = 0;
       U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(machine_id, process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, &page_is_stale, endt_us);
       U128 page_last_hash = hs_hash_from_key(page_key, 1);
@@ -3668,7 +3678,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     Rng1U64 vaddr_range = {0};
     B32 zero_terminated = 0;
     ctrl_u2ms_dequeue_req(&machine_id, &process, &vaddr_range, &zero_terminated);
-    U128 key = ctrl_hash_store_key_from_process_vaddr_range(machine_id, process, vaddr_range, zero_terminated);
+    U128 key = ctrl_calc_hash_store_key_from_process_vaddr_range(machine_id, process, vaddr_range, zero_terminated);
     
     //- rjf: unpack process memory cache key
     U64 process_hash = ctrl_hash_from_string(str8_struct(&process));
