@@ -73,355 +73,6 @@ txti_lang_kind_from_extension(String8 extension)
 }
 
 ////////////////////////////////
-//~ rjf: Token Type Functions
-
-internal void
-txti_token_chunk_list_push(Arena *arena, TXTI_TokenChunkList *list, U64 cap, TXTI_Token *token)
-{
-  TXTI_TokenChunkNode *node = list->last;
-  if(node == 0 || node->count >= node->cap)
-  {
-    node = push_array(arena, TXTI_TokenChunkNode, 1);
-    SLLQueuePush(list->first, list->last, node);
-    node->cap = cap;
-    node->v = push_array_no_zero(arena, TXTI_Token, node->cap);
-    list->chunk_count += 1;
-  }
-  MemoryCopyStruct(&node->v[node->count], token);
-  node->count += 1;
-  list->token_count += 1;
-}
-
-internal void
-txti_token_list_push(Arena *arena, TXTI_TokenList *list, TXTI_Token *token)
-{
-  TXTI_TokenNode *node = push_array(arena, TXTI_TokenNode, 1);
-  MemoryCopyStruct(&node->v, token);
-  SLLQueuePush(list->first, list->last, node);
-  list->count += 1;
-}
-
-internal TXTI_TokenArray
-txti_token_array_from_chunk_list(Arena *arena, TXTI_TokenChunkList *list)
-{
-  TXTI_TokenArray array = {0};
-  array.count = list->token_count;
-  array.v = push_array_no_zero(arena, TXTI_Token, array.count);
-  U64 idx = 0;
-  for(TXTI_TokenChunkNode *n = list->first; n != 0; n = n->next)
-  {
-    MemoryCopy(array.v+idx, n->v, n->count*sizeof(TXTI_Token));
-    idx += n->count;
-  }
-  return array;
-}
-
-internal TXTI_TokenArray
-txti_token_array_from_list(Arena *arena, TXTI_TokenList *list)
-{
-  TXTI_TokenArray array = {0};
-  array.count = list->count;
-  array.v = push_array_no_zero(arena, TXTI_Token, array.count);
-  U64 idx = 0;
-  for(TXTI_TokenNode *n = list->first; n != 0; n = n->next)
-  {
-    MemoryCopyStruct(array.v+idx, &n->v);
-    idx += 1;
-  }
-  return array;
-}
-
-////////////////////////////////
-//~ rjf: Lexing Functions
-
-internal TXTI_TokenArray
-txti_token_array_from_string__cpp(Arena *arena, U64 *bytes_processed_counter, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  //- rjf: generate token list
-  TXTI_TokenChunkList tokens = {0};
-  {
-    B32 comment_is_single_line = 0;
-    B32 string_is_char = 0;
-    TXTI_TokenKind active_token_kind = TXTI_TokenKind_Null;
-    U64 active_token_start_idx = 0;
-    B32 escaped = 0;
-    B32 next_escaped = 0;
-    U64 byte_process_start_idx = 0;
-    for(U64 idx = 0; idx <= string.size;)
-    {
-      U8 byte      = (idx+0 < string.size) ? (string.str[idx+0]) : 0;
-      U8 next_byte = (idx+1 < string.size) ? (string.str[idx+1]) : 0;
-      
-      // rjf: update counter
-      if(bytes_processed_counter != 0 && ((idx-byte_process_start_idx) >= 1000 || idx == string.size))
-      {
-        ins_atomic_u64_add_eval(bytes_processed_counter, (idx-byte_process_start_idx));
-        byte_process_start_idx = idx;
-      }
-      
-      // rjf: escaping
-      if(escaped && (byte != '\r' && byte != '\n'))
-      {
-        next_escaped = 0;
-      }
-      else if(!escaped && byte == '\\')
-      {
-        next_escaped = 1;
-      }
-      
-      // rjf: take starter, determine active token kind
-      if(active_token_kind == TXTI_TokenKind_Null)
-      {
-        // rjf: use next bytes to start a new token
-        if(0){}
-        else if(char_is_space(byte))             { active_token_kind = TXTI_TokenKind_Whitespace; }
-        else if(byte == '_' ||
-                byte == '$' ||
-                char_is_alpha(byte))             { active_token_kind = TXTI_TokenKind_Identifier; }
-        else if(char_is_digit(byte, 10) ||
-                (byte == '.' &&
-                 char_is_digit(next_byte, 10)))  { active_token_kind = TXTI_TokenKind_Numeric; }
-        else if(byte == '"')                     { active_token_kind = TXTI_TokenKind_String; string_is_char = 0; }
-        else if(byte == '\'')                    { active_token_kind = TXTI_TokenKind_String; string_is_char = 1; }
-        else if(byte == '/' && next_byte == '/') { active_token_kind = TXTI_TokenKind_Comment; comment_is_single_line = 1; }
-        else if(byte == '/' && next_byte == '*') { active_token_kind = TXTI_TokenKind_Comment; comment_is_single_line = 0; }
-        else if(byte == '~' || byte == '!' ||
-                byte == '%' || byte == '^' ||
-                byte == '&' || byte == '*' ||
-                byte == '(' || byte == ')' ||
-                byte == '-' || byte == '=' ||
-                byte == '+' || byte == '[' ||
-                byte == ']' || byte == '{' ||
-                byte == '}' || byte == ':' ||
-                byte == ';' || byte == ',' ||
-                byte == '.' || byte == '<' ||
-                byte == '>' || byte == '/' ||
-                byte == '?' || byte == '|')      { active_token_kind = TXTI_TokenKind_Symbol; }
-        else if(byte == '#')                     { active_token_kind = TXTI_TokenKind_Meta; }
-        
-        // rjf: start new token
-        if(active_token_kind != TXTI_TokenKind_Null)
-        {
-          active_token_start_idx = idx;
-        }
-        
-        // rjf: invalid token kind -> emit error
-        else
-        {
-          TXTI_Token token = {TXTI_TokenKind_Error, r1u64(idx, idx+1)};
-          txti_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
-        }
-      }
-      
-      // rjf: look for ender
-      U64 ender_pad = 0;
-      B32 ender_found = 0;
-      if(active_token_kind != TXTI_TokenKind_Null && idx>active_token_start_idx)
-      {
-        if(idx == string.size)
-        {
-          ender_pad = 0;
-          ender_found = 1;
-        }
-        else switch(active_token_kind)
-        {
-          default:break;
-          case TXTI_TokenKind_Whitespace:
-          {
-            ender_found = !char_is_space(byte);
-          }break;
-          case TXTI_TokenKind_Identifier:
-          {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
-          }break;
-          case TXTI_TokenKind_Numeric:
-          {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.');
-          }break;
-          case TXTI_TokenKind_String:
-          {
-            ender_found = (!escaped && ((!string_is_char && byte == '"') || (string_is_char && byte == '\'')));
-            ender_pad += 1;
-          }break;
-          case TXTI_TokenKind_Symbol:
-          {
-            ender_found = (byte != '~' && byte != '!' &&
-                           byte != '%' && byte != '^' &&
-                           byte != '&' && byte != '*' &&
-                           byte != '(' && byte != ')' &&
-                           byte != '-' && byte != '=' &&
-                           byte != '+' && byte != '[' &&
-                           byte != ']' && byte != '{' &&
-                           byte != '}' && byte != ':' &&
-                           byte != ';' && byte != ',' &&
-                           byte != '.' && byte != '<' &&
-                           byte != '>' && byte != '/' &&
-                           byte != '?' && byte != '|');
-          }break;
-          case TXTI_TokenKind_Comment:
-          {
-            if(comment_is_single_line)
-            {
-              ender_found = (!escaped && (byte == '\r' || byte == '\n'));
-            }
-            else
-            {
-              ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
-              ender_pad += 2;
-            }
-          }break;
-          case TXTI_TokenKind_Meta:
-          {
-            ender_found = (!escaped && (byte == '\r' || byte == '\n'));
-          }break;
-        }
-      }
-      
-      // rjf: next byte is ender => emit token
-      if(ender_found)
-      {
-        TXTI_Token token = {active_token_kind, r1u64(active_token_start_idx, idx+ender_pad)};
-        active_token_kind = TXTI_TokenKind_Null;
-        
-        // rjf: identifier -> keyword in special cases
-        if(token.kind == TXTI_TokenKind_Identifier)
-        {
-          read_only local_persist String8 cpp_keywords[] =
-          {
-            str8_lit_comp("alignas"),
-            str8_lit_comp("alignof"),
-            str8_lit_comp("and"),
-            str8_lit_comp("and_eq"),
-            str8_lit_comp("asm"),
-            str8_lit_comp("atomic_cancel"),
-            str8_lit_comp("atomic_commit"),
-            str8_lit_comp("atomic_noexcept"),
-            str8_lit_comp("auto"),
-            str8_lit_comp("bitand"),
-            str8_lit_comp("bitor"),
-            str8_lit_comp("bool"),
-            str8_lit_comp("break"),
-            str8_lit_comp("case"),
-            str8_lit_comp("catch"),
-            str8_lit_comp("char"),
-            str8_lit_comp("char8_t"),
-            str8_lit_comp("char16_t"),
-            str8_lit_comp("char32_t"),
-            str8_lit_comp("class"),
-            str8_lit_comp("compl"),
-            str8_lit_comp("concept"),
-            str8_lit_comp("const"),
-            str8_lit_comp("consteval"),
-            str8_lit_comp("constexpr"),
-            str8_lit_comp("constinit"),
-            str8_lit_comp("const_cast"),
-            str8_lit_comp("continue"),
-            str8_lit_comp("co_await"),
-            str8_lit_comp("co_return"),
-            str8_lit_comp("co_yield"),
-            str8_lit_comp("decltype"),
-            str8_lit_comp("default"),
-            str8_lit_comp("delete"),
-            str8_lit_comp("do"),
-            str8_lit_comp("double"),
-            str8_lit_comp("dynamic_cast"),
-            str8_lit_comp("else"),
-            str8_lit_comp("enum"),
-            str8_lit_comp("explicit"),
-            str8_lit_comp("export"),
-            str8_lit_comp("extern"),
-            str8_lit_comp("false"),
-            str8_lit_comp("float"),
-            str8_lit_comp("for"),
-            str8_lit_comp("friend"),
-            str8_lit_comp("goto"),
-            str8_lit_comp("if"),
-            str8_lit_comp("inline"),
-            str8_lit_comp("int"),
-            str8_lit_comp("long"),
-            str8_lit_comp("mutable"),
-            str8_lit_comp("namespace"),
-            str8_lit_comp("new"),
-            str8_lit_comp("noexcept"),
-            str8_lit_comp("not"),
-            str8_lit_comp("not_eq"),
-            str8_lit_comp("nullptr"),
-            str8_lit_comp("operator"),
-            str8_lit_comp("or"),
-            str8_lit_comp("or_eq"),
-            str8_lit_comp("private"),
-            str8_lit_comp("protected"),
-            str8_lit_comp("public"),
-            str8_lit_comp("reflexpr"),
-            str8_lit_comp("register"),
-            str8_lit_comp("reinterpret_cast"),
-            str8_lit_comp("requires"),
-            str8_lit_comp("return"),
-            str8_lit_comp("short"),
-            str8_lit_comp("signed"),
-            str8_lit_comp("sizeof"),
-            str8_lit_comp("static"),
-            str8_lit_comp("static_assert"),
-            str8_lit_comp("static_cast"),
-            str8_lit_comp("struct"),
-            str8_lit_comp("switch"),
-            str8_lit_comp("synchronized"),
-            str8_lit_comp("template"),
-            str8_lit_comp("this"),
-            str8_lit_comp("thread_local"),
-            str8_lit_comp("throw"),
-            str8_lit_comp("true"),
-            str8_lit_comp("try"),
-            str8_lit_comp("typedef"),
-            str8_lit_comp("typeid"),
-            str8_lit_comp("typename"),
-            str8_lit_comp("union"),
-            str8_lit_comp("unsigned"),
-            str8_lit_comp("using"),
-            str8_lit_comp("virtual"),
-            str8_lit_comp("void"),
-            str8_lit_comp("volatile"),
-            str8_lit_comp("wchar_t"),
-            str8_lit_comp("while"),
-            str8_lit_comp("xor"),
-            str8_lit_comp("xor_eq"),
-          };
-          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
-          for(U64 keyword_idx = 0; keyword_idx < ArrayCount(cpp_keywords); keyword_idx += 1)
-          {
-            if(str8_match(cpp_keywords[keyword_idx], token_string, 0))
-            {
-              token.kind = TXTI_TokenKind_Keyword;
-              break;
-            }
-          }
-        }
-        
-        // rjf: push
-        txti_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
-        
-        // rjf: increment by ender padding
-        idx += ender_pad;
-      }
-      
-      // rjf: advance by 1 byte if we haven't found an ender
-      if(!ender_found)
-      {
-        idx += 1;
-      }
-      escaped = next_escaped;
-    }
-  }
-  
-  //- rjf: token list -> token array
-  TXTI_TokenArray result = txti_token_array_from_chunk_list(arena, &tokens);
-  scratch_end(scratch);
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Message Type Functions
 
 internal void
@@ -607,7 +258,7 @@ txti_slice_from_handle_line_range(Arena *arena, TXTI_Handle handle, Rng1S64 line
       result.line_count = (U64)dim_1s64(line_range_clamped)+1;
       result.line_text = push_array(arena, String8, result.line_count);
       result.line_ranges = push_array(arena, Rng1U64, result.line_count);
-      result.line_tokens = push_array(arena, TXTI_TokenArray, result.line_count);
+      result.line_tokens = push_array(arena, TXT_TokenArray, result.line_count);
       
       // rjf: fill line ranges & text
       U64 line_slice_idx = 0;
@@ -626,7 +277,7 @@ txti_slice_from_handle_line_range(Arena *arena, TXTI_Handle handle, Rng1S64 line
       }
       
       // rjf: binary search to find first token
-      TXTI_Token *tokens_first = 0;
+      TXT_Token *tokens_first = 0;
       ProfScope("binary search to find first token")
       {
         Rng1U64 slice_range = r1u64(result.line_ranges[0].min, result.line_ranges[result.line_count-1].max);
@@ -639,7 +290,7 @@ txti_slice_from_handle_line_range(Arena *arena, TXTI_Handle handle, Rng1S64 line
           {
             break;
           }
-          TXTI_Token *mid_token = &buffer->tokens.v[mid_idx];
+          TXT_Token *mid_token = &buffer->tokens.v[mid_idx];
           if(mid_token->range.min > slice_range.max)
           {
             opl_idx = mid_idx;
@@ -661,18 +312,18 @@ txti_slice_from_handle_line_range(Arena *arena, TXTI_Handle handle, Rng1S64 line
       }
       
       // rjf: grab per-line tokens
-      TXTI_TokenList *line_tokens_lists = push_array(scratch.arena, TXTI_TokenList, result.line_count);
+      TXT_TokenList *line_tokens_lists = push_array(scratch.arena, TXT_TokenList, result.line_count);
       if(tokens_first != 0) ProfScope("grab per-line tokens")
       {
-        TXTI_Token *tokens_opl = buffer->tokens.v+buffer->tokens.count;
+        TXT_Token *tokens_opl = buffer->tokens.v+buffer->tokens.count;
         U64 line_slice_idx = 0;
-        for(TXTI_Token *token = tokens_first; token < tokens_opl && line_slice_idx < result.line_count;)
+        for(TXT_Token *token = tokens_first; token < tokens_opl && line_slice_idx < result.line_count;)
         {
           if(token->range.min < result.line_ranges[line_slice_idx].max)
           {
             if(token->range.max > result.line_ranges[line_slice_idx].min)
             {
-              txti_token_list_push(scratch.arena, &line_tokens_lists[line_slice_idx], token);
+              txt_token_list_push(scratch.arena, &line_tokens_lists[line_slice_idx], token);
             }
             B32 need_token_advance = 0;
             B32 need_line_advance = 0;
@@ -697,7 +348,7 @@ txti_slice_from_handle_line_range(Arena *arena, TXTI_Handle handle, Rng1S64 line
       // rjf: bake per-line tokens to arrays
       for(U64 line_slice_idx = 0; line_slice_idx < result.line_count; line_slice_idx += 1)
       {
-        result.line_tokens[line_slice_idx] = txti_token_array_from_list(arena, &line_tokens_lists[line_slice_idx]);
+        result.line_tokens[line_slice_idx] = txt_token_array_from_list(arena, &line_tokens_lists[line_slice_idx]);
       }
     }
   }
@@ -733,8 +384,8 @@ txti_string_from_handle_txt_rng(Arena *arena, TXTI_Handle handle, TxtRng range)
     switch(info.line_end_kind)
     {
       default:
-      case TXTI_LineEndKind_LF:{join.sep = str8_lit("\n");}break;
-      case TXTI_LineEndKind_CRLF:{join.sep = str8_lit("\r\n");}break;
+      case TXT_LineEndKind_LF:{join.sep = str8_lit("\n");}break;
+      case TXT_LineEndKind_CRLF:{join.sep = str8_lit("\r\n");}break;
     }
     result = str8_list_join(arena, &line_strings, &join);
   }
@@ -755,18 +406,18 @@ txti_string_from_handle_line_num(Arena *arena, TXTI_Handle handle, S64 line_num)
 }
 
 internal Rng1U64
-txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXTI_TokenArray *line_tokens)
+txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXT_TokenArray *line_tokens)
 {
   Rng1U64 result = {0};
   Temp scratch = scratch_begin(0, 0);
   {
     // rjf: unpack line info
-    TXTI_Token *line_tokens_first = line_tokens->v;
-    TXTI_Token *line_tokens_opl = line_tokens->v+line_tokens->count;
+    TXT_Token *line_tokens_first = line_tokens->v;
+    TXT_Token *line_tokens_opl = line_tokens->v+line_tokens->count;
     
     // rjf: find token containing `off`
-    TXTI_Token *pt_token = 0;
-    for(TXTI_Token *token = line_tokens_first;
+    TXT_Token *pt_token = 0;
+    for(TXT_Token *token = line_tokens_first;
         token < line_tokens_opl;
         token += 1)
     {
@@ -778,14 +429,14 @@ txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, S
         switch(token->kind)
         {
           default:{}break;
-          case TXTI_TokenKind_Symbol:
+          case TXT_TokenKind_Symbol:
           {
             token_ender = (str8_match(token_string, str8_lit("]"), 0));
           }break;
-          case TXTI_TokenKind_Identifier:
-          case TXTI_TokenKind_Keyword:
-          case TXTI_TokenKind_String:
-          case TXTI_TokenKind_Meta:
+          case TXT_TokenKind_Identifier:
+          case TXT_TokenKind_Keyword:
+          case TXT_TokenKind_String:
+          case TXT_TokenKind_Meta:
           {
             token_ender = 1;
           }break;
@@ -809,7 +460,7 @@ txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, S
     {
       B32 walkback_done = 0;
       S32 nest = 0;
-      for(TXTI_Token *wb_token = pt_token;
+      for(TXT_Token *wb_token = pt_token;
           wb_token >= line_tokens_first && walkback_done == 0;
           wb_token -= 1)
       {
@@ -819,7 +470,7 @@ txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, S
         switch(wb_token->kind)
         {
           default:{}break;
-          case TXTI_TokenKind_Symbol:
+          case TXT_TokenKind_Symbol:
           {
             B32 is_scope_resolution = str8_match(wb_token_string, str8_lit("::"), 0);
             B32 is_dot = str8_match(wb_token_string, str8_lit("."), 0);
@@ -837,7 +488,7 @@ txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, S
               include_wb_token = 1;
             }
           }break;
-          case TXTI_TokenKind_Identifier:
+          case TXT_TokenKind_Identifier:
           {
             include_wb_token = 1;
           }break;
@@ -868,9 +519,9 @@ txti_expr_range_from_handle_pt(TXTI_Handle handle, TxtPt pt)
     // rjf: unpack line info
     String8 line_text = slice.line_text[0];
     Rng1U64 line_range = slice.line_ranges[0];
-    TXTI_TokenArray line_tokens = slice.line_tokens[0];
-    TXTI_Token *line_tokens_first = line_tokens.v;
-    TXTI_Token *line_tokens_opl = line_tokens.v+line_tokens.count;
+    TXT_TokenArray line_tokens = slice.line_tokens[0];
+    TXT_Token *line_tokens_first = line_tokens.v;
+    TXT_Token *line_tokens_opl = line_tokens.v+line_tokens.count;
     U64 pt_off = line_range.min + (pt.column-1);
     
     // rjf: grab offset range of expression
@@ -1002,12 +653,12 @@ txti_mut_thread_entry_point(void *p)
         case TXTI_LangKind_C:
         case TXTI_LangKind_CPlusPlus:
         {
-          lex_function = txti_token_array_from_string__cpp;
+          lex_function = txt_token_array_from_string__c_cpp;
         }break;
       }
       
       //- rjf: detect line end kind
-      TXTI_LineEndKind line_end_kind = TXTI_LineEndKind_Null;
+      TXT_LineEndKind line_end_kind = TXT_LineEndKind_Null;
       if(load_valid)
       {
         U64 lf_count = 0;
@@ -1025,11 +676,11 @@ txti_mut_thread_entry_point(void *p)
         }
         if(cr_count >= lf_count/2 && lf_count >= 1)
         {
-          line_end_kind = TXTI_LineEndKind_CRLF;
+          line_end_kind = TXT_LineEndKind_CRLF;
         }
         else if(lf_count >= 1)
         {
-          line_end_kind = TXTI_LineEndKind_LF;
+          line_end_kind = TXT_LineEndKind_LF;
         }
       }
       
@@ -1084,7 +735,7 @@ txti_mut_thread_entry_point(void *p)
               if(entity != 0)
               {
                 entity->buffer_apply_gen += 1;
-                if(line_end_kind != TXTI_LineEndKind_Null)
+                if(line_end_kind != TXT_LineEndKind_Null)
                 {
                   entity->line_end_kind = line_end_kind;
                 }

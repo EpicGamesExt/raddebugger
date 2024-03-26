@@ -8056,18 +8056,18 @@ df_rgba_from_theme_color(DF_ThemeColor color)
 }
 
 internal DF_ThemeColor
-df_theme_color_from_txti_token_kind(TXTI_TokenKind kind)
+df_theme_color_from_txt_token_kind(TXT_TokenKind kind)
 {
   DF_ThemeColor color = DF_ThemeColor_CodeDefault;
   switch(kind)
   {
     default:break;
-    case TXTI_TokenKind_Keyword:{color = DF_ThemeColor_CodeKeyword;}break;
-    case TXTI_TokenKind_Numeric:{color = DF_ThemeColor_CodeNumeric;}break;
-    case TXTI_TokenKind_String: {color = DF_ThemeColor_CodeString;}break;
-    case TXTI_TokenKind_Meta:   {color = DF_ThemeColor_CodeMeta;}break;
-    case TXTI_TokenKind_Comment:{color = DF_ThemeColor_CodeComment;}break;
-    case TXTI_TokenKind_Symbol: {color = DF_ThemeColor_CodeSymbol;}break;
+    case TXT_TokenKind_Keyword:{color = DF_ThemeColor_CodeKeyword;}break;
+    case TXT_TokenKind_Numeric:{color = DF_ThemeColor_CodeNumeric;}break;
+    case TXT_TokenKind_String: {color = DF_ThemeColor_CodeString;}break;
+    case TXT_TokenKind_Meta:   {color = DF_ThemeColor_CodeMeta;}break;
+    case TXT_TokenKind_Comment:{color = DF_ThemeColor_CodeComment;}break;
+    case TXT_TokenKind_Symbol: {color = DF_ThemeColor_CodeSymbol;}break;
   }
   return color;
 }
@@ -10063,7 +10063,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     {
       U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
       String8 line_text = params->line_text[line_slice_idx];
-      TXTI_TokenArray line_tokens = params->line_tokens[line_slice_idx];
+      TXT_TokenArray line_tokens = params->line_tokens[line_slice_idx];
       Rng1U64 line_range = params->line_ranges[line_slice_idx];
       U64 mouse_pt_off = line_range.min + (mouse_pt.column-1);
       Rng1U64 expr_off_rng = txti_expr_range_from_line_off_range_string_tokens(mouse_pt_off, line_range, line_text, &line_tokens);
@@ -10261,7 +10261,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       {
         String8 line_string = params->line_text[line_idx];
         Rng1U64 line_range = params->line_ranges[line_idx];
-        TXTI_TokenArray *line_tokens = &params->line_tokens[line_idx];
+        TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
         ui_set_next_text_padding(-2);
         UI_Key line_key = ui_key_from_stringf(top_container_box->key, "ln_%I64x", line_num);
         Vec4F32 line_bg_color = line_bg_colors[line_idx];
@@ -10292,9 +10292,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           }
           else
           {
-            TXTI_Token *line_tokens_first = line_tokens->v;
-            TXTI_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
-            for(TXTI_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
+            TXT_Token *line_tokens_first = line_tokens->v;
+            TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
+            for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
             {
               // rjf: token -> token string
               String8 token_string = {0};
@@ -10314,9 +10314,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               // rjf: token -> token color
               Vec4F32 token_color = df_rgba_from_theme_color(DF_ThemeColor_CodeDefault);
               {
-                DF_ThemeColor new_color_kind = df_theme_color_from_txti_token_kind(token->kind);
+                DF_ThemeColor new_color_kind = df_theme_color_from_txt_token_kind(token->kind);
                 F32 mix_t = 1.f;
-                if(token->kind == TXTI_TokenKind_Identifier)
+                if(token->kind == TXT_TokenKind_Identifier)
                 {
                   B32 mapped_special = 0;
                   for(DF_EntityNode *n = params->relevant_binaries.first; n != 0; n = n->next)
@@ -10808,12 +10808,12 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
 {
   Temp scratch = scratch_begin(&arena, 1);
   D_FancyStringList fancy_strings = {0};
-  TXTI_TokenArray tokens = txti_token_array_from_string__cpp(scratch.arena, 0, string);
-  TXTI_Token *tokens_opl = tokens.v+tokens.count;
+  TXT_TokenArray tokens = txt_token_array_from_string__c_cpp(scratch.arena, 0, string);
+  TXT_Token *tokens_opl = tokens.v+tokens.count;
   S32 indirection_counter = 0;
-  for(TXTI_Token *token = tokens.v; token < tokens_opl; token += 1)
+  for(TXT_Token *token = tokens.v; token < tokens_opl; token += 1)
   {
-    DF_ThemeColor token_color = df_theme_color_from_txti_token_kind(token->kind);
+    DF_ThemeColor token_color = df_theme_color_from_txt_token_kind(token->kind);
     Vec4F32 token_color_rgba = df_rgba_from_theme_color(token_color);
     token_color_rgba.w *= alpha;
     String8 token_string = str8_substr(string, token->range);
@@ -10833,7 +10833,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
       }break;
-      case TXTI_TokenKind_Identifier:
+      case TXT_TokenKind_Identifier:
       {
         D_FancyString fancy_string =
         {
@@ -10844,7 +10844,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
       }break;
-      case TXTI_TokenKind_Numeric:
+      case TXT_TokenKind_Numeric:
       {
         Vec4F32 token_color_rgba_alt = token_color_rgba;
         token_color_rgba_alt.x *= 0.7f;

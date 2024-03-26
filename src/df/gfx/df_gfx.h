@@ -453,7 +453,7 @@ struct DF_CodeSliceParams
   Rng1S64 line_num_range;
   String8 *line_text;
   Rng1U64 *line_ranges;
-  TXTI_TokenArray *line_tokens;
+  TXT_TokenArray *line_tokens;
   DF_EntityList *line_bps;
   DF_EntityList *line_ips;
   DF_EntityList *line_pins;
@@ -1010,7 +1010,7 @@ internal DF_CmdSpecList df_cmd_spec_list_from_event_flags(Arena *arena, OS_Event
 
 //- rjf: colors
 internal Vec4F32 df_rgba_from_theme_color(DF_ThemeColor color);
-internal DF_ThemeColor df_theme_color_from_txti_token_kind(TXTI_TokenKind kind);
+internal DF_ThemeColor df_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 
 //- rjf: fonts/sizes
 internal F_Tag df_font_from_slot(DF_FontSlot slot);

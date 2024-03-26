@@ -57,88 +57,6 @@ struct TXTI_Handle
 };
 
 ////////////////////////////////
-//~ rjf: Parsed Text Info Types
-
-typedef enum TXTI_LineEndKind
-{
-  TXTI_LineEndKind_Null,
-  TXTI_LineEndKind_LF,
-  TXTI_LineEndKind_CRLF,
-  TXTI_LineEndKind_COUNT
-}
-TXTI_LineEndKind;
-
-typedef enum TXTI_TokenKind
-{
-  TXTI_TokenKind_Null,
-  TXTI_TokenKind_Error,
-  TXTI_TokenKind_Whitespace,
-  TXTI_TokenKind_Keyword,
-  TXTI_TokenKind_Identifier,
-  TXTI_TokenKind_Numeric,
-  TXTI_TokenKind_String,
-  TXTI_TokenKind_Symbol,
-  TXTI_TokenKind_Comment,
-  TXTI_TokenKind_Meta, // preprocessor, etc.
-  TXTI_TokenKind_COUNT
-}
-TXTI_TokenKind;
-
-typedef struct TXTI_Token TXTI_Token;
-struct TXTI_Token
-{
-  TXTI_TokenKind kind;
-  Rng1U64 range;
-};
-
-typedef struct TXTI_TokenChunkNode TXTI_TokenChunkNode;
-struct TXTI_TokenChunkNode
-{
-  TXTI_TokenChunkNode *next;
-  U64 count;
-  U64 cap;
-  TXTI_Token *v;
-};
-
-typedef struct TXTI_TokenChunkList TXTI_TokenChunkList;
-struct TXTI_TokenChunkList
-{
-  TXTI_TokenChunkNode *first;
-  TXTI_TokenChunkNode *last;
-  U64 chunk_count;
-  U64 token_count;
-};
-
-typedef struct TXTI_TokenNode TXTI_TokenNode;
-struct TXTI_TokenNode
-{
-  TXTI_TokenNode *next;
-  TXTI_Token v;
-};
-
-typedef struct TXTI_TokenList TXTI_TokenList;
-struct TXTI_TokenList
-{
-  TXTI_TokenNode *first;
-  TXTI_TokenNode *last;
-  U64 count;
-};
-
-typedef struct TXTI_TokenArray TXTI_TokenArray;
-struct TXTI_TokenArray
-{
-  U64 count;
-  TXTI_Token *v;
-};
-
-typedef struct TXTI_TokenArrayArray TXTI_TokenArrayArray;
-struct TXTI_TokenArrayArray
-{
-  U64 count;
-  TXTI_TokenArray *v;
-};
-
-////////////////////////////////
 //~ rjf: Language Kinds
 
 typedef enum TXTI_LangKind
@@ -150,7 +68,7 @@ typedef enum TXTI_LangKind
 }
 TXTI_LangKind;
 
-typedef TXTI_TokenArray TXTI_LangLexFunctionType(Arena *arena, U64 *bytes_processed_counter, String8 string);
+typedef TXT_TokenArray TXTI_LangLexFunctionType(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
 ////////////////////////////////
 //~ rjf: Buffer Entity Types
@@ -173,7 +91,7 @@ struct TXTI_Buffer
   U64 lines_max_size;
   
   // rjf: tokens
-  TXTI_TokenArray tokens;
+  TXT_TokenArray tokens;
 };
 
 typedef struct TXTI_Entity TXTI_Entity;
@@ -187,7 +105,7 @@ struct TXTI_Entity
   U64 mut_gen;
   
   // rjf: metadata
-  TXTI_LineEndKind line_end_kind;
+  TXT_LineEndKind line_end_kind;
   TXTI_LangKind lang_kind;
   U64 bytes_processed;
   U64 bytes_to_process;
@@ -238,7 +156,7 @@ struct TXTI_BufferInfo
 {
   String8 path;
   U64 timestamp;
-  TXTI_LineEndKind line_end_kind;
+  TXT_LineEndKind line_end_kind;
   TXTI_LangKind lang_kind;
   U64 total_line_count;
   U64 last_line_size;
@@ -255,7 +173,7 @@ struct TXTI_Slice
   U64 line_count;
   String8 *line_text;
   Rng1U64 *line_ranges;
-  TXTI_TokenArray *line_tokens;
+  TXT_TokenArray *line_tokens;
 };
 
 ////////////////////////////////
@@ -343,19 +261,6 @@ internal U64 txti_hash_from_string(String8 string);
 internal TXTI_LangKind txti_lang_kind_from_extension(String8 extension);
 
 ////////////////////////////////
-//~ rjf: Token Type Functions
-
-internal void txti_token_chunk_list_push(Arena *arena, TXTI_TokenChunkList *list, U64 cap, TXTI_Token *token);
-internal void txti_token_list_push(Arena *arena, TXTI_TokenList *list, TXTI_Token *token);
-internal TXTI_TokenArray txti_token_array_from_chunk_list(Arena *arena, TXTI_TokenChunkList *list);
-internal TXTI_TokenArray txti_token_array_from_list(Arena *arena, TXTI_TokenList *list);
-
-////////////////////////////////
-//~ rjf: Lexing Functions
-
-internal TXTI_TokenArray txti_token_array_from_string__cpp(Arena *arena, U64 *bytes_processed_counter, String8 string);
-
-////////////////////////////////
 //~ rjf: Message Type Functions
 
 internal void txti_msg_list_push(Arena *arena, TXTI_MsgList *msgs, TXTI_Msg *msg);
@@ -373,7 +278,7 @@ internal TXTI_BufferInfo txti_buffer_info_from_handle(Arena *arena, TXTI_Handle 
 internal TXTI_Slice txti_slice_from_handle_line_range(Arena *arena, TXTI_Handle handle, Rng1S64 line_range);
 internal String8 txti_string_from_handle_txt_rng(Arena *arena, TXTI_Handle handle, TxtRng range);
 internal String8 txti_string_from_handle_line_num(Arena *arena, TXTI_Handle handle, S64 line_num);
-internal Rng1U64 txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXTI_TokenArray *line_tokens);
+internal Rng1U64 txti_expr_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXT_TokenArray *line_tokens);
 internal TxtRng txti_expr_range_from_handle_pt(TXTI_Handle handle, TxtPt pt);
 
 //- rjf: buffer mutations

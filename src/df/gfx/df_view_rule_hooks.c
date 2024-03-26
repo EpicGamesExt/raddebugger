@@ -715,7 +715,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
       code_slice_params.line_num_range = r1s64(1, info.lines_count);
       code_slice_params.line_text = push_array(scratch.arena, String8, info.lines_count);
       code_slice_params.line_ranges = push_array(scratch.arena, Rng1U64, info.lines_count);
-      code_slice_params.line_tokens = push_array(scratch.arena, TXTI_TokenArray, info.lines_count);
+      code_slice_params.line_tokens = push_array(scratch.arena, TXT_TokenArray, info.lines_count);
       code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, info.lines_count);
       code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, info.lines_count);
       code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, info.lines_count);
