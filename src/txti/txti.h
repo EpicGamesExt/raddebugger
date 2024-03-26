@@ -146,6 +146,7 @@ typedef enum TXTI_LangKind
   TXTI_LangKind_Null,
   TXTI_LangKind_C,
   TXTI_LangKind_CPlusPlus,
+  TXTI_LangKind_Rust,
   TXTI_LangKind_COUNT
 }
 TXTI_LangKind;
@@ -354,6 +355,7 @@ internal TXTI_TokenArray txti_token_array_from_list(Arena *arena, TXTI_TokenList
 //~ rjf: Lexing Functions
 
 internal TXTI_TokenArray txti_token_array_from_string__cpp(Arena *arena, U64 *bytes_processed_counter, String8 string);
+internal TXTI_TokenArray txti_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
 ////////////////////////////////
 //~ rjf: Message Type Functions
