@@ -94,6 +94,8 @@ struct TXT_TextInfo
   U64 lines_max_size;
   TXT_LineEndKind line_end_kind;
   TXT_TokenArray tokens;
+  U64 bytes_processed;
+  U64 bytes_to_process;
 };
 
 ////////////////////////////////

@@ -774,6 +774,8 @@ txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
         if(u128_match(hash, n->hash) && n->lang == lang)
         {
           MemoryCopyStruct(&info, &n->info);
+          info.bytes_processed = ins_atomic_u64_eval(&n->info.bytes_processed);
+          info.bytes_to_process = ins_atomic_u64_eval(&n->info.bytes_to_process);
           found = 1;
           txt_scope_touch_node__stripe_r_guarded(scope, n);
           break;
@@ -1106,7 +1108,7 @@ txt_parse_thread__entry_point(void *p)
     {
       for(TXT_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(u128_match(n->hash, hash))
+        if(u128_match(n->hash, hash) && n->lang == lang)
         {
           got_task = !ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0);
           break;
@@ -1127,6 +1129,28 @@ txt_parse_thread__entry_point(void *p)
     if(got_task && data.size != 0)
     {
       info_arena = arena_alloc();
+      
+      //- rjf: grab pointers to working counters
+      U64 *bytes_processed_ptr = 0;
+      U64 *bytes_to_process_ptr = 0;
+      OS_MutexScopeR(stripe->rw_mutex)
+      {
+        for(TXT_Node *n = slot->first; n != 0; n = n->next)
+        {
+          if(u128_match(n->hash, hash) && n->lang == lang)
+          {
+            bytes_processed_ptr = &n->info.bytes_processed;
+            bytes_to_process_ptr = &n->info.bytes_to_process;
+          }
+        }
+      }
+      
+      //- rjf: set # of bytes to process
+      if(bytes_to_process_ptr)
+      {
+        //                                               (line ending calc)     (line counting)    (line measuring)   (lexing)
+        ins_atomic_u64_eval_assign(bytes_to_process_ptr, Min(data.size, 1024) + data.size        + data.size        + data.size*(lang != TXT_LangKind_Null));
+      }
       
       //- rjf: detect line end kind
       TXT_LineEndKind line_end_kind = TXT_LineEndKind_Null;
@@ -1155,6 +1179,12 @@ txt_parse_thread__entry_point(void *p)
         info.line_end_kind = line_end_kind;
       }
       
+      //- rjf: bump progress
+      if(bytes_processed_ptr)
+      {
+        ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024));
+      }
+      
       //- rjf: count # of lines
       U64 line_count = 1;
       U64 byte_process_start_idx = 0;
@@ -1168,6 +1198,16 @@ txt_parse_thread__entry_point(void *p)
             idx += 1;
           }
         }
+        if(idx && idx%1000 == 0)
+        {
+          ins_atomic_u64_add_eval(bytes_processed_ptr, 1000);
+        }
+      }
+      
+      //- rjf: bump progress
+      if(bytes_processed_ptr)
+      {
+        ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size);
       }
       
       //- rjf: allocate & store line ranges
@@ -1191,6 +1231,16 @@ txt_parse_thread__entry_point(void *p)
             idx += 1;
           }
         }
+        if(idx && idx%1000 == 0)
+        {
+          ins_atomic_u64_add_eval(bytes_processed_ptr, 1000);
+        }
+      }
+      
+      //- rjf: bump progress
+      if(bytes_processed_ptr)
+      {
+        ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size + data.size);
       }
       
       //- rjf: lang -> lex function
@@ -1200,9 +1250,15 @@ txt_parse_thread__entry_point(void *p)
       TXT_TokenArray tokens = {0};
       if(lex_function != 0)
       {
-        tokens = lex_function(info_arena, 0, data);
+        tokens = lex_function(info_arena, bytes_processed_ptr, data);
       }
       info.tokens = tokens;
+      
+      //- rjf: bump progress
+      if(bytes_processed_ptr)
+      {
+        ins_atomic_u64_eval_assign(bytes_processed_ptr, Min(data.size, 1024) + data.size + data.size + data.size*(lex_function != 0));
+      }
     }
     
     //- rjf: commit results to cache
@@ -1210,9 +1266,11 @@ txt_parse_thread__entry_point(void *p)
     {
       for(TXT_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(u128_match(n->hash, hash))
+        if(u128_match(n->hash, hash) && n->lang == lang)
         {
           n->arena = info_arena;
+          info.bytes_processed = n->info.bytes_processed;
+          info.bytes_to_process = n->info.bytes_to_process;
           MemoryCopyStruct(&n->info, &info);
           ins_atomic_u32_eval_assign(&n->is_working, 0);
           ins_atomic_u64_inc_eval(&n->load_count);

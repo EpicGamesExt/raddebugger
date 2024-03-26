@@ -5117,8 +5117,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   if(!entity_is_missing && !text_info_is_ready)
   {
-    // df_view_equip_loading_info(view, 1, txti_buffer_info.bytes_processed, txti_buffer_info.bytes_to_process);
-    df_view_equip_loading_info(view, 1, 0, 0);
+    df_view_equip_loading_info(view, 1, text_info.bytes_processed, text_info.bytes_to_process);
   }
   
   //////////////////////////////
