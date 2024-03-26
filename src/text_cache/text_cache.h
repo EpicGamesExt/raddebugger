@@ -98,6 +98,12 @@ struct TXT_TextInfo
   U64 bytes_to_process;
 };
 
+typedef struct TXT_LineTokensSlice TXT_LineTokensSlice;
+struct TXT_LineTokensSlice
+{
+  TXT_TokenArray *line_tokens;
+};
+
 ////////////////////////////////
 //~ rjf: Language Kind Types
 
@@ -273,6 +279,7 @@ internal TXT_TokenArray txt_token_array_from_info_line_num__linear_scan(TXT_Text
 internal Rng1U64 txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXT_TokenArray *line_tokens);
 internal Rng1U64 txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String8 data, TxtPt pt);
 internal String8 txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TxtRng rng);
+internal TXT_LineTokensSlice txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads

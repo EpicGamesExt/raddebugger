@@ -4850,7 +4850,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Code)
   
   // rjf: default to loading
   df_view_equip_loading_info(view, 1, 0, 0);
-  view->loading_t_target = 1.f;
+  view->loading_t = view->loading_t_target = 1.f;
 }
 
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Code)
@@ -5158,6 +5158,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   F32 margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
+  TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &text_info, data, visible_line_num_range);
   
   //////////////////////////////
   //- rjf: get active search query
@@ -5210,7 +5211,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         code_slice_params.line_text[visible_line_idx]   = str8_substr(data, text_info.lines_ranges[line_idx]);
         code_slice_params.line_ranges[visible_line_idx] = text_info.lines_ranges[line_idx];
-        code_slice_params.line_tokens[visible_line_idx] = txt_token_array_from_info_line_num__linear_scan(&text_info, line_num);
+        code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
       }
     }
     
@@ -6921,7 +6922,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Output)
   
   // rjf: default to loading
   df_view_equip_loading_info(view, 1, 0, 0);
-  view->loading_t_target = 1.f;
+  view->loading_t = view->loading_t_target = 1.f;
 }
 
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Output)

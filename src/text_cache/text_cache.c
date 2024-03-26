@@ -1016,7 +1016,8 @@ txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String8 data, TxtPt pt)
     // rjf: unpack line info
     Rng1U64 line_range = info->lines_ranges[pt.line-1];
     String8 line_text = str8_substr(data, line_range);
-    TXT_TokenArray line_tokens = txt_token_array_from_info_line_num__linear_scan(info, pt.line);
+    TXT_LineTokensSlice line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, info, data, r1s64(pt.line, pt.line));
+    TXT_TokenArray line_tokens = line_tokens_slice.line_tokens[0];
     TXT_Token *line_tokens_first = line_tokens.v;
     TXT_Token *line_tokens_opl = line_tokens.v+line_tokens.count;
     U64 pt_off = line_range.min + (pt.column-1);
@@ -1033,6 +1034,98 @@ txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TxtRng rng)
 {
   Rng1U64 rng_off = r1u64(txt_off_from_info_pt(info, rng.min), txt_off_from_info_pt(info, rng.max));
   String8 result = str8_substr(data, rng_off);
+  return result;
+}
+
+internal TXT_LineTokensSlice
+txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range)
+{
+  TXT_LineTokensSlice result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  if(info->lines_count != 0)
+  {
+    Rng1S64 line_range_clamped = r1s64(Clamp(1, line_range.min, (S64)info->lines_count), Clamp(1, line_range.max, (S64)info->lines_count));
+    U64 line_count = (U64)dim_1s64(line_range_clamped)+1;
+    
+    // rjf: allocate output arrays
+    result.line_tokens = push_array(arena, TXT_TokenArray, line_count);
+    
+    // rjf: binary search to find first token
+    TXT_Token *tokens_first = 0;
+    ProfScope("binary search to find first token")
+    {
+      Rng1U64 slice_range = r1u64(info->lines_ranges[line_range_clamped.min-1].min, info->lines_ranges[line_range_clamped.max-1].max);
+      U64 min_idx = 0;
+      U64 opl_idx = info->tokens.count;
+      for(;;)
+      {
+        U64 mid_idx = (opl_idx+min_idx)/2;
+        if(mid_idx >= opl_idx)
+        {
+          break;
+        }
+        TXT_Token *mid_token = &info->tokens.v[mid_idx];
+        if(mid_token->range.min > slice_range.max)
+        {
+          opl_idx = mid_idx;
+        }
+        else if(mid_token->range.max < slice_range.min)
+        {
+          min_idx = mid_idx;
+        }
+        else if(tokens_first == 0 || mid_token->range.min < tokens_first->range.min)
+        {
+          tokens_first = mid_token;
+          opl_idx = mid_idx;
+        }
+        if(mid_idx == min_idx && mid_idx+1 == opl_idx)
+        {
+          break;
+        }
+      }
+    }
+    
+    // rjf: grab per-line tokens
+    TXT_TokenList *line_tokens_lists = push_array(scratch.arena, TXT_TokenList, line_count);
+    if(tokens_first != 0) ProfScope("grab per-line tokens")
+    {
+      TXT_Token *tokens_opl = info->tokens.v+info->tokens.count;
+      U64 line_slice_idx = 0;
+      for(TXT_Token *token = tokens_first; token < tokens_opl && line_slice_idx < line_count;)
+      {
+        if(token->range.min < info->lines_ranges[line_slice_idx+line_range.min-1].max)
+        {
+          if(token->range.max > info->lines_ranges[line_slice_idx+line_range.min-1].min)
+          {
+            txt_token_list_push(scratch.arena, &line_tokens_lists[line_slice_idx], token);
+          }
+          B32 need_token_advance = 0;
+          B32 need_line_advance = 0;
+          if(token->range.max >= info->lines_ranges[line_slice_idx+line_range.min-1].max)
+          {
+            need_line_advance = 1;
+          }
+          if(token->range.max <= info->lines_ranges[line_slice_idx+line_range.min-1].max)
+          {
+            need_token_advance += 1;
+          }
+          if(need_line_advance) { line_slice_idx += 1; }
+          if(need_token_advance) { token += 1; }
+        }
+        else
+        {
+          line_slice_idx += 1;
+        }
+      }
+    }
+    
+    // rjf: bake per-line tokens to arrays
+    for(U64 line_slice_idx = 0; line_slice_idx < line_count; line_slice_idx += 1)
+    {
+      result.line_tokens[line_slice_idx] = txt_token_array_from_list(arena, &line_tokens_lists[line_slice_idx]);
+    }
+  }
+  scratch_end(scratch);
   return result;
 }
 
