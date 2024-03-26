@@ -5070,6 +5070,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
   DBGI_Scope *dbgi_scope = dbgi_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
   DF_CodeViewState *tv = df_view_user_state(view, DF_CodeViewState);
@@ -5103,17 +5104,21 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: unpack file/text entity info
   //
   B32 entity_is_missing = !!(entity->flags & DF_EntityFlag_IsMissing && !(entity->flags & DF_EntityFlag_Output));
-  TXTI_Handle txti_handle = df_txti_handle_from_entity(entity);
-  TXTI_BufferInfo txti_buffer_info = txti_buffer_info_from_handle(scratch.arena, txti_handle);
-  B32 txti_buffer_is_ready = ((txti_buffer_info.timestamp != 0 || entity->flags & DF_EntityFlag_Output) &&
-                              (txti_buffer_info.bytes_processed == txti_buffer_info.bytes_to_process || txti_buffer_info.buffer_apply_gen != 0));
+  String8 path = df_full_path_from_entity(scratch.arena, entity);
+  U128 key = fs_key_from_path(path);
+  TXT_LangKind lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
+  U128 hash = {0};
+  TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  String8 data = hs_data_from_hash(hs_scope, hash);
+  B32 text_info_is_ready = (text_info.lines_count != 0);
   
   //////////////////////////////
   //- rjf: buffer is pending -> equip view with loading information
   //
-  if(!entity_is_missing && !txti_buffer_is_ready)
+  if(!entity_is_missing && !text_info_is_ready)
   {
-    df_view_equip_loading_info(view, 1, txti_buffer_info.bytes_processed, txti_buffer_info.bytes_to_process);
+    // df_view_equip_loading_info(view, 1, txti_buffer_info.bytes_processed, txti_buffer_info.bytes_to_process);
+    df_view_equip_loading_info(view, 1, 0, 0);
   }
   
   //////////////////////////////
@@ -5125,12 +5130,12 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
                                                 view->scroll_pos.y.idx + 1 + num_possible_visible_lines);
   U64 visible_line_count = 0;
   {
-    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)txti_buffer_info.total_line_count);
-    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)txti_buffer_info.total_line_count);
+    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)text_info.lines_count);
+    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)text_info.lines_count);
     visible_line_num_range.min = Max(1, visible_line_num_range.min);
     visible_line_num_range.max = Max(1, visible_line_num_range.max);
-    target_visible_line_num_range.min = Clamp(1, target_visible_line_num_range.min, (S64)txti_buffer_info.total_line_count);
-    target_visible_line_num_range.max = Clamp(1, target_visible_line_num_range.max, (S64)txti_buffer_info.total_line_count);
+    target_visible_line_num_range.min = Clamp(1, target_visible_line_num_range.min, (S64)text_info.lines_count);
+    target_visible_line_num_range.max = Clamp(1, target_visible_line_num_range.max, (S64)text_info.lines_count);
     target_visible_line_num_range.min = Max(1, target_visible_line_num_range.min);
     target_visible_line_num_range.max = Max(1, target_visible_line_num_range.max);
     visible_line_count = (U64)dim_1s64(visible_line_num_range)+1;
@@ -5142,11 +5147,11 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   S64 line_size_x = 0;
   Rng1S64 scroll_idx_rng[Axis2_COUNT] = {0};
   {
-    line_size_x = (txti_buffer_info.max_line_size*big_glyph_advance*3)/2;
+    line_size_x = (text_info.lines_max_size*big_glyph_advance*3)/2;
     line_size_x = ClampBot(line_size_x, (S64)big_glyph_advance*120);
     line_size_x = ClampBot(line_size_x, (S64)code_area_dim.x);
     scroll_idx_rng[Axis2_X] = r1s64(0, line_size_x-(S64)code_area_dim.x);
-    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)txti_buffer_info.total_line_count-1);
+    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)text_info.lines_count-1);
   }
   
   //////////////////////////////
@@ -5154,7 +5159,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   F32 margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
-  TXTI_Slice slice = txti_slice_from_handle_line_range(scratch.arena, txti_handle, visible_line_num_range);
   
   //////////////////////////////
   //- rjf: get active search query
@@ -5177,19 +5181,19 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: prepare code slice info bundle, for the viewable region of text
   //
   DF_CodeSliceParams code_slice_params = {0};
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     // rjf: fill basics
     code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums;
     code_slice_params.line_num_range            = visible_line_num_range;
-    code_slice_params.line_text                 = slice.line_text;
-    code_slice_params.line_ranges               = slice.line_ranges;
-    code_slice_params.line_tokens               = slice.line_tokens;
-    code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, slice.line_count);
-    code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, slice.line_count);
-    code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, slice.line_count);
-    code_slice_params.line_dasm2src             = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, slice.line_count);
-    code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, slice.line_count);
+    code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
+    code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
+    code_slice_params.line_tokens               = push_array(scratch.arena, TXT_TokenArray, visible_line_count);
+    code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
+    code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
+    code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, visible_line_count);
+    code_slice_params.line_dasm2src             = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, visible_line_count);
+    code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
     code_slice_params.line_height_px            = code_line_height;
@@ -5198,6 +5202,18 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
+    
+    // rjf: fill text info
+    {
+      S64 line_num = visible_line_num_range.min;
+      U64 line_idx = visible_line_num_range.min-1;
+      for(U64 visible_line_idx = 0; visible_line_idx < visible_line_count; visible_line_idx += 1, line_idx += 1, line_num += 1)
+      {
+        code_slice_params.line_text[visible_line_idx]   = str8_substr(data, text_info.lines_ranges[line_idx]);
+        code_slice_params.line_ranges[visible_line_idx] = text_info.lines_ranges[line_idx];
+        code_slice_params.line_tokens[visible_line_idx] = txt_token_array_from_info_line_num__linear_scan(&text_info, line_num);
+      }
+    }
     
     // rjf: find visible breakpoints
     ProfScope("find visible breakpoints")
@@ -5305,7 +5321,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: build container
   //
   UI_Box *container_box = &ui_g_nil_box;
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     ui_set_next_pref_width(ui_px(code_area_dim.x, 1));
     ui_set_next_pref_height(ui_px(code_area_dim.y, 1));
@@ -5340,7 +5356,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: do searching operations
   //
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     //- rjf: find text (forward)
     if(tv->find_text_fwd.size != 0)
@@ -5349,14 +5365,14 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       B32 found = 0;
       B32 first = 1;
       S64 line_num_start = tv->cursor.line;
-      S64 line_num_last = (S64)txti_buffer_info.total_line_count;
+      S64 line_num_last = (S64)text_info.lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
         // rjf: pop scratch
         temp_end(scratch);
         
         // rjf: gather line info
-        String8 line_string = txti_string_from_handle_line_num(scratch.arena, txti_handle, line_num);
+        String8 line_string = str8_substr(data, text_info.lines_ranges[line_num-1]);
         U64 search_start = 0;
         if(tv->cursor.line == line_num && first)
         {
@@ -5405,14 +5421,14 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       B32 found = 0;
       B32 first = 1;
       S64 line_num_start = tv->cursor.line;
-      S64 line_num_last = (S64)txti_buffer_info.total_line_count;
+      S64 line_num_last = (S64)text_info.lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
         // rjf: pop scratch
         temp_end(scratch);
         
         // rjf: gather line info
-        String8 line_string = txti_string_from_handle_line_num(scratch.arena, txti_handle, line_num);
+        String8 line_string = str8_substr(data, text_info.lines_ranges[line_num-1]);
         if(tv->cursor.line == line_num && first)
         {
           line_string = str8_prefix(line_string, tv->cursor.column-1);
@@ -5470,11 +5486,11 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: do goto line
   //
-  if(txti_buffer_is_ready) if(tv->goto_line_num != 0)
+  if(text_info_is_ready) if(tv->goto_line_num != 0)
   {
     S64 line_num = tv->goto_line_num;
     tv->goto_line_num = 0;
-    line_num = Clamp(1, line_num, txti_buffer_info.total_line_count);
+    line_num = Clamp(1, line_num, text_info.lines_count);
     tv->cursor = tv->mark = txt_pt(line_num, 1);
     tv->center_cursor = !tv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
   }
@@ -5485,16 +5501,16 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   B32 snap[Axis2_COUNT] = {0};
   UI_Focus(UI_FocusKind_On)
   {
-    if(txti_buffer_is_ready && visible_line_num_range.max >= visible_line_num_range.min && ui_is_focus_active())
+    if(text_info_is_ready && visible_line_num_range.max >= visible_line_num_range.min && ui_is_focus_active())
     {
-      snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(num_possible_visible_lines, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
+      //snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(num_possible_visible_lines, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
     }
   }
   
   //////////////////////////////
   //- rjf: build container contents
   //
-  if(txti_buffer_is_ready) UI_Parent(container_box)
+  if(text_info_is_ready) UI_Parent(container_box)
   {
     //- rjf: build fractional space
     container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
@@ -5511,7 +5527,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(!ui_dragging(sig.base) && sig.mouse_expr_rng.min.line != 0 && sig.base.event_flags == 0)
     {
       TxtRng expr_rng = sig.mouse_expr_rng;
-      String8 expr = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_rng);
+      // TODO(rjf): @txt
+      String8 expr = {0};//txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_rng);
       if(expr.size != 0)
       {
         DF_Eval eval = df_eval_from_string(scratch.arena, dbgi_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
@@ -5541,7 +5558,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       ui_kill_action();
       DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.entity = df_handle_from_entity(entity);
-      params.string = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, txti_expr_range_from_handle_pt(txti_handle, sig.mouse_pt));
+      // TODO(rjf): @txt
+      //params.string = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, txti_expr_range_from_handle_pt(txti_handle, sig.mouse_pt));
       df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
     }
@@ -5613,7 +5631,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       df_entity_equip_color_rgba(flash_range, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
       df_entity_equip_txt_pt(flash_range, sig.copy_range.min);
       df_entity_equip_txt_pt_alt(flash_range, sig.copy_range.max);
-      String8 text = txti_string_from_handle_txt_rng(temp.arena, txti_handle, sig.copy_range);
+      // TODO(rjf): @txt
+      String8 text = {0};//txti_string_from_handle_txt_rng(temp.arena, txti_handle, sig.copy_range);
       os_set_clipboard_text(text);
       temp_end(temp);
     }
@@ -5677,7 +5696,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: apply post-build view snapping rules
   //
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     // rjf: center first match
     TxtPt next_match = df_text_search_match_array_find_nearest__linear_scan(&search_query_matches, tv->cursor, search_query_side).pt;
@@ -5708,7 +5727,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(tv->center_cursor)
     {
       tv->center_cursor = 0;
-      String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
+      String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
       F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
       
       // rjf: scroll x
@@ -5731,7 +5750,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     // rjf: snap in X
     if(snap[Axis2_X])
     {
-      String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
+      String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
       S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
@@ -5759,7 +5778,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
       S64 max_delta = Max(0, cursor_visibility_range.max-(target_visible_line_num_range.min+num_possible_visible_lines));
       S64 new_idx = view->scroll_pos.y.idx+min_delta+max_delta;
-      new_idx = Clamp(0, new_idx, (S64)txti_buffer_info.total_line_count-1);
+      new_idx = Clamp(0, new_idx, (S64)text_info.lines_count-1);
       ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
     }
   }
@@ -5767,7 +5786,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: build horizontal scroll bar
   //
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     ui_set_next_fixed_x(0);
     ui_set_next_fixed_y(code_area_dim.y);
@@ -5785,7 +5804,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: build vertical scroll bar
   //
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     ui_set_next_fixed_x(code_area_dim.x);
     ui_set_next_fixed_y(0);
@@ -5803,7 +5822,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: top-level container interaction (scrolling)
   //
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     UI_Signal sig = ui_signal_from_box(container_box);
     if(sig.scroll.x != 0)
@@ -5848,7 +5867,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: build bottom info bar
   //
-  if(txti_buffer_is_ready)
+  if(text_info_is_ready)
   {
     ui_set_next_fixed_x(0);
     ui_set_next_fixed_y(code_area_dim.y + scroll_bar_dim);
@@ -5900,6 +5919,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   
   txt_scope_close(txt_scope);
   dbgi_scope_close(dbgi_scope);
+  hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
 }

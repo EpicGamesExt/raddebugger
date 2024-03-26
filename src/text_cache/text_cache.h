@@ -283,4 +283,4 @@ internal void txt_parse_thread__entry_point(void *p);
 
 internal void txt_evictor_thread__entry_point(void *p);
 
-#endif //TEXT_CACHE_H
+#endif // TEXT_CACHE_H
