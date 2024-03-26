@@ -56,6 +56,9 @@ struct FS_Shared
   // rjf: streamer threads
   U64 streamer_count;
   OS_Handle *streamers;
+  
+  // rjf: change detector threads
+  OS_Handle detector_thread;
 };
 
 ////////////////////////////////
@@ -80,5 +83,10 @@ internal B32 fs_u2s_enqueue_path(String8 path, U64 endt_us);
 internal String8 fs_u2s_dequeue_path(Arena *arena);
 
 internal void fs_streamer_thread__entry_point(void *p);
+
+////////////////////////////////
+//~ rjf: Change Detector Thread
+
+internal void fs_detector_thread__entry_point(void *p);
 
 #endif // FILE_STREAM_H

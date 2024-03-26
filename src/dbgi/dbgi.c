@@ -11,7 +11,7 @@ dbgi_init(void)
   dbgi_shared = push_array(arena, DBGI_Shared, 1);
   dbgi_shared->arena = arena;
   dbgi_shared->force_slots_count = 1024;
-  dbgi_shared->force_stripes_count = 64;
+  dbgi_shared->force_stripes_count = Min(dbgi_shared->force_slots_count, os_logical_core_count());
   dbgi_shared->force_slots = push_array(arena, DBGI_ForceSlot, dbgi_shared->force_slots_count);
   dbgi_shared->force_stripes = push_array(arena, DBGI_ForceStripe, dbgi_shared->force_stripes_count);
   for(U64 idx = 0; idx < dbgi_shared->force_stripes_count; idx += 1)
@@ -21,7 +21,7 @@ dbgi_init(void)
     dbgi_shared->force_stripes[idx].cv = os_condition_variable_alloc();
   }
   dbgi_shared->binary_slots_count = 1024;
-  dbgi_shared->binary_stripes_count = 64;
+  dbgi_shared->binary_stripes_count = Min(dbgi_shared->binary_slots_count, os_logical_core_count());
   dbgi_shared->binary_slots = push_array(arena, DBGI_BinarySlot, dbgi_shared->binary_slots_count);
   dbgi_shared->binary_stripes = push_array(arena, DBGI_BinaryStripe, dbgi_shared->binary_stripes_count);
   for(U64 idx = 0; idx < dbgi_shared->binary_stripes_count; idx += 1)
@@ -31,7 +31,7 @@ dbgi_init(void)
     dbgi_shared->binary_stripes[idx].cv = os_condition_variable_alloc();
   }
   dbgi_shared->fuzzy_search_slots_count = 64;
-  dbgi_shared->fuzzy_search_stripes_count = 8;
+  dbgi_shared->fuzzy_search_stripes_count = Min(dbgi_shared->fuzzy_search_slots_count, os_logical_core_count());
   dbgi_shared->fuzzy_search_slots = push_array(arena, DBGI_FuzzySearchSlot, dbgi_shared->fuzzy_search_slots_count);
   dbgi_shared->fuzzy_search_stripes = push_array(arena, DBGI_FuzzySearchStripe, dbgi_shared->fuzzy_search_stripes_count);
   for(U64 idx = 0; idx < dbgi_shared->fuzzy_search_stripes_count; idx += 1)

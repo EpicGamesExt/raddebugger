@@ -24,7 +24,7 @@ tex_init(void)
   tex_shared = push_array(arena, TEX_Shared, 1);
   tex_shared->arena = arena;
   tex_shared->slots_count = 1024;
-  tex_shared->stripes_count = 64;
+  tex_shared->stripes_count = Min(tex_shared->slots_count, os_logical_core_count());
   tex_shared->slots = push_array(arena, TEX_Slot, tex_shared->slots_count);
   tex_shared->stripes = push_array(arena, TEX_Stripe, tex_shared->stripes_count);
   tex_shared->stripes_free_nodes = push_array(arena, TEX_Node *, tex_shared->stripes_count);
@@ -35,7 +35,7 @@ tex_init(void)
     tex_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
   tex_shared->fallback_slots_count = 1024;
-  tex_shared->fallback_stripes_count = 64;
+  tex_shared->fallback_stripes_count = Min(tex_shared->fallback_slots_count, os_logical_core_count());
   tex_shared->fallback_slots = push_array(arena, TEX_KeyFallbackSlot, tex_shared->fallback_slots_count);
   tex_shared->fallback_stripes = push_array(arena, TEX_Stripe, tex_shared->fallback_stripes_count);
   for(U64 idx = 0; idx < tex_shared->fallback_stripes_count; idx += 1)

@@ -27,7 +27,7 @@ ts_init(void)
   ts_shared = push_array(arena, TS_Shared, 1);
   ts_shared->arena = arena;
   ts_shared->artifact_slots_count = 1024;
-  ts_shared->artifact_stripes_count = 64;
+  ts_shared->artifact_stripes_count = Min(ts_shared->artifact_slots_count, os_logical_core_count());
   ts_shared->artifact_slots = push_array(arena, TS_TaskArtifactSlot, ts_shared->artifact_slots_count);
   ts_shared->artifact_stripes = push_array(arena, TS_TaskArtifactStripe, ts_shared->artifact_stripes_count);
   for(U64 idx = 0; idx < ts_shared->artifact_stripes_count; idx += 1)

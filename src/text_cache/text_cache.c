@@ -635,7 +635,7 @@ txt_init(void)
   txt_shared->arena = arena;
   txt_shared->slots_count = 1024;
   txt_shared->slots = push_array(arena, TXT_Slot, txt_shared->slots_count);
-  txt_shared->stripes_count = 64;
+  txt_shared->stripes_count = Min(txt_shared->slots_count, os_logical_core_count());
   txt_shared->stripes = push_array(arena, TXT_Stripe, txt_shared->stripes_count);
   txt_shared->stripes_free_nodes = push_array(arena, TXT_Node *, txt_shared->stripes_count);
   for(U64 idx = 0; idx < txt_shared->stripes_count; idx += 1)
@@ -645,7 +645,7 @@ txt_init(void)
     txt_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
   txt_shared->fallback_slots_count = 256;
-  txt_shared->fallback_stripes_count = 16;
+  txt_shared->fallback_stripes_count = Min(txt_shared->fallback_slots_count, os_logical_core_count());
   txt_shared->fallback_slots = push_array(arena, TXT_KeyFallbackSlot, txt_shared->fallback_slots_count);
   txt_shared->fallback_stripes = push_array(arena, TXT_Stripe, txt_shared->fallback_stripes_count);
   for(U64 idx = 0; idx < txt_shared->fallback_stripes_count; idx += 1)
