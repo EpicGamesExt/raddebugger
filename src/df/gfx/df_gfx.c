@@ -945,7 +945,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->cfg_src = cfg_src;
   window->arena = arena_alloc();
   {
-    String8 title = str8_lit_comp(RADDBG_TITLE_STRING_LITERAL);
+    String8 title = str8_lit_comp(BUILD_TITLE_STRING_LITERAL);
     window->os = os_window_open(size, title);
   }
   window->r = r_window_equip(window->os);
@@ -1012,7 +1012,7 @@ df_window_from_os_handle(OS_Handle os)
   return result;
 }
 
-#if defined(_MSC_VER) && !defined(__clang__) && defined(NDEBUG)
+#if COMPILER_MSVC && !BUILD_DEBUG
 #pragma optimize("", off)
 #endif
 
@@ -1249,6 +1249,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_View *watch = &df_g_nil_view;
           DF_View *locals = &df_g_nil_view;
           DF_View *regs = &df_g_nil_view;
+          DF_View *globals = &df_g_nil_view;
+          DF_View *tlocals = &df_g_nil_view;
+          DF_View *types = &df_g_nil_view;
+          DF_View *procs = &df_g_nil_view;
           DF_View *callstack = &df_g_nil_view;
           DF_View *breakpoints = &df_g_nil_view;
           DF_View *watch_pins = &df_g_nil_view;
@@ -1271,18 +1275,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               switch(view_kind)
               {
                 default:{}break;
-                case DF_GfxViewKind_Watch:      {if(df_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
-                case DF_GfxViewKind_Locals:     {if(df_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
-                case DF_GfxViewKind_Registers:  {if(df_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
-                case DF_GfxViewKind_CallStack:  {if(df_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
-                case DF_GfxViewKind_Breakpoints:{if(df_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
-                case DF_GfxViewKind_WatchPins:  {if(df_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
-                case DF_GfxViewKind_Output:     {if(df_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
-                case DF_GfxViewKind_Targets:    {if(df_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
-                case DF_GfxViewKind_Scheduler:  {if(df_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
-                case DF_GfxViewKind_Modules:    {if(df_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
-                case DF_GfxViewKind_Disassembly:{if(df_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
-                case DF_GfxViewKind_Memory:     {if(df_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
+                case DF_GfxViewKind_Watch:       {if(df_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
+                case DF_GfxViewKind_Locals:      {if(df_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
+                case DF_GfxViewKind_Registers:   {if(df_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
+                case DF_GfxViewKind_Globals:     {if(df_view_is_nil(globals))             { needs_delete = 0; globals = view;} }break;
+                case DF_GfxViewKind_ThreadLocals:{if(df_view_is_nil(tlocals))             { needs_delete = 0; tlocals = view;} }break;
+                case DF_GfxViewKind_Types:       {if(df_view_is_nil(types))               { needs_delete = 0; types = view;} }break;
+                case DF_GfxViewKind_Procedures:  {if(df_view_is_nil(procs))               { needs_delete = 0; procs = view;} }break;
+                case DF_GfxViewKind_CallStack:   {if(df_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
+                case DF_GfxViewKind_Breakpoints: {if(df_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
+                case DF_GfxViewKind_WatchPins:   {if(df_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
+                case DF_GfxViewKind_Output:      {if(df_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
+                case DF_GfxViewKind_Targets:     {if(df_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
+                case DF_GfxViewKind_Scheduler:   {if(df_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
+                case DF_GfxViewKind_Modules:     {if(df_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
+                case DF_GfxViewKind_Disassembly: {if(df_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
+                case DF_GfxViewKind_Memory:      {if(df_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
                 case DF_GfxViewKind_Code:
                 {
                   needs_delete = 0;
@@ -1327,6 +1335,26 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             regs = df_view_alloc();
             df_view_equip_spec(regs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Registers), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(globals))
+          {
+            globals = df_view_alloc();
+            df_view_equip_spec(globals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Globals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(tlocals))
+          {
+            tlocals = df_view_alloc();
+            df_view_equip_spec(tlocals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_ThreadLocals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(types))
+          {
+            types = df_view_alloc();
+            df_view_equip_spec(types, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Types), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+          }
+          if(df_view_is_nil(procs))
+          {
+            procs = df_view_alloc();
+            df_view_equip_spec(procs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Procedures), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(callstack))
           {
@@ -1442,6 +1470,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, globals);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, tlocals);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, types);
+          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, procs);
           root_0_1_0->selected_tab_view = df_handle_from_view(watch);
           root_0_1_0->tab_side = Side_Max;
           df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, callstack);
@@ -2099,7 +2131,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = (unwind_count == 0 ? df_rip_from_thread(thread) : df_query_cached_rip_from_thread_unwind(thread, unwind_count));
+            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -2992,7 +3024,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           case DF_EntityKind_Module:
           {
             DF_Entity *bin_file = df_binary_file_from_module(entity);
-            if(df_icon_buttonf(DF_IconKind_Module, 0, "Inspect Binary File Memory").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_Module, 0, "Inspect Binary File Memory")))
             {
               DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
               params.entity = df_handle_from_entity(bin_file);
@@ -3000,7 +3032,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PendingEntity));
               ui_ctx_menu_close();
             }
-            if(df_icon_buttonf(DF_IconKind_Module, 0, "View Binary File Disassembly").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_Module, 0, "View Binary File Disassembly")))
             {
               DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
               params.entity = df_handle_from_entity(bin_file);
@@ -3011,7 +3043,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }break;
           case DF_EntityKind_Process:
           {
-            if(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Open Process Log").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Open Process Log")))
             {
               DF_Entity *log = df_log_from_entity(entity);
               DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
@@ -3023,7 +3055,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }break;
           case DF_EntityKind_Thread:
           {
-            if(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Open Thread Log").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Open Thread Log")))
             {
               DF_Entity *log = df_log_from_entity(entity);
               DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
@@ -3047,7 +3079,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       //- rjf: toggles
       for(U64 idx = 0; idx < ArrayCount(DEV_toggle_table); idx += 1)
       {
-        if(df_icon_button(*DEV_toggle_table[idx].value_ptr ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, DEV_toggle_table[idx].name).clicked)
+        if(ui_clicked(df_icon_button(*DEV_toggle_table[idx].value_ptr ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, DEV_toggle_table[idx].name)))
         {
           *DEV_toggle_table[idx].value_ptr ^= 1;
         }
@@ -3079,8 +3111,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
           ui_labelf("Target Hz: %.2f", 1.f/df_dt());
-          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_idx());
-          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_memgen_idx());
+          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
+          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
           ui_labelf("Window %p", window);
           ui_set_next_pref_width(ui_children_sum(1));
           ui_set_next_pref_height(ui_children_sum(1));
@@ -3194,7 +3226,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         if(op_flags & DF_EntityOpFlag_Rename)
         {
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, entity->name, "%S###entity_name_edit_%p", df_g_entity_kind_name_label_table[entity->kind], entity);
-          if(sig.commit)
+          if(ui_committed(sig))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(entity);
@@ -3210,7 +3242,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         {
           DF_Entity *condition = df_entity_child_from_kind(entity, DF_EntityKind_Condition);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, condition->name, "Condition###entity_cond_edit_%p", entity);
-          if(sig.commit)
+          if(ui_committed(sig))
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
             if(new_string.size != 0)
@@ -3239,7 +3271,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         {
           DF_Entity *exe = df_entity_child_from_kind(entity, DF_EntityKind_Executable);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, exe->name, "Executable###entity_exe_edit_%p", entity);
-          if(sig.commit)
+          if(ui_committed(sig))
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
             if(new_string.size != 0)
@@ -3268,7 +3300,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         {
           DF_Entity *args = df_entity_child_from_kind(entity, DF_EntityKind_Arguments);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, args->name, "Arguments###entity_args_edit_%p", entity);
-          if(sig.commit)
+          if(ui_committed(sig))
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
             if(new_string.size != 0)
@@ -3293,20 +3325,20 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
         
         // rjf: copy name
-        if(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Name").clicked)
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Name")))
         {
           os_set_clipboard_text(display_name);
           ui_ctx_menu_close();
         }
         
         // rjf: is command line only? -> make permanent
-        if(entity->cfg_src == DF_CfgSrc_CommandLine && df_icon_buttonf(DF_IconKind_Save, 0, "Save To Profile").clicked)
+        if(entity->cfg_src == DF_CfgSrc_CommandLine && ui_clicked(df_icon_buttonf(DF_IconKind_Save, 0, "Save To Profile")))
         {
           df_entity_equip_cfg_src(entity, DF_CfgSrc_Profile);
         }
         
         // rjf: duplicate
-        if(op_flags & DF_EntityOpFlag_Duplicate && df_icon_buttonf(DF_IconKind_XSplit, 0, "Duplicate").clicked)
+        if(op_flags & DF_EntityOpFlag_Duplicate && ui_clicked(df_icon_buttonf(DF_IconKind_XSplit, 0, "Duplicate")))
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = df_handle_from_entity(entity);
@@ -3316,7 +3348,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
         
         // rjf: edit
-        if(op_flags & DF_EntityOpFlag_Edit && df_icon_buttonf(DF_IconKind_Pencil, 0, "Edit").clicked)
+        if(op_flags & DF_EntityOpFlag_Edit && ui_clicked(df_icon_buttonf(DF_IconKind_Pencil, 0, "Edit")))
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = df_handle_from_entity(entity);
@@ -3326,7 +3358,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
         
         // rjf: deletion
-        if(op_flags & DF_EntityOpFlag_Delete && df_icon_buttonf(DF_IconKind_Trash, 0, "Delete").clicked)
+        if(op_flags & DF_EntityOpFlag_Delete && ui_clicked(df_icon_buttonf(DF_IconKind_Trash, 0, "Delete")))
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = df_handle_from_entity(entity);
@@ -3339,14 +3371,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         if(op_flags & DF_EntityOpFlag_Enable)
         {
           B32 is_enabled = entity->b32;
-          if(!is_enabled && df_icon_buttonf(DF_IconKind_CheckHollow, 0, "Enable###enabler").clicked)
+          if(!is_enabled && ui_clicked(df_icon_buttonf(DF_IconKind_CheckHollow, 0, "Enable###enabler")))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(entity);
             df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_EnableEntity));
           }
-          if(is_enabled && df_icon_buttonf(DF_IconKind_CheckFilled, 0, "Disable###enabler").clicked)
+          if(is_enabled && ui_clicked(df_icon_buttonf(DF_IconKind_CheckFilled, 0, "Disable###enabler")))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(entity);
@@ -3364,14 +3396,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           color.y *= 0.7f;
           color.z *= 0.7f;
           ui_set_next_background_color(color);
-          if(is_frozen && df_icon_buttonf(DF_IconKind_Locked, 0, "Thaw###freeze_thaw").clicked)
+          if(is_frozen && ui_clicked(df_icon_buttonf(DF_IconKind_Locked, 0, "Thaw###freeze_thaw")))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(entity);
             df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ThawEntity));
           }
-          if(!is_frozen && df_icon_buttonf(DF_IconKind_Unlocked, 0, "Freeze###freeze_thaw").clicked)
+          if(!is_frozen && ui_clicked(df_icon_buttonf(DF_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(entity);
@@ -3384,7 +3416,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         if(entity->flags & DF_EntityFlag_HasTextPoint)
         {
           DF_Entity *file_ancestor = df_entity_ancestor_from_kind(entity, DF_EntityKind_File);
-          if(!df_entity_is_nil(file_ancestor) && df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Location").clicked)
+          if(!df_entity_is_nil(file_ancestor) && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Location")))
           {
             Temp scratch = scratch_begin(&arena, 1);
             DF_CmdParams params = df_cmd_params_from_window(ws);
@@ -3403,7 +3435,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         {
           DF_CtrlCtx ctrl_ctx = df_ctrl_ctx();
           DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-          if(entity->vaddr != 0 && !df_entity_is_nil(thread) && df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Location").clicked)
+          if(entity->vaddr != 0 && !df_entity_is_nil(thread) && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Location")))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = df_handle_from_entity(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process));
@@ -3425,7 +3457,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           case DF_EntityKind_File:
           {
             if(entity->flags & DF_EntityFlag_IsFolder &&
-               df_icon_buttonf(DF_IconKind_FolderOpenOutline, 0, "Open File In Folder").clicked)
+               ui_clicked(df_icon_buttonf(DF_IconKind_FolderOpenOutline, 0, "Open File In Folder")))
             {
               String8 path = df_full_path_from_entity(scratch.arena, entity);
               String8 path_w_slash = push_str8f(scratch.arena, "%S/", path);
@@ -3445,7 +3477,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             if(!(entity->flags & DF_EntityFlag_IsFolder) &&
                !(entity->flags & DF_EntityFlag_IsMissing) &&
-               df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To File").clicked)
+               ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To File")))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.file_path = df_full_path_from_entity(scratch.arena, entity);
@@ -3468,7 +3500,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 df_icon_buttonf(DF_IconKind_Thread, 0, "[Selected]###select_entity");
               }
-              else if(df_icon_buttonf(DF_IconKind_Thread, 0, "Select###select_entity").clicked)
+              else if(ui_clicked(df_icon_buttonf(DF_IconKind_Thread, 0, "Select###select_entity")))
               {
                 DF_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = df_handle_from_entity(entity);
@@ -3478,7 +3510,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
             }
             
-            if(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy ID").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy ID")))
             {
               U32 ctrl_id = entity->ctrl_id;
               String8 string = push_str8f(scratch.arena, "%i", (int)ctrl_id);
@@ -3488,7 +3520,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             if(entity->kind == DF_EntityKind_Thread)
             {
-              if(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Instruction Pointer Address").clicked)
+              if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Instruction Pointer Address")))
               {
                 U64 rip = df_query_cached_rip_from_thread(entity);
                 String8 string = push_str8f(scratch.arena, "0x%I64x", rip);
@@ -3499,7 +3531,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             if(entity->kind == DF_EntityKind_Thread)
             {
-              if(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Call Stack").clicked)
+              if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Call Stack")))
               {
                 DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
                 CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
@@ -3531,7 +3563,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             if(entity->kind == DF_EntityKind_Thread)
             {
-              if(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Find").clicked)
+              if(ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Find")))
               {
                 DF_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = df_handle_from_entity(entity);
@@ -3545,25 +3577,25 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           case DF_EntityKind_Module:
           {
             UI_Signal copy_full_path_sig = df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Full Path");
-            if(copy_full_path_sig.clicked)
+            if(ui_clicked(copy_full_path_sig))
             {
               String8 string = entity->name;
               os_set_clipboard_text(string);
               ui_ctx_menu_close();
             }
-            if(copy_full_path_sig.hovering) UI_Tooltip
+            if(ui_hovering(copy_full_path_sig)) UI_Tooltip
             {
               String8 string = entity->name;
               ui_label(string);
             }
-            if(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Base Address").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Base Address")))
             {
               Rng1U64 vaddr_rng = entity->vaddr_rng;
               String8 string = push_str8f(scratch.arena, "0x%I64x", vaddr_rng.min);
               os_set_clipboard_text(string);
               ui_ctx_menu_close();
             }
-            if(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Address Range Size").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Address Range Size")))
             {
               Rng1U64 vaddr_rng = entity->vaddr_rng;
               String8 string = push_str8f(scratch.arena, "0x%I64x", dim_1u64(vaddr_rng));
@@ -3574,7 +3606,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           
           case DF_EntityKind_Target:
           {
-            if(df_icon_buttonf(DF_IconKind_Play, 0, "Launch And Run").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Launch And Run")))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(entity);
@@ -3582,7 +3614,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndRun));
               ui_ctx_menu_close();
             }
-            if(df_icon_buttonf(DF_IconKind_PlayStepForward, 0, "Launch And Initialize").clicked)
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_PlayStepForward, 0, "Launch And Initialize")))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(entity);
@@ -3627,7 +3659,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                                                             UI_BoxFlag_DrawActiveEffects,
                                                             "###color_preset_%i", (int)preset_idx);
                     UI_Signal sig = ui_signal_from_box(box);
-                    if(sig.clicked)
+                    if(ui_clicked(sig))
                     {
                       Vec3F32 hsv = hsv_from_rgb(v3f32(presets[preset_idx].x, presets[preset_idx].y, presets[preset_idx].z));
                       Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, 1);
@@ -3653,7 +3685,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             UI_Row UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_em(12.f, 1.f)) UI_CornerRadius(8.f)
             {
-              if(df_icon_buttonf(DF_IconKind_Trash, 0, "Remove Color").clicked)
+              if(ui_clicked(df_icon_buttonf(DF_IconKind_Trash, 0, "Remove Color###color_toggle")))
               {
                 entity->flags &= ~DF_EntityFlag_HasColor;
               }
@@ -3661,7 +3693,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             ui_spacer(ui_em(1.5f, 1.f));
           }
-          if(!entity_has_color && df_icon_buttonf(DF_IconKind_Palette, 0, "Equip With Color").clicked)
+          if(!entity_has_color && ui_clicked(df_icon_buttonf(DF_IconKind_Palette, 0, "Apply Color###color_toggle")))
           {
             df_entity_equip_color_rgba(entity, v4f32(1, 1, 1, 1));
           }
@@ -3701,7 +3733,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
         
         // rjf: copy name
-        if(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Name").clicked)
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Name")))
         {
           os_set_clipboard_text(display_name);
           ui_ctx_menu_close();
@@ -3712,12 +3744,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         {
           UI_Signal copy_full_path_sig = df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Full Path");
           String8 full_path = df_full_path_from_entity(scratch.arena, entity);
-          if(copy_full_path_sig.clicked)
+          if(ui_clicked(copy_full_path_sig))
           {
             os_set_clipboard_text(full_path);
             ui_ctx_menu_close();
           }
-          if(copy_full_path_sig.hovering) UI_Tooltip
+          if(ui_hovering(copy_full_path_sig)) UI_Tooltip
           {
             ui_label(full_path);
           }
@@ -3726,7 +3758,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         // rjf: filter controls
         if(view->spec->info.flags & DF_ViewSpecFlag_CanFilter)
         {
-          if(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter)).clicked)
+          if(ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter))))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             {
@@ -3736,7 +3768,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
             ui_ctx_menu_close();
           }
-          if(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter)).clicked)
+          if(ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter))))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             {
@@ -3749,7 +3781,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
         
         // rjf: close tab
-        if(df_icon_buttonf(DF_IconKind_X, 0, "Close Tab").clicked)
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Tab")))
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           {
@@ -3793,20 +3825,20 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               UI_CornerRadius00(ui_top_font_size()*0.25f)
                 UI_CornerRadius01(ui_top_font_size()*0.25f)
-                if(ui_buttonf("Cancel").clicked || os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
-              {
-                DF_CmdParams p = df_cmd_params_zero();
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmCancel));
-              }
-              UI_CornerRadius10(ui_top_font_size()*0.25f)
-                UI_CornerRadius11(ui_top_font_size()*0.25f)
                 UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
                 UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-                if(ui_buttonf("OK").clicked || os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+                if(ui_clicked(ui_buttonf("OK")) || os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmAccept));
+              }
+              UI_CornerRadius10(ui_top_font_size()*0.25f)
+                UI_CornerRadius11(ui_top_font_size()*0.25f)
+                if(ui_clicked(ui_buttonf("Cancel")) || os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+              {
+                DF_CmdParams p = df_cmd_params_zero();
+                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmCancel));
               }
             }
             ui_spacer(ui_em(3.f, 1.f));
@@ -3989,7 +4021,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   ui_label(item->kind_string);
               }
               UI_Signal item_sig = ui_signal_from_box(item_box);
-              if(item_sig.clicked)
+              if(ui_clicked(item_sig))
               {
                 UI_NavAction autocomp_action = {UI_NavActionFlag_ReplaceAndCommit, {0}, (UI_NavDeltaUnit)0, push_str8_copy(ui_build_arena(), item->string)};
                 ui_nav_action_list_push(ui_build_arena(), ui_nav_actions(), autocomp_action);
@@ -4185,7 +4217,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_Signal sig = {0};
               UI_TextColor(color)
                 sig = df_icon_buttonf(DF_IconKind_Target, 0, "%S##%p", target_name, target);
-              if(sig.clicked)
+              if(ui_clicked(sig))
               {
                 DF_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = df_handle_from_entity(target);
@@ -4235,7 +4267,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(40.f, 1.f))
           {
             UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-              ui_label(str8_lit(RADDBG_TITLE_STRING_LITERAL));
+              ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
             ui_spacer(ui_em(0.25f, 1.f));
             UI_Row
               UI_PrefWidth(ui_text_dim(10, 1))
@@ -4254,11 +4286,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             UI_TextAlignment(UI_TextAlign_Center)
             {
               UI_Signal url_sig = ui_buttonf("github.com/EpicGames/raddebugger");
-              if(url_sig.hovering) UI_Tooltip
+              if(ui_hovering(url_sig)) UI_Tooltip
               {
                 ui_labelf("Copy To Clipboard");
               }
-              if(url_sig.clicked)
+              if(ui_clicked(url_sig))
               {
                 os_set_clipboard_text(str8_lit("https://github.com/EpicGames/raddebugger"));
               }
@@ -4346,12 +4378,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_Signal sig = df_menu_bar_button(items[idx].name);
               if(menu_open)
               {
-                if((sig.hovering && !ui_ctx_menu_is_open(items[idx].menu_key)) || (open_menu_idx_prime == idx && open_menu_idx_prime != open_menu_idx))
+                if((ui_hovering(sig) && !ui_ctx_menu_is_open(items[idx].menu_key)) || (open_menu_idx_prime == idx && open_menu_idx_prime != open_menu_idx))
                 {
                   ui_ctx_menu_open(items[idx].menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
                 }
               }
-              else if(sig.pressed || alt_fastpath_key)
+              else if(ui_pressed(sig) || alt_fastpath_key)
               {
                 if(ui_ctx_menu_is_open(items[idx].menu_key))
                 {
@@ -4376,17 +4408,20 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           for(DF_EntityNode *n = tasks.first; n != 0; n = n->next)
           {
             DF_Entity *task = n->entity;
-            String8 raddbg_path = task->name;
-            String8 raddbg_name = str8_skip_last_slash(raddbg_path);
-            String8 task_text = push_str8f(scratch.arena, "Creating %S...", raddbg_name);
-            UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
-            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
-            UI_Signal sig = ui_signal_from_box(box);
-            if(sig.hovering) UI_Tooltip
+            if(task->alloc_time_us + 500000 < os_now_microseconds())
             {
-              ui_label(raddbg_path);
+              String8 rdi_path = task->name;
+              String8 rdi_name = str8_skip_last_slash(rdi_path);
+              String8 task_text = push_str8f(scratch.arena, "Creating %S...", rdi_name);
+              UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
+              UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, key);
+              UI_Signal sig = ui_signal_from_box(box);
+              if(ui_hovering(sig)) UI_Tooltip
+              {
+                ui_label(rdi_path);
+              }
+              ui_box_equip_display_string(box, task_text);
             }
-            ui_box_equip_display_string(box, task_text);
           }
           scratch_end(scratch);
         }
@@ -4412,7 +4447,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             ui_label(str8_skip_last_slash(user_path));
           }
           UI_Signal user_sig = ui_signal_from_box(user_box);
-          if(user_sig.clicked)
+          if(ui_clicked(user_sig))
           {
             DF_CmdParams p = df_cmd_params_from_window(ws);
             p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenUser);
@@ -4442,7 +4477,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             ui_label(str8_skip_last_slash(prof_path));
           }
           UI_Signal prof_sig = ui_signal_from_box(prof_box);
-          if(prof_sig.clicked)
+          if(ui_clicked(prof_sig))
           {
             DF_CmdParams p = df_cmd_params_from_window(ws);
             p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProfile);
@@ -4470,14 +4505,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(can_play || !have_targets) UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Play]);
-            if(sig.hovering && can_play == 0)
+            if(ui_hovering(sig) && !can_play)
             {
               UI_Tooltip
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
                 UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
                 ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
             }
-            if(sig.hovering && can_play)
+            if(ui_hovering(sig) && can_play)
             {
               UI_Tooltip
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
@@ -4497,7 +4532,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 }
               }
             }
-            if(sig.clicked)
+            if(ui_clicked(sig))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
@@ -4507,7 +4542,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(!can_play && have_targets && !can_send_signal) UI_TextAlignment(UI_TextAlign_Center)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Redo]);
-            if(sig.hovering)
+            if(ui_hovering(sig))
             {
               UI_Tooltip
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
@@ -4528,7 +4563,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 }
               }
             }
-            if(sig.clicked)
+            if(ui_clicked(sig))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Restart));
@@ -4538,21 +4573,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Pause]);
-            if(sig.hovering && can_pause == 0)
+            if(ui_hovering(sig) && !can_pause)
             {
               UI_Tooltip
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
                 UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
                 ui_labelf("Disabled: Already halted");
             }
-            if(sig.hovering && can_pause)
+            if(ui_hovering(sig) && can_pause)
             {
               UI_Tooltip
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
                 UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
                 ui_labelf("Halt all target processes");
             }
-            if(sig.clicked)
+            if(ui_clicked(sig))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Halt));
@@ -4565,21 +4600,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Stop]);
             }
-            if(sig.hovering && can_stop == 0)
+            if(ui_hovering(sig) && !can_stop)
             {
               UI_Tooltip
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
                 UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
                 ui_labelf("Disabled: No processes are running");
             }
-            if(sig.hovering && can_stop)
+            if(ui_hovering(sig) && can_stop)
             {
               UI_Tooltip
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
                 UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
                 ui_labelf("Kill all target processes");
             }
-            if(sig.clicked)
+            if(ui_clicked(sig))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Kill));
@@ -4649,107 +4684,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             Temp scratch = scratch_begin(&arena, 1);
             DF_IconKind icon = DF_IconKind_Null;
             String8 explanation = str8_lit("Not running");
-            DF_Entity *thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
-            String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
-            switch(stop_event.kind)
             {
-              default:
+              String8 stop_explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
+              if(stop_explanation.size != 0)
               {
-                switch(stop_event.cause)
-                {
-                  default:{}break;
-                  case CTRL_EventCause_Finished:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      explanation = push_str8f(scratch.arena, "%S completed step", thread_display_string);
-                    }
-                    else
-                    {
-                      explanation = str8_lit("Stopped");
-                    }
-                  }break;
-                  case CTRL_EventCause_UserBreakpoint:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      icon = DF_IconKind_CircleFilled;
-                      explanation = push_str8f(scratch.arena, "%S hit a breakpoint", thread_display_string);
-                    }
-                  }break;
-                  case CTRL_EventCause_InterruptedByException:
-                  {
-                    if(!df_entity_is_nil(thread))
-                    {
-                      icon = DF_IconKind_WarningBig;
-                      switch(stop_event.exception_kind)
-                      {
-                        default:
-                        {
-                          explanation = push_str8f(scratch.arena, "%S interrupted - 0x%x", thread_display_string, stop_event.exception_code);
-                        }break;
-                        case CTRL_ExceptionKind_CppThrow:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x", thread_display_string, stop_event.exception_code);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryRead:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation reading 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryWrite:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation writing 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                        case CTRL_ExceptionKind_MemoryExecute:
-                        {
-                          explanation = push_str8f(scratch.arena, "Exception thrown on %S - 0x%x: Access violation executing 0x%I64x",
-                                                   thread_display_string,
-                                                   stop_event.exception_code,
-                                                   stop_event.vaddr_rng.min);
-                        }break;
-                      }
-                    }
-                    else
-                    {
-                      icon = DF_IconKind_Pause;
-                      explanation = str8_lit("Interrupted");
-                    }
-                  }break;
-                  case CTRL_EventCause_InterruptedByTrap:
-                  {
-                    icon = DF_IconKind_WarningBig;
-                    explanation = push_str8f(scratch.arena, "%S interrupted by trap - 0x%x", thread_display_string, stop_event.exception_code);
-                  }break;
-                  case CTRL_EventCause_InterruptedByHalt:
-                  {
-                    icon = DF_IconKind_Pause;
-                    explanation = str8_lit("Halted");
-                  }break;
-                }
-              }break;
-              case CTRL_EventKind_LaunchAndInitDone:
-              case CTRL_EventKind_LaunchAndHandshakeDone:
-              {
-                explanation = str8_lit("Launched");
-              }break;
-              case CTRL_EventKind_AttachDone:
-              {
-                explanation = str8_lit("Attached");
-              }break;
-              case CTRL_EventKind_DetachDone:
-              {
-                explanation = str8_lit("Detached");
-              }break;
-              case CTRL_EventKind_KillDone:
-              {
-                explanation = str8_lit("Killed");
-              }break;
+                explanation = stop_explanation;
+              }
             }
             if(icon != DF_IconKind_Null)
             {
@@ -4975,7 +4915,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                                          0,
                                          str8(view->query_buffer, view->query_string_size),
                                          str8_lit("###query_text_input"));
-            if(sig.pressed)
+            if(ui_pressed(sig))
             {
               ws->query_view_selected = 1;
             }
@@ -5022,7 +4962,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       //- rjf: take fallthrough interaction in query view
       {
         UI_Signal sig = ui_signal_from_box(query_container_box);
-        if(sig.pressed)
+        if(ui_pressed(sig))
         {
           ws->query_view_selected = 1;
         }
@@ -5105,7 +5045,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           U64 expr_hash = df_hash_from_string(expr);
           DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
           DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
-          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_num(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, expr, 1);
+          DF_ExpandKey parent_key = df_expand_key_make(5381, 1);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
+          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, expr, parent_key, key);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, macro_map, eval_view, 10, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
@@ -5195,7 +5137,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 default:{}break;
                 case EVAL_EvalMode_Addr:
                 {
-                  U64 size = tg_byte_size_from_graph_raddbg_key(parse_ctx.type_graph, parse_ctx.rdbg, row->eval.type_key);
+                  U64 size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdi, row->eval.type_key);
                   size = Min(size, 64);
                   Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
                   CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
@@ -5219,7 +5161,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 B32 row_is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
                 if(row->flags & DF_EvalVizRowFlag_CanExpand)
                   UI_PrefWidth(ui_em(1.5f, 1)) UI_Flags(UI_BoxFlag_DrawSideLeft*(row->depth>0))
-                  if(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num).pressed)
+                  if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num)))
                 {
                   df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
                 }
@@ -5248,11 +5190,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                                                   DF_LineEditFlag_PreferDisplayString|
                                                   DF_LineEditFlag_Border,
                                                   0, 0, &ws->hover_eval_txt_cursor, &ws->hover_eval_txt_mark, ws->hover_eval_txt_buffer, sizeof(ws->hover_eval_txt_buffer), &ws->hover_eval_txt_size, 0, row->edit_value, "%S###val_%I64x", row->display_value, row_hash);
-                    if(sig.commit)
+                    if(ui_committed(sig))
                     {
                       String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
                       DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, commit_string);
-                      B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdbg, &ctrl_ctx, row->eval, write_eval);
+                      B32 success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdi, &ctrl_ctx, row->eval, write_eval);
                       if(success == 0)
                       {
                         DF_CmdParams params = df_cmd_params_from_window(ws);
@@ -5283,11 +5225,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     UI_CornerRadius11(0)
                   {
                     UI_Signal watch_sig = df_icon_buttonf(DF_IconKind_List, 0, "###watch_hover_eval");
-                    if(watch_sig.hovering) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                    if(ui_hovering(watch_sig)) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
                     {
                       ui_labelf("Add the hovered expression to an opened watch view.");
                     }
-                    if(watch_sig.clicked)
+                    if(ui_clicked(watch_sig))
                     {
                       DF_CmdParams params = df_cmd_params_from_window(ws);
                       params.string = expr;
@@ -5301,7 +5243,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     UI_CornerRadius11(corner_radius)
                   {
                     UI_Signal pin_sig = df_icon_buttonf(DF_IconKind_Pin, 0, "###pin_hover_eval");
-                    if(pin_sig.hovering) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                    if(ui_hovering(pin_sig)) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
                       UI_CornerRadius00(0)
                       UI_CornerRadius01(0)
                       UI_CornerRadius10(0)
@@ -5309,7 +5251,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     {
                       ui_labelf("Pin the hovered expression to this code location.");
                     }
-                    if(pin_sig.clicked)
+                    if(ui_clicked(pin_sig))
                     {
                       DF_CmdParams params = df_cmd_params_from_window(ws);
                       if(ws->hover_eval_vaddr != 0)
@@ -5338,7 +5280,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           //- rjf: interact
           {
             UI_Signal hover_eval_sig = ui_signal_from_box(hover_eval_box);
-            if(hover_eval_sig.mouse_over)
+            if(ui_mouse_over(hover_eval_sig))
             {
               ws->hover_eval_last_frame_idx = df_frame_index();
             }
@@ -5393,19 +5335,19 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           ui_set_next_hover_cursor(split_axis == Axis2_X ? OS_Cursor_LeftRight : OS_Cursor_UpDown);
           UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%p_%p", min_child, max_child);
           UI_Signal sig = ui_signal_from_box(box);
-          if(sig.double_clicked)
+          if(ui_double_clicked(sig))
           {
             ui_kill_action();
             F32 sum_pct = min_child->size_pct_of_parent_target.v[split_axis] + max_child->size_pct_of_parent_target.v[split_axis];
             min_child->size_pct_of_parent_target.v[split_axis] = 0.5f * sum_pct;
             max_child->size_pct_of_parent_target.v[split_axis] = 0.5f * sum_pct;
           }
-          else if(sig.pressed)
+          else if(ui_pressed(sig))
           {
             Vec2F32 v = {min_child->size_pct_of_parent_target.v[split_axis], max_child->size_pct_of_parent_target.v[split_axis]};
             ui_store_drag_struct(&v);
           }
-          else if(sig.dragging)
+          else if(ui_dragging(sig))
           {
             Vec2F32 v = *ui_get_drag_struct(Vec2F32);
             Vec2F32 mouse_delta      = ui_drag_delta();
@@ -5433,7 +5375,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             max_child->size_pct_of_parent.v[split_axis] = max_child->size_pct_of_parent_target.v[split_axis] = max_pct__after;
             is_changing_panel_boundaries = 1;
           }
-          if(sig.released || sig.double_clicked)
+          if(ui_released(sig) || ui_double_clicked(sig))
           {
             df_panel_notify_mutation(ws, min_child);
           }
@@ -5534,7 +5476,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                                                0,
                                                str8(view->query_buffer, view->query_string_size),
                                                str8_lit("###filter_text_input"));
-                  if(sig.pressed)
+                  if(ui_pressed(sig))
                   {
                     DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
                     df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
@@ -5745,7 +5687,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //- rjf: consume panel fallthrough interaction events
         //
         UI_Signal panel_sig = ui_signal_from_box(panel_box);
-        if(panel_sig.pressed)
+        if(ui_pressed(panel_sig))
         {
           DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
@@ -5825,7 +5767,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     ui_label(label);
                 }
                 UI_Signal sig = ui_signal_from_box(tab_list_item_box);
-                if(sig.clicked)
+                if(ui_clicked(sig))
                 {
                   next_selected_tab_view = view;
                   DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
@@ -5838,7 +5780,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             if(panel->tab_view_count > 5) UI_PrefWidth(ui_em(2.25f, 1.f)) UI_PrefHeight(ui_px(tab_bar_vheight, 1))
             {
               UI_Signal sig = df_icon_buttonf(DF_IconKind_List, 0, "###tab_list_%p", panel);
-              if(sig.clicked)
+              if(ui_clicked(sig))
               {
                 if(ui_ctx_menu_is_open(tab_list_ctx_menu_key))
                 {
@@ -5920,23 +5862,26 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     UI_BackgroundColor(v4f32(0, 0, 0, 0))
                     UI_CornerRadius00(0)
                     UI_CornerRadius01(0)
-                    if(ui_buttonf("%S###close_view_%p", df_g_icon_kind_text_table[DF_IconKind_X], view).clicked)
                   {
-                    DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-                    df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseTab));
+                    UI_Signal sig = ui_buttonf("%S###close_view_%p", df_g_icon_kind_text_table[DF_IconKind_X], view);
+                    if(ui_clicked(sig) || ui_middle_clicked(sig))
+                    {
+                      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+                      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseTab));
+                    }
                   }
                 }
                 
                 // rjf: consume events for tab clicking
                 {
                   UI_Signal sig = ui_signal_from_box(tab_box);
-                  if(sig.pressed)
+                  if(ui_pressed(sig))
                   {
                     next_selected_tab_view = view;
                     DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
                     df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
                   }
-                  else if(sig.dragging && !df_drag_is_active() && length_2f32(ui_drag_delta()) > 10.f)
+                  else if(ui_dragging(sig) && !df_drag_is_active() && length_2f32(ui_drag_delta()) > 10.f)
                   {
                     DF_DragDropPayload payload = {0};
                     {
@@ -5946,12 +5891,17 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     }
                     df_drag_begin(&payload);
                   }
-                  else if(sig.right_clicked)
+                  else if(ui_right_clicked(sig))
                   {
                     ui_ctx_menu_open(ws->tab_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
                     ws->tab_ctx_menu_view = df_handle_from_view(view);
                   }
-                  if(sig.released)
+                  else if(ui_middle_clicked(sig))
+                  {
+                    DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+                    df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseTab));
+                  }
+                  if(ui_released(sig))
                   {
                     df_panel_notify_mutation(ws, panel);
                   }
@@ -6674,7 +6624,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           // rjf: disabled overlay
           if(b->disabled_t >= 0.005f)
           {
-            R_Rect2DInst *inst = d_rect(b->rect, v4f32(0, 0, 0, 0.5f*b->disabled_t), 0, 0, 1);
+            // rhp: disabled overlay color blends from plain background and inactive panel overlay
+            Vec4F32 bg = df_rgba_from_theme_color(DF_ThemeColor_PlainBackground);
+            Vec4F32 ov = df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay);
+            Vec4F32 color = {};
+            color.x = bg.x * bg.w + ov.x * ov.w * (1.0f - bg.w);
+            color.y = bg.y * bg.w + ov.y * ov.w * (1.0f - bg.w);
+            color.z = bg.z * bg.w + ov.z * ov.w * (1.0f - bg.w);
+            color.w = bg.w + ov.w * (1.0f - bg.w);
+            if (1.0f - color.w < 0.01f)
+            {
+              color.x *= color.w;
+              color.y *= color.w;
+              color.z *= color.w;
+            }
+            color.w = 0.60f * b->disabled_t;
+            R_Rect2DInst *inst = d_rect(b->rect, color, 0, 0, 1);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
@@ -6762,7 +6727,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   ProfEnd();
 }
 
-#if defined(_MSC_VER) && !defined(__clang__) && defined(NDEBUG)
+#if COMPILER_MSVC && !BUILD_DEBUG
 #pragma optimize("", on)
 #endif
 
@@ -6813,7 +6778,7 @@ df_eval_escaped_from_raw_string(Arena *arena, String8 raw)
 }
 
 internal String8List
-df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table)
+df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table)
 {
   ProfBeginFunction();
   String8List list = {0};
@@ -6824,21 +6789,21 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
   {
     if(opt_member != 0)
     {
-      U64 member_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, opt_member->type_key);
-      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u byte%s)", opt_member->off, member_byte_size, member_byte_size > 1 ? "s" : "");
+      U64 member_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdi, opt_member->type_key);
+      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u byte%s)", opt_member->off, member_byte_size, member_byte_size == 1 ? "s" : "");
     }
     else
     {
       String8 basic_type_kind_string = tg_kind_basic_string_table[tg_kind_from_key(eval.type_key)];
-      U64 byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, eval.type_key);
-      str8_list_pushf(arena, &list, "%S (%I64u byte%s)", basic_type_kind_string, byte_size, byte_size > 1 ? "s" : "");
+      U64 byte_size = tg_byte_size_from_graph_rdi_key(graph, rdi, eval.type_key);
+      str8_list_pushf(arena, &list, "%S (%I64u byte%s)", basic_type_kind_string, byte_size, byte_size == 1 ? "s" : "");
     }
   }
   
   //- rjf: non-type path: descend recursively & produce single-line value strings
   else if(max_size > 0)
   {
-    TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_raddbg_key(graph, rdbg, eval.type_key));
+    TG_Kind eval_type_kind = tg_kind_from_key(tg_unwrapped_from_graph_rdi_key(graph, rdi, eval.type_key));
     U32 radix = default_radix;
     DF_CfgVal *dec_cfg = df_cfg_val_from_string(cfg_table, str8_lit("dec"));
     DF_CfgVal *hex_cfg = df_cfg_val_from_string(cfg_table, str8_lit("hex"));
@@ -6854,8 +6819,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
       //- rjf: default - leaf cases
       default:
       {
-        DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdbg, ctrl_ctx, eval);
-        String8 string = df_string_from_simple_typed_eval(arena, graph, rdbg, flags, radix, value_eval);
+        DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdi, ctrl_ctx, eval);
+        String8 string = df_string_from_simple_typed_eval(arena, graph, rdi, flags, radix, value_eval);
         space_taken += f_dim_from_tag_size_string(font, font_size, string).x;
         str8_list_push(arena, &list, string);
       }break;
@@ -6875,11 +6840,11 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         B32 has_array = (array_cfg != &df_g_nil_cfg_val);
         
         // rjf: get ptr value
-        DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdbg, ctrl_ctx, eval);
+        DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdi, ctrl_ctx, eval);
         
         // rjf: get pointed-at info
         TG_Kind type_kind = tg_kind_from_key(eval.type_key);
-        TG_Key direct_type_key = tg_ptee_from_graph_raddbg_key(graph, rdbg, eval.type_key);
+        TG_Key direct_type_key = tg_ptee_from_graph_rdi_key(graph, rdi, eval.type_key);
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
         B32 direct_type_has_content = (direct_type_kind != TG_Kind_Null && direct_type_kind != TG_Kind_Void && value_eval.imm_u64 != 0);
         B32 direct_type_is_string = (direct_type_kind != TG_Kind_Null && value_eval.imm_u64 != 0 &&
@@ -6895,7 +6860,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         if(!no_addr || (direct_type_has_content == 0 && direct_type_is_string == 0))
         {
           did_ptr_value = 1;
-          String8 string = df_string_from_simple_typed_eval(arena, graph, rdbg, flags, radix, value_eval);
+          String8 string = df_string_from_simple_typed_eval(arena, graph, rdi, flags, radix, value_eval);
           space_taken += f_dim_from_tag_size_string(font, font_size, string).x;
           str8_list_push(arena, &list, string);
         }
@@ -6940,7 +6905,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             pted_eval.type_key = direct_type_key;
             pted_eval.mode     = EVAL_EvalMode_Addr;
             pted_eval.offset   = value_eval.imm_u64;
-            String8List pted_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, pted_eval, opt_member, cfg_table);
+            String8List pted_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdi, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, pted_eval, opt_member, cfg_table);
             if(pted_strs.total_size == 0)
             {
               String8 unknown = str8_lit("???");
@@ -6966,7 +6931,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
       case TG_Kind_Array:
       {
         Temp scratch = scratch_begin(&arena, 1);
-        TG_Type *eval_type = tg_type_from_graph_raddbg_key(scratch.arena, graph, rdbg, eval.type_key);
+        TG_Type *eval_type = tg_type_from_graph_rdi_key(scratch.arena, graph, rdi, eval.type_key);
         TG_Key direct_type_key = eval_type->direct_type_key;
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
         U64 array_count = eval_type->count;
@@ -7010,7 +6975,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           if(depth < 3)
           {
-            U64 direct_type_byte_size = tg_byte_size_from_graph_raddbg_key(graph, rdbg, direct_type_key);
+            U64 direct_type_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdi, direct_type_key);
             for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
             {
               DF_Eval element_eval = zero_struct;
@@ -7018,7 +6983,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
               element_eval.mode     = eval.mode;
               element_eval.offset   = eval.offset + direct_type_byte_size*idx;
               MemoryCopyArray(element_eval.imm_u128, eval.imm_u128);
-              String8List element_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, element_eval, opt_member, cfg_table);
+              String8List element_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdi, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, element_eval, opt_member, cfg_table);
               space_taken += f_dim_from_tag_size_string_list(font, font_size, element_strs).x;
               str8_list_concat_in_place(&list, &element_strs);
               if(idx+1 < array_count)
@@ -7066,7 +7031,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         if(depth < 4)
         {
           Temp scratch = scratch_begin(&arena, 1);
-          TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, graph, rdbg, eval.type_key);
+          TG_MemberArray data_members = tg_data_members_from_graph_rdi_key(scratch.arena, graph, rdi, eval.type_key);
           TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
           for(U64 member_idx = 0; member_idx < filtered_data_members.count && max_size > space_taken; member_idx += 1)
           {
@@ -7076,7 +7041,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             member_eval.mode = eval.mode;
             member_eval.offset = eval.offset + mem->off;
             MemoryCopyArray(member_eval.imm_u128, eval.imm_u128);
-            String8List member_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdbg, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, member_eval, opt_member, cfg_table);
+            String8List member_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdi, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, member_eval, opt_member, cfg_table);
             space_taken += f_dim_from_tag_size_string_list(font, font_size, member_strs).x;
             str8_list_concat_in_place(&list, &member_strs);
             if(member_idx+1 < filtered_data_members.count)
@@ -7241,8 +7206,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_Root:
       if(visible_idx_range.max > visible_idx_range.min)
       {
-        String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
-        String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
+        String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
+        String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, block->eval, block->member, &block->cfg_table);
         DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, block->key, block->eval);
         row->expr                = block->string;
         row->display_value       = str8_list_join(arena, &display_strings, 0);
@@ -7267,7 +7232,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_Members:
       if(block_type_kind != TG_Kind_Null)
       {
-        TG_MemberArray data_members = tg_data_members_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        TG_MemberArray data_members = tg_data_members_from_graph_rdi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdi, block->eval.type_key);
         TG_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, &block->cfg_table);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max && idx < filtered_data_members.count; idx += 1)
         {
@@ -7292,13 +7257,13 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           
           // rjf: apply view rules to eval
           {
-            member_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, member_eval);
+            member_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, member_eval);
             member_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, member_eval, &view_rule_table);
           }
           
           // rjf: build & push row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, member_eval, member, &view_rule_table);
           DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, member_eval);
           if(member->kind == TG_MemberKind_Padding)
           {
@@ -7325,7 +7290,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       case DF_EvalVizBlockKind_EnumMembers:
       if(block_type_kind == TG_Kind_Enum)
       {
-        TG_Type *type = tg_type_from_graph_raddbg_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        TG_Type *type = tg_type_from_graph_rdi_key(scratch.arena, parse_ctx->type_graph, parse_ctx->rdi, block->eval.type_key);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max && idx < type->count; idx += 1)
         {
           TG_EnumVal *enum_val = &type->enum_vals[idx];
@@ -7346,13 +7311,13 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           
           // rjf: apply view rules to eval
           {
-            eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
+            eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
             eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval, &view_rule_table);
           }
           
           // rjf: build & push row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
           DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, eval);
           row->expr                = push_str8_copy(arena, enum_val->name);
           row->display_value       = str8_list_join(arena, &display_strings, 0);
@@ -7369,9 +7334,9 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       //
       case DF_EvalVizBlockKind_Elements:
       {
-        TG_Key direct_type_key = tg_unwrapped_direct_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, block->eval.type_key);
+        TG_Key direct_type_key = tg_unwrapped_direct_from_graph_rdi_key(parse_ctx->type_graph, parse_ctx->rdi, block->eval.type_key);
         TG_Kind direct_type_kind = tg_kind_from_key(direct_type_key);
-        U64 direct_type_key_byte_size = tg_byte_size_from_graph_raddbg_key(parse_ctx->type_graph, parse_ctx->rdbg, direct_type_key);
+        U64 direct_type_key_byte_size = tg_byte_size_from_graph_rdi_key(parse_ctx->type_graph, parse_ctx->rdi, direct_type_key);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
           // rjf: get keys for this row
@@ -7393,13 +7358,13 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           
           // rjf: apply view rules to eval
           {
-            elem_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, elem_eval);
+            elem_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, elem_eval);
             elem_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, elem_eval, &view_rule_table);
           }
           
           // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, elem_eval, 0, &view_rule_table);
           DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, elem_eval);
           row->expr                = push_str8f(arena, "[%I64u]", idx);
           row->display_value       = str8_list_join(arena, &display_strings, 0);
@@ -7420,7 +7385,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       //
       case DF_EvalVizBlockKind_Links:
       {
-        DF_EvalLinkBaseChunkList link_base_chunks = df_eval_link_base_chunk_list_from_eval(scratch.arena, parse_ctx->type_graph, parse_ctx->rdbg, block->link_member_type_key, block->link_member_off, ctrl_ctx, block->eval, 512);
+        DF_EvalLinkBaseChunkList link_base_chunks = df_eval_link_base_chunk_list_from_eval(scratch.arena, parse_ctx->type_graph, parse_ctx->rdi, block->link_member_type_key, block->link_member_off, ctrl_ctx, block->eval, 512);
         DF_EvalLinkBaseArray link_bases = df_eval_link_base_array_from_chunk_list(scratch.arena, &link_base_chunks);
         for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
         {
@@ -7444,13 +7409,13 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
           df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
           
           // rjf: apply view rules to eval
-          link_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, link_eval);
+          link_eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, link_eval);
           link_eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, link_eval, &view_rule_table);
           TG_Kind link_type_kind = tg_kind_from_key(link_eval.type_key);
           
           // rjf: build row
-          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
-          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
+          String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
+          String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, link_eval, 0, &view_rule_table);
           DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, link_eval);
           row->expr                = push_str8f(arena, "[%I64u]", idx);
           row->display_value       = str8_list_join(arena, &display_strings, 0);
@@ -7489,7 +7454,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
       {
         // rjf: unpack info about this row
-        String8 name = dbgi_fuzzy_item_string_from_rdbg_target_element_idx(parse_ctx->rdbg, block->dbgi_target, block->backing_search_items.v[idx].idx);
+        String8 name = dbgi_fuzzy_item_string_from_rdi_target_element_idx(parse_ctx->rdi, block->dbgi_target, block->backing_search_items.v[idx].idx);
         
         // rjf: get keys for this row
         DF_ExpandKey parent_key = block->parent_key;
@@ -7506,13 +7471,13 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
         
         // rjf: apply view rules to eval
         {
-          eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, eval);
+          eval = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
           eval = df_eval_from_eval_cfg_table(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval, &view_rule_table);
         }
         
         // rjf: build row
-        String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
-        String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+        String8List display_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
+        String8List edit_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, 0, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, default_radix, font, font_size, 500, 0, eval, 0, &view_rule_table);
         DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, parse_ctx, &list, block, key, eval);
         row->expr = name;
         row->display_value = str8_list_join(arena, &display_strings, 0);
@@ -7535,7 +7500,10 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
 internal void
 df_set_hover_eval(DF_Window *ws, Vec2F32 pos, DF_CtrlCtx ctrl_ctx, DF_Entity *file, TxtPt pt, U64 vaddr, String8 string)
 {
-  if(ws->hover_eval_last_frame_idx+1 < df_frame_index() && ui_key_match(ui_active_key(Side_Min), ui_key_zero()) && ui_key_match(ui_active_key(Side_Max), ui_key_zero()))
+  if(ws->hover_eval_last_frame_idx+1 < df_frame_index() &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero()) &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()))
   {
     B32 is_new_string = !str8_match(ws->hover_eval_string, string, 0);
     if(is_new_string)
@@ -7705,8 +7673,6 @@ df_text_search_little_hash_from_hash(U128 hash)
 internal void
 df_text_search_thread_entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
 #if 0
   // TODO(rjf): [ ] @de2ctrl text searcher -- wound up in DE_Hash
   
@@ -8105,18 +8071,18 @@ df_rgba_from_theme_color(DF_ThemeColor color)
 }
 
 internal DF_ThemeColor
-df_theme_color_from_txti_token_kind(TXTI_TokenKind kind)
+df_theme_color_from_txt_token_kind(TXT_TokenKind kind)
 {
   DF_ThemeColor color = DF_ThemeColor_CodeDefault;
   switch(kind)
   {
     default:break;
-    case TXTI_TokenKind_Keyword:{color = DF_ThemeColor_CodeKeyword;}break;
-    case TXTI_TokenKind_Numeric:{color = DF_ThemeColor_CodeNumeric;}break;
-    case TXTI_TokenKind_String: {color = DF_ThemeColor_CodeString;}break;
-    case TXTI_TokenKind_Meta:   {color = DF_ThemeColor_CodeMeta;}break;
-    case TXTI_TokenKind_Comment:{color = DF_ThemeColor_CodeComment;}break;
-    case TXTI_TokenKind_Symbol: {color = DF_ThemeColor_CodeSymbol;}break;
+    case TXT_TokenKind_Keyword:{color = DF_ThemeColor_CodeKeyword;}break;
+    case TXT_TokenKind_Numeric:{color = DF_ThemeColor_CodeNumeric;}break;
+    case TXT_TokenKind_String: {color = DF_ThemeColor_CodeString;}break;
+    case TXT_TokenKind_Meta:   {color = DF_ThemeColor_CodeMeta;}break;
+    case TXT_TokenKind_Comment:{color = DF_ThemeColor_CodeComment;}break;
+    case TXT_TokenKind_Symbol: {color = DF_ThemeColor_CodeSymbol;}break;
   }
   return color;
 }
@@ -8438,6 +8404,141 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
 }
 
 ////////////////////////////////
+//~ rjf: Process Control Info Stringification
+
+internal String8
+df_string_from_exception_code(U32 code)
+{
+  String8 string = {0};
+  for(EachNonZeroEnumVal(CTRL_ExceptionCodeKind, k))
+  {
+    if(code == ctrl_exception_code_kind_code_table[k])
+    {
+      string = ctrl_exception_code_kind_display_string_table[k];
+      break;
+    }
+  }
+  return string;
+}
+
+internal String8
+df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, DF_IconKind *icon_out)
+{
+  DF_IconKind icon = DF_IconKind_Null;
+  String8 explanation = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
+  String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
+  switch(event->kind)
+  {
+    default:
+    {
+      switch(event->cause)
+      {
+        default:{}break;
+        case CTRL_EventCause_Finished:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            explanation = push_str8f(arena, "%S completed step", thread_display_string);
+          }
+          else
+          {
+            explanation = str8_lit("Stopped");
+          }
+        }break;
+        case CTRL_EventCause_UserBreakpoint:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            icon = DF_IconKind_CircleFilled;
+            explanation = push_str8f(arena, "%S hit a breakpoint", thread_display_string);
+          }
+        }break;
+        case CTRL_EventCause_InterruptedByException:
+        {
+          if(!df_entity_is_nil(thread))
+          {
+            icon = DF_IconKind_WarningBig;
+            switch(event->exception_kind)
+            {
+              default:
+              {
+                String8 exception_code_string = df_string_from_exception_code(event->exception_code);
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", thread_display_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
+              }break;
+              case CTRL_ExceptionKind_CppThrow:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", thread_display_string, event->exception_code);
+              }break;
+              case CTRL_ExceptionKind_MemoryRead:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation reading 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+              case CTRL_ExceptionKind_MemoryWrite:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation writing 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+              case CTRL_ExceptionKind_MemoryExecute:
+              {
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation executing 0x%I64x",
+                                         thread_display_string,
+                                         event->exception_code,
+                                         event->vaddr_rng.min);
+              }break;
+            }
+          }
+          else
+          {
+            icon = DF_IconKind_Pause;
+            explanation = str8_lit("Interrupted");
+          }
+        }break;
+        case CTRL_EventCause_InterruptedByTrap:
+        {
+          icon = DF_IconKind_WarningBig;
+          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", thread_display_string, event->exception_code);
+        }break;
+        case CTRL_EventCause_InterruptedByHalt:
+        {
+          icon = DF_IconKind_Pause;
+          explanation = str8_lit("Halted");
+        }break;
+      }
+    }break;
+    case CTRL_EventKind_LaunchAndInitDone:
+    case CTRL_EventKind_LaunchAndHandshakeDone:
+    {
+      explanation = str8_lit("Launched");
+    }break;
+    case CTRL_EventKind_AttachDone:
+    {
+      explanation = str8_lit("Attached");
+    }break;
+    case CTRL_EventKind_DetachDone:
+    {
+      explanation = str8_lit("Detached");
+    }break;
+    case CTRL_EventKind_KillDone:
+    {
+      explanation = str8_lit("Killed");
+    }break;
+  }
+  scratch_end(scratch);
+  if(icon_out)
+  {
+    *icon_out = icon;
+  }
+  return explanation;
+}
+
+////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void
@@ -8499,26 +8600,26 @@ df_cmd_binding_button(DF_CmdSpec *spec)
   UI_Signal sig = ui_signal_from_box(box);
   {
     // rjf: hover => visualize clickability
-    if(sig.hovering)
+    if(ui_hovering(sig))
     {
       box->flags |= UI_BoxFlag_DrawBorder;
       box->flags |= UI_BoxFlag_DrawBackground;
     }
     
     // rjf: click => toggle activity
-    if(!df_gfx_state->bind_change_active && sig.clicked)
+    if(!df_gfx_state->bind_change_active && ui_clicked(sig))
     {
       df_gfx_state->bind_change_active = 1;
       df_gfx_state->bind_change_cmd_spec = spec;
       df_gfx_state->bind_change_binding = binding;
     }
-    else if(df_gfx_state->bind_change_active && sig.clicked)
+    else if(df_gfx_state->bind_change_active && ui_clicked(sig))
     {
       df_gfx_state->bind_change_active = 0;
     }
     
     // rjf: hover w/ conflicts => show conflicts
-    if(sig.hovering && has_conflicts) UI_Tooltip
+    if(ui_hovering(sig) && has_conflicts) UI_Tooltip
     {
       ui_labelf("This binding conflicts with others:");
       for(DF_CmdSpecNode *n = specs_with_binding.first; n != 0; n = n->next)
@@ -8603,7 +8704,7 @@ df_cmd_list_menu_buttons(DF_Window *ws, U64 count, DF_CoreCmdKind *cmds, U32 *fa
     DF_CmdSpec *spec = df_cmd_spec_from_core_cmd_kind(cmds[idx]);
     ui_set_next_fastpath_codepoint(fastpath_codepoints[idx]);
     UI_Signal sig = df_cmd_spec_button(spec);
-    if(sig.clicked)
+    if(ui_clicked(sig))
     {
       DF_CmdParams params = df_cmd_params_from_window(ws);
       params.cmd_spec = spec;
@@ -8704,6 +8805,25 @@ df_entity_tooltips(DF_Entity *entity)
         }
         UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
       }
+      {
+        CTRL_Event stop_event = df_ctrl_last_stop_event();
+        DF_Entity *stopper_thread = df_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
+        if(stopper_thread == entity)
+        {
+          ui_spacer(ui_em(1.5f, 1.f));
+          DF_IconKind icon_kind = DF_IconKind_Null;
+          String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon_kind);
+          if(explanation.size != 0)
+          {
+            UI_PrefWidth(ui_children_sum(1)) UI_Row UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+            {
+              UI_PrefWidth(ui_em(1.5f, 1.f)) UI_Font(df_font_from_slot(DF_FontSlot_Icons)) ui_label(df_g_icon_kind_text_table[icon_kind]);
+              UI_PrefWidth(ui_text_dim(10, 1)) ui_label(explanation);
+            }
+          }
+        }
+      }
+      ui_spacer(ui_em(1.5f, 1.f));
       UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
         UI_PrefWidth(ui_em(18.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("TID: ");
@@ -8880,7 +9000,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
           info_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "%S###%p_temp_info", df_g_icon_kind_text_table[DF_IconKind_Info], entity);
         }
         UI_Signal info_sig = ui_signal_from_box(info_box);
-        if(info_sig.hovering) UI_Tooltip
+        if(ui_hovering(info_sig)) UI_Tooltip
         {
           ui_labelf("Specified via command line; not saved in profile.");
         }
@@ -8954,7 +9074,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     }
     
     // rjf: click => fastpath or dropdown for this entity
-    if(sig.clicked)
+    if(ui_clicked(sig))
     {
       DF_CmdParams params = df_cmd_params_from_window(ws);
       params.entity = df_handle_from_entity(entity);
@@ -8963,7 +9083,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     }
     
     // rjf: right-click => context menu for this entity
-    else if(sig.right_clicked)
+    else if(ui_right_clicked(sig))
     {
       DF_Handle handle = df_handle_from_entity(entity);
       if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
@@ -8978,7 +9098,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     }
     
     // rjf: drag+drop
-    else if(sig.dragging && !contains_2f32(box->rect, ui_mouse()))
+    else if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
     {
       DF_DragDropPayload payload = {0};
       payload.key = box->key;
@@ -9020,7 +9140,7 @@ df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt point)
   }
   
   // rjf: click => find code location
-  if(sig.clicked)
+  if(ui_clicked(sig))
   {
     DF_CmdParams params = df_cmd_params_from_window(ws);
     params.file_path = full_path;
@@ -9031,7 +9151,7 @@ df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt point)
   }
   
   // rjf: drag+drop
-  else if(sig.dragging && !contains_2f32(box->rect, ui_mouse()))
+  else if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
   {
     DF_DragDropPayload payload = {0};
     payload.key = box->key;
@@ -9041,7 +9161,7 @@ df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt point)
   }
   
   // rjf: hover => show full path
-  else if(sig.hovering && !sig.dragging) UI_Tooltip
+  else if(ui_hovering(sig) && !ui_dragging(sig)) UI_Tooltip
   {
     ui_labelf("%S:%I64d:%I64d", full_path, point.line, point.column);
   }
@@ -9224,6 +9344,29 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: build per-line background colors
+  //
+  Vec4F32 *line_bg_colors = push_array(scratch.arena, Vec4F32, dim_1s64(params->line_num_range)+1);
+  {
+    //- rjf: color line with stopper-thread red
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      DF_EntityList threads = params->line_ips[line_idx];
+      for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
+      {
+        if(n->entity == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+        {
+          line_bg_colors[line_idx] = df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
+          line_bg_colors[line_idx].w *= 0.25f;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build per-line context menus
   //
   UI_Key *ctx_menu_keys = push_array(scratch.arena, UI_Key, dim_1s64(params->line_num_range)+1);
@@ -9240,28 +9383,28 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         DF_TextLineDasm2SrcInfoList *line_dasm2src_list = &params->line_dasm2src[line_idx];
         
         //- rjf: copy selection
-        if(!txt_pt_match(*cursor, *mark) && df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Copy)).clicked)
+        if(!txt_pt_match(*cursor, *mark) && ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Copy))))
         {
           result.copy_range = txt_rng(*cursor, *mark);
           ui_ctx_menu_close();
         }
         
         //- rjf: watch selection
-        if(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpressionAtCursor)).clicked)
+        if(ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpressionAtCursor))))
         {
           result.toggle_cursor_watch = 1;
           ui_ctx_menu_close();
         }
         
         //- rjf: set-next-statement
-        if(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetNextStatement)).clicked)
+        if(ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetNextStatement))))
         {
           result.set_next_statement_line_num = line_num;
           ui_ctx_menu_close();
         }
         
         //- rjf: run-to-line
-        if(df_icon_buttonf(DF_IconKind_Play, 0, "Run To Line").clicked)
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Run To Line")))
         {
           result.run_to_line_num = line_num;
           ui_ctx_menu_close();
@@ -9269,9 +9412,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         
         //- rjf: breakpoint placing
         if((params->line_bps[line_idx].count == 0 &&
-            df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Place Breakpoint").clicked) ||
+            ui_clicked(df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Place Breakpoint"))) ||
            (params->line_bps[line_idx].count != 0 &&
-            df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Remove Breakpoint").clicked))
+            ui_clicked(df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Remove Breakpoint"))))
         {
           result.clicked_margin_line_num = line_num;
           ui_ctx_menu_close();
@@ -9279,7 +9422,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         
         //- rjf: go from src -> disasm
         if(line_src2dasm_list->first != 0 &&
-           df_icon_buttonf(DF_IconKind_Find, 0, "Go To Disassembly").clicked)
+           ui_clicked(df_icon_buttonf(DF_IconKind_Find, 0, "Go To Disassembly")))
         {
           result.goto_disasm_line_num = line_num;
           ui_ctx_menu_close();
@@ -9287,7 +9430,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         
         //- rjf: go from disasm -> src
         if(line_dasm2src_list->first != 0 &&
-           df_icon_buttonf(DF_IconKind_Find, 0, "Go To Source").clicked)
+           ui_clicked(df_icon_buttonf(DF_IconKind_Find, 0, "Go To Source")))
         {
           result.goto_src_line_num = line_num;
           ui_ctx_menu_close();
@@ -9416,13 +9559,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: hover tooltips
-            if(thread_sig.hovering)
+            if(ui_hovering(thread_sig))
             {
               df_entity_tooltips(thread);
             }
             
             // rjf: ip right-click menu
-            if(thread_sig.right_clicked)
+            if(ui_right_clicked(thread_sig))
             {
               DF_Handle handle = df_handle_from_entity(thread);
               if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
@@ -9437,7 +9580,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: double click => select
-            if(thread_sig.double_clicked)
+            if(ui_double_clicked(thread_sig))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(thread);
@@ -9446,7 +9589,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: drag start
-            if(thread_sig.dragging && !contains_2f32(thread_box->rect, ui_mouse()))
+            if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {
               DF_DragDropPayload payload = {0};
               payload.key = thread_box->key;
@@ -9506,13 +9649,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             UI_Signal bp_sig = ui_signal_from_box(bp_box);
             
             // rjf: bp hovering
-            if(bp_sig.hovering)
+            if(ui_hovering(bp_sig))
             {
               df_entity_tooltips(bp);
             }
             
             // rjf: click => remove breakpoint
-            if(bp_sig.clicked)
+            if(ui_clicked(bp_sig))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(bp);
@@ -9521,7 +9664,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: drag start
-            if(bp_sig.dragging && !contains_2f32(bp_box->rect, ui_mouse()))
+            if(ui_dragging(bp_sig) && !contains_2f32(bp_box->rect, ui_mouse()))
             {
               DF_DragDropPayload payload = {0};
               payload.entity = df_handle_from_entity(bp);
@@ -9529,7 +9672,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: bp right-click menu
-            if(bp_sig.right_clicked)
+            if(ui_right_clicked(bp_sig))
             {
               DF_Handle handle = df_handle_from_entity(bp);
               if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
@@ -9573,13 +9716,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             UI_Signal pin_sig = ui_signal_from_box(pin_box);
             
             // rjf: watch hovering
-            if(pin_sig.hovering)
+            if(ui_hovering(pin_sig))
             {
               df_entity_tooltips(pin);
             }
             
             // rjf: click => remove pin
-            if(pin_sig.clicked)
+            if(ui_clicked(pin_sig))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(pin);
@@ -9588,7 +9731,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: drag start
-            if(pin_sig.dragging && !contains_2f32(pin_box->rect, ui_mouse()))
+            if(ui_dragging(pin_sig) && !contains_2f32(pin_box->rect, ui_mouse()))
             {
               DF_DragDropPayload payload = {0};
               payload.entity = df_handle_from_entity(pin);
@@ -9596,7 +9739,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: watch right-click menu
-            if(pin_sig.right_clicked)
+            if(ui_right_clicked(pin_sig))
             {
               DF_Handle handle = df_handle_from_entity(pin);
               if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
@@ -9612,7 +9755,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           }
         }
         UI_Signal line_margin_sig = ui_signal_from_box(line_margin_box);
-        if(line_margin_sig.clicked)
+        if(ui_clicked(line_margin_sig))
         {
           result.clicked_margin_line_num = line_num;
         }
@@ -9665,6 +9808,49 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: build exception annotations
+  //
+  UI_Focus(UI_FocusKind_Off)
+  {
+    U64 line_idx = 0;
+    for(S64 line_num = params->line_num_range.min;
+        line_num < params->line_num_range.max;
+        line_num += 1, line_idx += 1)
+    {
+      DF_EntityList threads = params->line_ips[line_idx];
+      for(DF_EntityNode *n = threads.first; n != 0; n = n->next)
+      {
+        DF_Entity *thread = n->entity;
+        if(thread == stopper_thread &&
+           (stop_event.cause == CTRL_EventCause_InterruptedByException ||
+            stop_event.cause == CTRL_EventCause_InterruptedByTrap))
+        {
+          DF_IconKind icon = DF_IconKind_WarningBig;
+          String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
+          UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+          {
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_Clickable, "###exception_info");
+            UI_Parent(box)
+            {
+              UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+                UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
+              }
+              UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+                UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                ui_label(explanation);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build watch pin annotations
   //
   UI_Focus(UI_FocusKind_Off)
@@ -9687,7 +9873,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           if(!tg_key_match(tg_key_zero(), eval.type_key))
           {
             DF_CfgTable cfg_table = {0};
-            String8List eval_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdbg, ctrl_ctx, 10, params->font, params->font_size, params->font_size*60.f, 0, eval, 0, &cfg_table);
+            String8List eval_strings = df_single_line_eval_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, 10, params->font, params->font_size, params->font_size*60.f, 0, eval, 0, &cfg_table);
             eval_string = str8_list_join(scratch.arena, &eval_strings, 0);
           }
           ui_spacer(ui_em(1.5f, 1.f));
@@ -9708,13 +9894,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               UI_Flags(UI_BoxFlag_DisableTextTrunc)
             {
               UI_Signal sig = ui_buttonf("%S###pin_nub", df_g_icon_kind_text_table[DF_IconKind_Pin]);
-              if(sig.dragging && !contains_2f32(sig.box->rect, ui_mouse()))
+              if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
               {
                 DF_DragDropPayload payload = {0};
                 payload.entity = df_handle_from_entity(pin);
                 df_drag_begin(&payload);
               }
-              if(sig.clicked || sig.right_clicked)
+              if(ui_clicked(sig) || ui_right_clicked(sig))
               {
                 ui_ctx_menu_open(ws->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
                 ws->entity_ctx_menu_entity = df_handle_from_entity(pin);
@@ -9785,7 +9971,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   DF_Entity *line_drag_entity = &df_g_nil_entity;
   {
     //- rjf: clicking/dragging over the text container
-    if(!ctrlified && text_container_sig.dragging)
+    if(!ctrlified && ui_dragging(text_container_sig))
     {
       if(mouse_pt.line == 0)
       {
@@ -9799,7 +9985,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           mouse_pt.line = params->line_num_range.max + 2;
         }
       }
-      if(text_container_sig.pressed)
+      if(ui_pressed(text_container_sig))
       {
         *mark = mouse_pt;
       }
@@ -9808,7 +9994,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     }
     
     //- rjf: right-click => active context menu for line
-    if(text_container_sig.right_clicked)
+    if(ui_right_clicked(text_container_sig))
     {
       S64 line_idx = mouse_pt.line-params->line_num_range.min;
       if(0 <= line_idx && line_idx < dim_1s64(params->line_num_range))
@@ -9822,7 +10008,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     }
     
     //- rjf: hovering text container & ctrl+scroll -> change font size
-    if(text_container_sig.hovering)
+    if(ui_hovering(text_container_sig))
     {
       for(OS_Event *event = ui_events()->first; event != 0; event = event->next)
       {
@@ -9874,7 +10060,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //////////////////////////////
   //- rjf: mouse -> expression range info
   //
-  if(text_container_sig.hovering && contains_1s64(params->line_num_range, mouse_pt.line)) ProfScope("mouse -> expression range")
+  if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line)) ProfScope("mouse -> expression range")
   {
     TxtRng selected_rng = txt_rng(*cursor, *mark);
     if(!txt_pt_match(*cursor, *mark) && cursor->line == mark->line &&
@@ -9892,7 +10078,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     {
       U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
       String8 line_text = params->line_text[line_slice_idx];
-      TXTI_TokenArray line_tokens = params->line_tokens[line_slice_idx];
+      TXT_TokenArray line_tokens = params->line_tokens[line_slice_idx];
       Rng1U64 line_range = params->line_ranges[line_slice_idx];
       U64 mouse_pt_off = line_range.min + (mouse_pt.column-1);
       Rng1U64 expr_off_rng = txti_expr_range_from_line_off_range_string_tokens(mouse_pt_off, line_range, line_text, &line_tokens);
@@ -9909,7 +10095,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //////////////////////////////
   //- rjf: mouse -> set global frontend hovered line info
   //
-  if(text_container_sig.hovering && contains_1s64(params->line_num_range, mouse_pt.line))
+  if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line))
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
     if(params->line_src2dasm[line_slice_idx].first != 0 &&
@@ -10090,9 +10276,15 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       {
         String8 line_string = params->line_text[line_idx];
         Rng1U64 line_range = params->line_ranges[line_idx];
-        TXTI_TokenArray *line_tokens = &params->line_tokens[line_idx];
+        TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
         ui_set_next_text_padding(-2);
         UI_Key line_key = ui_key_from_stringf(top_container_box->key, "ln_%I64x", line_num);
+        Vec4F32 line_bg_color = line_bg_colors[line_idx];
+        if(line_bg_color.w != 0)
+        {
+          ui_set_next_background_color(line_bg_color);
+          ui_set_next_flags(UI_BoxFlag_DrawBackground);
+        }
         UI_Box *line_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, line_key);
         D_Bucket *line_bucket = d_bucket_make();
         d_push_bucket(line_bucket);
@@ -10115,9 +10307,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           }
           else
           {
-            TXTI_Token *line_tokens_first = line_tokens->v;
-            TXTI_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
-            for(TXTI_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
+            TXT_Token *line_tokens_first = line_tokens->v;
+            TXT_Token *line_tokens_opl = line_tokens->v + line_tokens->count;
+            for(TXT_Token *token = line_tokens_first; token < line_tokens_opl; token += 1)
             {
               // rjf: token -> token string
               String8 token_string = {0};
@@ -10137,9 +10329,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               // rjf: token -> token color
               Vec4F32 token_color = df_rgba_from_theme_color(DF_ThemeColor_CodeDefault);
               {
-                DF_ThemeColor new_color_kind = df_theme_color_from_txti_token_kind(token->kind);
+                DF_ThemeColor new_color_kind = df_theme_color_from_txt_token_kind(token->kind);
                 F32 mix_t = 1.f;
-                if(token->kind == TXTI_TokenKind_Identifier)
+                if(token->kind == TXT_TokenKind_Identifier)
                 {
                   B32 mapped_special = 0;
                   for(DF_EntityNode *n = params->relevant_binaries.first; n != 0; n = n->next)
@@ -10610,7 +10802,7 @@ df_help_label(String8 string)
   UI_Parent(box)
   {
     UI_PrefWidth(ui_pct(1, 0)) ui_label(string);
-    if(sig.hovering) UI_PrefWidth(ui_em(2.25f, 1))
+    if(ui_hovering(sig)) UI_PrefWidth(ui_em(2.25f, 1))
     {
       result = 1;
       ui_set_next_font(ui_icon_font());
@@ -10631,12 +10823,12 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
 {
   Temp scratch = scratch_begin(&arena, 1);
   D_FancyStringList fancy_strings = {0};
-  TXTI_TokenArray tokens = txti_token_array_from_string__cpp(scratch.arena, 0, string);
-  TXTI_Token *tokens_opl = tokens.v+tokens.count;
+  TXT_TokenArray tokens = txt_token_array_from_string__c_cpp(scratch.arena, 0, string);
+  TXT_Token *tokens_opl = tokens.v+tokens.count;
   S32 indirection_counter = 0;
-  for(TXTI_Token *token = tokens.v; token < tokens_opl; token += 1)
+  for(TXT_Token *token = tokens.v; token < tokens_opl; token += 1)
   {
-    DF_ThemeColor token_color = df_theme_color_from_txti_token_kind(token->kind);
+    DF_ThemeColor token_color = df_theme_color_from_txt_token_kind(token->kind);
     Vec4F32 token_color_rgba = df_rgba_from_theme_color(token_color);
     token_color_rgba.w *= alpha;
     String8 token_string = str8_substr(string, token->range);
@@ -10656,7 +10848,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
       }break;
-      case TXTI_TokenKind_Identifier:
+      case TXT_TokenKind_Identifier:
       {
         D_FancyString fancy_string =
         {
@@ -10667,7 +10859,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
       }break;
-      case TXTI_TokenKind_Numeric:
+      case TXT_TokenKind_Numeric:
       {
         Vec4F32 token_color_rgba_alt = token_color_rgba;
         token_color_rgba_alt.x *= 0.7f;
@@ -10837,7 +11029,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     UI_Focus(UI_FocusKind_Off)
   {
     UI_Signal expander_sig = ui_expanderf(*expanded_out, "expander");
-    if(expander_sig.pressed)
+    if(ui_pressed(expander_sig))
     {
       *expanded_out ^= 1;
     }
@@ -10891,13 +11083,16 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   
   //- rjf: get signal
   UI_Signal sig = ui_signal_from_box(box);
-  sig.commit = sig.commit || commit;
+  if(commit)
+  {
+    sig.f |= UI_SignalFlag_Commit;
+  }
   
   //- rjf: do start/end editing interaction
   B32 focus_started = 0;
   if(!is_focus_active)
   {
-    B32 start_editing_via_sig = (sig.double_clicked || sig.keyboard_clicked);
+    B32 start_editing_via_sig = (ui_double_clicked(sig) || sig.f&UI_SignalFlag_KeyboardPressed);
     B32 start_editing_via_typing = 0;
     if(is_focus_hot)
     {
@@ -10928,10 +11123,10 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       focus_started = 1;
     }
   }
-  else if(is_focus_active && sig.keyboard_clicked)
+  else if(is_focus_active && sig.f&UI_SignalFlag_KeyboardPressed)
   {
     ui_set_auto_focus_active_key(ui_key_zero());
-    sig.commit = 1;
+    sig.f |= UI_SignalFlag_Commit;
   }
   
   //- rjf: take navigation actions for editing
@@ -11076,15 +11271,15 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   }
   
   //- rjf: click+drag
-  if(is_focus_active && sig.dragging)
+  if(is_focus_active && ui_dragging(sig))
   {
-    if(sig.pressed)
+    if(ui_pressed(sig))
     {
       *mark = mouse_pt;
     }
     *cursor = mouse_pt;
   }
-  if(!is_focus_active && is_focus_active_disabled && sig.pressed)
+  if(!is_focus_active && is_focus_active_disabled && ui_pressed(sig))
   {
     *cursor = *mark = mouse_pt;
   }

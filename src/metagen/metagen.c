@@ -113,6 +113,18 @@ mg_txt_pt_from_string_off(String8 string, U64 off)
 }
 
 ////////////////////////////////
+//~ rjf: Message Lists
+
+internal void
+mg_msg_list_push(Arena *arena, MG_MsgList *msgs, MG_Msg *msg)
+{
+  MG_MsgNode *n = push_array(arena, MG_MsgNode, 1);
+  MemoryCopyStruct(&n->v, msg);
+  SLLQueuePush(msgs->first, msgs->last, n);
+  msgs->count += 1;
+}
+
+////////////////////////////////
 //~ rjf: String Escaping
 
 internal String8
@@ -360,7 +372,7 @@ mg_str_expr_parse_from_first_opl__min_prec(Arena *arena, MD_Node *first, MD_Node
     
     //- rjf: consume prefix operators
     MG_StrExpr *leafmost_op = &mg_str_expr_nil;
-    for(;it < opl && !md_node_is_nil(it);)
+    for(;it != opl && !md_node_is_nil(it);)
     {
       MG_StrExprOp found_op = MG_StrExprOp_Null;
       for(MG_StrExprOp op = (MG_StrExprOp)(MG_StrExprOp_Null+1);
@@ -419,7 +431,7 @@ mg_str_expr_parse_from_first_opl__min_prec(Arena *arena, MD_Node *first, MD_Node
     }
     
     //- rjf: parse binary operator extensions at this precedence level
-    for(;it < opl && !md_node_is_nil(it);)
+    for(;it != opl && !md_node_is_nil(it);)
     {
       // rjf: find binary op kind of `it`
       MG_StrExprOp found_op = MG_StrExprOp_Null;

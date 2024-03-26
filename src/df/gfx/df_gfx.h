@@ -453,7 +453,7 @@ struct DF_CodeSliceParams
   Rng1S64 line_num_range;
   String8 *line_text;
   Rng1U64 *line_ranges;
-  TXTI_TokenArray *line_tokens;
+  TXT_TokenArray *line_tokens;
   DF_EntityList *line_bps;
   DF_EntityList *line_ips;
   DF_EntityList *line_pins;
@@ -961,7 +961,7 @@ internal void df_window_update_and_render(Arena *arena, OS_EventList *events, DF
 //~ rjf: Eval Viz
 
 internal String8 df_eval_escaped_from_raw_string(Arena *arena, String8 raw);
-internal String8List df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table);
+internal String8List df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table);
 internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks);
 
 ////////////////////////////////
@@ -1010,7 +1010,7 @@ internal DF_CmdSpecList df_cmd_spec_list_from_event_flags(Arena *arena, OS_Event
 
 //- rjf: colors
 internal Vec4F32 df_rgba_from_theme_color(DF_ThemeColor color);
-internal DF_ThemeColor df_theme_color_from_txti_token_kind(TXTI_TokenKind kind);
+internal DF_ThemeColor df_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 
 //- rjf: fonts/sizes
 internal F_Tag df_font_from_slot(DF_FontSlot slot);
@@ -1018,6 +1018,12 @@ internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
 
 //- rjf: config serialization
 internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source);
+
+////////////////////////////////
+//~ rjf: Process Control Info Stringification
+
+internal String8 df_string_from_exception_code(U32 code);
+internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, DF_IconKind *icon_out);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons

@@ -11,7 +11,7 @@ dbgi_init(void)
   dbgi_shared = push_array(arena, DBGI_Shared, 1);
   dbgi_shared->arena = arena;
   dbgi_shared->force_slots_count = 1024;
-  dbgi_shared->force_stripes_count = 64;
+  dbgi_shared->force_stripes_count = Min(dbgi_shared->force_slots_count, os_logical_core_count());
   dbgi_shared->force_slots = push_array(arena, DBGI_ForceSlot, dbgi_shared->force_slots_count);
   dbgi_shared->force_stripes = push_array(arena, DBGI_ForceStripe, dbgi_shared->force_stripes_count);
   for(U64 idx = 0; idx < dbgi_shared->force_stripes_count; idx += 1)
@@ -21,7 +21,7 @@ dbgi_init(void)
     dbgi_shared->force_stripes[idx].cv = os_condition_variable_alloc();
   }
   dbgi_shared->binary_slots_count = 1024;
-  dbgi_shared->binary_stripes_count = 64;
+  dbgi_shared->binary_stripes_count = Min(dbgi_shared->binary_slots_count, os_logical_core_count());
   dbgi_shared->binary_slots = push_array(arena, DBGI_BinarySlot, dbgi_shared->binary_slots_count);
   dbgi_shared->binary_stripes = push_array(arena, DBGI_BinaryStripe, dbgi_shared->binary_stripes_count);
   for(U64 idx = 0; idx < dbgi_shared->binary_stripes_count; idx += 1)
@@ -31,7 +31,7 @@ dbgi_init(void)
     dbgi_shared->binary_stripes[idx].cv = os_condition_variable_alloc();
   }
   dbgi_shared->fuzzy_search_slots_count = 64;
-  dbgi_shared->fuzzy_search_stripes_count = 8;
+  dbgi_shared->fuzzy_search_stripes_count = Min(dbgi_shared->fuzzy_search_slots_count, os_logical_core_count());
   dbgi_shared->fuzzy_search_slots = push_array(arena, DBGI_FuzzySearchSlot, dbgi_shared->fuzzy_search_slots_count);
   dbgi_shared->fuzzy_search_stripes = push_array(arena, DBGI_FuzzySearchStripe, dbgi_shared->fuzzy_search_stripes_count);
   for(U64 idx = 0; idx < dbgi_shared->fuzzy_search_stripes_count; idx += 1)
@@ -85,12 +85,12 @@ dbgi_ensure_tctx_inited(void)
 //~ rjf: Helpers
 
 internal U64
-dbgi_hash_from_string(String8 string)
+dbgi_hash_from_string(String8 string, StringMatchFlags match_flags)
 {
   U64 result = 5381;
   for(U64 i = 0; i < string.size; i += 1)
   {
-    result = ((result << 5) + result) + string.str[i];
+    result = ((result << 5) + result) + ((match_flags & StringMatchFlag_CaseInsensitive) ? char_to_lower(string.str[i]) : string.str[i]);
   }
   return result;
 }
@@ -111,7 +111,7 @@ dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemAr
 }
 
 internal String8
-dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBG_Parsed *rdbg, DBGI_FuzzySearchTarget target, U64 element_idx)
+dbgi_fuzzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, DBGI_FuzzySearchTarget target, U64 element_idx)
 {
   String8 result = {0};
   switch(target)
@@ -119,31 +119,31 @@ dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBG_Parsed *rdbg, DBGI_Fu
     // NOTE(rjf): no default - warn if we miss a case
     case DBGI_FuzzySearchTarget_Procedures:
     {
-      RADDBG_Procedure *proc = raddbg_element_from_idx(rdbg, procedures, element_idx);
+      RDI_Procedure *proc = rdi_element_from_idx(rdi, procedures, element_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbg_string_from_idx(rdbg, proc->name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdi, proc->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_GlobalVariables:
     {
-      RADDBG_GlobalVariable *gvar = raddbg_element_from_idx(rdbg, global_variables, element_idx);
+      RDI_GlobalVariable *gvar = rdi_element_from_idx(rdi, global_variables, element_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbg_string_from_idx(rdbg, gvar->name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdi, gvar->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_ThreadVariables:
     {
-      RADDBG_ThreadVariable *tvar = raddbg_element_from_idx(rdbg, thread_variables, element_idx);
+      RDI_ThreadVariable *tvar = rdi_element_from_idx(rdi, thread_variables, element_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbg_string_from_idx(rdbg, tvar->name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdi, tvar->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_UDTs:
     {
-      RADDBG_UDT *udt = raddbg_element_from_idx(rdbg, udts, element_idx);
-      RADDBG_TypeNode *type_node = raddbg_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+      RDI_UDT *udt = rdi_element_from_idx(rdi, udts, element_idx);
+      RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, udt->self_type_idx);
       U64 name_size = 0;
-      U8 *name_base = raddbg_string_from_idx(rdbg, type_node->user_defined.name_string_idx, &name_size);
+      U8 *name_base = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case DBGI_FuzzySearchTarget_COUNT:{}break;
@@ -157,7 +157,8 @@ dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBG_Parsed *rdbg, DBGI_Fu
 internal void
 dbgi_force_exe_path_dbg_path(String8 exe_path, String8 dbg_path)
 {
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->force_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
   DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
@@ -167,7 +168,7 @@ dbgi_force_exe_path_dbg_path(String8 exe_path, String8 dbg_path)
     DBGI_ForceNode *node = 0;
     for(DBGI_ForceNode *n = slot->first; n != 0; n = n->next)
     {
-      if(str8_match(n->exe_path, exe_path, 0))
+      if(str8_match(n->exe_path, exe_path, match_flags))
       {
         node = n;
         break;
@@ -192,7 +193,8 @@ internal String8
 dbgi_forced_dbg_path_from_exe_path(Arena *arena, String8 exe_path)
 {
   String8 result = {0};
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->force_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
   DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
@@ -202,7 +204,7 @@ dbgi_forced_dbg_path_from_exe_path(Arena *arena, String8 exe_path)
     DBGI_ForceNode *node = 0;
     for(DBGI_ForceNode *n = slot->first; n != 0; n = n->next)
     {
-      if(str8_match(exe_path, n->exe_path, 0))
+      if(str8_match(exe_path, n->exe_path, match_flags))
       {
         node = n;
         break;
@@ -297,7 +299,8 @@ dbgi_binary_open(String8 exe_path)
 {
   Temp scratch = scratch_begin(0, 0);
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->binary_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
   DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -308,7 +311,7 @@ dbgi_binary_open(String8 exe_path)
     DBGI_Binary *binary = 0;
     for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
     {
-      if(str8_match(bin->exe_path, exe_path, 0))
+      if(str8_match(bin->exe_path, exe_path, match_flags))
       {
         binary = bin;
         break;
@@ -336,7 +339,8 @@ dbgi_binary_close(String8 exe_path)
 {
   Temp scratch = scratch_begin(0, 0);
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  U64 hash = dbgi_hash_from_string(exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
   U64 slot_idx = hash%dbgi_shared->binary_slots_count;
   U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
   DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -346,7 +350,7 @@ dbgi_binary_close(String8 exe_path)
     DBGI_Binary *binary = 0;
     for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
     {
-      if(str8_match(bin->exe_path, exe_path, 0))
+      if(str8_match(bin->exe_path, exe_path, match_flags))
       {
         binary = bin;
         break;
@@ -393,7 +397,8 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
   DBGI_Parse *parse = &dbgi_parse_nil;
   if(exe_path.size != 0)
   {
-    U64 hash = dbgi_hash_from_string(exe_path);
+    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+    U64 hash = dbgi_hash_from_string(exe_path, match_flags);
     U64 slot_idx = hash%dbgi_shared->binary_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
     DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -404,7 +409,7 @@ dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
       DBGI_Binary *binary = 0;
       for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           binary = bin;
           break;
@@ -446,6 +451,7 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
   Temp scratch = scratch_begin(0, 0);
   DBGI_FuzzySearchItemArray items = {0};
   exe_path = path_normalized_from_string(scratch.arena, exe_path);
+  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
   {
     //- rjf: unpack key
     U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
@@ -481,7 +487,7 @@ dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 
       
       // rjf: try to grab last valid results for this key/query; determine if stale
       B32 stale = 1;
-      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, 0) &&
+      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, match_flags) &&
          target == node->buckets[node->gen%ArrayCount(node->buckets)].target &&
          node->gen != 0)
       {
@@ -632,17 +638,16 @@ dbgi_p2u_pop_events(Arena *arena, U64 endt_us)
 internal void
 dbgi_parse_thread_entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  ProfThreadName("[dbgi] parse #%I64U", (U64)p);
+  ThreadNameF("[dbgi] parse #%I64U", (U64)p);
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
     
     //- rjf: grab next path & unpack
     String8 exe_path = dbgi_u2p_dequeue_exe_path(scratch.arena);
+    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
     ProfBegin("begin task for \"%.*s\"", str8_varg(exe_path));
-    U64 hash = dbgi_hash_from_string(exe_path);
+    U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
     U64 slot_idx = hash%dbgi_shared->binary_slots_count;
     U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
     DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
@@ -656,7 +661,7 @@ dbgi_parse_thread_entry_point(void *p)
       DBGI_Binary *binary = 0;
       for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           binary = bin;
           break;
@@ -769,7 +774,7 @@ dbgi_parse_thread_entry_point(void *p)
       }
       if(!og_dbg_format_is_known)
       {
-        if(data.size >= 8 && *(U64 *)data.str == RADDBG_MAGIC_CONSTANT)
+        if(data.size >= 8 && *(U64 *)data.str == RDI_MAGIC_CONSTANT)
         {
           og_dbg_format_is_known = 1;
           og_dbg_is_raddbg = 1;
@@ -801,54 +806,54 @@ dbgi_parse_thread_entry_point(void *p)
     }
     
     //- rjf: given O.G. path & analysis, determine RADDBG file path
-    String8 raddbg_path = {0};
+    String8 raddbgi_path = {0};
     if(do_task)
     {
       if(og_dbg_is_raddbg)
       {
-        raddbg_path = og_dbg_path;
+        raddbgi_path = og_dbg_path;
       }
       else if(og_dbg_format_is_known && og_dbg_is_pdb)
       {
-        raddbg_path = push_str8f(scratch.arena, "%S.raddbg", str8_chop_last_dot(og_dbg_path));
+        raddbgi_path = push_str8f(scratch.arena, "%S.raddbgi", str8_chop_last_dot(og_dbg_path));
       }
     }
     
     //- rjf: check if raddbg file is up-to-date
-    B32 raddbg_file_is_up_to_date = 0;
+    B32 raddbgi_file_is_up_to_date = 0;
     if(do_task)
     {
-      if(raddbg_path.size != 0)
+      if(raddbgi_path.size != 0)
       {
-        FileProperties props = os_properties_from_file_path(raddbg_path);
-        raddbg_file_is_up_to_date = (props.modified > og_dbg_props.modified);
+        FileProperties props = os_properties_from_file_path(raddbgi_path);
+        raddbgi_file_is_up_to_date = (props.modified > og_dbg_props.modified);
       }
     }
     
     //- rjf: if raddbg file is up to date based on timestamp, check the
-    // encoding generation number, to see if we need to regenerate it
+    // encoding generation number & size, to see if we need to regenerate it
     // regardless
-    if(do_task && raddbg_file_is_up_to_date)
+    if(do_task && raddbgi_file_is_up_to_date)
     {
       OS_Handle file = {0};
       OS_Handle file_map = {0};
       FileProperties file_props = {0};
       void *file_base = 0;
-      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbg_path);
+      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbgi_path);
       file_map = os_file_map_open(OS_AccessFlag_Read, file);
       file_props = os_properties_from_file(file);
       file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
-      if(sizeof(RADDBG_Header) <= file_props.size)
+      if(sizeof(RDI_Header) <= file_props.size)
       {
-        RADDBG_Header *header = (RADDBG_Header*)file_base;
-        if(header->encoding_version != RADDBG_ENCODING_VERSION)
+        RDI_Header *header = (RDI_Header*)file_base;
+        if(header->encoding_version != RDI_ENCODING_VERSION)
         {
-          raddbg_file_is_up_to_date = 0;
+          raddbgi_file_is_up_to_date = 0;
         }
       }
       else
       {
-        raddbg_file_is_up_to_date = 0;
+        raddbgi_file_is_up_to_date = 0;
       }
       os_file_map_view_close(file_map, file_base);
       os_file_map_close(file_map);
@@ -858,14 +863,14 @@ dbgi_parse_thread_entry_point(void *p)
     //- rjf: raddbg file not up-to-date? we need to generate it
     if(do_task)
     {
-      if(!raddbg_file_is_up_to_date) ProfScope("generate raddbg file")
+      if(!raddbgi_file_is_up_to_date) ProfScope("generate raddbg file")
       {
         if(og_dbg_is_pdb)
         {
           // rjf: push conversion task begin event
           {
             DBGI_Event event = {DBGI_EventKind_ConversionStarted};
-            event.string = raddbg_path;
+            event.string = raddbgi_path;
             dbgi_p2u_push_event(&event);
           }
           
@@ -882,7 +887,7 @@ dbgi_parse_thread_entry_point(void *p)
             //str8_list_pushf(scratch.arena, &opts.cmd_line, "--capture");
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--exe:%S", exe_path);
             str8_list_pushf(scratch.arena, &opts.cmd_line, "--pdb:%S", og_dbg_path);
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "--out:%S", raddbg_path);
+            str8_list_pushf(scratch.arena, &opts.cmd_line, "--out:%S", raddbgi_path);
             os_launch_process(&opts, &process);
           }
           
@@ -894,7 +899,7 @@ dbgi_parse_thread_entry_point(void *p)
               B32 wait_done = os_process_wait(process, os_now_microseconds()+1000);
               if(wait_done)
               {
-                raddbg_file_is_up_to_date = 1;
+                raddbgi_file_is_up_to_date = 1;
                 break;
               }
               if(os_now_microseconds()-start_wait_t > 10000000 && og_dbg_props.size < MB(64))
@@ -907,7 +912,7 @@ dbgi_parse_thread_entry_point(void *p)
           // rjf: push conversion task end event
           {
             DBGI_Event event = {DBGI_EventKind_ConversionEnded};
-            event.string = raddbg_path;
+            event.string = raddbgi_path;
             dbgi_p2u_push_event(&event);
           }
         }
@@ -917,7 +922,7 @@ dbgi_parse_thread_entry_point(void *p)
           // rjf: push conversion task failure event
           {
             DBGI_Event event = {DBGI_EventKind_ConversionFailureUnsupportedFormat};
-            event.string = raddbg_path;
+            event.string = raddbgi_path;
             dbgi_p2u_push_event(&event);
           }
         }
@@ -925,16 +930,16 @@ dbgi_parse_thread_entry_point(void *p)
     }
     
     //- rjf: open raddbg file & gather info
-    OS_Handle raddbg_file = {0};
-    OS_Handle raddbg_file_map = {0};
-    FileProperties raddbg_file_props = {0};
-    void *raddbg_file_base = 0;
-    if(do_task && raddbg_file_is_up_to_date)
+    OS_Handle raddbgi_file = {0};
+    OS_Handle raddbgi_file_map = {0};
+    FileProperties raddbgi_file_props = {0};
+    void *raddbgi_file_base = 0;
+    if(do_task && raddbgi_file_is_up_to_date)
     {
-      raddbg_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbg_path);
-      raddbg_file_map = os_file_map_open(OS_AccessFlag_Read, raddbg_file);
-      raddbg_file_props = os_properties_from_file(raddbg_file);
-      raddbg_file_base = os_file_map_view_open(raddbg_file_map, OS_AccessFlag_Read, r1u64(0, raddbg_file_props.size));
+      raddbgi_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbgi_path);
+      raddbgi_file_map = os_file_map_open(OS_AccessFlag_Read, raddbgi_file);
+      raddbgi_file_props = os_properties_from_file(raddbgi_file);
+      raddbgi_file_base = os_file_map_view_open(raddbgi_file_map, OS_AccessFlag_Read, r1u64(0, raddbgi_file_props.size));
     }
     
     //- rjf: cache write, step 0: busy-loop-wait for all scope touches to be done
@@ -944,7 +949,7 @@ dbgi_parse_thread_entry_point(void *p)
       {
         OS_MutexScopeR(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
         {
-          if(str8_match(bin->exe_path, exe_path, 0) &&
+          if(str8_match(bin->exe_path, exe_path, match_flags) &&
              bin->scope_touch_count == 0)
           {
             done = 1;
@@ -958,22 +963,22 @@ dbgi_parse_thread_entry_point(void *p)
     // either EXE or raddbg file is new. if so, clear all old results &
     // store new top-level info
     B32 binary_refcount_is_zero = 0;
-    B32 raddbg_or_exe_file_is_updated = 0;
+    B32 raddbgi_or_exe_file_is_updated = 0;
     if(do_task) ProfScope("cache write, step 1: check if raddbg is new & clear")
     {
       OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           if(bin->refcount == 0)
           {
             binary_refcount_is_zero = 1;
             break;
           }
-          if(bin->parse.dbg_props.modified != raddbg_file_props.modified ||
+          if(bin->parse.dbg_props.modified != raddbgi_file_props.modified ||
              bin->parse.exe_props.modified != exe_file_props.modified)
           {
-            raddbg_or_exe_file_is_updated = 1;
+            raddbgi_or_exe_file_is_updated = 1;
             
             // rjf: clean up old stuff
             if(bin->parse.arena != 0) { arena_release(bin->parse.arena); }
@@ -991,10 +996,10 @@ dbgi_parse_thread_entry_point(void *p)
             bin->exe_file_map = exe_file_map;
             bin->parse.exe_base = exe_file_base;
             bin->parse.exe_props = exe_file_props;
-            bin->dbg_file = raddbg_file;
-            bin->dbg_file_map = raddbg_file_map;
-            bin->parse.dbg_base = raddbg_file_base;
-            bin->parse.dbg_props = raddbg_file_props;
+            bin->dbg_file = raddbgi_file;
+            bin->dbg_file_map = raddbgi_file_map;
+            bin->parse.dbg_base = raddbgi_file_base;
+            bin->parse.dbg_props = raddbgi_file_props;
             bin->gen += 1;
           }
           break;
@@ -1004,11 +1009,11 @@ dbgi_parse_thread_entry_point(void *p)
     
     //- rjf: raddbg file or exe is not new? cache can stay unmodified, close
     // handles & skip to end.
-    if(do_task) if((!raddbg_or_exe_file_is_updated && raddbg_file_is_up_to_date) || binary_refcount_is_zero)
+    if(do_task) if((!raddbgi_or_exe_file_is_updated && raddbgi_file_is_up_to_date) || binary_refcount_is_zero)
     {
-      os_file_map_view_close(raddbg_file_map, raddbg_file_base);
-      os_file_map_close(raddbg_file_map);
-      os_file_close(raddbg_file);
+      os_file_map_view_close(raddbgi_file_map, raddbgi_file_base);
+      os_file_map_close(raddbgi_file_map);
+      os_file_close(raddbgi_file);
       os_file_map_view_close(exe_file_map, exe_file_base);
       os_file_map_close(exe_file_map);
       os_file_close(exe_file);
@@ -1017,14 +1022,14 @@ dbgi_parse_thread_entry_point(void *p)
     }
     
     //- rjf: parse raddbg info
-    RADDBG_Parsed raddbg_parsed = dbgi_parse_nil.rdbg;
+    RDI_Parsed rdi_parsed = dbgi_parse_nil.rdi;
     U64 arch_addr_size = 8;
     if(do_task)
     {
-      RADDBG_ParseStatus parse_status = raddbg_parse((U8 *)raddbg_file_base, raddbg_file_props.size, &raddbg_parsed);
-      if(raddbg_parsed.top_level_info != 0)
+      RDI_ParseStatus parse_status = rdi_parse((U8 *)raddbgi_file_base, raddbgi_file_props.size, &rdi_parsed);
+      if(rdi_parsed.top_level_info != 0)
       {
-        arch_addr_size = raddbg_addr_size_from_arch(raddbg_parsed.top_level_info->architecture);
+        arch_addr_size = rdi_addr_size_from_arch(rdi_parsed.top_level_info->architecture);
       }
     }
     
@@ -1034,7 +1039,7 @@ dbgi_parse_thread_entry_point(void *p)
     {
       OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           String8 dbg_path = og_dbg_path;
           if(dbg_path.size == 0)
@@ -1053,7 +1058,7 @@ dbgi_parse_thread_entry_point(void *p)
           bin->parse.arena = parse_arena;
           bin->parse.dbg_path = push_str8_copy(parse_arena, dbg_path);
           MemoryCopyStruct(&bin->parse.pe, &exe_pe_info);
-          MemoryCopyStruct(&bin->parse.rdbg, &raddbg_parsed);
+          MemoryCopyStruct(&bin->parse.rdi, &rdi_parsed);
           bin->parse.gen = bin->gen;
           break;
         }
@@ -1071,7 +1076,7 @@ dbgi_parse_thread_entry_point(void *p)
     {
       OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
       {
-        if(str8_match(bin->exe_path, exe_path, 0))
+        if(str8_match(bin->exe_path, exe_path, match_flags))
         {
           bin->flags &= ~DBGI_BinaryFlag_ParseInFlight;
           break;
@@ -1154,9 +1159,7 @@ dbgi_qsort_compare_fuzzy_search_items(DBGI_FuzzySearchItem *a, DBGI_FuzzySearchI
 internal void
 dbgi_fuzzy_thread__entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  ProfThreadName("[dbgi] fuzzy search #%I64U", (U64)p);
+  ThreadNameF("[dbgi] fuzzy search #%I64U", (U64)p);
   DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[(U64)p];
   for(;;)
   {
@@ -1197,9 +1200,9 @@ dbgi_fuzzy_thread__entry_point(void *p)
     
     //- rjf: exe_path -> dbgi_parse, raddbg
     DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
-    RADDBG_Parsed *rdbg = &dbgi->rdbg;
+    RDI_Parsed *rdi = &dbgi->rdi;
     
-    //- rjf: rdbg * query -> item list
+    //- rjf: rdi * query -> item list
     U64 table_ptr_off = 0;
     U64 element_name_idx_off = 0;
     U64 element_count = 0;
@@ -1210,49 +1213,49 @@ dbgi_fuzzy_thread__entry_point(void *p)
       case DBGI_FuzzySearchTarget_COUNT:{}break;
       case DBGI_FuzzySearchTarget_Procedures:
       {
-        table_ptr_off = OffsetOf(RADDBG_Parsed, procedures);
-        element_name_idx_off = OffsetOf(RADDBG_Procedure, name_string_idx);
-        element_count = rdbg->procedures_count;
-        element_size = sizeof(RADDBG_Procedure);
+        table_ptr_off = OffsetOf(RDI_Parsed, procedures);
+        element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
+        element_count = rdi->procedures_count;
+        element_size = sizeof(RDI_Procedure);
       }break;
       case DBGI_FuzzySearchTarget_GlobalVariables:
       {
-        table_ptr_off = OffsetOf(RADDBG_Parsed, global_variables);
-        element_name_idx_off = OffsetOf(RADDBG_GlobalVariable, name_string_idx);
-        element_count = rdbg->global_variables_count;
-        element_size = sizeof(RADDBG_GlobalVariable);
+        table_ptr_off = OffsetOf(RDI_Parsed, global_variables);
+        element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
+        element_count = rdi->global_variables_count;
+        element_size = sizeof(RDI_GlobalVariable);
       }break;
       case DBGI_FuzzySearchTarget_ThreadVariables:
       {
-        table_ptr_off = OffsetOf(RADDBG_Parsed, thread_variables);
-        element_name_idx_off = OffsetOf(RADDBG_ThreadVariable, name_string_idx);
-        element_count = rdbg->thread_variables_count;
-        element_size = sizeof(RADDBG_ThreadVariable);
+        table_ptr_off = OffsetOf(RDI_Parsed, thread_variables);
+        element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
+        element_count = rdi->thread_variables_count;
+        element_size = sizeof(RDI_ThreadVariable);
       }break;
       case DBGI_FuzzySearchTarget_UDTs:
       {
-        table_ptr_off = OffsetOf(RADDBG_Parsed, udts);
-        element_count = rdbg->udts_count;
-        element_size = sizeof(RADDBG_UDT);
+        table_ptr_off = OffsetOf(RDI_Parsed, udts);
+        element_count = rdi->udts_count;
+        element_size = sizeof(RDI_UDT);
       }break;
     }
     DBGI_FuzzySearchItemChunkList items_list = {0};
     if(task_is_good)
     {
-      void *table_base = (U8*)rdbg + table_ptr_off;
+      void *table_base = (U8*)rdi + table_ptr_off;
       for(U64 idx = 1; task_is_good && idx < element_count; idx += 1)
       {
         void *element = (U8 *)(*(void **)table_base) + element_size*idx;
         U32 *name_idx_ptr = (U32 *)((U8 *)element + element_name_idx_off);
         if(target == DBGI_FuzzySearchTarget_UDTs)
         {
-          RADDBG_UDT *udt = (RADDBG_UDT *)element;
-          RADDBG_TypeNode *type_node = raddbg_element_from_idx(rdbg, type_nodes, udt->self_type_idx);
+          RDI_UDT *udt = (RDI_UDT *)element;
+          RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, udt->self_type_idx);
           name_idx_ptr = &type_node->user_defined.name_string_idx;
         }
         U32 name_idx = *name_idx_ptr;
         U64 name_size = 0;
-        U8 *name_base = raddbg_string_from_idx(rdbg, name_idx, &name_size);
+        U8 *name_base = rdi_string_from_idx(rdi, name_idx, &name_size);
         String8 name = str8(name_base, name_size);
         if(name.size == 0) { continue; }
         FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query, name);

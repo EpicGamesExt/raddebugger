@@ -15,3 +15,6 @@ internal R_Tex2DSampleKind          d_top_tex2d_sample_kind(void) {D_StackTopImp
 internal Mat3x3F32                  d_top_xform2d(void) {D_StackTopImpl(XForm2D, xform2d, Mat3x3F32);}
 internal Rng2F32                    d_top_clip(void) {D_StackTopImpl(Clip, clip, Rng2F32);}
 internal F32                        d_top_transparency(void) {D_StackTopImpl(Transparency, transparency, F32);}
+C_LINKAGE_BEGIN
+C_LINKAGE_END
+

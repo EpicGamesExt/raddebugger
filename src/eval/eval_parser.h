@@ -67,7 +67,7 @@ struct EVAL_ParseCtx
 {
   Architecture arch;
   U64 ip_voff;
-  RADDBG_Parsed *rdbg;
+  RDI_Parsed *rdi;
   TG_Graph *type_graph;
   EVAL_String2NumMap *regs_map;
   EVAL_String2NumMap *reg_alias_map;
@@ -85,8 +85,8 @@ global read_only EVAL_ParseResult eval_parse_result_nil = {0, &eval_expr_nil};
 ////////////////////////////////
 //~ rjf: Debug-Info-Driven Map Building Fast Paths
 
-internal EVAL_String2NumMap *eval_push_locals_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 voff);
-internal EVAL_String2NumMap *eval_push_member_map_from_raddbg_voff(Arena *arena, RADDBG_Parsed *rdbg, U64 voff);
+internal EVAL_String2NumMap *eval_push_locals_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
+internal EVAL_String2NumMap *eval_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
 
 ////////////////////////////////
 //~ rjf: Tokenization Functions
@@ -101,7 +101,7 @@ internal EVAL_TokenArray eval_token_array_make_first_opl(EVAL_Token *first, EVAL
 ////////////////////////////////
 //~ rjf: Parser Functions
 
-internal TG_Key eval_leaf_type_from_name(RADDBG_Parsed *rdbg, String8 name);
+internal TG_Key eval_leaf_type_from_name(RDI_Parsed *rdi, String8 name);
 internal EVAL_ParseResult eval_parse_type_from_text_tokens(Arena *arena, EVAL_ParseCtx *ctx, String8 text, EVAL_TokenArray *tokens);
 internal EVAL_ParseResult eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8 text, EVAL_TokenArray *tokens, S64 max_precedence);
 internal EVAL_ParseResult eval_parse_expr_from_text_tokens(Arena *arena, EVAL_ParseCtx *ctx, String8 text, EVAL_TokenArray *tokens);

@@ -1,7 +1,7 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#define SUPPLEMENT_UNIT 1
+#define BUILD_SUPPLEMENTARY_UNIT 1
 #define OS_FEATURE_GRAPHICAL 1
 
 #include "base/base_inc.h"

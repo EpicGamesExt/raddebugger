@@ -1,0 +1,622 @@
+////////////////////////////////
+//~ rjf: CV Numerics
+
+@table(name val)
+CV_NumericKindTable:
+{
+  {CHAR           0x8000}
+  {SHORT          0x8001}
+  {USHORT         0x8002}
+  {LONG           0x8003}
+  {ULONG          0x8004}
+  {FLOAT32        0x8005}
+  {FLOAT64        0x8006}
+  {FLOAT80        0x8007}
+  {FLOAT128       0x8008}
+  {QUADWORD       0x8009}
+  {UQUADWORD      0x800a}
+  {FLOAT48        0x800b}
+  {COMPLEX32      0x800c}
+  {COMPLEX64      0x800d}
+  {COMPLEX80      0x800e}
+  {COMPLEX128     0x800f}
+  {VARSTRING      0x8010}
+  {OCTWORD        0x8017}
+  {UOCTWORD       0x8018}
+  {DECIMAL        0x8019}
+  {DATE           0x801a}
+  {UTF8STRING     0x801b}
+  {FLOAT16        0x801c}
+}
+
+@enum(U16) CV_NumericKind:
+{
+  @expand(CV_NumericKindTable a) `$(a.name) = $(a.val)`
+}
+
+@enum2string_switch(CV_NumericKind)
+cv_string_from_numeric_kind:
+{
+  @expand(CV_NumericKindTable a) `case CV_NumericKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+////////////////////////////////
+//~ rjf: CV Architectures
+
+@table(name val)
+CV_ArchTable:
+{
+  {8080         0x00}
+  {8086         0x01}
+  {80286        0x02}
+  {80386        0x03}
+  {80486        0x04}
+  {PENTIUM      0x05}
+  {PENTIUMII    0x06}
+  {PENTIUMIII   0x07}
+  {MIPS         0x10}
+  {MIPS16       0x11}
+  {MIPS32       0x12}
+  {MIPS64       0x13}
+  {MIPSI        0x14}
+  {MIPSII       0x15}
+  {MIPSIII      0x16}
+  {MIPSIV       0x17}
+  {MIPSV        0x18}
+  {M68000       0x20}
+  {M68010       0x21}
+  {M68020       0x22}
+  {M68030       0x23}
+  {M68040       0x24}
+  {ALPHA        0x30}
+  {ALPHA_21164  0x31}
+  {ALPHA_21164A 0x32}
+  {ALPHA_21264  0x33}
+  {ALPHA_21364  0x34}
+  {PPC601       0x40}
+  {PPC603       0x41}
+  {PPC604       0x42}
+  {PPC620       0x43}
+  {PPCFP        0x44}
+  {PPCBE        0x45}
+  {SH3          0x50}
+  {SH3E         0x51}
+  {SH3DSP       0x52}
+  {SH4          0x53}
+  {SHMEDIA      0x54}
+  {ARM3         0x60}
+  {ARM4         0x61}
+  {ARM4T        0x62}
+  {ARM5         0x63}
+  {ARM5T        0x64}
+  {ARM6         0x65}
+  {ARM_XMAC     0x66}
+  {ARM_WMMX     0x67}
+  {ARM7         0x68}
+  {OMNI         0x70}
+  {IA64_1       0x80}
+  {IA64_2       0x81}
+  {CEE          0x90}
+  {AM33         0xA0}
+  {M32R         0xB0}
+  {TRICORE      0xC0}
+  {X64          0xD0}
+  {EBC          0xE0}
+  {THUMB        0xF0}
+  {ARMNT        0xF4}
+  {ARM64        0xF6}
+  {D3D11_SHADER 0x100}
+}
+
+@enum(U16) CV_Arch:
+{
+  @expand(CV_ArchTable a) `$(a.name) = $(a.val)`,
+  `IA64        = CV_Arch_IA64_1`,
+  `PENTIUMPRO  = CV_Arch_PENTIUMII`,
+  `MIPSR4000   = CV_Arch_MIPS`,
+  `ALPHA_21064 = CV_Arch_ALPHA`,
+  `AMD64       = CV_Arch_X64`,
+}
+
+@enum2string_switch(CV_Arch)
+cv_string_from_arch:
+{
+  @expand(CV_ArchTable a) `case CV_Arch_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+////////////////////////////////
+//~ rjf: CV Registers
+
+@table(name val) CV_AllRegTable:
+{
+  {ERR    30000}
+  {TEB    30001}
+  {TIMER  30002}
+  {EFAD1  30003}
+  {EFAD2  30004}
+  {EFAD3  30005}
+  {VFRAME 30006}
+  {HANDLE 30007}
+  {PARAMS 30008}
+  {LOCALS 30009}
+  {TID    30010}
+  {ENV    30011}
+  {CMDLN  30012}
+}
+
+@enum(U16) CV_AllReg:
+{
+  @expand(CV_AllRegTable a) `$(a.name) = $(a.val)`
+}
+
+////////////////////////////////
+//~ rjf: CV Sym Kinds
+
+@table(name  header_type_name  val) CV_SymKindTable:
+{
+  {COMPILE                                       Compile                            0x0001}
+  {REGISTER_16t                                  -                                  0x0002}
+  {CONSTANT_16t                                  -                                  0x0003}
+  {UDT_16t                                       -                                  0x0004}
+  {SSEARCH                                       StartSearch                        0x0005}
+  {END                                           -                                  0x0006}
+  {SKIP                                          -                                  0x0007}
+  {CVRESERVE                                     -                                  0x0008}
+  {OBJNAME_ST                                    -                                  0x0009}
+  {ENDARG                                        -                                  0x000a}
+  {COBOLUDT_16t                                  -                                  0x000b}
+  {MANYREG_16t                                   -                                  0x000c}
+  {RETURN                                        Return                             0x000d}
+  {ENTRYTHIS                                     -                                  0x000e}
+  {BPREL16                                       -                                  0x0100}
+  {LDATA16                                       -                                  0x0101}
+  {GDATA16                                       -                                  0x0102}
+  {PUB16                                         -                                  0x0103}
+  {LPROC16                                       -                                  0x0104}
+  {GPROC16                                       -                                  0x0105}
+  {THUNK16                                       -                                  0x0106}
+  {BLOCK16                                       -                                  0x0107}
+  {WITH16                                        -                                  0x0108}
+  {LABEL16                                       -                                  0x0109}
+  {CEXMODEL16                                    -                                  0x010a}
+  {VFTABLE16                                     -                                  0x010b}
+  {REGREL16                                      -                                  0x010c}
+  {BPREL32_16t                                   -                                  0x0200}
+  {LDATA32_16t                                   -                                  0x0201}
+  {GDATA32_16t                                   -                                  0x0202}
+  {PUB32_16t                                     -                                  0x0203}
+  {LPROC32_16t                                   -                                  0x0204}
+  {GPROC32_16t                                   -                                  0x0205}
+  {THUNK32_ST                                    -                                  0x0206}
+  {BLOCK32_ST                                    -                                  0x0207}
+  {WITH32_ST                                     -                                  0x0208}
+  {LABEL32_ST                                    -                                  0x0209}
+  {CEXMODEL32                                    -                                  0x020a}
+  {VFTABLE32_16t                                 -                                  0x020b}
+  {REGREL32_16t                                  -                                  0x020c}
+  {LTHREAD32_16t                                 -                                  0x020d}
+  {GTHREAD32_16t                                 -                                  0x020e}
+  {SLINK32                                       SLink32                            0x020f}
+  {LPROCMIPS_16t                                 -                                  0x0300}
+  {GPROCMIPS_16t                                 -                                  0x0301}
+  {PROCREF_ST                                    -                                  0x0400}
+  {DATAREF_ST                                    -                                  0x0401}
+  {ALIGN                                         -                                  0x0402}
+  {LPROCREF_ST                                   -                                  0x0403}
+  {OEM                                           OEM                                0x0404}
+  {TI16_MAX                                      -                                  0x1000}
+  {CONSTANT_ST                                   -                                  0x1002}
+  {UDT_ST                                        -                                  0x1003}
+  {COBOLUDT_ST                                   -                                  0x1004}
+  {MANYREG_ST                                    -                                  0x1005}
+  {BPREL32_ST                                    -                                  0x1006}
+  {LDATA32_ST                                    -                                  0x1007}
+  {GDATA32_ST                                    -                                  0x1008}
+  {PUB32_ST                                      -                                  0x1009}
+  {LPROC32_ST                                    -                                  0x100a}
+  {GPROC32_ST                                    -                                  0x100b}
+  {VFTABLE32                                     VPath32                            0x100c}
+  {REGREL32_ST                                   -                                  0x100d}
+  {LTHREAD32_ST                                  -                                  0x100e}
+  {GTHREAD32_ST                                  -                                  0x100f}
+  {LPROCMIPS_ST                                  -                                  0x1010}
+  {GPROCMIPS_ST                                  -                                  0x1011}
+  {FRAMEPROC                                     Frameproc                          0x1012}
+  {COMPILE2_ST                                   -                                  0x1013}
+  {MANYREG2_ST                                   -                                  0x1014}
+  {LPROCIA64_ST                                  -                                  0x1015}
+  {GPROCIA64_ST                                  -                                  0x1016}
+  {LOCALSLOT_ST                                  -                                  0x1017}
+  {PARAMSLOT_ST                                  -                                  0x1018}
+  {ANNOTATION                                    Annotation                         0x1019}
+  {GMANPROC_ST                                   -                                  0x101a}
+  {LMANPROC_ST                                   -                                  0x101b}
+  {RESERVED1                                     -                                  0x101c}
+  {RESERVED2                                     -                                  0x101d}
+  {RESERVED3                                     -                                  0x101e}
+  {RESERVED4                                     -                                  0x101f}
+  {LMANDATA_ST                                   -                                  0x1020}
+  {GMANDATA_ST                                   -                                  0x1021}
+  {MANFRAMEREL_ST                                -                                  0x1022}
+  {MANREGISTER_ST                                -                                  0x1023}
+  {MANSLOT_ST                                    -                                  0x1024}
+  {MANMANYREG_ST                                 -                                  0x1025}
+  {MANREGREL_ST                                  -                                  0x1026}
+  {MANMANYREG2_ST                                -                                  0x1027}
+  {MANTYPREF                                     -                                  0x1028}
+  {UNAMESPACE_ST                                 -                                  0x1029}
+  {ST_MAX                                        -                                  0x1100}
+  {OBJNAME                                       Objname                            0x1101}
+  {THUNK32                                       Thunk32                            0x1102}
+  {BLOCK32                                       Block32                            0x1103}
+  {WITH32                                        -                                  0x1104}
+  {LABEL32                                       Label32                            0x1105}
+  {REGISTER                                      Register                           0x1106}
+  {CONSTANT                                      Constant                           0x1107}
+  {UDT                                           UDT                                0x1108}
+  {COBOLUDT                                      -                                  0x1109}
+  {MANYREG                                       Manyreg                            0x110a}
+  {BPREL32                                       BPRel32                            0x110b}
+  {LDATA32                                       Data32                             0x110c}
+  {GDATA32                                       Data32                             0x110d}
+  {PUB32                                         Pub32                              0x110e}
+  {LPROC32                                       Proc32                             0x110f}
+  {GPROC32                                       Proc32                             0x1110}
+  {REGREL32                                      Regrel32                           0x1111}
+  {LTHREAD32                                     Thread32                           0x1112}
+  {GTHREAD32                                     Thread32                           0x1113}
+  {LPROCMIPS                                     -                                  0x1114}
+  {GPROCMIPS                                     -                                  0x1115}
+  {COMPILE2                                      Compile2                           0x1116}
+  {MANYREG2                                      Manyreg2                           0x1117}
+  {LPROCIA64                                     -                                  0x1118}
+  {GPROCIA64                                     -                                  0x1119}
+  {LOCALSLOT                                     Slot                               0x111a}
+  {PARAMSLOT                                     -                                  0x111b}
+  {LMANDATA                                      -                                  0x111c}
+  {GMANDATA                                      -                                  0x111d}
+  {MANFRAMEREL                                   AttrFrameRel                       0x111e}
+  {MANREGISTER                                   AttrReg                            0x111f}
+  {MANSLOT                                       -                                  0x1120}
+  {MANMANYREG                                    AttrManyReg                        0x1121}
+  {MANREGREL                                     AttrRegRel                         0x1122}
+  {MANMANYREG2                                   -                                  0x1123}
+  {UNAMESPACE                                    UNamespace                         0x1124}
+  {PROCREF                                       Ref2                               0x1125}
+  {DATAREF                                       Ref2                               0x1126}
+  {LPROCREF                                      Ref2                               0x1127}
+  {ANNOTATIONREF                                 -                                  0x1128}
+  {TOKENREF                                      -                                  0x1129}
+  {GMANPROC                                      -                                  0x112a}
+  {LMANPROC                                      -                                  0x112b}
+  {TRAMPOLINE                                    Trampoline                         0x112c}
+  {MANCONSTANT                                   -                                  0x112d}
+  {ATTR_FRAMEREL                                 AttrFrameRel                       0x112e}
+  {ATTR_REGISTER                                 AttrReg                            0x112f}
+  {ATTR_REGREL                                   AttrRegRel                         0x1130}
+  {ATTR_MANYREG                                  AttrManyReg                        0x1131}
+  {SEPCODE                                       Sepcode                            0x1132}
+  {DEFRANGE_2005                                 -                                  0x1134}
+  {DEFRANGE2_2005                                -                                  0x1135}
+  {SECTION                                       Section                            0x1136}
+  {COFFGROUP                                     CoffGroup                          0x1137}
+  {EXPORT                                        Export                             0x1138}
+  {CALLSITEINFO                                  CallSiteInfo                       0x1139}
+  {FRAMECOOKIE                                   FrameCookie                        0x113a}
+  {DISCARDED                                     Discarded                          0x113b}
+  {COMPILE3                                      Compile3                           0x113c}
+  {ENVBLOCK                                      EnvBlock                           0x113d}
+  {LOCAL                                         Local                              0x113e}
+  {DEFRANGE                                      -                                  0x113f}
+  {DEFRANGE_SUBFIELD                             DefrangeSubfield                   0x1140}
+  {DEFRANGE_REGISTER                             DefrangeRegister                   0x1141}
+  {DEFRANGE_FRAMEPOINTER_REL                     DefrangeFramepointerRel            0x1142}
+  {DEFRANGE_SUBFIELD_REGISTER                    DefrangeSubfieldRegister           0x1143}
+  {DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE          DefrangeFramepointerRelFullScope   0x1144}
+  {DEFRANGE_REGISTER_REL                         DefrangeRegisterRel                0x1145}
+  {LPROC32_ID                                    -                                  0x1146}
+  {GPROC32_ID                                    -                                  0x1147}
+  {LPROCMIPS_ID                                  -                                  0x1148}
+  {GPROCMIPS_ID                                  -                                  0x1149}
+  {LPROCIA64_ID                                  -                                  0x114a}
+  {GPROCIA64_ID                                  -                                  0x114b}
+  {BUILDINFO                                     BuildInfo                          0x114c}
+  {INLINESITE                                    InlineSite                         0x114d}
+  {INLINESITE_END                                -                                  0x114e}
+  {PROC_ID_END                                   -                                  0x114f}
+  {DEFRANGE_HLSL                                 -                                  0x1150}
+  {GDATA_HLSL                                    -                                  0x1151}
+  {LDATA_HLSL                                    -                                  0x1152}
+  {FILESTATIC                                    FileStatic                         0x1153}
+  {LPROC32_DPC                                   -                                  0x1155}
+  {LPROC32_DPC_ID                                -                                  0x1156}
+  {DEFRANGE_DPC_PTR_TAG                          -                                  0x1157}
+  {DPC_SYM_TAG_MAP                               -                                  0x1158}
+  {ARMSWITCHTABLE                                -                                  0x1159}
+  {CALLEES                                       FunctionList                       0x115a}
+  {CALLERS                                       FunctionList                       0x115b}
+  {POGODATA                                      PogoInfo                           0x115c}
+  {INLINESITE2                                   InlineSite2                        0x115d}
+  {HEAPALLOCSITE                                 HeapAllocSite                      0x115e}
+  {MOD_TYPEREF                                   ModTypeRef                         0x115f}
+  {REF_MINIPDB                                   RefMiniPdb                         0x1160}
+  {PDBMAP                                        -                                  0x1161}
+  {GDATA_HLSL32                                  -                                  0x1162}
+  {LDATA_HLSL32                                  -                                  0x1163}
+  {GDATA_HLSL32_EX                               -                                  0x1164}
+  {LDATA_HLSL32_EX                               -                                  0x1165}
+  {FASTLINK                                      FastLink                           0x1167}
+  {INLINEES                                      Inlinees                           0x1168}
+}
+
+@enum(U16) CV_SymKind:
+{
+  @expand(CV_SymKindTable a) `$(a.name) = $(a.val)`
+}
+
+@enum2string_switch(CV_SymKind)
+cv_string_from_sym_kind:
+{
+  @expand(CV_SymKindTable a) `case CV_SymKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+@gen(functions)
+{
+  `internal U64 cv_header_struct_size_from_sym_kind(CV_SymKind v);`;
+}
+
+@gen(functions) @c_file
+{
+  `internal U64`;
+  `cv_header_struct_size_from_sym_kind(CV_SymKind v)`;
+  `{`;
+    `U64 result = 0;`;
+    `switch(v)`;
+    `{`;
+      `default:{}break;`;
+      @expand(CV_SymKindTable a) `$(a.header_type_name != "-" -> "case CV_SymKind_"..a.name..":{result = sizeof(CV_Sym"..a.header_type_name..");}break;")`;
+      `}`;
+    `return result;`;
+    `}`;
+}
+
+////////////////////////////////
+//~ rjf: CV Basic Types
+
+@table(name val type_name)
+CV_BasicTypeTable:
+{
+  {NOTYPE     0x00    ""                         }
+  {ABS        0x01    ""                         }
+  {SEGMENT    0x02    ""                         }
+  {VOID       0x03    "void"                     }
+  {CURRENCY   0x04    ""                         }
+  {NBASICSTR  0x05    ""                         }
+  {FBASICSTR  0x06    ""                         }
+  {NOTTRANS   0x07    ""                         }
+  {HRESULT    0x08    "HRESULT"                  }
+  {CHAR       0x10    "char"                     }
+  {SHORT      0x11    "S16"                      }
+  {LONG       0x12    "S32"                      }
+  {QUAD       0x13    "S64"                      }
+  {OCT        0x14    "S128"                     }
+  {UCHAR      0x20    "UCHAR"                    }
+  {USHORT     0x21    "U16"                      }
+  {ULONG      0x22    "U32"                      }
+  {UQUAD      0x23    "U64"                      }
+  {UOCT       0x24    "U128"                     }
+  {BOOL8      0x30    "B8"                       }
+  {BOOL16     0x31    "B16"                      }
+  {BOOL32     0x32    "B32"                      }
+  {BOOL64     0x33    "B64"                      }
+  {FLOAT32    0x40    "F32"                      }
+  {FLOAT64    0x41    "F64"                      }
+  {FLOAT80    0x42    "F80"                      }
+  {FLOAT128   0x43    "F128"                     }
+  {FLOAT48    0x44    "F48"                      }
+  {FLOAT32PP  0x45    "F32PP"                    }
+  {FLOAT16    0x46    "F16"                      }
+  {COMPLEX32  0x50    "ComplexF32"               }
+  {COMPLEX64  0x51    "ComplexF64"               }
+  {COMPLEX80  0x52    "ComplexF80"               }
+  {COMPLEX128 0x53    "ComplexF128"              }
+  {BIT        0x60    ""                         }
+  {PASCHAR    0x61    ""                         }
+  {BOOL32FF   0x62    "B32FF"                    }
+  {INT8       0x68    "S8"                       }
+  {UINT8      0x69    "U8"                       }
+  {RCHAR      0x70    "char"                     }
+  {WCHAR      0x71    "WCHAR"                    }
+  {INT16      0x72    "S16"                      }
+  {UINT16     0x73    "U16"                      }
+  {INT32      0x74    "S32"                      }
+  {UINT32     0x75    "U32"                      }
+  {INT64      0x76    "S64"                      }
+  {UINT64     0x77    "U64"                      }
+  {INT128     0x78    "S128"                     }
+  {UINT128    0x79    "U128"                     }
+  {CHAR16     0x7a    "CHAR16"                   }
+  {CHAR32     0x7b    "CHAR32"                   }
+  {CHAR8      0x7c    "char"                     }
+  {PTR        0xf0    "PTR"                      }
+}
+
+@enum(U8) CV_BasicType:
+{
+  @expand(CV_BasicTypeTable a) `$(a.name) = $(a.val)`
+}
+
+@enum2string_switch(CV_BasicType) cv_string_from_basic_type:
+{
+  @expand(CV_BasicTypeTable a) `case CV_BasicType_$(a.name):{result = str8_lit("$(a.name)");}break`
+}
+
+@enum2string_switch(CV_BasicType) cv_type_name_from_basic_type:
+{
+  @expand(CV_BasicTypeTable a) `case CV_BasicType_$(a.name):{result = str8_lit("$(a.type_name)");}break`
+}
+
+////////////////////////////////
+//~ rjf: CV Leaf Kinds
+
+@table(name  header_type_name  val)
+CV_LeafKindTable:
+{
+  {MODIFIER_16t                  -                            0x0001}
+  {POINTER_16t                   -                            0x0002}
+  {ARRAY_16t                     -                            0x0003}
+  {CLASS_16t                     -                            0x0004}
+  {STRUCTURE_16t                 -                            0x0005}
+  {UNION_16t                     -                            0x0006}
+  {ENUM_16t                      -                            0x0007}
+  {PROCEDURE_16t                 -                            0x0008}
+  {MFUNCTION_16t                 -                            0x0009}
+  {VTSHAPE                       VTShape                      0x000a}
+  {COBOL0_16t                    -                            0x000b}
+  {COBOL1                        -                            0x000c}
+  {BARRAY_16t                    -                            0x000d}
+  {LABEL                         Label                        0x000e}
+  {NULL                          -                            0x000f}
+  {NOTTRAN                       -                            0x0010}
+  {DIMARRAY_16t                  -                            0x0011}
+  {VFTPATH_16t                   -                            0x0012}
+  {PRECOMP_16t                   -                            0x0013}
+  {ENDPRECOMP                    -                            0x0014}
+  {OEM_16t                       -                            0x0015}
+  {TYPESERVER_ST                 -                            0x0016}
+  {SKIP_16t                      -                            0x0200}
+  {ARGLIST_16t                   -                            0x0201}
+  {DEFARG_16t                    -                            0x0202}
+  {LIST                          -                            0x0203}
+  {FIELDLIST_16t                 -                            0x0204}
+  {DERIVED_16t                   -                            0x0205}
+  {BITFIELD_16t                  -                            0x0206}
+  {METHODLIST_16t                -                            0x0207}
+  {DIMCONU_16t                   -                            0x0208}
+  {DIMCONLU_16t                  -                            0x0209}
+  {DIMVARU_16t                   -                            0x020a}
+  {DIMVARLU_16t                  -                            0x020b}
+  {REFSYM                        -                            0x020c}
+  {BCLASS_16t                    -                            0x0400}
+  {VBCLASS_16t                   -                            0x0401}
+  {IVBCLASS_16t                  -                            0x0402}
+  {ENUMERATE_ST                  -                            0x0403}
+  {FRIENDFCN_16t                 -                            0x0404}
+  {INDEX_16t                     -                            0x0405}
+  {MEMBER_16t                    -                            0x0406}
+  {STMEMBER_16t                  -                            0x0407}
+  {METHOD_16t                    -                            0x0408}
+  {NESTTYPE_16t                  -                            0x0409}
+  {VFUNCTAB_16t                  -                            0x040a}
+  {FRIENDCLS_16t                 -                            0x040b}
+  {ONEMETHOD_16t                 -                            0x040c}
+  {VFUNCOFF_16t                  -                            0x040d}
+  {TI16_MAX                      -                            0x1000}
+  {MODIFIER                      Modifier                     0x1001}
+  {POINTER                       Pointer                      0x1002}
+  {ARRAY_ST                      -                            0x1003}
+  {CLASS_ST                      -                            0x1004}
+  {STRUCTURE_ST                  -                            0x1005}
+  {UNION_ST                      -                            0x1006}
+  {ENUM_ST                       -                            0x1007}
+  {PROCEDURE                     Procedure                    0x1008}
+  {MFUNCTION                     MFunction                    0x1009}
+  {COBOL0                        -                            0x100a}
+  {BARRAY                        -                            0x100b}
+  {DIMARRAY_ST                   -                            0x100c}
+  {VFTPATH                       VFPath                       0x100d}
+  {PRECOMP_ST                    -                            0x100e}
+  {OEM                           -                            0x100f}
+  {ALIAS_ST                      -                            0x1010}
+  {OEM2                          -                            0x1011}
+  {SKIP                          Skip                         0x1200}
+  {ARGLIST                       ArgList                      0x1201}
+  {DEFARG_ST                     -                            0x1202}
+  {FIELDLIST                     -                            0x1203}
+  {DERIVED                       -                            0x1204}
+  {BITFIELD                      BitField                     0x1205}
+  {METHODLIST                    MethodListMember             0x1206}
+  {DIMCONU                       -                            0x1207}
+  {DIMCONLU                      -                            0x1208}
+  {DIMVARU                       -                            0x1209}
+  {DIMVARLU                      -                            0x120a}
+  {BCLASS                        BClass                       0x1400}
+  {VBCLASS                       VBClass                      0x1401}
+  {IVBCLASS                      -                            0x1402}
+  {FRIENDFCN_ST                  -                            0x1403}
+  {INDEX                         Index                        0x1404}
+  {MEMBER_ST                     -                            0x1405}
+  {STMEMBER_ST                   -                            0x1406}
+  {METHOD_ST                     -                            0x1407}
+  {NESTTYPE_ST                   -                            0x1408}
+  {VFUNCTAB                      VFuncTab                     0x1409}
+  {FRIENDCLS                     -                            0x140a}
+  {ONEMETHOD_ST                  -                            0x140b}
+  {VFUNCOFF                      VFuncOff                     0x140c}
+  {NESTTYPEEX_ST                 -                            0x140d}
+  {MEMBERMODIFY_ST               -                            0x140e}
+  {MANAGED_ST                    -                            0x140f}
+  {ST_MAX                        -                            0x1500}
+  {TYPESERVER                    TypeServer                   0x1501}
+  {ENUMERATE                     Enumerate                    0x1502}
+  {ARRAY                         Array                        0x1503}
+  {CLASS                         Struct                       0x1504}
+  {STRUCTURE                     Struct                       0x1505}
+  {UNION                         Union                        0x1506}
+  {ENUM                          Enum                         0x1507}
+  {DIMARRAY                      -                            0x1508}
+  {PRECOMP                       PreComp                      0x1509}
+  {ALIAS                         Alias                        0x150a}
+  {DEFARG                        -                            0x150b}
+  {FRIENDFCN                     -                            0x150c}
+  {MEMBER                        Member                       0x150d}
+  {STMEMBER                      StMember                     0x150e}
+  {METHOD                        Method                       0x150f}
+  {NESTTYPE                      NestType                     0x1510}
+  {ONEMETHOD                     OneMethod                    0x1511}
+  {NESTTYPEEX                    NestTypeEx                   0x1512}
+  {MEMBERMODIFY                  -                            0x1513}
+  {MANAGED                       -                            0x1514}
+  {TYPESERVER2                   TypeServer2                  0x1515}
+  {STRIDED_ARRAY                 -                            0x1516}
+  {HLSL                          -                            0x1517}
+  {MODIFIER_EX                   -                            0x1518}
+  {INTERFACE                     Struct                       0x1519}
+  {BINTERFACE                    -                            0x151a}
+  {VECTOR                        -                            0x151b}
+  {MATRIX                        -                            0x151c}
+  {VFTABLE                       -                            0x151d}
+  {CLASS2                        Struct2                      0x1608}
+  {STRUCT2                       Struct2                      0x1609}
+}
+
+@enum(U16) CV_LeafKind:
+{
+  @expand(CV_LeafKindTable a) `$(a.name) = $(a.val)`;
+}
+
+@enum2string_switch(CV_LeafKind)
+cv_string_from_leaf_kind:
+{
+  @expand(CV_LeafKindTable a) `case CV_LeafKind_$(a.name):{result = str8_lit("$(a.name)");}break`;
+}
+
+@gen(functions)
+{
+  `internal U64 cv_header_struct_size_from_leaf_kind(CV_LeafKind v);`;
+}
+
+@gen(functions) @c_file
+{
+  `internal U64`;
+  `cv_header_struct_size_from_leaf_kind(CV_LeafKind v)`;
+  `{`;
+    `U64 result = 0;`;
+    `switch(v)`;
+    `{`;
+      `default:{}break;`;
+      @expand(CV_LeafKindTable a) `$(a.header_type_name != "-" -> "case CV_LeafKind_"..a.name..":{result = sizeof(CV_Leaf"..a.header_type_name..");}break;")`;
+      `}`;
+    `return result;`;
+    `}`;
+}

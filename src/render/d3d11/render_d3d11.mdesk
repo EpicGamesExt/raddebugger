@@ -462,65 +462,62 @@ ps_main(Vertex2Pixel v2p) : SV_TARGET
 ////////////////////////////////
 //~ rjf: Table Generators
 
-@table_gen_enum
-R_D3D11_VShadKind:
+@enum R_D3D11_VShadKind:
 {
-  @expand(R_D3D11_VShadTable a) `R_D3D11_VShadKind_$(a.name),`;
-  `R_D3D11_VShadKind_COUNT`;
+  @expand(R_D3D11_VShadTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-R_D3D11_PShadKind:
+@enum R_D3D11_PShadKind:
 {
-  @expand(R_D3D11_PShadTable a) `R_D3D11_PShadKind_$(a.name),`;
-  `R_D3D11_PShadKind_COUNT`;
+  @expand(R_D3D11_PShadTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum
-R_D3D11_UniformTypeKind:
+@enum R_D3D11_UniformTypeKind:
 {
-  @expand(R_D3D11_UniformTypeTable a) `R_D3D11_UniformTypeKind_$(a.name),`;
-  `R_D3D11_UniformTypeKind_COUNT`;
+  @expand(R_D3D11_UniformTypeTable a) `$(a.name)`,
+  COUNT,
 }
 
-@c_file @table_gen_data(type:String8, fallback:`{0}`)
+@c_file @data(String8)
 r_d3d11_g_vshad_kind_source_table:
 {
-  @expand(R_D3D11_VShadTable a) `$(a.source),`;
+  @expand(R_D3D11_VShadTable a) `$(a.source)`;
 }
 
-@c_file @table_gen_data(type:String8, fallback:`{0}`)
+@c_file @data(String8)
 r_d3d11_g_vshad_kind_source_name_table:
 {
-  @expand(R_D3D11_VShadTable a) `str8_lit_comp("$(a.source)"),`;
+  @expand(R_D3D11_VShadTable a) `str8_lit_comp("$(a.source)")`;
 }
 
-@c_file @table_gen_data(type:`D3D11_INPUT_ELEMENT_DESC *`, fallback:`0`)
+@c_file @data(`D3D11_INPUT_ELEMENT_DESC *`)
 r_d3d11_g_vshad_kind_elements_ptr_table:
 {
-  @expand(R_D3D11_VShadTable a) `$(a.ilay_table),`;
+  @expand(R_D3D11_VShadTable a) `$(a.ilay_table)`;
 }
 
-@c_file @table_gen_data(type:U64, fallback:`0`)
+@c_file @data(U64)
 r_d3d11_g_vshad_kind_elements_count_table:
 {
-  @expand(R_D3D11_VShadTable a) `$(a.ilay_table != 0 -> "ArrayCount("..a.ilay_table..")") $(a.ilay_table == 0 -> "0"),`;
+  @expand(R_D3D11_VShadTable a) `$(a.ilay_table != 0 -> "ArrayCount("..a.ilay_table..")") $(a.ilay_table == 0 -> "0")`;
 }
 
-@c_file @table_gen_data(type:String8, fallback:`{0}`)
+@c_file @data(String8)
 r_d3d11_g_pshad_kind_source_table:
 {
-  @expand(R_D3D11_PShadTable a) `$(a.source),`;
+  @expand(R_D3D11_PShadTable a) `$(a.source)`;
 }
 
-@c_file @table_gen_data(type:String8, fallback:`{0}`)
+@c_file @data(String8)
 r_d3d11_g_pshad_kind_source_name_table:
 {
-  @expand(R_D3D11_PShadTable a) `str8_lit_comp("$(a.source)"),`;
+  @expand(R_D3D11_PShadTable a) `str8_lit_comp("$(a.source)")`;
 }
 
-@c_file @table_gen_data(type:U64, fallback:`0`)
+@c_file @data(U64)
 r_d3d11_g_uniform_type_kind_size_table:
 {
-  @expand(R_D3D11_UniformTypeTable a) `sizeof(R_D3D11_Uniforms_$(a.name)),`;
+  @expand(R_D3D11_UniformTypeTable a) `sizeof(R_D3D11_Uniforms_$(a.name))`;
 }

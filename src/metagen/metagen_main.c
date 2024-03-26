@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Build Options
+
+#define BUILD_CONSOLE_INTERFACE 1
+
+////////////////////////////////
 //~ rjf: Includes
 
 //- rjf: headers
@@ -28,6 +33,7 @@ int main(int argument_count, char **arguments)
   //////////////////////////////
   //- rjf: set up state
   //
+  MG_MsgList msgs = {0};
   mg_arena = arena_alloc__sized(GB(64), MB(64));
   mg_state = push_array(mg_arena, MG_State, 1);
   mg_state->slots_count = 256;
@@ -91,16 +97,26 @@ int main(int argument_count, char **arguments)
         String8 data = os_data_from_file_path(mg_arena, file_path);
         MD_TokenizeResult tokenize = md_tokenize_from_text(mg_arena, data);
         MD_ParseResult parse = md_parse_from_text_tokens(mg_arena, file_path, data, tokenize.tokens);
+        for(MD_Msg *m = parse.msgs.first; m != 0; m = m->next)
+        {
+          TxtPt pt = mg_txt_pt_from_string_off(data, m->node->src_offset);
+          String8 msg_kind_string = {0};
+          switch(m->kind)
+          {
+            default:{}break;
+            case MD_MsgKind_Note:        {msg_kind_string = str8_lit("note");}break;
+            case MD_MsgKind_Warning:     {msg_kind_string = str8_lit("warning");}break;
+            case MD_MsgKind_Error:       {msg_kind_string = str8_lit("error");}break;
+            case MD_MsgKind_FatalError:  {msg_kind_string = str8_lit("fatal error");}break;
+          }
+          String8 location = push_str8f(mg_arena, "%S:%I64d:%I64d", file_path, pt.line, pt.column);
+          MG_Msg dst_m = {location, msg_kind_string, m->string};
+          mg_msg_list_push(mg_arena, &msgs, &dst_m);
+        }
         MG_FileParseNode *parse_n = push_array(mg_arena, MG_FileParseNode, 1);
         SLLQueuePush(parses.first, parses.last, parse_n);
         parse_n->v.root = parse.root;
         parses.count += 1;
-        for(MD_Msg *msg = parse.msgs.first; msg != 0; msg = msg->next)
-        {
-          TxtPt pt = mg_txt_pt_from_string_off(data, msg->node->src_offset);
-          // TODO(rjf): error kind display & locations
-          fprintf(stderr, "%.*s:%i:%i %.*s\n", str8_varg(file_path), (int)pt.line, (int)pt.column, str8_varg(msg->string));
-        }
       }
     }
   }
@@ -134,39 +150,55 @@ int main(int argument_count, char **arguments)
   }
   
   //////////////////////////////
-  //- rjf: generate table enums
+  //- rjf: generate enums
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      if(md_node_has_tag(node, str8_lit("table_gen_enum"), 0))
+      MD_Node *tag = md_tag_from_string(node, str8_lit("enum"), 0);
+      if(!md_node_is_nil(tag))
       {
+        String8 enum_base_type_name = tag->first->string;
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
         String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
-        str8_list_pushf(mg_arena, &layer->enums, "typedef enum %S\n{\n", node->string);
+        if(enum_base_type_name.size == 0)
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %S\n{\n", node->string);
+        }
+        else
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "typedef %S %S;\n", enum_base_type_name, node->string);
+          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %SEnum\n{\n", node->string);
+        }
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_push(mg_arena, &layer->enums, escaped);
-          str8_list_push(mg_arena, &layer->enums, str8_lit("\n"));
+          str8_list_pushf(mg_arena, &layer->enums, "%S_%S,\n", node->string, escaped);
         }
-        str8_list_pushf(mg_arena, &layer->enums, "} %S;\n\n", node->string);
+        if(enum_base_type_name.size == 0)
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "} %S;\n\n", node->string);
+        }
+        else
+        {
+          str8_list_pushf(mg_arena, &layer->enums, "} %SEnum;\n\n", node->string);
+        }
       }
     }
   }
   
   //////////////////////////////
-  //- rjf: generate table structs
+  //- rjf: generate structs
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      if(md_node_has_tag(node, str8_lit("table_gen_struct"), 0))
+      if(md_node_has_tag(node, str8_lit("struct"), 0))
       {
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
@@ -176,8 +208,7 @@ int main(int argument_count, char **arguments)
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_push(mg_arena, &layer->structs, escaped);
-          str8_list_push(mg_arena, &layer->structs, str8_lit("\n"));
+          str8_list_pushf(mg_arena, &layer->structs, "%S;\n", escaped);
         }
         str8_list_pushf(mg_arena, &layer->structs, "};\n\n");
       }
@@ -185,48 +216,88 @@ int main(int argument_count, char **arguments)
   }
   
   //////////////////////////////
-  //- rjf: generate table data tables
+  //- rjf: generate data tables
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      MD_Node *tag = md_tag_from_string(node, str8_lit("table_gen_data"), 0);
+      MD_Node *tag = md_tag_from_string(node, str8_lit("data"), 0);
       if(!md_node_is_nil(tag))
       {
+        String8 element_type = tag->first->string;
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
-        String8List *out = md_node_has_tag(node, str8_lit("c_file"), 0) ? &layer->c_tables : &layer->h_tables;
-        MD_Node *type = md_child_from_string(tag, str8_lit("type"), 0)->first;
-        MD_Node *fallback = md_child_from_string(tag, str8_lit("fallback"), 0)->first;
-        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, fallback->string, node);
-        str8_list_pushf(mg_arena, out, "%S %S[] =\n{\n", type->string, node->string);
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        if(!md_node_has_tag(node, str8_lit("c_file"), 0))
+        {
+          str8_list_pushf(mg_arena, &layer->h_tables, "extern %S %S[%I64u];\n", element_type, node->string, gen_strings.node_count);
+        }
+        str8_list_pushf(mg_arena, &layer->c_tables, "%S %S[%I64u] =\n{\n", element_type, node->string, gen_strings.node_count);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_push(mg_arena, out, escaped);
-          str8_list_push(mg_arena, out, str8_lit("\n"));
+          str8_list_pushf(mg_arena, &layer->c_tables, "%S,\n", escaped);
         }
-        str8_list_push(mg_arena, out, str8_lit("};\n\n"));
+        str8_list_push(mg_arena, &layer->c_tables, str8_lit("};\n\n"));
       }
     }
   }
   
   //////////////////////////////
-  //- rjf: generate table catch-all generations
+  //- rjf: generate enum -> string mapping functions
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
     for(MD_EachNode(node, file->first))
     {
-      MD_Node *tag = md_tag_from_string(node, str8_lit("table_gen"), 0);
+      MD_Node *tag = md_tag_from_string(node, str8_lit("enum2string_switch"), 0);
+      if(!md_node_is_nil(tag))
+      {
+        String8 enum_type = tag->first->string;
+        String8 layer_key = mg_layer_key_from_path(file->string);
+        MG_Layer *layer = mg_layer_from_key(layer_key);
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        str8_list_pushf(mg_arena, &layer->h_functions, "internal String8 %S(%S v);\n", node->string, enum_type);
+        str8_list_pushf(mg_arena, &layer->c_functions, "internal String8\n%S(%S v)\n{\n", node->string, enum_type);
+        str8_list_pushf(mg_arena, &layer->c_functions, "String8 result = str8_lit(\"<Unknown %S>\");\n", enum_type);
+        str8_list_pushf(mg_arena, &layer->c_functions, "switch(v)\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "{\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "default:{}break;\n");
+        for(String8Node *n = gen_strings.first; n != 0; n = n->next)
+        {
+          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
+          str8_list_pushf(mg_arena, &layer->c_functions, "%S;\n", escaped);
+        }
+        str8_list_pushf(mg_arena, &layer->c_functions, "}\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "return result;\n");
+        str8_list_pushf(mg_arena, &layer->c_functions, "}\n\n");
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: generate catch-all generations
+  //
+  for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
+  {
+    MD_Node *file = n->v.root;
+    for(MD_EachNode(node, file->first))
+    {
+      MD_Node *tag = md_tag_from_string(node, str8_lit("gen"), 0);
       if(!md_node_is_nil(tag))
       {
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
-        String8List *out = md_node_has_tag(node, str8_lit("c_file"), 0) ? &layer->c_catchall : &layer->h_catchall;
+        B32 prefer_c_file = md_node_has_tag(node, str8_lit("c_file"), 0);
+        String8List *out = prefer_c_file ? &layer->c_catchall : &layer->h_catchall;
+        if(tag->first->string.size == 0){}
+        else if(str8_match(tag->first->string, str8_lit("enums"), 0))     { out = &layer->enums; }
+        else if(str8_match(tag->first->string, str8_lit("structs"), 0))   { out = &layer->structs; }
+        else if(str8_match(tag->first->string, str8_lit("functions"), 0)) { out = prefer_c_file ? &layer->c_functions : &layer->h_functions; }
+        else if(str8_match(tag->first->string, str8_lit("tables"), 0))    { out = prefer_c_file ? &layer->c_tables : &layer->h_tables; }
         String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
@@ -377,11 +448,13 @@ int main(int argument_count, char **arguments)
             {
               fwrite(n->string.str, n->string.size, 1, h);
             }
+            fprintf(h, "C_LINKAGE_BEGIN\n");
             for(String8Node *n = layer->h_tables.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, h);
             }
-            fprintf(h, "\n#endif // %.*s_META_H\n", str8_varg(layer_key_filename_upper));
+            fprintf(h, "C_LINKAGE_END\n\n");
+            fprintf(h, "#endif // %.*s_META_H\n", str8_varg(layer_key_filename_upper));
             fclose(h);
           }
           {
@@ -397,15 +470,26 @@ int main(int argument_count, char **arguments)
             {
               fwrite(n->string.str, n->string.size, 1, c);
             }
+            fprintf(c, "C_LINKAGE_BEGIN\n");
             for(String8Node *n = layer->c_tables.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, c);
             }
+            fprintf(c, "C_LINKAGE_END\n\n");
             fclose(c);
           }
         }
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: write out all messages to stderr
+  //
+  for(MG_MsgNode *n = msgs.first; n != 0; n = n->next)
+  {
+    MG_Msg *msg = &n->v;
+    fprintf(stderr, "%.*s: %.*s: %.*s\n", str8_varg(msg->location), str8_varg(msg->kind), str8_varg(msg->msg));
   }
   
   return 0;

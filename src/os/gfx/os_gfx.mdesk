@@ -155,21 +155,18 @@ OS_KeyTable:
 ////////////////////////////////
 //~ rjf: Generators
 
-@table_gen_enum
-OS_Key:
+@enum OS_Key:
 {
-  @expand(OS_KeyTable a) `OS_Key_$(a.name),`;
-  `OS_Key_COUNT`;
+  @expand(OS_KeyTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_data(type: String8, fallback:`{0}`)
-os_g_key_display_string_table:
+@data(String8) os_g_key_display_string_table:
 {
-  @expand(OS_KeyTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(OS_KeyTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type: String8, fallback:`{0}`)
-os_g_key_cfg_string_table:
+@data(String8) os_g_key_cfg_string_table:
 {
-  @expand(OS_KeyTable a) `str8_lit_comp("$(a.cfg_string)"),`;
+  @expand(OS_KeyTable a) `str8_lit_comp("$(a.cfg_string)")`;
 }

@@ -13,6 +13,7 @@ typedef enum EVAL_ErrorKind
   EVAL_ErrorKind_MalformedInput,
   EVAL_ErrorKind_MissingInfo,
   EVAL_ErrorKind_ResolutionFailure,
+  EVAL_ErrorKind_InterpretationError,
   EVAL_ErrorKind_COUNT
 }
 EVAL_ErrorKind;
@@ -40,7 +41,7 @@ struct EVAL_ErrorList
 
 enum
 {
-  EVAL_IRExtKind_Bytecode = RADDBG_EvalOp_COUNT,
+  EVAL_IRExtKind_Bytecode = RDI_EvalOp_COUNT,
   EVAL_IRExtKind_COUNT
 };
 
@@ -48,7 +49,7 @@ typedef struct EVAL_Op EVAL_Op;
 struct EVAL_Op
 {
   EVAL_Op *next;
-  RADDBG_EvalOp opcode;
+  RDI_EvalOp opcode;
   union
   {
     U64 p;
@@ -114,7 +115,7 @@ struct EVAL_Expr
 
 typedef struct EVAL_IRTree EVAL_IRTree;
 struct EVAL_IRTree{
-  RADDBG_EvalOp op;
+  RDI_EvalOp op;
   EVAL_IRTree *children[3];
   union{
     U64 p;
@@ -212,7 +213,7 @@ internal U64 eval_num_from_string(EVAL_String2NumMap *map, String8 string);
 
 //- rjf: string -> expr
 internal EVAL_String2ExprMap eval_string2expr_map_make(Arena *arena, U64 slot_count);
-internal void eval_string2expr_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string, EVAL_Expr *expr);
+internal void eval_string2expr_map_insert(Arena *arena, EVAL_String2ExprMap *map, String8 string, EVAL_Expr *expr);
 internal void eval_string2expr_map_inc_poison(EVAL_String2ExprMap *map, String8 string);
 internal void eval_string2expr_map_dec_poison(EVAL_String2ExprMap *map, String8 string);
 internal EVAL_Expr *eval_expr_from_string(EVAL_String2ExprMap *map, String8 string);

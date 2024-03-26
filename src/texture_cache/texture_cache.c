@@ -24,7 +24,7 @@ tex_init(void)
   tex_shared = push_array(arena, TEX_Shared, 1);
   tex_shared->arena = arena;
   tex_shared->slots_count = 1024;
-  tex_shared->stripes_count = 64;
+  tex_shared->stripes_count = Min(tex_shared->slots_count, os_logical_core_count());
   tex_shared->slots = push_array(arena, TEX_Slot, tex_shared->slots_count);
   tex_shared->stripes = push_array(arena, TEX_Stripe, tex_shared->stripes_count);
   tex_shared->stripes_free_nodes = push_array(arena, TEX_Node *, tex_shared->stripes_count);
@@ -33,16 +33,6 @@ tex_init(void)
     tex_shared->stripes[idx].arena = arena_alloc();
     tex_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
     tex_shared->stripes[idx].cv = os_condition_variable_alloc();
-  }
-  tex_shared->fallback_slots_count = 1024;
-  tex_shared->fallback_stripes_count = 64;
-  tex_shared->fallback_slots = push_array(arena, TEX_KeyFallbackSlot, tex_shared->fallback_slots_count);
-  tex_shared->fallback_stripes = push_array(arena, TEX_Stripe, tex_shared->fallback_stripes_count);
-  for(U64 idx = 0; idx < tex_shared->fallback_stripes_count; idx += 1)
-  {
-    tex_shared->fallback_stripes[idx].arena = arena_alloc();
-    tex_shared->fallback_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    tex_shared->fallback_stripes[idx].cv = os_condition_variable_alloc();
   }
   tex_shared->u2x_ring_size = KB(64);
   tex_shared->u2x_ring_base = push_array_no_zero(arena, U8, tex_shared->u2x_ring_size);
@@ -158,10 +148,9 @@ tex_scope_touch_node__stripe_r_guarded(TEX_Scope *scope, TEX_Node *node)
 //~ rjf: Cache Lookups
 
 internal R_Handle
-tex_texture_from_key_hash_topology(TEX_Scope *scope, U128 key, U128 hash, TEX_Topology topology)
+tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topology)
 {
   R_Handle handle = {0};
-  if(!u128_match(u128_zero(), hash))
   {
     U64 slot_idx = hash.u64[1]%tex_shared->slots_count;
     U64 stripe_idx = slot_idx%tex_shared->stripes_count;
@@ -217,42 +206,23 @@ tex_texture_from_key_hash_topology(TEX_Scope *scope, U128 key, U128 hash, TEX_To
     }
     if(node_is_new)
     {
-      tex_u2x_enqueue_req(key, hash, topology, max_U64);
+      tex_u2x_enqueue_req(hash, topology, max_U64);
     }
-    if(r_handle_match(handle, r_handle_zero()))
+  }
+  return handle;
+}
+
+internal R_Handle
+tex_texture_from_key_topology(TEX_Scope *scope, U128 key, TEX_Topology topology)
+{
+  R_Handle handle = {0};
+  for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+  {
+    U128 hash = hs_hash_from_key(key, rewind_idx);
+    handle = tex_texture_from_hash_topology(scope, hash, topology);
+    if(!r_handle_match(handle, r_handle_zero()))
     {
-      U128 fallback_hash = {0};
-      U64 fallback_slot_idx = key.u64[1]%tex_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%tex_shared->fallback_stripes_count;
-      TEX_KeyFallbackSlot *fallback_slot = &tex_shared->fallback_slots[fallback_slot_idx];
-      TEX_Stripe *fallback_stripe = &tex_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeR(fallback_stripe->rw_mutex) for(TEX_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(key, n->key))
-        {
-          fallback_hash = n->hash;
-          break;
-        }
-      }
-      if(!u128_match(fallback_hash, u128_zero()))
-      {
-        U64 retry_slot_idx = fallback_hash.u64[1]%tex_shared->slots_count;
-        U64 retry_stripe_idx = retry_slot_idx%tex_shared->stripes_count;
-        TEX_Slot *retry_slot = &tex_shared->slots[retry_slot_idx];
-        TEX_Stripe *retry_stripe = &tex_shared->stripes[retry_stripe_idx];
-        OS_MutexScopeR(retry_stripe->rw_mutex)
-        {
-          for(TEX_Node *n = retry_slot->first; n != 0; n = n->next)
-          {
-            if(u128_match(fallback_hash, n->hash) && MemoryMatchStruct(&topology, &n->topology))
-            {
-              handle = n->texture;
-              tex_scope_touch_node__stripe_r_guarded(scope, n);
-              break;
-            }
-          }
-        }
-      }
+      break;
     }
   }
   return handle;
@@ -262,17 +232,16 @@ tex_texture_from_key_hash_topology(TEX_Scope *scope, U128 key, U128 hash, TEX_To
 //~ rjf: Transfer Threads
 
 internal B32
-tex_u2x_enqueue_req(U128 key, U128 hash, TEX_Topology top, U64 endt_us)
+tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us)
 {
   B32 good = 0;
   OS_MutexScope(tex_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = tex_shared->u2x_ring_write_pos-tex_shared->u2x_ring_read_pos;
     U64 available_size = tex_shared->u2x_ring_size-unconsumed_size;
-    if(available_size >= sizeof(key)+sizeof(hash)+sizeof(top))
+    if(available_size >= sizeof(hash)+sizeof(top))
     {
       good = 1;
-      tex_shared->u2x_ring_write_pos += ring_write_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_write_pos, &key);
       tex_shared->u2x_ring_write_pos += ring_write_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_write_pos, &hash);
       tex_shared->u2x_ring_write_pos += ring_write_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_write_pos, &top);
       break;
@@ -291,14 +260,13 @@ tex_u2x_enqueue_req(U128 key, U128 hash, TEX_Topology top, U64 endt_us)
 }
 
 internal void
-tex_u2x_dequeue_req(U128 *key_out, U128 *hash_out, TEX_Topology *top_out)
+tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out)
 {
   OS_MutexScope(tex_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = tex_shared->u2x_ring_write_pos-tex_shared->u2x_ring_read_pos;
-    if(unconsumed_size >= sizeof(*key_out)+sizeof(*hash_out)+sizeof(*top_out))
+    if(unconsumed_size >= sizeof(*hash_out)+sizeof(*top_out))
     {
-      tex_shared->u2x_ring_read_pos += ring_read_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_read_pos, key_out);
       tex_shared->u2x_ring_read_pos += ring_read_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_read_pos, hash_out);
       tex_shared->u2x_ring_read_pos += ring_read_struct(tex_shared->u2x_ring_base, tex_shared->u2x_ring_size, tex_shared->u2x_ring_read_pos, top_out);
       break;
@@ -311,17 +279,14 @@ tex_u2x_dequeue_req(U128 *key_out, U128 *hash_out, TEX_Topology *top_out)
 internal void
 tex_xfer_thread__entry_point(void *p)
 {
-  TCTX tctx_ = {0};
-  tctx_init_and_equip(&tctx_);
   for(;;)
   {
     HS_Scope *scope = hs_scope_open();
     
     //- rjf: decode
-    U128 key = {0};
     U128 hash = {0};
     TEX_Topology top = {0};
-    tex_u2x_dequeue_req(&key, &hash, &top);
+    tex_u2x_dequeue_req(&hash, &top);
     
     //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%tex_shared->slots_count;
@@ -369,34 +334,6 @@ tex_xfer_thread__entry_point(void *p)
           ins_atomic_u64_inc_eval(&n->load_count);
           break;
         }
-      }
-    }
-    
-    //- rjf: commit this key/hash pair to fallback cache
-    if(got_task && !u128_match(key, u128_zero()) && !u128_match(hash, u128_zero()))
-    {
-      U64 fallback_slot_idx = key.u64[1]%tex_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%tex_shared->fallback_stripes_count;
-      TEX_KeyFallbackSlot *fallback_slot = &tex_shared->fallback_slots[fallback_slot_idx];
-      TEX_Stripe *fallback_stripe = &tex_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeW(fallback_stripe->rw_mutex)
-      {
-        TEX_KeyFallbackNode *node = 0;
-        for(TEX_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-        {
-          if(u128_match(n->key, key))
-          {
-            node = n;
-            break;
-          }
-        }
-        if(node == 0)
-        {
-          node = push_array(fallback_stripe->arena, TEX_KeyFallbackNode, 1);
-          SLLQueuePush(fallback_slot->first, fallback_slot->last, node);
-        }
-        node->key = key;
-        node->hash = hash;
       }
     }
     

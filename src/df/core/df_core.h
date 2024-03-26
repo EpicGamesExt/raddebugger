@@ -430,6 +430,7 @@ struct DF_Entity
   DF_EntityFlags flags;
   DF_EntityID id;
   U64 generation;
+  U64 alloc_time_us;
   B32 deleted;
   F32 alive_t;
   
@@ -446,7 +447,7 @@ struct DF_Entity
   
   // rjf: ctrl entity equipment
   CTRL_MachineID ctrl_machine_id;
-  CTRL_Handle ctrl_handle;
+  DMN_Handle ctrl_handle;
   Architecture arch;
   U32 ctrl_id;
   U64 stack_base;
@@ -939,7 +940,6 @@ struct DF_RunUnwindCacheNode
   DF_RunUnwindCacheNode *hash_next;
   DF_Handle thread;
   CTRL_Unwind unwind;
-  U64 tls_base_vaddr;
 };
 
 typedef struct DF_RunUnwindCacheSlot DF_RunUnwindCacheSlot;
@@ -953,8 +953,8 @@ typedef struct DF_RunUnwindCache DF_RunUnwindCache;
 struct DF_RunUnwindCache
 {
   Arena *arena;
-  U64 table_size;
-  DF_RunUnwindCacheSlot *table;
+  U64 slots_count;
+  DF_RunUnwindCacheSlot *slots;
 };
 
 //- rjf: per-run tls-base-vaddr cache
@@ -1135,14 +1135,18 @@ struct DF_State
   // rjf: per-run caches
   U64 unwind_cache_reggen_idx;
   U64 unwind_cache_memgen_idx;
-  DF_RunUnwindCache unwind_cache;
+  DF_RunUnwindCache unwind_caches[2];
+  U64 unwind_cache_gen;
   U64 tls_base_cache_reggen_idx;
   U64 tls_base_cache_memgen_idx;
-  DF_RunTLSBaseCache tls_base_cache;
+  DF_RunTLSBaseCache tls_base_caches[2];
+  U64 tls_base_cache_gen;
   U64 locals_cache_reggen_idx;
-  DF_RunLocalsCache locals_cache;
+  DF_RunLocalsCache locals_caches[2];
+  U64 locals_cache_gen;
   U64 member_cache_reggen_idx;
-  DF_RunLocalsCache member_cache;
+  DF_RunLocalsCache member_caches[2];
+  U64 member_cache_gen;
   
   // rjf: eval view cache
   DF_EvalViewCache eval_view_cache;
@@ -1178,6 +1182,7 @@ struct DF_State
   B32 ctrl_solo_stepping_mode;
   
   // rjf: control thread ctrl -> user reading state
+  CTRL_EntityStore *ctrl_entity_store;
   Arena *ctrl_stop_arena;
   CTRL_Event ctrl_last_stop_event;
   
@@ -1220,6 +1225,7 @@ read_only global DF_Entity df_g_nil_entity =
   
   // rjf: metadata
   DF_EntityKind_Nil,
+  0,
   0,
   0,
   0,
@@ -1445,7 +1451,7 @@ internal void df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src);
 
 //- rjf: control layer correllation equipment
 internal void df_entity_equip_ctrl_machine_id(DF_Entity *entity, CTRL_MachineID machine_id);
-internal void df_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle);
+internal void df_entity_equip_ctrl_handle(DF_Entity *entity, DMN_Handle handle);
 internal void df_entity_equip_arch(DF_Entity *entity, Architecture arch);
 internal void df_entity_equip_ctrl_id(DF_Entity *entity, U32 id);
 internal void df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base);
@@ -1466,7 +1472,7 @@ internal DF_Entity *df_entity_root(void);
 internal DF_EntityList df_push_entity_list_with_kind(Arena *arena, DF_EntityKind kind);
 internal DF_Entity *df_entity_from_id(DF_EntityID id);
 internal DF_Entity *df_machine_entity_from_machine_id(CTRL_MachineID machine_id);
-internal DF_Entity *df_entity_from_ctrl_handle(CTRL_MachineID machine_id, CTRL_Handle handle);
+internal DF_Entity *df_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 internal DF_Entity *df_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal DF_Entity *df_entity_from_name_and_kind(String8 string, DF_EntityKind kind);
 internal DF_Entity *df_entity_from_u64_and_kind(U64 u64, DF_EntityKind kind);
@@ -1531,7 +1537,6 @@ internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_
 
 //- rjf: voff -> src lookups
 internal DF_TextLineDasm2SrcInfo df_text_line_dasm2src_info_from_binary_voff(DF_Entity *binary, U64 voff);
-internal DF_TextLineDasm2SrcInfoList df_text_line_dasm2src_info_from_voff(Arena *arena, U64 voff);
 
 //- rjf: symbol -> voff lookups
 internal U64 df_voff_from_binary_symbol_name(DF_Entity *binary, String8 symbol_name);
@@ -1545,9 +1550,6 @@ internal DF_Entity *df_module_from_process_vaddr(DF_Entity *process, U64 vaddr);
 internal DF_Entity *df_module_from_thread(DF_Entity *thread);
 internal U64 df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal Architecture df_architecture_from_entity(DF_Entity *entity);
-internal CTRL_Unwind df_push_unwind_from_thread(Arena *arena, DF_Entity *thread);
-internal U64 df_rip_from_thread(DF_Entity *thread);
-internal U64 df_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
 internal EVAL_String2NumMap *df_push_locals_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *binary, U64 voff);
 internal EVAL_String2NumMap *df_push_member_map_from_binary_voff(Arena *arena, DBGI_Scope *scope, DF_Entity *binary, U64 voff);
 internal B32 df_set_thread_rip(DF_Entity *thread, U64 vaddr);
@@ -1560,6 +1562,9 @@ internal DF_Entity *df_log_from_entity(DF_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Target Controls
+
+//- rjf: control user breakpoint gathering
+internal CTRL_UserBreakpointList df_push_ctrl_user_breakpoints(Arena *arena);
 
 //- rjf: control message dispatching
 internal void df_push_ctrl_msg(CTRL_Msg *msg);
@@ -1577,8 +1582,8 @@ internal B32 df_eval_memory_read(void *u, void *out, U64 addr, U64 size);
 internal EVAL_ParseCtx df_eval_parse_ctx_from_process_vaddr(DBGI_Scope *scope, DF_Entity *process, U64 vaddr);
 internal EVAL_ParseCtx df_eval_parse_ctx_from_src_loc(DBGI_Scope *scope, DF_Entity *file, TxtPt pt);
 internal DF_Eval df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, String8 string);
-internal DF_Eval df_value_mode_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
-internal DF_Eval df_dynamically_typed_eval_from_eval(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
+internal DF_Eval df_value_mode_eval_from_eval(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
+internal DF_Eval df_dynamically_typed_eval_from_eval(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, DF_Eval eval);
 internal DF_Eval df_eval_from_eval_cfg_table(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////
@@ -1602,14 +1607,14 @@ internal String8 df_eval_view_rule_from_key(DF_EvalView *eval_view, DF_ExpandKey
 
 //- rjf: evaluation value string builder helpers
 internal String8 df_string_from_ascii_value(Arena *arena, U8 val);
-internal String8 df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, DF_EvalVizStringFlags flags, U32 radix, DF_Eval eval);
+internal String8 df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, DF_EvalVizStringFlags flags, U32 radix, DF_Eval eval);
 
 //- rjf: writing values back to child processes
-internal B32 df_commit_eval_value(TG_Graph *graph, RADDBG_Parsed *rdbg, DF_CtrlCtx *ctrl_ctx, DF_Eval dst_eval, DF_Eval src_eval);
+internal B32 df_commit_eval_value(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, DF_Eval dst_eval, DF_Eval src_eval);
 
 //- rjf: type helpers
 internal TG_MemberArray df_filtered_data_members_from_members_cfg_table(Arena *arena, TG_MemberArray members, DF_CfgTable *cfg);
-internal DF_EvalLinkBaseChunkList df_eval_link_base_chunk_list_from_eval(Arena *arena, TG_Graph *graph, RADDBG_Parsed *rdbg, TG_Key link_member_type_key, U64 link_member_off, DF_CtrlCtx *ctrl_ctx, DF_Eval eval, U64 cap);
+internal DF_EvalLinkBaseChunkList df_eval_link_base_chunk_list_from_eval(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key link_member_type_key, U64 link_member_off, DF_CtrlCtx *ctrl_ctx, DF_Eval eval, U64 cap);
 internal DF_EvalLinkBase df_eval_link_base_from_chunk_list_index(DF_EvalLinkBaseChunkList *list, U64 idx);
 internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *arena, DF_EvalLinkBaseChunkList *chunks);
 
@@ -1618,7 +1623,7 @@ internal DF_EvalVizBlock *df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockK
 internal DF_EvalVizBlock *df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx);
 internal void df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block);
 internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalView *view, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
-internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_num(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, String8 expr, U64 num);
+internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
 
 //- rjf: viz block list <-> table coordinates
@@ -1688,7 +1693,7 @@ internal void df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec);
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_core_init(String8 user_path, String8 profile_path, DF_StateDeltaHistory *hist);
+internal void df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist);
 internal DF_CmdList df_core_gather_root_cmds(Arena *arena);
 internal void df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt);
 internal void df_core_end_frame(void);

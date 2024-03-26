@@ -11,7 +11,7 @@ fs_init(void)
   fs_shared = push_array(arena, FS_Shared, 1);
   fs_shared->arena = arena;
   fs_shared->slots_count = 1024;
-  fs_shared->stripes_count = 64;
+  fs_shared->stripes_count = os_logical_core_count();
   fs_shared->slots = push_array(arena, FS_Slot, fs_shared->slots_count);
   fs_shared->stripes = push_array(arena, FS_Stripe, fs_shared->stripes_count);
   for(U64 idx = 0; idx < fs_shared->stripes_count; idx += 1)
@@ -30,6 +30,7 @@ fs_init(void)
   {
     fs_shared->streamers[idx] = os_launch_thread(fs_streamer_thread__entry_point, (void *)idx, 0);
   }
+  fs_shared->detector_thread = os_launch_thread(fs_detector_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////
@@ -140,9 +141,7 @@ fs_u2s_dequeue_path(Arena *arena)
 internal void
 fs_streamer_thread__entry_point(void *p)
 {
-  TCTX tctx_;
-  tctx_init_and_equip(&tctx_);
-  ThreadName("[fs] streamer #%I64u", (U64)p);
+  ThreadNameF("[fs] streamer #%I64u", (U64)p);
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
@@ -188,5 +187,36 @@ fs_streamer_thread__entry_point(void *p)
       os_condition_variable_broadcast(stripe->cv);
     }
     scratch_end(scratch);
+  }
+}
+
+////////////////////////////////
+//~ rjf: Change Detector Thread
+
+internal void
+fs_detector_thread__entry_point(void *p)
+{
+  ThreadNameF("[fs] detector");
+  for(;;)
+  {
+    U64 slots_per_stripe = fs_shared->slots_count/fs_shared->stripes_count;
+    for(U64 stripe_idx = 0; stripe_idx < fs_shared->stripes_count; stripe_idx += 1)
+    {
+      FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
+      OS_MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
+      {
+        U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
+        FS_Slot *slot = &fs_shared->slots[slot_idx];
+        for(FS_Node *n = slot->first; n != 0; n = n->next)
+        {
+          FileProperties props = os_properties_from_file_path(n->path);
+          if(props.modified != n->timestamp && n->last_time_requested_us+100000 < os_now_microseconds())
+          {
+            fs_u2s_enqueue_path(n->path, os_now_microseconds()+100000);
+          }
+        }
+      }
+    }
+    os_sleep_milliseconds(100);
   }
 }

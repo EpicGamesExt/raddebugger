@@ -144,7 +144,7 @@ struct DF_EntityListerItemArray
 typedef struct DF_ProcessInfo DF_ProcessInfo;
 struct DF_ProcessInfo
 {
-  DEMON_ProcessInfo info;
+  DMN_ProcessInfo info;
   B32 is_attached;
   FuzzyMatchRangeList attached_match_ranges;
   FuzzyMatchRangeList name_match_ranges;
@@ -438,7 +438,7 @@ internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityLi
 ////////////////////////////////
 //~ rjf: Disassembly View
 
-internal TXTI_TokenArray df_txti_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string);
+internal TXT_TokenArray df_txt_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string);
 
 ////////////////////////////////
 //~ rjf: Eval/Watch Views
@@ -453,6 +453,8 @@ internal void           df_eval_root_equip_string(DF_EvalRoot *root, String8 str
 internal DF_EvalRoot *  df_eval_root_from_string(DF_EvalWatchViewState *ews, String8 string);
 internal DF_EvalRoot *  df_eval_root_from_expand_key(DF_EvalWatchViewState *ews, DF_EvalView *eval_view, DF_ExpandKey expand_key);
 internal String8        df_string_from_eval_root(DF_EvalRoot *root);
+internal DF_ExpandKey   df_parent_expand_key_from_eval_root(DF_EvalRoot *root);
+internal DF_ExpandKey   df_expand_key_from_eval_root(DF_EvalRoot *root);
 
 //- rjf: windowed watch tree visualization
 internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_EvalWatchViewState *ews);

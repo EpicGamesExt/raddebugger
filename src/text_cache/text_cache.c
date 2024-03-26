@@ -26,7 +26,25 @@ txt_lang_kind_from_extension(String8 extension)
   {
     kind = TXT_LangKind_CPlusPlus;
   }
+  else if(str8_match(extension, str8_lit("odin"), StringMatchFlag_CaseInsensitive))
+  {
+    kind = TXT_LangKind_Odin;
+  }
   return kind;
+}
+
+internal TXT_LangLexFunctionType *
+txt_lex_function_from_lang_kind(TXT_LangKind kind)
+{
+  TXT_LangLexFunctionType *fn = 0;
+  switch(kind)
+  {
+    default:{}break;
+    case TXT_LangKind_C:           {fn = txt_token_array_from_string__c_cpp;}break;
+    case TXT_LangKind_CPlusPlus:   {fn = txt_token_array_from_string__c_cpp;}break;
+    case TXT_LangKind_Odin:        {fn = txt_token_array_from_string__odin;}break;
+  }
+  return fn;
 }
 
 ////////////////////////////////
@@ -195,7 +213,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
           }break;
           case TXT_TokenKind_Numeric:
           {
-            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.');
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.' && byte != '\'');
           }break;
           case TXT_TokenKind_String:
           {
@@ -378,6 +396,234 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
   return result;
 }
 
+internal TXT_TokenArray
+txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: generate token list
+  TXT_TokenChunkList tokens = {0};
+  {
+    B32 comment_is_single_line = 0;
+    B32 string_is_char = 0;
+    TXT_TokenKind active_token_kind = TXT_TokenKind_Null;
+    U64 active_token_start_idx = 0;
+    B32 escaped = 0;
+    B32 next_escaped = 0;
+    U64 byte_process_start_idx = 0;
+    for(U64 idx = 0; idx <= string.size;)
+    {
+      U8 byte      = (idx+0 < string.size) ? (string.str[idx+0]) : 0;
+      U8 next_byte = (idx+1 < string.size) ? (string.str[idx+1]) : 0;
+      
+      // rjf: update counter
+      if(bytes_processed_counter != 0 && ((idx-byte_process_start_idx) >= 1000 || idx == string.size))
+      {
+        ins_atomic_u64_add_eval(bytes_processed_counter, (idx-byte_process_start_idx));
+        byte_process_start_idx = idx;
+      }
+      
+      // rjf: escaping
+      if(escaped && (byte != '\r' && byte != '\n'))
+      {
+        next_escaped = 0;
+      }
+      else if(!escaped && byte == '\\')
+      {
+        next_escaped = 1;
+      }
+      
+      // rjf: take starter, determine active token kind
+      if(active_token_kind == TXT_TokenKind_Null)
+      {
+        // rjf: use next bytes to start a new token
+        if(0){}
+        else if(char_is_space(byte))             { active_token_kind = TXT_TokenKind_Whitespace; }
+        else if(byte == '_' ||
+                byte == '$' ||
+                char_is_alpha(byte))             { active_token_kind = TXT_TokenKind_Identifier; }
+        else if(char_is_digit(byte, 10) ||
+                (byte == '.' &&
+                 char_is_digit(next_byte, 10)))  { active_token_kind = TXT_TokenKind_Numeric; }
+        else if(byte == '"')                     { active_token_kind = TXT_TokenKind_String; string_is_char = 0; }
+        else if(byte == '\'')                    { active_token_kind = TXT_TokenKind_String; string_is_char = 1; }
+        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 1; }
+        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 0; }
+        else if(byte == '~' || byte == '!' ||
+                byte == '%' || byte == '^' ||
+                byte == '&' || byte == '*' ||
+                byte == '(' || byte == ')' ||
+                byte == '-' || byte == '=' ||
+                byte == '+' || byte == '[' ||
+                byte == ']' || byte == '{' ||
+                byte == '}' || byte == ':' ||
+                byte == ';' || byte == ',' ||
+                byte == '.' || byte == '<' ||
+                byte == '>' || byte == '/' ||
+                byte == '?' || byte == '|')      { active_token_kind = TXT_TokenKind_Symbol; }
+        else if(byte == '#')                     { active_token_kind = TXT_TokenKind_Meta; }
+        
+        // rjf: start new token
+        if(active_token_kind != TXT_TokenKind_Null)
+        {
+          active_token_start_idx = idx;
+        }
+        
+        // rjf: invalid token kind -> emit error
+        else
+        {
+          TXT_Token token = {TXT_TokenKind_Error, r1u64(idx, idx+1)};
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        }
+      }
+      
+      // rjf: look for ender
+      U64 ender_pad = 0;
+      B32 ender_found = 0;
+      if(active_token_kind != TXT_TokenKind_Null && idx>active_token_start_idx)
+      {
+        if(idx == string.size)
+        {
+          ender_pad = 0;
+          ender_found = 1;
+        }
+        else switch(active_token_kind)
+        {
+          default:break;
+          case TXT_TokenKind_Whitespace:
+          {
+            ender_found = !char_is_space(byte);
+          }break;
+          case TXT_TokenKind_Identifier:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+          }break;
+          case TXT_TokenKind_Numeric:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '.' && byte != '\'');
+          }break;
+          case TXT_TokenKind_String:
+          {
+            ender_found = (!escaped && ((!string_is_char && byte == '"') || (string_is_char && byte == '\'')));
+            ender_pad += 1;
+          }break;
+          case TXT_TokenKind_Symbol:
+          {
+            ender_found = (byte != '~' && byte != '!' &&
+                           byte != '%' && byte != '^' &&
+                           byte != '&' && byte != '*' &&
+                           byte != '(' && byte != ')' &&
+                           byte != '-' && byte != '=' &&
+                           byte != '+' && byte != '[' &&
+                           byte != ']' && byte != '{' &&
+                           byte != '}' && byte != ':' &&
+                           byte != ';' && byte != ',' &&
+                           byte != '.' && byte != '<' &&
+                           byte != '>' && byte != '/' &&
+                           byte != '?' && byte != '|');
+          }break;
+          case TXT_TokenKind_Comment:
+          {
+            if(comment_is_single_line)
+            {
+              ender_found = (!escaped && (byte == '\r' || byte == '\n'));
+            }
+            else
+            {
+              ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
+              ender_pad += 2;
+            }
+          }break;
+          case TXT_TokenKind_Meta:
+          {
+            ender_found = (!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '_' && byte != '$');
+          }break;
+        }
+      }
+      
+      // rjf: next byte is ender => emit token
+      if(ender_found)
+      {
+        TXT_Token token = {active_token_kind, r1u64(active_token_start_idx, idx+ender_pad)};
+        active_token_kind = TXT_TokenKind_Null;
+        
+        // rjf: identifier -> keyword in special cases
+        if(token.kind == TXT_TokenKind_Identifier)
+        {
+          read_only local_persist String8 odin_keywords[] =
+          {
+            str8_lit_comp("asm"),
+            str8_lit_comp("auto_cast"),
+            str8_lit_comp("bit_set"),
+            str8_lit_comp("break"),
+            str8_lit_comp("case"),
+            str8_lit_comp("cast"),
+            str8_lit_comp("context"),
+            str8_lit_comp("continue"),
+            str8_lit_comp("defer"),
+            str8_lit_comp("distinct"),
+            str8_lit_comp("do"),
+            str8_lit_comp("dynamic"),
+            str8_lit_comp("else"),
+            str8_lit_comp("enum"),
+            str8_lit_comp("fallthrough"),
+            str8_lit_comp("for"),
+            str8_lit_comp("foreign"),
+            str8_lit_comp("if"),
+            str8_lit_comp("in"),
+            str8_lit_comp("map"),
+            str8_lit_comp("matrix"),
+            str8_lit_comp("not_in"),
+            str8_lit_comp("or_break"),
+            str8_lit_comp("or_continue"),
+            str8_lit_comp("or_else"),
+            str8_lit_comp("or_return"),
+            str8_lit_comp("package"),
+            str8_lit_comp("proc"),
+            str8_lit_comp("return"),
+            str8_lit_comp("struct"),
+            str8_lit_comp("switch"),
+            str8_lit_comp("transmute"),
+            str8_lit_comp("typeid"),
+            str8_lit_comp("union"),
+            str8_lit_comp("using"),
+            str8_lit_comp("when"),
+            str8_lit_comp("where"),
+            str8_lit_comp("import"),
+          };
+          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
+          for(U64 keyword_idx = 0; keyword_idx < ArrayCount(odin_keywords); keyword_idx += 1)
+          {
+            if(str8_match(odin_keywords[keyword_idx], token_string, 0))
+            {
+              token.kind = TXT_TokenKind_Keyword;
+              break;
+            }
+          }
+        }
+        
+        // rjf: push
+        txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        
+        // rjf: increment by ender padding
+        idx += ender_pad;
+      }
+      
+      // rjf: advance by 1 byte if we haven't found an ender
+      if(!ender_found)
+      {
+        idx += 1;
+      }
+      escaped = next_escaped;
+    }
+  }
+  
+  //- rjf: token list -> token array
+  TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
 
@@ -389,7 +635,7 @@ txt_init(void)
   txt_shared->arena = arena;
   txt_shared->slots_count = 1024;
   txt_shared->slots = push_array(arena, TXT_Slot, txt_shared->slots_count);
-  txt_shared->stripes_count = 64;
+  txt_shared->stripes_count = Min(txt_shared->slots_count, os_logical_core_count());
   txt_shared->stripes = push_array(arena, TXT_Stripe, txt_shared->stripes_count);
   txt_shared->stripes_free_nodes = push_array(arena, TXT_Node *, txt_shared->stripes_count);
   for(U64 idx = 0; idx < txt_shared->stripes_count; idx += 1)
@@ -397,16 +643,6 @@ txt_init(void)
     txt_shared->stripes[idx].arena = arena_alloc();
     txt_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
     txt_shared->stripes[idx].cv = os_condition_variable_alloc();
-  }
-  txt_shared->fallback_slots_count = 256;
-  txt_shared->fallback_stripes_count = 16;
-  txt_shared->fallback_slots = push_array(arena, TXT_KeyFallbackSlot, txt_shared->fallback_slots_count);
-  txt_shared->fallback_stripes = push_array(arena, TXT_Stripe, txt_shared->fallback_stripes_count);
-  for(U64 idx = 0; idx < txt_shared->fallback_stripes_count; idx += 1)
-  {
-    txt_shared->fallback_stripes[idx].arena = arena_alloc();
-    txt_shared->fallback_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    txt_shared->fallback_stripes[idx].cv = os_condition_variable_alloc();
   }
   txt_shared->u2p_ring_size = KB(64);
   txt_shared->u2p_ring_base = push_array_no_zero(arena, U8, txt_shared->u2p_ring_size);
@@ -521,7 +757,7 @@ txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node *node)
 //~ rjf: Cache Lookups
 
 internal TXT_TextInfo
-txt_text_info_from_key_hash_lang(TXT_Scope *scope, U128 key, U128 hash, TXT_LangKind lang)
+txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang)
 {
   TXT_TextInfo info = {0};
   if(!u128_match(hash, u128_zero()))
@@ -579,63 +815,46 @@ txt_text_info_from_key_hash_lang(TXT_Scope *scope, U128 key, U128 hash, TXT_Lang
     }
     if(node_is_new)
     {
-      txt_u2p_enqueue_req(key, hash, lang, max_U64);
-    }
-    if(!found)
-    {
-      U128 fallback_hash = {0};
-      TXT_LangKind fallback_lang = TXT_LangKind_Null;
-      U64 fallback_slot_idx = key.u64[1]%txt_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%txt_shared->fallback_stripes_count;
-      TXT_KeyFallbackSlot *fallback_slot = &txt_shared->fallback_slots[fallback_slot_idx];
-      TXT_Stripe *fallback_stripe = &txt_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeR(fallback_stripe->rw_mutex) for(TXT_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(key, n->key))
-        {
-          fallback_hash = n->hash;
-          break;
-        }
-      }
-      if(!u128_match(fallback_hash, u128_zero()))
-      {
-        U64 retry_slot_idx = fallback_hash.u64[1]%txt_shared->slots_count;
-        U64 retry_stripe_idx = retry_slot_idx%txt_shared->stripes_count;
-        TXT_Slot *retry_slot = &txt_shared->slots[retry_slot_idx];
-        TXT_Stripe *retry_stripe = &txt_shared->stripes[retry_stripe_idx];
-        OS_MutexScopeR(retry_stripe->rw_mutex)
-        {
-          for(TXT_Node *n = retry_slot->first; n != 0; n = n->next)
-          {
-            if(u128_match(fallback_hash, n->hash) && fallback_lang == n->lang)
-            {
-              MemoryCopyStruct(&info, &n->info);
-              txt_scope_touch_node__stripe_r_guarded(scope, n);
-              break;
-            }
-          }
-        }
-      }
+      txt_u2p_enqueue_req(hash, lang, max_U64);
     }
   }
   return info;
+}
+
+internal TXT_TextInfo
+txt_text_info_from_key_lang(TXT_Scope *scope, U128 key, TXT_LangKind lang, U128 *hash_out)
+{
+  TXT_TextInfo result = {0};
+  for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+  {
+    U128 hash = hs_hash_from_key(key, rewind_idx);
+    result = txt_text_info_from_hash_lang(scope, hash, lang);
+    if(result.lines_count != 0)
+    {
+      if(hash_out)
+      {
+        *hash_out = hash;
+      }
+      break;
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
 //~ rjf: Transfer Threads
 
 internal B32
-txt_u2p_enqueue_req(U128 key, U128 hash, TXT_LangKind lang, U64 endt_us)
+txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us)
 {
   B32 good = 0;
   OS_MutexScope(txt_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
     U64 available_size = txt_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(key)+sizeof(hash))
+    if(available_size >= sizeof(hash)+sizeof(lang))
     {
       good = 1;
-      txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &key);
       txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &hash);
       txt_shared->u2p_ring_write_pos += ring_write_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_write_pos, &lang);
       break;
@@ -654,14 +873,13 @@ txt_u2p_enqueue_req(U128 key, U128 hash, TXT_LangKind lang, U64 endt_us)
 }
 
 internal void
-txt_u2p_dequeue_req(U128 *key_out, U128 *hash_out, TXT_LangKind *lang_out)
+txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out)
 {
   OS_MutexScope(txt_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = txt_shared->u2p_ring_write_pos - txt_shared->u2p_ring_read_pos;
-    if(unconsumed_size >= sizeof(*key_out) + sizeof(*hash_out))
+    if(unconsumed_size >= sizeof(*hash_out) + sizeof(*lang_out))
     {
-      txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, key_out);
       txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, hash_out);
       txt_shared->u2p_ring_read_pos += ring_read_struct(txt_shared->u2p_ring_base, txt_shared->u2p_ring_size, txt_shared->u2p_ring_read_pos, lang_out);
       break;
@@ -674,17 +892,14 @@ txt_u2p_dequeue_req(U128 *key_out, U128 *hash_out, TXT_LangKind *lang_out)
 internal void
 txt_parse_thread__entry_point(void *p)
 {
-  TCTX tctx_ = {0};
-  tctx_init_and_equip(&tctx_);
   for(;;)
   {
     HS_Scope *scope = hs_scope_open();
     
     //- rjf: get next key
-    U128 key = {0};
     U128 hash = {0};
     TXT_LangKind lang = TXT_LangKind_Null;
-    txt_u2p_dequeue_req(&key, &hash, &lang);
+    txt_u2p_dequeue_req(&hash, &lang);
     
     //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
@@ -786,16 +1001,7 @@ txt_parse_thread__entry_point(void *p)
       }
       
       //- rjf: lang -> lex function
-      TXT_LangLexFunctionType *lex_function = 0;
-      switch(lang)
-      {
-        default:{}break;
-        case TXT_LangKind_C:
-        case TXT_LangKind_CPlusPlus:
-        {
-          lex_function = txt_token_array_from_string__c_cpp;
-        }break;
-      }
+      TXT_LangLexFunctionType *lex_function = txt_lex_function_from_lang_kind(lang);
       
       //- rjf: lex function * data -> tokens
       TXT_TokenArray tokens = {0};
@@ -819,34 +1025,6 @@ txt_parse_thread__entry_point(void *p)
           ins_atomic_u64_inc_eval(&n->load_count);
           break;
         }
-      }
-    }
-    
-    //- rjf: commit this key/hash pair to fallback cache
-    if(got_task && !u128_match(key, u128_zero()) && !u128_match(hash, u128_zero()))
-    {
-      U64 fallback_slot_idx = key.u64[1]%txt_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%txt_shared->fallback_stripes_count;
-      TXT_KeyFallbackSlot *fallback_slot = &txt_shared->fallback_slots[fallback_slot_idx];
-      TXT_Stripe *fallback_stripe = &txt_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeW(fallback_stripe->rw_mutex)
-      {
-        TXT_KeyFallbackNode *node = 0;
-        for(TXT_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-        {
-          if(u128_match(n->key, key))
-          {
-            node = n;
-            break;
-          }
-        }
-        if(node == 0)
-        {
-          node = push_array(fallback_stripe->arena, TXT_KeyFallbackNode, 1);
-          SLLQueuePush(fallback_slot->first, fallback_slot->last, node);
-        }
-        node->key = key;
-        node->hash = hash;
       }
     }
     

@@ -18,7 +18,7 @@ struct DBGI_Parse
   void *dbg_base;
   FileProperties dbg_props;
   PE_BinInfo pe;
-  RADDBG_Parsed rdbg;
+  RDI_Parsed rdi;
 };
 
 ////////////////////////////////
@@ -341,24 +341,24 @@ global DBGI_Parse dbgi_parse_nil =
     0,
     0,
     0,
-    &raddbg_binary_section_nil, 1,
-    &raddbg_file_path_node_nil, 1,
-    &raddbg_source_file_nil, 1,
-    &raddbg_unit_nil, 1,
-    &raddbg_vmap_entry_nil, 1,
-    &raddbg_type_node_nil, 1,
-    &raddbg_udt_nil, 1,
-    &raddbg_member_nil, 1,
-    &raddbg_enum_member_nil, 1,
-    &raddbg_global_variable_nil, 1,
-    &raddbg_vmap_entry_nil, 1,
-    &raddbg_thread_variable_nil, 1,
-    &raddbg_procedure_nil, 1,
-    &raddbg_scope_nil, 1,
-    &raddbg_voff_nil, 1,
-    &raddbg_vmap_entry_nil, 1,
-    &raddbg_local_nil, 1,
-    &raddbg_location_block_nil, 1,
+    &rdi_binary_section_nil, 1,
+    &rdi_file_path_node_nil, 1,
+    &rdi_source_file_nil, 1,
+    &rdi_unit_nil, 1,
+    &rdi_vmap_entry_nil, 1,
+    &rdi_type_node_nil, 1,
+    &rdi_udt_nil, 1,
+    &rdi_member_nil, 1,
+    &rdi_enum_member_nil, 1,
+    &rdi_global_variable_nil, 1,
+    &rdi_vmap_entry_nil, 1,
+    &rdi_thread_variable_nil, 1,
+    &rdi_procedure_nil, 1,
+    &rdi_scope_nil, 1,
+    &rdi_voff_nil, 1,
+    &rdi_vmap_entry_nil, 1,
+    &rdi_local_nil, 1,
+    &rdi_location_block_nil, 1,
     0, 0,
     0, 0,
   },
@@ -377,9 +377,9 @@ internal void dbgi_ensure_tctx_inited(void);
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal U64 dbgi_hash_from_string(String8 string);
+internal U64 dbgi_hash_from_string(String8 string, StringMatchFlags match_flags);
 internal U64 dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemArray *array, U64 element_idx);
-internal String8 dbgi_fuzzy_item_string_from_rdbg_target_element_idx(RADDBG_Parsed *rdbg, DBGI_FuzzySearchTarget target, U64 element_idx);
+internal String8 dbgi_fuzzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, DBGI_FuzzySearchTarget target, U64 element_idx);
 
 ////////////////////////////////
 //~ rjf: Forced Override Cache Functions

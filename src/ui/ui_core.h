@@ -32,6 +32,18 @@ struct UI_IconInfo
 };
 
 ////////////////////////////////
+//~ rjf: Mouse Button Kinds
+
+typedef enum UI_MouseButtonKind
+{
+  UI_MouseButtonKind_Left,
+  UI_MouseButtonKind_Middle,
+  UI_MouseButtonKind_Right,
+  UI_MouseButtonKind_COUNT
+}
+UI_MouseButtonKind;
+
+////////////////////////////////
 //~ rjf: Focus Types
 
 typedef enum UI_FocusKind
@@ -339,23 +351,78 @@ struct UI_BoxList
   U64 count;
 };
 
+typedef U32 UI_SignalFlags;
+enum
+{
+  // rjf: mouse press -> box was pressed while hovering
+  UI_SignalFlag_LeftPressed         = (1<<0),
+  UI_SignalFlag_MiddlePressed       = (1<<1),
+  UI_SignalFlag_RightPressed        = (1<<2),
+  
+  // rjf: dragging -> box was previously pressed, user is still holding button
+  UI_SignalFlag_LeftDragging        = (1<<3),
+  UI_SignalFlag_MiddleDragging      = (1<<4),
+  UI_SignalFlag_RightDragging       = (1<<5),
+  
+  // rjf: released -> box was previously pressed & user released, in or out of bounds
+  UI_SignalFlag_LeftReleased        = (1<<6),
+  UI_SignalFlag_MiddleReleased      = (1<<7),
+  UI_SignalFlag_RightReleased       = (1<<8),
+  
+  // rjf: clicked -> box was previously pressed & user released, in bounds
+  UI_SignalFlag_LeftClicked         = (1<<9),
+  UI_SignalFlag_MiddleClicked       = (1<<10),
+  UI_SignalFlag_RightClicked        = (1<<11),
+  
+  // rjf: double clicked -> box was previously clicked, pressed again
+  UI_SignalFlag_LeftDoubleClicked   = (1<<12),
+  UI_SignalFlag_MiddleDoubleClicked = (1<<13),
+  UI_SignalFlag_RightDoubleClicked  = (1<<14),
+  
+  // rjf: triple clicked -> box was previously clicked twice, pressed again
+  UI_SignalFlag_LeftTripleClicked   = (1<<15),
+  UI_SignalFlag_MiddleTripleClicked = (1<<16),
+  UI_SignalFlag_RightTripleClicked  = (1<<17),
+  
+  // rjf: keyboard pressed -> box had focus, user activated via their keyboard
+  UI_SignalFlag_KeyboardPressed     = (1<<18),
+  
+  // rjf: passive mouse info
+  UI_SignalFlag_Hovering            = (1<<19), // hovering specifically this box
+  UI_SignalFlag_MouseOver           = (1<<20), // mouse is over, but may be occluded
+  
+  // rjf: committing state changes via user interaction
+  UI_SignalFlag_Commit              = (1<<21),
+  
+  // rjf: high-level combos
+  UI_SignalFlag_Pressed = UI_SignalFlag_LeftPressed|UI_SignalFlag_KeyboardPressed,
+  UI_SignalFlag_Released = UI_SignalFlag_LeftReleased,
+  UI_SignalFlag_Clicked = UI_SignalFlag_LeftClicked|UI_SignalFlag_KeyboardPressed,
+  UI_SignalFlag_DoubleClicked = UI_SignalFlag_LeftDoubleClicked,
+  UI_SignalFlag_TripleClicked = UI_SignalFlag_LeftTripleClicked,
+  UI_SignalFlag_Dragging = UI_SignalFlag_LeftDragging,
+};
+
 typedef struct UI_Signal UI_Signal;
 struct UI_Signal
 {
   UI_Box *box;
   OS_EventFlags event_flags;
   Vec2S16 scroll;
-  B8 clicked          :1;
-  B8 keyboard_clicked :1;
-  B8 double_clicked   :1;
-  B8 right_clicked    :1;
-  B8 pressed          :1;
-  B8 released         :1;
-  B8 dragging         :1;
-  B8 hovering         :1;
-  B8 mouse_over       :1;
-  B8 commit           :1;
+  UI_SignalFlags f;
 };
+
+#define ui_pressed(s)        !!((s).f&UI_SignalFlag_Pressed)
+#define ui_clicked(s)        !!((s).f&UI_SignalFlag_Clicked)
+#define ui_released(s)       !!((s).f&UI_SignalFlag_Released)
+#define ui_double_clicked(s) !!((s).f&UI_SignalFlag_DoubleClicked)
+#define ui_triple_clicked(s) !!((s).f&UI_SignalFlag_TripleClicked)
+#define ui_middle_clicked(s) !!((s).f&UI_SignalFlag_MiddleClicked)
+#define ui_right_clicked(s)  !!((s).f&UI_SignalFlag_RightClicked)
+#define ui_dragging(s)       !!((s).f&UI_SignalFlag_Dragging)
+#define ui_hovering(s)       !!((s).f&UI_SignalFlag_Hovering)
+#define ui_mouse_over(s)     !!((s).f&UI_SignalFlag_MouseOver)
+#define ui_committed(s)      !!((s).f&UI_SignalFlag_Commit)
 
 typedef struct UI_Nav UI_Nav;
 struct UI_Nav
@@ -415,10 +482,10 @@ struct UI_State
   
   //- rjf: user interaction state
   UI_Key hot_box_key;
-  UI_Key active_box_key[Side_COUNT];
+  UI_Key active_box_key[UI_MouseButtonKind_COUNT];
   UI_Key clipboard_copy_key;
-  F32 time_since_last_click[Side_COUNT];
-  UI_Key last_click_key[Side_COUNT];
+  U64 last_press_timestamp_us[UI_MouseButtonKind_COUNT];
+  UI_Key last_press_key[UI_MouseButtonKind_COUNT];
   Vec2F32 drag_start_mouse;
   Arena *drag_state_arena;
   String8 drag_state_data;
@@ -551,7 +618,7 @@ internal D_FancyRunList    ui_string_hover_runs(Arena *arena);
 
 //- rjf: interaction keys
 internal UI_Key            ui_hot_key(void);
-internal UI_Key            ui_active_key(Side side);
+internal UI_Key            ui_active_key(UI_MouseButtonKind button_kind);
 
 //- rjf: controls over interaction
 internal void              ui_kill_action(void);

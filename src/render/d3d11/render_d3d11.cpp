@@ -142,7 +142,7 @@ r_init(CmdLine *cmdln)
   
   //- rjf: create base device
   UINT creation_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-#if !defined(NDEBUG)
+#if BUILD_DEBUG
   if(cmd_line_has_flag(cmdln, str8_lit("d3d11_debug")))
   {
     creation_flags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -182,7 +182,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: enable break-on-error
-#if !defined(NDEBUG)
+#if BUILD_DEBUG
   if(cmd_line_has_flag(cmdln, str8_lit("d3d11_debug")))
   {
     ID3D11InfoQueue *info = 0;

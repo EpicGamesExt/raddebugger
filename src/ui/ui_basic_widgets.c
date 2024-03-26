@@ -96,7 +96,7 @@ ui_hover_label(String8 string)
 {
   UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable|UI_BoxFlag_DrawText, string);
   UI_Signal interact = ui_signal_from_box(box);
-  if(interact.hovering)
+  if(ui_hovering(interact))
   {
     box->flags |= UI_BoxFlag_DrawBorder;
   }
@@ -271,7 +271,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   
   //- rjf: interact
   UI_Signal sig = ui_signal_from_box(box);
-  if(!is_focus_active && (sig.double_clicked || sig.keyboard_clicked))
+  if(!is_focus_active && sig.f&(UI_SignalFlag_DoubleClicked|UI_SignalFlag_KeyboardPressed))
   {
     String8 edit_string = pre_edit_value;
     edit_string.size = Min(edit_buffer_size, pre_edit_value.size);
@@ -282,14 +282,14 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
     *cursor = txt_pt(1, edit_string.size+1);
     *mark = txt_pt(1, 1);
   }
-  if(is_focus_active && sig.keyboard_clicked)
+  if(is_focus_active && sig.f&UI_SignalFlag_KeyboardPressed)
   {
     ui_set_auto_focus_active_key(ui_key_zero());
-    sig.commit = 1;
+    sig.f |= UI_SignalFlag_Commit;
   }
-  if(is_focus_active && sig.dragging)
+  if(is_focus_active && ui_dragging(sig))
   {
-    if(sig.pressed)
+    if(ui_pressed(sig))
     {
       *mark = mouse_pt;
     }
@@ -565,7 +565,7 @@ ui_sat_val_picker(F32 hue, F32 *out_sat, F32 *out_val, String8 string)
   UI_Signal sig = ui_signal_from_box(box);
   
   // rjf: click+draw behavior
-  if(sig.dragging)
+  if(ui_dragging(sig))
   {
     Vec2F32 dim = dim_2f32(box->rect);
     *out_sat = (ui_mouse().x - box->rect.x0) / dim.x;
@@ -662,7 +662,7 @@ ui_hue_picker(F32 *out_hue, F32 sat, F32 val, String8 string)
   UI_Signal sig = ui_signal_from_box(box);
   
   // rjf: click+draw behavior
-  if(sig.dragging)
+  if(ui_dragging(sig))
   {
     Vec2F32 dim = dim_2f32(box->rect);
     *out_hue = (ui_mouse().y - box->rect.y0) / dim.y;
@@ -740,7 +740,7 @@ ui_alpha_picker(F32 *out_alpha, String8 string)
   UI_Signal sig = ui_signal_from_box(box);
   
   // rjf: click+draw behavior
-  if(sig.dragging)
+  if(ui_dragging(sig))
   {
     Vec2F32 dim = dim_2f32(box->rect);
     F32 drag_pct = (ui_mouse().y - box->rect.y0) / dim.y; 
@@ -889,9 +889,9 @@ ui_table_begin(U64 column_pct_count, F32 **column_pcts, String8 string)
       
       // rjf: boundary dragging
       UI_Signal interact = ui_signal_from_box(box);
-      if(interact.dragging)
+      if(ui_dragging(interact))
       {
-        if(interact.pressed)
+        if(ui_pressed(interact))
         {
           Vec2F32 v = v2f32(*left_pct_ptr, *right_pct_ptr);
           ui_store_drag_struct(&v);
@@ -1228,9 +1228,9 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
       UI_ScrollPt start_pt;
       F32 scroll_space_px;
     };
-    if(scroller_sig.dragging)
+    if(ui_dragging(scroller_sig))
     {
-      if(scroller_sig.pressed)
+      if(ui_pressed(scroller_sig))
       {
         UI_ScrollBarDragData drag_data = {pt, (floor_f32(dim_2f32(scroll_area_box->rect).v[axis])-floor_f32(dim_2f32(scroller_box->rect).v[axis]))};
         ui_store_drag_struct(&drag_data);
@@ -1244,13 +1244,13 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
       ui_scroll_pt_target_idx(&new_pt, new_idx);
       new_pt.off = 0;
     }
-    if(min_scroll_sig.dragging || space_before_sig.dragging)
+    if(ui_dragging(min_scroll_sig) || ui_dragging(space_before_sig))
     {
       S64 new_idx = new_pt.idx-1;
       new_idx = Clamp(idx_range.min, new_idx, idx_range.max);
       ui_scroll_pt_target_idx(&new_pt, new_idx);
     }
-    if(max_scroll_sig.dragging || space_after_sig.dragging)
+    if(ui_dragging(max_scroll_sig) || ui_dragging(space_after_sig))
     {
       S64 new_idx = new_pt.idx+1;
       new_idx = Clamp(idx_range.min, new_idx, idx_range.max);

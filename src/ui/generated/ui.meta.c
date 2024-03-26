@@ -185,3 +185,6 @@ internal F32 ui_set_next_corner_radius_11(F32 v) { UI_StackSetNextImpl(ui_state,
 internal F32 ui_set_next_blur_size(F32 v) { UI_StackSetNextImpl(ui_state, BlurSize, blur_size, F32, v) }
 internal F32 ui_set_next_text_padding(F32 v) { UI_StackSetNextImpl(ui_state, TextPadding, text_padding, F32, v) }
 internal UI_TextAlign ui_set_next_text_alignment(UI_TextAlign v) { UI_StackSetNextImpl(ui_state, TextAlignment, text_alignment, UI_TextAlign, v) }
+C_LINKAGE_BEGIN
+C_LINKAGE_END
+

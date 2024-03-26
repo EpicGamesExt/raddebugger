@@ -6,6 +6,8 @@
 // op_string     - string for quick display of the operator
 EVAL_ExprKindTable:
 {
+  { Nil                 0         ""             }
+  
   { ArrayIndex          2         "[]"           }
   { MemberAccess        2         "."            }
   { Deref               1         "*"            }
@@ -54,31 +56,51 @@ EVAL_ExprKindTable:
   { LeafIdent           0         "leaf_ident"   }
 }
 
-@table_gen
+@table(name display_string)
+EVAL_ResultCodeTable:
 {
-  `typedef U32 EVAL_ExprKind;`;
-  `enum`;
-  `{`;
-    @expand(EVAL_ExprKindTable a) `EVAL_ExprKind_$(a.name),`;
-    `EVAL_ExprKind_COUNT`;
-    `};`;
-  ``;
+  { Good                    "" }
+  { DivideByZero            "Cannot divide by zero." }
+  { BadOp                   "Invalid operation." }
+  { BadOpTypes              "Invalid operation types." }
+  { BadMemRead              "Failed memory read." }
+  { BadRegRead              "Failed register read." }
+  { BadFrameBase            "Invalid frame base address." }
+  { BadModuleBase           "Invalid module base address." }
+  { BadTLSBase              "Invalid thread-local storage base address." }
+  { InsufficientStackSpace  "Insufficient evaluation machine stack space." }
+  { MalformedBytecode       "Malformed bytecode." }
 }
 
-@table_gen_data(type:U8, fallback:0)
-eval_expr_kind_child_counts:
+@enum(U32) EVAL_ExprKind:
 {
-  @expand(EVAL_ExprKindTable a) `$(a.num_children),`;
+  @expand(EVAL_ExprKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
+@enum EVAL_ResultCode:
+{
+  @expand(EVAL_ResultCodeTable a) `$(a.name)`,
+  COUNT,
+}
+
+@data(U8) eval_expr_kind_child_counts:
+{
+  @expand(EVAL_ExprKindTable a) `$(a.num_children)`
+}
+
+@data(String8)
 eval_expr_kind_strings:
 {
-  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.name)"),`;
+  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.name)")`
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-eval_expr_op_strings:
+@data(String8) eval_result_code_display_strings:
 {
-  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.op_string)"),`;
+  @expand(EVAL_ResultCodeTable a) `str8_lit_comp("$(a.display_string)")`
+}
+
+@data(String8) eval_expr_op_strings:
+{
+  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.op_string)")`
 }

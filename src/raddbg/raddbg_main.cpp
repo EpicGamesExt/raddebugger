@@ -2,11 +2,29 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Build Options
+
+#define BUILD_VERSION_MAJOR 0
+#define BUILD_VERSION_MINOR 9
+#define BUILD_VERSION_PATCH 9
+#define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
+#define BUILD_TITLE "The RAD Debugger"
+#define OS_FEATURE_GRAPHICAL 1
+
+////////////////////////////////
 //~ rjf: Includes
+
+//- rjf: [lib]
+#include "lib_raddbgi_format/raddbgi_format.h"
+#include "lib_raddbgi_format/raddbgi_format_parse.h"
+#include "lib_raddbgi_format/raddbgi_format.c"
+#include "lib_raddbgi_format/raddbgi_format_parse.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "task_system/task_system.h"
+#include "raddbgi_make_local/raddbgi_make_local.h"
 #include "mdesk/mdesk.h"
 #include "hash_store/hash_store.h"
 #include "file_stream/file_stream.h"
@@ -15,20 +33,14 @@
 #include "txti/txti.h"
 #include "coff/coff.h"
 #include "pe/pe.h"
-#include "raddbg_format/raddbg_format.h"
-#include "raddbg_format/raddbg_format_parse.h"
-#include "raddbg_cons/raddbg_cons.h"
-#include "raddbg_convert/pdb/raddbg_coff.h"
-#include "raddbg_convert/pdb/raddbg_codeview.h"
-#include "raddbg_convert/pdb/raddbg_msf.h"
-#include "raddbg_convert/pdb/raddbg_pdb.h"
-#include "raddbg_convert/pdb/raddbg_coff_conversion.h"
-#include "raddbg_convert/pdb/raddbg_codeview_conversion.h"
-#include "raddbg_convert/pdb/raddbg_from_pdb.h"
-#include "raddbg_convert/pdb/raddbg_codeview_stringize.h"
-#include "raddbg_convert/pdb/raddbg_pdb_stringize.h"
+#include "codeview/codeview.h"
+#include "codeview/codeview_stringize.h"
+#include "msf/msf.h"
+#include "pdb/pdb.h"
+#include "pdb/pdb_stringize.h"
+#include "raddbgi_from_pdb/raddbgi_from_pdb.h"
 #include "regs/regs.h"
-#include "regs/raddbg/regs_raddbg.h"
+#include "regs/raddbgi/regs_raddbgi.h"
 #include "type_graph/type_graph.h"
 #include "dbgi/dbgi.h"
 #include "demon/demon_inc.h"
@@ -49,6 +61,8 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "task_system/task_system.c"
+#include "raddbgi_make_local/raddbgi_make_local.c"
 #include "mdesk/mdesk.c"
 #include "hash_store/hash_store.c"
 #include "file_stream/file_stream.c"
@@ -57,19 +71,14 @@
 #include "txti/txti.c"
 #include "coff/coff.c"
 #include "pe/pe.c"
-#include "raddbg_format/raddbg_format.c"
-#include "raddbg_format/raddbg_format_parse.c"
-#include "raddbg_cons/raddbg_cons.c"
-#include "raddbg_convert/pdb/raddbg_msf.c"
-#include "raddbg_convert/pdb/raddbg_codeview.c"
-#include "raddbg_convert/pdb/raddbg_pdb.c"
-#include "raddbg_convert/pdb/raddbg_coff_conversion.c"
-#include "raddbg_convert/pdb/raddbg_codeview_conversion.c"
-#include "raddbg_convert/pdb/raddbg_codeview_stringize.c"
-#include "raddbg_convert/pdb/raddbg_pdb_stringize.c"
-#include "raddbg_convert/pdb/raddbg_from_pdb.c"
+#include "codeview/codeview.c"
+#include "codeview/codeview_stringize.c"
+#include "msf/msf.c"
+#include "pdb/pdb.c"
+#include "pdb/pdb_stringize.c"
+#include "raddbgi_from_pdb/raddbgi_from_pdb.c"
 #include "regs/regs.c"
-#include "regs/raddbg/regs_raddbg.c"
+#include "regs/raddbgi/regs_raddbgi.c"
 #include "type_graph/type_graph.c"
 #include "dbgi/dbgi.c"
 #include "demon/demon_inc.c"
@@ -88,213 +97,15 @@
 #include "raddbg.c"
 
 ////////////////////////////////
-//~ rjf: Low-Level Entry Points
+//~ rjf: Entry Point
 
-//- rjf: windows
+internal void
+entry_point(CmdLine *cmd_line)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: windows -> turn off output handles, as we need to control those for target processes
 #if OS_WINDOWS
-
-#include <dbghelp.h>
-
-#undef OS_WINDOWS // shlwapi uses its own OS_WINDOWS include inside
-#include <shlwapi.h>
-
-internal B32 g_is_quiet = 0;
-
-internal HRESULT WINAPI
-win32_dialog_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, LONG_PTR data)
-{
-  if(msg == TDN_HYPERLINK_CLICKED)
-  {
-    ShellExecuteW(NULL, L"open", (LPWSTR)lparam, NULL, NULL, SW_SHOWNORMAL);
-  }
-  return S_OK;
-}
-
-internal LONG WINAPI
-win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
-{
-  if(g_is_quiet)
-  {
-    ExitProcess(1);
-  }
-  
-  static volatile LONG first = 0;
-  if(InterlockedCompareExchange(&first, 1, 0) != 0)
-  {
-    // prevent failures in other threads to popup same message box
-    // this handler just shows first thread that crashes
-    // we are terminating afterwards anyway
-    for (;;) Sleep(1000);
-  }
-  
-  WCHAR buffer[4096] = {0};
-  int buflen = 0;
-  
-  DWORD exception_code = exception_ptrs->ExceptionRecord->ExceptionCode;
-  buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"A fatal exception (code 0x%x) occurred. The process is terminating.\n", exception_code);
-  
-  // load dbghelp dynamically just in case if it is missing
-  HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
-  if(dbghelp)
-  {
-    DWORD (WINAPI *dbg_SymSetOptions)(DWORD SymOptions);
-    BOOL (WINAPI *dbg_SymInitializeW)(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeProcess);
-    BOOL (WINAPI *dbg_StackWalk64)(DWORD MachineType, HANDLE hProcess, HANDLE hThread,
-                                   LPSTACKFRAME64 StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine,
-                                   PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine,
-                                   PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress);
-    PVOID (WINAPI *dbg_SymFunctionTableAccess64)(HANDLE hProcess, DWORD64 AddrBase);
-    DWORD64 (WINAPI *dbg_SymGetModuleBase64)(HANDLE hProcess, DWORD64 qwAddr);
-    BOOL (WINAPI *dbg_SymFromAddrW)(HANDLE hProcess, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFOW Symbol);
-    BOOL (WINAPI *dbg_SymGetLineFromAddrW64)(HANDLE hProcess, DWORD64 dwAddr, PDWORD pdwDisplacement, PIMAGEHLP_LINEW64 Line);
-    BOOL (WINAPI *dbg_SymGetModuleInfoW64)(HANDLE hProcess, DWORD64 qwAddr, PIMAGEHLP_MODULEW64 ModuleInfo);
-    
-    *(FARPROC*)&dbg_SymSetOptions            = GetProcAddress(dbghelp, "SymSetOptions");
-    *(FARPROC*)&dbg_SymInitializeW           = GetProcAddress(dbghelp, "SymInitializeW");
-    *(FARPROC*)&dbg_StackWalk64              = GetProcAddress(dbghelp, "StackWalk64");
-    *(FARPROC*)&dbg_SymFunctionTableAccess64 = GetProcAddress(dbghelp, "SymFunctionTableAccess64");
-    *(FARPROC*)&dbg_SymGetModuleBase64       = GetProcAddress(dbghelp, "SymGetModuleBase64");
-    *(FARPROC*)&dbg_SymFromAddrW             = GetProcAddress(dbghelp, "SymFromAddrW");
-    *(FARPROC*)&dbg_SymGetLineFromAddrW64    = GetProcAddress(dbghelp, "SymGetLineFromAddrW64");
-    *(FARPROC*)&dbg_SymGetModuleInfoW64      = GetProcAddress(dbghelp, "SymGetModuleInfoW64");
-    
-    if(dbg_SymSetOptions && dbg_SymInitializeW && dbg_StackWalk64 && dbg_SymFunctionTableAccess64 && dbg_SymGetModuleBase64 && dbg_SymFromAddrW && dbg_SymGetLineFromAddrW64 && dbg_SymGetModuleInfoW64)
-    {
-      HANDLE process = GetCurrentProcess();
-      HANDLE thread = GetCurrentThread();
-      CONTEXT* context = exception_ptrs->ContextRecord;
-      
-      dbg_SymSetOptions(SYMOPT_EXACT_SYMBOLS | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
-      if(dbg_SymInitializeW(process, L"", TRUE))
-      {
-        // check that raddbg.pdb file is good
-        B32 raddbg_pdb_valid = 0;
-        {
-          IMAGEHLP_MODULEW64 module = {0};
-          module.SizeOfStruct = sizeof(module);
-          if(dbg_SymGetModuleInfoW64(process, (DWORD64)&win32_exception_filter, &module))
-          {
-            raddbg_pdb_valid = (module.SymType == SymPdb);
-          }
-        }
-        
-        if(!raddbg_pdb_valid)
-        {
-          buflen += wnsprintfW(buffer + buflen, sizeof(buffer) - buflen,
-                               L"\nraddbg.pdb debug file is not valid or not found. Please rebuild binary to get call stack.\n");
-        }
-        else
-        {
-          STACKFRAME64 frame = {0};
-          DWORD image_type;
-#if defined(_M_AMD64)
-          image_type = IMAGE_FILE_MACHINE_AMD64;
-          frame.AddrPC.Offset = context->Rip;
-          frame.AddrPC.Mode = AddrModeFlat;
-          frame.AddrFrame.Offset = context->Rbp;
-          frame.AddrFrame.Mode = AddrModeFlat;
-          frame.AddrStack.Offset = context->Rsp;
-          frame.AddrStack.Mode = AddrModeFlat;
-#elif defined(_M_ARM64)
-          image_type = IMAGE_FILE_MACHINE_ARM64;
-          frame.AddrPC.Offset = context->Pc;
-          frame.AddrPC.Mode = AddrModeFlat;
-          frame.AddrFrame.Offset = context->Fp;
-          frame.AddrFrame.Mode = AddrModeFlat;
-          frame.AddrStack.Offset = context->Sp;
-          frame.AddrStack.Mode = AddrModeFlat;
-#else
-#  error Architecture not supported!
-#endif
-          
-          for(U32 idx=0; ;idx++)
-          {
-            const U32 max_frames = 32;
-            if(idx == max_frames)
-            {
-              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"...");
-              break;
-            }
-            
-            if(!dbg_StackWalk64(image_type, process, thread, &frame, context, 0, dbg_SymFunctionTableAccess64, dbg_SymGetModuleBase64, 0))
-            {
-              break;
-            }
-            
-            U64 address = frame.AddrPC.Offset;
-            if(address == 0)
-            {
-              break;
-            }
-            
-            if(idx==0)
-            {
-              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen,
-                                   L"\nPress Ctrl+C to copy this text to clipboard, then create a new issue in\n"
-                                   L"<a href=\"%S\">%S</a>\n\n", RADDBG_GITHUB_ISSUES, RADDBG_GITHUB_ISSUES);
-              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"Call stack:\n");
-            }
-            
-            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"%u. [0x%I64x]", idx + 1, address);
-            
-            struct {
-              SYMBOL_INFOW info;
-              WCHAR name[MAX_SYM_NAME];
-            } symbol = {0};
-            
-            symbol.info.SizeOfStruct = sizeof(symbol.info);
-            symbol.info.MaxNameLen = MAX_SYM_NAME;
-            
-            DWORD64 displacement = 0;
-            if(dbg_SymFromAddrW(process, address, &displacement, &symbol.info))
-            {
-              buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L" %s +%u", symbol.info.Name, (DWORD)displacement);
-              
-              IMAGEHLP_LINEW64 line = {0};
-              line.SizeOfStruct = sizeof(line);
-              
-              DWORD line_displacement = 0;
-              if(dbg_SymGetLineFromAddrW64(process, address, &line_displacement, &line))
-              {
-                buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L", %s line %u", PathFindFileNameW(line.FileName), line.LineNumber);
-              }
-            }
-            else
-            {
-              IMAGEHLP_MODULEW64 module = {0};
-              module.SizeOfStruct = sizeof(module);
-              if(dbg_SymGetModuleInfoW64(process, address, &module))
-              {
-                buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L" %s", module.ModuleName);
-              }
-            }
-            
-            buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\n");
-          }
-        }
-      }
-    }
-  }
-  
-  buflen += wnsprintfW(buffer + buflen, ArrayCount(buffer) - buflen, L"\nVersion: %S%S", RADDBG_VERSION_STRING_LITERAL, RADDBG_GIT_STR);
-  
-  TASKDIALOGCONFIG dialog = {0};
-  dialog.cbSize = sizeof(dialog);
-  dialog.dwFlags = TDF_SIZE_TO_CONTENT | TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
-  dialog.pszMainIcon = TD_ERROR_ICON;
-  dialog.dwCommonButtons = TDCBF_CLOSE_BUTTON;
-  dialog.pszWindowTitle = L"Fatal Exception";
-  dialog.pszContent = buffer;
-  dialog.pfCallback = &win32_dialog_callback;
-  TaskDialogIndirect(&dialog, 0, 0, 0);
-  
-  ExitProcess(1);
-}
-
-int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
-{
-  SetUnhandledExceptionFilter(&win32_exception_filter);
-  
   HANDLE output_handles[3] =
   {
     GetStdHandle(STD_INPUT_HANDLE),
@@ -327,36 +138,295 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
   SetStdHandle(STD_INPUT_HANDLE, 0);
   SetStdHandle(STD_OUTPUT_HANDLE, 0);
   SetStdHandle(STD_ERROR_HANDLE, 0);
-  static TCTX main_thread_tctx = {0};
-  tctx_init_and_equip(&main_thread_tctx);
-  Arena *perm_arena = arena_alloc();
-  WCHAR *command_line = GetCommandLineW();
-  int argc;
-  WCHAR **argv_16 = CommandLineToArgvW(command_line, &argc);
-  char **argv = push_array(perm_arena, char *, argc);
-  for(int i = 0; i < argc; i += 1)
-  {
-    String16 arg16 = str16_cstring((U16 *)argv_16[i]);
-    String8 arg8 = str8_from_16(perm_arena, arg16);
-    if(str8_match(arg8, str8_lit("--quiet"), StringMatchFlag_CaseInsensitive))
-    {
-      g_is_quiet = 1;
-    }
-    argv[i] = (char *)arg8.str;
-  }
-  entry_point(argc, argv);
-  return 0;
-}
-
-//- rjf: linux
-#elif OS_LINUX
-
-int main(int argument_count, char **arguments)
-{
-  static TCTX main_thread_tctx = {0};
-  tctx_init_and_equip(&main_thread_tctx);
-  entry_point(argument_count, arguments);
-  return 0;
-}
-
 #endif
+  
+  //- rjf: unpack command line arguments
+  ExecMode exec_mode = ExecMode_Normal;
+  B32 auto_run = 0;
+  B32 auto_step = 0;
+  B32 jit_attach = 0;
+  U64 jit_pid = 0;
+  U64 jit_code = 0;
+  U64 jit_addr = 0;
+  {
+    if(cmd_line_has_flag(cmd_line, str8_lit("ipc")))
+    {
+      exec_mode = ExecMode_IPCSender;
+    }
+    else if(cmd_line_has_flag(cmd_line, str8_lit("convert")))
+    {
+      exec_mode = ExecMode_Converter;
+    }
+    else if(cmd_line_has_flag(cmd_line, str8_lit("?")) ||
+            cmd_line_has_flag(cmd_line, str8_lit("help")))
+    {
+      exec_mode = ExecMode_Help;
+    }
+    auto_run = cmd_line_has_flag(cmd_line, str8_lit("auto_run"));
+    auto_step = cmd_line_has_flag(cmd_line, str8_lit("auto_step"));
+    String8 jit_pid_string = cmd_line_string(cmd_line, str8_lit("jit_pid"));
+    String8 jit_code_string = cmd_line_string(cmd_line, str8_lit("jit_code"));
+    String8 jit_addr_string = cmd_line_string(cmd_line, str8_lit("jit_addr"));
+    try_u64_from_str8_c_rules(jit_pid_string, &jit_pid);
+    try_u64_from_str8_c_rules(jit_code_string, &jit_code);
+    try_u64_from_str8_c_rules(jit_addr_string, &jit_addr);
+    jit_attach = (jit_addr != 0);
+  }
+  
+  //- rjf: set up layers
+  ctrl_set_wakeup_hook(wakeup_hook);
+  
+  //- rjf: dispatch to top-level codepath based on execution mode
+  switch(exec_mode)
+  {
+    //- rjf: normal execution
+    default:
+    case ExecMode_Normal:
+    {
+      //- rjf: set up shared memory for ipc
+      OS_Handle ipc_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_shared_memory_name);
+      void *ipc_shared_memory_base = os_shared_memory_view_open(ipc_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
+      OS_Handle ipc_semaphore = os_semaphore_alloc(1, 1, ipc_semaphore_name);
+      IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
+      ipc_info->msg_size = 0;
+      
+      //- rjf: setup initial target from command line args
+      {
+        String8List args = cmd_line->inputs;
+        if(args.node_count > 0 && args.first->string.size != 0)
+        {
+          Temp scratch = scratch_begin(0, 0);
+          DF_Entity *target = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Target);
+          df_entity_equip_b32(target, 1);
+          df_entity_equip_cfg_src(target, DF_CfgSrc_CommandLine);
+          String8List passthrough_args_list = {0};
+          for(String8Node *n = args.first->next; n != 0; n = n->next)
+          {
+            str8_list_push(scratch.arena, &passthrough_args_list, n->string);
+          }
+          
+          // rjf: get current path
+          String8 current_path = os_string_from_system_path(scratch.arena, OS_SystemPath_Current);
+          
+          // rjf: equip exe
+          if(args.first->string.size != 0)
+          {
+            String8 exe_name = args.first->string;
+            DF_Entity *exe = df_entity_alloc(0, target, DF_EntityKind_Executable);
+            PathStyle style = path_style_from_str8(exe_name);
+            if(style == PathStyle_Relative)
+            {
+              exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
+              exe_name = path_normalized_from_string(scratch.arena, exe_name);
+            }
+            df_entity_equip_name(0, exe, exe_name);
+          }
+          
+          // rjf: equip path
+          String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
+          if(path_part_of_arg.size != 0)
+          {
+            String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
+            DF_Entity *execution_path = df_entity_alloc(0, target, DF_EntityKind_ExecutionPath);
+            df_entity_equip_name(0, execution_path, path);
+          }
+          
+          // rjf: equip args
+          StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+          String8 args_str = str8_list_join(scratch.arena, &passthrough_args_list, &join);
+          if(args_str.size != 0)
+          {
+            DF_Entity *args_entity = df_entity_alloc(0, target, DF_EntityKind_Arguments);
+            df_entity_equip_name(0, args_entity, args_str);
+          }
+          scratch_end(scratch);
+        }
+      }
+      
+      //- rjf: main application loop
+      {
+        for(;;)
+        {
+          //- rjf: get IPC messages & dispatch ui commands from them
+          {
+            if(os_semaphore_take(ipc_semaphore, max_U64))
+            {
+              if(ipc_info->msg_size != 0)
+              {
+                U8 *buffer = (U8 *)(ipc_info+1);
+                U64 msg_size = ipc_info->msg_size;
+                String8 cmd_string = str8(buffer, msg_size);
+                ipc_info->msg_size = 0;
+                DF_Window *dst_window = df_gfx_state->first_window;
+                for(DF_Window *window = dst_window; window != 0; window = window->next)
+                {
+                  if(os_window_is_focused(window->os))
+                  {
+                    dst_window = window;
+                    break;
+                  }
+                }
+                if(dst_window != 0)
+                {
+                  Temp scratch = scratch_begin(0, 0);
+                  String8 cmd_spec_string = df_cmd_name_part_from_string(cmd_string);
+                  DF_CmdSpec *cmd_spec = df_cmd_spec_from_string(cmd_spec_string);
+                  if(!df_cmd_spec_is_nil(cmd_spec))
+                  {
+                    DF_CmdParams params = df_cmd_params_from_gfx();
+                    DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_window(dst_window);
+                    String8 error = df_cmd_params_apply_spec_query(scratch.arena, &ctrl_ctx, &params, cmd_spec, df_cmd_arg_part_from_string(cmd_string));
+                    if(error.size == 0)
+                    {
+                      df_push_cmd__root(&params, cmd_spec);
+                    }
+                    else
+                    {
+                      DF_CmdParams params = df_cmd_params_from_window(dst_window);
+                      params.string = error;
+                      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+                      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+                    }
+                  }
+                  scratch_end(scratch);
+                }
+              }
+              os_semaphore_drop(ipc_semaphore);
+            }
+          }
+          
+          //- rjf: update & render frame
+          OS_Handle repaint_window = {0};
+          update_and_render(repaint_window, 0);
+          
+          //- rjf: auto run
+          if(auto_run)
+          {
+            auto_run = 0;
+            DF_CmdParams params = df_cmd_params_from_gfx();
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndRun));
+          }
+          
+          //- rjf: auto step
+          if(auto_step)
+          {
+            auto_step = 0;
+            DF_CmdParams params = df_cmd_params_from_gfx();
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_StepInto));
+          }
+          
+          //- rjf: jit attach
+          if(jit_attach)
+          {
+            jit_attach = 0;
+            DF_CmdParams params = df_cmd_params_from_gfx();
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_ID);
+            params.id = jit_pid;
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Attach));
+          }
+          
+          //- rjf: quit if no windows are left
+          if(df_gfx_state->first_window == 0)
+          {
+            break;
+          }
+        }
+      }
+      
+    }break;
+    
+    //- rjf: inter-process communication message sender
+    case ExecMode_IPCSender:
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      //- rjf: grab ipc shared memory
+      OS_Handle ipc_shared_memory = os_shared_memory_open(ipc_shared_memory_name);
+      void *ipc_shared_memory_base = os_shared_memory_view_open(ipc_shared_memory, r1u64(0, MB(16)));
+      if(ipc_shared_memory_base != 0)
+      {
+        OS_Handle ipc_semaphore = os_semaphore_open(ipc_semaphore_name);
+        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
+        if(os_semaphore_take(ipc_semaphore, os_now_microseconds() + Million(6)))
+        {
+          U8 *buffer = (U8 *)(ipc_info+1);
+          U64 buffer_max = IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo);
+          StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+          String8 msg = str8_list_join(scratch.arena, &cmd_line->inputs, &join);
+          ipc_info->msg_size = Min(buffer_max, msg.size);
+          MemoryCopy(buffer, msg.str, ipc_info->msg_size);
+          os_semaphore_drop(ipc_semaphore);
+        }
+      }
+      
+      scratch_end(scratch);
+    }break;
+    
+    //- rjf: built-in pdb/dwarf -> raddbg converter mode
+    case ExecMode_Converter:
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      //- rjf: parse arguments
+      P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(scratch.arena, cmd_line);
+      
+      //- rjf: open output file
+      String8 output_name = push_str8_copy(scratch.arena, user2convert->output_name);
+      OS_Handle out_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, output_name);
+      B32 out_file_is_good = !os_handle_match(out_file, os_handle_zero());
+      
+      //- rjf: convert
+      P2R_Convert2Bake *convert2bake = 0;
+      if(out_file_is_good)
+      {
+        convert2bake = p2r_convert(scratch.arena, user2convert);
+      }
+      
+      //- rjf: bake
+      P2R_Bake2Serialize *bake2srlz = 0;
+      ProfScope("bake")
+      {
+        bake2srlz = p2r_bake(scratch.arena, convert2bake);
+      }
+      
+      //- rjf: serialize
+      String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(scratch.arena, &convert2bake->bake_params, &bake2srlz->sections);
+      
+      //- rjf: write
+      if(out_file_is_good)
+      {
+        U64 off = 0;
+        for(String8Node *n = serialize_out.first; n != 0; n = n->next)
+        {
+          os_file_write(out_file, r1u64(off, off+n->string.size), n->string.str);
+          off += n->string.size;
+        }
+      }
+      
+      //- rjf: close output file
+      os_file_close(out_file);
+      
+      scratch_end(scratch);
+    }break;
+    
+    //- rjf: help message box
+    case ExecMode_Help:
+    {
+      os_graphical_message(0,
+                           str8_lit("The RAD Debugger - Help"),
+                           str8_lit("The following options may be used when starting the RAD Debugger from the command line:\n\n"
+                                    "--user:<path>\n"
+                                    "Use to specify the location of a user file which should be used. User files are used to store settings for users, including window and panel setups, path mapping, and visual settings. If this file does not exist, it will be created as necessary. This file will be autosaved as user-related changes are made.\n\n"
+                                    "--profile:<path>\n"
+                                    "Use to specify the location of a profile file which should be used. Profile files are used to store settings for users and projects. If this file does not exist, it will be created as necessary. This file will be autosaved as profile-related changes are made.\n\n"
+                                    "--auto_step\n"
+                                    "This will step into all targets after the debugger initially starts.\n\n"
+                                    "--auto_run\n"
+                                    "This will run all targets after the debugger initially starts.\n\n"
+                                    "--ipc <command>\n"
+                                    "This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger.\n\n"));
+    }break;
+  }
+  
+  scratch_end(scratch);
+}

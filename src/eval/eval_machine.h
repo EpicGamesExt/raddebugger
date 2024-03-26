@@ -10,7 +10,8 @@
 typedef B32 EVAL_MemoryRead(void *u, void *out, U64 addr, U64 size);
 
 typedef struct EVAL_Machine EVAL_Machine;
-struct EVAL_Machine{
+struct EVAL_Machine
+{
   void *u;
   Architecture arch;
   EVAL_MemoryRead *memory_read;
@@ -22,7 +23,8 @@ struct EVAL_Machine{
 };
 
 typedef union EVAL_Slot EVAL_Slot;
-union EVAL_Slot{
+union EVAL_Slot
+{
   U64 u256[4];
   U64 u128[2];
   U64 u64;
@@ -32,9 +34,10 @@ union EVAL_Slot{
 };
 
 typedef struct EVAL_Result EVAL_Result;
-struct EVAL_Result{
+struct EVAL_Result
+{
   EVAL_Slot value;
-  B32 bad_eval;
+  EVAL_ResultCode code;
 };
 
 ////////////////////////////////

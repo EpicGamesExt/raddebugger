@@ -55,9 +55,6 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
     arena->cmt         = cmt;
     arena->res         = res;
     arena->align       = 8;
-#if ENABLE_DEV
-    arena->dev         = 0;
-#endif
     arena->grow        = 1;
     arena->large_pages = large_pages;
   }
@@ -209,10 +206,6 @@ arena_pop_to(Arena *arena, U64 big_pos_unclamped)
 internal void
 arena_absorb(Arena *arena, Arena *sub)
 {
-#if ENABLE_DEV
-  arena_annotate_absorb__dev(arena, sub);
-#endif
-  
   // base adjustment
   Arena *current = arena->current;
   U64 base_adjust = current->base_pos + current->res;
@@ -233,9 +226,6 @@ internal void *
 arena_push(Arena *arena, U64 size)
 {
   void *memory = arena_push__impl(arena, size);
-#if ENABLE_DEV
-  arena_annotate_push__dev(arena, size, memory);
-#endif
   return memory;
 }
 
@@ -246,9 +236,6 @@ arena_push_contiguous(Arena *arena, U64 size)
   arena->grow = 0;
   void *memory = arena_push(arena, size);
   arena->grow = restore;
-#if ENABLE_DEV
-  arena_annotate_push__dev(arena, size, memory);
-#endif
   return memory;
 }
 

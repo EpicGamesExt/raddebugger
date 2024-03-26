@@ -2,6 +2,54 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Basic Enum Functions
+
+internal U32
+pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode)
+{
+  U32 result = 0;
+  switch(opcode)
+  {
+    case PE_UnwindOpCode_PUSH_NONVOL:     result = 1; break;
+    case PE_UnwindOpCode_ALLOC_LARGE:     result = 2; break;
+    case PE_UnwindOpCode_ALLOC_SMALL:     result = 1; break;
+    case PE_UnwindOpCode_SET_FPREG:       result = 1; break;
+    case PE_UnwindOpCode_SAVE_NONVOL:     result = 2; break;
+    case PE_UnwindOpCode_SAVE_NONVOL_FAR: result = 3; break;
+    case PE_UnwindOpCode_EPILOG:          result = 2; break;
+    case PE_UnwindOpCode_SPARE_CODE:      result = 3; break;
+    case PE_UnwindOpCode_SAVE_XMM128:     result = 2; break;
+    case PE_UnwindOpCode_SAVE_XMM128_FAR: result = 3; break;
+    case PE_UnwindOpCode_PUSH_MACHFRAME:  result = 1; break;
+  }
+  return result;
+}
+
+internal String8
+pe_string_from_windows_subsystem(PE_WindowsSubsystem subsystem)
+{
+  String8 result = {0};
+  switch(subsystem)
+  {
+    default:{}break;
+    case PE_WindowsSubsystem_UNKNOWN:                  result = str8_lit("UNKNOWN"); break;
+    case PE_WindowsSubsystem_NATIVE:                   result = str8_lit("NATIVE"); break;
+    case PE_WindowsSubsystem_WINDOWS_GUI:              result = str8_lit("WINDOWS_GUI"); break;
+    case PE_WindowsSubsystem_WINDOWS_CUI:              result = str8_lit("WINDOWS_CUI"); break;
+    case PE_WindowsSubsystem_OS2_CUI:                  result = str8_lit("OS2_CUI"); break;
+    case PE_WindowsSubsystem_POSIX_CUI:                result = str8_lit("POSIX_CUI"); break;
+    case PE_WindowsSubsystem_NATIVE_WINDOWS:           result = str8_lit("NATIVE_WINDOWS"); break;
+    case PE_WindowsSubsystem_WINDOWS_CE_GUI:           result = str8_lit("WINDOWS_CE_GUID"); break;
+    case PE_WindowsSubsystem_EFI_APPLICATION:          result = str8_lit("EFI_APPLICATION"); break;
+    case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:  result = str8_lit("EFI_BOOT_SERVICE_DRIVER"); break;
+    case PE_WindowsSubsystem_EFI_ROM:                  result = str8_lit("EFI_ROM"); break;
+    case PE_WindowsSubsystem_XBOX:                     result = str8_lit("XBOX"); break;
+    case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: result = str8_lit("WINDOWS_BOOT_APPLICATION"); break;
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Parser Functions
 
 internal PE_BinInfo
@@ -535,7 +583,7 @@ pe_resource_dir_push_dir_node(Arena *arena, PE_ResourceDir *dir, COFF_ResourceID
   
   PE_Resource *res = &res_node->data;
   res->id    = id;
-  res->type  = PE_ResData_DIR;
+  res->kind  = PE_ResDataKind_DIR;
   res->u.dir = sub_dir;
   
   return res_node;
@@ -558,7 +606,7 @@ pe_resource_dir_push_entry_node(Arena *arena, PE_ResourceDir *dir, COFF_Resource
   
   PE_Resource *res = &res_node->data;
   res->id   = id;
-  res->type = PE_ResData_COFF_RESOURCE;
+  res->kind = PE_ResDataKind_COFF_RESOURCE;
   res->u.coff_res.type         = type;
   res->u.coff_res.data_version = data_version;
   res->u.coff_res.version      = version;
@@ -716,7 +764,7 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
       
       entry->id.type = COFF_ResourceIDType_STRING;
       entry->id.u.string = str8_from_16(arena, name16);
-      entry->type = is_dir ? PE_ResData_DIR : PE_ResData_COFF_LEAF;
+      entry->kind = is_dir ? PE_ResDataKind_DIR : PE_ResDataKind_COFF_LEAF;
       
       if (is_dir) {
         struct stack_s *frame = push_array(scratch.arena, struct stack_s, 1);
@@ -745,7 +793,7 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
       
       entry->id.type = COFF_ResourceIDType_NUMBER;
       entry->id.u.number = coff_entry.name.id;
-      entry->type = is_dir ? PE_ResData_DIR : PE_ResData_COFF_LEAF;
+      entry->kind = is_dir ? PE_ResDataKind_DIR : PE_ResDataKind_COFF_LEAF;
       
       if (is_dir) {
         struct stack_s *frame = push_array(scratch.arena, struct stack_s, 1);
@@ -766,43 +814,3 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
   scratch_end(scratch);
   return bottom_frame->table;
 }
-
-////////////////////////////////
-
-internal String8
-pe_get_dos_program(void)
-{
-  // generated from pe/dos_program.asm
-  static U8 program[] = {
-    0x0E, 0x1F, 0xBA, 0x0E, 0x00, 0xB4, 0x09, 0xCD, 0x21, 0xB8, 0x01, 0x4C, 0xCD, 0x21, 0x54, 0x68,
-    0x69, 0x73, 0x20, 0x70, 0x72, 0x6F, 0x67, 0x72, 0x61, 0x6D, 0x20, 0x63, 0x61, 0x6E, 0x6E, 0x6F,
-    0x74, 0x20, 0x62, 0x65, 0x20, 0x72, 0x75, 0x6E, 0x20, 0x69, 0x6E, 0x20, 0x44, 0x4F, 0x53, 0x20,
-    0x6D, 0x6F, 0x64, 0x65, 0x2E, 0x24, 0x00, 0x00
-  };
-  return str8(program, sizeof(program));
-}
-
-////////////////////////////////
-
-internal String8
-pe_string_from_subsystem(PE_WindowsSubsystem subsystem)
-{
-  switch (subsystem) {
-    case PE_WindowsSubsystem_UNKNOWN:                  return str8_lit("UNKNOWN");
-    case PE_WindowsSubsystem_NATIVE:                   return str8_lit("NATIVE");
-    case PE_WindowsSubsystem_WINDOWS_GUI:              return str8_lit("WINDOWS_GUI");
-    case PE_WindowsSubsystem_WINDOWS_CUI:              return str8_lit("WINDOWS_CUI");
-    case PE_WindowsSubsystem_OS2_CUI:                  return str8_lit("OS2_CUI");
-    case PE_WindowsSubsystem_POSIX_CUI:                return str8_lit("POSIX_CUI");
-    case PE_WindowsSubsystem_NATIVE_WINDOWS:           return str8_lit("NATIVE_WINDOWS");
-    case PE_WindowsSubsystem_WINDOWS_CE_GUI:           return str8_lit("WINDOWS_CE_GUID");
-    case PE_WindowsSubsystem_EFI_APPLICATION:          return str8_lit("EFI_APPLICATION");
-    case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:  return str8_lit("EFI_BOOT_SERVICE_DRIVER");
-    case PE_WindowsSubsystem_EFI_ROM:                  return str8_lit("EFI_ROM");
-    case PE_WindowsSubsystem_XBOX:                     return str8_lit("XBOX");
-    case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: return str8_lit("WINDOWS_BOOT_APPLICATION");
-    default: break;
-  }
-  return str8(0,0);
-}
-

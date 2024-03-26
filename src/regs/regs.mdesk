@@ -299,141 +299,129 @@ REGS_ArchTable:
 ////////////////////////////////
 //~ rjf: X64 Generators
 
-@table_gen_enum REGS_RegCodeX64:
+@enum REGS_RegCodeX64:
 {
-  `REGS_RegCodeX64_NULL,`;
-  @expand(REGS_RegTableX64 a) `REGS_RegCodeX64_$(a.name),`;
-  `REGS_RegCodeX64_COUNT`;
+  NULL,
+  @expand(REGS_RegTableX64 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum REGS_AliasCodeX64:
+@enum REGS_AliasCodeX64:
 {
-  `REGS_AliasCodeX64_NULL,`;
-  @expand(REGS_AliasTableX64 a) `REGS_AliasCodeX64_$(a.name),`;
-  `REGS_AliasCodeX64_COUNT`;
+  NULL,
+  @expand(REGS_AliasTableX64 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_struct
-REGS_RegBlockX64:
+@struct REGS_RegBlockX64:
 {
-  @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name);`;
+  @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
-regs_g_reg_code_x64_usage_kind_table:
+@data(REGS_UsageKind) regs_g_reg_code_x64_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_RegTableX64 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_RegTableX64 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+@data(REGS_UsageKind)
 regs_g_alias_code_x64_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_AliasTableX64 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_AliasTableX64 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_reg_code_x64_string_table:
+@data(String8) regs_g_reg_code_x64_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_RegTableX64 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_RegTableX64 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_alias_code_x64_string_table:
+@data(String8) regs_g_alias_code_x64_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_AliasTableX64 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_AliasTableX64 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type: REGS_Rng, fallback: `{0}`)
-regs_g_reg_code_x64_rng_table:
+@data(REGS_Rng) regs_g_reg_code_x64_rng_table:
 {
-  `{0},`;
-  @expand(REGS_RegTableX64 a) `{(U16)OffsetOf(REGS_RegBlockX64, $(a.name)), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_RegTableX64 a) `{(U16)OffsetOf(REGS_RegBlockX64, $(a.name)), $(a.size/8)}`,
 }
 
-@table_gen_data(type: REGS_Slice, fallback: `{0}`)
-regs_g_alias_code_x64_slice_table:
+@data(REGS_Slice) regs_g_alias_code_x64_slice_table:
 {
-  `{0},`;
-  @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////
 //~ rjf: X86 Generators
 
-@table_gen_enum REGS_RegCodeX86:
+@enum REGS_RegCodeX86:
 {
-  `REGS_RegCodeX86_NULL,`;
-  @expand(REGS_RegTableX86 a) `REGS_RegCodeX86_$(a.name),`;
-  `REGS_RegCodeX86_COUNT`;
+  NULL,
+  @expand(REGS_RegTableX86 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum REGS_AliasCodeX86:
+@enum REGS_AliasCodeX86:
 {
-  `REGS_AliasCodeX86_NULL,`;
-  @expand(REGS_AliasTableX86 a) `REGS_AliasCodeX86_$(a.name),`;
-  `REGS_AliasCodeX86_COUNT`;
+  NULL,
+  @expand(REGS_AliasTableX86 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_struct
-REGS_RegBlockX86:
+@struct REGS_RegBlockX86:
 {
-  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name);`;
+  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+@data(REGS_UsageKind)
 regs_g_reg_code_x86_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
-regs_g_alias_code_x86_usage_kind_table:
+@data(REGS_UsageKind) regs_g_alias_code_x86_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_reg_code_x86_string_table:
+@data(String8) regs_g_reg_code_x86_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_alias_code_x86_string_table:
+@data(String8) regs_g_alias_code_x86_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type: REGS_Rng, fallback: `{0}`)
-regs_g_reg_code_x86_rng_table:
+@data(REGS_Rng) regs_g_reg_code_x86_rng_table:
 {
-  `{0},`;
-  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)}`,
 }
 
-@table_gen_data(type: REGS_Slice, fallback: `{0}`)
-regs_g_alias_code_x86_slice_table:
+@data(REGS_Slice) regs_g_alias_code_x86_slice_table:
 {
-  `{0},`;
-  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////
 //~ rjf: Architecture-Dynamic Helper Implementation Generators
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal U64 regs_block_size_from_architecture(Architecture arch)`;
   `{`;
-    `U64 result = 0;`;
+    `U64 result = 8;`;
     `switch(arch)`;
     `{`;
       `default:{}break;`;
@@ -443,7 +431,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal U64 regs_reg_code_count_from_architecture(Architecture arch)`;
   `{`;
@@ -457,7 +445,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal U64 regs_alias_code_count_from_architecture(Architecture arch)`;
   `{`;
@@ -471,7 +459,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal String8 *regs_reg_code_string_table_from_architecture(Architecture arch)`;
   `{`;
@@ -485,7 +473,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal String8 *regs_alias_code_string_table_from_architecture(Architecture arch)`;
   `{`;
@@ -499,7 +487,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_Rng *regs_reg_code_rng_table_from_architecture(Architecture arch)`;
   `{`;
@@ -513,7 +501,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_Slice *regs_alias_code_slice_table_from_architecture(Architecture arch)`;
   `{`;
@@ -527,7 +515,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_UsageKind *regs_reg_code_usage_kind_table_from_architecture(Architecture arch)`;
   `{`;
@@ -541,7 +529,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_UsageKind *regs_alias_code_usage_kind_table_from_architecture(Architecture arch)`;
   `{`;

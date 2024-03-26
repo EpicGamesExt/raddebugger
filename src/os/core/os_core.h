@@ -166,11 +166,6 @@ internal String8 os_string_from_system_path(Arena *arena, OS_SystemPath path);
 internal String8List os_string_list_from_argcv(Arena *arena, int argc, char **argv);
 
 ////////////////////////////////
-//~ rjf: Process Helpers (Helper, Implemented Once)
-
-internal void os_relaunch_self(void);
-
-////////////////////////////////
 //~ rjf: Filesystem Helpers (Helpers, Implemented Once)
 
 internal String8        os_data_from_file_path(Arena *arena, String8 path);
@@ -204,7 +199,7 @@ internal void os_condition_variable_broadcast(OS_Handle cv);
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
-internal void os_init(int argc, char **argv);
+internal void os_init(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Memory Allocation (Implemented Per-OS)
@@ -232,13 +227,17 @@ internal U64          os_allocation_granularity(void);
 internal U64          os_logical_core_count(void);
 
 ////////////////////////////////
-//~ rjf: @os_hooks Process Info (Implemented Per-OS)
+//~ rjf: @os_hooks Process & Thread Info (Implemented Per-OS)
 
-internal String8List os_get_command_line_arguments(void);
 internal S32         os_get_pid(void);
 internal S32         os_get_tid(void);
 internal String8List os_get_environment(void);
 internal U64         os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *out);
+
+////////////////////////////////
+//~ rjf: @os_hooks Thread Names
+
+internal void os_set_thread_name(String8 string);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Process Control (Implemented Per-OS)
@@ -306,6 +305,7 @@ internal void  os_process_release_handle(OS_Handle handle);
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 
 internal OS_Handle os_launch_thread(OS_ThreadFunctionType *func, void *ptr, void *params);
+internal B32       os_thread_wait(OS_Handle handle, U64 endt_us);
 internal void      os_release_thread_handle(OS_Handle thread);
 
 ////////////////////////////////
@@ -363,5 +363,16 @@ internal void os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *f
 
 internal OS_Guid os_make_guid(void);
 internal String8 os_string_from_guid(Arena *arena, OS_Guid guid);
+
+////////////////////////////////
+//~ rjf: @os_hooks Entry Points (Implemented Per-OS)
+
+// NOTE(rjf): The implementation of `os_core` will define low-level entry
+// points if BUILD_ENTRY_DEFINING_UNIT is defined to 1. These will call
+// into the standard codebase program entry points, named "entry_point".
+
+#if BUILD_ENTRY_DEFINING_UNIT
+internal void entry_point(CmdLine *cmdline);
+#endif
 
 #endif // OS_CORE_H

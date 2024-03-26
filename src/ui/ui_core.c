@@ -591,9 +591,9 @@ ui_hot_key(void)
 }
 
 internal UI_Key
-ui_active_key(Side side)
+ui_active_key(UI_MouseButtonKind button_kind)
 {
-  return ui_state->active_box_key[side];
+  return ui_state->active_box_key[button_kind];
 }
 
 //- rjf: controls over interaction
@@ -601,7 +601,10 @@ ui_active_key(Side side)
 internal void
 ui_kill_action(void)
 {
-  ui_state->active_box_key[Side_Min] = ui_state->active_box_key[Side_Max] = ui_key_zero();
+  for(EachEnumVal(UI_MouseButtonKind, k))
+  {
+    ui_state->active_box_key[k] = ui_key_zero();
+  }
 }
 
 //- rjf: box cache lookup
@@ -958,32 +961,41 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   }
   
   //- rjf: reset hot if we don't have an active widget
-  if(ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) &&
-     ui_key_match(ui_state->active_box_key[Side_Max], ui_key_zero()))
   {
-    ui_state->hot_box_key = ui_key_zero();
+    B32 has_active = 0;
+    for(EachEnumVal(UI_MouseButtonKind, k))
+    {
+      if(!ui_key_match(ui_state->active_box_key[k], ui_key_zero()))
+      {
+        has_active = 1;
+      }
+    }
+    if(!has_active)
+    {
+      ui_state->hot_box_key = ui_key_zero();
+    }
   }
   
   //- rjf: reset active if our active box is disabled
-  for(Side side = (Side)0; side < Side_COUNT; side = (Side)(side+1))
+  for(EachEnumVal(UI_MouseButtonKind, k))
   {
-    if(!ui_key_match(ui_state->active_box_key[side], ui_key_zero()))
+    if(!ui_key_match(ui_state->active_box_key[k], ui_key_zero()))
     {
-      UI_Box *box = ui_box_from_key(ui_state->active_box_key[side]);
+      UI_Box *box = ui_box_from_key(ui_state->active_box_key[k]);
       if(!ui_box_is_nil(box) && box->flags & UI_BoxFlag_Disabled)
       {
-        ui_state->active_box_key[side] = ui_key_zero();
+        ui_state->active_box_key[k] = ui_key_zero();
       }
     }
   }
   
   //- rjf: reset active keys if they have been pruned
-  for(Side side = Side_Min; side < Side_COUNT; side = (Side)(side + 1))
+  for(EachEnumVal(UI_MouseButtonKind, k))
   {
-    UI_Box *box = ui_box_from_key(ui_state->active_box_key[side]);
+    UI_Box *box = ui_box_from_key(ui_state->active_box_key[k]);
     if(ui_box_is_nil(box))
     {
-      ui_state->active_box_key[side] = ui_key_zero();
+      ui_state->active_box_key[k] = ui_key_zero();
     }
   }
   
@@ -993,18 +1005,12 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     if((event->kind == OS_EventKind_Press || event->kind == OS_EventKind_Release) &&
        !os_handle_match(event->window, window))
     {
-      for(Side side = Side_Min; side < Side_COUNT; side = (Side)(side + 1))
+      for(EachEnumVal(UI_MouseButtonKind, k))
       {
-        ui_state->active_box_key[side] = ui_key_zero();
+        ui_state->active_box_key[k] = ui_key_zero();
       }
       break;
     }
-  }
-  
-  //- rjf: tick click timers
-  for(Side side = (Side)0; side < Side_COUNT; side = (Side)(side + 1))
-  {
-    ui_state->time_since_last_click[side] += real_dt;
   }
 }
 
@@ -1154,7 +1160,7 @@ ui_end_build(void)
       {
         // rjf: grab states informing animation
         B32 is_hot            = ui_key_match(box->key, ui_state->hot_box_key);
-        B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[Side_Min]);
+        B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[UI_MouseButtonKind_Left]);
         B32 is_disabled       = !!(box->flags & UI_BoxFlag_Disabled) && (box->first_disabled_build_index+10 < ui_state->build_index ||
                                                                          box->first_touched_build_index == box->first_disabled_build_index);
         B32 is_focus_hot      = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
@@ -1273,7 +1279,7 @@ ui_end_build(void)
   //- rjf: hover cursor
   {
     UI_Box *hot = ui_box_from_key(ui_state->hot_box_key);
-    UI_Box *active = ui_box_from_key(ui_state->active_box_key[Side_Min]);
+    UI_Box *active = ui_box_from_key(ui_state->active_box_key[UI_MouseButtonKind_Left]);
     UI_Box *box = ui_box_is_nil(active) ? hot : active;
     OS_Cursor cursor = box->hover_cursor;
     if(box->flags & UI_BoxFlag_Disabled && box->flags & UI_BoxFlag_Clickable)
@@ -1313,58 +1319,68 @@ ui_end_build(void)
   }
   
   //- rjf: hovering possibly-truncated drawn text -> store text
-  if(ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Min]) &&
-     ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Max]))
   {
-    B32 found = 0;
-    for(UI_Box *box = ui_state->root, *next = 0; !ui_box_is_nil(box); box = next)
+    B32 inactive = 1;
+    for(EachEnumVal(UI_MouseButtonKind, k))
     {
-      UI_BoxRec rec = ui_box_rec_df_pre(box, ui_state->root);
-      next = rec.next;
-      S32 pop_idx = 0;
-      for(UI_Box *b = box; !ui_box_is_nil(b) && pop_idx <= rec.pop_count; b = b->parent, pop_idx += 1)
+      if(!ui_key_match(ui_key_zero(), ui_state->active_box_key[k]))
       {
-        if(b->flags & UI_BoxFlag_DrawText && !(b->flags & UI_BoxFlag_DisableTextTrunc))
+        inactive = 0;
+        break;
+      }
+    }
+    if(inactive)
+    {
+      B32 found = 0;
+      for(UI_Box *box = ui_state->root, *next = 0; !ui_box_is_nil(box); box = next)
+      {
+        UI_BoxRec rec = ui_box_rec_df_pre(box, ui_state->root);
+        next = rec.next;
+        S32 pop_idx = 0;
+        for(UI_Box *b = box; !ui_box_is_nil(b) && pop_idx <= rec.pop_count; b = b->parent, pop_idx += 1)
         {
-          String8 box_display_string = ui_box_display_string(b);
-          Vec2F32 text_pos = ui_box_text_position(b);
-          Vec2F32 drawn_text_dim = b->display_string_runs.dim;
-          B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > b->rect.x1);
-          B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
-                                                       b->rect.y0,
-                                                       Min(text_pos.x+drawn_text_dim.x, b->rect.x1),
-                                                       b->rect.y1),
-                                                ui_state->mouse);
-          if(text_is_truncated && mouse_is_hovering)
+          if(b->flags & UI_BoxFlag_DrawText && !(b->flags & UI_BoxFlag_DisableTextTrunc))
           {
-            if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+            String8 box_display_string = ui_box_display_string(b);
+            Vec2F32 text_pos = ui_box_text_position(b);
+            Vec2F32 drawn_text_dim = b->display_string_runs.dim;
+            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > b->rect.x1);
+            B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
+                                                         b->rect.y0,
+                                                         Min(text_pos.x+drawn_text_dim.x, b->rect.x1),
+                                                         b->rect.y1),
+                                                  ui_state->mouse);
+            if(text_is_truncated && mouse_is_hovering)
             {
-              arena_clear(ui_state->string_hover_arena);
-              ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
-              ui_state->string_hover_fancy_runs = d_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
-              ui_state->string_hover_begin_us = os_now_microseconds();
+              if(!str8_match(box_display_string, ui_state->string_hover_string, 0))
+              {
+                arena_clear(ui_state->string_hover_arena);
+                ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
+                ui_state->string_hover_fancy_runs = d_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
+                ui_state->string_hover_begin_us = os_now_microseconds();
+              }
+              ui_state->string_hover_build_index = ui_state->build_index;
+              found = 1;
+              goto break_all_hover_string;
             }
-            ui_state->string_hover_build_index = ui_state->build_index;
-            found = 1;
+          }
+          if(b != box && contains_2f32(b->rect, ui_state->mouse) && b->flags & UI_BoxFlag_DrawText)
+          {
             goto break_all_hover_string;
           }
         }
-        if(b != box && contains_2f32(b->rect, ui_state->mouse) && b->flags & UI_BoxFlag_DrawText)
-        {
-          goto break_all_hover_string;
-        }
       }
-    }
-    break_all_hover_string:;
-    if(!found)
-    {
-      arena_clear(ui_state->string_hover_arena);
-      ui_state->string_hover_build_index = 0;
-      MemoryZeroStruct(&ui_state->string_hover_string);
-    }
-    if(found && !ui_string_hover_active())
-    {
-      ui_state->is_animating = 1;
+      break_all_hover_string:;
+      if(!found)
+      {
+        arena_clear(ui_state->string_hover_arena);
+        ui_state->string_hover_build_index = 0;
+        MemoryZeroStruct(&ui_state->string_hover_string);
+      }
+      if(found && !ui_string_hover_active())
+      {
+        ui_state->is_animating = 1;
+      }
     }
   }
   
@@ -1568,7 +1584,6 @@ ui_layout_enforce_constraints__in_place_rec(UI_Box *root, Axis2 axis)
             F32 fixup_pct = (violation / total_weighted_size);
             fixup_pct = Clamp(0, fixup_pct, 1);
             child->fixed_size.v[axis] -= child_fixups[child_idx] * fixup_pct;
-            child->fixed_size.v[axis] = child->fixed_size.v[axis];
           }
         }
       }
@@ -2356,73 +2371,25 @@ internal UI_Signal
 ui_signal_from_box(UI_Box *box)
 {
   ProfBeginFunction();
-  UI_Signal result = {0};
-  result.box = box;
-  result.event_flags = os_get_event_flags();
-  B32 disabled = !!(box->flags & UI_BoxFlag_Disabled);
-  B32 is_focused = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
+  B32 is_focus_hot = box->flags & UI_BoxFlag_FocusHot && !(box->flags & UI_BoxFlag_FocusHotDisabled);
+  UI_Signal sig = {box};
+  sig.event_flags |= os_get_event_flags();
   
-  //- rjf: gather events
-  OS_Event *left_press = 0;
-  OS_Event *left_release = 0;
-  OS_Event *right_press = 0;
-  OS_Event *right_release = 0;
-  for(OS_Event *evt = ui_state->events->first; evt != 0; evt = evt->next)
+  //////////////////////////////
+  //- rjf: calculate possibly-clipped box rectangle
+  //
+  Rng2F32 rect = box->rect;
+  for(UI_Box *b = box->parent; !ui_box_is_nil(b); b = b->parent)
   {
-    if(os_handle_match(ui_state->window, evt->window))
+    if(b->flags & UI_BoxFlag_Clip)
     {
-      if(left_press == 0 && evt->kind == OS_EventKind_Press && evt->key == OS_Key_LeftMouseButton)
-      {
-        left_press = evt;
-      }
-      if(left_release == 0 && evt->kind == OS_EventKind_Release && evt->key == OS_Key_LeftMouseButton)
-      {
-        left_release = evt;
-      }
-      if(right_press == 0 && evt->kind == OS_EventKind_Press && evt->key == OS_Key_RightMouseButton)
-      {
-        right_press = evt;
-      }
-      if(right_release == 0 && evt->kind == OS_EventKind_Release && evt->key == OS_Key_RightMouseButton)
-      {
-        right_release = evt;
-      }
+      rect = intersect_2f32(rect, b->rect);
     }
   }
   
-  //- rjf: unpack mouse position info
-  Vec2F32 mouse = ui_state->mouse;
-  if(left_press != 0)   { mouse = left_press->pos; }
-  if(left_release != 0) { mouse = left_release->pos; }
-  if(right_press != 0)   { mouse = right_press->pos; }
-  if(right_release != 0) { mouse = right_release->pos; }
-  B32 mouse_is_over = contains_2f32(box->rect, mouse);
-  
-  //- rjf: check for parent that is clipping
-  if(box->flags & (UI_BoxFlag_Clickable|UI_BoxFlag_ViewScroll) && mouse_is_over)
-  {
-    for(UI_Box *parent = box->parent; !ui_box_is_nil(parent); parent = parent->parent)
-    {
-      if(parent->flags & UI_BoxFlag_Clip)
-      {
-        mouse_is_over = mouse_is_over && contains_2f32(parent->rect, mouse);
-        break;
-      }
-    }
-  }
-  
-  //- rjf: get default nav ancestor
-  UI_Box *default_nav_parent = &ui_g_nil_box;
-  for(UI_Box *p = ui_top_parent(); !ui_box_is_nil(p); p = p->parent)
-  {
-    if(p->flags & UI_BoxFlag_DefaultFocusNav)
-    {
-      default_nav_parent = p;
-      break;
-    }
-  }
-  
+  //////////////////////////////
   //- rjf: determine if we're under the context menu or not
+  //
   B32 ctx_menu_is_ancestor = 0;
   ProfScope("check context menu ancestor")
   {
@@ -2436,276 +2403,284 @@ ui_signal_from_box(UI_Box *box)
     }
   }
   
-  //- rjf: clip against floaters
-  if(mouse_is_over) ProfScope("clip against floaters")
+  //////////////////////////////
+  //- rjf: calculate blacklist rectangles
+  //
+  Rng2F32 blacklist_rect = {0};
+  if(!ctx_menu_is_ancestor && ui_state->ctx_menu_open)
   {
-    if(!ctx_menu_is_ancestor && ui_state->ctx_menu_open != 0 && contains_2f32(ui_state->ctx_menu_root->rect, mouse))
-    {
-      mouse_is_over = 0;
-    }
+    blacklist_rect = ui_state->ctx_menu_root->rect;
   }
   
-  //- rjf: mouse clickability
-  if(box->flags & UI_BoxFlag_MouseClickable && !ui_key_match(ui_key_zero(), box->key)) ProfScope("clickability")
+  //////////////////////////////
+  //- rjf: process events related to this box
+  //
+  B32 view_scrolled = 0;
+  for(OS_Event *evt = ui_state->events->first, *next = 0;
+      evt != 0;
+      evt = next)
   {
-    // rjf: hot management
-    if((ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Min]) &&
-        ui_key_match(ui_key_zero(), ui_state->active_box_key[Side_Max])) &&
-       ui_key_match(ui_key_zero(), ui_state->hot_box_key) &&
-       mouse_is_over)
+    B32 taken = 0;
+    next = evt->next;
+    
+    //- rjf: skip disqualified events
+    if(!os_handle_match(evt->window, ui_state->window)) {continue;}
+    
+    //- rjf: unpack event
+    Vec2F32 evt_mouse = evt->pos;
+    B32 evt_mouse_in_bounds = !contains_2f32(blacklist_rect, evt_mouse) && contains_2f32(rect, evt_mouse);
+    UI_MouseButtonKind evt_mouse_button_kind = (evt->key == OS_Key_LeftMouseButton   ? UI_MouseButtonKind_Left :
+                                                evt->key == OS_Key_MiddleMouseButton ? UI_MouseButtonKind_Middle :
+                                                evt->key == OS_Key_RightMouseButton  ? UI_MouseButtonKind_Right :
+                                                UI_MouseButtonKind_Left);
+    B32 evt_key_is_mouse = (evt->key == OS_Key_LeftMouseButton ||
+                            evt->key == OS_Key_MiddleMouseButton ||
+                            evt->key == OS_Key_RightMouseButton);
+    sig.event_flags |= evt->flags;
+    
+    //- rjf: mouse presses in box -> set hot/active; mark signal accordingly
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       evt->kind == OS_EventKind_Press &&
+       evt_mouse_in_bounds &&
+       evt_key_is_mouse)
     {
       ui_state->hot_box_key = box->key;
+      ui_state->active_box_key[evt_mouse_button_kind] = box->key;
+      sig.f |= (UI_SignalFlag_LeftPressed<<evt_mouse_button_kind);
+      ui_state->drag_start_mouse = evt->pos;
+      if(ui_key_match(box->key, ui_state->last_press_key[evt_mouse_button_kind]) &&
+         evt->timestamp_us-ui_state->last_press_timestamp_us[evt_mouse_button_kind] <= 1000000*os_double_click_time())
+      {
+        sig.f |= (UI_SignalFlag_LeftDoubleClicked<<evt_mouse_button_kind);
+      }
+      ui_state->last_press_key[evt_mouse_button_kind] = box->key;
+      ui_state->last_press_timestamp_us[evt_mouse_button_kind] = evt->timestamp_us;
+      taken = 1;
     }
-    else if(ui_key_match(ui_state->hot_box_key, box->key) &&
-            !mouse_is_over &&
-            !ui_key_match(ui_state->active_box_key[Side_Min], box->key) &&
-            !ui_key_match(ui_state->active_box_key[Side_Max], box->key))
+    
+    //- rjf: mouse releases in active box -> unset active; mark signal accordingly
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       evt->kind == OS_EventKind_Release &&
+       ui_key_match(ui_state->active_box_key[evt_mouse_button_kind], box->key) &&
+       evt_mouse_in_bounds &&
+       evt_key_is_mouse)
+    {
+      ui_state->active_box_key[evt_mouse_button_kind] = ui_key_zero();
+      sig.f |= (UI_SignalFlag_LeftReleased<<evt_mouse_button_kind);
+      sig.f |= (UI_SignalFlag_LeftClicked<<evt_mouse_button_kind);
+      taken = 1;
+    }
+    
+    //- rjf: mouse releases outside active box -> unset hot/active
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       evt->kind == OS_EventKind_Release &&
+       ui_key_match(ui_state->active_box_key[evt_mouse_button_kind], box->key) &&
+       !evt_mouse_in_bounds &&
+       evt_key_is_mouse)
     {
       ui_state->hot_box_key = ui_key_zero();
+      ui_state->active_box_key[evt_mouse_button_kind] = ui_key_zero();
+      sig.f |= (UI_SignalFlag_LeftReleased<<evt_mouse_button_kind);
+      taken = 1;
     }
     
-    // rjf: active management (left click)
-    if(!disabled &&
-       ui_key_match(ui_state->hot_box_key, box->key) &&
-       ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) &&
-       left_press != 0)
+    //- rjf: focus is hot & keyboard click -> mark signal
+    if(box->flags & UI_BoxFlag_KeyboardClickable &&
+       is_focus_hot &&
+       evt->kind == OS_EventKind_Press &&
+       evt->key == OS_Key_Return)
     {
-      os_eat_event(ui_state->events, left_press);
-      result.pressed = 1;
-      ui_state->active_box_key[Side_Min] = box->key;
-    }
-    else if(!disabled &&
-            ui_key_match(ui_state->active_box_key[Side_Min], box->key) &&
-            left_release != 0)
-    {
-      os_eat_event(ui_state->events, left_release);
-      result.released = 1;
-      result.clicked = mouse_is_over;
-      ui_state->hot_box_key = mouse_is_over ? box->key : ui_key_zero();
-      ui_state->active_box_key[Side_Min] = ui_key_zero();
+      sig.f |= UI_SignalFlag_KeyboardPressed;
+      taken = 1;
     }
     
-    // rjf: active management (right click)
-    if(!disabled &&
-       ui_key_match(ui_state->hot_box_key, box->key) &&
-       ui_key_match(ui_state->active_box_key[Side_Max], ui_key_zero()) &&
-       right_press != 0)
+    //- rjf: scrolling
+    if(box->flags & UI_BoxFlag_Scroll &&
+       evt->kind == OS_EventKind_Scroll &&
+       evt->flags != OS_EventFlag_Ctrl &&
+       evt_mouse_in_bounds)
     {
-      os_eat_event(ui_state->events, right_press);
-      // NOTE(rjf): Add this in if it ever needs to exist:
-      // result.right_pressed = 1;
-      ui_state->active_box_key[Side_Max] = box->key;
-    }
-    else if(!disabled &&
-            ui_key_match(ui_state->active_box_key[Side_Max], box->key) &&
-            right_release != 0)
-    {
-      os_eat_event(ui_state->events, right_release);
-      // NOTE(rjf): Add this in if it ever needs to exist:
-      // result.right_released = 1;
-      result.right_clicked = mouse_is_over;
-      ui_state->active_box_key[Side_Max] = ui_key_zero();
-    }
-    
-    // rjf: dragging
-    if(ui_key_match(ui_state->active_box_key[Side_Min], box->key))
-    {
-      result.dragging = 1;
-      if(result.pressed)
+      Vec2F32 delta = evt->delta;
+      if(evt->flags & OS_EventFlag_Shift)
       {
-        ui_state->drag_start_mouse = mouse;
+        Swap(F32, delta.x, delta.y);
       }
+      sig.scroll.x += (S16)(delta.x/30.f);
+      sig.scroll.y += (S16)(delta.y/30.f);
+      taken = 1;
     }
-  }
-  
-  //- rjf: plain scrolling
-  if(box->flags & UI_BoxFlag_Scroll)
-  {
-    OS_EventList *events = ui_events();
-    for(OS_Event *event = events->first, *next = 0; event != 0; event = next)
+    
+    //- rjf: view scrolling
+    if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
+       evt->kind == OS_EventKind_Scroll &&
+       evt->flags != OS_EventFlag_Ctrl &&
+       evt_mouse_in_bounds)
     {
-      next = event->next;
-      if(os_handle_match(event->window, ui_state->window) && event->flags != OS_EventFlag_Ctrl)
+      Vec2F32 delta = evt->delta;
+      if(evt->flags & OS_EventFlag_Shift)
       {
-        switch(event->kind)
+        Swap(F32, delta.x, delta.y);
+      }
+      if(!(box->flags & UI_BoxFlag_ViewScrollX))
+      {
+        if(delta.y == 0)
         {
-          default:break;
-          case OS_EventKind_Scroll:
-          if(mouse_is_over)
-          {
-            Vec2F32 delta = event->delta;
-            if(event->flags & OS_EventFlag_Shift)
-            {
-              Swap(F32, delta.x, delta.y);
-            }
-            os_eat_event(events, event);
-            result.scroll.x += (S16)(delta.x/30.f);
-            result.scroll.y += (S16)(delta.y/30.f);
-          }break;
+          delta.y = delta.x;
         }
+        delta.x = 0;
       }
-    }
-  }
-  
-  //- rjf: view scrolling
-  if(box->first_touched_build_index != box->last_touched_build_index && box->flags & UI_BoxFlag_ViewScroll)
-  {
-    OS_EventList *events = ui_events();
-    for(OS_Event *event = events->first, *next = 0; event != 0; event = next)
-    {
-      next = event->next;
-      if(os_handle_match(event->window, ui_state->window) && event->flags != OS_EventFlag_Ctrl)
+      if(!(box->flags & UI_BoxFlag_ViewScrollY))
       {
-        switch(event->kind)
+        if(delta.x == 0)
         {
-          default:break;
-          case OS_EventKind_Scroll:
-          if(mouse_is_over)
-          {
-            Vec2F32 delta = event->delta;
-            if(event->flags & OS_EventFlag_Shift)
-            {
-              Swap(F32, delta.x, delta.y);
-            }
-            if(!(box->flags & UI_BoxFlag_ViewScrollX))
-            {
-              delta.x = 0;
-            }
-            if(!(box->flags & UI_BoxFlag_ViewScrollY))
-            {
-              delta.y = 0;
-            }
-            os_eat_event(events, event);
-            box->view_off_target.x += delta.x;
-            box->view_off_target.y += delta.y;
-          }break;
+          delta.x = delta.y;
         }
+        delta.y = 0;
       }
+      os_eat_event(ui_state->events, evt);
+      box->view_off_target.x += delta.x;
+      box->view_off_target.y += delta.y;
+      view_scrolled = 1;
+      taken = 1;
     }
-    if(box->flags & UI_BoxFlag_ViewClamp)
+    
+    //- rjf: taken -> eat event
+    if(taken)
     {
-      Vec2F32 max_view_off_target =
-      {
-        ClampBot(0, box->view_bounds.x - box->fixed_size.x),
-        ClampBot(0, box->view_bounds.y - box->fixed_size.y),
-      };
-      if(box->flags & UI_BoxFlag_ViewClampX) { box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x); }
-      if(box->flags & UI_BoxFlag_ViewClampY) { box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y); }
+      os_eat_event(ui_state->events, evt);
     }
   }
   
-  //- rjf: focus + clicks
-  B32 keyboard_click = 0;
-  if(!disabled && is_focused && box->flags & UI_BoxFlag_KeyboardClickable)
+  //////////////////////////////
+  //- rjf: process nav actions related to this box
+  //
   {
-    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return) != 0)
-      // TODO(rjf): need to handle case where this would conflict with typing.
-      // if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return) != 0 ||
-      // os_key_press(ui_events(), ui_window(), 0, OS_Key_Space) != 0)
-    {
-      keyboard_click = 1;
-      result.clicked = 1;
-      result.pressed = 1;
-      result.keyboard_clicked = 1;
-    }
-  }
-  
-  //- rjf: focus + ctrl+clicks
-  if(!disabled && is_focused && box->flags & UI_BoxFlag_KeyboardClickable)
-  {
-    if(os_key_press(ui_events(), ui_window(), OS_EventFlag_Shift, OS_Key_Return))
-    {
-      result.right_clicked = 1;
-    }
-  }
-  
-  //- rjf: focus & ctrl+c
-  if(is_focused && box->flags & UI_BoxFlag_KeyboardClickable)
-  {
-    for(UI_NavActionNode *n = ui_nav_actions()->first, *next = 0; n != 0; n = next)
+    for(UI_NavActionNode *n = ui_state->nav_actions->first, *next = 0;
+        n != 0;
+        n = next)
     {
       next = n->next;
-      if(n->v.flags & UI_NavActionFlag_Copy)
+      UI_NavAction *action = &n->v;
+      B32 taken = 0;
+      if(is_focus_hot && box->flags & UI_BoxFlag_KeyboardClickable && action->flags & UI_NavActionFlag_Copy)
       {
         ui_state->clipboard_copy_key = box->key;
+        taken = 1;
+      }
+      if(box->flags & UI_BoxFlag_Clickable && box->fastpath_codepoint != 0)
+      {
+        B32 ancestor_is_focused = 0;
+        for(UI_Box *parent = box->parent; !ui_box_is_nil(parent); parent = parent->parent)
+        {
+          if(parent->flags & UI_BoxFlag_FocusActive)
+          {
+            ancestor_is_focused = 1;
+            if(parent->flags & UI_BoxFlag_FocusActiveDisabled ||
+               !ui_key_match(parent->default_nav_focus_active_key, ui_key_zero()))
+            {
+              ancestor_is_focused = 0;
+              break;
+            }
+          }
+        }
+        if(ancestor_is_focused && action->insertion.size != 0)
+        {
+          Temp scratch = scratch_begin(0, 0);
+          String32 insertion32 = str32_from_8(scratch.arena, action->insertion);
+          if(insertion32.size == 1 && insertion32.str[0] == box->fastpath_codepoint)
+          {
+            taken = 1;
+            sig.f |= UI_SignalFlag_Clicked|UI_SignalFlag_Pressed;
+          }
+          scratch_end(scratch);
+        }
+      }
+      if(taken)
+      {
         ui_nav_eat_action_node(ui_nav_actions(), n);
       }
     }
   }
   
-  //- rjf: focused ancestors and fastpath codepoint -> click
-  if(box->flags & UI_BoxFlag_Clickable && box->fastpath_codepoint != 0)
+  //////////////////////////////
+  //- rjf: clamp view scrolling
+  //
+  if(view_scrolled && box->flags & UI_BoxFlag_ViewClamp)
   {
-    B32 is_focused = 0;
-    for(UI_Box *parent = box->parent; !ui_box_is_nil(parent); parent = parent->parent)
+    Vec2F32 max_view_off_target =
     {
-      if(parent->flags & UI_BoxFlag_FocusActive)
-      {
-        is_focused = 1;
-        if(parent->flags & UI_BoxFlag_FocusActiveDisabled ||
-           !ui_key_match(parent->default_nav_focus_active_key, ui_key_zero()))
-        {
-          is_focused = 0;
-          break;
-        }
-      }
-    }
-    if(is_focused)
+      ClampBot(0, box->view_bounds.x - box->fixed_size.x),
+      ClampBot(0, box->view_bounds.y - box->fixed_size.y),
+    };
+    if(box->flags & UI_BoxFlag_ViewClampX) { box->view_off_target.x = Clamp(0, box->view_off_target.x, max_view_off_target.x); }
+    if(box->flags & UI_BoxFlag_ViewClampY) { box->view_off_target.y = Clamp(0, box->view_off_target.y, max_view_off_target.y); }
+  }
+  
+  //////////////////////////////
+  //- rjf: active -> dragging
+  //
+  for(EachEnumVal(UI_MouseButtonKind, k))
+  {
+    if(ui_key_match(ui_state->active_box_key[k], box->key) ||
+       sig.f & (UI_SignalFlag_LeftPressed<<k))
     {
-      Temp scratch = scratch_begin(0, 0);
-      B32 clicked = 0;
-      for(UI_NavActionNode *n = ui_nav_actions()->first; n != 0; n = n->next)
-      {
-        UI_NavAction *action = &n->v;
-        if(action->insertion.size != 0)
-        {
-          String32 insertion32 = str32_from_8(scratch.arena, action->insertion);
-          if(insertion32.size == 1 && insertion32.str[0] == box->fastpath_codepoint)
-          {
-            clicked = 1;
-            ui_nav_eat_action_node(ui_nav_actions(), n);
-            break;
-          }
-        }
-      }
-      if(clicked)
-      {
-        keyboard_click = 1;
-        result.clicked = 1;
-        result.pressed = 1;
-        result.keyboard_clicked = 1;
-      }
-      scratch_end(scratch);
+      sig.f |= (UI_SignalFlag_LeftDragging<<k);
     }
   }
   
-  //- rjf: double-clicks
-  if(!keyboard_click && result.pressed)
+  //////////////////////////////
+  //- rjf: mouse is over this box's rect -> always mark mouse-over
+  //
   {
-    if(ui_key_match(ui_state->last_click_key[Side_Min], box->key) &&
-       ui_state->time_since_last_click[Side_Min] < os_double_click_time())
+    if(contains_2f32(rect, ui_state->mouse) &&
+       !contains_2f32(blacklist_rect, ui_state->mouse))
     {
-      result.double_clicked = 1;
+      sig.f |= UI_SignalFlag_MouseOver;
     }
-    ui_state->time_since_last_click[Side_Min] = 0;
-    ui_state->last_click_key[Side_Min] = box->key;
   }
   
+  //////////////////////////////
+  //- rjf: mouse is over this box's rect, no other hot key? -> set hot key, mark hovering
+  //
+  {
+    if(box->flags & UI_BoxFlag_MouseClickable &&
+       contains_2f32(rect, ui_state->mouse) &&
+       !contains_2f32(blacklist_rect, ui_state->mouse) &&
+       (ui_key_match(ui_state->hot_box_key, ui_key_zero()) || ui_key_match(ui_state->hot_box_key, box->key)) &&
+       (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], box->key)) &&
+       (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Middle], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Middle], box->key)) &&
+       (ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Right], ui_key_zero()) || ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Right], box->key)))
+    {
+      ui_state->hot_box_key = box->key;
+      sig.f |= UI_SignalFlag_Hovering;
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: clicking on something outside the context menu kills the context menu
-  if(!ctx_menu_is_ancestor && result.pressed)
+  //
+  if(!ctx_menu_is_ancestor && sig.f & (UI_SignalFlag_LeftPressed|UI_SignalFlag_RightPressed|UI_SignalFlag_MiddlePressed))
   {
     ui_ctx_menu_close();
   }
   
-  //- rjf: set hovering status
-  result.hovering = mouse_is_over && ((ui_key_match(ui_state->hot_box_key, ui_key_zero()) ||
-                                       ui_key_match(ui_state->hot_box_key, box->key)) &&
-                                      (ui_key_match(ui_state->active_box_key[Side_Min], ui_key_zero()) ||
-                                       ui_key_match(ui_state->active_box_key[Side_Min], box->key)));
-  result.mouse_over = mouse_is_over;
+  //////////////////////////////
+  //- rjf: get default nav ancestor
+  //
+  UI_Box *default_nav_parent = &ui_g_nil_box;
+  for(UI_Box *p = ui_top_parent(); !ui_box_is_nil(p); p = p->parent)
+  {
+    if(p->flags & UI_BoxFlag_DefaultFocusNav)
+    {
+      default_nav_parent = p;
+      break;
+    }
+  }
   
+  //////////////////////////////
   //- rjf: clicking in default nav -> set navigation state to this box
-  if(box->flags & UI_BoxFlag_ClickToFocus && result.pressed && !ui_box_is_nil(default_nav_parent))
+  //
+  if(box->flags & UI_BoxFlag_ClickToFocus && sig.f&UI_SignalFlag_Pressed && !ui_box_is_nil(default_nav_parent))
   {
     default_nav_parent->default_nav_focus_next_hot_key = box->key;
     if(!ui_key_match(default_nav_parent->default_nav_focus_active_key, box->key))
@@ -2714,15 +2689,9 @@ ui_signal_from_box(UI_Box *box)
     }
   }
   
-  //- rjf: focus & external commit events -> commit
-  if(is_focused && ui_state->external_focus_commit)
-  {
-    ui_state->external_focus_commit = 0;
-    result.commit = 1;
-  }
   
   ProfEnd();
-  return result;
+  return sig;
 }
 
 ////////////////////////////////

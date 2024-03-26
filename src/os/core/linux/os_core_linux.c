@@ -788,8 +788,8 @@ lnx_thread_base(void *ptr){
   
   TCTX tctx_;
   tctx_init_and_equip(&tctx_);
-  
   func(thread_ptr);
+  tctx_release();
   
   // remove my bit
   U32 result = __sync_fetch_and_and(&entity->reference_mask, ~0x2);
@@ -813,7 +813,7 @@ lnx_safe_call_sig_handler(int){
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
 internal void
-os_init(int argc, char **argv)
+os_init(void)
 {
   // NOTE(allen): Initialize linux layer mutex
   {
@@ -984,7 +984,7 @@ os_logical_core_count(void)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Process Info (Implemented Per-OS)
+//~ rjf: @os_hooks Process & Thread Info (Implemented Per-OS)
 
 internal String8List
 os_get_command_line_arguments(void)

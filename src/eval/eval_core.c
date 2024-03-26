@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/eval.meta.c"
+
+////////////////////////////////
 //~ rjf: Basic Functions
 
 internal U64
