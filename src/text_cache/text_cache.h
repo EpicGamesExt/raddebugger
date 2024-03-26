@@ -32,15 +32,6 @@ typedef enum TXT_TokenKind
 }
 TXT_TokenKind;
 
-typedef enum TXT_LangKind
-{
-  TXT_LangKind_Null,
-  TXT_LangKind_C,
-  TXT_LangKind_CPlusPlus,
-  TXT_LangKind_COUNT
-}
-TXT_LangKind;
-
 typedef struct TXT_Token TXT_Token;
 struct TXT_Token
 {
@@ -104,6 +95,19 @@ struct TXT_TextInfo
   TXT_LineEndKind line_end_kind;
   TXT_TokenArray tokens;
 };
+
+////////////////////////////////
+//~ rjf: Language Kind Types
+
+typedef enum TXT_LangKind
+{
+  TXT_LangKind_Null,
+  TXT_LangKind_C,
+  TXT_LangKind_CPlusPlus,
+  TXT_LangKind_Odin,
+  TXT_LangKind_COUNT
+}
+TXT_LangKind;
 
 typedef TXT_TokenArray TXT_LangLexFunctionType(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
@@ -234,6 +238,7 @@ global TXT_Shared *txt_shared = 0;
 //~ rjf: Basic Helpers
 
 internal TXT_LangKind txt_lang_kind_from_extension(String8 extension);
+internal TXT_LangLexFunctionType *txt_lex_function_from_lang_kind(TXT_LangKind kind);
 
 ////////////////////////////////
 //~ rjf: Token Type Functions
@@ -247,6 +252,7 @@ internal TXT_TokenArray txt_token_array_from_list(Arena *arena, TXT_TokenList *l
 //~ rjf: Lexing Functions
 
 internal TXT_TokenArray txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, String8 string);
+internal TXT_TokenArray txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization

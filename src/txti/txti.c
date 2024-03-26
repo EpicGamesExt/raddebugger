@@ -47,31 +47,6 @@ txti_hash_from_string(String8 string)
   return result;
 }
 
-internal TXTI_LangKind
-txti_lang_kind_from_extension(String8 extension)
-{
-  TXTI_LangKind kind = TXTI_LangKind_Null;
-  if(str8_match(extension, str8_lit("c"), 0) ||
-     str8_match(extension, str8_lit("h"), 0))
-  {
-    kind = TXTI_LangKind_C;
-  }
-  else if(str8_match(extension, str8_lit("cpp"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("cxx"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("cc"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("c++"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("C"), 0) ||
-          str8_match(extension, str8_lit("hpp"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("hxx"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("hh"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("h++"), StringMatchFlag_CaseInsensitive) ||
-          str8_match(extension, str8_lit("H"), 0))
-  {
-    kind = TXTI_LangKind_CPlusPlus;
-  }
-  return kind;
-}
-
 ////////////////////////////////
 //~ rjf: Message Type Functions
 
@@ -628,14 +603,14 @@ txti_mut_thread_entry_point(void *p)
       //- rjf: load file if we need it
       B32 load_valid = 0;
       String8 file_contents = {0};
-      TXTI_LangKind lang_kind = TXTI_LangKind_Null;
+      TXT_LangKind lang_kind = TXT_LangKind_Null;
       U64 timestamp = 0;
       if(msg->kind == TXTI_MsgKind_Reload) ProfScope("reload file")
       {
         FileProperties pre_load_props = os_properties_from_file_path(msg->string);
         OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, msg->string);
         file_contents = os_string_from_file_range(scratch.arena, file, r1u64(0, pre_load_props.size));
-        lang_kind = txti_lang_kind_from_extension(str8_skip_last_dot(msg->string));
+        lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(msg->string));
         os_file_close(file);
         FileProperties post_load_props = os_properties_from_file_path(msg->string);
         load_valid = (post_load_props.modified == pre_load_props.modified);
@@ -646,16 +621,7 @@ txti_mut_thread_entry_point(void *p)
       }
       
       //- rjf: nonzero lang kind -> unpack lang info
-      TXTI_LangLexFunctionType *lex_function = 0;
-      switch(lang_kind)
-      {
-        default:{}break;
-        case TXTI_LangKind_C:
-        case TXTI_LangKind_CPlusPlus:
-        {
-          lex_function = txt_token_array_from_string__c_cpp;
-        }break;
-      }
+      TXT_LangLexFunctionType *lex_function = txt_lex_function_from_lang_kind(lang_kind);
       
       //- rjf: detect line end kind
       TXT_LineEndKind line_end_kind = TXT_LineEndKind_Null;
@@ -739,7 +705,7 @@ txti_mut_thread_entry_point(void *p)
                 {
                   entity->line_end_kind = line_end_kind;
                 }
-                if(lang_kind != TXTI_LangKind_Null)
+                if(lang_kind != TXT_LangKind_Null)
                 {
                   entity->lang_kind = lang_kind;
                 }

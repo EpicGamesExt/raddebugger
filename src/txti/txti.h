@@ -57,20 +57,6 @@ struct TXTI_Handle
 };
 
 ////////////////////////////////
-//~ rjf: Language Kinds
-
-typedef enum TXTI_LangKind
-{
-  TXTI_LangKind_Null,
-  TXTI_LangKind_C,
-  TXTI_LangKind_CPlusPlus,
-  TXTI_LangKind_COUNT
-}
-TXTI_LangKind;
-
-typedef TXT_TokenArray TXTI_LangLexFunctionType(Arena *arena, U64 *bytes_processed_counter, String8 string);
-
-////////////////////////////////
 //~ rjf: Buffer Entity Types
 
 #define TXTI_ENTITY_BUFFER_COUNT 2
@@ -106,7 +92,7 @@ struct TXTI_Entity
   
   // rjf: metadata
   TXT_LineEndKind line_end_kind;
-  TXTI_LangKind lang_kind;
+  TXT_LangKind lang_kind;
   U64 bytes_processed;
   U64 bytes_to_process;
   U64 working_count;
@@ -157,7 +143,7 @@ struct TXTI_BufferInfo
   String8 path;
   U64 timestamp;
   TXT_LineEndKind line_end_kind;
-  TXTI_LangKind lang_kind;
+  TXT_LangKind lang_kind;
   U64 total_line_count;
   U64 last_line_size;
   U64 max_line_size;
@@ -258,7 +244,6 @@ internal void txti_init(void);
 //~ rjf: Basic Helpers
 
 internal U64 txti_hash_from_string(String8 string);
-internal TXTI_LangKind txti_lang_kind_from_extension(String8 extension);
 
 ////////////////////////////////
 //~ rjf: Message Type Functions
