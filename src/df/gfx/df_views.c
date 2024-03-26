@@ -5024,7 +5024,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
+  DBGI_Scope *dbgi_scope = dbgi_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
   DF_CodeViewState *tv = df_view_user_state(view, DF_CodeViewState);
   
   //////////////////////////////
@@ -5050,10 +5051,10 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   U64 unwind_count = ctrl_ctx.unwind_count;
   U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, rip_vaddr);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(dbgi_scope, process, rip_vaddr);
   
   //////////////////////////////
-  //- rjf: unpack entity info
+  //- rjf: unpack file/text entity info
   //
   B32 entity_is_missing = !!(entity->flags & DF_EntityFlag_IsMissing && !(entity->flags & DF_EntityFlag_Output));
   TXTI_Handle txti_handle = df_txti_handle_from_entity(entity);
@@ -5467,7 +5468,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       String8 expr = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_rng);
       if(expr.size != 0)
       {
-        DF_Eval eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
+        DF_Eval eval = df_eval_from_string(scratch.arena, dbgi_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
         if(eval.mode != EVAL_EvalMode_NULL)
         {
           df_set_hover_eval(ws, sig.mouse_expr_baseline_pos, ctrl_ctx, entity, sig.mouse_pt, 0, expr);
@@ -5788,7 +5789,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       String8 full_path = df_full_path_from_entity(scratch.arena, entity);
       TXTI_Handle handle = txti_handle_from_path(full_path);
       TXTI_BufferInfo info = txti_buffer_info_from_handle(scratch.arena, handle);
-      DBGI_Parse *parse = df_dbgi_parse_from_binary_file(scope, binary);
+      DBGI_Parse *parse = df_dbgi_parse_from_binary_file(dbgi_scope, binary);
       if(parse->exe_props.modified < info.timestamp)
       {
         file_is_out_of_date = 1;
@@ -5851,7 +5852,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     }
   }
   
-  dbgi_scope_close(scope);
+  txt_scope_close(txt_scope);
+  dbgi_scope_close(dbgi_scope);
   scratch_end(scratch);
   ProfEnd();
 }

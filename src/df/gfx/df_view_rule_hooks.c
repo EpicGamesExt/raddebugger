@@ -877,6 +877,17 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   U64 expected_size = topology_info.width*topology_info.height*r_tex2d_format_bytes_per_pixel_table[topology_info.fmt];
   Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr+expected_size);
   
+  //- rjf: obtain key for this data range
+  U128 texture_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
+  // HACK(rjf): we should not need to explicitly inform the process memory cache layer here -
+  // want a joined "get me the key & load it" operation here
+  ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0, 0, 0);
+  
+  //- rjf: hash & topology -> texture
+  TEX_Topology topology = tex_topology_make(v2s32((S32)topology_info.width, (S32)topology_info.height), topology_info.fmt);
+  R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology);
+  
+#if 0
   //- rjf: unique identifying info about this address -> unique key
   U128 texture_key = {0};
   {
@@ -892,10 +903,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   
   //- rjf: address range -> hash
   U128 hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0, 0, 0);
-  
-  //- rjf: hash & topology -> texture
-  TEX_Topology topology = tex_topology_make(v2s32((S32)topology_info.width, (S32)topology_info.height), topology_info.fmt);
   R_Handle texture = tex_texture_from_key_hash_topology(tex_scope, texture_key, hash, topology);
+#endif
   
   //- rjf: build preview
   F32 rate = 1 - pow_f32(2, (-15.f * df_dt()));
@@ -941,6 +950,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
       {
         if(dim.y > (F32)topology_info.height)
         {
+          U128 hash = hs_hash_from_key(texture_key, 0);
           String8 data = hs_data_from_hash(hs_scope, hash);
           U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[topology.fmt];
           U64 mouse_pixel_off = mouse_bitmap_px_off.y*topology_info.width + mouse_bitmap_px_off.x;

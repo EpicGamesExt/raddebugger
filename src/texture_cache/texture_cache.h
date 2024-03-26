@@ -17,21 +17,6 @@ struct TEX_Topology
 ////////////////////////////////
 //~ rjf: Cache Types
 
-typedef struct TEX_KeyFallbackNode TEX_KeyFallbackNode;
-struct TEX_KeyFallbackNode
-{
-  TEX_KeyFallbackNode *next;
-  U128 key;
-  U128 hash;
-};
-
-typedef struct TEX_KeyFallbackSlot TEX_KeyFallbackSlot;
-struct TEX_KeyFallbackSlot
-{
-  TEX_KeyFallbackNode *first;
-  TEX_KeyFallbackNode *last;
-};
-
 typedef struct TEX_Node TEX_Node;
 struct TEX_Node
 {
@@ -109,12 +94,6 @@ struct TEX_Shared
   TEX_Stripe *stripes;
   TEX_Node **stripes_free_nodes;
   
-  // rjf: fallback cache
-  U64 fallback_slots_count;
-  U64 fallback_stripes_count;
-  TEX_KeyFallbackSlot *fallback_slots;
-  TEX_Stripe *fallback_stripes;
-  
   // rjf: user -> xfer thread
   U64 u2x_ring_size;
   U8 *u2x_ring_base;
@@ -168,13 +147,14 @@ internal void tex_scope_touch_node__stripe_r_guarded(TEX_Scope *scope, TEX_Node 
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal R_Handle tex_texture_from_key_hash_topology(TEX_Scope *scope, U128 key, U128 hash, TEX_Topology topology);
+internal R_Handle tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topology);
+internal R_Handle tex_texture_from_key_topology(TEX_Scope *scope, U128 key, TEX_Topology topology);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads
 
-internal B32 tex_u2x_enqueue_req(U128 key, U128 hash, TEX_Topology top, U64 endt_us);
-internal void tex_u2x_dequeue_req(U128 *key_out, U128 *hash_out, TEX_Topology *top_out);
+internal B32 tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us);
+internal void tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out);
 internal void tex_xfer_thread__entry_point(void *p);
 
 ////////////////////////////////
