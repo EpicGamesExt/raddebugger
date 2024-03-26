@@ -5503,6 +5503,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   {
     if(text_info_is_ready && visible_line_num_range.max >= visible_line_num_range.min && ui_is_focus_active())
     {
+      // TODO(rjf): @txt
       //snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(num_possible_visible_lines, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
     }
   }
@@ -5527,8 +5528,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(!ui_dragging(sig.base) && sig.mouse_expr_rng.min.line != 0 && sig.base.event_flags == 0)
     {
       TxtRng expr_rng = sig.mouse_expr_rng;
-      // TODO(rjf): @txt
-      String8 expr = {0};//txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_rng);
+      String8 expr = txt_string_from_info_data_txt_rng(&text_info, data, expr_rng);
       if(expr.size != 0)
       {
         DF_Eval eval = df_eval_from_string(scratch.arena, dbgi_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
@@ -5558,8 +5558,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       ui_kill_action();
       DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.entity = df_handle_from_entity(entity);
-      // TODO(rjf): @txt
-      //params.string = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, txti_expr_range_from_handle_pt(txti_handle, sig.mouse_pt));
+      params.string = txt_string_from_info_data_txt_rng(&text_info, data, sig.mouse_expr_rng);
       df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
     }
@@ -5631,8 +5630,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       df_entity_equip_color_rgba(flash_range, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
       df_entity_equip_txt_pt(flash_range, sig.copy_range.min);
       df_entity_equip_txt_pt_alt(flash_range, sig.copy_range.max);
-      // TODO(rjf): @txt
-      String8 text = {0};//txti_string_from_handle_txt_rng(temp.arena, txti_handle, sig.copy_range);
+      String8 text = txt_string_from_info_data_txt_rng(&text_info, data, sig.copy_range);
       os_set_clipboard_text(text);
       temp_end(temp);
     }

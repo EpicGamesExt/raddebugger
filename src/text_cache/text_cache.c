@@ -1026,6 +1026,14 @@ txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String8 data, TxtPt pt)
   return result;
 }
 
+internal String8
+txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TxtRng rng)
+{
+  Rng1U64 rng_off = r1u64(txt_off_from_info_pt(info, rng.min), txt_off_from_info_pt(info, rng.max));
+  String8 result = str8_substr(data, rng_off);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Transfer Threads
 
