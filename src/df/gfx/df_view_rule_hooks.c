@@ -1112,39 +1112,13 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   
-  //- rjf: produce unique keys for index buffer
-  U128 index_buffer_key = {0};
-  {
-    U64 data[] =
-    {
-      (U64)process->ctrl_machine_id,
-      (U64)process->ctrl_handle.u64[0],
-      index_buffer_vaddr_range.min,
-      index_buffer_vaddr_range.max,
-    };
-    index_buffer_key = hs_hash_from_data(str8((U8 *)data, sizeof(data)));
-  }
-  
-  //- rjf: produce unique keys for vertex buffer
-  U128 vertex_buffer_key = {0};
-  {
-    U64 data[] =
-    {
-      (U64)process->ctrl_machine_id,
-      (U64)process->ctrl_handle.u64[0],
-      vertex_buffer_vaddr_range.min,
-      vertex_buffer_vaddr_range.max,
-    };
-    vertex_buffer_key = hs_hash_from_data(str8((U8 *)data, sizeof(data)));
-  }
-  
-  //- rjf: address range -> hash
-  U128 index_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, index_buffer_vaddr_range, 0, 0, 0);
-  U128 vertex_buffer_hash = ctrl_stored_hash_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vertex_buffer_vaddr_range, 0, 0, 0);
+  //- rjf: obtain keys for index buffer & vertex buffer memory
+  U128 index_buffer_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, index_buffer_vaddr_range, 0);
+  U128 vertex_buffer_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vertex_buffer_vaddr_range, 0);
   
   //- rjf: get gpu buffers
-  R_Handle index_buffer = geo_buffer_from_key_hash(geo_scope, index_buffer_key, index_buffer_hash);
-  R_Handle vertex_buffer = geo_buffer_from_key_hash(geo_scope, vertex_buffer_key, vertex_buffer_hash);
+  R_Handle index_buffer = geo_buffer_from_key(geo_scope, index_buffer_key);
+  R_Handle vertex_buffer = geo_buffer_from_key(geo_scope, vertex_buffer_key);
   
   //- rjf: build preview
   F32 rate = 1 - pow_f32(2, (-15.f * df_dt()));
