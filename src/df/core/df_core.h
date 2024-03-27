@@ -1563,9 +1563,6 @@ internal DF_Entity *df_log_from_entity(DF_Entity *entity);
 ////////////////////////////////
 //~ rjf: Target Controls
 
-//- rjf: control user breakpoint gathering
-internal CTRL_UserBreakpointList df_push_ctrl_user_breakpoints(Arena *arena);
-
 //- rjf: control message dispatching
 internal void df_push_ctrl_msg(CTRL_Msg *msg);
 

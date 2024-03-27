@@ -3757,71 +3757,6 @@ df_log_from_entity(DF_Entity *entity)
 ////////////////////////////////
 //~ rjf: Target Controls
 
-//- rjf: control user breakpoint gathering
-
-internal CTRL_UserBreakpointList
-df_push_ctrl_user_breakpoints(Arena *arena)
-{
-  CTRL_UserBreakpointList user_bps_out = {0};
-  DF_EntityList user_bp_entities = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
-  for(DF_EntityNode *user_bp_n = user_bp_entities.first;
-      user_bp_n != 0;
-      user_bp_n = user_bp_n->next)
-  {
-    // rjf: unpack user breakpoint entity
-    DF_Entity *user_bp = user_bp_n->entity;
-    if(user_bp->b32 == 0)
-    {
-      continue;
-    }
-    DF_Entity *file = df_entity_ancestor_from_kind(user_bp, DF_EntityKind_File);
-    DF_Entity *symb = df_entity_child_from_kind(user_bp, DF_EntityKind_EntryPointName);
-    DF_EntityList overrides = df_possible_overrides_from_entity(arena, file);
-    for(DF_EntityNode *override_n = overrides.first; override_n != 0; override_n = override_n->next)
-    {
-      DF_Entity *override = override_n->entity;
-      DF_Entity *condition_child = df_entity_child_from_kind(user_bp, DF_EntityKind_Condition);
-      String8 condition = condition_child->name;
-      
-      // rjf: generate user breakpoint info depending on breakpoint placement
-      CTRL_UserBreakpointKind ctrl_user_bp_kind = CTRL_UserBreakpointKind_FileNameAndLineColNumber;
-      String8 ctrl_user_bp_string = {0};
-      TxtPt ctrl_user_bp_pt = {0};
-      U64 ctrl_user_bp_u64 = 0;
-      {
-        if(user_bp->flags & DF_EntityFlag_HasTextPoint)
-        {
-          ctrl_user_bp_kind = CTRL_UserBreakpointKind_FileNameAndLineColNumber;
-          ctrl_user_bp_string = df_full_path_from_entity(arena, override);
-          ctrl_user_bp_pt = user_bp->text_point;
-        }
-        else if(user_bp->flags & DF_EntityFlag_HasVAddr)
-        {
-          ctrl_user_bp_kind = CTRL_UserBreakpointKind_VirtualAddress;
-          ctrl_user_bp_u64 = user_bp->vaddr;
-        }
-        else if(!df_entity_is_nil(symb))
-        {
-          ctrl_user_bp_kind = CTRL_UserBreakpointKind_SymbolNameAndOffset;
-          ctrl_user_bp_string = symb->name;
-          ctrl_user_bp_u64 = user_bp->u64;
-        }
-      }
-      
-      // rjf: push user breakpoint to list
-      {
-        CTRL_UserBreakpoint ctrl_user_bp = {ctrl_user_bp_kind};
-        ctrl_user_bp.string = ctrl_user_bp_string;
-        ctrl_user_bp.pt = ctrl_user_bp_pt;
-        ctrl_user_bp.u64 = ctrl_user_bp_u64;
-        ctrl_user_bp.condition = condition;
-        ctrl_user_breakpoint_list_push(arena, &user_bps_out, &ctrl_user_bp);
-      }
-    }
-  }
-  return user_bps_out;
-}
-
 //- rjf: control message dispatching
 
 internal void
@@ -3861,7 +3796,61 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_TrapList *run_traps)
     {
       MemoryCopyStruct(&msg.traps, run_traps);
     }
-    msg.user_bps = df_push_ctrl_user_breakpoints(scratch.arena);
+    for(DF_EntityNode *user_bp_n = user_bps.first;
+        user_bp_n != 0;
+        user_bp_n = user_bp_n->next)
+    {
+      // rjf: unpack user breakpoint entity
+      DF_Entity *user_bp = user_bp_n->entity;
+      if(user_bp->b32 == 0)
+      {
+        continue;
+      }
+      DF_Entity *file = df_entity_ancestor_from_kind(user_bp, DF_EntityKind_File);
+      DF_Entity *symb = df_entity_child_from_kind(user_bp, DF_EntityKind_EntryPointName);
+      DF_EntityList overrides = df_possible_overrides_from_entity(scratch.arena, file);
+      for(DF_EntityNode *override_n = overrides.first; override_n != 0; override_n = override_n->next)
+      {
+        DF_Entity *override = override_n->entity;
+        DF_Entity *condition_child = df_entity_child_from_kind(user_bp, DF_EntityKind_Condition);
+        String8 condition = condition_child->name;
+        
+        // rjf: generate user breakpoint info depending on breakpoint placement
+        CTRL_UserBreakpointKind ctrl_user_bp_kind = CTRL_UserBreakpointKind_FileNameAndLineColNumber;
+        String8 ctrl_user_bp_string = {0};
+        TxtPt ctrl_user_bp_pt = {0};
+        U64 ctrl_user_bp_u64 = 0;
+        {
+          if(user_bp->flags & DF_EntityFlag_HasTextPoint)
+          {
+            ctrl_user_bp_kind = CTRL_UserBreakpointKind_FileNameAndLineColNumber;
+            ctrl_user_bp_string = df_full_path_from_entity(scratch.arena, override);
+            ctrl_user_bp_pt = user_bp->text_point;
+          }
+          else if(user_bp->flags & DF_EntityFlag_HasVAddr)
+          {
+            ctrl_user_bp_kind = CTRL_UserBreakpointKind_VirtualAddress;
+            ctrl_user_bp_u64 = user_bp->vaddr;
+          }
+          else if(!df_entity_is_nil(symb))
+          {
+            ctrl_user_bp_kind = CTRL_UserBreakpointKind_SymbolNameAndOffset;
+            ctrl_user_bp_string = symb->name;
+            ctrl_user_bp_u64 = user_bp->u64;
+          }
+        }
+        
+        // rjf: push user breakpoint to list
+        {
+          CTRL_UserBreakpoint ctrl_user_bp = {ctrl_user_bp_kind};
+          ctrl_user_bp.string = ctrl_user_bp_string;
+          ctrl_user_bp.pt = ctrl_user_bp_pt;
+          ctrl_user_bp.u64 = ctrl_user_bp_u64;
+          ctrl_user_bp.condition = condition;
+          ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
+        }
+      }
+    }
     if(df_state->ctrl_solo_stepping_mode && !df_entity_is_nil(run_thread))
     {
       msg.freeze_state_is_frozen = 0;
