@@ -48,6 +48,7 @@ typedef enum CTRL_EntityKind
   CTRL_EntityKind_Process,
   CTRL_EntityKind_Thread,
   CTRL_EntityKind_Module,
+  CTRL_EntityKind_EntryPoint,
   CTRL_EntityKind_COUNT
 }
 CTRL_EntityKind;
@@ -64,6 +65,7 @@ struct CTRL_Entity
   Architecture arch;
   CTRL_MachineID machine_id;
   DMN_Handle handle;
+  U64 id;
   Rng1U64 vaddr_range;
   String8 string;
 };
@@ -617,7 +619,7 @@ internal String8 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 strin
 internal void ctrl_entity_string_release(CTRL_EntityStore *store, String8 string);
 
 //- rjf: entity construction/deletion
-internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle);
+internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle, U64 id);
 internal void ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity);
 
 //- rjf: entity equipment

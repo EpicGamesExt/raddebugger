@@ -469,7 +469,9 @@ ctrl_entity_store_alloc(void)
   store->arena = arena;
   store->hash_slots_count = 1024;
   store->hash_slots = push_array(arena, CTRL_EntityHashSlot, store->hash_slots_count);
-  store->root = &ctrl_entity_nil;
+  CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Architecture_Null, 0, dmn_handle_zero(), 0);
+  CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, architecture_from_context(), CTRL_MachineID_Local, dmn_handle_zero(), 0);
+  (void)local_machine;
   return store;
 }
 
@@ -573,7 +575,7 @@ ctrl_entity_string_release(CTRL_EntityStore *store, String8 string)
 //- rjf: entity construction/deletion
 
 internal CTRL_Entity *
-ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle)
+ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle, U64 id)
 {
   CTRL_Entity *entity = &ctrl_entity_nil;
   {
@@ -597,6 +599,7 @@ ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind 
       entity->arch        = arch;
       entity->machine_id  = machine_id;
       entity->handle      = handle;
+      entity->id          = id;
       entity->parent      = parent;
       entity->next = entity->prev = entity->first = entity->last = &ctrl_entity_nil;
       if(parent != &ctrl_entity_nil)
@@ -734,14 +737,6 @@ ctrl_entity_from_machine_id_handle(CTRL_EntityStore *store, CTRL_MachineID machi
 internal void
 ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
 {
-  //- rjf: construct root-level entities
-  if(store->root == &ctrl_entity_nil)
-  {
-    CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Architecture_Null, 0, dmn_handle_zero());
-    CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, architecture_from_context(), CTRL_MachineID_Local, dmn_handle_zero());
-    (void)local_machine;
-  }
-  
   //- rjf: scan events & construct entities
   for(CTRL_EventNode *n = list->first; n != 0; n = n->next)
   {
@@ -752,19 +747,29 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       case CTRL_EventKind_NewProc:
       {
         CTRL_Entity *machine = ctrl_entity_from_machine_id_handle(store, event->machine_id, dmn_handle_zero());
-        CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->machine_id, event->entity);
+        CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->machine_id, event->entity, (U64)event->entity_id);
       }break;
       case CTRL_EventKind_EndProc:
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
         ctrl_entity_release(store, process);
+        for(CTRL_Entity *entry = store->root->first, *next = &ctrl_entity_nil;
+            entry != &ctrl_entity_nil;
+            entry = next)
+        {
+          next = entry->next;
+          if(entry->kind == CTRL_EntityKind_EntryPoint && entry->id == process->id)
+          {
+            ctrl_entity_release(store, entry);
+          }
+        }
       }break;
       
       //- rjf: threads
       case CTRL_EventKind_NewThread:
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
-        CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->machine_id, event->entity);
+        CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->machine_id, event->entity, (U64)event->entity_id);
       }break;
       case CTRL_EventKind_EndThread:
       {
@@ -781,7 +786,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       case CTRL_EventKind_NewModule:
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
-        CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->arch, event->machine_id, event->entity);
+        CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->arch, event->machine_id, event->entity, event->vaddr_rng.min);
         ctrl_entity_equip_string(store, module, event->string);
         module->vaddr_range = event->vaddr_rng;
       }break;
@@ -2255,6 +2260,7 @@ ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 internal void
 ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
+  //- rjf: launch
   OS_LaunchOptions opts = {0};
   {
     opts.cmd_line    = msg->cmd_line_string_list;
@@ -2263,7 +2269,14 @@ ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     opts.inherit_env = msg->env_inherit;
   }
   U32 id = dmn_ctrl_launch(ctrl_ctx, &opts);
-  (void)id;
+  
+  //- rjf: record (id -> entry points), so that we know custom entry points for this PID
+  for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
+  {
+    String8 string = n->string;
+    CTRL_Entity *entry = ctrl_entity_alloc(ctrl_state->ctrl_thread_entity_store, ctrl_state->ctrl_thread_entity_store->root, CTRL_EntityKind_EntryPoint, Architecture_Null, 0, dmn_handle_zero(), (U64)id);
+    ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, entry, string);
+  }
 }
 
 internal void
@@ -2736,7 +2749,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         RDI_ParsedNameMap map = {0};
         rdi_name_map_parse(rdi, unparsed_map, &map);
         
-        //- rjf: add trap for user-specified entry point, if specified
+        //- rjf: add traps for user-specified entry points on this message, if specified
         B32 entries_found = 0;
         if(!entries_found)
         {
@@ -2759,6 +2772,35 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               entries_found = 1;
               DMN_Trap trap = {process->handle, module_base_vaddr + voff};
               dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+            }
+          }
+        }
+        
+        //- rjf: add traps for PID-correllated entry points
+        if(!entries_found)
+        {
+          for(CTRL_Entity *e = ctrl_state->ctrl_thread_entity_store->root->first; e != &ctrl_entity_nil; e = e->next)
+          {
+            if(e->id == process->id)
+            {
+              U32 procedure_id = 0;
+              {
+                String8 name = e->string;
+                RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
+                U32 id_count = 0;
+                U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+                if(id_count > 0)
+                {
+                  procedure_id = ids[0];
+                }
+              }
+              U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+              if(voff != 0)
+              {
+                entries_found = 1;
+                DMN_Trap trap = {process->handle, module_base_vaddr + voff};
+                dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+              }
             }
           }
         }
