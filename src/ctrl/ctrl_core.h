@@ -530,7 +530,6 @@ struct CTRL_State
   String8List user_entry_points;
   U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   U64 process_counter;
-  B32 disable_stuck_thread_step;
   
   // rjf: user -> memstream ring buffer
   U64 u2ms_ring_size;
