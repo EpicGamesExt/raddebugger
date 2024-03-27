@@ -215,7 +215,7 @@ struct CTRL_UserBreakpointList
 typedef enum CTRL_MsgKind
 {
   CTRL_MsgKind_Null,
-  CTRL_MsgKind_LaunchAndInit,
+  CTRL_MsgKind_Launch,
   CTRL_MsgKind_Attach,
   CTRL_MsgKind_Kill,
   CTRL_MsgKind_Detach,
@@ -229,8 +229,7 @@ CTRL_MsgKind;
 typedef U32 CTRL_RunFlags;
 enum
 {
-  CTRL_RunFlag_Launch           = (1<<0),
-  CTRL_RunFlag_StopOnEntryPoint = (1<<1),
+  CTRL_RunFlag_StopOnEntryPoint = (1<<0),
 };
 
 typedef struct CTRL_Msg CTRL_Msg;
@@ -247,7 +246,7 @@ struct CTRL_Msg
   B32 env_inherit;
   U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   String8 path;
-  String8List strings;
+  String8List entry_points;
   String8List cmd_line_string_list;
   String8List env_string_list;
   CTRL_TrapList traps;
@@ -715,7 +714,7 @@ internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_
 internal B32 ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size);
 
 //- rjf: msg kind implementations
-internal void ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);

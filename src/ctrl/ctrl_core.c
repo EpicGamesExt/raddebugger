@@ -126,7 +126,7 @@ ctrl_msg_deep_copy(Arena *arena, CTRL_Msg *dst, CTRL_Msg *src)
 {
   MemoryCopyStruct(dst, src);
   dst->path                 = push_str8_copy(arena, src->path);
-  dst->strings              = str8_list_copy(arena, &src->strings);
+  dst->entry_points         = str8_list_copy(arena, &src->entry_points);
   dst->cmd_line_string_list = str8_list_copy(arena, &src->cmd_line_string_list);
   dst->env_string_list      = str8_list_copy(arena, &src->env_string_list);
   dst->traps                = ctrl_trap_list_copy(arena, &src->traps);
@@ -179,9 +179,9 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->path.size);
       str8_serial_push_data(scratch.arena, &msgs_srlzed, msg->path.str, msg->path.size);
       
-      // rjf: write general string list
-      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->strings.node_count);
-      for(String8Node *n = msg->strings.first; n != 0; n = n->next)
+      // rjf: write entry point string list
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->entry_points.node_count);
+      for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
       {
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &n->string.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, n->string.str, n->string.size);
@@ -279,16 +279,16 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       msg->path.str = push_array_no_zero(arena, U8, msg->path.size);
       read_off += str8_deserial_read(string, read_off, msg->path.str, msg->path.size, 1);
       
-      // rjf: read general string list
-      U64 string_list_string_count = 0;
-      read_off += str8_deserial_read_struct(string, read_off, &string_list_string_count);
-      for(U64 idx = 0; idx < string_list_string_count; idx += 1)
+      // rjf: read entry point string list
+      U64 entry_point_list_string_count = 0;
+      read_off += str8_deserial_read_struct(string, read_off, &entry_point_list_string_count);
+      for(U64 idx = 0; idx < entry_point_list_string_count; idx += 1)
       {
         String8 str = {0};
         read_off += str8_deserial_read_struct(string, read_off, &str.size);
         str.str = push_array_no_zero(arena, U8, str.size);
         read_off += str8_deserial_read(string, read_off, str.str, str.size, 1);
-        str8_list_push(arena, &msg->strings, str);
+        str8_list_push(arena, &msg->entry_points, str);
       }
       
       // rjf: read command line string list
@@ -469,6 +469,7 @@ ctrl_entity_store_alloc(void)
   store->arena = arena;
   store->hash_slots_count = 1024;
   store->hash_slots = push_array(arena, CTRL_EntityHashSlot, store->hash_slots_count);
+  store->root = &ctrl_entity_nil;
   return store;
 }
 
@@ -734,7 +735,7 @@ internal void
 ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
 {
   //- rjf: construct root-level entities
-  if(!store->root)
+  if(store->root == &ctrl_entity_nil)
   {
     CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Architecture_Null, 0, dmn_handle_zero());
     CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, architecture_from_context(), CTRL_MachineID_Local, dmn_handle_zero());
@@ -1750,7 +1751,7 @@ ctrl_thread__entry_point(void *p)
           case CTRL_MsgKind_COUNT:{}break;
           
           //- rjf: target operations
-          case CTRL_MsgKind_LaunchAndInit:     {ctrl_thread__launch_and_init     (ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_Launch:            {ctrl_thread__launch              (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Attach:            {ctrl_thread__attach              (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Kill:              {ctrl_thread__kill                (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Detach:            {ctrl_thread__detach              (ctrl_ctx, msg);}break;
@@ -1762,7 +1763,7 @@ ctrl_thread__entry_point(void *p)
           {
             arena_clear(ctrl_state->user_entry_point_arena);
             MemoryZeroStruct(&ctrl_state->user_entry_points);
-            for(String8Node *n = msg->strings.first; n != 0; n = n->next)
+            for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
             {
               str8_list_push(ctrl_state->user_entry_point_arena, &ctrl_state->user_entry_points, n->string);
             }
@@ -2252,14 +2253,8 @@ ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 //- rjf: msg kind implementations
 
 internal void
-ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
+ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  
-  //////////////////////////////
-  //- rjf: launch
-  //
   OS_LaunchOptions opts = {0};
   {
     opts.cmd_line    = msg->cmd_line_string_list;
@@ -2268,319 +2263,7 @@ ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     opts.inherit_env = msg->env_inherit;
   }
   U32 id = dmn_ctrl_launch(ctrl_ctx, &opts);
-  
-  //////////////////////////////
-  //- rjf: record start
-  //
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
-    event->kind = CTRL_EventKind_Started;
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  //////////////////////////////
-  //- rjf: run to initialization (entry point)
-  //
-  DMN_Event *stop_event = 0;
-  if(id != 0)
-  {
-    DMN_Handle unfrozen_process[8] = {0};
-    DMN_RunCtrls run_ctrls = {0};
-    run_ctrls.run_entities_are_unfrozen = 1;
-    run_ctrls.run_entities_are_processes = 1;
-    for(B32 done = 0; done == 0;)
-    {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
-      switch(event->kind)
-      {
-        default:{}break;
-        
-        //- rjf: new process -> freeze process
-        case DMN_EventKind_CreateProcess:
-        if(run_ctrls.run_entity_count < ArrayCount(unfrozen_process))
-        {
-          unfrozen_process[run_ctrls.run_entity_count] = event->process;
-          run_ctrls.run_entities = &unfrozen_process[0];
-          run_ctrls.run_entity_count += 1;
-        }break;
-        
-        //- rjf: breakpoint -> if it's the entry point, we're done. otherwise, keep going
-        case DMN_EventKind_Breakpoint:
-        {
-          for(DMN_TrapChunkNode *n = run_ctrls.traps.first; n != 0; n = n->next)
-          {
-            for(U64 idx = 0; idx < n->count; idx += 1)
-            {
-              if(n->v[idx].vaddr == event->instruction_pointer)
-              {
-                done = 1;
-                stop_event = event;
-                goto end_look_for_entry_match;
-              }
-            }
-          }
-          end_look_for_entry_match:;
-        }break;
-        
-        //- rjf: exception -> done
-        case DMN_EventKind_Halt:
-        case DMN_EventKind_Exception:
-        case DMN_EventKind_Error:
-        {
-          done = 1;
-          stop_event = event;
-        }break;
-        
-        //- rjf: process ended? -> remove from unfrozen processes. zero processes -> done.
-        case DMN_EventKind_ExitProcess:
-        {
-          for(U64 idx = 0; idx < run_ctrls.run_entity_count; idx += 1)
-          {
-            if(dmn_handle_match(run_ctrls.run_entities[idx], event->process) &&
-               idx+1 < run_ctrls.run_entity_count)
-            {
-              MemoryCopy(run_ctrls.run_entities+idx, run_ctrls.run_entities+idx+1, sizeof(DMN_Handle)*(run_ctrls.run_entity_count-(idx+1)));
-              break;
-            }
-          }
-          if(run_ctrls.run_entity_count > 0)
-          {
-            run_ctrls.run_entity_count -= 1;
-          }
-          if(run_ctrls.run_entity_count == 0)
-          {
-            done = 1;
-            stop_event = event;
-          }
-        }break;
-        
-        //- rjf: done with handshake -> ready to find entry point. search launched processes
-        case DMN_EventKind_HandshakeComplete:
-        {
-          DBGI_Scope *scope = dbgi_scope_open();
-          
-          //- rjf: add traps for all possible entry points
-          for(U64 process_idx = 0; process_idx < run_ctrls.run_entity_count; process_idx += 1)
-          {
-            //- rjf: unpack process & first module info
-            CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, run_ctrls.run_entities[process_idx]);
-            CTRL_Entity *module = &ctrl_entity_nil;
-            for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
-            {
-              if(child->kind == CTRL_EntityKind_Module)
-              {
-                module = child;
-                break;
-              }
-            }
-            U64 module_base_vaddr = module->vaddr_range.min;
-            String8 exe_path = module->string;
-            DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
-            RDI_Parsed *rdi = &dbgi->rdi;
-            RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Procedures);
-            RDI_ParsedNameMap map = {0};
-            rdi_name_map_parse(rdi, unparsed_map, &map);
-            
-            //- rjf: add trap for user-specified entry point, if specified
-            B32 entries_found = 0;
-            if(!entries_found)
-            {
-              for(String8Node *n = msg->strings.first; n != 0; n = n->next)
-              {
-                U32 procedure_id = 0;
-                {
-                  String8 name = n->string;
-                  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
-                  U32 id_count = 0;
-                  U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-                  if(id_count > 0)
-                  {
-                    procedure_id = ids[0];
-                  }
-                }
-                U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
-                if(voff != 0)
-                {
-                  entries_found = 1;
-                  DMN_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
-                  dmn_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
-                }
-              }
-            }
-            
-            //- rjf: add traps for all custom user entry points
-            if(!entries_found)
-            {
-              for(String8Node *n = ctrl_state->user_entry_points.first; n != 0; n = n->next)
-              {
-                U32 procedure_id = 0;
-                {
-                  String8 name = n->string;
-                  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
-                  U32 id_count = 0;
-                  U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-                  if(id_count > 0)
-                  {
-                    procedure_id = ids[0];
-                  }
-                }
-                U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
-                if(voff != 0)
-                {
-                  DMN_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
-                  dmn_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
-                  break;
-                }
-              }
-            }
-            
-            //- rjf: add traps for all high-level entry points
-            if(!entries_found)
-            {
-              String8 hi_entry_points[] =
-              {
-                str8_lit("WinMain"),
-                str8_lit("wWinMain"),
-                str8_lit("main"),
-                str8_lit("wmain"),
-              };
-              for(U64 idx = 0; idx < ArrayCount(hi_entry_points); idx += 1)
-              {
-                U32 procedure_id = 0;
-                {
-                  String8 name = hi_entry_points[idx];
-                  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
-                  U32 id_count = 0;
-                  U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-                  if(id_count > 0)
-                  {
-                    procedure_id = ids[0];
-                  }
-                }
-                U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
-                if(voff != 0)
-                {
-                  entries_found = 1;
-                  DMN_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
-                  dmn_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
-                }
-              }
-            }
-            
-            //- rjf: add trap for PE header entry
-            if(!entries_found)
-            {
-              U64 voff = dbgi->pe.entry_point;
-              if(voff != 0)
-              {
-                DMN_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
-                dmn_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
-              }
-            }
-            
-            //- rjf: add traps for all low-level entry points
-            if(!entries_found)
-            {
-              String8 lo_entry_points[] =
-              {
-                str8_lit("WinMainCRTStartup"),
-                str8_lit("wWinMainCRTStartup"),
-                str8_lit("mainCRTStartup"),
-                str8_lit("wmainCRTStartup"),
-              };
-              for(U64 idx = 0; idx < ArrayCount(lo_entry_points); idx += 1)
-              {
-                U32 procedure_id = 0;
-                {
-                  String8 name = lo_entry_points[idx];
-                  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
-                  U32 id_count = 0;
-                  U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-                  if(id_count > 0)
-                  {
-                    procedure_id = ids[0];
-                  }
-                }
-                U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
-                if(voff != 0)
-                {
-                  entries_found = 1;
-                  DMN_Trap trap = {run_ctrls.run_entities[process_idx], module_base_vaddr + voff};
-                  dmn_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
-                }
-              }
-            }
-            
-            //- rjf: no entry point found -> done
-            if(run_ctrls.traps.trap_count == 0)
-            {
-              done = 1;
-              stop_event = event;
-            }
-          }
-          
-          dbgi_scope_close(scope);
-        }break;
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: record bad stop
-  //
-  if(stop_event == 0 && id == 0)
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
-    event->kind = CTRL_EventKind_Error;
-    event->cause = CTRL_EventCause_Error;
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  //////////////////////////////
-  //- rjf: record stop
-  //
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
-    event->kind    = CTRL_EventKind_Stopped;
-    event->msg_id  = msg->msg_id;
-    if(stop_event != 0)
-    {
-      event->cause          = ctrl_event_cause_from_dmn_event_kind(stop_event->kind);
-      event->machine_id     = CTRL_MachineID_Local;
-      event->entity         = stop_event->thread;
-      event->parent         = stop_event->process;
-      event->exception_code = stop_event->code;
-      event->vaddr_rng      = r1u64(stop_event->address, stop_event->address);
-      event->rip_vaddr      = stop_event->instruction_pointer;
-    }
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  //////////////////////////////
-  //- rjf: push request resolution event
-  //
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
-    evt->kind      = CTRL_EventKind_LaunchAndInitDone;
-    evt->machine_id= CTRL_MachineID_Local;
-    evt->msg_id    = msg->msg_id;
-    evt->entity_id = id;
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  //////////////////////////////
-  //- rjf: disable 'step-over-stuck' behavior
-  //
-  {
-    ctrl_state->disable_stuck_thread_step = 1;
-  }
-  
-  scratch_end(scratch);
-  ProfEnd();
+  (void)id;
 }
 
 internal void
@@ -2929,24 +2612,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   
   //////////////////////////////
-  //- rjf: launch if needed
-  //
-  B32 launch_triggered = 0;
-  U32 launch_id = 0;
-  if(msg->run_flags & CTRL_RunFlag_Launch)
-  {
-    OS_LaunchOptions opts = {0};
-    {
-      opts.cmd_line    = msg->cmd_line_string_list;
-      opts.path        = msg->path;
-      opts.env         = msg->env_string_list;
-      opts.inherit_env = msg->env_inherit;
-    }
-    launch_id = dmn_ctrl_launch(ctrl_ctx, &opts);
-    launch_triggered = (launch_id != 0);
-  }
-  
-  //////////////////////////////
   //- rjf: record start
   //
   if(stop_event == 0)
@@ -3048,13 +2713,21 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //////////////////////////
       //- rjf: on launches, detect entry points, place traps
       //
-      if(launch_triggered && !launch_done_first_module && event->kind == DMN_EventKind_LoadModule)
+      if(msg->run_flags & CTRL_RunFlag_StopOnEntryPoint && !launch_done_first_module && event->kind == DMN_EventKind_HandshakeComplete)
       {
         launch_done_first_module = 1;
         
         //- rjf: unpack process/module info
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
-        CTRL_Entity *module = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->module);
+        CTRL_Entity *module = &ctrl_entity_nil;
+        for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+        {
+          if(child->kind == CTRL_EntityKind_Module)
+          {
+            module = child;
+            break;
+          }
+        }
         U64 module_base_vaddr = module->vaddr_range.min;
         String8 exe_path = module->string;
         DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
@@ -3067,7 +2740,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         B32 entries_found = 0;
         if(!entries_found)
         {
-          for(String8Node *n = msg->strings.first; n != 0; n = n->next)
+          for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
           {
             U32 procedure_id = 0;
             {
@@ -3144,7 +2817,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             {
               entries_found = 1;
               DMN_Trap trap = {process->handle, module_base_vaddr + voff};
-              dmn_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
+              dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
             }
           }
         }

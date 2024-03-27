@@ -3764,10 +3764,6 @@ df_push_ctrl_msg(CTRL_Msg *msg)
 {
   CTRL_Msg *dst = ctrl_msg_list_push(df_state->ctrl_msg_arena, &df_state->ctrl_msgs);
   ctrl_msg_deep_copy(df_state->ctrl_msg_arena, dst, msg);
-  if(dst->kind == CTRL_MsgKind_LaunchAndInit)
-  {
-    df_state->ctrl_is_running = 1;
-  }
   if(df_state->ctrl_soft_halt_issued == 0 && df_ctrl_targets_running())
   {
     df_state->ctrl_soft_halt_issued = 1;
@@ -3778,7 +3774,7 @@ df_push_ctrl_msg(CTRL_Msg *msg)
 //- rjf: control thread running
 
 internal void
-df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_TrapList *run_traps)
+df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps)
 {
   DBGI_Scope *scope = dbgi_scope_open();
   Temp scratch = scratch_begin(0, 0);
@@ -3788,6 +3784,7 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_TrapList *run_traps)
   {
     DF_EntityList user_bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
     DF_Entity *process = df_entity_ancestor_from_kind(run_thread, DF_EntityKind_Process);
+    msg.run_flags = flags;
     msg.machine_id = run_thread->ctrl_machine_id;
     msg.entity = run_thread->ctrl_handle;
     msg.parent = process->ctrl_handle;
@@ -3887,6 +3884,7 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_TrapList *run_traps)
   df_state->ctrl_last_run_kind = run;
   df_state->ctrl_last_run_frame_idx = df_frame_index();
   df_state->ctrl_last_run_thread = df_handle_from_entity(run_thread);
+  df_state->ctrl_last_run_flags = flags;
   df_state->ctrl_last_run_traps = ctrl_trap_list_copy(df_state->ctrl_last_run_arena, &run_traps_copy);
   df_state->ctrl_is_running = 1;
   
@@ -6599,6 +6597,19 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectThread));
           }
           
+          // rjf: if no stop-causing thread, and if selected thread, snap to selected
+          if(df_entity_is_nil(stop_thread))
+          {
+            DF_Entity *selected_thread = df_entity_from_handle(df_state->ctrl_ctx.thread);
+            if(!df_entity_is_nil(selected_thread))
+            {
+              DF_CmdParams params = df_cmd_params_zero();
+              params.entity = df_handle_from_entity(selected_thread);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+              df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindThread));
+            }
+          }
+          
           // rjf: thread hit user breakpoint -> increment breakpoint hit count
           if(event->cause == CTRL_EventCause_UserBreakpoint)
           {
@@ -6888,6 +6899,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           if(!df_entity_is_nil(request_entity))
           {
             df_entity_mark_for_deletion(request_entity);
+            
+            // TODO(rjf): @launch_and_init_x
+#if 0
             switch(request_entity->subkind)
             {
               case CTRL_MsgKind_LaunchAndInit:
@@ -6907,6 +6921,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                 }
               }break;
             }
+#endif
           }
           
           // rjf: collect stop info
@@ -7133,28 +7148,25 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               // rjf: build corresponding request entity
               DF_Entity *request_entity = df_entity_alloc(0, df_entity_root(), DF_EntityKind_CtrlRequest);
               {
-                request_entity->subkind = CTRL_MsgKind_LaunchAndInit;
+                request_entity->subkind = CTRL_MsgKind_Launch;
                 request_entity->entity_handle = df_handle_from_entity(target);
               }
               
               // rjf: push message to launch
               {
-                CTRL_Msg msg = {CTRL_MsgKind_LaunchAndInit};
+                CTRL_Msg msg = {CTRL_MsgKind_Launch};
                 msg.msg_id = request_entity->id;
                 msg.path = path;
                 msg.cmd_line_string_list = cmdln_strings;
                 msg.env_inherit = 1;
                 MemoryCopyArray(msg.exception_code_filters, df_state->ctrl_exception_code_filters);
-                str8_list_push(scratch.arena, &msg.strings, entry);
+                str8_list_push(scratch.arena, &msg.entry_points, entry);
                 df_push_ctrl_msg(&msg);
               }
             }
             
-            // rjf: run if needed
-            if(core_cmd_kind == DF_CoreCmdKind_LaunchAndRun)
-            {
-              df_ctrl_run(DF_RunKind_Run, &df_g_nil_entity, 0);
-            }
+            // rjf: run
+            df_ctrl_run(DF_RunKind_Run, &df_g_nil_entity, CTRL_RunFlag_StopOnEntryPoint * (core_cmd_kind == DF_CoreCmdKind_LaunchAndInit), 0);
           }
           
           // rjf: no targets -> error
@@ -7258,7 +7270,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           }
           if(good_to_run)
           {
-            df_ctrl_run(DF_RunKind_Run, &df_g_nil_entity, 0);
+            df_ctrl_run(DF_RunKind_Run, &df_g_nil_entity, 0, 0);
           }
           else
           {
@@ -7327,11 +7339,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             if(good && traps.count != 0)
             {
-              df_ctrl_run(DF_RunKind_Step, thread, &traps);
+              df_ctrl_run(DF_RunKind_Step, thread, 0, &traps);
             }
             if(good && traps.count == 0)
             {
-              df_ctrl_run(DF_RunKind_SingleStep, thread, &traps);
+              df_ctrl_run(DF_RunKind_SingleStep, thread, 0, &traps);
             }
           }
         }break;
@@ -7344,7 +7356,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           if(df_ctrl_targets_running())
           {
-            df_ctrl_run(df_state->ctrl_last_run_kind, df_entity_from_handle(df_state->ctrl_last_run_thread), &df_state->ctrl_last_run_traps);
+            df_ctrl_run(df_state->ctrl_last_run_kind, df_entity_from_handle(df_state->ctrl_last_run_thread), df_state->ctrl_last_run_flags, &df_state->ctrl_last_run_traps);
           }
         }break;
         case DF_CoreCmdKind_SetThreadIP:

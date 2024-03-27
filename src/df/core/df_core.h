@@ -1172,6 +1172,7 @@ struct DF_State
   DF_RunKind ctrl_last_run_kind;
   U64 ctrl_last_run_frame_idx;
   DF_Handle ctrl_last_run_thread;
+  CTRL_RunFlags ctrl_last_run_flags;
   CTRL_TrapList ctrl_last_run_traps;
   U64 ctrl_run_gen;
   B32 ctrl_is_running;
@@ -1567,7 +1568,7 @@ internal DF_Entity *df_log_from_entity(DF_Entity *entity);
 internal void df_push_ctrl_msg(CTRL_Msg *msg);
 
 //- rjf: control thread running
-internal void df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_TrapList *run_traps);
+internal void df_ctrl_run(DF_RunKind run, DF_Entity *target, DF_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps);
 
 //- rjf: stopped info from the control thread
 internal CTRL_Event df_ctrl_last_stop_event(void);
