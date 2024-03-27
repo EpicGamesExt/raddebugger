@@ -151,6 +151,10 @@ dmn_w32_entity_release(DMN_W32_Entity *entity)
       // rjf: free entity
       SLLStackPush(dmn_w32_shared->entities_first_free, t->e);
       t->e->gen += 1;
+      if(t->e->kind == DMN_W32_EntityKind_Module)
+      {
+        CloseHandle(t->e->handle);
+      }
       
       // rjf: remove from id -> entity map
       if(t->e->id != 0)

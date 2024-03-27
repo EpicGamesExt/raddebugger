@@ -365,8 +365,7 @@ dbgi_binary_close(String8 exe_path)
     if(need_deletion) for(;;)
     {
       os_rw_mutex_drop_w(stripe->rw_mutex);
-      for(U64 start_t = os_now_microseconds();
-          os_now_microseconds() <= start_t + 250;);
+      for(U64 start_t = os_now_microseconds(); os_now_microseconds() <= start_t + 250;);
       os_rw_mutex_take_w(stripe->rw_mutex);
       if(binary->refcount == 0 && ins_atomic_u64_eval(&binary->scope_touch_count) == 0)
       {

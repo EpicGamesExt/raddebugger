@@ -678,7 +678,8 @@ os_file_close(OS_Handle file)
 {
   if(os_handle_match(file, os_handle_zero())) { return; }
   HANDLE handle = (HANDLE)file.u64[0];
-  CloseHandle(handle);
+  BOOL result = CloseHandle(handle);
+  (void)result;
 }
 
 internal U64
@@ -896,7 +897,8 @@ internal void
 os_file_map_close(OS_Handle map)
 {
   HANDLE handle = (HANDLE)map.u64[0];
-  CloseHandle(handle);
+  BOOL result = CloseHandle(handle);
+  (void)result;
 }
 
 internal void *
@@ -939,7 +941,8 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
 internal void
 os_file_map_view_close(OS_Handle map, void *ptr)
 {
-  UnmapViewOfFile(ptr);
+  BOOL result = UnmapViewOfFile(ptr);
+  (void)result;
 }
 
 //- rjf: directory iteration
