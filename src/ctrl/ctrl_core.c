@@ -2314,14 +2314,15 @@ ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     }
   }
   
-  //- rjf: push request resolution event
+  //- rjf: record stop
   {
     CTRL_EventList evts = {0};
-    CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
-    evt->kind      = CTRL_EventKind_AttachDone;
-    evt->machine_id= CTRL_MachineID_Local;
-    evt->msg_id    = msg->msg_id;
-    evt->entity_id = !!attach_successful * msg->entity_id;
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind       = CTRL_EventKind_Stopped;
+    event->cause      = CTRL_EventCause_Finished;
+    event->machine_id = CTRL_MachineID_Local;
+    event->msg_id     = msg->msg_id;
+    event->entity_id = !!attach_successful * msg->entity_id;
     ctrl_c2u_push_events(&evts);
   }
   
@@ -2366,16 +2367,17 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     }
   }
   
-  //- rjf: push request resolution event
+  //- rjf: record stop
   {
     CTRL_EventList evts = {0};
-    CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
-    evt->kind      = CTRL_EventKind_KillDone;
-    evt->machine_id= CTRL_MachineID_Local;
-    evt->msg_id    = msg->msg_id;
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind       = CTRL_EventKind_Stopped;
+    event->cause      = CTRL_EventCause_Finished;
+    event->machine_id = CTRL_MachineID_Local;
+    event->msg_id     = msg->msg_id;
     if(kill_worked)
     {
-      evt->entity = msg->entity;
+      event->entity = msg->entity;
     }
     ctrl_c2u_push_events(&evts);
   }
@@ -2420,16 +2422,17 @@ ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     }
   }
   
-  //- rjf: push request resolution event
+  //- rjf: record stop
   {
     CTRL_EventList evts = {0};
-    CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
-    evt->kind      = CTRL_EventKind_DetachDone;
-    evt->machine_id= CTRL_MachineID_Local;
-    evt->msg_id    = msg->msg_id;
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind       = CTRL_EventKind_Stopped;
+    event->cause      = CTRL_EventCause_Finished;
+    event->machine_id = CTRL_MachineID_Local;
+    event->msg_id     = msg->msg_id;
     if(detach_worked)
     {
-      evt->entity = msg->entity;
+      event->entity = msg->entity;
     }
     ctrl_c2u_push_events(&evts);
   }

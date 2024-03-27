@@ -6803,11 +6803,28 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           DF_Entity *binary = df_entity_from_path(bin_path, DF_EntityFromPathFlag_All);
           df_entity_equip_entity_handle(module, df_handle_from_entity(binary));
           
-          // rjf: is first -> attach process color if applicable
-          if(is_first && parent->flags & DF_EntityFlag_HasColor)
+          // rjf: is first -> find target, equip process & module & first thread with target color
+          if(is_first)
           {
-            Vec4F32 rgba = df_rgba_from_entity(parent);
-            df_entity_equip_color_rgba(module, rgba);
+            DF_EntityList targets = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
+            for(DF_EntityNode *n = targets.first; n != 0; n = n->next)
+            {
+              DF_Entity *target = n->entity;
+              DF_Entity *exe = df_entity_child_from_kind(target, DF_EntityKind_Executable);
+              String8 exe_name = exe->name;
+              String8 exe_name_normalized = path_normalized_from_string(scratch.arena, exe_name);
+              String8 module_name_normalized = path_normalized_from_string(scratch.arena, module->name);
+              if(str8_match(exe_name_normalized, module_name_normalized, StringMatchFlag_CaseInsensitive) &&
+                 target->flags & DF_EntityFlag_HasColor)
+              {
+                DF_Entity *first_thread = df_entity_child_from_kind(parent, DF_EntityKind_Thread);
+                Vec4F32 rgba = df_rgba_from_entity(target);
+                df_entity_equip_color_rgba(parent, rgba);
+                df_entity_equip_color_rgba(first_thread, rgba);
+                df_entity_equip_color_rgba(module, rgba);
+                break;
+              }
+            }
           }
         }break;
         
@@ -6885,50 +6902,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case CTRL_EventKind_MemCommit:{}break;
         case CTRL_EventKind_MemDecommit:{}break;
         case CTRL_EventKind_MemRelease:{}break;
-        
-        //- rjf: ctrl requests
-        
-        case CTRL_EventKind_LaunchAndInitDone:
-        case CTRL_EventKind_AttachDone:
-        case CTRL_EventKind_KillDone:
-        case CTRL_EventKind_DetachDone:
-        {
-          // rjf: resolve request entities
-          DF_EntityID id = event->msg_id;
-          DF_Entity *request_entity = df_entity_from_id(id);
-          if(!df_entity_is_nil(request_entity))
-          {
-            df_entity_mark_for_deletion(request_entity);
-            
-            // TODO(rjf): @launch_and_init_x
-#if 0
-            switch(request_entity->subkind)
-            {
-              case CTRL_MsgKind_LaunchAndInit:
-              {
-                DF_Entity *target = df_entity_from_handle(request_entity->entity_handle);
-                DF_Entity *process = df_entity_from_ctrl_id(event->machine_id, event->entity_id);
-                DF_Entity *thread = df_entity_child_from_kind(process, DF_EntityKind_Thread);
-                if(!df_entity_is_nil(target) && !df_entity_is_nil(process) && !df_entity_is_nil(thread))
-                {
-                  df_entity_equip_entity_handle(process, df_handle_from_entity(target));
-                  if(target->flags & DF_EntityFlag_HasColor)
-                  {
-                    Vec4F32 color = df_rgba_from_entity(target);
-                    df_entity_equip_color_rgba(process, color);
-                    df_entity_equip_color_rgba(thread, color);
-                  }
-                }
-              }break;
-            }
-#endif
-          }
-          
-          // rjf: collect stop info
-          arena_clear(df_state->ctrl_stop_arena);
-          MemoryCopyStruct(&df_state->ctrl_last_stop_event, event);
-          df_state->ctrl_last_stop_event.string = push_str8_copy(df_state->ctrl_stop_arena, df_state->ctrl_last_stop_event.string);
-        }break;
       }
     }
     
@@ -7145,17 +7118,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                 }
               }
               
-              // rjf: build corresponding request entity
-              DF_Entity *request_entity = df_entity_alloc(0, df_entity_root(), DF_EntityKind_CtrlRequest);
-              {
-                request_entity->subkind = CTRL_MsgKind_Launch;
-                request_entity->entity_handle = df_handle_from_entity(target);
-              }
-              
               // rjf: push message to launch
               {
                 CTRL_Msg msg = {CTRL_MsgKind_Launch};
-                msg.msg_id = request_entity->id;
                 msg.path = path;
                 msg.cmd_line_string_list = cmdln_strings;
                 msg.env_inherit = 1;

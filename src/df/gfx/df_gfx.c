@@ -8512,22 +8512,6 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
         }break;
       }
     }break;
-    case CTRL_EventKind_LaunchAndInitDone:
-    {
-      explanation = str8_lit("Launched");
-    }break;
-    case CTRL_EventKind_AttachDone:
-    {
-      explanation = str8_lit("Attached");
-    }break;
-    case CTRL_EventKind_DetachDone:
-    {
-      explanation = str8_lit("Detached");
-    }break;
-    case CTRL_EventKind_KillDone:
-    {
-      explanation = str8_lit("Killed");
-    }break;
   }
   scratch_end(scratch);
   if(icon_out)

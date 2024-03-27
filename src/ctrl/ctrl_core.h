@@ -302,12 +302,6 @@ typedef enum CTRL_EventKind
   CTRL_EventKind_MemDecommit,
   CTRL_EventKind_MemRelease,
   
-  //- rjf: ctrl requests
-  CTRL_EventKind_LaunchAndInitDone,
-  CTRL_EventKind_AttachDone,
-  CTRL_EventKind_KillDone,
-  CTRL_EventKind_DetachDone,
-  
   CTRL_EventKind_COUNT
 }
 CTRL_EventKind;

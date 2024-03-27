@@ -35,7 +35,6 @@ DF_EntityKind_ExecutionPath,
 DF_EntityKind_EntryPointName,
 DF_EntityKind_Source,
 DF_EntityKind_Dest,
-DF_EntityKind_CtrlRequest,
 DF_EntityKind_Process,
 DF_EntityKind_Thread,
 DF_EntityKind_Module,
@@ -1517,11 +1516,11 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 df_g_cmd_param_slot_range_table[19];
-extern DF_IconKind df_g_entity_kind_icon_kind_table[27];
-extern String8 df_g_entity_kind_display_string_table[27];
-extern String8 df_g_entity_kind_name_label_table[27];
-extern DF_EntityKindFlags df_g_entity_kind_flags_table[27];
-extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[27];
+extern DF_IconKind df_g_entity_kind_icon_kind_table[26];
+extern String8 df_g_entity_kind_display_string_table[26];
+extern String8 df_g_entity_kind_name_label_table[26];
+extern DF_EntityKindFlags df_g_entity_kind_flags_table[26];
+extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[26];
 extern String8 df_g_cfg_src_string_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[4];
