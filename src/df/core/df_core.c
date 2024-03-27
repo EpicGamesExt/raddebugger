@@ -6889,7 +6889,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         //- rjf: ctrl requests
         
         case CTRL_EventKind_LaunchAndInitDone:
-        case CTRL_EventKind_LaunchAndHandshakeDone:
         case CTRL_EventKind_AttachDone:
         case CTRL_EventKind_KillDone:
         case CTRL_EventKind_DetachDone:
@@ -6903,7 +6902,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             switch(request_entity->subkind)
             {
               case CTRL_MsgKind_LaunchAndInit:
-              case CTRL_MsgKind_LaunchAndHandshake:
               {
                 DF_Entity *target = df_entity_from_handle(request_entity->entity_handle);
                 DF_Entity *process = df_entity_from_ctrl_id(event->machine_id, event->entity_id);

@@ -165,6 +165,7 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
       
       // rjf: write flat parts
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->kind);
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->run_flags);
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->msg_id);
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->machine_id);
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->entity);
@@ -263,6 +264,7 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       
       // rjf: read flat data
       read_off += str8_deserial_read_struct(string, read_off, &msg->kind);
+      read_off += str8_deserial_read_struct(string, read_off, &msg->run_flags);
       read_off += str8_deserial_read_struct(string, read_off, &msg->msg_id);
       read_off += str8_deserial_read_struct(string, read_off, &msg->machine_id);
       read_off += str8_deserial_read_struct(string, read_off, &msg->entity);
@@ -1748,7 +1750,6 @@ ctrl_thread__entry_point(void *p)
           case CTRL_MsgKind_COUNT:{}break;
           
           //- rjf: target operations
-          case CTRL_MsgKind_LaunchAndHandshake:{ctrl_thread__launch_and_handshake(ctrl_ctx, msg);}break;
           case CTRL_MsgKind_LaunchAndInit:     {ctrl_thread__launch_and_init     (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Attach:            {ctrl_thread__attach              (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Kill:              {ctrl_thread__kill                (ctrl_ctx, msg);}break;
@@ -2251,114 +2252,6 @@ ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 //- rjf: msg kind implementations
 
 internal void
-ctrl_thread__launch_and_handshake(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
-  
-  //- rjf: launch
-  OS_LaunchOptions opts = {0};
-  {
-    opts.cmd_line    = msg->cmd_line_string_list;
-    opts.path        = msg->path;
-    opts.env         = msg->env_string_list;
-    opts.inherit_env = msg->env_inherit;
-  }
-  U32 id = dmn_ctrl_launch(ctrl_ctx, &opts);
-  
-  //- rjf: record start
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
-    event->kind = CTRL_EventKind_Started;
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  //- rjf: run to handshake
-  DMN_Event *stop_event = 0;
-  if(id != 0)
-  {
-    // rjf: prep run controls
-    DMN_Handle unfrozen_process = {0};
-    DMN_RunCtrls run_ctrls = {0};
-    {
-      run_ctrls.run_entities_are_unfrozen = 1;
-      run_ctrls.run_entities_are_processes = 1;
-      run_ctrls.run_entities = &unfrozen_process;
-      run_ctrls.run_entity_count = 0;
-    }
-    
-    // rjf: run until handshake-signifying events
-    for(B32 done = 0; done == 0;)
-    {
-      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
-      switch(event->kind)
-      {
-        default:{}break;
-        case DMN_EventKind_CreateProcess:
-        {
-          unfrozen_process = event->process;
-          run_ctrls.run_entity_count = 1;
-        }break;
-        case DMN_EventKind_Error:
-        case DMN_EventKind_Breakpoint:
-        case DMN_EventKind_Exception:
-        case DMN_EventKind_ExitProcess:
-        case DMN_EventKind_HandshakeComplete:
-        {
-          done = 1;
-          stop_event = event;
-        }break;
-      }
-    }
-  }
-  
-  //- rjf: record bad stop
-  if(stop_event == 0 && id == 0)
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
-    event->kind = CTRL_EventKind_Error;
-    event->cause = CTRL_EventCause_Error;
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  //- rjf: record stop
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
-    event->kind = CTRL_EventKind_Stopped;
-    if(stop_event != 0)
-    {
-      event->cause = ctrl_event_cause_from_dmn_event_kind(stop_event->kind);
-      event->machine_id = CTRL_MachineID_Local;
-      event->entity = stop_event->thread;
-      event->parent = stop_event->process;
-      event->exception_code = stop_event->code;
-      event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
-      event->rip_vaddr = stop_event->instruction_pointer;
-    }
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  //- rjf: push request resolution event
-  {
-    CTRL_EventList evts = {0};
-    CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
-    evt->kind      = CTRL_EventKind_LaunchAndHandshakeDone;
-    evt->machine_id= CTRL_MachineID_Local;
-    evt->msg_id    = msg->msg_id;
-    evt->entity_id = id;
-    ctrl_c2u_push_events(&evts);
-  }
-  
-  dbgi_scope_close(scope);
-  scratch_end(scratch);
-  ProfEnd();
-}
-
-internal void
 ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
@@ -2431,7 +2324,9 @@ ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         }break;
         
         //- rjf: exception -> done
+        case DMN_EventKind_Halt:
         case DMN_EventKind_Exception:
+        case DMN_EventKind_Error:
         {
           done = 1;
           stop_event = event;
@@ -2717,6 +2612,9 @@ ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           run_ctrls.run_entities = &unfrozen_process;
           run_ctrls.run_entity_count = 1;
         }break;
+        case DMN_EventKind_Halt:
+        case DMN_EventKind_Exception:
+        case DMN_EventKind_Error:
         case DMN_EventKind_HandshakeComplete:
         {
           done = 1;
@@ -2768,6 +2666,12 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       {
         done = 1;
       }
+      if(event->kind == DMN_EventKind_Halt ||
+         event->kind == DMN_EventKind_Exception ||
+         event->kind == DMN_EventKind_Error)
+      {
+        done = 1;
+      }
     }
   }
   
@@ -2813,6 +2717,12 @@ ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     {
       DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
       if(event->kind == DMN_EventKind_ExitProcess && dmn_handle_match(event->process, process))
+      {
+        done = 1;
+      }
+      if(event->kind == DMN_EventKind_Halt ||
+         event->kind == DMN_EventKind_Exception ||
+         event->kind == DMN_EventKind_Error)
       {
         done = 1;
       }
@@ -3019,6 +2929,24 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   
   //////////////////////////////
+  //- rjf: launch if needed
+  //
+  B32 launch_triggered = 0;
+  U32 launch_id = 0;
+  if(msg->run_flags & CTRL_RunFlag_Launch)
+  {
+    OS_LaunchOptions opts = {0};
+    {
+      opts.cmd_line    = msg->cmd_line_string_list;
+      opts.path        = msg->path;
+      opts.env         = msg->env_string_list;
+      opts.inherit_env = msg->env_inherit;
+    }
+    launch_id = dmn_ctrl_launch(ctrl_ctx, &opts);
+    launch_triggered = (launch_id != 0);
+  }
+  
+  //////////////////////////////
   //- rjf: record start
   //
   if(stop_event == 0)
@@ -3036,6 +2964,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   {
     B32 spoof_mode = 0;
     CTRL_Spoof spoof = {0};
+    DMN_TrapChunkList entry_traps = {0};
     for(;;)
     {
       //////////////////////////
@@ -3082,6 +3011,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //////////////////////////
       //- rjf: determine event handling
       //
+      B32 launch_done_first_module = 0;
       B32 hard_stop = 0;
       CTRL_EventCause hard_stop_cause = ctrl_event_cause_from_dmn_event_kind(event->kind);
       B32 use_stepping_logic = 0;
@@ -3113,6 +3043,164 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &new_traps);
           dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &user_traps, &new_traps);
         }break;
+      }
+      
+      //////////////////////////
+      //- rjf: on launches, detect entry points, place traps
+      //
+      if(launch_triggered && !launch_done_first_module && event->kind == DMN_EventKind_LoadModule)
+      {
+        launch_done_first_module = 1;
+        
+        //- rjf: unpack process/module info
+        CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
+        CTRL_Entity *module = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->module);
+        U64 module_base_vaddr = module->vaddr_range.min;
+        String8 exe_path = module->string;
+        DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
+        RDI_Parsed *rdi = &dbgi->rdi;
+        RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Procedures);
+        RDI_ParsedNameMap map = {0};
+        rdi_name_map_parse(rdi, unparsed_map, &map);
+        
+        //- rjf: add trap for user-specified entry point, if specified
+        B32 entries_found = 0;
+        if(!entries_found)
+        {
+          for(String8Node *n = msg->strings.first; n != 0; n = n->next)
+          {
+            U32 procedure_id = 0;
+            {
+              String8 name = n->string;
+              RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
+              U32 id_count = 0;
+              U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+              if(id_count > 0)
+              {
+                procedure_id = ids[0];
+              }
+            }
+            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            if(voff != 0)
+            {
+              entries_found = 1;
+              DMN_Trap trap = {process->handle, module_base_vaddr + voff};
+              dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+            }
+          }
+        }
+        
+        //- rjf: add traps for all custom user entry points
+        if(!entries_found)
+        {
+          for(String8Node *n = ctrl_state->user_entry_points.first; n != 0; n = n->next)
+          {
+            U32 procedure_id = 0;
+            {
+              String8 name = n->string;
+              RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
+              U32 id_count = 0;
+              U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+              if(id_count > 0)
+              {
+                procedure_id = ids[0];
+              }
+            }
+            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            if(voff != 0)
+            {
+              DMN_Trap trap = {process->handle, module_base_vaddr + voff};
+              dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+              break;
+            }
+          }
+        }
+        
+        //- rjf: add traps for all high-level entry points
+        if(!entries_found)
+        {
+          String8 hi_entry_points[] =
+          {
+            str8_lit("WinMain"),
+            str8_lit("wWinMain"),
+            str8_lit("main"),
+            str8_lit("wmain"),
+          };
+          for(U64 idx = 0; idx < ArrayCount(hi_entry_points); idx += 1)
+          {
+            U32 procedure_id = 0;
+            {
+              String8 name = hi_entry_points[idx];
+              RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
+              U32 id_count = 0;
+              U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+              if(id_count > 0)
+              {
+                procedure_id = ids[0];
+              }
+            }
+            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            if(voff != 0)
+            {
+              entries_found = 1;
+              DMN_Trap trap = {process->handle, module_base_vaddr + voff};
+              dmn_trap_chunk_list_push(scratch.arena, &run_ctrls.traps, 256, &trap);
+            }
+          }
+        }
+        
+        //- rjf: add trap for PE header entry
+        if(!entries_found)
+        {
+          U64 voff = dbgi->pe.entry_point;
+          if(voff != 0)
+          {
+            DMN_Trap trap = {process->handle, module_base_vaddr + voff};
+            dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+          }
+        }
+        
+        //- rjf: add traps for all low-level entry points
+        if(!entries_found)
+        {
+          String8 lo_entry_points[] =
+          {
+            str8_lit("WinMainCRTStartup"),
+            str8_lit("wWinMainCRTStartup"),
+            str8_lit("mainCRTStartup"),
+            str8_lit("wmainCRTStartup"),
+          };
+          for(U64 idx = 0; idx < ArrayCount(lo_entry_points); idx += 1)
+          {
+            U32 procedure_id = 0;
+            {
+              String8 name = lo_entry_points[idx];
+              RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
+              U32 id_count = 0;
+              U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+              if(id_count > 0)
+              {
+                procedure_id = ids[0];
+              }
+            }
+            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            if(voff != 0)
+            {
+              entries_found = 1;
+              DMN_Trap trap = {process->handle, module_base_vaddr + voff};
+              dmn_trap_chunk_list_push(scratch.arena, &entry_traps, 256, &trap);
+            }
+          }
+        }
+        
+        //- rjf: no entry point found -> done
+        if(entry_traps.trap_count == 0)
+        {
+          hard_stop = 1;
+        }
+        
+        //- rjf: found entry points -> add to joined traps
+        dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &entry_traps);
       }
       
       //////////////////////////
@@ -3149,7 +3237,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //
       B32 hit_spoof = 0;
       B32 exception_stop = 0;
-      if(use_stepping_logic)
+      if(!hard_stop && use_stepping_logic)
       {
         if(event->kind == DMN_EventKind_Exception)
         {
@@ -3183,16 +3271,31 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       }
       
       //- rjf: for breakpoint events, gather bp info
+      B32 hit_entry = 0;
       B32 hit_user_bp = 0;
       B32 hit_trap_net_bp = 0;
       B32 hit_conditional_bp_but_filtered = 0;
       CTRL_TrapFlags hit_trap_flags = 0;
-      if(use_stepping_logic)
+      if(!hard_stop && use_stepping_logic)
       {
         if(event->kind == DMN_EventKind_Breakpoint)
         {
           Temp temp = temp_begin(scratch.arena);
           String8List conditions = {0};
+          
+          // rjf: entry breakpoints
+          for(DMN_TrapChunkNode *n = entry_traps.first; n != 0; n = n->next)
+          {
+            DMN_Trap *trap = n->v;
+            DMN_Trap *opl = n->v + n->count;
+            for(;trap < opl; trap += 1)
+            {
+              if(dmn_handle_match(trap->process, event->process) && trap->vaddr == event->instruction_pointer)
+              {
+                hit_entry = 1;
+              }
+            }
+          }
           
           // rjf: user breakpoints
           for(DMN_TrapChunkNode *n = user_traps.first; n != 0; n = n->next)
@@ -3336,9 +3439,17 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         }
       }
       
+      //- rjf: hit entry points on *any thread* cause a stop, if this msg says as such
+      B32 entry_stop = 0;
+      if(msg->run_flags & CTRL_RunFlag_StopOnEntryPoint && hit_entry)
+      {
+        entry_stop = 1;
+        use_stepping_logic = 0;
+      }
+      
       //- rjf: user breakpoints on *any thread* cause a stop
       B32 user_bp_stop = 0;
-      if(use_stepping_logic && hit_user_bp)
+      if(!hard_stop && use_stepping_logic && hit_user_bp)
       {
         user_bp_stop = 1;
         use_stepping_logic = 0;
@@ -3346,7 +3457,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       
       //- rjf: trap net on off-target threads are ignored
       B32 step_past_trap_net = 0;
-      if(use_stepping_logic && hit_trap_net_bp)
+      if(!hard_stop && use_stepping_logic && hit_trap_net_bp)
       {
         if(!dmn_handle_match(event->thread, target_thread))
         {
@@ -3357,7 +3468,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       
       //- rjf: trap net on on-target threads trigger trap net logic
       B32 use_trap_net_logic = 0;
-      if(use_stepping_logic && hit_trap_net_bp)
+      if(!hard_stop && use_stepping_logic && hit_trap_net_bp)
       {
         if(dmn_handle_match(event->thread, target_thread))
         {
@@ -3376,7 +3487,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //- rjf: trap net logic: single step after hit
       B32 single_step_stop = 0;
       CTRL_EventCause single_step_stop_cause = CTRL_EventCause_Null;
-      if(use_trap_net_logic)
+      if(!hard_stop && use_trap_net_logic)
       {
         if(hit_trap_flags & CTRL_TrapFlag_SingleStepAfterHit)
         {
@@ -3411,7 +3522,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       
       //- rjf: trap net logic: begin spoof mode
       B32 begin_spoof_mode = 0;
-      if(use_trap_net_logic)
+      if(!hard_stop && use_trap_net_logic)
       {
         if(hit_trap_flags & CTRL_TrapFlag_BeginSpoofMode)
         {
@@ -3428,7 +3539,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       
       //- rjf: trap net logic: save stack pointer
       B32 save_stack_pointer = 0;
-      if(use_trap_net_logic)
+      if(!hard_stop && use_trap_net_logic)
       {
         if(hit_trap_flags & CTRL_TrapFlag_SaveStackPointer)
         {
@@ -3442,7 +3553,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       
       //- rjf: trap net logic: end stepping
       B32 trap_net_stop = 0;
-      if(use_trap_net_logic)
+      if(!hard_stop && use_trap_net_logic)
       {
         if(hit_trap_flags & CTRL_TrapFlag_EndStepping)
         {
@@ -3516,6 +3627,10 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       else if(user_bp_stop)
       {
         stage_stop_cause = CTRL_EventCause_UserBreakpoint;
+      }
+      else if(entry_stop)
+      {
+        stage_stop_cause = CTRL_EventCause_EntryPoint;
       }
       else if(trap_net_stop)
       {

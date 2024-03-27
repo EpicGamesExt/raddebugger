@@ -215,7 +215,6 @@ struct CTRL_UserBreakpointList
 typedef enum CTRL_MsgKind
 {
   CTRL_MsgKind_Null,
-  CTRL_MsgKind_LaunchAndHandshake,
   CTRL_MsgKind_LaunchAndInit,
   CTRL_MsgKind_Attach,
   CTRL_MsgKind_Kill,
@@ -227,10 +226,18 @@ typedef enum CTRL_MsgKind
 }
 CTRL_MsgKind;
 
+typedef U32 CTRL_RunFlags;
+enum
+{
+  CTRL_RunFlag_Launch           = (1<<0),
+  CTRL_RunFlag_StopOnEntryPoint = (1<<1),
+};
+
 typedef struct CTRL_Msg CTRL_Msg;
 struct CTRL_Msg
 {
   CTRL_MsgKind kind;
+  CTRL_RunFlags run_flags;
   CTRL_MsgID msg_id;
   CTRL_MachineID machine_id;
   DMN_Handle entity;
@@ -295,7 +302,6 @@ typedef enum CTRL_EventKind
   CTRL_EventKind_MemRelease,
   
   //- rjf: ctrl requests
-  CTRL_EventKind_LaunchAndHandshakeDone,
   CTRL_EventKind_LaunchAndInitDone,
   CTRL_EventKind_AttachDone,
   CTRL_EventKind_KillDone,
@@ -310,6 +316,7 @@ typedef enum CTRL_EventCause
   CTRL_EventCause_Null,
   CTRL_EventCause_Error,
   CTRL_EventCause_Finished,
+  CTRL_EventCause_EntryPoint,
   CTRL_EventCause_UserBreakpoint,
   CTRL_EventCause_InterruptedByTrap,
   CTRL_EventCause_InterruptedByException,
@@ -708,7 +715,6 @@ internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_
 internal B32 ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size);
 
 //- rjf: msg kind implementations
-internal void ctrl_thread__launch_and_handshake(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__launch_and_init(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);

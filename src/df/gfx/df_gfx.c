@@ -8513,7 +8513,6 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
       }
     }break;
     case CTRL_EventKind_LaunchAndInitDone:
-    case CTRL_EventKind_LaunchAndHandshakeDone:
     {
       explanation = str8_lit("Launched");
     }break;
