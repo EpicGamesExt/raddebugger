@@ -829,7 +829,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
     {
       U128 dasm_text_hash = hs_hash_from_key(dasm_info.text_key, rewind_idx);
       dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
-      dasm_text_info = txt_text_info_from_hash_lang(txt_scope, dasm_text_hash, TXT_LangKind_Null);
+      dasm_text_info = txt_text_info_from_hash_lang(txt_scope, dasm_text_hash, TXT_LangKind_DisasmX64Intel);
       if(dasm_text_info.lines_count != 0)
       {
         break;

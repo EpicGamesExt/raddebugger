@@ -40,9 +40,10 @@ txt_lex_function_from_lang_kind(TXT_LangKind kind)
   switch(kind)
   {
     default:{}break;
-    case TXT_LangKind_C:           {fn = txt_token_array_from_string__c_cpp;}break;
-    case TXT_LangKind_CPlusPlus:   {fn = txt_token_array_from_string__c_cpp;}break;
-    case TXT_LangKind_Odin:        {fn = txt_token_array_from_string__odin;}break;
+    case TXT_LangKind_C:             {fn = txt_token_array_from_string__c_cpp;}break;
+    case TXT_LangKind_CPlusPlus:     {fn = txt_token_array_from_string__c_cpp;}break;
+    case TXT_LangKind_Odin:          {fn = txt_token_array_from_string__odin;}break;
+    case TXT_LangKind_DisasmX64Intel:{fn = txt_token_array_from_string__disasm_x64_intel;}break;
   }
   return fn;
 }
@@ -615,6 +616,178 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
         idx += 1;
       }
       escaped = next_escaped;
+    }
+  }
+  
+  //- rjf: token list -> token array
+  TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
+  scratch_end(scratch);
+  return result;
+}
+
+internal TXT_TokenArray
+txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed_counter, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: parse tokens
+  TXT_TokenChunkList tokens = {0};
+  {
+    TXT_TokenKind active_token_kind = TXT_TokenKind_Null;
+    U64 active_token_start_off = 0;
+    U64 off = 0;
+    B32 escaped = 0;
+    B32 string_is_char = 0;
+    for(U64 advance = 0; off <= string.size; off += advance)
+    {
+      U8 byte      = (off+0 < string.size) ? string.str[off+0] : 0;
+      U8 next_byte = (off+1 < string.size) ? string.str[off+1] : 0;
+      B32 ender_found = 0;
+      advance = (active_token_kind != TXT_TokenKind_Null ? 1 : 0);
+      if(off == string.size && active_token_kind != TXT_TokenKind_Null)
+      {
+        ender_found = 1;
+        advance = 1;
+      }
+      switch(active_token_kind)
+      {
+        default:
+        case TXT_TokenKind_Null:
+        {
+          if(byte == ' ' || byte == '\t' || byte == '\v' || byte == '\f' || byte == '\r' || byte == '\n')
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_Whitespace;
+            advance = 1;
+          }
+          else if(('a' <= byte && byte <= 'z') || ('A' <= byte && byte <= 'Z') || byte == '_')
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_Identifier;
+            advance = 1;
+          }
+          else if(byte == '\'')
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_String;
+            advance = 1;
+            string_is_char = 1;
+          }
+          else if(byte == '"')
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_String;
+            advance = 1;
+            string_is_char = 0;
+          }
+          else if(('0' <= byte && byte <= '9') || (byte == '.' && '0' <= next_byte && next_byte <= '9'))
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_Numeric;
+            advance = 1;
+          }
+          else if(byte == '~' || byte == '!' || byte == '%' || byte == '^' ||
+                  byte == '&' || byte == '*' || byte == '(' || byte == ')' ||
+                  byte == '-' || byte == '=' || byte == '+' || byte == '[' ||
+                  byte == ']' || byte == '{' || byte == '}' || byte == ';' ||
+                  byte == ':' || byte == '?' || byte == '/' || byte == '<' ||
+                  byte == '>' || byte == ',' || byte == '.')
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_Symbol;
+            advance = 1;
+          }
+          else
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_Error;
+            advance = 1;
+          }
+        }break;
+        case TXT_TokenKind_Whitespace:
+        if(byte != ' ' && byte != '\t' && byte != '\v' && byte != '\f')
+        {
+          ender_found = 1;
+          advance = 0;
+        }break;
+        case TXT_TokenKind_Identifier:
+        if((byte < 'a' || 'z' < byte) && (byte < 'A' || 'Z' < byte) && (byte < '0' || '9' < byte) && byte != '_')
+        {
+          ender_found = 1;
+          advance = 0;
+        }break;
+        case TXT_TokenKind_String:
+        {
+          U8 ender_byte = string_is_char ? '\'' : '"';
+          if(!escaped && byte == ender_byte)
+          {
+            ender_found = 1;
+            advance = 1;
+          }
+          else if(escaped)
+          {
+            escaped = 0;
+            advance = 1;
+          }
+          else if(byte == '\\')
+          {
+            escaped = 1;
+            advance = 1;
+          }
+          else
+          {
+            U8 byte_class = utf8_class[byte>>3];
+            if(byte_class > 1)
+            {
+              advance = (U64)byte_class;
+            }
+          }
+        }break;
+        case TXT_TokenKind_Numeric:
+        if((byte < 'a' || 'z' < byte) && (byte < 'A' || 'Z' < byte) && (byte < '0' || '9' < byte) && byte != '.')
+        {
+          ender_found = 1;
+          advance = 0;
+        }break;
+        case TXT_TokenKind_Symbol:
+        if(1)
+        {
+          // NOTE(rjf): avoiding maximum munch rule for now
+          ender_found = 1;
+          advance = 0;
+        }
+        else if(byte != '~' && byte != '!' && byte != '#' && byte != '%' &&
+                byte != '^' && byte != '&' && byte != '*' && byte != '(' &&
+                byte != ')' && byte != '-' && byte != '=' && byte != '+' &&
+                byte != '[' && byte != ']' && byte != '{' && byte != '}' &&
+                byte != ';' && byte != ':' && byte != '?' && byte != '/' &&
+                byte != '<' && byte != '>' && byte != ',' && byte != '.')
+        {
+          ender_found = 1;
+          advance = 0;
+        }break;
+        case TXT_TokenKind_Error:
+        {
+          ender_found = 1;
+          advance = 0;
+        }break;
+      }
+      if(ender_found != 0)
+      {
+        TXT_Token token = {active_token_kind, r1u64(active_token_start_off, off+advance)};
+        if(active_token_kind == TXT_TokenKind_Identifier)
+        {
+          String8 token_string = str8_substr(string, token.range);
+          B32 identifier_is_instruction = 0;
+          if(identifier_is_instruction)
+          {
+            token.kind = TXT_TokenKind_Keyword;
+          }
+        }
+        txt_token_chunk_list_push(arena, &tokens, 1024, &token);
+        active_token_kind = TXT_TokenKind_Null;
+        active_token_start_off = token.range.max;
+      }
     }
   }
   
