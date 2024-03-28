@@ -9,6 +9,7 @@
 
 #define R_BACKEND_STUB 0
 #define R_BACKEND_D3D11 1
+#define R_BACKEND_OPENGL 2
 
 ////////////////////////////////
 //~ rjf: Decide On Backend
@@ -30,6 +31,8 @@
 #  include "stub/render_stub.h"
 # elif R_BACKEND == R_BACKEND_D3D11
 #  include "d3d11/render_d3d11.h"
+# elif R_BACKEND == R_BACKEND_OPENGL
+#  include "opengl/render_opengl.h"
 # else
 #  error Renderer backend not specified.
 # endif

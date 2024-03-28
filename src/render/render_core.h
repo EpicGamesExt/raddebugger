@@ -194,6 +194,19 @@ struct R_PassList
 };
 
 ////////////////////////////////
+//~ dmylo: Blur helper type
+typedef struct R_Blur_Kernel R_Blur_Kernel;
+struct R_Blur_Kernel
+{
+  Vec2F32 weights[32];
+  U64 blur_count;
+};
+
+////////////////////////////////
+//~ dmylo: Blur Helpers (Helpers, Implemented once)
+internal void r_fill_blur_kernel(F32 blur_size, R_Blur_Kernel *kernel);
+
+////////////////////////////////
 //~ rjf: Handle Type Functions
 
 internal R_Handle r_handle_zero(void);
