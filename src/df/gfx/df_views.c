@@ -5503,8 +5503,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   {
     if(text_info_is_ready && visible_line_num_range.max >= visible_line_num_range.min && ui_is_focus_active())
     {
-      // TODO(rjf): @txt
-      //snap[Axis2_X] = snap[Axis2_Y] = df_do_txti_controls(txti_handle, ClampBot(num_possible_visible_lines, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
+      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(&text_info, data, ClampBot(num_possible_visible_lines, 10) - 10, &tv->cursor, &tv->mark, &tv->preferred_column);
     }
   }
   

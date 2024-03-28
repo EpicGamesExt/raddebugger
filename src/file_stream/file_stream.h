@@ -13,7 +13,7 @@ struct FS_Node
   FS_Node *next;
   String8 path;
   U64 timestamp;
-  U64 last_time_requested_us;
+  B32 is_working;
 };
 
 typedef struct FS_Slot FS_Slot;

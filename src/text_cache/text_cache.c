@@ -1037,6 +1037,17 @@ txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TxtRng rng)
   return result;
 }
 
+internal String8
+txt_string_from_info_data_line_num(TXT_TextInfo *info, String8 data, S64 line_num)
+{
+  String8 result = {0};
+  if(1 <= line_num && line_num <= info->lines_count)
+  {
+    result = str8_substr(data, info->lines_ranges[line_num-1]);
+  }
+  return result;
+}
+
 internal TXT_LineTokensSlice
 txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range)
 {

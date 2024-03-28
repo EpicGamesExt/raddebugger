@@ -1046,6 +1046,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions);
 internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
 internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
 
+internal B32 df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 internal B32 df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 internal B32 df_do_dasm_controls(DASM_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 

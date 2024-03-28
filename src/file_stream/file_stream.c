@@ -73,10 +73,10 @@ fs_hash_from_path(String8 path, U64 endt_us)
           SLLQueuePush(slot->first, slot->last, node);
           node->path = push_str8_copy(stripe->arena, path);
         }
-        if(os_now_microseconds() >= ins_atomic_u64_eval(&node->last_time_requested_us)+1000000 &&
-           fs_u2s_enqueue_path(path, endt_us))
+        if(!ins_atomic_u32_eval_cond_assign(&node->is_working, 1, 0) &&
+           !fs_u2s_enqueue_path(path, endt_us))
         {
-          ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
+          ins_atomic_u32_eval_assign(&node->is_working, 0);
         }
         result = hs_hash_from_key(path_key, 0);
         if(u128_match(result, u128_zero()) && os_now_microseconds() <= endt_us)
@@ -161,47 +161,75 @@ fs_streamer_thread__entry_point(void *p)
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
+    
+    //- rjf: unpack path
     String8 path = fs_u2s_dequeue_path(scratch.arena);
+    U128 key = hs_hash_from_data(path);
+    U64 slot_idx = key.u64[0]%fs_shared->slots_count;
+    U64 stripe_idx = slot_idx%fs_shared->stripes_count;
+    FS_Slot *slot = &fs_shared->slots[slot_idx];
+    FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
+    
+    //- rjf: load
+    ProfBegin("load \"%.*s\"", str8_varg(path));
     FileProperties pre_props = os_properties_from_file_path(path);
     OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
     U64 data_arena_size = pre_props.size+ARENA_HEADER_SIZE;
     data_arena_size += KB(4)-1;
     data_arena_size -= data_arena_size%KB(4);
+    ProfBegin("allocate");
     Arena *data_arena = arena_alloc__sized(data_arena_size, data_arena_size);
+    ProfEnd();
+    ProfBegin("read");
     String8 data = os_string_from_file_range(data_arena, file, r1u64(0, pre_props.size));
+    ProfEnd();
     os_file_close(file);
     FileProperties post_props = os_properties_from_file_path(path);
+    
+    //- rjf: abort if modification timestamps differ - we did not successfully read the file
     if(pre_props.modified != post_props.modified)
     {
-      arena_release(data_arena);
-      MemoryZeroStruct(&data);
+      ProfScope("abort")
+      {
+        arena_release(data_arena);
+        MemoryZeroStruct(&data);
+        data_arena = 0;
+      }
     }
+    
+    //- rjf: submit
     else
     {
-      U128 key = hs_hash_from_data(path);
-      hs_submit_data(key, &data_arena, data);
-      U64 slot_idx = key.u64[0]%fs_shared->slots_count;
-      U64 stripe_idx = slot_idx%fs_shared->stripes_count;
-      FS_Slot *slot = &fs_shared->slots[slot_idx];
-      FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-      OS_MutexScopeW(stripe->rw_mutex)
+      ProfScope("submit")
       {
-        FS_Node *node = 0;
-        for(FS_Node *n = slot->first; n != 0; n = n->next)
+        hs_submit_data(key, &data_arena, data);
+      }
+    }
+    
+    //- rjf: commit info to cache
+    ProfScope("commit to cache") OS_MutexScopeW(stripe->rw_mutex)
+    {
+      FS_Node *node = 0;
+      for(FS_Node *n = slot->first; n != 0; n = n->next)
+      {
+        if(str8_match(n->path, path, 0))
         {
-          if(str8_match(n->path, path, 0))
-          {
-            node = n;
-            break;
-          }
+          node = n;
+          break;
         }
-        if(node != 0)
+      }
+      if(node != 0)
+      {
+        if(post_props.modified == pre_props.modified)
         {
           node->timestamp = post_props.modified;
         }
+        ins_atomic_u32_eval_assign(&node->is_working, 0);
       }
-      os_condition_variable_broadcast(stripe->cv);
     }
+    os_condition_variable_broadcast(stripe->cv);
+    
+    ProfEnd();
     scratch_end(scratch);
   }
 }
@@ -226,9 +254,13 @@ fs_detector_thread__entry_point(void *p)
         for(FS_Node *n = slot->first; n != 0; n = n->next)
         {
           FileProperties props = os_properties_from_file_path(n->path);
-          if(props.modified != n->timestamp && n->last_time_requested_us+100000 < os_now_microseconds())
+          if(props.modified != n->timestamp)
           {
-            fs_u2s_enqueue_path(n->path, os_now_microseconds()+100000);
+            if(!ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0) &&
+               !fs_u2s_enqueue_path(n->path, os_now_microseconds()+100000))
+            {
+              ins_atomic_u32_eval_assign(&n->is_working, 0);
+            }
           }
         }
       }

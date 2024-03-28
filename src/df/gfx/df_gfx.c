@@ -10571,6 +10571,183 @@ df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF
 }
 
 internal B32
+df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
+{
+  Temp scratch = scratch_begin(0, 0);
+  B32 change = 0;
+  UI_NavActionList *nav_actions = ui_nav_actions();
+  for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+  {
+    next = n->next;
+    B32 taken = 0;
+    
+    String8 line = txt_string_from_info_data_line_num(info, data, cursor->line);
+    UI_NavTxtOp single_line_op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, line, *cursor, *mark);
+    
+    //- rjf: invalid single-line op or endpoint units => try multiline
+    if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint || single_line_op.flags & UI_NavTxtOpFlag_Invalid)
+    {
+      U64 line_count = info->lines_count;
+      String8 prev_line = txt_string_from_info_data_line_num(info, data, cursor->line-1);
+      String8 next_line = txt_string_from_info_data_line_num(info, data, cursor->line+1);
+      Vec2S32 delta = n->v.delta;
+      
+      //- rjf: wrap lines right
+      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+      {
+        cursor->line += 1;
+        cursor->column = 1;
+        *preferred_column = 1;
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: wrap lines left
+      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+      {
+        cursor->line -= 1;
+        cursor->column = prev_line.size+1;
+        *preferred_column = prev_line.size+1;
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement down (plain)
+      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y > 0 && cursor->line+1 <= line_count)
+      {
+        cursor->line += 1;
+        cursor->column = Min(*preferred_column, next_line.size+1);
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement up (plain)
+      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y < 0 && cursor->line-1 >= 1)
+      {
+        cursor->line -= 1;
+        cursor->column = Min(*preferred_column, prev_line.size+1);
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement down (chunk)
+      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y > 0 && cursor->line+1 <= line_count)
+      {
+        for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
+        {
+          String8 line = txt_string_from_info_data_line_num(info, data, line_num);
+          U64 line_size = line.size;
+          if(line_size == 0)
+          {
+            cursor->line = line_num;
+            cursor->column = 1;
+            break;
+          }
+          else if(line_num == line_count)
+          {
+            cursor->line = line_num;
+            cursor->column = line_size+1;
+          }
+        }
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement up (chunk)
+      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y < 0 && cursor->line-1 >= 1)
+      {
+        for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
+        {
+          String8 line = txt_string_from_info_data_line_num(info, data, line_num);
+          U64 line_size = line.size;
+          if(line_size == 0)
+          {
+            cursor->line = line_num;
+            cursor->column = 1;
+            break;
+          }
+          else if(line_num == 1)
+          {
+            cursor->line = line_num;
+            cursor->column = 1;
+          }
+        }
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement down (page)
+      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y > 0)
+      {
+        cursor->line += line_count_per_page;
+        cursor->column = 1;
+        cursor->line = Clamp(1, cursor->line, line_count);
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement up (page)
+      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y < 0)
+      {
+        cursor->line -= line_count_per_page;
+        cursor->column = 1;
+        cursor->line = Clamp(1, cursor->line, line_count);
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement to endpoint (+)
+      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y > 0 || delta.x > 0))
+      {
+        *cursor = txt_pt(line_count, info->lines_count ? dim_1u64(info->lines_ranges[info->lines_count-1])+1 : 1);
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: movement to endpoint (-)
+      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y < 0 || delta.x < 0))
+      {
+        *cursor = txt_pt(1, 1);
+        change = 1;
+        taken = 1;
+      }
+      
+      //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
+      if(!(n->v.flags & UI_NavActionFlag_KeepMark))
+      {
+        *mark = *cursor;
+      }
+    }
+    
+    //- rjf: valid single-line op => do single-line op
+    else
+    {
+      *cursor = single_line_op.cursor;
+      *mark = single_line_op.mark;
+      *preferred_column = cursor->column;
+      change = 1;
+      taken = 1;
+    }
+    
+    //- rjf: copy
+    if(n->v.flags & UI_NavActionFlag_Copy)
+    {
+      String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(*cursor, *mark));
+      os_set_clipboard_text(text);
+    }
+    
+    //- rjf: consume
+    if(taken)
+    {
+      ui_nav_eat_action_node(nav_actions, n);
+    }
+  }
+  
+  scratch_end(scratch);
+  return change;
+}
+
+internal B32
 df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
 {
   Temp scratch = scratch_begin(0, 0);
