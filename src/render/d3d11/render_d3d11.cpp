@@ -496,6 +496,8 @@ r_window_equip(OS_Handle handle)
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       os_exit_process(1);
     }
+
+    r_d3d11_state->dxgi_factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
     
     //- rjf: create framebuffer & view
     window->swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)(&window->framebuffer));
