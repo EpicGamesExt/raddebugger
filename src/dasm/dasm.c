@@ -110,6 +110,7 @@ dasmi_inst_array_off_from_idx(DASMI_InstArray *array, U64 idx)
 ////////////////////////////////
 //~ rjf: Disassembly Functions
 
+#if 0
 #include "third_party/udis86/config.h"
 #include "third_party/udis86/udis86.h"
 #include "third_party/udis86/libudis86/decode.c"
@@ -118,6 +119,7 @@ dasmi_inst_array_off_from_idx(DASMI_InstArray *array, U64 idx)
 #include "third_party/udis86/libudis86/syn-intel.c"
 #include "third_party/udis86/libudis86/syn.c"
 #include "third_party/udis86/libudis86/udis86.c"
+#endif
 
 internal DASMI_InstChunkList
 dasmi_inst_chunk_list_from_arch_addr_data(Arena *arena, U64 *bytes_processed_counter, Architecture arch, U64 addr, String8 data)

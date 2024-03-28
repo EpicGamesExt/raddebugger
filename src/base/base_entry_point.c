@@ -33,6 +33,9 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(TEXT_CACHE_H)
   txt_init();
 #endif
+#if defined(DASM_CACHE_H)
+  dasm_init();
+#endif
 #if defined(DBGI_H)
   dbgi_init();
 #endif

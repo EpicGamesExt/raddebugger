@@ -181,7 +181,7 @@ internal void
 ts_task_thread__entry_point(void *p)
 {
   U64 thread_idx = (U64)p;
-  ThreadNameF("[ts] task thread #%I64u", thread_idx+1);
+  ThreadNameF("[ts] task thread #%I64u", thread_idx);
   TS_TaskThread *thread = &ts_shared->task_threads[thread_idx];
   for(;;)
   {

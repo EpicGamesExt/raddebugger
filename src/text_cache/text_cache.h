@@ -125,12 +125,19 @@ typedef TXT_TokenArray TXT_LangLexFunctionType(Arena *arena, U64 *bytes_processe
 typedef struct TXT_Node TXT_Node;
 struct TXT_Node
 {
+  // rjf: links
   TXT_Node *next;
   TXT_Node *prev;
+  
+  // rjf: key
   U128 hash;
   TXT_LangKind lang;
+  
+  // rjf: artifacts
   Arena *arena;
   TXT_TextInfo info;
+  
+  // rjf: metadata
   B32 is_working;
   U64 scope_ref_count;
   U64 last_time_touched_us;
@@ -161,6 +168,7 @@ struct TXT_Touch
 {
   TXT_Touch *next;
   U128 hash;
+  TXT_LangKind lang;
 };
 
 typedef struct TXT_Scope TXT_Scope;
@@ -283,7 +291,7 @@ internal String8 txt_string_from_info_data_line_num(TXT_TextInfo *info, String8 
 internal TXT_LineTokensSlice txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range);
 
 ////////////////////////////////
-//~ rjf: Transfer Threads
+//~ rjf: Parse Threads
 
 internal B32 txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us);
 internal void txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out);

@@ -721,7 +721,7 @@ txt_scope_close(TXT_Scope *scope)
     {
       for(TXT_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(u128_match(hash, n->hash))
+        if(u128_match(hash, n->hash) && touch->lang == n->lang)
         {
           ins_atomic_u64_dec_eval(&n->scope_ref_count);
           break;
@@ -750,6 +750,7 @@ txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node *node)
   }
   MemoryZeroStruct(touch);
   touch->hash = node->hash;
+  touch->lang = node->lang;
   SLLStackPush(scope->top_touch, touch);
 }
 
@@ -1193,12 +1194,11 @@ txt_parse_thread__entry_point(void *p)
 {
   for(;;)
   {
-    HS_Scope *scope = hs_scope_open();
-    
     //- rjf: get next key
     U128 hash = {0};
     TXT_LangKind lang = TXT_LangKind_Null;
     txt_u2p_dequeue_req(&hash, &lang);
+    HS_Scope *scope = hs_scope_open();
     
     //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%txt_shared->slots_count;
