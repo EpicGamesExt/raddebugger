@@ -234,6 +234,7 @@ global TXT_Shared *txt_shared = 0;
 //~ rjf: Basic Helpers
 
 internal TXT_LangKind txt_lang_kind_from_extension(String8 extension);
+internal TXT_LangKind txt_lang_kind_from_architecture(Architecture arch);
 internal TXT_LangLexFunctionType *txt_lex_function_from_lang_kind(TXT_LangKind kind);
 
 ////////////////////////////////

@@ -822,7 +822,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
     
     //- rjf: key -> parsed text info
     U128 data_hash = {0};
-    DASM_Info dasm_info = dasm_info_from_key_addr_arch(dasm_scope, dasm_key, vaddr_range.min, top.arch, &data_hash);
+    DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, vaddr_range.min, top.arch, 0, DASM_Syntax_Intel, &data_hash);
     String8 dasm_text_data = {0};
     TXT_TextInfo dasm_text_info = {0};
     for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)

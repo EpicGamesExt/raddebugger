@@ -5,6 +5,24 @@
 #define DASM_CACHE_H
 
 ////////////////////////////////
+//~ rjf: Stringification Types
+
+typedef U32 DASM_StyleFlags;
+enum
+{
+  DASM_StyleFlag_Addresses = (1<<0),
+  DASM_StyleFlag_CodeBytes = (1<<1),
+};
+
+typedef enum DASM_Syntax
+{
+  DASM_Syntax_Intel,
+  DASM_Syntax_ATT,
+  DASM_Syntax_COUNT
+}
+DASM_Syntax;
+
+////////////////////////////////
 //~ rjf: Instruction Types
 
 typedef struct DASM_Inst DASM_Inst;
@@ -64,6 +82,8 @@ struct DASM_Node
   U128 hash;
   U64 addr;
   Architecture arch;
+  DASM_StyleFlags style_flags;
+  DASM_Syntax syntax;
   
   // rjf: value
   Arena *info_arena;
@@ -103,6 +123,8 @@ struct DASM_Touch
   U128 hash;
   U64 addr;
   Architecture arch;
+  DASM_StyleFlags style_flags;
+  DASM_Syntax syntax;
 };
 
 typedef struct DASM_Scope DASM_Scope;
@@ -191,14 +213,14 @@ internal void dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_No
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal DASM_Info dasm_info_from_hash_addr_arch(DASM_Scope *scope, U128 hash, U64 addr, Architecture arch);
-internal DASM_Info dasm_info_from_key_addr_arch(DASM_Scope *scope, U128 key, U64 addr, Architecture arch, U128 *hash_out);
+internal DASM_Info dasm_info_from_hash_addr_arch_style(DASM_Scope *scope, U128 hash, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax);
+internal DASM_Info dasm_info_from_key_addr_arch_style(DASM_Scope *scope, U128 key, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
 
-internal B32 dasm_u2p_enqueue_req(U128 hash, U64 addr, Architecture arch, U64 endt_us);
-internal void dasm_u2p_dequeue_req(U128 *hash_out, U64 *addr_out, Architecture *arch_out);
+internal B32 dasm_u2p_enqueue_req(U128 hash, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax, U64 endt_us);
+internal void dasm_u2p_dequeue_req(U128 *hash_out, U64 *addr_out, Architecture *arch_out, DASM_StyleFlags *style_flags_out, DASM_Syntax *syntax_out);
 internal void dasm_parse_thread__entry_point(void *p);
 
 ////////////////////////////////

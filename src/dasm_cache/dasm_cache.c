@@ -161,7 +161,11 @@ dasm_scope_close(DASM_Scope *scope)
     {
       for(DASM_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(u128_match(t->hash, n->hash) && t->addr == n->addr && t->arch == n->arch)
+        if(u128_match(t->hash, n->hash) &&
+           t->addr == n->addr &&
+           t->arch == n->arch &&
+           t->style_flags == n->style_flags &&
+           t->syntax == n->syntax)
         {
           ins_atomic_u64_dec_eval(&n->scope_ref_count);
           break;
@@ -192,6 +196,8 @@ dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_Node *node)
   touch->hash = node->hash;
   touch->addr = node->addr;
   touch->arch = node->arch;
+  touch->style_flags = node->style_flags;
+  touch->syntax = node->syntax;
   SLLStackPush(scope->top_touch, touch);
 }
 
@@ -199,7 +205,7 @@ dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_Node *node)
 //~ rjf: Cache Lookups
 
 internal DASM_Info
-dasm_info_from_hash_addr_arch(DASM_Scope *scope, U128 hash, U64 addr, Architecture arch)
+dasm_info_from_hash_addr_arch_style(DASM_Scope *scope, U128 hash, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax)
 {
   DASM_Info info = {0};
   if(!u128_match(hash, u128_zero()))
@@ -213,7 +219,11 @@ dasm_info_from_hash_addr_arch(DASM_Scope *scope, U128 hash, U64 addr, Architectu
     {
       for(DASM_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(u128_match(hash, n->hash) && addr == n->addr && arch == n->arch)
+        if(u128_match(hash, n->hash) &&
+           addr == n->addr &&
+           arch == n->arch &&
+           style_flags == n->style_flags &&
+           syntax == n->syntax)
         {
           MemoryCopyStruct(&info, &n->info);
           found = 1;
@@ -230,7 +240,11 @@ dasm_info_from_hash_addr_arch(DASM_Scope *scope, U128 hash, U64 addr, Architectu
         DASM_Node *node = 0;
         for(DASM_Node *n = slot->first; n != 0; n = n->next)
         {
-          if(u128_match(hash, n->hash) && addr == n->addr && arch == n->arch)
+          if(u128_match(hash, n->hash) &&
+             addr == n->addr &&
+             arch == n->arch &&
+             style_flags == n->style_flags &&
+             syntax == n->syntax)
           {
             node = n;
             break;
@@ -252,26 +266,28 @@ dasm_info_from_hash_addr_arch(DASM_Scope *scope, U128 hash, U64 addr, Architectu
           node->hash = hash;
           node->addr = addr;
           node->arch = arch;
+          node->style_flags = style_flags;
+          node->syntax = syntax;
           node_is_new = 1;
         }
       }
     }
     if(node_is_new)
     {
-      dasm_u2p_enqueue_req(hash, addr, arch, max_U64);
+      dasm_u2p_enqueue_req(hash, addr, arch, style_flags, syntax, max_U64);
     }
   }
   return info;
 }
 
 internal DASM_Info
-dasm_info_from_key_addr_arch(DASM_Scope *scope, U128 key, U64 addr, Architecture arch, U128 *hash_out)
+dasm_info_from_key_addr_arch_style(DASM_Scope *scope, U128 key, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax, U128 *hash_out)
 {
   DASM_Info result = {0};
   for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
   {
     U128 hash = hs_hash_from_key(key, rewind_idx);
-    result = dasm_info_from_hash_addr_arch(scope, hash, addr, arch);
+    result = dasm_info_from_hash_addr_arch_style(scope, hash, addr, arch, style_flags, syntax);
     if(result.insts.count != 0)
     {
       if(hash_out)
@@ -288,7 +304,7 @@ dasm_info_from_key_addr_arch(DASM_Scope *scope, U128 key, U64 addr, Architecture
 //~ rjf: Parse Threads
 
 internal B32
-dasm_u2p_enqueue_req(U128 hash, U64 addr, Architecture arch, U64 endt_us)
+dasm_u2p_enqueue_req(U128 hash, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax, U64 endt_us)
 {
   B32 good = 0;
   OS_MutexScope(dasm_shared->u2p_ring_mutex) for(;;)
@@ -301,6 +317,8 @@ dasm_u2p_enqueue_req(U128 hash, U64 addr, Architecture arch, U64 endt_us)
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &hash);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &addr);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &arch);
+      dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &style_flags);
+      dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &syntax);
       break;
     }
     if(os_now_microseconds() >= endt_us)
@@ -317,7 +335,7 @@ dasm_u2p_enqueue_req(U128 hash, U64 addr, Architecture arch, U64 endt_us)
 }
 
 internal void
-dasm_u2p_dequeue_req(U128 *hash_out, U64 *addr_out, Architecture *arch_out)
+dasm_u2p_dequeue_req(U128 *hash_out, U64 *addr_out, Architecture *arch_out, DASM_StyleFlags *style_flags_out, DASM_Syntax *syntax_out)
 {
   OS_MutexScope(dasm_shared->u2p_ring_mutex) for(;;)
   {
@@ -327,6 +345,8 @@ dasm_u2p_dequeue_req(U128 *hash_out, U64 *addr_out, Architecture *arch_out)
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, hash_out);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, addr_out);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, arch_out);
+      dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, style_flags_out);
+      dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, syntax_out);
       break;
     }
     os_condition_variable_wait(dasm_shared->u2p_ring_cv, dasm_shared->u2p_ring_mutex, max_U64);
@@ -346,7 +366,9 @@ dasm_parse_thread__entry_point(void *p)
     U128 hash = {0};
     U64 addr = 0;
     Architecture arch = Architecture_Null;
-    dasm_u2p_dequeue_req(&hash, &addr, &arch);
+    DASM_StyleFlags style_flags = 0;
+    DASM_Syntax syntax = DASM_Syntax_Intel;
+    dasm_u2p_dequeue_req(&hash, &addr, &arch, &style_flags, &syntax);
     HS_Scope *hs_scope = hs_scope_open();
     
     //- rjf: unpack hash
@@ -466,7 +488,11 @@ dasm_parse_thread__entry_point(void *p)
     {
       for(DASM_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(u128_match(n->hash, hash) && n->addr == addr && n->arch == arch)
+        if(u128_match(n->hash, hash) &&
+           addr == n->addr &&
+           arch == n->arch &&
+           style_flags == n->style_flags &&
+           syntax == n->syntax)
         {
           n->info_arena = info_arena;
           MemoryCopyStruct(&n->info, &info);

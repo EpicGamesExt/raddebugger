@@ -33,6 +33,18 @@ txt_lang_kind_from_extension(String8 extension)
   return kind;
 }
 
+internal TXT_LangKind
+txt_lang_kind_from_architecture(Architecture arch)
+{
+  TXT_LangKind kind = TXT_LangKind_Null;
+  switch(arch)
+  {
+    default:{}break;
+    case Architecture_x64:{kind = TXT_LangKind_DisasmX64Intel;}break;
+  }
+  return kind;
+}
+
 internal TXT_LangLexFunctionType *
 txt_lex_function_from_lang_kind(TXT_LangKind kind)
 {
