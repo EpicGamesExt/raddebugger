@@ -10925,16 +10925,6 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
   return change;
 }
 
-internal B32
-df_do_dasm_controls(DASMI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
-{
-  Temp scratch = scratch_begin(0, 0);
-  B32 change = 0;
-  UI_NavActionList *nav_actions = ui_nav_actions();
-  scratch_end(scratch);
-  return change;
-}
-
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Labels
 

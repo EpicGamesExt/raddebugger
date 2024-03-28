@@ -1048,7 +1048,6 @@ internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, 
 
 internal B32 df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 internal B32 df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
-internal B32 df_do_dasm_controls(DASMI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Labels
