@@ -6346,18 +6346,10 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     //- rjf: copy text
     if(!txt_pt_match(sig.copy_range.min, sig.copy_range.max))
     {
-      // TODO(rjf)
-#if 0
       Temp temp = temp_begin(scratch.arena);
-      DF_Entity *flash_range = df_entity_alloc(entity, DF_EntityKind_FlashMarker);
-      df_entity_equip_death_timer(flash_range, 0.5f);
-      df_entity_equip_color_rgba(flash_range, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
-      df_entity_equip_txt_pt(flash_range, sig.copy_range.min);
-      df_entity_equip_txt_pt_alt(flash_range, sig.copy_range.max);
-      String8 text = txti_string_from_handle_txt_rng(temp.arena, txti_handle, sig.copy_range);
+      String8 text = txt_string_from_info_data_txt_rng(&dasm_text_info, dasm_text_data, sig.copy_range);
       os_set_clipboard_text(text);
       temp_end(temp);
-#endif
     }
     
     //- rjf: toggle cursor watch
