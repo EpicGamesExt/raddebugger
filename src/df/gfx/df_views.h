@@ -436,11 +436,6 @@ internal DF_EntityListerItemArray df_entity_lister_item_array_from_list(Arena *a
 internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray array);
 
 ////////////////////////////////
-//~ rjf: Disassembly View
-
-internal TXT_TokenArray df_txt_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string);
-
-////////////////////////////////
 //~ rjf: Eval/Watch Views
 
 //- rjf: eval watch view instance -> eval view key

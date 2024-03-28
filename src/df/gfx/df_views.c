@@ -370,176 +370,6 @@ df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray 
 }
 
 ////////////////////////////////
-//~ rjf: Disassembly View
-
-internal TXT_TokenArray
-df_txt_token_array_from_dasm_arch_string(Arena *arena, Architecture arch, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  TXT_TokenChunkList tokens = {0};
-  {
-    TXT_TokenKind active_token_kind = TXT_TokenKind_Null;
-    U64 active_token_start_off = 0;
-    U64 off = 0;
-    B32 escaped = 0;
-    B32 string_is_char = 0;
-    for(U64 advance = 0; off <= string.size; off += advance)
-    {
-      U8 byte      = (off+0 < string.size) ? string.str[off+0] : 0;
-      U8 next_byte = (off+1 < string.size) ? string.str[off+1] : 0;
-      B32 ender_found = 0;
-      advance = (active_token_kind != TXT_TokenKind_Null ? 1 : 0);
-      if(off == string.size && active_token_kind != TXT_TokenKind_Null)
-      {
-        ender_found = 1;
-        advance = 1;
-      }
-      switch(active_token_kind)
-      {
-        default:
-        case TXT_TokenKind_Null:
-        {
-          if(byte == ' ' || byte == '\t' || byte == '\v' || byte == '\f' || byte == '\r' || byte == '\n')
-          {
-            active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_Whitespace;
-            advance = 1;
-          }
-          else if(('a' <= byte && byte <= 'z') || ('A' <= byte && byte <= 'Z') || byte == '_')
-          {
-            active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_Identifier;
-            advance = 1;
-          }
-          else if(byte == '\'')
-          {
-            active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_String;
-            advance = 1;
-            string_is_char = 1;
-          }
-          else if(byte == '"')
-          {
-            active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_String;
-            advance = 1;
-            string_is_char = 0;
-          }
-          else if(('0' <= byte && byte <= '9') || (byte == '.' && '0' <= next_byte && next_byte <= '9'))
-          {
-            active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_Numeric;
-            advance = 1;
-          }
-          else if(byte == '~' || byte == '!' || byte == '%' || byte == '^' ||
-                  byte == '&' || byte == '*' || byte == '(' || byte == ')' ||
-                  byte == '-' || byte == '=' || byte == '+' || byte == '[' ||
-                  byte == ']' || byte == '{' || byte == '}' || byte == ';' ||
-                  byte == ':' || byte == '?' || byte == '/' || byte == '<' ||
-                  byte == '>' || byte == ',' || byte == '.')
-          {
-            active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_Symbol;
-            advance = 1;
-          }
-          else
-          {
-            active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_Error;
-            advance = 1;
-          }
-        }break;
-        case TXT_TokenKind_Whitespace:
-        if(byte != ' ' && byte != '\t' && byte != '\v' && byte != '\f')
-        {
-          ender_found = 1;
-          advance = 0;
-        }break;
-        case TXT_TokenKind_Identifier:
-        if((byte < 'a' || 'z' < byte) && (byte < 'A' || 'Z' < byte) && (byte < '0' || '9' < byte) && byte != '_')
-        {
-          ender_found = 1;
-          advance = 0;
-        }break;
-        case TXT_TokenKind_String:
-        {
-          U8 ender_byte = string_is_char ? '\'' : '"';
-          if(!escaped && byte == ender_byte)
-          {
-            ender_found = 1;
-            advance = 1;
-          }
-          else if(escaped)
-          {
-            escaped = 0;
-            advance = 1;
-          }
-          else if(byte == '\\')
-          {
-            escaped = 1;
-            advance = 1;
-          }
-          else
-          {
-            U8 byte_class = utf8_class[byte>>3];
-            if(byte_class > 1)
-            {
-              advance = (U64)byte_class;
-            }
-          }
-        }break;
-        case TXT_TokenKind_Numeric:
-        if((byte < 'a' || 'z' < byte) && (byte < 'A' || 'Z' < byte) && (byte < '0' || '9' < byte) && byte != '.')
-        {
-          ender_found = 1;
-          advance = 0;
-        }break;
-        case TXT_TokenKind_Symbol:
-        if(1)
-        {
-          // NOTE(rjf): avoiding maximum munch rule for now
-          ender_found = 1;
-          advance = 0;
-        }
-        else if(byte != '~' && byte != '!' && byte != '#' && byte != '%' &&
-                byte != '^' && byte != '&' && byte != '*' && byte != '(' &&
-                byte != ')' && byte != '-' && byte != '=' && byte != '+' &&
-                byte != '[' && byte != ']' && byte != '{' && byte != '}' &&
-                byte != ';' && byte != ':' && byte != '?' && byte != '/' &&
-                byte != '<' && byte != '>' && byte != ',' && byte != '.')
-        {
-          ender_found = 1;
-          advance = 0;
-        }break;
-        case TXT_TokenKind_Error:
-        {
-          ender_found = 1;
-          advance = 0;
-        }break;
-      }
-      if(ender_found != 0)
-      {
-        TXT_Token token = {active_token_kind, r1u64(active_token_start_off, off+advance)};
-        if(active_token_kind == TXT_TokenKind_Identifier)
-        {
-          String8 token_string = str8_substr(string, token.range);
-          if(df_info_summary_from_string(arch, token_string).size != 0)
-          {
-            token.kind = TXT_TokenKind_Keyword;
-          }
-        }
-        txt_token_chunk_list_push(arena, &tokens, 1024, &token);
-        active_token_kind = TXT_TokenKind_Null;
-        active_token_start_off = token.range.max;
-      }
-    }
-  }
-  TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
-  scratch_end(scratch);
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Eval/Watch Views
 
 //- rjf: eval watch view instance -> eval view key
@@ -5945,8 +5775,28 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Disassembly)
 DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
 {
   Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
+  DASM_Scope *dasm_scope = dasm_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
   DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
+  
+  //////////////////////////////
+  //- rjf: unpack disassembly info
+  //
   DF_Entity *process = df_entity_from_handle(dv->process);
+  Architecture arch = df_architecture_from_entity(process);
+  U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(4));
+  Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
+  U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
+  U128 dasm_data_hash = {0};
+  DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, dasm_vaddr_range.min, arch, DASM_StyleFlag_Addresses, DASM_Syntax_Intel, &dasm_data_hash);
+  U128 dasm_text_hash = {0};
+  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, txt_lang_kind_from_architecture(arch), &dasm_text_hash);
+  String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
+  
+  //////////////////////////////
+  //- rjf: process commands
+  //
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
     DF_Cmd *cmd = &n->cmd;
@@ -6008,13 +5858,10 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
       case DF_CoreCmdKind_ToggleBreakpointAtCursor:
       {
-        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
-        if(insts.count != 0)
+        if(1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count)
         {
-          U64 off = dasmi_inst_array_off_from_idx(&insts, dv->cursor.line-1);
-          U64 vaddr = dasm_info.vaddr_range.min+off;
+          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, dv->cursor.line-1);
+          U64 vaddr = dasm_vaddr_range.min+off;
           DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.vaddr = vaddr;
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
@@ -6024,30 +5871,25 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
       case DF_CoreCmdKind_ToggleWatchPinAtCursor:
       {
-        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
-        if(insts.count != 0)
+        if(1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count)
         {
-          U64 off = dasmi_inst_array_off_from_idx(&insts, dv->cursor.line-1);
-          U64 vaddr = dasm_info.vaddr_range.min+off;
+          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, dv->cursor.line-1);
+          U64 vaddr = dasm_vaddr_range.min+off;
           DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
           p.vaddr = vaddr;
           p.string = params.string;
           df_cmd_params_mark_slot(&p, DF_CmdParamSlot_VirtualAddr);
           df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchPin));
+          dv->contain_cursor = 1;
         }
       }break;
       case DF_CoreCmdKind_RunToCursor:
       {
-        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
-        if(insts.count != 0)
+        if(1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count)
         {
-          U64 off = dasmi_inst_array_off_from_idx(&insts, dv->cursor.line-1);
-          U64 vaddr = dasm_info.vaddr_range.min+off;
+          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, dv->cursor.line-1);
+          U64 vaddr = dasm_vaddr_range.min+off;
           DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.vaddr = vaddr;
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
@@ -6056,15 +5898,12 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
       case DF_CoreCmdKind_SetNextStatement:
       {
-        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
-        DF_Entity *thread = df_entity_from_handle(params.entity);
         S64 line_num = (cmd->params.text_point.line == 0 ? dv->cursor.line : cmd->params.text_point.line);
-        if(insts.count != 0)
+        DF_Entity *thread = df_entity_from_handle(params.entity);
+        if(1 <= line_num && line_num <= dasm_info.insts.count)
         {
-          U64 off = dasmi_inst_array_off_from_idx(&insts, line_num-1);
-          U64 vaddr = dasm_info.vaddr_range.min+off;
+          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, line_num-1);
+          U64 vaddr = dasm_vaddr_range.min+off;
           DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.vaddr = vaddr;
           params.entity = df_handle_from_entity(thread);
@@ -6126,6 +5965,10 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
     }
   }
+  
+  hs_scope_close(hs_scope);
+  dasm_scope_close(dasm_scope);
+  txt_scope_close(txt_scope);
   scratch_end(scratch);
 }
 
