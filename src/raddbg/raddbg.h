@@ -8,9 +8,6 @@
 // [ ] unwinding -> in-process-memory EXE info
 // [ ] "root" concept in hash store, which buckets keys & allows usage code to
 //     jettison a collection of keys in retained mode fashion
-// [x] solidify synchronization mechanisms for usage of demon layer
-// [x] TLS eval correctness
-// [x] freezing thread while running -> soft-halt
 
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
@@ -55,7 +52,6 @@
 //       start with brighter color, but sometimes with darker - shouldn't it
 //       always have the same color ordering?
 //
-//  [x]  middle mouse button on tab should close it
 // [ ] pipe failure-to-launch errors back to frontend
 
 ////////////////////////////////
@@ -85,15 +81,9 @@
 //     since that's not normally how Windows fonts work.
 //
 // [ ] ** Converter performance & heuristics for asynchronously doing it early
-//
-// [x] disasm animation & go-to-address
-//
-// [ ] visualize remapped files (via path map)
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
-//
-// [ ] Watch Window Filtering
 //
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
@@ -211,9 +201,6 @@
 // [ ] @cleanup @feature double & triple click select in source views
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
-// [x] @feature disasm keyboard navigation & copy/paste
-// [x] run-to-line needs to work if no processes are running
-//     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
 //
 // [ ] C++ virtual inheritance member visualization in watch window
@@ -238,12 +225,6 @@
 //      the watch window, but then also how you edit them if they are not
 //      expandable? It seems like this should be consistent (one way to edit,
 //      one way to expand/collapse, that are distinct)
-//
-//  [x] I didn't understand the terminology "Equip With Color". Does that just
-//      mean specify the color used to display it? Is "Apply Color" perhaps a
-//      bit more user-friendly?
-//
-//  [x] The cursor feels a bit too huge vertically.
 //
 //  [ ] The hex format for color values in the config file was a real
 //      mindbender. It's prefixed with "0x", so I was assuming it was either
@@ -412,6 +393,24 @@
 //      just in looking up & stitching stuff repeatedly
 //  [ ] convert UI layout pass to not be naive recursive version
 //  [ ] (big change) parallelize window ui build codepaths per-panel
+
+////////////////////////////////
+//~ rjf: Recently Completed Task Log
+//
+// [x] solidify synchronization mechanisms for usage of demon layer
+// [x] TLS eval correctness
+// [x] freezing thread while running -> soft-halt
+// [x] Watch Window Filtering
+// [x] @feature disasm keyboard navigation & copy/paste
+// [x] run-to-line needs to work if no processes are running
+//     - place temp bp, attach "die on hit" flag or something like that?
+// [x] disasm animation & go-to-address
+//  [x]  middle mouse button on tab should close it
+//  [x] I didn't understand the terminology "Equip With Color". Does that just
+//      mean specify the color used to display it? Is "Apply Color" perhaps a
+//      bit more user-friendly?
+//
+//  [x] The cursor feels a bit too huge vertically.
 
 #ifndef RADDBG_H
 #define RADDBG_H
