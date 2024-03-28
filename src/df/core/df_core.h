@@ -1404,7 +1404,7 @@ internal DF_EntityFuzzyItemArray df_entity_fuzzy_item_array_from_entity_array_ne
 internal TXTI_Handle df_txti_handle_from_entity(DF_Entity *entity);
 
 //- rjf: entity -> disasm info
-internal DASM_Handle df_dasm_handle_from_process_vaddr(DF_Entity *process, U64 vaddr);
+internal DASMI_Handle df_dasm_handle_from_process_vaddr(DF_Entity *process, U64 vaddr);
 
 //- rjf: full path building, from file/folder entities
 internal String8 df_full_path_from_entity(Arena *arena, DF_Entity *entity);

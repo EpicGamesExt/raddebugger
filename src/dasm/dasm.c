@@ -5,30 +5,30 @@
 //~ rjf: Main Layer Initialization
 
 internal void
-dasm_init(void)
+dasmi_init(void)
 {
   Arena *arena = arena_alloc();
-  dasm_shared = push_array(arena, DASM_Shared, 1);
-  dasm_shared->arena = arena;
-  dasm_shared->entity_map.slots_count = 1024;
-  dasm_shared->entity_map.slots = push_array(arena, DASM_EntitySlot, dasm_shared->entity_map.slots_count);
-  dasm_shared->entity_map_stripes.count = 64;
-  dasm_shared->entity_map_stripes.v = push_array(arena, DASM_Stripe, dasm_shared->entity_map_stripes.count);
-  for(U64 idx = 0; idx < dasm_shared->entity_map_stripes.count; idx += 1)
+  dasmi_shared = push_array(arena, DASMI_Shared, 1);
+  dasmi_shared->arena = arena;
+  dasmi_shared->entity_map.slots_count = 1024;
+  dasmi_shared->entity_map.slots = push_array(arena, DASMI_EntitySlot, dasmi_shared->entity_map.slots_count);
+  dasmi_shared->entity_map_stripes.count = 64;
+  dasmi_shared->entity_map_stripes.v = push_array(arena, DASMI_Stripe, dasmi_shared->entity_map_stripes.count);
+  for(U64 idx = 0; idx < dasmi_shared->entity_map_stripes.count; idx += 1)
   {
-    dasm_shared->entity_map_stripes.v[idx].arena = arena_alloc();
-    dasm_shared->entity_map_stripes.v[idx].rw_mutex = os_rw_mutex_alloc();
-    dasm_shared->entity_map_stripes.v[idx].cv = os_condition_variable_alloc();
+    dasmi_shared->entity_map_stripes.v[idx].arena = arena_alloc();
+    dasmi_shared->entity_map_stripes.v[idx].rw_mutex = os_rw_mutex_alloc();
+    dasmi_shared->entity_map_stripes.v[idx].cv = os_condition_variable_alloc();
   }
-  dasm_shared->u2d_ring_mutex = os_mutex_alloc();
-  dasm_shared->u2d_ring_cv = os_condition_variable_alloc();
-  dasm_shared->u2d_ring_size = KB(64);
-  dasm_shared->u2d_ring_base = push_array_no_zero(arena, U8, dasm_shared->u2d_ring_size);
-  dasm_shared->decode_thread_count = Max(1, os_logical_core_count()-1);
-  dasm_shared->decode_threads = push_array(arena, OS_Handle, dasm_shared->decode_thread_count);
-  for(U64 idx = 0; idx < dasm_shared->decode_thread_count; idx += 1)
+  dasmi_shared->u2d_ring_mutex = os_mutex_alloc();
+  dasmi_shared->u2d_ring_cv = os_condition_variable_alloc();
+  dasmi_shared->u2d_ring_size = KB(64);
+  dasmi_shared->u2d_ring_base = push_array_no_zero(arena, U8, dasmi_shared->u2d_ring_size);
+  dasmi_shared->decode_thread_count = Max(1, os_logical_core_count()-1);
+  dasmi_shared->decode_threads = push_array(arena, OS_Handle, dasmi_shared->decode_thread_count);
+  for(U64 idx = 0; idx < dasmi_shared->decode_thread_count; idx += 1)
   {
-    dasm_shared->decode_threads[idx] = os_launch_thread(dasm_decode_thread_entry_point, (void *)idx, 0);
+    dasmi_shared->decode_threads[idx] = os_launch_thread(dasmi_decode_thread_entry_point, (void *)idx, 0);
   }
 }
 
@@ -36,7 +36,7 @@ dasm_init(void)
 //~ rjf: Basic Helpers
 
 internal U64
-dasm_hash_from_string(String8 string)
+dasmi_hash_from_string(String8 string)
 {
   U64 result = 5381;
   for(U64 i = 0; i < string.size; i += 1)
@@ -50,13 +50,13 @@ dasm_hash_from_string(String8 string)
 //~ rjf: Instruction Type Functions
 
 internal void
-dasm_inst_chunk_list_push(Arena *arena, DASM_InstChunkList *list, U64 cap, DASM_Inst *inst)
+dasmi_inst_chunk_list_push(Arena *arena, DASMI_InstChunkList *list, U64 cap, DASMI_Inst *inst)
 {
-  DASM_InstChunkNode *node = list->last;
+  DASMI_InstChunkNode *node = list->last;
   if(node == 0 || node->count >= node->cap)
   {
-    node = push_array(arena, DASM_InstChunkNode, 1);
-    node->v = push_array_no_zero(arena, DASM_Inst, cap);
+    node = push_array(arena, DASMI_InstChunkNode, 1);
+    node->v = push_array_no_zero(arena, DASMI_Inst, cap);
     node->cap = cap;
     SLLQueuePush(list->first, list->last, node);
     list->node_count += 1;
@@ -66,23 +66,23 @@ dasm_inst_chunk_list_push(Arena *arena, DASM_InstChunkList *list, U64 cap, DASM_
   list->inst_count += 1;
 }
 
-internal DASM_InstArray
-dasm_inst_array_from_chunk_list(Arena *arena, DASM_InstChunkList *list)
+internal DASMI_InstArray
+dasmi_inst_array_from_chunk_list(Arena *arena, DASMI_InstChunkList *list)
 {
-  DASM_InstArray array = {0};
+  DASMI_InstArray array = {0};
   array.count = list->inst_count;
-  array.v = push_array_no_zero(arena, DASM_Inst, array.count);
+  array.v = push_array_no_zero(arena, DASMI_Inst, array.count);
   U64 idx = 0;
-  for(DASM_InstChunkNode *n = list->first; n != 0; n = n->next)
+  for(DASMI_InstChunkNode *n = list->first; n != 0; n = n->next)
   {
-    MemoryCopy(array.v+idx, n->v, sizeof(DASM_Inst)*n->count);
+    MemoryCopy(array.v+idx, n->v, sizeof(DASMI_Inst)*n->count);
     idx += n->count;
   }
   return array;
 }
 
 internal U64
-dasm_inst_array_idx_from_off__linear_scan(DASM_InstArray *array, U64 off)
+dasmi_inst_array_idx_from_off__linear_scan(DASMI_InstArray *array, U64 off)
 {
   U64 result = 0;
   for(U64 idx = 0; idx < array->count; idx += 1)
@@ -97,7 +97,7 @@ dasm_inst_array_idx_from_off__linear_scan(DASM_InstArray *array, U64 off)
 }
 
 internal U64
-dasm_inst_array_off_from_idx(DASM_InstArray *array, U64 idx)
+dasmi_inst_array_off_from_idx(DASMI_InstArray *array, U64 idx)
 {
   U64 off = 0;
   if(idx < array->count)
@@ -119,10 +119,10 @@ dasm_inst_array_off_from_idx(DASM_InstArray *array, U64 idx)
 #include "third_party/udis86/libudis86/syn.c"
 #include "third_party/udis86/libudis86/udis86.c"
 
-internal DASM_InstChunkList
-dasm_inst_chunk_list_from_arch_addr_data(Arena *arena, U64 *bytes_processed_counter, Architecture arch, U64 addr, String8 data)
+internal DASMI_InstChunkList
+dasmi_inst_chunk_list_from_arch_addr_data(Arena *arena, U64 *bytes_processed_counter, Architecture arch, U64 addr, String8 data)
 {
-  DASM_InstChunkList inst_list = {0};
+  DASMI_InstChunkList inst_list = {0};
   switch(arch)
   {
     default:{}break;
@@ -157,8 +157,8 @@ dasm_inst_chunk_list_from_arch_addr_data(Arena *arena, U64 *bytes_processed_coun
         
         // rjf: push
         String8 string = push_str8f(arena, "%s", udc.asm_buf);
-        DASM_Inst inst = {string, off, rel_voff};
-        dasm_inst_chunk_list_push(arena, &inst_list, 1024, &inst);
+        DASMI_Inst inst = {string, off, rel_voff};
+        dasmi_inst_chunk_list_push(arena, &inst_list, 1024, &inst);
         
         // rjf: increment
         off += size;
@@ -178,21 +178,21 @@ dasm_inst_chunk_list_from_arch_addr_data(Arena *arena, U64 *bytes_processed_coun
 
 //- rjf: opening handles & correllation with module
 
-internal DASM_Handle
-dasm_handle_from_ctrl_process_range_arch(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range, Architecture arch)
+internal DASMI_Handle
+dasmi_handle_from_ctrl_process_range_arch(CTRL_MachineID machine, DMN_Handle process, Rng1U64 vaddr_range, Architecture arch)
 {
-  DASM_Handle result = {0};
+  DASMI_Handle result = {0};
   if(machine != 0 && process.u64[0] != 0)
   {
-    U64 hash = dasm_hash_from_string(str8_struct(&process));
-    U64 slot_idx = hash%dasm_shared->entity_map.slots_count;
-    U64 stripe_idx = slot_idx%dasm_shared->entity_map_stripes.count;
-    DASM_EntitySlot *slot = &dasm_shared->entity_map.slots[slot_idx];
-    DASM_Stripe *stripe = &dasm_shared->entity_map_stripes.v[stripe_idx];
+    U64 hash = dasmi_hash_from_string(str8_struct(&process));
+    U64 slot_idx = hash%dasmi_shared->entity_map.slots_count;
+    U64 stripe_idx = slot_idx%dasmi_shared->entity_map_stripes.count;
+    DASMI_EntitySlot *slot = &dasmi_shared->entity_map.slots[slot_idx];
+    DASMI_Stripe *stripe = &dasmi_shared->entity_map_stripes.v[stripe_idx];
     OS_MutexScopeW(stripe->rw_mutex)
     {
-      DASM_Entity *entity = 0;
-      for(DASM_Entity *e = slot->first; e != 0; e = e->next)
+      DASMI_Entity *entity = 0;
+      for(DASMI_Entity *e = slot->first; e != 0; e = e->next)
       {
         if(e->machine_id == machine &&
            dmn_handle_match(e->process, process) &&
@@ -205,13 +205,13 @@ dasm_handle_from_ctrl_process_range_arch(CTRL_MachineID machine, DMN_Handle proc
       }
       if(entity == 0)
       {
-        entity = push_array(stripe->arena, DASM_Entity, 1);
+        entity = push_array(stripe->arena, DASMI_Entity, 1);
         SLLQueuePush(slot->first, slot->last, entity);
         entity->machine_id = machine;
         entity->process    = process;
         entity->vaddr_range= vaddr_range;
         entity->arch       = arch;
-        entity->id         = ins_atomic_u64_inc_eval(&dasm_shared->entity_id_gen);
+        entity->id         = ins_atomic_u64_inc_eval(&dasmi_shared->entity_id_gen);
         entity->decode_inst_arena = arena_alloc__sized(MB(256), KB(64));
         entity->decode_string_arena = arena_alloc__sized(GB(1), KB(64));
       }
@@ -224,21 +224,21 @@ dasm_handle_from_ctrl_process_range_arch(CTRL_MachineID machine, DMN_Handle proc
 
 //- rjf: asking for top-level info of a handle
 
-internal DASM_BinaryInfo
-dasm_binary_info_from_handle(Arena *arena, DASM_Handle handle)
+internal DASMI_BinaryInfo
+dasmi_binary_info_from_handle(Arena *arena, DASMI_Handle handle)
 {
-  DASM_BinaryInfo info = {0};
+  DASMI_BinaryInfo info = {0};
   {
     U64 hash = handle.u64[0];
     U64 id = handle.u64[1];
-    U64 slot_idx = hash%dasm_shared->entity_map.slots_count;
-    U64 stripe_idx = slot_idx%dasm_shared->entity_map_stripes.count;
-    DASM_EntitySlot *slot = &dasm_shared->entity_map.slots[slot_idx];
-    DASM_Stripe *stripe = &dasm_shared->entity_map_stripes.v[stripe_idx];
+    U64 slot_idx = hash%dasmi_shared->entity_map.slots_count;
+    U64 stripe_idx = slot_idx%dasmi_shared->entity_map_stripes.count;
+    DASMI_EntitySlot *slot = &dasmi_shared->entity_map.slots[slot_idx];
+    DASMI_Stripe *stripe = &dasmi_shared->entity_map_stripes.v[stripe_idx];
     OS_MutexScopeR(stripe->rw_mutex)
     {
-      DASM_Entity *entity = 0;
-      for(DASM_Entity *e = slot->first; e != 0; e = e->next)
+      DASMI_Entity *entity = 0;
+      for(DASMI_Entity *e = slot->first; e != 0; e = e->next)
       {
         if(e->id == id)
         {
@@ -261,23 +261,23 @@ dasm_binary_info_from_handle(Arena *arena, DASM_Handle handle)
 
 //- rjf: asking for decoded instructions
 
-internal DASM_InstArray
-dasm_inst_array_from_handle(Arena *arena, DASM_Handle handle, U64 endt_us)
+internal DASMI_InstArray
+dasmi_inst_array_from_handle(Arena *arena, DASMI_Handle handle, U64 endt_us)
 {
-  DASM_InstArray result = {0};
+  DASMI_InstArray result = {0};
   if(handle.u64[0] != 0 || handle.u64[1] != 0)
   {
     U64 hash = handle.u64[0];
     U64 id = handle.u64[1];
-    U64 slot_idx = hash%dasm_shared->entity_map.slots_count;
-    U64 stripe_idx = slot_idx%dasm_shared->entity_map_stripes.count;
-    DASM_EntitySlot *slot = &dasm_shared->entity_map.slots[slot_idx];
-    DASM_Stripe *stripe = &dasm_shared->entity_map_stripes.v[stripe_idx];
+    U64 slot_idx = hash%dasmi_shared->entity_map.slots_count;
+    U64 stripe_idx = slot_idx%dasmi_shared->entity_map_stripes.count;
+    DASMI_EntitySlot *slot = &dasmi_shared->entity_map.slots[slot_idx];
+    DASMI_Stripe *stripe = &dasmi_shared->entity_map_stripes.v[stripe_idx];
     B32 sent = 0;
     OS_MutexScopeR(stripe->rw_mutex) for(;;)
     {
-      DASM_Entity *entity = 0;
-      for(DASM_Entity *e = slot->first; e != 0; e = e->next)
+      DASMI_Entity *entity = 0;
+      for(DASMI_Entity *e = slot->first; e != 0; e = e->next)
       {
         if(e->id == id)
         {
@@ -294,8 +294,8 @@ dasm_inst_array_from_handle(Arena *arena, DASM_Handle handle, U64 endt_us)
         if(bytes_processed == bytes_to_process && bytes_processed != 0)
         {
           result.count = entity->decode_inst_array.count;
-          result.v = push_array_no_zero(arena, DASM_Inst, result.count);
-          MemoryCopy(result.v, entity->decode_inst_array.v, sizeof(DASM_Inst)*result.count);
+          result.v = push_array_no_zero(arena, DASMI_Inst, result.count);
+          MemoryCopy(result.v, entity->decode_inst_array.v, sizeof(DASMI_Inst)*result.count);
           for(U64 idx = 0; idx < result.count; idx += 1)
           {
             result.v[idx].string = push_str8_copy(arena, result.v[idx].string);
@@ -305,8 +305,8 @@ dasm_inst_array_from_handle(Arena *arena, DASM_Handle handle, U64 endt_us)
       }
       if(!sent && entity != 0 && last_time_sent_us+10000 <= os_now_microseconds())
       {
-        DASM_DecodeRequest req = {handle};
-        sent = dasm_u2d_enqueue_request(&req, endt_us);
+        DASMI_DecodeRequest req = {handle};
+        sent = dasmi_u2d_enqueue_request(&req, endt_us);
         ins_atomic_u64_eval_assign(&entity->last_time_sent_us, os_now_microseconds());
       }
       if(os_now_microseconds() >= endt_us)
@@ -323,70 +323,70 @@ dasm_inst_array_from_handle(Arena *arena, DASM_Handle handle, U64 endt_us)
 //~ rjf: Decode Threads
 
 internal B32
-dasm_u2d_enqueue_request(DASM_DecodeRequest *req, U64 endt_us)
+dasmi_u2d_enqueue_request(DASMI_DecodeRequest *req, U64 endt_us)
 {
   B32 result = 0;
-  OS_MutexScope(dasm_shared->u2d_ring_mutex) for(;;)
+  OS_MutexScope(dasmi_shared->u2d_ring_mutex) for(;;)
   {
-    U64 unconsumed_size = (dasm_shared->u2d_ring_write_pos-dasm_shared->u2d_ring_read_pos);
-    U64 available_size = (dasm_shared->u2d_ring_size-unconsumed_size);
+    U64 unconsumed_size = (dasmi_shared->u2d_ring_write_pos-dasmi_shared->u2d_ring_read_pos);
+    U64 available_size = (dasmi_shared->u2d_ring_size-unconsumed_size);
     if(available_size >= sizeof(*req))
     {
       result = 1;
-      dasm_shared->u2d_ring_write_pos += ring_write_struct(dasm_shared->u2d_ring_base, dasm_shared->u2d_ring_size, dasm_shared->u2d_ring_write_pos, req);
-      dasm_shared->u2d_ring_write_pos += 7;
-      dasm_shared->u2d_ring_write_pos -= dasm_shared->u2d_ring_write_pos%8;
+      dasmi_shared->u2d_ring_write_pos += ring_write_struct(dasmi_shared->u2d_ring_base, dasmi_shared->u2d_ring_size, dasmi_shared->u2d_ring_write_pos, req);
+      dasmi_shared->u2d_ring_write_pos += 7;
+      dasmi_shared->u2d_ring_write_pos -= dasmi_shared->u2d_ring_write_pos%8;
       break;
     }
     if(os_now_microseconds() >= endt_us)
     {
       break;
     }
-    os_condition_variable_wait(dasm_shared->u2d_ring_cv, dasm_shared->u2d_ring_mutex, endt_us);
+    os_condition_variable_wait(dasmi_shared->u2d_ring_cv, dasmi_shared->u2d_ring_mutex, endt_us);
   }
   if(result)
   {
-    os_condition_variable_broadcast(dasm_shared->u2d_ring_cv);
+    os_condition_variable_broadcast(dasmi_shared->u2d_ring_cv);
   }
   return result;
 }
 
-internal DASM_DecodeRequest
-dasm_u2d_dequeue_request(void)
+internal DASMI_DecodeRequest
+dasmi_u2d_dequeue_request(void)
 {
-  DASM_DecodeRequest req = {0};
-  OS_MutexScope(dasm_shared->u2d_ring_mutex) for(;;)
+  DASMI_DecodeRequest req = {0};
+  OS_MutexScope(dasmi_shared->u2d_ring_mutex) for(;;)
   {
-    U64 unconsumed_size = (dasm_shared->u2d_ring_write_pos-dasm_shared->u2d_ring_read_pos);
-    if(unconsumed_size >= sizeof(DASM_DecodeRequest))
+    U64 unconsumed_size = (dasmi_shared->u2d_ring_write_pos-dasmi_shared->u2d_ring_read_pos);
+    if(unconsumed_size >= sizeof(DASMI_DecodeRequest))
     {
-      dasm_shared->u2d_ring_read_pos += ring_read_struct(dasm_shared->u2d_ring_base, dasm_shared->u2d_ring_size, dasm_shared->u2d_ring_read_pos, &req);
-      dasm_shared->u2d_ring_read_pos += 7;
-      dasm_shared->u2d_ring_read_pos -= dasm_shared->u2d_ring_read_pos%8;
+      dasmi_shared->u2d_ring_read_pos += ring_read_struct(dasmi_shared->u2d_ring_base, dasmi_shared->u2d_ring_size, dasmi_shared->u2d_ring_read_pos, &req);
+      dasmi_shared->u2d_ring_read_pos += 7;
+      dasmi_shared->u2d_ring_read_pos -= dasmi_shared->u2d_ring_read_pos%8;
       break;
     }
-    os_condition_variable_wait(dasm_shared->u2d_ring_cv, dasm_shared->u2d_ring_mutex, max_U64);
+    os_condition_variable_wait(dasmi_shared->u2d_ring_cv, dasmi_shared->u2d_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(dasm_shared->u2d_ring_cv);
+  os_condition_variable_broadcast(dasmi_shared->u2d_ring_cv);
   return req;
 }
 
 internal void
-dasm_decode_thread_entry_point(void *p)
+dasmi_decode_thread_entry_point(void *p)
 {
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
     
     //- rjf: get next request & unpack
-    DASM_DecodeRequest req = dasm_u2d_dequeue_request();
-    DASM_Handle handle = req.handle;
+    DASMI_DecodeRequest req = dasmi_u2d_dequeue_request();
+    DASMI_Handle handle = req.handle;
     U64 hash = handle.u64[0];
     U64 id = handle.u64[1];
-    U64 slot_idx = hash%dasm_shared->entity_map.slots_count;
-    U64 stripe_idx = slot_idx%dasm_shared->entity_map_stripes.count;
-    DASM_EntitySlot *slot = &dasm_shared->entity_map.slots[slot_idx];
-    DASM_Stripe *stripe = &dasm_shared->entity_map_stripes.v[stripe_idx];
+    U64 slot_idx = hash%dasmi_shared->entity_map.slots_count;
+    U64 stripe_idx = slot_idx%dasmi_shared->entity_map_stripes.count;
+    DASMI_EntitySlot *slot = &dasmi_shared->entity_map.slots[slot_idx];
+    DASMI_Stripe *stripe = &dasmi_shared->entity_map_stripes.v[stripe_idx];
     
     //- rjf: request -> ctrl info
     B32 is_first_to_task = 0;
@@ -397,8 +397,8 @@ dasm_decode_thread_entry_point(void *p)
     U64 *bytes_processed_counter = 0;
     OS_MutexScopeR(stripe->rw_mutex)
     {
-      DASM_Entity *entity = 0;
-      for(DASM_Entity *e = slot->first; e != 0; e = e->next)
+      DASMI_Entity *entity = 0;
+      for(DASMI_Entity *e = slot->first; e != 0; e = e->next)
       {
         if(e->id == id)
         {
@@ -432,8 +432,8 @@ dasm_decode_thread_entry_point(void *p)
     {
       OS_MutexScopeW(stripe->rw_mutex)
       {
-        DASM_Entity *entity = 0;
-        for(DASM_Entity *e = slot->first; e != 0; e = e->next)
+        DASMI_Entity *entity = 0;
+        for(DASMI_Entity *e = slot->first; e != 0; e = e->next)
         {
           if(e->id == id)
           {
@@ -463,14 +463,14 @@ dasm_decode_thread_entry_point(void *p)
         
         //- rjf: read next chunk & decode
         String8 data = {0};
-        DASM_InstChunkList inst_list = {0};
+        DASMI_InstChunkList inst_list = {0};
         if(good_task)
         {
           data.str = push_array_no_zero(scratch.arena, U8, dim_1u64(chunk_vaddr_range));
           data.size = dmn_process_read(ctrl_process, chunk_vaddr_range, data.str);
           if(data.size != 0)
           {
-            inst_list = dasm_inst_chunk_list_from_arch_addr_data(scratch.arena, bytes_processed_counter, arch, chunk_vaddr_range.min, data);
+            inst_list = dasmi_inst_chunk_list_from_arch_addr_data(scratch.arena, bytes_processed_counter, arch, chunk_vaddr_range.min, data);
           }
         }
         
@@ -478,8 +478,8 @@ dasm_decode_thread_entry_point(void *p)
         {
           OS_MutexScopeW(stripe->rw_mutex)
           {
-            DASM_Entity *entity = 0;
-            for(DASM_Entity *e = slot->first; e != 0; e = e->next)
+            DASMI_Entity *entity = 0;
+            for(DASMI_Entity *e = slot->first; e != 0; e = e->next)
             {
               if(e->id == id)
               {
@@ -489,11 +489,11 @@ dasm_decode_thread_entry_point(void *p)
             }
             if(entity != 0)
             {
-              DASM_Inst *new_chunk_base = push_array(entity->decode_inst_arena, DASM_Inst, inst_list.inst_count);
+              DASMI_Inst *new_chunk_base = push_array(entity->decode_inst_arena, DASMI_Inst, inst_list.inst_count);
               U64 off = 0;
-              for(DASM_InstChunkNode *node = inst_list.first; node != 0; node = node->next)
+              for(DASMI_InstChunkNode *node = inst_list.first; node != 0; node = node->next)
               {
-                MemoryCopy(new_chunk_base+off, node->v, sizeof(DASM_Inst)*node->count);
+                MemoryCopy(new_chunk_base+off, node->v, sizeof(DASMI_Inst)*node->count);
                 off += node->count;
               }
               for(U64 idx = 0; idx < inst_list.inst_count; idx += 1)
@@ -517,8 +517,8 @@ dasm_decode_thread_entry_point(void *p)
     {
       OS_MutexScopeR(stripe->rw_mutex)
       {
-        DASM_Entity *entity = 0;
-        for(DASM_Entity *e = slot->first; e != 0; e = e->next)
+        DASMI_Entity *entity = 0;
+        for(DASMI_Entity *e = slot->first; e != 0; e = e->next)
         {
           if(e->id == id)
           {

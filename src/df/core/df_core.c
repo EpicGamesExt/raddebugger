@@ -1400,11 +1400,11 @@ df_txti_handle_from_entity(DF_Entity *entity)
 
 //- rjf: entity -> disasm info
 
-internal DASM_Handle
+internal DASMI_Handle
 df_dasm_handle_from_process_vaddr(DF_Entity *process, U64 vaddr)
 {
   Rng1U64 disasm_vaddr_rng = r1u64(AlignDownPow2(vaddr, KB(4)), AlignDownPow2(vaddr, KB(4)) + KB(16));
-  DASM_Handle dasm_handle = dasm_handle_from_ctrl_process_range_arch(process->ctrl_machine_id, process->ctrl_handle, disasm_vaddr_rng, process->arch);
+  DASMI_Handle dasm_handle = dasmi_handle_from_ctrl_process_range_arch(process->ctrl_machine_id, process->ctrl_handle, disasm_vaddr_rng, process->arch);
   return dasm_handle;
 }
 

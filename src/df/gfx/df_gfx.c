@@ -10926,7 +10926,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
 }
 
 internal B32
-df_do_dasm_controls(DASM_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
+df_do_dasm_controls(DASMI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;

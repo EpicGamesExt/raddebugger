@@ -6008,12 +6008,12 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
       case DF_CoreCmdKind_ToggleBreakpointAtCursor:
       {
-        DASM_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASM_BinaryInfo dasm_info = dasm_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASM_InstArray insts = dasm_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
+        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
+        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
+        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
         if(insts.count != 0)
         {
-          U64 off = dasm_inst_array_off_from_idx(&insts, dv->cursor.line-1);
+          U64 off = dasmi_inst_array_off_from_idx(&insts, dv->cursor.line-1);
           U64 vaddr = dasm_info.vaddr_range.min+off;
           DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.vaddr = vaddr;
@@ -6024,12 +6024,12 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
       case DF_CoreCmdKind_ToggleWatchPinAtCursor:
       {
-        DASM_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASM_BinaryInfo dasm_info = dasm_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASM_InstArray insts = dasm_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
+        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
+        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
+        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
         if(insts.count != 0)
         {
-          U64 off = dasm_inst_array_off_from_idx(&insts, dv->cursor.line-1);
+          U64 off = dasmi_inst_array_off_from_idx(&insts, dv->cursor.line-1);
           U64 vaddr = dasm_info.vaddr_range.min+off;
           DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
           p.vaddr = vaddr;
@@ -6041,12 +6041,12 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
       case DF_CoreCmdKind_RunToCursor:
       {
-        DASM_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASM_BinaryInfo dasm_info = dasm_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASM_InstArray insts = dasm_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
+        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
+        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
+        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
         if(insts.count != 0)
         {
-          U64 off = dasm_inst_array_off_from_idx(&insts, dv->cursor.line-1);
+          U64 off = dasmi_inst_array_off_from_idx(&insts, dv->cursor.line-1);
           U64 vaddr = dasm_info.vaddr_range.min+off;
           DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.vaddr = vaddr;
@@ -6056,14 +6056,14 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       }break;
       case DF_CoreCmdKind_SetNextStatement:
       {
-        DASM_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-        DASM_BinaryInfo dasm_info = dasm_binary_info_from_handle(scratch.arena, dasm_handle);
-        DASM_InstArray insts = dasm_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
+        DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
+        DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
+        DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
         DF_Entity *thread = df_entity_from_handle(params.entity);
         S64 line_num = (cmd->params.text_point.line == 0 ? dv->cursor.line : cmd->params.text_point.line);
         if(insts.count != 0)
         {
-          U64 off = dasm_inst_array_off_from_idx(&insts, line_num-1);
+          U64 off = dasmi_inst_array_off_from_idx(&insts, line_num-1);
           U64 vaddr = dasm_info.vaddr_range.min+off;
           DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.vaddr = vaddr;
@@ -6175,12 +6175,12 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //- rjf: unpack entity info
   //
   DF_Entity *process = df_entity_from_handle(dv->process);
-  DASM_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
-  DASM_BinaryInfo dasm_info = dasm_binary_info_from_handle(scratch.arena, dasm_handle);
+  DASMI_Handle dasm_handle = df_dasm_handle_from_process_vaddr(process, dv->base_vaddr);
+  DASMI_BinaryInfo dasm_info = dasmi_binary_info_from_handle(scratch.arena, dasm_handle);
   Rng1U64 disasm_vaddr_rng = dasm_info.vaddr_range;
   DF_Entity *module = df_module_from_process_vaddr(process, disasm_vaddr_rng.min);
   DF_Entity *binary = df_binary_file_from_module(module);
-  DASM_InstArray insts = dasm_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
+  DASMI_InstArray insts = dasmi_inst_array_from_handle(scratch.arena, dasm_handle, os_now_microseconds()+100);
   B32 has_disasm = (insts.count != 0);
   B32 is_loading = (!has_disasm && !df_entity_is_nil(process) && dim_1u64(disasm_vaddr_rng) != 0 && !df_ctrl_targets_running());
   
@@ -6270,7 +6270,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
     {
       U64 idx = line_num-visible_line_num_range.min;
-      DASM_Inst *inst = &insts.v[visible_line_num_range.min+idx-1];
+      DASMI_Inst *inst = &insts.v[visible_line_num_range.min+idx-1];
       String8 symbol_name = {0};
       if(inst->addr != 0)
       {
@@ -6312,7 +6312,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         if(contains_1u64(disasm_vaddr_rng, rip_vaddr))
         {
           U64 rip_off = rip_vaddr - disasm_vaddr_rng.min;
-          S64 line_num = dasm_inst_array_idx_from_off__linear_scan(&insts, rip_off)+1;
+          S64 line_num = dasmi_inst_array_idx_from_off__linear_scan(&insts, rip_off)+1;
           if(contains_1s64(visible_line_num_range, line_num))
           {
             U64 slice_line_idx = (line_num-visible_line_num_range.min);
@@ -6332,7 +6332,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         if(bp->flags & DF_EntityFlag_HasVAddr && contains_1u64(disasm_vaddr_rng, bp->vaddr))
         {
           U64 off = bp->vaddr-disasm_vaddr_rng.min;
-          U64 idx = dasm_inst_array_idx_from_off__linear_scan(&insts, off);
+          U64 idx = dasmi_inst_array_idx_from_off__linear_scan(&insts, off);
           S64 line_num = (S64)(idx+1);
           if(contains_1s64(visible_line_num_range, line_num))
           {
@@ -6353,7 +6353,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         if(pin->flags & DF_EntityFlag_HasVAddr && contains_1u64(disasm_vaddr_rng, pin->vaddr))
         {
           U64 off = pin->vaddr-disasm_vaddr_rng.min;
-          U64 idx = dasm_inst_array_idx_from_off__linear_scan(&insts, off);
+          U64 idx = dasmi_inst_array_idx_from_off__linear_scan(&insts, off);
           S64 line_num = (S64)(idx+1);
           if(contains_1s64(visible_line_num_range, line_num))
           {
@@ -6370,7 +6370,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       DF_Entity *binary = df_binary_file_from_module(module);
       for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
       {
-        U64 vaddr = disasm_vaddr_rng.min + dasm_inst_array_off_from_idx(&insts, line_num-1);
+        U64 vaddr = disasm_vaddr_rng.min + dasmi_inst_array_off_from_idx(&insts, line_num-1);
         U64 voff = df_voff_from_vaddr(module, vaddr);
         U64 slice_idx = line_num-visible_line_num_range.min;
         DF_TextLineDasm2SrcInfoNode *dasm2src_n = push_array(scratch.arena, DF_TextLineDasm2SrcInfoNode, 1);
@@ -6397,7 +6397,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   {
     U64 vaddr = dv->goto_vaddr;
     dv->goto_vaddr = 0;
-    U64 line_idx = dasm_inst_array_idx_from_off__linear_scan(&insts, vaddr-disasm_vaddr_rng.min);
+    U64 line_idx = dasmi_inst_array_idx_from_off__linear_scan(&insts, vaddr-disasm_vaddr_rng.min);
     S64 line_num = (S64)(line_idx+1);
     dv->cursor = dv->mark = txt_pt(line_num, 1);
     dv->center_cursor = !dv->contain_cursor || (line_num < visible_line_num_range.min+8 || visible_line_num_range.max-8 < line_num);
@@ -6446,7 +6446,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         DF_Eval eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
         if(eval.mode != EVAL_EvalMode_NULL)
         {
-          U64 off = dasm_inst_array_off_from_idx(&insts, sig.mouse_expr_rng.min.line-1);
+          U64 off = dasmi_inst_array_off_from_idx(&insts, sig.mouse_expr_rng.min.line-1);
           U64 vaddr = disasm_vaddr_rng.min+off;
           df_set_hover_eval(ws, sig.mouse_expr_baseline_pos, ctrl_ctx, process, sig.mouse_pt, vaddr, expr);
         }
@@ -6470,7 +6470,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     if(sig.clicked_margin_line_num != 0)
     {
       DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      params.vaddr = disasm_vaddr_rng.min+dasm_inst_array_off_from_idx(&insts, sig.clicked_margin_line_num-1);
+      params.vaddr = disasm_vaddr_rng.min+dasmi_inst_array_off_from_idx(&insts, sig.clicked_margin_line_num-1);
       df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddressBreakpoint));
     }
@@ -6478,7 +6478,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     //- rjf: dropped entity onto line? -> do drop
     if(sig.dropped_entity_line_num != 0 && !df_entity_is_nil(sig.dropped_entity))
     {
-      U64 drop_vaddr = disasm_vaddr_rng.min+dasm_inst_array_off_from_idx(&insts, sig.dropped_entity_line_num-1);
+      U64 drop_vaddr = disasm_vaddr_rng.min+dasmi_inst_array_off_from_idx(&insts, sig.dropped_entity_line_num-1);
       DF_Entity *dropped_entity = sig.dropped_entity;
       switch(dropped_entity->kind)
       {
@@ -6541,7 +6541,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     if(sig.run_to_line_num != 0 && contains_1s64(visible_line_num_range, sig.run_to_line_num))
     {
       DF_CmdParams params = df_cmd_params_from_window(ws);
-      params.vaddr = disasm_vaddr_rng.min+dasm_inst_array_off_from_idx(&insts, sig.run_to_line_num-1);
+      params.vaddr = disasm_vaddr_rng.min+dasmi_inst_array_off_from_idx(&insts, sig.run_to_line_num-1);
       df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
     }
@@ -6549,7 +6549,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     //- rjf: go to source
     if(sig.goto_src_line_num != 0 && contains_1s64(visible_line_num_range, sig.goto_src_line_num))
     {
-      U64 vaddr = disasm_vaddr_rng.min+dasm_inst_array_off_from_idx(&insts, sig.goto_src_line_num-1);
+      U64 vaddr = disasm_vaddr_rng.min+dasmi_inst_array_off_from_idx(&insts, sig.goto_src_line_num-1);
       DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
       DF_Entity *binary = df_binary_file_from_module(module);
       U64 voff = df_voff_from_vaddr(module, vaddr);

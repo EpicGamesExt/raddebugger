@@ -46,7 +46,7 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   ctrl_init();
 #endif
 #if defined(DASM_H)
-  dasm_init();
+  dasmi_init();
 #endif
 #if defined(OS_GRAPHICAL_H)
   os_graphical_init();
