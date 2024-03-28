@@ -86,7 +86,7 @@
 //
 // [ ] ** Converter performance & heuristics for asynchronously doing it early
 //
-// [ ] disasm animation & go-to-address
+// [x] disasm animation & go-to-address
 //
 // [ ] visualize remapped files (via path map)
 
@@ -209,9 +209,9 @@
 //      "save" option in the menus.
 //
 // [ ] @cleanup @feature double & triple click select in source views
-// [ ] @feature disasm keyboard navigation & copy/paste
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
+// [x] @feature disasm keyboard navigation & copy/paste
 // [x] run-to-line needs to work if no processes are running
 //     - place temp bp, attach "die on hit" flag or something like that?
 // [ ] auto-scroll output window
