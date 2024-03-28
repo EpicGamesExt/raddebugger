@@ -418,7 +418,7 @@ dasm_parse_thread__entry_point(void *p)
           ud_set_pc(&udc, addr);
           ud_set_input_buffer(&udc, data.str, data.size);
           ud_set_vendor(&udc, UD_VENDOR_ANY);
-          ud_set_syntax(&udc, UD_SYN_INTEL);
+          ud_set_syntax(&udc, syntax == DASM_Syntax_Intel ? UD_SYN_INTEL : UD_SYN_ATT);
           
           // rjf: disassemble
           U64 byte_process_start_off = 0;
@@ -436,11 +436,16 @@ dasm_parse_thread__entry_point(void *p)
             U64 rel_voff = (first_op != 0 && first_op->type == UD_OP_JIMM) ? ud_syn_rel_target(&udc, first_op) : 0;
             
             // rjf: push
-            String8 string = push_str8f(scratch.arena, "%s", udc.asm_buf);
+            String8 addr_part = {0};
+            if(style_flags & DASM_StyleFlag_Addresses)
+            {
+              addr_part = push_str8f(scratch.arena, "%016I64X  ", addr+off);
+            }
+            String8 inst_string = push_str8f(scratch.arena, "%S%s", addr_part, udc.asm_buf);
             DASM_Inst inst = {off, rel_voff, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                   inst_strings.total_size + inst_strings.node_count + string.size)};
+                                                   inst_strings.total_size + inst_strings.node_count + inst_string.size)};
             dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
-            str8_list_push(scratch.arena, &inst_strings, string);
+            str8_list_push(scratch.arena, &inst_strings, inst_string);
             
             // rjf: increment
             off += size;
