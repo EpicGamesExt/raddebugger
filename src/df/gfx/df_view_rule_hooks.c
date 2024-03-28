@@ -314,6 +314,36 @@ df_view_rule_hooks__txt_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ct
   return result;
 }
 
+internal DF_DisasmTopologyInfo
+df_view_rule_hooks__disasm_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
+{
+  Temp scratch = scratch_begin(0, 0);
+  DF_DisasmTopologyInfo result = zero_struct;
+  {
+    StringJoin join = {0};
+    join.sep = str8_lit(" ");
+    DF_CfgNode *size_cfg = df_cfg_node_child_from_string(cfg, str8_lit("size"), 0);
+    DF_CfgNode *arch_cfg = df_cfg_node_child_from_string(cfg, str8_lit("arch"), 0);
+    String8List size_expr_strs = {0};
+    String8 arch_string = {0};
+    for(DF_CfgNode *child = size_cfg->first; child != &df_g_nil_cfg_node; child = child->next)
+    {
+      str8_list_push(scratch.arena, &size_expr_strs, child->string);
+    }
+    arch_string = arch_cfg->first->string;
+    String8 size_expr = str8_list_join(scratch.arena, &size_expr_strs, &join);
+    DF_Eval size_eval = df_eval_from_string(scratch.arena, scope, ctrl_ctx, parse_ctx, macro_map, size_expr);
+    DF_Eval size_val_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, size_eval);
+    if(str8_match(arch_string, str8_lit("x64"), StringMatchFlag_CaseInsensitive))
+    {
+      result.arch = Architecture_x64;
+    }
+    result.size_cap = size_val_eval.imm_u64;
+  }
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: "array"
 
@@ -736,6 +766,17 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
 ////////////////////////////////
 //~ rjf: "disasm"
 
+typedef struct DF_ViewRuleHooks_DisasmState DF_ViewRuleHooks_DisasmState;
+struct DF_ViewRuleHooks_DisasmState
+{
+  B32 initialized;
+  TxtPt cursor;
+  TxtPt mark;
+  S64 preferred_column;
+  U64 last_open_frame_idx;
+  F32 loaded_t;
+};
+
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
@@ -748,7 +789,92 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
 
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
 {
-  
+  Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
+  DASM_Scope *dasm_scope = dasm_scope_open();
+  DF_ViewRuleHooks_DisasmState *state = df_view_rule_block_user_state(key, DF_ViewRuleHooks_DisasmState);
+  if(!state->initialized)
+  {
+    state->initialized = 1;
+    state->cursor = state->mark = txt_pt(1, 1);
+  }
+  if(state->last_open_frame_idx+1 < df_frame_index())
+  {
+    state->loaded_t = 0;
+  }
+  state->last_open_frame_idx = df_frame_index();
+  {
+    //- rjf: unpack params
+    DF_DisasmTopologyInfo top = df_view_rule_hooks__disasm_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
+    
+    //- rjf: resolve to address value & range
+    DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
+    U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
+    Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr + (top.size_cap ? top.size_cap : 2048));
+    
+    //- rjf: unpack thread/process of eval
+    DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+    DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+    
+    //- rjf: unpack key for this region in memory
+    U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
+    
+    //- rjf: key -> parsed text info
+    U128 data_hash = {0};
+    DASM_Info dasm_info = dasm_info_from_key_addr_arch(dasm_scope, dasm_key, vaddr_range.min, top.arch, &data_hash);
+    String8 dasm_text_data = {0};
+    TXT_TextInfo dasm_text_info = {0};
+    for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+    {
+      U128 dasm_text_hash = hs_hash_from_key(dasm_info.text_key, rewind_idx);
+      dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
+      dasm_text_info = txt_text_info_from_hash_lang(txt_scope, dasm_text_hash, TXT_LangKind_Null);
+      if(dasm_text_info.lines_count != 0)
+      {
+        break;
+      }
+    }
+    TXT_LineTokensSlice line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &dasm_text_info, dasm_text_data, r1s64(1, dasm_info.insts.count));
+    
+    //- rjf: info -> code slice info
+    DF_CodeSliceParams code_slice_params = {0};
+    {
+      code_slice_params.flags = DF_CodeSliceFlag_LineNums;
+      code_slice_params.line_num_range = r1s64(1, dasm_text_info.lines_count);
+      code_slice_params.line_text = push_array(scratch.arena, String8, dasm_text_info.lines_count);
+      code_slice_params.line_ranges = push_array(scratch.arena, Rng1U64, dasm_text_info.lines_count);
+      code_slice_params.line_tokens = push_array(scratch.arena, TXT_TokenArray, dasm_text_info.lines_count);
+      code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
+      code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
+      code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
+      code_slice_params.line_dasm2src = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, dasm_text_info.lines_count);
+      code_slice_params.line_src2dasm = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, dasm_text_info.lines_count);
+      for(U64 line_idx = 0; line_idx < dasm_text_info.lines_count; line_idx += 1)
+      {
+        code_slice_params.line_text[line_idx] = str8_substr(dasm_text_data, dasm_info.insts.v[line_idx].text_range);
+        code_slice_params.line_ranges[line_idx] = dasm_info.insts.v[line_idx].text_range;
+        code_slice_params.line_tokens[line_idx] = line_tokens_slice.line_tokens[line_idx];
+      }
+      code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
+      code_slice_params.font_size = ui_top_font_size();
+      code_slice_params.line_height_px = ui_top_font_size()*1.5f;
+      code_slice_params.margin_width_px = 0;
+      code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
+      code_slice_params.line_text_max_width_px = ui_top_font_size()*2.f*dasm_text_info.lines_max_size;
+    }
+    
+    //- rjf: build code slice
+    if(dasm_info.insts.count != 0 && dasm_text_info.lines_count != 0)
+      UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_px(dasm_text_info.lines_max_size*ui_top_font_size()*1.2f, 1.f)) UI_Column UI_Padding(ui_pct(1, 0))
+    {
+      DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));
+    }
+  }
+  dasm_scope_close(dasm_scope);
+  txt_scope_close(txt_scope);
+  hs_scope_close(hs_scope);
+  scratch_end(scratch);
 }
 
 ////////////////////////////////

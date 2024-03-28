@@ -46,7 +46,7 @@ struct DASM_InstArray
 typedef struct DASM_Info DASM_Info;
 struct DASM_Info
 {
-  String8 text;
+  U128 text_key;
   DASM_InstArray insts;
 };
 
@@ -171,11 +171,6 @@ internal U64 dasm_inst_array_idx_from_code_off__linear_scan(DASM_InstArray *arra
 internal U64 dasm_inst_array_code_off_from_idx(DASM_InstArray *array, U64 idx);
 
 ////////////////////////////////
-//~ rjf: Disassembly Decoding Function
-
-internal DASM_Info dasm_info_from_arch_addr_data(Arena *arena, U64 *bytes_processed_counter, Architecture arch, U64 addr, String8 data);
-
-////////////////////////////////
 //~ rjf: Main Layer Initialization
 
 internal void dasm_init(void);
@@ -198,6 +193,7 @@ internal void dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_No
 
 internal DASM_Info dasm_info_from_hash_addr_arch(DASM_Scope *scope, U128 hash, U64 addr, Architecture arch);
 internal DASM_Info dasm_info_from_key_addr_arch(DASM_Scope *scope, U128 key, U64 addr, Architecture arch, U128 *hash_out);
+
 ////////////////////////////////
 //~ rjf: Parse Threads
 

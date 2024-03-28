@@ -2,6 +2,18 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Third Party Includes
+
+#include "third_party/udis86/config.h"
+#include "third_party/udis86/udis86.h"
+#include "third_party/udis86/libudis86/decode.c"
+#include "third_party/udis86/libudis86/itab.c"
+#include "third_party/udis86/libudis86/syn-att.c"
+#include "third_party/udis86/libudis86/syn-intel.c"
+#include "third_party/udis86/libudis86/syn.c"
+#include "third_party/udis86/libudis86/udis86.c"
+
+////////////////////////////////
 //~ rjf: Instruction Type Functions
 
 internal void
@@ -60,84 +72,6 @@ dasm_inst_array_code_off_from_idx(DASM_InstArray *array, U64 idx)
     off = array->v[idx].code_off;
   }
   return off;
-}
-
-////////////////////////////////
-//~ rjf: Disassembly Decoding Function
-
-#include "third_party/udis86/config.h"
-#include "third_party/udis86/udis86.h"
-#include "third_party/udis86/libudis86/decode.c"
-#include "third_party/udis86/libudis86/itab.c"
-#include "third_party/udis86/libudis86/syn-att.c"
-#include "third_party/udis86/libudis86/syn-intel.c"
-#include "third_party/udis86/libudis86/syn.c"
-#include "third_party/udis86/libudis86/udis86.c"
-
-internal DASM_Info
-dasm_info_from_arch_addr_data(Arena *arena, U64 *bytes_processed_counter, Architecture arch, U64 addr, String8 data)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  //- rjf: decode
-  DASM_InstChunkList inst_list = {0};
-  String8List inst_strings = {0};
-  switch(arch)
-  {
-    default:{}break;
-    
-    //- rjf: x86/x64 decoding
-    case Architecture_x64:
-    case Architecture_x86:
-    {
-      // rjf: grab context
-      struct ud udc;
-      ud_init(&udc);
-      ud_set_mode(&udc, bit_size_from_arch(arch));
-      ud_set_pc(&udc, addr);
-      ud_set_input_buffer(&udc, data.str, data.size);
-      ud_set_vendor(&udc, UD_VENDOR_ANY);
-      ud_set_syntax(&udc, UD_SYN_INTEL);
-      
-      // rjf: disassemble
-      U64 byte_process_start_off = 0;
-      for(U64 off = 0; off < data.size;)
-      {
-        // rjf: disassemble one instruction
-        U64 size = ud_disassemble(&udc);
-        if(size == 0)
-        {
-          break;
-        }
-        
-        // rjf: analyze
-        struct ud_operand *first_op = (struct ud_operand *)ud_insn_opr(&udc, 0);
-        U64 rel_voff = (first_op != 0 && first_op->type == UD_OP_JIMM) ? ud_syn_rel_target(&udc, first_op) : 0;
-        
-        // rjf: push
-        String8 string = push_str8f(scratch.arena, "%s\n", udc.asm_buf);
-        DASM_Inst inst = {off, rel_voff, r1u64(inst_strings.total_size, inst_strings.total_size+string.size-1)};
-        dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
-        str8_list_push(scratch.arena, &inst_strings, string);
-        
-        // rjf: increment
-        off += size;
-        if(bytes_processed_counter != 0 && (off-byte_process_start_off >= 1000))
-        {
-          ins_atomic_u64_add_eval(bytes_processed_counter, (off-byte_process_start_off));
-          byte_process_start_off = off;
-        }
-      }
-    }break;
-  }
-  
-  //- rjf: fill result
-  DASM_Info info = {0};
-  info.text = str8_list_join(arena, &inst_strings, 0);
-  info.insts = dasm_inst_array_from_chunk_list(arena, &inst_list);
-  
-  scratch_end(scratch);
-  return info;
 }
 
 ////////////////////////////////
@@ -406,6 +340,8 @@ dasm_parse_thread__entry_point(void *p)
   ThreadNameF("[dasm] parse thread #%I64u", (U64)p);
   for(;;)
   {
+    Temp scratch = scratch_begin(0, 0);
+    
     //- rjf: get next request
     U128 hash = {0};
     U64 addr = 0;
@@ -440,13 +376,89 @@ dasm_parse_thread__entry_point(void *p)
       data = hs_data_from_hash(hs_scope, hash);
     }
     
-    //- rjf: data -> disassembly info
+    //- rjf: data * arch * addr -> decode artifacts
+    DASM_InstChunkList inst_list = {0};
+    String8List inst_strings = {0};
+    if(got_task)
+    {
+      switch(arch)
+      {
+        default:{}break;
+        
+        //- rjf: x86/x64 decoding
+        case Architecture_x64:
+        case Architecture_x86:
+        {
+          // rjf: grab context
+          struct ud udc;
+          ud_init(&udc);
+          ud_set_mode(&udc, bit_size_from_arch(arch));
+          ud_set_pc(&udc, addr);
+          ud_set_input_buffer(&udc, data.str, data.size);
+          ud_set_vendor(&udc, UD_VENDOR_ANY);
+          ud_set_syntax(&udc, UD_SYN_INTEL);
+          
+          // rjf: disassemble
+          U64 byte_process_start_off = 0;
+          for(U64 off = 0; off < data.size;)
+          {
+            // rjf: disassemble one instruction
+            U64 size = ud_disassemble(&udc);
+            if(size == 0)
+            {
+              break;
+            }
+            
+            // rjf: analyze
+            struct ud_operand *first_op = (struct ud_operand *)ud_insn_opr(&udc, 0);
+            U64 rel_voff = (first_op != 0 && first_op->type == UD_OP_JIMM) ? ud_syn_rel_target(&udc, first_op) : 0;
+            
+            // rjf: push
+            String8 string = push_str8f(scratch.arena, "%s", udc.asm_buf);
+            DASM_Inst inst = {off, rel_voff, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                   inst_strings.total_size + inst_strings.node_count + string.size)};
+            dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
+            str8_list_push(scratch.arena, &inst_strings, string);
+            
+            // rjf: increment
+            off += size;
+          }
+        }break;
+      }
+    }
+    
+    //- rjf: artifacts -> value bundle
     Arena *info_arena = 0;
     DASM_Info info = {0};
-    if(got_task && data.size != 0)
+    if(got_task)
     {
+      //- rjf: produce joined text
+      Arena *text_arena = arena_alloc();
+      StringJoin text_join = {0};
+      text_join.sep = str8_lit("\n");
+      String8 text = str8_list_join(text_arena, &inst_strings, &text_join);
+      
+      //- rjf: produce unique key for this disassembly's text
+      U128 text_key = {0};
+      {
+        U64 hash_data[] =
+        {
+          hash.u64[0],
+          hash.u64[1],
+          addr,
+          (U64)arch,
+          0x4d534144,
+        };
+        text_key = hs_hash_from_data(str8((U8 *)hash_data, sizeof(hash_data)));
+      }
+      
+      //- rjf: submit text data to hash store
+      U128 text_hash = hs_submit_data(text_key, &text_arena, text);
+      
+      //- rjf: produce value bundle
       info_arena = arena_alloc();
-      info = dasm_info_from_arch_addr_data(info_arena, 0, arch, addr, data);
+      info.text_key = text_key;
+      info.insts = dasm_inst_array_from_chunk_list(info_arena, &inst_list);
     }
     
     //- rjf: commit results to cache
@@ -466,6 +478,7 @@ dasm_parse_thread__entry_point(void *p)
     }
     
     hs_scope_close(hs_scope);
+    scratch_end(scratch);
   }
 }
 
