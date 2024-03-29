@@ -675,7 +675,7 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
           else if(('a' <= byte && byte <= 'z') || ('A' <= byte && byte <= 'Z') || byte == '_')
           {
             active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_Identifier;
+            active_token_kind = TXT_TokenKind_Keyword;
             advance = 1;
           }
           else if(byte == '\'')
@@ -722,7 +722,7 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
           ender_found = 1;
           advance = 0;
         }break;
-        case TXT_TokenKind_Identifier:
+        case TXT_TokenKind_Keyword:
         if((byte < 'a' || 'z' < byte) && (byte < 'A' || 'Z' < byte) && (byte < '0' || '9' < byte) && byte != '_')
         {
           ender_found = 1;
@@ -787,15 +787,6 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
       if(ender_found != 0)
       {
         TXT_Token token = {active_token_kind, r1u64(active_token_start_off, off+advance)};
-        if(active_token_kind == TXT_TokenKind_Identifier)
-        {
-          String8 token_string = str8_substr(string, token.range);
-          B32 identifier_is_instruction = 0;
-          if(identifier_is_instruction)
-          {
-            token.kind = TXT_TokenKind_Keyword;
-          }
-        }
         txt_token_chunk_list_push(arena, &tokens, 1024, &token);
         active_token_kind = TXT_TokenKind_Null;
         active_token_start_off = token.range.max;

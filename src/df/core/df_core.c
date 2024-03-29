@@ -5580,6 +5580,10 @@ df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalViz
       {
         break;
       }
+      if(kind == TG_Kind_Function)
+      {
+        break;
+      }
     }
   }
   
