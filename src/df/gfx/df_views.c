@@ -5173,17 +5173,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   }
   
   //////////////////////////////
-  //- rjf: search query -> matches
-  //
-  DF_TextSearchMatchArray search_query_matches = {0};
-#if 0
-  {
-    search_query_matches = df_text_search_match_array_from_entity_needle(scratch.arena, entity, search_query, entity_line_string_flags, tv->cursor);
-    df_text_search_match_array_sort_in_place(&search_query_matches);
-  }
-#endif
-  
-  //////////////////////////////
   //- rjf: do searching operations
   //
   if(text_info_is_ready)
@@ -5525,23 +5514,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   if(text_info_is_ready)
   {
-    // rjf: center first match
-    TxtPt next_match = df_text_search_match_array_find_nearest__linear_scan(&search_query_matches, tv->cursor, search_query_side).pt;
-    if(search_query.size != 0 && next_match.line != 0)
-    {
-      // TODO(rjf): [ ] @de2ctrl
-#if 0
-      DF_TextSlice match_line_slice = df_text_slice_from_entity(scratch.arena, entity, r1s64(next_match.line, next_match.line), entity_line_string_flags);
-      String8 match_line = match_line_slice.visible_range_text;
-      F32 match_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(match_line, next_match.column-1)).x;
-      container_box->view_off_target.x = match_advance - code_area_dim.x/2;
-      container_box->view_off_target.y = next_match.line*code_line_height - code_area_dim.y/2 + code_line_height*1.5f;
-      container_box->view_off_target.x = ClampBot(container_box->view_off_target.x, 0);
-      container_box->view_off_target.y = ClampBot(container_box->view_off_target.y, 0);
-      tv->drifted_for_search = 1;
-#endif
-    }
-    
     // rjf: contain => snap
     if(tv->contain_cursor)
     {
@@ -6984,17 +6956,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   }
   
   //////////////////////////////
-  //- rjf: search query -> matches
-  //
-  DF_TextSearchMatchArray search_query_matches = {0};
-#if 0
-  {
-    search_query_matches = df_text_search_match_array_from_entity_needle(scratch.arena, entity, search_query, entity_line_string_flags, tv->cursor);
-    df_text_search_match_array_sort_in_place(&search_query_matches);
-  }
-#endif
-  
-  //////////////////////////////
   //- rjf: do searching operations
   //
   if(txti_buffer_is_ready)
@@ -7212,23 +7173,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //
   if(txti_buffer_is_ready)
   {
-    // rjf: center first match
-    TxtPt next_match = df_text_search_match_array_find_nearest__linear_scan(&search_query_matches, tv->cursor, search_query_side).pt;
-    if(search_query.size != 0 && next_match.line != 0)
-    {
-      // TODO(rjf): [ ] @de2ctrl
-#if 0
-      DF_TextSlice match_line_slice = df_text_slice_from_entity(scratch.arena, entity, r1s64(next_match.line, next_match.line), entity_line_string_flags);
-      String8 match_line = match_line_slice.visible_range_text;
-      F32 match_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(match_line, next_match.column-1)).x;
-      container_box->view_off_target.x = match_advance - code_area_dim.x/2;
-      container_box->view_off_target.y = next_match.line*code_line_height - code_area_dim.y/2 + code_line_height*1.5f;
-      container_box->view_off_target.x = ClampBot(container_box->view_off_target.x, 0);
-      container_box->view_off_target.y = ClampBot(container_box->view_off_target.y, 0);
-      tv->drifted_for_search = 1;
-#endif
-    }
-    
     // rjf: contain => snap
     if(tv->contain_cursor)
     {

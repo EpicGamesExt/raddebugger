@@ -48,71 +48,6 @@ struct DF_StringBindingPair
 };
 
 ////////////////////////////////
-//~ rjf: Text Searching Types
-
-typedef struct DF_TextSearchMatch DF_TextSearchMatch;
-struct DF_TextSearchMatch
-{
-  TxtPt pt;
-};
-
-typedef struct DF_TextSearchMatchChunkNode DF_TextSearchMatchChunkNode;
-struct DF_TextSearchMatchChunkNode
-{
-  DF_TextSearchMatchChunkNode *next;
-  DF_TextSearchMatch *v;
-  U64 count;
-  U64 cap;
-};
-
-typedef struct DF_TextSearchMatchChunkList DF_TextSearchMatchChunkList;
-struct DF_TextSearchMatchChunkList
-{
-  DF_TextSearchMatchChunkNode *first;
-  DF_TextSearchMatchChunkNode *last;
-  U64 node_count;
-  U64 total_count;
-};
-
-typedef struct DF_TextSearchMatchArray DF_TextSearchMatchArray;
-struct DF_TextSearchMatchArray
-{
-  DF_TextSearchMatch *v;
-  U64 count;
-};
-
-typedef struct DF_TextSearchCacheNode DF_TextSearchCacheNode;
-struct DF_TextSearchCacheNode
-{
-  // rjf: links
-  DF_TextSearchCacheNode *next;
-  DF_TextSearchCacheNode *prev;
-  
-  // rjf: allocation
-  Arena *arena;
-  
-  // rjf: search parameters
-  U128 hash;
-  String8 needle;
-  DF_TextSliceFlags flags;
-  TxtPt start_pt;
-  
-  // rjf: search results
-  B32 good;
-  DF_TextSearchMatchChunkList search_matches;
-  
-  // rjf: last time touched
-  U64 last_time_touched_us;
-};
-
-typedef struct DF_TextSearchCacheSlot DF_TextSearchCacheSlot;
-struct DF_TextSearchCacheSlot
-{
-  DF_TextSearchCacheNode *first;
-  DF_TextSearchCacheNode *last;
-};
-
-////////////////////////////////
 //~ rjf: Key Map Types
 
 typedef struct DF_KeyMapNode DF_KeyMapNode;
@@ -984,17 +919,6 @@ internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_Ct
 
 internal void df_set_search_string(String8 string);
 internal String8 df_push_search_string(Arena *arena);
-
-////////////////////////////////
-//~ rjf: Text Searching
-
-internal void df_text_search_match_chunk_list_push(Arena *arena, DF_TextSearchMatchChunkList *list, U64 cap, DF_TextSearchMatch *match);
-internal DF_TextSearchMatchArray df_text_search_match_array_from_chunk_list(Arena *arena, DF_TextSearchMatchChunkList *chunks);
-internal U64 df_text_search_little_hash_from_hash(U128 hash);
-internal void df_text_search_thread_entry_point(void *p);
-internal int df_text_search_match_array_qsort_compare(TxtPt *a, TxtPt *b);
-internal void df_text_search_match_array_sort_in_place(DF_TextSearchMatchArray *array);
-internal DF_TextSearchMatch df_text_search_match_array_find_nearest__linear_scan(DF_TextSearchMatchArray *array, TxtPt pt, Side side);
 
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config
