@@ -5785,7 +5785,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   //
   DF_Entity *process = df_entity_from_handle(dv->process);
   Architecture arch = df_architecture_from_entity(process);
-  U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(4));
+  U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
@@ -6021,7 +6021,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //
   DF_Entity *process = df_entity_from_handle(dv->process);
   Architecture arch = df_architecture_from_entity(process);
-  U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(4));
+  U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};

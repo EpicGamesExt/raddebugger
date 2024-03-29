@@ -440,7 +440,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
           }
           
           //- rjf: constructed types
-          if(RDI_TypeKind_FirstConstructed <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastConstructed)
+          else if(RDI_TypeKind_FirstConstructed <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastConstructed)
           {
             // rjf: unpack direct type
             B32 direct_type_is_good = 0;
@@ -605,6 +605,29 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             type->name            = push_str8_copy(arena, name);
             type->byte_size       = direct_type_byte_size;
             type->direct_type_key = direct_type_key;
+          }
+          
+          //- rjf: bitfields
+          else if(RDI_TypeKind_Bitfield == rdi_type->kind)
+          {
+            // rjf: unpack direct type
+            TG_Key direct_type_key = zero_struct;
+            U64 direct_type_byte_size = 0;
+            if(rdi_type->bitfield.direct_type_idx < type_node_idx)
+            {
+              RDI_TypeNode *direct_type_node = &rdi->type_nodes[rdi_type->bitfield.direct_type_idx];
+              TG_Kind direct_type_kind = tg_kind_from_rdi_type_kind(direct_type_node->kind);
+              direct_type_key = tg_key_ext(direct_type_kind, (U64)rdi_type->bitfield.direct_type_idx);
+              direct_type_byte_size = direct_type_node->byte_size;
+            }
+            
+            // rjf: produce
+            type = push_array(arena, TG_Type, 1);
+            type->kind            = kind;
+            type->byte_size       = direct_type_byte_size;
+            type->direct_type_key = direct_type_key;
+            type->off             = (U32)rdi_type->bitfield.off;
+            type->count           = (U64)rdi_type->bitfield.size;
           }
           
           //- rjf: incomplete types
@@ -1257,8 +1280,11 @@ tg_rhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key ke
     
     case TG_Kind_Bitfield:
     {
-      TG_Key direct = tg_direct_from_graph_rdi_key(graph, rdi, key);
-      tg_rhs_string_from_key(arena, graph, rdi, direct, out, prec);
+      Temp scratch = scratch_begin(&arena, 1);
+      TG_Type *type = tg_type_from_graph_rdi_key(scratch.arena, graph, rdi, key);
+      tg_rhs_string_from_key(arena, graph, rdi, type->direct_type_key, out, prec);
+      str8_list_pushf(arena, out, ": %I64u", type->count);
+      scratch_end(scratch);
     }break;
     
     case TG_Kind_Modifier:

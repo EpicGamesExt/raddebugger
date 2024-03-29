@@ -2763,6 +2763,7 @@ rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringM
         //- rjf: fill bitfield info
         else if(dst->kind == RDI_TypeKind_Bitfield)
         {
+          dst->bitfield.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
           dst->bitfield.off  = src->off;
           dst->bitfield.size = src->count;
         }

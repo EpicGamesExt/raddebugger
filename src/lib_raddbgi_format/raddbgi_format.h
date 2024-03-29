@@ -533,6 +533,7 @@ typedef struct RDI_TypeNode{
     
     // (kind = Bitfield)
     struct{
+      RDI_U32 direct_type_idx;
       RDI_U32 off;
       RDI_U32 size;
     } bitfield;
