@@ -167,11 +167,14 @@ internal TS_TASK_FUNCTION_DEF(p2b_dump_proc_chunk_task__entry_point)
             RDI_Line *line = &line_info.lines[line_info_idx];
             U64 line_voff_min = line_info.voffs[line_info_idx];
             U64 line_voff_opl = line_info.voffs[line_info_idx+1];
-            str8_list_pushf(arena, out, "%I64x %I64x %I64u %I64u\n",
-                            line_voff_min,
-                            line_voff_opl-line_voff_min,
-                            (U64)line->line_num,
-                            (U64)line->file_idx);
+            if(line->file_idx != 0)
+            {
+              str8_list_pushf(arena, out, "%I64x %I64x %I64u %I64u\n",
+                              line_voff_min,
+                              line_voff_opl-line_voff_min,
+                              (U64)line->line_num,
+                              (U64)line->file_idx);
+            }
             last_voff = voff;
             voff = line_voff_opl;
           }
