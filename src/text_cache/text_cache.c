@@ -650,6 +650,7 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
     U64 off = 0;
     B32 escaped = 0;
     B32 string_is_char = 0;
+    S32 brace_nest = 0;
     for(U64 advance = 0; off <= string.size; off += advance)
     {
       U8 byte      = (off+0 < string.size) ? string.str[off+0] : 0;
@@ -708,6 +709,14 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
             active_token_start_off = off;
             active_token_kind = TXT_TokenKind_Symbol;
             advance = 1;
+            if(byte == '{')
+            {
+              brace_nest += 1;
+            }
+            else if(byte == '}')
+            {
+              brace_nest -= 1;
+            }
           }
           else
           {
@@ -786,6 +795,10 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
       }
       if(ender_found != 0)
       {
+        if(brace_nest != 0 && active_token_kind == TXT_TokenKind_Keyword)
+        {
+          active_token_kind = TXT_TokenKind_Numeric;
+        }
         TXT_Token token = {active_token_kind, r1u64(active_token_start_off, off+advance)};
         txt_token_chunk_list_push(arena, &tokens, 1024, &token);
         active_token_kind = TXT_TokenKind_Null;

@@ -364,6 +364,7 @@ struct DF_DisasmViewState
   TxtPt mark;
   S64 preferred_column;
   B32 drifted_for_search;
+  DASM_StyleFlags style_flags;
   
   // rjf: per-frame command info
   S64 goto_line_num;

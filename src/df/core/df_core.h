@@ -511,20 +511,7 @@ struct DF_EntityFuzzyItemArray
 };
 
 ////////////////////////////////
-//~ rjf: Text Slices (output type from data which can be used to produce readable text)
-
-//- rjf: text slice construction flags
-
-typedef U32 DF_TextSliceFlags;
-enum
-{
-  DF_TextSliceFlag_CodeBytes = (1<<0),
-  DF_TextSliceFlag_Addresses = (1<<1),
-  DF_TextSliceFlag_Tokens    = (1<<2),
-  DF_TextSliceFlag_Src2Dasm  = (1<<3),
-  DF_TextSliceFlag_Dasm2Src  = (1<<4),
-  DF_TextSliceFlag_VirtualOff= (1<<5),
-};
+//~ rjf: Source <-> Disasm Types
 
 //- rjf: debug info for mapping src -> disasm
 

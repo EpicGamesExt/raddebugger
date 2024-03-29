@@ -383,7 +383,11 @@ dasm_parse_thread__entry_point(void *p)
     {
       for(DASM_Node *n = slot->first; n != 0; n = n->next)
       {
-        if(u128_match(n->hash, hash) && n->addr == addr && n->arch == arch)
+        if(u128_match(n->hash, hash) &&
+           n->addr == addr &&
+           n->arch == arch &&
+           n->style_flags == style_flags &&
+           n->syntax == syntax)
         {
           got_task = !ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0);
           break;
@@ -441,7 +445,26 @@ dasm_parse_thread__entry_point(void *p)
             {
               addr_part = push_str8f(scratch.arena, "%016I64X  ", addr+off);
             }
-            String8 inst_string = push_str8f(scratch.arena, "%S%s", addr_part, udc.asm_buf);
+            String8 code_bytes_part = {0};
+            if(style_flags & DASM_StyleFlag_CodeBytes)
+            {
+              String8List code_bytes_strings = {0};
+              str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("{"));
+              for(U64 byte_idx = 0; byte_idx < size || byte_idx < 16; byte_idx += 1)
+              {
+                if(byte_idx < size)
+                {
+                  str8_list_pushf(scratch.arena, &code_bytes_strings, "%02x%s ", (U32)data.str[off+byte_idx], byte_idx == size-1 ? "}" : "");
+                }
+                else if(byte_idx < 8)
+                {
+                  str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("   "));
+                }
+              }
+              str8_list_push(scratch.arena, &code_bytes_strings, str8_lit(" "));
+              code_bytes_part = str8_list_join(scratch.arena, &code_bytes_strings, 0);
+            }
+            String8 inst_string = push_str8f(scratch.arena, "%S%S%s", addr_part, code_bytes_part, udc.asm_buf);
             DASM_Inst inst = {off, rel_voff, r1u64(inst_strings.total_size + inst_strings.node_count,
                                                    inst_strings.total_size + inst_strings.node_count + inst_string.size)};
             dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
@@ -474,6 +497,8 @@ dasm_parse_thread__entry_point(void *p)
           hash.u64[1],
           addr,
           (U64)arch,
+          (U64)style_flags,
+          (U64)syntax,
           0x4d534144,
         };
         text_key = hs_hash_from_data(str8((U8 *)hash_data, sizeof(hash_data)));

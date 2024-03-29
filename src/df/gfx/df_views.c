@@ -4863,13 +4863,6 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
           params.string = expr_text;
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
-          
-          // rjf: flash marker for grabbed expr
-          DF_Entity *flash_marker = df_entity_alloc(0, entity, DF_EntityKind_FlashMarker);
-          df_entity_equip_death_timer(flash_marker, 0.5f);
-          df_entity_equip_txt_pt(flash_marker, txt_pt_from_info_off__linear_scan(&text_info, expr_range.min));
-          df_entity_equip_txt_pt_alt(flash_marker, txt_pt_from_info_off__linear_scan(&text_info, expr_range.max));
-          df_entity_equip_color_rgba(flash_marker, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
           scratch_end(scratch);
         }
         hs_scope_close(hs_scope);
@@ -5442,15 +5435,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     //- rjf: copy text
     if(!txt_pt_match(sig.copy_range.min, sig.copy_range.max))
     {
-      Temp temp = temp_begin(scratch.arena);
-      DF_Entity *flash_range = df_entity_alloc(0, entity, DF_EntityKind_FlashMarker);
-      df_entity_equip_death_timer(flash_range, 0.5f);
-      df_entity_equip_color_rgba(flash_range, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
-      df_entity_equip_txt_pt(flash_range, sig.copy_range.min);
-      df_entity_equip_txt_pt_alt(flash_range, sig.copy_range.max);
       String8 text = txt_string_from_info_data_txt_rng(&text_info, data, sig.copy_range);
       os_set_clipboard_text(text);
-      temp_end(temp);
     }
     
     //- rjf: toggle cursor watch
@@ -5736,6 +5722,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Disassembly)
     dv->mark = txt_pt(1, 1);
     dv->preferred_column = 1;
     dv->find_text_arena = df_view_push_arena_ext(view);
+    dv->style_flags = DASM_StyleFlag_Addresses;
   }
 }
 
@@ -5761,7 +5748,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
-  DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, dasm_vaddr_range.min, arch, DASM_StyleFlag_Addresses, DASM_Syntax_Intel, &dasm_data_hash);
+  DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, dasm_vaddr_range.min, arch, dv->style_flags, DASM_Syntax_Intel, &dasm_data_hash);
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, txt_lang_kind_from_architecture(arch), &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
@@ -5884,56 +5871,63 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetThreadIP));
         }
       }break;
+      case DF_CoreCmdKind_ToggleCodeBytesVisibility:
+      {
+        dv->style_flags ^= DASM_StyleFlag_CodeBytes;
+      }break;
+      case DF_CoreCmdKind_ToggleAddressVisibility:
+      {
+        dv->style_flags ^= DASM_StyleFlag_Addresses;
+      }break;
       case DF_CoreCmdKind_GoToNameAtCursor:
       {
-        // TODO(rjf)
-#if 0
-        Temp scratch = scratch_begin(0, 0);
-        TXTI_Handle txti_handle = df_txti_handle_from_entity(entity);
-        TxtRng expr_range = txt_rng(tv->cursor, tv->mark);
-        if(txt_pt_match(tv->cursor, tv->mark))
+        // rjf: determine expression range
+        Rng1U64 expr_range = {0};
         {
-          expr_range = txti_expr_range_from_handle_pt(txti_handle, tv->cursor);
+          TxtRng selection_range = txt_rng(dv->cursor, dv->mark);
+          if(txt_pt_match(selection_range.min, selection_range.max))
+          {
+            expr_range = txt_expr_off_range_from_info_data_pt(&dasm_text_info, dasm_text_data, dv->cursor);
+          }
+          else
+          {
+            expr_range = r1u64(txt_off_from_info_pt(&dasm_text_info, selection_range.min), txt_off_from_info_pt(&dasm_text_info, selection_range.max));
+          }
         }
-        String8 expr_text = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_range);
+        
+        // rjf: expression range -> text
+        String8 expr_text = str8_substr(dasm_text_data, expr_range);
         
         // rjf: go to name
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-        params.entity = df_handle_from_entity(entity);
         params.string = expr_text;
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
-        
-        scratch_end(scratch);
-#endif
       }break;
       case DF_CoreCmdKind_ToggleWatchExpressionAtCursor:
       {
-        // TODO(rjf)
-#if 0
-        Temp scratch = scratch_begin(0, 0);
-        TXTI_Handle txti_handle = df_txti_handle_from_entity(entity);
-        TxtRng expr_range = txt_rng(tv->cursor, tv->mark);
-        if(txt_pt_match(tv->cursor, tv->mark))
+        // rjf: determine expression range
+        Rng1U64 expr_range = {0};
         {
-          expr_range = txti_expr_range_from_handle_pt(txti_handle, tv->cursor);
+          TxtRng selection_range = txt_rng(dv->cursor, dv->mark);
+          if(txt_pt_match(selection_range.min, selection_range.max))
+          {
+            expr_range = txt_expr_off_range_from_info_data_pt(&dasm_text_info, dasm_text_data, dv->cursor);
+          }
+          else
+          {
+            expr_range = r1u64(txt_off_from_info_pt(&dasm_text_info, selection_range.min), txt_off_from_info_pt(&dasm_text_info, selection_range.max));
+          }
         }
-        String8 expr_text = txti_string_from_handle_txt_rng(scratch.arena, txti_handle, expr_range);
+        
+        // rjf: expression range -> text
+        String8 expr_text = str8_substr(dasm_text_data, expr_range);
         
         // rjf: toggle watch expr
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.string = expr_text;
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
-        
-        // rjf: flash marker for grabbed expr
-        DF_Entity *flash_marker = df_entity_alloc(entity, DF_EntityKind_FlashMarker);
-        df_entity_equip_death_timer(flash_marker, 0.5f);
-        df_entity_equip_txt_pt(flash_marker, expr_range.min);
-        df_entity_equip_txt_pt_alt(flash_marker, expr_range.max);
-        df_entity_equip_color_rgba(flash_marker, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
-        scratch_end(scratch);
-#endif
       }break;
     }
   }
@@ -5997,7 +5991,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
-  DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, dasm_vaddr_range.min, arch, DASM_StyleFlag_Addresses, DASM_Syntax_Intel, &dasm_data_hash);
+  DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, dasm_vaddr_range.min, arch, dv->style_flags, DASM_Syntax_Intel, &dasm_data_hash);
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, txt_lang_kind_from_architecture(arch), &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
@@ -7157,11 +7151,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     if(!txt_pt_match(sig.copy_range.min, sig.copy_range.max))
     {
       Temp temp = temp_begin(scratch.arena);
-      DF_Entity *flash_range = df_entity_alloc(0, entity, DF_EntityKind_FlashMarker);
-      df_entity_equip_death_timer(flash_range, 0.5f);
-      df_entity_equip_color_rgba(flash_range, df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
-      df_entity_equip_txt_pt(flash_range, sig.copy_range.min);
-      df_entity_equip_txt_pt_alt(flash_range, sig.copy_range.max);
       String8 text = txti_string_from_handle_txt_rng(temp.arena, txti_handle, sig.copy_range);
       os_set_clipboard_text(text);
       temp_end(temp);
