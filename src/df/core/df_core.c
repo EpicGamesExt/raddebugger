@@ -4179,7 +4179,7 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   }
   
   //- rjf: try to resolve basic integral values into symbols
-  if(result.mode == EVAL_EvalMode_Value && parse.expr->kind != EVAL_ExprKind_Cast &&
+  if((result.mode == EVAL_EvalMode_Value || result.mode == EVAL_EvalMode_Reg) && parse.expr->kind != EVAL_ExprKind_Cast &&
      (tg_key_match(result.type_key, tg_key_basic(TG_Kind_S64)) ||
       tg_key_match(result.type_key, tg_key_basic(TG_Kind_U64)) ||
       tg_key_match(result.type_key, tg_key_basic(TG_Kind_S32)) ||

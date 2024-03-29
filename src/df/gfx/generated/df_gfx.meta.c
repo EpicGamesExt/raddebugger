@@ -30,7 +30,7 @@ str8_lit_comp("four_coder"),
 str8_lit_comp("far_manager"),
 };
 
-Vec4F32 df_g_theme_preset_colors__default_dark[53] =
+Vec4F32 df_g_theme_preset_colors__default_dark[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0xe5e5e5ff),
@@ -41,6 +41,7 @@ rgba_from_u32_lit_comp(0xe5e5e5ff),
 rgba_from_u32_lit_comp(0x7fcc99ff),
 rgba_from_u32_lit_comp(0x66b2e5ff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0xf7bf5eff),
 rgba_from_u32_lit_comp(0x994c32ff),
 rgba_from_u32_lit_comp(0x4ce54cff),
@@ -87,7 +88,7 @@ rgba_from_u32_lit_comp(0x0000003f),
 rgba_from_u32_lit_comp(0x0000007f),
 };
 
-Vec4F32 df_g_theme_preset_colors__default_light[53] =
+Vec4F32 df_g_theme_preset_colors__default_light[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0x383838ff),
@@ -98,6 +99,7 @@ rgba_from_u32_lit_comp(0x282828ff),
 rgba_from_u32_lit_comp(0x2a7a45ff),
 rgba_from_u32_lit_comp(0x2c688fff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0xa47729ff),
 rgba_from_u32_lit_comp(0x6c2d18ff),
 rgba_from_u32_lit_comp(0x2c7d2cff),
@@ -144,7 +146,7 @@ rgba_from_u32_lit_comp(0x0000000d),
 rgba_from_u32_lit_comp(0x0000003b),
 };
 
-Vec4F32 df_g_theme_preset_colors__vs_dark[53] =
+Vec4F32 df_g_theme_preset_colors__vs_dark[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0xe5e5e5ff),
@@ -155,6 +157,7 @@ rgba_from_u32_lit_comp(0xd4d4d4ff),
 rgba_from_u32_lit_comp(0xdcdcaaff),
 rgba_from_u32_lit_comp(0x4ec9b0ff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0x569cd6ff),
 rgba_from_u32_lit_comp(0xb4b4b4ff),
 rgba_from_u32_lit_comp(0xb5cea8ff),
@@ -201,7 +204,7 @@ rgba_from_u32_lit_comp(0x0000003f),
 rgba_from_u32_lit_comp(0x0000007f),
 };
 
-Vec4F32 df_g_theme_preset_colors__vs_light[53] =
+Vec4F32 df_g_theme_preset_colors__vs_light[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0x1e1e1eff),
@@ -212,6 +215,7 @@ rgba_from_u32_lit_comp(0x000000ff),
 rgba_from_u32_lit_comp(0x74531fff),
 rgba_from_u32_lit_comp(0x2b91afff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0x0000ffff),
 rgba_from_u32_lit_comp(0x000000ff),
 rgba_from_u32_lit_comp(0x000000ff),
@@ -258,7 +262,7 @@ rgba_from_u32_lit_comp(0x0000000d),
 rgba_from_u32_lit_comp(0x0000003b),
 };
 
-Vec4F32 df_g_theme_preset_colors__solarized_dark[53] =
+Vec4F32 df_g_theme_preset_colors__solarized_dark[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0xe5e5e5ff),
@@ -269,6 +273,7 @@ rgba_from_u32_lit_comp(0x839496ff),
 rgba_from_u32_lit_comp(0x1c7dd1ff),
 rgba_from_u32_lit_comp(0x1c7dd1ff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0x63980fff),
 rgba_from_u32_lit_comp(0x839496ff),
 rgba_from_u32_lit_comp(0xcb4b20ff),
@@ -315,7 +320,7 @@ rgba_from_u32_lit_comp(0x0000003f),
 rgba_from_u32_lit_comp(0x0000007f),
 };
 
-Vec4F32 df_g_theme_preset_colors__solarized_light[53] =
+Vec4F32 df_g_theme_preset_colors__solarized_light[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0x1e1e1eff),
@@ -326,6 +331,7 @@ rgba_from_u32_lit_comp(0x74878cff),
 rgba_from_u32_lit_comp(0xc39d36ff),
 rgba_from_u32_lit_comp(0x66b2e5ff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0xc39d36ff),
 rgba_from_u32_lit_comp(0x2e5256ff),
 rgba_from_u32_lit_comp(0x657b83ff),
@@ -372,7 +378,7 @@ rgba_from_u32_lit_comp(0x0000000d),
 rgba_from_u32_lit_comp(0x0000003b),
 };
 
-Vec4F32 df_g_theme_preset_colors__handmade_hero[53] =
+Vec4F32 df_g_theme_preset_colors__handmade_hero[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0xa08563ff),
@@ -383,6 +389,7 @@ rgba_from_u32_lit_comp(0xa08563ff),
 rgba_from_u32_lit_comp(0xcc5735ff),
 rgba_from_u32_lit_comp(0xd8a51dff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0xac7b0bff),
 rgba_from_u32_lit_comp(0x994c32ff),
 rgba_from_u32_lit_comp(0x6b8e23ff),
@@ -429,7 +436,7 @@ rgba_from_u32_lit_comp(0x0000003f),
 rgba_from_u32_lit_comp(0x0000007f),
 };
 
-Vec4F32 df_g_theme_preset_colors__four_coder[53] =
+Vec4F32 df_g_theme_preset_colors__four_coder[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0x90b080ff),
@@ -440,6 +447,7 @@ rgba_from_u32_lit_comp(0x90b080ff),
 rgba_from_u32_lit_comp(0x7fcc99ff),
 rgba_from_u32_lit_comp(0x66b2e5ff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0xd08f20ff),
 rgba_from_u32_lit_comp(0x994c32ff),
 rgba_from_u32_lit_comp(0x50ff30ff),
@@ -486,7 +494,7 @@ rgba_from_u32_lit_comp(0x0000003f),
 rgba_from_u32_lit_comp(0x0000007f),
 };
 
-Vec4F32 df_g_theme_preset_colors__far_manager[53] =
+Vec4F32 df_g_theme_preset_colors__far_manager[54] =
 {
 rgba_from_u32_lit_comp(0xff00ffff),
 rgba_from_u32_lit_comp(0x00ffffff),
@@ -497,6 +505,7 @@ rgba_from_u32_lit_comp(0x00ffffff),
 rgba_from_u32_lit_comp(0x49b2ffff),
 rgba_from_u32_lit_comp(0x49b2ffff),
 rgba_from_u32_lit_comp(0xfe9548ff),
+rgba_from_u32_lit_comp(0xd45d90ff),
 rgba_from_u32_lit_comp(0xff0000ff),
 rgba_from_u32_lit_comp(0xffffffff),
 rgba_from_u32_lit_comp(0x2cff50ff),
@@ -755,7 +764,7 @@ DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[29] =
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath|0*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("theme"), str8_lit_comp("Theme"), DF_NameKind_Null, DF_IconKind_Palette, DF_VIEW_SETUP_FUNCTION_NAME(Theme), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Theme), DF_VIEW_CMD_FUNCTION_NAME(Theme), DF_VIEW_UI_FUNCTION_NAME(Theme)},
 };
 
-String8 df_g_theme_color_display_string_table[53] =
+String8 df_g_theme_color_display_string_table[54] =
 {
 str8_lit_comp("Null"),
 str8_lit_comp("Plain Text"),
@@ -766,6 +775,7 @@ str8_lit_comp("Code (Default)"),
 str8_lit_comp("Code (Function)"),
 str8_lit_comp("Code (Type)"),
 str8_lit_comp("Code (Local)"),
+str8_lit_comp("Code (Register)"),
 str8_lit_comp("Code (Keyword)"),
 str8_lit_comp("Code (Symbol)"),
 str8_lit_comp("Code (Numeric)"),
@@ -812,7 +822,7 @@ str8_lit_comp("Inactive Panel Overlay"),
 str8_lit_comp("Drop Shadow"),
 };
 
-String8 df_g_theme_color_cfg_string_table[53] =
+String8 df_g_theme_color_cfg_string_table[54] =
 {
 str8_lit_comp("null"),
 str8_lit_comp("plain_text"),
@@ -823,6 +833,7 @@ str8_lit_comp("code_default"),
 str8_lit_comp("code_function"),
 str8_lit_comp("code_type"),
 str8_lit_comp("code_local"),
+str8_lit_comp("code_register"),
 str8_lit_comp("code_keyword"),
 str8_lit_comp("code_symbol"),
 str8_lit_comp("code_numeric"),

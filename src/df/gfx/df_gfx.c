@@ -10314,13 +10314,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               {
                 DF_ThemeColor new_color_kind = df_theme_color_from_txt_token_kind(token->kind);
                 F32 mix_t = 1.f;
-                if(token->kind == TXT_TokenKind_Identifier)
+                if(token->kind == TXT_TokenKind_Identifier || token->kind == TXT_TokenKind_Keyword)
                 {
                   B32 mapped_special = 0;
                   for(DF_EntityNode *n = params->relevant_binaries.first; n != 0; n = n->next)
                   {
                     DF_Entity *binary = n->entity;
-                    if(!mapped_special)
+                    if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
                       U64 voff = df_voff_from_binary_symbol_name(binary, token_string);
                       if(voff != 0)
@@ -10330,7 +10330,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                         mix_t = selected_thread_module->alive_t;
                       }
                     }
-                    if(!mapped_special)
+                    if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
                       U64 type_num = df_type_num_from_binary_name(binary, token_string);
                       if(type_num != 0)
@@ -10340,13 +10340,33 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                         mix_t = selected_thread_module->alive_t;
                       }
                     }
-                    if(!mapped_special)
+                    if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
                       U64 local_num = eval_num_from_string(parse_ctx->locals_map, token_string);
                       if(local_num != 0)
                       {
                         mapped_special = 1;
                         new_color_kind = DF_ThemeColor_CodeLocal;
+                        mix_t = selected_thread_module->alive_t;
+                      }
+                    }
+                    if(!mapped_special)
+                    {
+                      U64 reg_num = eval_num_from_string(parse_ctx->regs_map, token_string);
+                      if(reg_num != 0)
+                      {
+                        mapped_special = 1;
+                        new_color_kind = DF_ThemeColor_CodeRegister;
+                        mix_t = selected_thread_module->alive_t;
+                      }
+                    }
+                    if(!mapped_special)
+                    {
+                      U64 alias_num = eval_num_from_string(parse_ctx->reg_alias_map, token_string);
+                      if(alias_num != 0)
+                      {
+                        mapped_special = 1;
+                        new_color_kind = DF_ThemeColor_CodeRegister;
                         mix_t = selected_thread_module->alive_t;
                       }
                     }

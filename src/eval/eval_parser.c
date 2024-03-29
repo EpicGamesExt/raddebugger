@@ -775,6 +775,38 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
       }
     }
     
+    //- rjf: descent to assembly-style dereference sub-expression
+    else if(token.kind == EVAL_TokenKind_Symbol && str8_match(token_string, str8_lit("["), 0))
+    {
+      // rjf: skip [
+      it += 1;
+      
+      // rjf: parse [] contents
+      EVAL_TokenArray nested_parse_tokens = eval_token_array_make_first_opl(it, it_opl);
+      EVAL_ParseResult nested_parse = eval_parse_expr_from_text_tokens__prec(arena, ctx, text, &nested_parse_tokens, eval_g_max_precedence);
+      eval_error_list_concat_in_place(&result.errors, &nested_parse.errors);
+      atom = nested_parse.expr;
+      it = nested_parse.last_token;
+      
+      // rjf: build cast-to-U64*, and dereference operators
+      atom = eval_expr(arena, EVAL_ExprKind_Cast, token_string.str, eval_expr_leaf_type(arena, token_string.str, tg_cons_type_make(ctx->type_graph, TG_Kind_Ptr, tg_key_basic(TG_Kind_U64), 0)), atom, 0);
+      atom = eval_expr(arena, EVAL_ExprKind_Deref, token_string.str, atom, 0, 0);
+      
+      // rjf: expect ]
+      EVAL_Token close_paren_maybe = eval_token_at_it(it, tokens);
+      String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
+      if(close_paren_maybe.kind != EVAL_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit("]"), 0))
+      {
+        eval_errorf(arena, &result.errors, EVAL_ErrorKind_MalformedInput, token_string.str, "Missing ].");
+      }
+      
+      // rjf: consume )
+      else
+      {
+        it += 1;
+      }
+    }
+    
     //- rjf: leaf (identifier, literal)
     else if(token.kind != EVAL_TokenKind_Symbol)
     {

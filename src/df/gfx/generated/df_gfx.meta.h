@@ -51,6 +51,7 @@ DF_ThemeColor_CodeDefault,
 DF_ThemeColor_CodeFunction,
 DF_ThemeColor_CodeType,
 DF_ThemeColor_CodeLocal,
+DF_ThemeColor_CodeRegister,
 DF_ThemeColor_CodeKeyword,
 DF_ThemeColor_CodeSymbol,
 DF_ThemeColor_CodeNumeric,
@@ -250,15 +251,15 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo);
 C_LINKAGE_BEGIN
 extern String8 df_g_theme_preset_display_string_table[9];
 extern String8 df_g_theme_preset_code_string_table[9];
-extern Vec4F32 df_g_theme_preset_colors__default_dark[53];
-extern Vec4F32 df_g_theme_preset_colors__default_light[53];
-extern Vec4F32 df_g_theme_preset_colors__vs_dark[53];
-extern Vec4F32 df_g_theme_preset_colors__vs_light[53];
-extern Vec4F32 df_g_theme_preset_colors__solarized_dark[53];
-extern Vec4F32 df_g_theme_preset_colors__solarized_light[53];
-extern Vec4F32 df_g_theme_preset_colors__handmade_hero[53];
-extern Vec4F32 df_g_theme_preset_colors__four_coder[53];
-extern Vec4F32 df_g_theme_preset_colors__far_manager[53];
+extern Vec4F32 df_g_theme_preset_colors__default_dark[54];
+extern Vec4F32 df_g_theme_preset_colors__default_light[54];
+extern Vec4F32 df_g_theme_preset_colors__vs_dark[54];
+extern Vec4F32 df_g_theme_preset_colors__vs_light[54];
+extern Vec4F32 df_g_theme_preset_colors__solarized_dark[54];
+extern Vec4F32 df_g_theme_preset_colors__solarized_light[54];
+extern Vec4F32 df_g_theme_preset_colors__handmade_hero[54];
+extern Vec4F32 df_g_theme_preset_colors__four_coder[54];
+extern Vec4F32 df_g_theme_preset_colors__far_manager[54];
 extern Vec4F32* df_g_theme_preset_colors_table[9];
 extern DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
@@ -267,8 +268,8 @@ extern DF_StringBindingPair df_g_default_binding_table[97];
 extern String8 df_g_binding_version_remap_old_name_table[3];
 extern String8 df_g_binding_version_remap_new_name_table[3];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[29];
-extern String8 df_g_theme_color_display_string_table[53];
-extern String8 df_g_theme_color_cfg_string_table[53];
+extern String8 df_g_theme_color_display_string_table[54];
+extern String8 df_g_theme_color_cfg_string_table[54];
 read_only global U8 df_g_icon_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x80,0x00,0x03,0x00,0x70,0x47,0x53,0x55,0x42,0x20,0x8b,0x25,0x7a,0x00,0x00,0x00,0xfc,0x00,0x00,0x00,0x54,0x4f,0x53,0x2f,0x32,0x56,0x44,0x49,0xa0,0x00,0x00,0x01,0x50,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0x2a,0x09,0xe2,0xc2,0x00,0x00,0x01,0xb0,0x00,0x00,0x05,0xec,0x63,0x76,0x74,0x20,

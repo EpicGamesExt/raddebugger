@@ -265,6 +265,7 @@ DF_ThemeTable:
   {CodeFunction             "Code (Function)"          code_function                 }
   {CodeType                 "Code (Type)"              code_type                     }
   {CodeLocal                "Code (Local)"             code_local                    }
+  {CodeRegister             "Code (Register)"          code_register                 }
   {CodeKeyword              "Code (Keyword)"           code_keyword                  }
   {CodeSymbol               "Code (Symbol)"            code_symbol                   }
   {CodeNumeric              "Code (Numeric)"           code_numeric                  }
@@ -349,6 +350,7 @@ DF_ThemePresetColorTable:
   (code_function                 0x7fcc99ff          0x2a7a45ff           0xdcdcaaff          0x74531fff          0x1c7dd1ff          0xc39d36ff          0xcc5735ff          0x7fcc99ff          0x49b2ffff     )
   (code_type                     0x66b2e5ff          0x2c688fff           0x4ec9b0ff          0x2b91afff          0x1c7dd1ff          0x66b2e5ff          0xd8a51dff          0x66b2e5ff          0x49b2ffff     )
   (code_local                    0xfe9548ff          0xfe9548ff           0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff     )
+  (code_register                 0xd45d90ff          0xd45d90ff           0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff     )
   (code_keyword                  0xf7bf5eff          0xa47729ff           0x569cd6ff          0x0000ffff          0x63980fff          0xc39d36ff          0xac7b0bff          0xd08f20ff          0xff0000ff     )
   (code_symbol                   0x994c32ff          0x6c2d18ff           0xb4b4b4ff          0x000000ff          0x839496ff          0x2e5256ff          0x994c32ff          0x994c32ff          0xffffffff     )
   (code_numeric                  0x4ce54cff          0x2c7d2cff           0xb5cea8ff          0x000000ff          0xcb4b20ff          0x657b83ff          0x6b8e23ff          0x50ff30ff          0x2cff50ff     )
