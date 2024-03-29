@@ -2368,9 +2368,7 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       {
         done = 1;
       }
-      if(event->kind == DMN_EventKind_Halt ||
-         event->kind == DMN_EventKind_Exception ||
-         event->kind == DMN_EventKind_Error)
+      if(event->kind == DMN_EventKind_Halt)
       {
         done = 1;
       }
@@ -2423,9 +2421,7 @@ ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       {
         done = 1;
       }
-      if(event->kind == DMN_EventKind_Halt ||
-         event->kind == DMN_EventKind_Exception ||
-         event->kind == DMN_EventKind_Error)
+      if(event->kind == DMN_EventKind_Halt)
       {
         done = 1;
       }
