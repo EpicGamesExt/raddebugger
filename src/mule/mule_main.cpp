@@ -274,6 +274,9 @@ type_coverage_eval_tests(void){
     "With multiple lines in it\r\n"
     "\t> What ways might it be rendered?\n"
     "\t> How would it deal with line endings?\r\n";
+  wchar_t a_wide_string[] =
+    L"This is a string, but instead of being encoded in a stream of bytes,\n"
+    L"it is encoded in a stream of 2-byte packages!\n";
   
   void *pointer = &basics;
   Basics *pointer_to_basics = &basics;
