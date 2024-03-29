@@ -1209,14 +1209,24 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID mac
 }
 
 internal CTRL_ProcessMemorySlice
-ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, U64 vaddr, U64 limit, U64 endt_us)
+ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, U64 vaddr, U64 limit, U64 element_size, U64 endt_us)
 {
   CTRL_ProcessMemorySlice result = ctrl_query_cached_data_from_process_vaddr_range(arena, machine_id, process, r1u64(vaddr, vaddr+limit), endt_us);
-  for(U64 idx = 0; idx < result.data.size; idx += 1)
+  U64 element_count = result.data.size/element_size;
+  for(U64 element_idx = 0; element_idx < element_count; element_idx += 1)
   {
-    if(result.data.str[idx] == 0)
+    B32 element_is_zero = 1;
+    for(U64 element_byte_idx = 0; element_byte_idx < element_size; element_byte_idx += 1)
     {
-      result.data.size = idx;
+      if(result.data.str[element_idx*element_size + element_byte_idx] != 0)
+      {
+        element_is_zero = 0;
+        break;
+      }
+    }
+    if(element_is_zero)
+    {
+      result.data.size = element_idx*element_size;
       break;
     }
   }
@@ -3561,7 +3571,20 @@ ctrl_mem_stream_thread__entry_point(void *p)
       else
       {
         range_base = push_array_no_zero(range_arena, U8, range_size);
-        U64 bytes_read = dmn_process_read(process, vaddr_range_clamped, range_base);
+        U64 bytes_read = 0;
+        U64 retry_count = 0;
+        for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped; retry_count < 64; retry_count += 1)
+        {
+          bytes_read = dmn_process_read(process, vaddr_range_clamped_retry, range_base);
+          if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
+          {
+            vaddr_range_clamped_retry.max -= (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
+          }
+          else
+          {
+            break;
+          }
+        }
         if(bytes_read == 0)
         {
           arena_release(range_arena);

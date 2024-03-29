@@ -6877,8 +6877,16 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         if(!has_array && direct_type_is_string && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && eval.mode == EVAL_EvalMode_Addr)
         {
           U64 string_memory_addr = value_eval.imm_u64;
-          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, 0);
-          String8 text = df_eval_escaped_from_raw_string(arena, text_slice.data);
+          U64 element_size = tg_byte_size_from_graph_rdi_key(graph, rdi, eval.type_key);
+          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, element_size, 0);
+          String8 raw_text = {0};
+          switch(element_size)
+          {
+            default:{raw_text = text_slice.data;}break;
+            case 2: {raw_text = str8_from_16(arena, str16((U16 *)text_slice.data.str, text_slice.data.size/sizeof(U16)));}break;
+            case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_slice.data.str, text_slice.data.size/sizeof(U32)));}break;
+          }
+          String8 text = df_eval_escaped_from_raw_string(arena, raw_text);
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));
@@ -6953,8 +6961,16 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           special_case = 1;
           DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
           DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, 0);
-          String8 text = df_eval_escaped_from_raw_string(arena, text_slice.data);
+          U64 element_size = tg_byte_size_from_graph_rdi_key(graph, rdi, eval_type->direct_type_key);
+          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, element_size, 0);
+          String8 raw_text = {0};
+          switch(element_size)
+          {
+            default:{raw_text = text_slice.data;}break;
+            case 2: {raw_text = str8_from_16(arena, str16((U16 *)text_slice.data.str, text_slice.data.size/sizeof(U16)));}break;
+            case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_slice.data.str, text_slice.data.size/sizeof(U32)));}break;
+          }
+          String8 text = df_eval_escaped_from_raw_string(arena, raw_text);
           space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
           space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));
