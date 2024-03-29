@@ -364,35 +364,45 @@ enum
   UI_SignalFlag_MiddleDragging      = (1<<4),
   UI_SignalFlag_RightDragging       = (1<<5),
   
+  // rjf: double-dragging -> box was previously double-clicked, user is still holding button
+  UI_SignalFlag_LeftDoubleDragging  = (1<<6),
+  UI_SignalFlag_MiddleDoubleDragging= (1<<7),
+  UI_SignalFlag_RightDoubleDragging = (1<<8),
+  
+  // rjf: triple-dragging -> box was previously triple-clicked, user is still holding button
+  UI_SignalFlag_LeftTripleDragging  = (1<<9),
+  UI_SignalFlag_MiddleTripleDragging= (1<<10),
+  UI_SignalFlag_RightTripleDragging = (1<<11),
+  
   // rjf: released -> box was previously pressed & user released, in or out of bounds
-  UI_SignalFlag_LeftReleased        = (1<<6),
-  UI_SignalFlag_MiddleReleased      = (1<<7),
-  UI_SignalFlag_RightReleased       = (1<<8),
+  UI_SignalFlag_LeftReleased        = (1<<12),
+  UI_SignalFlag_MiddleReleased      = (1<<13),
+  UI_SignalFlag_RightReleased       = (1<<14),
   
   // rjf: clicked -> box was previously pressed & user released, in bounds
-  UI_SignalFlag_LeftClicked         = (1<<9),
-  UI_SignalFlag_MiddleClicked       = (1<<10),
-  UI_SignalFlag_RightClicked        = (1<<11),
+  UI_SignalFlag_LeftClicked         = (1<<15),
+  UI_SignalFlag_MiddleClicked       = (1<<16),
+  UI_SignalFlag_RightClicked        = (1<<17),
   
   // rjf: double clicked -> box was previously clicked, pressed again
-  UI_SignalFlag_LeftDoubleClicked   = (1<<12),
-  UI_SignalFlag_MiddleDoubleClicked = (1<<13),
-  UI_SignalFlag_RightDoubleClicked  = (1<<14),
+  UI_SignalFlag_LeftDoubleClicked   = (1<<18),
+  UI_SignalFlag_MiddleDoubleClicked = (1<<19),
+  UI_SignalFlag_RightDoubleClicked  = (1<<20),
   
   // rjf: triple clicked -> box was previously clicked twice, pressed again
-  UI_SignalFlag_LeftTripleClicked   = (1<<15),
-  UI_SignalFlag_MiddleTripleClicked = (1<<16),
-  UI_SignalFlag_RightTripleClicked  = (1<<17),
+  UI_SignalFlag_LeftTripleClicked   = (1<<21),
+  UI_SignalFlag_MiddleTripleClicked = (1<<22),
+  UI_SignalFlag_RightTripleClicked  = (1<<23),
   
   // rjf: keyboard pressed -> box had focus, user activated via their keyboard
-  UI_SignalFlag_KeyboardPressed     = (1<<18),
+  UI_SignalFlag_KeyboardPressed     = (1<<24),
   
   // rjf: passive mouse info
-  UI_SignalFlag_Hovering            = (1<<19), // hovering specifically this box
-  UI_SignalFlag_MouseOver           = (1<<20), // mouse is over, but may be occluded
+  UI_SignalFlag_Hovering            = (1<<25), // hovering specifically this box
+  UI_SignalFlag_MouseOver           = (1<<26), // mouse is over, but may be occluded
   
   // rjf: committing state changes via user interaction
-  UI_SignalFlag_Commit              = (1<<21),
+  UI_SignalFlag_Commit              = (1<<27),
   
   // rjf: high-level combos
   UI_SignalFlag_Pressed = UI_SignalFlag_LeftPressed|UI_SignalFlag_KeyboardPressed,
@@ -484,8 +494,8 @@ struct UI_State
   UI_Key hot_box_key;
   UI_Key active_box_key[UI_MouseButtonKind_COUNT];
   UI_Key clipboard_copy_key;
-  U64 last_press_timestamp_us[UI_MouseButtonKind_COUNT];
-  UI_Key last_press_key[UI_MouseButtonKind_COUNT];
+  U64 press_timestamp_history_us[UI_MouseButtonKind_COUNT][3];
+  UI_Key press_key_history[UI_MouseButtonKind_COUNT][3];
   Vec2F32 drag_start_mouse;
   Arena *drag_state_arena;
   String8 drag_state_data;
