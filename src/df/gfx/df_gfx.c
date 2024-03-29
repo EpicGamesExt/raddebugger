@@ -9964,12 +9964,45 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: mouse point -> mouse token range, mouse line range
+  //
+  TxtRng mouse_token_rng = txt_rng(mouse_pt, mouse_pt);
+  TxtRng mouse_line_rng = txt_rng(mouse_pt, mouse_pt);
+  if(contains_1s64(params->line_num_range, mouse_pt.line))
+  {
+    TXT_TokenArray *line_tokens = &params->line_tokens[mouse_pt.line-params->line_num_range.min];
+    Rng1U64 line_range = params->line_ranges[mouse_pt.line-params->line_num_range.min];
+    U64 mouse_pt_off = (mouse_pt.column-1) + line_range.min;
+    for(U64 line_token_idx = 0; line_token_idx < line_tokens->count; line_token_idx += 1)
+    {
+      TXT_Token *line_token = &line_tokens->v[line_token_idx];
+      if(contains_1u64(line_token->range, mouse_pt_off))
+      {
+        mouse_token_rng = txt_rng(txt_pt(mouse_pt.line, 1+line_token->range.min-line_range.min), txt_pt(mouse_pt.line, 1+line_token->range.max-line_range.min));
+        break;
+      }
+    }
+    mouse_line_rng = txt_rng(txt_pt(mouse_pt.line, 1), txt_pt(mouse_pt.line, 1+line_range.max));
+  }
+  
+  //////////////////////////////
   //- rjf: interact with margin box & text box
   //
   UI_Signal margin_container_sig = ui_signal_from_box(margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
   DF_Entity *line_drag_entity = &df_g_nil_entity;
   {
+    //- rjf: determine mouse drag range
+    TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
+    if(text_container_sig.f & UI_SignalFlag_LeftTripleDragging)
+    {
+      mouse_drag_rng = mouse_line_rng;
+    }
+    else if(text_container_sig.f & UI_SignalFlag_LeftDoubleDragging)
+    {
+      mouse_drag_rng = mouse_token_rng;
+    }
+    
     //- rjf: clicking/dragging over the text container
     if(!ctrlified && ui_dragging(text_container_sig))
     {
@@ -9987,9 +10020,17 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       }
       if(ui_pressed(text_container_sig))
       {
-        *mark = mouse_pt;
+        *cursor = mouse_drag_rng.max;
+        *mark = mouse_drag_rng.min;
       }
-      *cursor = mouse_pt;
+      if(txt_pt_less_than(mouse_pt, *mark))
+      {
+        *cursor = mouse_drag_rng.min;
+      }
+      else
+      {
+        *cursor = mouse_drag_rng.max;
+      }
       *preferred_column = cursor->column;
     }
     

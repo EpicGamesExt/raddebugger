@@ -2464,8 +2464,11 @@ ui_signal_from_box(UI_Box *box)
                  sizeof(ui_state->press_timestamp_history_us[evt_mouse_button_kind][0]) * ArrayCount(ui_state->press_timestamp_history_us[evt_mouse_button_kind])-1);
       MemoryCopy(&ui_state->press_key_history[evt_mouse_button_kind][1], &ui_state->press_key_history[evt_mouse_button_kind][0],
                  sizeof(ui_state->press_key_history[evt_mouse_button_kind][0]) * ArrayCount(ui_state->press_key_history[evt_mouse_button_kind])-1);
+      MemoryCopy(&ui_state->press_pos_history[evt_mouse_button_kind][1], &ui_state->press_pos_history[evt_mouse_button_kind][0],
+                 sizeof(ui_state->press_pos_history[evt_mouse_button_kind][0]) * ArrayCount(ui_state->press_pos_history[evt_mouse_button_kind])-1);
       ui_state->press_timestamp_history_us[evt_mouse_button_kind][0] = evt->timestamp_us;
       ui_state->press_key_history[evt_mouse_button_kind][0] = box->key;
+      ui_state->press_pos_history[evt_mouse_button_kind][0] = evt_mouse;
       taken = 1;
     }
     
@@ -2652,7 +2655,8 @@ ui_signal_from_box(UI_Box *box)
       if(sig.f & (UI_SignalFlag_LeftDragging<<k) &&
          ui_key_match(ui_state->press_key_history[k][0], box->key) &&
          ui_key_match(ui_state->press_key_history[k][1], box->key) &&
-         ui_state->press_timestamp_history_us[k][0] - ui_state->press_timestamp_history_us[k][1] <= 1000000*os_double_click_time())
+         ui_state->press_timestamp_history_us[k][0] - ui_state->press_timestamp_history_us[k][1] <= 1000000*os_double_click_time() &&
+         length_2f32(sub_2f32(ui_state->press_pos_history[k][0], ui_state->press_pos_history[k][1])) < 10.f)
       {
         sig.f |= (UI_SignalFlag_LeftDoubleDragging<<k);
       }
@@ -2671,7 +2675,9 @@ ui_signal_from_box(UI_Box *box)
          ui_key_match(ui_state->press_key_history[k][1], box->key) &&
          ui_key_match(ui_state->press_key_history[k][2], box->key) &&
          ui_state->press_timestamp_history_us[k][0] - ui_state->press_timestamp_history_us[k][1] <= 1000000*os_double_click_time() &&
-         ui_state->press_timestamp_history_us[k][1] - ui_state->press_timestamp_history_us[k][2] <= 1000000*os_double_click_time())
+         ui_state->press_timestamp_history_us[k][1] - ui_state->press_timestamp_history_us[k][2] <= 1000000*os_double_click_time() &&
+         length_2f32(sub_2f32(ui_state->press_pos_history[k][0], ui_state->press_pos_history[k][1])) < 10.f &&
+         length_2f32(sub_2f32(ui_state->press_pos_history[k][1], ui_state->press_pos_history[k][2])) < 10.f)
       {
         sig.f |= (UI_SignalFlag_LeftTripleDragging<<k);
       }

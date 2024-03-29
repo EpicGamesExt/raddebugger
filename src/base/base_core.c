@@ -387,6 +387,14 @@ txt_rng_union(TxtRng a, TxtRng b)
   return result;
 }
 
+internal B32
+txt_rng_contains(TxtRng r, TxtPt pt)
+{
+  B32 result = ((txt_pt_less_than(r.min, pt) || txt_pt_match(r.min, pt)) &&
+                txt_pt_less_than(pt, r.max));
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Toolchain/Environment Enum Functions
 

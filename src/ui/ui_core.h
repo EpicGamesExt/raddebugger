@@ -496,6 +496,7 @@ struct UI_State
   UI_Key clipboard_copy_key;
   U64 press_timestamp_history_us[UI_MouseButtonKind_COUNT][3];
   UI_Key press_key_history[UI_MouseButtonKind_COUNT][3];
+  Vec2F32 press_pos_history[UI_MouseButtonKind_COUNT][3];
   Vec2F32 drag_start_mouse;
   Arena *drag_state_arena;
   String8 drag_state_data;

@@ -738,6 +738,7 @@ internal TxtPt txt_pt_max(TxtPt a, TxtPt b);
 internal TxtRng txt_rng(TxtPt min, TxtPt max);
 internal TxtRng txt_rng_intersect(TxtRng a, TxtRng b);
 internal TxtRng txt_rng_union(TxtRng a, TxtRng b);
+internal B32 txt_rng_contains(TxtRng r, TxtPt pt);
 
 ////////////////////////////////
 //~ rjf: Toolchain/Environment Enum Functions
