@@ -4178,6 +4178,24 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
     result = df_dynamically_typed_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, result);
   }
   
+  //- rjf: try to resolve basic integral values into symbols
+  if(result.mode == EVAL_EvalMode_Value && parse.expr->kind != EVAL_ExprKind_Cast &&
+     (tg_key_match(result.type_key, tg_key_basic(TG_Kind_S64)) ||
+      tg_key_match(result.type_key, tg_key_basic(TG_Kind_U64)) ||
+      tg_key_match(result.type_key, tg_key_basic(TG_Kind_S32)) ||
+      tg_key_match(result.type_key, tg_key_basic(TG_Kind_U32))))
+  {
+    U64 vaddr = result.imm_u64;
+    DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
+    DF_Entity *binary = df_binary_file_from_module(module);
+    U64 voff = df_voff_from_vaddr(module, vaddr);
+    String8 symbol_name = df_symbol_name_from_binary_voff(scratch.arena, binary, voff);
+    if(symbol_name.size != 0)
+    {
+      result.type_key = tg_cons_type_make(parse_ctx->type_graph, TG_Kind_Ptr, tg_key_basic(TG_Kind_Void), 0);
+    }
+  }
+  
   scratch_end(scratch);
   ProfEnd();
   return result;
