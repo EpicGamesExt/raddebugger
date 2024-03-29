@@ -16,14 +16,6 @@ DF_CfgSrcTable:
 ////////////////////////////////
 //~ rjf: Entity Kind Tables
 
-@table(name)
-DF_NameKindTable:
-{
-  {Null}
-  {EntityName}
-  {EntityKindName}
-}
-
 @table(name          name_lower            op_delete     op_freeze       op_edit      op_rename    op_enable       op_cond       op_dup       lf_mut_user_cfg     tr_mut_user_cfg     lf_mut_prof_cfg     tr_mut_prof_cfg     lf_mut_halt   lf_mut_dbg   tr_mut_halt   tr_mut_dbg   name_is_code   user_lifetime            name_label          icon_kind              display_string)
 DF_EntityKindTable:
 {
@@ -81,24 +73,24 @@ DF_EntityKindTable:
 @table(name, name_lower, c_type)
 DF_CmdParamSlotTable:
 {
-  {Window,            window,       `DF_Handle`}
-  {Panel,             panel,        `DF_Handle`}
-  {DestPanel,         dest_panel,   `DF_Handle`}
-  {PrevView,          prev_view,    `DF_Handle`}
-  {View,              view,         `DF_Handle`}
-  {Entity,            entity,       `DF_Handle`}
-  {EntityList,        entity_list,  `DF_HandleList`}
-  {String,            string,       `String8`}
-  {FilePath,          file_path,    `String8`}
-  {TextPoint,         text_point,   `TxtPt`}
-  {CmdSpec,           cmd_spec,     `struct DF_CmdSpec *`}
-  {ViewSpec,          view_spec,    `struct DF_ViewSpec *`}
-  {VirtualAddr,       vaddr,        `U64`}
-  {VirtualOff,        voff,         `U64`}
-  {Index,             index,        `U64`}
-  {ID,                id,           `U64`}
-  {PreferDisassembly, prefer_dasm,  `B32`}
-  {ForceConfirm,      force_confirm,`B32`}
+  {Window            window                `DF_Handle`}
+  {Panel             panel                 `DF_Handle`}
+  {DestPanel         dest_panel            `DF_Handle`}
+  {PrevView          prev_view             `DF_Handle`}
+  {View              view                  `DF_Handle`}
+  {Entity            entity                `DF_Handle`}
+  {EntityList        entity_list           `DF_HandleList`}
+  {String            string                `String8`}
+  {FilePath          file_path             `String8`}
+  {TextPoint         text_point            `TxtPt`}
+  {CmdSpec           cmd_spec              `struct DF_CmdSpec *`}
+  {ViewSpec          view_spec             `struct DF_ViewSpec *`}
+  {VirtualAddr       vaddr                 `U64`}
+  {VirtualOff        voff                  `U64`}
+  {Index             index                 `U64`}
+  {ID                id                    `U64`}
+  {PreferDisassembly prefer_dasm           `B32`}
+  {ForceConfirm      force_confirm         `B32`}
 }
 
 @table(name                      lister_omit  q_slot       q_ent_kind  q_allow_files q_allow_folders  q_keep_oi   q_select_oi  q_is_code  q_required           canonical_icon        string                        display_name                                  desc                                                                                                               search_tags                      )
@@ -1703,12 +1695,6 @@ DF_DevToggleTable:
 @enum DF_EntityKind:
 {
   @expand(DF_EntityKindTable a) `$(a.name)`,
-  COUNT,
-}
-
-@enum DF_NameKind:
-{
-  @expand(DF_NameKindTable, a) `$(a.name)`,
   COUNT,
 }
 

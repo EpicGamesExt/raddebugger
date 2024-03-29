@@ -692,72 +692,89 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
+  
+  //////////////////////////////
+  //- rjf: get & initialize state
+  //
   DF_ViewRuleHooks_TextState *state = df_view_rule_block_user_state(key, DF_ViewRuleHooks_TextState);
   if(!state->initialized)
   {
     state->initialized = 1;
     state->cursor = state->mark = txt_pt(1, 1);
   }
-  if(state->last_open_frame_idx+1 < df_frame_index())
+  
+  //////////////////////////////
+  //- rjf: unpack evaluation / view rule params
+  //
+  DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  DF_TxtTopologyInfo top = df_view_rule_hooks__txt_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
+  DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
+  U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
+  Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr + (top.size_cap ? top.size_cap : 2048));
+  
+  //////////////////////////////
+  //- rjf: evaluation info -> text visualization info
+  //
+  String8 data = {0};
+  TXT_TextInfo info = {0};
+  TXT_LineTokensSlice line_tokens_slice = {0};
   {
-    state->loaded_t = 0;
-  }
-  state->last_open_frame_idx = df_frame_index();
-  {
-    //- rjf: unpack params
-    DF_TxtTopologyInfo top = df_view_rule_hooks__txt_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
-    
-    //- rjf: resolve to address value & range
-    DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
-    U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
-    Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr + (top.size_cap ? top.size_cap : 2048));
-    
-    //- rjf: unpack thread/process of eval
-    DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-    DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-    
-    //- rjf: unpack key for this region in memory
-    U128 text_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1);
-    
-    //- rjf: key -> parsed text info
     U128 text_hash = {0};
-    TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, top.lang, &text_hash);
-    String8 data = hs_data_from_hash(hs_scope, text_hash);
-    TXT_LineTokensSlice line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &info, data, r1s64(1, info.lines_count));
-    
-    //- rjf: info -> code slice info
-    DF_CodeSliceParams code_slice_params = {0};
+    U128 text_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1);
+    info = txt_text_info_from_key_lang(txt_scope, text_key, top.lang, &text_hash);
+    data = hs_data_from_hash(hs_scope, text_hash);
+    line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &info, data, r1s64(1, info.lines_count));
+  }
+  
+  //////////////////////////////
+  //- rjf: info -> code slice info
+  //
+  DF_CodeSliceParams code_slice_params = {0};
+  {
+    code_slice_params.flags = DF_CodeSliceFlag_LineNums;
+    code_slice_params.line_num_range = r1s64(1, info.lines_count);
+    code_slice_params.line_text = push_array(scratch.arena, String8, info.lines_count);
+    code_slice_params.line_ranges = push_array(scratch.arena, Rng1U64, info.lines_count);
+    code_slice_params.line_tokens = push_array(scratch.arena, TXT_TokenArray, info.lines_count);
+    code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, info.lines_count);
+    code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, info.lines_count);
+    code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, info.lines_count);
+    code_slice_params.line_dasm2src = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, info.lines_count);
+    code_slice_params.line_src2dasm = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, info.lines_count);
+    for(U64 line_idx = 0; line_idx < info.lines_count; line_idx += 1)
     {
-      code_slice_params.flags = DF_CodeSliceFlag_LineNums;
-      code_slice_params.line_num_range = r1s64(1, info.lines_count);
-      code_slice_params.line_text = push_array(scratch.arena, String8, info.lines_count);
-      code_slice_params.line_ranges = push_array(scratch.arena, Rng1U64, info.lines_count);
-      code_slice_params.line_tokens = push_array(scratch.arena, TXT_TokenArray, info.lines_count);
-      code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, info.lines_count);
-      code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, info.lines_count);
-      code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, info.lines_count);
-      code_slice_params.line_dasm2src = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, info.lines_count);
-      code_slice_params.line_src2dasm = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, info.lines_count);
-      for(U64 line_idx = 0; line_idx < info.lines_count; line_idx += 1)
-      {
-        code_slice_params.line_text[line_idx] = str8_substr(data, info.lines_ranges[line_idx]);
-        code_slice_params.line_ranges[line_idx] = info.lines_ranges[line_idx];
-        code_slice_params.line_tokens[line_idx] = line_tokens_slice.line_tokens[line_idx];
-      }
-      code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
-      code_slice_params.font_size = ui_top_font_size();
-      code_slice_params.line_height_px = ui_top_font_size()*1.5f;
-      code_slice_params.margin_width_px = 0;
-      code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
-      code_slice_params.line_text_max_width_px = ui_top_font_size()*2.f*info.lines_max_size;
+      code_slice_params.line_text[line_idx] = str8_substr(data, info.lines_ranges[line_idx]);
+      code_slice_params.line_ranges[line_idx] = info.lines_ranges[line_idx];
+      code_slice_params.line_tokens[line_idx] = line_tokens_slice.line_tokens[line_idx];
+    }
+    code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
+    code_slice_params.font_size = ui_top_font_size();
+    code_slice_params.line_height_px = ui_top_font_size()*1.5f;
+    code_slice_params.margin_width_px = 0;
+    code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
+    code_slice_params.line_text_max_width_px = ui_top_font_size()*2.f*info.lines_max_size;
+  }
+  
+  //////////////////////////////
+  //- rjf: build UI
+  //
+  if(info.lines_count != 0)
+  {
+    //- rjf: build top-level container
+    UI_Box *container = &ui_g_nil_box;
+    UI_PrefWidth(ui_px(dim.x, 1.f)) UI_PrefHeight(ui_px(dim.y, 1.f))
+    {
+      container = ui_build_box_from_stringf(UI_BoxFlag_AllowOverflow|UI_BoxFlag_Clip, "###text_container");
     }
     
     //- rjf: build code slice
-    if(info.lines_count != 0) UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_px(info.lines_max_size*ui_top_font_size()*1.2f, 1.f)) UI_Column UI_Padding(ui_pct(1, 0))
+    UI_WidthFill UI_HeightFill UI_Parent(container)
     {
-      DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));
+      DF_CodeSliceSignal slice_sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###slice"));
     }
   }
+  
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -1002,10 +1019,11 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   F32 rate = 1 - pow_f32(2, (-15.f * df_dt()));
   if(expected_size != 0)
   {
+    F32 img_dim = dim.y - ui_top_font_size()*2.f;
     UI_Padding(ui_pct(1.f, 0.f))
-      UI_PrefWidth(ui_px(dim.y*((F32)topology_info.width/(F32)topology_info.height), 1.f))
+      UI_PrefWidth(ui_px(img_dim*((F32)topology_info.width/(F32)topology_info.height), 1.f))
       UI_Column UI_Padding(ui_pct(1.f, 0.f))
-      UI_PrefHeight(ui_px(dim.y, 1.f))
+      UI_PrefHeight(ui_px(img_dim, 1.f))
     {
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects, "image_box");
@@ -1112,6 +1130,11 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   tex_scope_close(tex_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
+}
+
+DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_DEF(bitmap)
+{
+  
 }
 
 ////////////////////////////////

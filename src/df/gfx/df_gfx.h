@@ -113,7 +113,7 @@ struct DF_ViewSpecInfo
   DF_ViewSpecFlags flags;
   String8 name;
   String8 display_string;
-  DF_NameKind name_kind;
+  enum DF_NameKind name_kind;
   DF_IconKind icon_kind;
   DF_ViewSetupFunctionType *setup_hook;
   DF_ViewStringFromStateFunctionType *string_from_state_hook;
@@ -302,7 +302,7 @@ enum
 
 #define DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, Rng2F32 rect, DBGI_Scope *dbgi_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg)
 #define DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_NAME(name) df_gfx_view_rule_whole_ui__##name
-#define DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_WHOLW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_NAME(name))
+#define DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_NAME(name))
 
 typedef DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_GfxViewRuleVizRowProdHookFunctionType);
 typedef DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GfxViewRuleLineStringizeHookFunctionType);
@@ -383,8 +383,9 @@ enum
 typedef U32 DF_CodeSliceFlags;
 enum
 {
-  DF_CodeSliceFlag_Margin   = (1<<0),
-  DF_CodeSliceFlag_LineNums = (1<<1),
+  DF_CodeSliceFlag_Clickable = (1<<0),
+  DF_CodeSliceFlag_Margin    = (1<<1),
+  DF_CodeSliceFlag_LineNums  = (1<<2),
 };
 
 typedef struct DF_CodeSliceParams DF_CodeSliceParams;

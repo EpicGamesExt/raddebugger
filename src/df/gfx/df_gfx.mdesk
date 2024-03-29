@@ -177,6 +177,14 @@ DF_BindingVersionRemapTable:
 ////////////////////////////////
 //~ rjf: Gfx Layer View Kinds
 
+@table(name)
+DF_NameKindTable:
+{
+  {Null}
+  {EntityName}
+  {EntityKindName}
+}
+
 @table(name, name_lower, display_string, name_kind, icon, parameterized_by_entity, can_serialize, can_serialize_entity_path, can_filter, filter_is_code, typing_automatically_filters, inc_in_docs, docs_desc)
 DF_GfxViewTable:
 {
@@ -196,6 +204,7 @@ DF_GfxViewTable:
   { PendingEntity          "pending_entity"         "Pending Entity"               EntityName           FileOutline     1 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { Code                   "code"                   "Code"                         EntityName           FileOutline     1 1 1 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { Disassembly            "disassembly"            "Disassembly"                  Null                 Glasses         0 1 0 0 0 0      1 "Displays disassembled instructions in a textual form from the selected thread's containing process virtual address space."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
+  { EvalViewer             "eval_viewer"            "Evaluation Viewer"            Null                 Binoculars      0 1 0 0 0 0      0 "."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
   { Watch                  "watch"                  "Watch"                        Null                 Binoculars      0 1 0 1 1 1      1 "The familiar 'watch window' debugger interface. Allows the inputting of a number of expressions. Each expression in the table is evaluated within the context of the selected thread's selected call stack frame. If applicable (depending on visualization rules and the expression's type), these expressions may be hierarchically expanded, which displays children as more rows in the table. The values of these expressions may also be edited, and if possible, can be used to write to registers or memory in attached processes. Also contains a new *view rule* column, not found in other major debuggers, which allows per-row specification of various visualization rules. These view rules may be used to visualize and inspect the evaluation of expressions in a variety of ways. To learn more, read the 'View Rules' section."                                                        }
   { Locals                 "locals"                 "Locals"                       Null                 Binoculars      0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with local variables found within the selected call stack frame of the selected thread, according to the associated debug info. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
   { Registers              "registers"              "Registers"                    Null                 Binoculars      0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with all register names according to the selected thread's architecture. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  }
@@ -402,6 +411,12 @@ DF_ThemePresetColorTable:
 
 //- rjf: enums
 
+@enum DF_NameKind:
+{
+  @expand(DF_NameKindTable, a) `$(a.name)`,
+  COUNT,
+}
+
 @enum DF_GfxViewKind:
 {
   @expand(DF_GfxViewTable a) `$(a.name)`,
@@ -541,6 +556,8 @@ DF_ThemePresetColorTable:
     `$(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
   @expand(DF_GfxViewRuleTable a)
     `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.wu == "x" -> "DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
 }
 
 //- rjf: gfx view rule tables
@@ -548,7 +565,7 @@ DF_ThemePresetColorTable:
 @data(DF_GfxViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
 {
   @expand(DF_GfxViewRuleTable a)
-    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_BlockUI*$(a.bu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0), $(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME("..a.name_lower..")") $(a.bu != "x" -> 0), }```;
+    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_BlockUI*$(a.bu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0), $(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME("..a.name_lower..")") $(a.bu != "x" -> 0), $(a.wu == "x" -> "DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_NAME("..a.name_lower..")") $(a.wu != "x" -> 0) }```;
 }
 
 //- rjf: default view spec info table

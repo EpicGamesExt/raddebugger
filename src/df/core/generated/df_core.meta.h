@@ -46,14 +46,6 @@ DF_EntityKind_EndedProcess,
 DF_EntityKind_COUNT,
 } DF_EntityKind;
 
-typedef enum DF_NameKind
-{
-DF_NameKind_Null,
-DF_NameKind_EntityName,
-DF_NameKind_EntityKindName,
-DF_NameKind_COUNT,
-} DF_NameKind;
-
 typedef enum DF_CoreCmdKind
 {
 DF_CoreCmdKind_Null,

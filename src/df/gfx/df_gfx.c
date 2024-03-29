@@ -9149,7 +9149,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     ui_set_next_pref_width(ui_px(params->margin_width_px, 1));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_set_next_child_layout_axis(Axis2_Y);
-    margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable, str8_lit("margin_container"));
+    margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable), str8_lit("margin_container"));
     UI_Parent(margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
     {
       U64 line_idx = 0;
@@ -9162,7 +9162,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         DF_EntityList line_pins = params->line_pins[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         ui_set_next_background_color(v4f32(0, 0, 0, 0));
-        UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
+        UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
@@ -9215,7 +9215,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
-                                                       UI_BoxFlag_Clickable|
+                                                       UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_AnimatePosX|
                                                        UI_BoxFlag_DrawText,
                                                        thread_box_key);
@@ -9341,7 +9341,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                                                        UI_BoxFlag_DrawHotEffects|
                                                        UI_BoxFlag_DrawBorder|
                                                        UI_BoxFlag_AnimatePosX|
-                                                       UI_BoxFlag_Clickable|
+                                                       UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DisableTextTrunc,
                                                        "%S##bp_%p",
                                                        df_g_icon_kind_text_table[DF_IconKind_CircleFilled],
@@ -9408,7 +9408,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                                                         UI_BoxFlag_DrawActiveEffects|
                                                         UI_BoxFlag_DrawHotEffects|
                                                         UI_BoxFlag_DrawBorder|
-                                                        UI_BoxFlag_Clickable|
+                                                        UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
                                                         UI_BoxFlag_AnimatePosX|
                                                         UI_BoxFlag_DisableTextTrunc,
                                                         "%S##watch_%p",
@@ -9472,7 +9472,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   {
     ui_set_next_hover_cursor(ctrlified ? OS_Cursor_HandPoint : OS_Cursor_IBar);
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
-    text_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable, str8_lit("text_container"));
+    text_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable), str8_lit("text_container"));
   }
   
   //////////////////////////////
@@ -9530,7 +9530,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
           UI_Parent(line_extras_boxes[line_idx]) UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
           {
-            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_Clickable, "###exception_info");
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder, "###exception_info");
             UI_Parent(box)
             {
               UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
@@ -9580,7 +9580,10 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           ui_spacer(ui_em(1.5f, 1.f));
           ui_set_next_pref_width(ui_children_sum(1));
           UI_Key pin_box_key = ui_key_from_stringf(ui_key_zero(), "###pin_%p", pin);
-          UI_Box *pin_box = ui_build_box_from_key(UI_BoxFlag_AnimatePos|UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawBorder, pin_box_key);
+          UI_Box *pin_box = ui_build_box_from_key(UI_BoxFlag_AnimatePos|
+                                                  UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
+                                                  UI_BoxFlag_DrawHotEffects|
+                                                  UI_BoxFlag_DrawBorder, pin_box_key);
           UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(10, 1))
           {
             Vec4F32 pin_color = df_rgba_from_theme_color(DF_ThemeColor_WeakText);

@@ -1052,7 +1052,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               UI_Parent(canvas_box) UI_WidthFill UI_HeightFill
               {
                 Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
-                                           (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px - scroll_list_params.row_height_px);
+                                           (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px);
                 row->expand_ui_rule_spec->info.block_ui(ws, row->key, row->eval, scope, &ctrl_ctx, &parse_ctx, &macro_map, row->expand_ui_rule_node, canvas_dim);
               }
             }
@@ -1063,6 +1063,13 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             edit_commit = edit_commit || (!row_selected && ewv->input_editing);
             next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
             pressed = 1;
+          }
+          if(ui_double_clicked(sig))
+          {
+            DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+            p.view_spec = df_view_spec_from_gfx_view_kind(DF_GfxViewKind_EvalViewer);
+            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenTab));
           }
         }
         
@@ -5007,7 +5014,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   if(text_info_is_ready)
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums;
+    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
@@ -6068,7 +6075,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   if(has_disasm)
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums;
+    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
@@ -6532,6 +6539,16 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
 }
 
 ////////////////////////////////
+//~ rjf: EvalViewer @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(EvalViewer) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(EvalViewer) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(EvalViewer) {}
+DF_VIEW_UI_FUNCTION_DEF(EvalViewer)
+{
+}
+
+////////////////////////////////
 //~ rjf: Watch @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Watch)
@@ -6903,7 +6920,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   if(txti_buffer_is_ready)
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_LineNums;
+    code_slice_params.flags                     = DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = slice.line_text;
     code_slice_params.line_ranges               = slice.line_ranges;
