@@ -1151,8 +1151,11 @@ tg_lhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key ke
     
     case TG_Kind_Bitfield:
     {
-      TG_Key direct = tg_direct_from_graph_rdi_key(graph, rdi, key);
-      tg_lhs_string_from_key(arena, graph, rdi, direct, out, prec, skip_return);
+      Temp scratch = scratch_begin(&arena, 1);
+      TG_Type *type = tg_type_from_graph_rdi_key(scratch.arena, graph, rdi, key);
+      tg_lhs_string_from_key(arena, graph, rdi, type->direct_type_key, out, prec, skip_return);
+      str8_list_pushf(arena, out, ": %I64u", type->count);
+      scratch_end(scratch);
     }break;
     
     case TG_Kind_Modifier:
@@ -1280,11 +1283,8 @@ tg_rhs_string_from_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Key ke
     
     case TG_Kind_Bitfield:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      TG_Type *type = tg_type_from_graph_rdi_key(scratch.arena, graph, rdi, key);
-      tg_rhs_string_from_key(arena, graph, rdi, type->direct_type_key, out, prec);
-      str8_list_pushf(arena, out, ": %I64u", type->count);
-      scratch_end(scratch);
+      TG_Key direct = tg_direct_from_graph_rdi_key(graph, rdi, key);
+      tg_rhs_string_from_key(arena, graph, rdi, direct, out, prec);
     }break;
     
     case TG_Kind_Modifier:

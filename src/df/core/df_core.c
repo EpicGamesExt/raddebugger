@@ -4219,7 +4219,7 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_
       TG_Key type_key = eval.type_key;
       TG_Kind type_kind = tg_kind_from_key(type_key);
       U64 type_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdi, type_key);
-      if(!tg_key_match(type_key, tg_key_zero()) && type_byte_size <= 8)
+      if(!tg_key_match(type_key, tg_key_zero()) && type_byte_size <= sizeof(U64)*2)
       {
         Temp scratch = scratch_begin(0, 0);
         Rng1U64 vaddr_range = r1u64(eval.offset, eval.offset + type_byte_size);
@@ -4230,6 +4230,20 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_
           MemoryZeroArray(eval.imm_u128);
           MemoryCopy(eval.imm_u128, data.str, Min(data.size, sizeof(U64)*2));
           eval.mode = EVAL_EvalMode_Value;
+          
+          // rjf: mask&shift, for bitfields
+          if(type_kind == TG_Kind_Bitfield && type_byte_size <= sizeof(U64))
+          {
+            TG_Type *type = tg_type_from_graph_rdi_key(scratch.arena, graph, rdi, type_key);
+            U64 valid_bits_mask = 0;
+            for(U64 idx = 0; idx < type->count; idx += 1)
+            {
+              valid_bits_mask |= (1<<idx);
+            }
+            eval.imm_u64 = eval.imm_u64 >> type->off;
+            eval.imm_u64 = eval.imm_u64 & valid_bits_mask;
+            eval.type_key = type->direct_type_key;
+          }
           
           // rjf: manually sign-extend
           switch(type_kind)
