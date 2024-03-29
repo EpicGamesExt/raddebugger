@@ -281,6 +281,7 @@ enum
   DF_GfxViewRuleSpecInfoFlag_LineStringize  = (1<<1),
   DF_GfxViewRuleSpecInfoFlag_RowUI          = (1<<2),
   DF_GfxViewRuleSpecInfoFlag_BlockUI        = (1<<3),
+  DF_GfxViewRuleSpecInfoFlag_WholeUI        = (1<<4),
 };
 
 #define DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(name) void name(void)
@@ -299,10 +300,15 @@ enum
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name) df_gfx_view_rule_block_ui__##name
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name))
 
+#define DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, Rng2F32 rect, DBGI_Scope *dbgi_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg)
+#define DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_NAME(name) df_gfx_view_rule_whole_ui__##name
+#define DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_WHOLW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_NAME(name))
+
 typedef DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_GfxViewRuleVizRowProdHookFunctionType);
 typedef DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GfxViewRuleLineStringizeHookFunctionType);
 typedef DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GfxViewRuleRowUIFunctionType);
 typedef DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GfxViewRuleBlockUIFunctionType);
+typedef DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_SIG(DF_GfxViewRuleWholeUIFunctionType);
 
 typedef struct DF_GfxViewRuleSpecInfo DF_GfxViewRuleSpecInfo;
 struct DF_GfxViewRuleSpecInfo
@@ -313,6 +319,7 @@ struct DF_GfxViewRuleSpecInfo
   DF_GfxViewRuleLineStringizeHookFunctionType *line_stringize;
   DF_GfxViewRuleRowUIFunctionType *row_ui;
   DF_GfxViewRuleBlockUIFunctionType *block_ui;
+  DF_GfxViewRuleWholeUIFunctionType *whole_ui;
 };
 
 typedef struct DF_GfxViewRuleSpecInfoArray DF_GfxViewRuleSpecInfoArray;

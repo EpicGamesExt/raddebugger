@@ -6878,8 +6878,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         if(!has_array && direct_type_is_string && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && eval.mode == EVAL_EvalMode_Addr)
         {
           U64 string_memory_addr = value_eval.imm_u64;
-          U64 element_size = tg_byte_size_from_graph_rdi_key(graph, rdi, eval.type_key);
-          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.offset, 256, element_size, 0);
+          U64 element_size = tg_byte_size_from_graph_rdi_key(graph, rdi, direct_type_key);
+          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, element_size, 0);
           String8 raw_text = {0};
           switch(element_size)
           {

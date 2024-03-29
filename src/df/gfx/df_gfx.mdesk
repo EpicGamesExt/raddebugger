@@ -231,23 +231,23 @@ DF_CmdParamSlot2ViewSpecMap:
 //
 // NOTE(rjf): see @view_rule_info
 
-@table(string     vr  ls  ru  bu)
+@table(string     vr  ls  ru  bu  wu)
 DF_GfxViewRuleTable:
 {
-  {"array"         -   -   -   -}
-  {"list"          x   -   -   -}
-  {"dec"           -   x   -   -}
-  {"bin"           -   x   -   -}
-  {"oct"           -   x   -   -}
-  {"hex"           -   x   -   -}
-  {"only"          x   x   -   -}
-  {"omit"          x   x   -   -}
-  {"no_addr"       -   x   -   -}
-  {"rgba"          -   -   x   x}
-  {"text"          -   -   -   x}
-  {"disasm"        -   -   -   x}
-  {"bitmap"        -   -   x   x}
-  {"geo"           -   -   x   x}
+  {"array"         -   -   -   -   -  }
+  {"list"          x   -   -   -   -  }
+  {"dec"           -   x   -   -   -  }
+  {"bin"           -   x   -   -   -  }
+  {"oct"           -   x   -   -   -  }
+  {"hex"           -   x   -   -   -  }
+  {"only"          x   x   -   -   -  }
+  {"omit"          x   x   -   -   -  }
+  {"no_addr"       -   x   -   -   -  }
+  {"rgba"          -   -   x   x   -  }
+  {"text"          -   -   -   x   -  }
+  {"disasm"        -   -   -   x   -  }
+  {"bitmap"        -   -   x   x   x  }
+  {"geo"           -   -   x   x   -  }
 }
 
 ////////////////////////////////
