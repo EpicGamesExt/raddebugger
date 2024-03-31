@@ -1970,7 +1970,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
             if(container_name_opl > 2)
             {
               String8 container_name = str8(name.str, container_name_opl - 2);
-              CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, name, 0);
+              CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, container_name, 0);
               container_type = p2r_type_ptr_from_itype(cv_type_id);
             }
             
@@ -2007,7 +2007,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           if(container_name_opl > 2)
           {
             String8 container_name = str8(name.str, container_name_opl - 2);
-            CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, name, 0);
+            CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, container_name, 0);
             container_type = p2r_type_ptr_from_itype(cv_type_id);
           }
           
@@ -2182,7 +2182,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           if(container_name_opl > 2)
           {
             String8 container_name = str8(name.str, container_name_opl - 2);
-            CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, name, 0);
+            CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, container_name, 0);
             container_type = p2r_type_ptr_from_itype(cv_type_id);
           }
           
@@ -3026,11 +3026,18 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                 if(lf->flags & CV_ModifierFlag_Volatile) {flags |= RDI_TypeModifierFlag_Volatile;}
                 
                 // rjf: fill type
-                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
-                dst_type->kind        = RDI_TypeKind_Modifier;
-                dst_type->flags       = flags;
-                dst_type->direct_type = p2r_type_ptr_from_itype(lf->itype);
-                dst_type->byte_size   = dst_type->direct_type ? dst_type->direct_type->byte_size : 0;
+                if(flags == 0)
+                {
+                  dst_type = p2r_type_ptr_from_itype(lf->itype);
+                }
+                else
+                {
+                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type->kind        = RDI_TypeKind_Modifier;
+                  dst_type->flags       = flags;
+                  dst_type->direct_type = p2r_type_ptr_from_itype(lf->itype);
+                  dst_type->byte_size   = dst_type->direct_type ? dst_type->direct_type->byte_size : 0;
+                }
               }break;
               
               //- rjf: POINTER
@@ -3072,10 +3079,10 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                 }
                 
                 // rjf: fill type
-                dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
                 if(modifier_flags != 0)
                 {
                   RDIM_Type *pointer_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
+                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
                   dst_type->kind             = RDI_TypeKind_Modifier;
                   dst_type->flags            = modifier_flags;
                   dst_type->direct_type      = pointer_type;
@@ -3086,6 +3093,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                 }
                 else
                 {
+                  dst_type = rdim_type_chunk_list_push(arena, &all_types, (U64)itype_opl);
                   dst_type->kind        = type_kind;
                   dst_type->byte_size   = arch_addr_size;
                   dst_type->direct_type = direct_type;

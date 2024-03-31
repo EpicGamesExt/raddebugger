@@ -2723,6 +2723,7 @@ rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringM
         
         //- rjf: fill shared type node info
         dst->kind      = src->kind;
+        dst->flags     = (RDI_U16)src->flags; // TODO(rjf): @u32_to_u16
         dst->byte_size = src->byte_size;
         
         //- rjf: fill built-in-only type node info
