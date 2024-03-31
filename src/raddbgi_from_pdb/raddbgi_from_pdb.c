@@ -1257,7 +1257,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_udt_convert_task__entry_point)
                 CV_LeafKind field_kind = *(CV_LeafKind *)read_ptr;
                 U64 field_leaf_header_size = cv_header_struct_size_from_leaf_kind(field_kind);
                 U8 *field_leaf_first = read_ptr+2;
-                U8 *field_leaf_opl   = field_leaf_first+range->hdr.size-2;
+                U8 *field_leaf_opl   = field_list_opl;
                 next_read_ptr = field_leaf_opl;
                 
                 // rjf: skip out-of-bounds fields
@@ -1281,6 +1281,9 @@ internal TS_TASK_FUNCTION_DEF(p2r_udt_convert_task__entry_point)
                     // rjf: unpack leaf
                     CV_LeafIndex *lf = (CV_LeafIndex *)field_leaf_first;
                     CV_TypeId new_itype = lf->itype;
+                    
+                    // rjf: bump next read pointer past header
+                    next_read_ptr = (U8 *)(lf+1);
                     
                     // rjf: determine if index itype is new
                     B32 is_new = 1;
@@ -1573,6 +1576,9 @@ internal TS_TASK_FUNCTION_DEF(p2r_udt_convert_task__entry_point)
                     U8 *num2_ptr = num1_ptr + num1.encoded_size;
                     CV_NumericParsed num2 = cv_numeric_from_data_range(num2_ptr, field_leaf_opl);
                     
+                    // rjf: bump next read pointer past header
+                    next_read_ptr = (U8 *)(lf+1);
+                    
                     // rjf: emit member
                     RDIM_UDTMember *mem = rdim_udt_push_member(arena, udts, dst_udt);
                     mem->kind = RDI_MemberKind_VirtualBase;
@@ -1583,6 +1589,10 @@ internal TS_TASK_FUNCTION_DEF(p2r_udt_convert_task__entry_point)
                   case CV_LeafKind_VFUNCTAB:
                   {
                     CV_LeafVFuncTab *lf = (CV_LeafVFuncTab *)field_leaf_first;
+                    
+                    // rjf: bump next read pointer past header
+                    next_read_ptr = (U8 *)(lf+1);
+                    
                     // NOTE(rjf): currently no-op this case
                     (void)lf;
                   }break;
