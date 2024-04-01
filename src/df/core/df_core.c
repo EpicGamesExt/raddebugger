@@ -5025,6 +5025,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
   //
   TG_Key eval_type_key = tg_unwrapped_from_graph_rdi_key(parse_ctx->type_graph, parse_ctx->rdi, eval.type_key);
   TG_Kind eval_type_kind = tg_kind_from_key(eval_type_key);
+  String8 eval_string = push_str8_copy(arena, string);
   
   //////////////////////////////
   //- rjf: make and push block for root
@@ -5033,7 +5034,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     DF_EvalVizBlock *block = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Root, parent_key, key, depth);
     block->eval                        = eval;
     block->cfg_table                   = *cfg_table;
-    block->string                      = push_str8_copy(arena, string);
+    block->string                      = eval_string;
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
     if(opt_member != 0)
@@ -5156,7 +5157,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
      expand_view_rule_cfg != &df_g_nil_cfg_val)
     ProfScope("build viz blocks for lens")
   {
-    expand_view_rule_spec->info.viz_block_prod(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, eval, cfg_table, parent_key, key, depth+1, expand_view_rule_cfg->last, list_out);
+    expand_view_rule_spec->info.viz_block_prod(arena, scope, ctrl_ctx, parse_ctx, macro_map, eval_view, eval, string, cfg_table, parent_key, key, depth+1, expand_view_rule_cfg->last, list_out);
   }
   
   //////////////////////////////
@@ -5176,6 +5177,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Members, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
     {
       last_vb->eval = udt_eval;
+      last_vb->string = eval_string;
       last_vb->cfg_table = *cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, filtered_data_members.count);
     }
@@ -5231,6 +5233,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_EnumMembers, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
     {
       last_vb->eval = udt_eval;
+      last_vb->string = eval_string;
       last_vb->cfg_table = *cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, type->count);
     }
@@ -5287,6 +5290,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
       DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Links, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
       {
         last_vb->eval = udt_eval;
+        last_vb->string = eval_string;
         last_vb->cfg_table = *cfg_table;
         last_vb->link_member_type_key = link_member->type_key;
         last_vb->link_member_off = link_member->off;
@@ -5350,6 +5354,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DBGI_Scope *scope, DF_EvalVie
     DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
     {
       last_vb->eval = arr_eval;
+      last_vb->string = eval_string;
       last_vb->cfg_table = *cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, array_count);
     }
@@ -5411,10 +5416,11 @@ df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DBGI_Scope *scope,
   {
     DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, macro_map, expr);
     U64 expr_comma_pos = str8_find_needle(expr, 0, str8_lit(","), 0);
+    U64 passthrough_pos = str8_find_needle(expr, 0, str8_lit("--"), 0);
     String8List default_view_rules = {0};
-    if(expr_comma_pos < expr.size)
+    if(expr_comma_pos < expr.size && expr_comma_pos < passthrough_pos)
     {
-      String8 expr_extension = str8_skip(expr, expr_comma_pos+1);
+      String8 expr_extension = str8_substr(expr, r1u64(expr_comma_pos+1, passthrough_pos));
       expr_extension = str8_skip_chop_whitespace(expr_extension);
       if(str8_match(expr_extension, str8_lit("x"), StringMatchFlag_CaseInsensitive))
       {
@@ -5428,9 +5434,17 @@ df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DBGI_Scope *scope,
       {
         str8_list_pushf(arena, &default_view_rules, "oct");
       }
-      else
+      else if(expr_extension.size != 0)
       {
         str8_list_pushf(arena, &default_view_rules, "array:{%S}", expr_extension);
+      }
+    }
+    if(passthrough_pos < expr.size)
+    {
+      String8 passthrough_view_rule = str8_skip_chop_whitespace(str8_skip(expr, passthrough_pos+2));
+      if(passthrough_view_rule.size != 0)
+      {
+        str8_list_push(arena, &default_view_rules, passthrough_view_rule);
       }
     }
     String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);

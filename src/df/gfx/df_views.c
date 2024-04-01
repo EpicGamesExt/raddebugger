@@ -997,7 +997,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
       for(DF_EvalVizRow *row = rows.first; row != 0; row = row->next, semantic_idx += 1)
       {
         U64 row_hash = df_hash_from_expand_key(row->key);
-        U64 expr_hash = df_hash_from_string(row->expr);
+        U64 expr_hash = df_hash_from_string(row->display_expr);
         df_expand_tree_table_animate(&eval_view->expand_tree_table, df_dt());
         B32 row_selected = ((semantic_idx+1) == cursor_tbl.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
@@ -1037,6 +1037,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         //- rjf: build canvas row
         if(row->flags & DF_EvalVizRowFlag_Canvas) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off) ProfScope("canvas row")
         {
+          //- rjf: build
           ui_set_next_flags(disabled_flags);
           ui_set_next_pref_width(ui_pct(1, 0));
           ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->size_in_rows, 1.f));
@@ -1053,21 +1054,29 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               {
                 Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
                                            (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px);
-                row->expand_ui_rule_spec->info.block_ui(ws, row->key, row->eval, scope, &ctrl_ctx, &parse_ctx, &macro_map, row->expand_ui_rule_node, canvas_dim);
+                row->expand_ui_rule_spec->info.block_ui(ws, row->key, row->eval, row->edit_expr, scope, &ctrl_ctx, &parse_ctx, &macro_map, row->expand_ui_rule_node, canvas_dim);
               }
             }
           }
+          
+          //- rjf: take interaction 
           UI_Signal sig = ui_signal_from_box(vector);
+          
+          //- rjf: press -> focus
           if(ui_pressed(sig))
           {
             edit_commit = edit_commit || (!row_selected && ewv->input_editing);
             next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
             pressed = 1;
           }
-          if(ui_double_clicked(sig))
+          
+          //- rjf: double clicked or keyboard clicked -> open dedicated tab
+          if(ui_double_clicked(sig) || sig.f & UI_SignalFlag_KeyboardPressed)
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+            p.string = row->edit_expr;
             p.view_spec = df_view_spec_from_gfx_view_kind(DF_GfxViewKind_EvalViewer);
+            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenTab));
           }
@@ -1130,8 +1139,8 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               if(cell_selected && (edit_begin || (edit_begin_or_expand && !(row->flags & DF_EvalVizRowFlag_CanExpand))) && can_edit_expr)
               {
                 ewv->input_editing = 1;
-                ewv->input_size = Min(sizeof(ewv->input_buffer), row->expr.size);
-                MemoryCopy(ewv->input_buffer, row->expr.str, ewv->input_size);
+                ewv->input_size = Min(sizeof(ewv->input_buffer), row->display_expr.size);
+                MemoryCopy(ewv->input_buffer, row->display_expr.str, ewv->input_size);
                 ewv->input_cursor = txt_pt(1, 1+ewv->input_size);
                 ewv->input_mark = txt_pt(1, 1);
               }
@@ -1163,7 +1172,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   FuzzyMatchRangeList matches = {0};
                   if(filter.size != 0)
                   {
-                    matches = fuzzy_match_find(scratch.arena, filter, row->expr);
+                    matches = fuzzy_match_find(scratch.arena, filter, row->display_expr);
                   }
                   sig = df_line_editf((DF_LineEditFlag_CodeContents*(!(row->flags & DF_EvalVizRowFlag_ExprIsSpecial))|
                                        DF_LineEditFlag_NoBackground*(!is_inherited)|
@@ -1174,7 +1183,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                                       row->depth,
                                       filter.size ? &matches : 0,
                                       &ewv->input_cursor, &ewv->input_mark, ewv->input_buffer, sizeof(ewv->input_buffer), &ewv->input_size, &next_expanded,
-                                      row->expr,
+                                      row->display_expr,
                                       "###row_%I64x", row_hash);
                 }
                 edit_commit = edit_commit || ui_committed(sig);
@@ -1206,7 +1215,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 if(DEV_eval_compiler_tooltips && row->depth == 0 && ui_hovering(sig)) UI_Tooltip
                 {
                   Temp scratch = scratch_begin(0, 0);
-                  String8 string = row->expr;
+                  String8 string = row->display_expr;
                   
                   // rjf: lex & parse
                   EVAL_TokenArray tokens = eval_token_array_from_text(scratch.arena, string);
@@ -1270,8 +1279,8 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               {
                 ui_kill_action();
                 ewv->input_editing = 1;
-                ewv->input_size = Min(sizeof(ewv->input_buffer), row->expr.size);
-                MemoryCopy(ewv->input_buffer, row->expr.str, ewv->input_size);
+                ewv->input_size = Min(sizeof(ewv->input_buffer), row->display_expr.size);
+                MemoryCopy(ewv->input_buffer, row->display_expr.str, ewv->input_size);
                 ewv->input_cursor = txt_pt(1, 1+ewv->input_size);
                 ewv->input_mark = txt_pt(1, 1);
               }

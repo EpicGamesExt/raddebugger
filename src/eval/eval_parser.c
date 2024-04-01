@@ -414,6 +414,14 @@ eval_token_array_from_text(Arena *arena, String8 text)
         eval_token_chunk_list_push(scratch.arena, &tokens, 256, &token);
       }
       
+      // rjf: symbolic strings matching `--` mean the remainder of the string
+      // is reserved for external usage. the rest of the stream should not
+      // be tokenized.
+      else if(idx == active_token_start_idx+2 && text.str[active_token_start_idx] == '-' && text.str[active_token_start_idx+1] == '-')
+      {
+        break;
+      }
+      
       // rjf: if we got a symbol string of N>1 characters, then we need to
       // apply the maximum-munch rule, and produce M<=N tokens, where each
       // formed token is the maximum size possible, given the legal

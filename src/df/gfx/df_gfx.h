@@ -296,7 +296,7 @@ enum
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, DF_Eval eval, DBGI_Scope *dbgi_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg, Vec2F32 dim)
+#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, DF_Eval eval, String8 string, DBGI_Scope *dbgi_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg, Vec2F32 dim)
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name) df_gfx_view_rule_block_ui__##name
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name))
 
