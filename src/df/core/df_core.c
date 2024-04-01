@@ -8305,6 +8305,32 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           {
             df_entity_mark_for_deletion(map);
           }
+          {
+            DF_AutoViewRuleMapCache *cache = &df_state->auto_view_rule_cache;
+            if(cache->arena == 0)
+            {
+              cache->arena = arena_alloc();
+            }
+            arena_clear(cache->arena);
+            cache->slots_count = 1024;
+            cache->slots = push_array(cache->arena, DF_AutoViewRuleSlot, cache->slots_count);
+            DF_EntityList maps = df_query_cached_entity_list_with_kind(DF_EntityKind_AutoViewRule);
+            for(DF_EntityNode *n = maps.first; n != 0; n = n->next)
+            {
+              DF_Entity *map = n->entity;
+              DF_Entity *src = df_entity_child_from_kind(map, DF_EntityKind_Source);
+              DF_Entity *dst = df_entity_child_from_kind(map, DF_EntityKind_Dest);
+              String8 type = src->name;
+              String8 view_rule = dst->name;
+              U64 hash = df_hash_from_string(type);
+              U64 slot_idx = hash%cache->slots_count;
+              DF_AutoViewRuleSlot *slot = &cache->slots[slot_idx];
+              DF_AutoViewRuleNode *node = push_array(cache->arena, DF_AutoViewRuleNode, 1);
+              node->type = push_str8_copy(cache->arena, type);
+              node->view_rule = push_str8_copy(cache->arena, view_rule);
+              SLLQueuePush(slot->first, slot->last, node);
+            }
+          }
         }break;
         
         //- rjf: general entity operations

@@ -3950,7 +3950,7 @@ DF_VIEW_UI_FUNCTION_DEF(AutoViewRules)
           {
             edit_end = 1;
             edit_commit = avrs->input_editing;
-            next_cursor.x = 2;
+            next_cursor.x = 1;
             next_cursor.y = map_idx+1;
           }
           

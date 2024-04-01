@@ -920,6 +920,31 @@ struct DF_EntityListCache
   DF_EntityList list;
 };
 
+//- rjf: auto view rules hash table cache
+
+typedef struct DF_AutoViewRuleNode DF_AutoViewRuleNode;
+struct DF_AutoViewRuleNode
+{
+  DF_AutoViewRuleNode *next;
+  String8 type;
+  String8 view_rule;
+};
+
+typedef struct DF_AutoViewRuleSlot DF_AutoViewRuleSlot;
+struct DF_AutoViewRuleSlot
+{
+  DF_AutoViewRuleNode *first;
+  DF_AutoViewRuleNode *last;
+};
+
+typedef struct DF_AutoViewRuleMapCache DF_AutoViewRuleMapCache;
+struct DF_AutoViewRuleMapCache
+{
+  Arena *arena;
+  U64 slots_count;
+  DF_AutoViewRuleSlot *slots;
+};
+
 //- rjf: per-run unwind cache
 
 typedef struct DF_RunUnwindCacheNode DF_RunUnwindCacheNode;
@@ -1117,8 +1142,7 @@ struct DF_State
   // rjf: entity query caches
   U64 kind_alloc_gens[DF_EntityKind_COUNT];
   DF_EntityListCache kind_caches[DF_EntityKind_COUNT];
-  DF_EntityListCache dbg_info_cache;
-  DF_EntityListCache bin_file_cache;
+  DF_AutoViewRuleMapCache auto_view_rule_cache;
   
   // rjf: per-run caches
   U64 unwind_cache_reggen_idx;
