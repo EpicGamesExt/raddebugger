@@ -5877,6 +5877,35 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
     }
   }
   
+  //- rjf: write auto view rules
+  {
+    B32 first = 1;
+    DF_EntityList avrs = df_query_cached_entity_list_with_kind(DF_EntityKind_AutoViewRule);
+    for(DF_EntityNode *n = avrs.first; n != 0; n = n->next)
+    {
+      DF_Entity *map = n->entity;
+      if(map->cfg_src == source)
+      {
+        if(first)
+        {
+          first = 0;
+          str8_list_push(arena, &strs, str8_lit("/// auto view rules ///////////////////////////////////////////////////////////\n"));
+          str8_list_push(arena, &strs, str8_lit("\n"));
+        }
+        String8 type      = df_entity_child_from_kind(map, DF_EntityKind_Source)->name;
+        String8 view_rule = df_entity_child_from_kind(map, DF_EntityKind_Dest)->name;
+        type = df_cfg_escaped_from_raw_string(arena, type);
+        view_rule= df_cfg_escaped_from_raw_string(arena, view_rule);
+        str8_list_push (arena, &strs,  str8_lit("auto_view_rule:\n"));
+        str8_list_push (arena, &strs,  str8_lit("{\n"));
+        str8_list_pushf(arena, &strs,           "  type:      \"%S\"\n", type);
+        str8_list_pushf(arena, &strs,           "  view_rule: \"%S\"\n", view_rule);
+        str8_list_push (arena, &strs,  str8_lit("}\n"));
+        str8_list_push (arena, &strs,  str8_lit("\n"));
+      }
+    }
+  }
+  
   //- rjf: write breakpoints
   {
     B32 first = 1;
@@ -7888,6 +7917,29 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
           }
           
+          //- rjf: apply auto view rules
+          DF_CfgVal *avrs = df_cfg_val_from_string(table, str8_lit("auto_view_rule"));
+          for(DF_CfgNode *map = avrs->first;
+              map != &df_g_nil_cfg_node;
+              map = map->next)
+          {
+            if(map->source == src)
+            {
+              DF_CfgNode *src_cfg = df_cfg_node_child_from_string(map, str8_lit("type"), StringMatchFlag_CaseInsensitive);
+              DF_CfgNode *dst_cfg = df_cfg_node_child_from_string(map, str8_lit("view_rule"), StringMatchFlag_CaseInsensitive);
+              String8 type = src_cfg->first->string;
+              String8 view_rule = dst_cfg->first->string;
+              type = df_cfg_raw_from_escaped_string(scratch.arena, type);
+              view_rule = df_cfg_raw_from_escaped_string(scratch.arena, view_rule);
+              DF_Entity *map_entity = df_entity_alloc(0, df_entity_root(), DF_EntityKind_AutoViewRule);
+              DF_Entity *src_entity = df_entity_alloc(0, map_entity, DF_EntityKind_Source);
+              DF_Entity *dst_entity = df_entity_alloc(0, map_entity, DF_EntityKind_Dest);
+              df_entity_equip_name(0, src_entity, type);
+              df_entity_equip_name(0, dst_entity, view_rule);
+              df_entity_equip_cfg_src(map_entity, src);
+            }
+          }
+          
           //- rjf: apply breakpoints
           DF_CfgVal *bps = df_cfg_val_from_string(table, str8_lit("breakpoint"));
           for(DF_CfgNode *bp = bps->first;
@@ -8221,6 +8273,37 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               df_entity_equip_name(0, link, first_diff_src->name);
             }
             df_entity_equip_entity_handle(link, df_handle_from_entity(first_diff_dst));
+          }
+        }break;
+        
+        //- rjf: auto view rules
+        case DF_CoreCmdKind_SetAutoViewRuleType:
+        case DF_CoreCmdKind_SetAutoViewRuleViewRule:
+        {
+          DF_Entity *map = df_entity_from_handle(params.entity);
+          if(df_entity_is_nil(map))
+          {
+            map = df_entity_alloc(df_state_delta_history(), df_entity_root(), DF_EntityKind_AutoViewRule);
+            df_entity_equip_cfg_src(map, DF_CfgSrc_Profile);
+          }
+          DF_Entity *src = df_entity_child_from_kind(map, DF_EntityKind_Source);
+          if(df_entity_is_nil(src))
+          {
+            src = df_entity_alloc(df_state_delta_history(), map, DF_EntityKind_Source);
+          }
+          DF_Entity *dst = df_entity_child_from_kind(map, DF_EntityKind_Dest);
+          if(df_entity_is_nil(dst))
+          {
+            dst = df_entity_alloc(df_state_delta_history(), map, DF_EntityKind_Dest);
+          }
+          if(map->kind == DF_EntityKind_AutoViewRule)
+          {
+            DF_Entity *edit_child = (core_cmd_kind == DF_CoreCmdKind_SetAutoViewRuleType ? src : dst);
+            df_entity_equip_name(df_state_delta_history(), edit_child, params.string);
+          }
+          if(src->name.size == 0 && dst->name.size == 0)
+          {
+            df_entity_mark_for_deletion(map);
           }
         }break;
         

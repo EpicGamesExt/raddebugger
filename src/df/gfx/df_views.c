@@ -3444,7 +3444,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
   B32 edit_end    = 0;
   B32 edit_commit = 0;
   B32 edit_submit = 0;
-  if(ui_is_focus_active())
+  UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
   {
     if(!fpms->input_editing)
     {
@@ -3703,6 +3703,296 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
   
   //- rjf: apply moves to selection
   fpms->cursor = next_cursor;
+  
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+////////////////////////////////
+//~ rjf: AutoViewRules @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(AutoViewRules)
+{
+  DF_AutoViewRulesViewState *avrs = df_view_user_state(view, DF_AutoViewRulesViewState);
+  if(avrs->initialized == 0)
+  {
+    avrs->initialized = 1;
+    avrs->src_column_pct = 0.5f;
+    avrs->dst_column_pct = 0.5f;
+  }
+}
+
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(AutoViewRules)
+{
+  DF_AutoViewRulesViewState *avrs = df_view_user_state(view, DF_AutoViewRulesViewState);
+  return str8_lit("");
+}
+
+DF_VIEW_CMD_FUNCTION_DEF(AutoViewRules)
+{
+  DF_AutoViewRulesViewState *avrs = df_view_user_state(view, DF_AutoViewRulesViewState);
+  
+  // rjf: process commands
+  for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
+  {
+    DF_Cmd *cmd = &n->cmd;
+    
+    // rjf: mismatched window/panel => skip
+    if(df_window_from_handle(cmd->params.window) != ws ||
+       df_panel_from_handle(cmd->params.panel) != panel)
+    {
+      continue;
+    }
+  }
+}
+
+DF_VIEW_UI_FUNCTION_DEF(AutoViewRules)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  DF_EntityList maps_list = df_query_cached_entity_list_with_kind(DF_EntityKind_AutoViewRule);
+  DF_EntityArray maps = df_entity_array_from_list(scratch.arena, &maps_list);
+  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  
+  //- rjf: grab state
+  DF_AutoViewRulesViewState *avrs = df_view_user_state(view, DF_AutoViewRulesViewState);
+  
+  //- rjf: take controls to start/end editing
+  B32 edit_begin  = 0;
+  B32 edit_end    = 0;
+  B32 edit_commit = 0;
+  B32 edit_submit = 0;
+  UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
+  {
+    if(!avrs->input_editing)
+    {
+      UI_NavActionList *nav_actions = ui_nav_actions();
+      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+      {
+        if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+        {
+          edit_begin = 1;
+          break;
+        }
+      }
+      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_F2))
+      {
+        edit_begin = 1;
+      }
+    }
+    if(avrs->input_editing)
+    {
+      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+      {
+        edit_end = 1;
+        edit_commit = 0;
+      }
+      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+      {
+        edit_end = 1;
+        edit_commit = 1;
+        edit_submit = 1;
+      }
+    }
+  }
+  
+  //- rjf: build
+  DF_Handle commit_map = df_handle_zero();
+  Side commit_side = Side_Invalid;
+  F32 *col_pcts[] = { &avrs->src_column_pct, &avrs->dst_column_pct };
+  Vec2S64 next_cursor = avrs->cursor;
+  Rng1S64 visible_row_range = {0};
+  UI_ScrollListParams scroll_list_params = {0};
+  {
+    scroll_list_params.flags         = UI_ScrollListFlag_All;
+    scroll_list_params.row_height_px = row_height_px;
+    scroll_list_params.dim_px        = dim_2f32(rect);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(1, maps.count + 1));
+    scroll_list_params.item_range    = r1s64(0, maps.count+2);
+    scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
+  }
+  UI_ScrollListSignal scroll_list_sig = {0};
+  UI_Focus(UI_FocusKind_On)
+    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, avrs->input_editing ? 0 : &avrs->cursor, &visible_row_range, &scroll_list_sig)
+    UI_Focus(UI_FocusKind_Null)
+    UI_TableF(ArrayCount(col_pcts), col_pcts, "###tbl")
+  {
+    next_cursor = avrs->cursor;
+    
+    //- rjf: header
+    if(visible_row_range.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    {
+      UI_TableCell ui_label(str8_lit("Type"));
+      UI_TableCell ui_label(str8_lit("View Rule"));
+    }
+    
+    //- rjf: map rows
+    for(S64 row_idx = Max(1, visible_row_range.min);
+        row_idx <= visible_row_range.max && row_idx <= maps.count+1;
+        row_idx += 1) UI_TableVector
+    {
+      U64 map_idx = row_idx-1;
+      DF_Entity *map = (map_idx < maps.count ? maps.v[map_idx] : &df_g_nil_entity);
+      DF_Entity *source = df_entity_child_from_kind(map, DF_EntityKind_Source);
+      DF_Entity *dest = df_entity_child_from_kind(map, DF_EntityKind_Dest);
+      String8 type = source->name;
+      String8 view_rule = dest->name;
+      B32 row_selected = (avrs->cursor.y == row_idx);
+      
+      //- rjf: type
+      UI_TableCell UI_WidthFill
+      {
+        //- rjf: editor
+        {
+          B32 value_selected = (row_selected && avrs->cursor.x == 0);
+          
+          // rjf: begin editing
+          if(value_selected && edit_begin)
+          {
+            avrs->input_editing = 1;
+            avrs->input_size = Min(sizeof(avrs->input_buffer), type.size);
+            MemoryCopy(avrs->input_buffer, type.str, avrs->input_size);
+            avrs->input_cursor = txt_pt(1, 1+avrs->input_size);
+            avrs->input_mark = txt_pt(1, 1);
+          }
+          
+          // rjf: build
+          UI_Signal sig = {0};
+          UI_FocusHot(value_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+            UI_FocusActive((value_selected && avrs->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
+            UI_Font(df_font_from_slot(DF_FontSlot_Code))
+          {
+            sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground|DF_LineEditFlag_DisplayStringIsCode, 0, 0, &avrs->input_cursor, &avrs->input_mark, avrs->input_buffer, sizeof(avrs->input_buffer), &avrs->input_size, 0, type, "###src_editor_%p", map);
+            edit_commit = edit_commit || ui_committed(sig);
+          }
+          
+          // rjf: focus panel on press
+          if(ui_pressed(sig))
+          {
+            DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+          }
+          
+          // rjf: begin editing on double-click
+          if(!avrs->input_editing && ui_double_clicked(sig))
+          {
+            avrs->input_editing = 1;
+            avrs->input_size = Min(sizeof(avrs->input_buffer), type.size);
+            MemoryCopy(avrs->input_buffer, type.str, avrs->input_size);
+            avrs->input_cursor = txt_pt(1, 1+avrs->input_size);
+            avrs->input_mark = txt_pt(1, 1);
+          }
+          
+          // rjf: press on non-selected => commit edit, change selected cell
+          if(ui_pressed(sig) && !value_selected)
+          {
+            edit_end = 1;
+            edit_commit = avrs->input_editing;
+            next_cursor.x = 0;
+            next_cursor.y = map_idx+1;
+          }
+          
+          // rjf: store commit information
+          if(value_selected)
+          {
+            commit_side = Side_Min;
+            commit_map = df_handle_from_entity(map);
+          }
+        }
+      }
+      
+      //- rjf: dst
+      UI_TableCell UI_WidthFill
+      {
+        //- rjf: editor
+        {
+          B32 value_selected = (row_selected && avrs->cursor.x == 1);
+          
+          // rjf: begin editing
+          if(value_selected && edit_begin)
+          {
+            avrs->input_editing = 1;
+            avrs->input_size = Min(sizeof(avrs->input_buffer), view_rule.size);
+            MemoryCopy(avrs->input_buffer, view_rule.str, avrs->input_size);
+            avrs->input_cursor = txt_pt(1, 1+avrs->input_size);
+            avrs->input_mark = txt_pt(1, 1);
+          }
+          
+          // rjf: build
+          UI_Signal sig = {0};
+          UI_FocusHot(value_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+            UI_FocusActive((value_selected && avrs->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
+            UI_Font(df_font_from_slot(DF_FontSlot_Code))
+          {
+            sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground|DF_LineEditFlag_DisplayStringIsCode, 0, 0, &avrs->input_cursor, &avrs->input_mark, avrs->input_buffer, sizeof(avrs->input_buffer), &avrs->input_size, 0, view_rule, "###dst_editor_%p", map);
+            edit_commit = edit_commit || ui_committed(sig);
+          }
+          
+          // rjf: focus panel on press
+          if(ui_pressed(sig))
+          {
+            DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+          }
+          
+          // rjf: begin editing on double-click
+          if(!avrs->input_editing && ui_double_clicked(sig))
+          {
+            avrs->input_editing = 1;
+            avrs->input_size = Min(sizeof(avrs->input_buffer), view_rule.size);
+            MemoryCopy(avrs->input_buffer, view_rule.str, avrs->input_size);
+            avrs->input_cursor = txt_pt(1, 1+avrs->input_size);
+            avrs->input_mark = txt_pt(1, 1);
+          }
+          
+          // rjf: press on non-selected => commit edit, change selected cell
+          if(ui_pressed(sig) && !value_selected)
+          {
+            edit_end = 1;
+            edit_commit = avrs->input_editing;
+            next_cursor.x = 2;
+            next_cursor.y = map_idx+1;
+          }
+          
+          // rjf: store commit information
+          if(value_selected)
+          {
+            commit_side = Side_Max;
+            commit_map = df_handle_from_entity(map);
+          }
+        }
+      }
+    }
+  }
+  
+  //- rjf: apply commit
+  if(edit_commit && commit_side != Side_Invalid)
+  {
+    String8 new_string = str8(avrs->input_buffer, avrs->input_size);
+    DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+    p.entity = commit_map;
+    p.string = new_string;
+    df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
+    df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
+    df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(commit_side == Side_Min ?
+                                                         DF_CoreCmdKind_SetAutoViewRuleType :
+                                                         DF_CoreCmdKind_SetAutoViewRuleViewRule));
+  }
+  
+  //- rjf: apply editing finish
+  if(edit_end)
+  {
+    avrs->input_editing = 0;
+  }
+  
+  //- rjf: move down one row if submitted
+  if(edit_submit)
+  {
+    next_cursor.y += 1;
+  }
+  
+  //- rjf: apply moves to selection
+  avrs->cursor = next_cursor;
   
   scratch_end(scratch);
   ProfEnd();

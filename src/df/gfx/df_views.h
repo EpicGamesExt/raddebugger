@@ -231,6 +231,23 @@ struct DF_FilePathMapViewState
 };
 
 ////////////////////////////////
+//~ rjf: AutoViewRules @view_types
+
+typedef struct DF_AutoViewRulesViewState DF_AutoViewRulesViewState;
+struct DF_AutoViewRulesViewState
+{
+  B32 initialized;
+  Vec2S64 cursor;
+  TxtPt input_cursor;
+  TxtPt input_mark;
+  U8 input_buffer[1024];
+  U64 input_size;
+  B32 input_editing;
+  F32 src_column_pct;
+  F32 dst_column_pct;
+};
+
+////////////////////////////////
 //~ rjf: Modules @view_types
 
 typedef struct DF_ModulesViewState DF_ModulesViewState;

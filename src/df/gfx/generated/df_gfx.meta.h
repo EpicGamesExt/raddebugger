@@ -26,6 +26,7 @@ DF_GfxViewKind_SymbolLister,
 DF_GfxViewKind_Target,
 DF_GfxViewKind_Targets,
 DF_GfxViewKind_FilePathMap,
+DF_GfxViewKind_AutoViewRules,
 DF_GfxViewKind_Scheduler,
 DF_GfxViewKind_CallStack,
 DF_GfxViewKind_Modules,
@@ -132,6 +133,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(SymbolLister);
 DF_VIEW_SETUP_FUNCTION_DEF(Target);
 DF_VIEW_SETUP_FUNCTION_DEF(Targets);
 DF_VIEW_SETUP_FUNCTION_DEF(FilePathMap);
+DF_VIEW_SETUP_FUNCTION_DEF(AutoViewRules);
 DF_VIEW_SETUP_FUNCTION_DEF(Scheduler);
 DF_VIEW_SETUP_FUNCTION_DEF(CallStack);
 DF_VIEW_SETUP_FUNCTION_DEF(Modules);
@@ -162,6 +164,7 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(SymbolLister);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Target);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Targets);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(FilePathMap);
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(AutoViewRules);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Scheduler);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(CallStack);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Modules);
@@ -192,6 +195,7 @@ DF_VIEW_CMD_FUNCTION_DEF(SymbolLister);
 DF_VIEW_CMD_FUNCTION_DEF(Target);
 DF_VIEW_CMD_FUNCTION_DEF(Targets);
 DF_VIEW_CMD_FUNCTION_DEF(FilePathMap);
+DF_VIEW_CMD_FUNCTION_DEF(AutoViewRules);
 DF_VIEW_CMD_FUNCTION_DEF(Scheduler);
 DF_VIEW_CMD_FUNCTION_DEF(CallStack);
 DF_VIEW_CMD_FUNCTION_DEF(Modules);
@@ -222,6 +226,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister);
 DF_VIEW_UI_FUNCTION_DEF(Target);
 DF_VIEW_UI_FUNCTION_DEF(Targets);
 DF_VIEW_UI_FUNCTION_DEF(FilePathMap);
+DF_VIEW_UI_FUNCTION_DEF(AutoViewRules);
 DF_VIEW_UI_FUNCTION_DEF(Scheduler);
 DF_VIEW_UI_FUNCTION_DEF(CallStack);
 DF_VIEW_UI_FUNCTION_DEF(Modules);
@@ -281,7 +286,7 @@ extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];
 extern DF_StringBindingPair df_g_default_binding_table[97];
 extern String8 df_g_binding_version_remap_old_name_table[3];
 extern String8 df_g_binding_version_remap_new_name_table[3];
-extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[30];
+extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[31];
 extern String8 df_g_theme_color_display_string_table[54];
 extern String8 df_g_theme_color_cfg_string_table[54];
 read_only global U8 df_g_icon_font_bytes__data[] =
