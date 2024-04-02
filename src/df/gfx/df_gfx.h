@@ -102,9 +102,10 @@ enum
   DF_ViewSpecFlag_ParameterizedByEntity      = (1<<0),
   DF_ViewSpecFlag_CanSerialize               = (1<<1),
   DF_ViewSpecFlag_CanSerializeEntityPath     = (1<<2),
-  DF_ViewSpecFlag_CanFilter                  = (1<<3),
-  DF_ViewSpecFlag_FilterIsCode               = (1<<4),
-  DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<5),
+  DF_ViewSpecFlag_CanSerializeQuery          = (1<<3),
+  DF_ViewSpecFlag_CanFilter                  = (1<<4),
+  DF_ViewSpecFlag_FilterIsCode               = (1<<5),
+  DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<6),
 };
 
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;

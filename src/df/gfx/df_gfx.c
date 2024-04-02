@@ -7983,6 +7983,14 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
               {
                 str8_list_push(arena, &strs, str8_lit("selected "));
               }
+              if(view->query_string_size != 0 && view->spec->info.flags & DF_ViewSpecFlag_CanSerializeQuery)
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                String8 query_raw = str8(view->query_buffer, view->query_string_size);
+                String8 query_sanitized = df_cfg_escaped_from_raw_string(scratch.arena, query_raw);
+                str8_list_pushf(arena, &strs, "query:\"%S\" ", query_sanitized);
+                scratch_end(scratch);
+              }
               if(view->spec->info.flags & DF_ViewSpecFlag_CanSerializeEntityPath)
               {
                 if(view_entity->kind == DF_EntityKind_File)
@@ -11817,6 +11825,14 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     // rjf: check if this view is selected
                     view_is_selected = df_cfg_node_child_from_string(op, str8_lit("selected"), StringMatchFlag_CaseInsensitive) != &df_g_nil_cfg_node;
                     
+                    // rjf: read view query string
+                    String8 view_query = str8_lit("");
+                    if(view_spec_flags & DF_ViewSpecFlag_CanSerializeQuery)
+                    {
+                      String8 escaped_query = df_cfg_node_child_from_string(op, str8_lit("query"), StringMatchFlag_CaseInsensitive)->first->string;
+                      view_query = df_cfg_raw_from_escaped_string(scratch.arena, escaped_query);
+                    }
+                    
                     // rjf: read entity path
                     DF_Entity *entity = &df_g_nil_entity;
                     if(view_spec_flags & DF_ViewSpecFlag_CanSerializeEntityPath)
@@ -11827,7 +11843,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     }
                     
                     // rjf: set up view
-                    df_view_equip_spec(view, view_spec, entity, str8_lit(""), op);
+                    df_view_equip_spec(view, view_spec, entity, view_query, op);
                   }
                   
                   // rjf: insert

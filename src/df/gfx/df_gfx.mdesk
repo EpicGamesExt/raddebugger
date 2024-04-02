@@ -576,7 +576,7 @@ DF_ThemePresetColorTable:
 @data(DF_ViewSpecInfo) @c_file df_g_gfx_view_rule_tab_view_spec_info_table:
 {
   @expand(DF_GfxViewRuleTable a)
-    ```$(a.tu == "x" -> '{ DF_ViewSpecFlag_CanSerialize, str8_lit_comp("' .. a.string .. '_view_rule"), str8_lit_comp("' .. a.tab_display_string .. '"), DF_NameKind_Null, DF_IconKind_Binoculars, ' .. 'DF_VIEW_SETUP_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_CMD_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_UI_FUNCTION_NAME(' .. a.string .. ') }')```;
+    ```$(a.tu == "x" -> '{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("' .. a.string .. '_view_rule"), str8_lit_comp("' .. a.tab_display_string .. '"), DF_NameKind_Null, DF_IconKind_Binoculars, ' .. 'DF_VIEW_SETUP_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_CMD_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_UI_FUNCTION_NAME(' .. a.string .. ') }')```;
 }
 
 //- rjf: default view spec info table

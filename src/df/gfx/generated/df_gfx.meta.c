@@ -733,10 +733,10 @@ DF_GfxViewRuleSpecInfo df_g_gfx_view_rule_spec_info_table[14] =
 
 DF_ViewSpecInfo df_g_gfx_view_rule_tab_view_spec_info_table[4] =
 {
-{ DF_ViewSpecFlag_CanSerialize, str8_lit_comp("text_view_rule"), str8_lit_comp("Text"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(text), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(text), DF_VIEW_CMD_FUNCTION_NAME(text), DF_VIEW_UI_FUNCTION_NAME(text) },
-{ DF_ViewSpecFlag_CanSerialize, str8_lit_comp("disasm_view_rule"), str8_lit_comp("Disassembly"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(disasm), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(disasm), DF_VIEW_CMD_FUNCTION_NAME(disasm), DF_VIEW_UI_FUNCTION_NAME(disasm) },
-{ DF_ViewSpecFlag_CanSerialize, str8_lit_comp("bitmap_view_rule"), str8_lit_comp("Bitmap"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(bitmap), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(bitmap), DF_VIEW_CMD_FUNCTION_NAME(bitmap), DF_VIEW_UI_FUNCTION_NAME(bitmap) },
-{ DF_ViewSpecFlag_CanSerialize, str8_lit_comp("geo_view_rule"), str8_lit_comp("Geometry"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(geo), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(geo), DF_VIEW_CMD_FUNCTION_NAME(geo), DF_VIEW_UI_FUNCTION_NAME(geo) },
+{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("text_view_rule"), str8_lit_comp("Text"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(text), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(text), DF_VIEW_CMD_FUNCTION_NAME(text), DF_VIEW_UI_FUNCTION_NAME(text) },
+{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("disasm_view_rule"), str8_lit_comp("Disassembly"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(disasm), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(disasm), DF_VIEW_CMD_FUNCTION_NAME(disasm), DF_VIEW_UI_FUNCTION_NAME(disasm) },
+{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("bitmap_view_rule"), str8_lit_comp("Bitmap"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(bitmap), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(bitmap), DF_VIEW_CMD_FUNCTION_NAME(bitmap), DF_VIEW_UI_FUNCTION_NAME(bitmap) },
+{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("geo_view_rule"), str8_lit_comp("Geometry"), DF_NameKind_Null, DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(geo), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(geo), DF_VIEW_CMD_FUNCTION_NAME(geo), DF_VIEW_UI_FUNCTION_NAME(geo) },
 };
 
 DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[30] =
