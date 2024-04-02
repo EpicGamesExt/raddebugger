@@ -1228,7 +1228,7 @@ utf8_decode(U8 *str, U64 max){
     }break;
     case 2:
     {
-      if (2 < max)
+      if (1 < max)
       {
         U8 cont_byte = str[1];
         if (utf8_class[cont_byte >> 3] == 0)
