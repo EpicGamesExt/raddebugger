@@ -1076,8 +1076,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             p.string = row->edit_expr;
             p.view_spec = df_tab_view_spec_from_gfx_view_rule_spec(row->expand_ui_rule_spec);
+            p.cfg_node = row->expand_ui_rule_node;
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
+            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CfgNode);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenTab));
           }
         }

@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 df_g_cmd_param_slot_range_table[19] =
+Rng1U64 df_g_cmd_param_slot_range_table[20] =
 {
 {0},
 {OffsetOf(DF_CmdParams, window), OffsetOf(DF_CmdParams, window) + sizeof(DF_Handle)},
@@ -19,6 +19,7 @@ Rng1U64 df_g_cmd_param_slot_range_table[19] =
 {OffsetOf(DF_CmdParams, text_point), OffsetOf(DF_CmdParams, text_point) + sizeof(TxtPt)},
 {OffsetOf(DF_CmdParams, cmd_spec), OffsetOf(DF_CmdParams, cmd_spec) + sizeof(struct DF_CmdSpec *)},
 {OffsetOf(DF_CmdParams, view_spec), OffsetOf(DF_CmdParams, view_spec) + sizeof(struct DF_ViewSpec *)},
+{OffsetOf(DF_CmdParams, cfg_node), OffsetOf(DF_CmdParams, cfg_node) + sizeof(struct DF_CfgNode *)},
 {OffsetOf(DF_CmdParams, vaddr), OffsetOf(DF_CmdParams, vaddr) + sizeof(U64)},
 {OffsetOf(DF_CmdParams, voff), OffsetOf(DF_CmdParams, voff) + sizeof(U64)},
 {OffsetOf(DF_CmdParams, index), OffsetOf(DF_CmdParams, index) + sizeof(U64)},

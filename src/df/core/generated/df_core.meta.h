@@ -371,6 +371,7 @@ DF_CmdParamSlot_FilePath,
 DF_CmdParamSlot_TextPoint,
 DF_CmdParamSlot_CmdSpec,
 DF_CmdParamSlot_ViewSpec,
+DF_CmdParamSlot_CfgNode,
 DF_CmdParamSlot_VirtualAddr,
 DF_CmdParamSlot_VirtualOff,
 DF_CmdParamSlot_Index,
@@ -396,6 +397,7 @@ String8 file_path;
 TxtPt text_point;
 struct DF_CmdSpec * cmd_spec;
 struct DF_ViewSpec * view_spec;
+struct DF_CfgNode * cfg_node;
 U64 vaddr;
 U64 voff;
 U64 index;
@@ -1511,7 +1513,7 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 C_LINKAGE_BEGIN
-extern Rng1U64 df_g_cmd_param_slot_range_table[19];
+extern Rng1U64 df_g_cmd_param_slot_range_table[20];
 extern DF_IconKind df_g_entity_kind_icon_kind_table[27];
 extern String8 df_g_entity_kind_display_string_table[27];
 extern String8 df_g_entity_kind_name_label_table[27];

@@ -182,7 +182,6 @@ DF_NameKindTable:
 {
   {Null}
   {EntityName}
-  {EntityKindName}
 }
 
 @table(name, name_lower, display_string, name_kind, icon, parameterized_by_entity, can_serialize, can_serialize_entity_path, can_filter, filter_is_code, typing_automatically_filters, inc_in_docs, docs_desc)
@@ -193,7 +192,7 @@ DF_GfxViewTable:
   { Commands               "commands"               "Commands"                     Null                 List            0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { FileSystem             "file_system"            "File System"                  Null                 FileOutline     0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { SystemProcesses        "system_processes"       "System Processes"             Null                 Null            0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { EntityLister           "entity_lister"          "Entity List"                  EntityKindName       Null            0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { EntityLister           "entity_lister"          "Entity List"                  Null                 Null            0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { SymbolLister           "symbol_lister"          "Symbols"                      Null                 Null            0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { Target                 "target"                 "Target"                       EntityName           Target          1 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { Targets                "targets"                "Targets"                      Null                 Target          0 1 0 1 0 1      1 "Displays a list of all targets, as well as controls for enabling, disabling, launching, editing, or deleting each target. For more information on targets, read the `Targets` section."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
@@ -240,23 +239,23 @@ DF_CmdParamSlot2ViewSpecMap:
 //
 // NOTE(rjf): see @view_rule_info
 
-@table(string     vr  ls  ru  bu  tu)
+@table(string     vr  ls  ru  bu  tu  tab_display_string)
 DF_GfxViewRuleTable:
 {
-  {"array"         -   -   -   -   -   }
-  {"list"          x   -   -   -   -   }
-  {"dec"           -   x   -   -   -   }
-  {"bin"           -   x   -   -   -   }
-  {"oct"           -   x   -   -   -   }
-  {"hex"           -   x   -   -   -   }
-  {"only"          x   x   -   -   -   }
-  {"omit"          x   x   -   -   -   }
-  {"no_addr"       -   x   -   -   -   }
-  {"rgba"          -   -   x   x   -   }
-  {"text"          -   -   -   x   -   }
-  {"disasm"        -   -   -   x   -   }
-  {"bitmap"        -   -   x   x   x   }
-  {"geo"           -   -   x   x   -   }
+  {"array"         -   -   -   -   -   ""                              }
+  {"list"          x   -   -   -   -   ""                              }
+  {"dec"           -   x   -   -   -   ""                              }
+  {"bin"           -   x   -   -   -   ""                              }
+  {"oct"           -   x   -   -   -   ""                              }
+  {"hex"           -   x   -   -   -   ""                              }
+  {"only"          x   x   -   -   -   ""                              }
+  {"omit"          x   x   -   -   -   ""                              }
+  {"no_addr"       -   x   -   -   -   ""                              }
+  {"rgba"          -   -   x   x   -   ""                              }
+  {"text"          -   -   -   x   x   "Text"                          }
+  {"disasm"        -   -   -   x   x   "Disassembly"                   }
+  {"bitmap"        -   -   x   x   x   "Bitmap"                        }
+  {"geo"           -   -   x   x   x   "Geometry"                      }
 }
 
 ////////////////////////////////
@@ -577,7 +576,7 @@ DF_ThemePresetColorTable:
 @data(DF_ViewSpecInfo) @c_file df_g_gfx_view_rule_tab_view_spec_info_table:
 {
   @expand(DF_GfxViewRuleTable a)
-    ```$(a.tu == "x" -> '{ DF_ViewSpecFlag_CanSerialize, str8_lit_comp("' .. a.string .. '_view_rule"), str8_lit_comp("' .. a.string .. '"), DF_NameKind_Null, DF_IconKind_Binoculars, ' .. 'DF_VIEW_SETUP_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_CMD_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_UI_FUNCTION_NAME(' .. a.string .. ') }')```;
+    ```$(a.tu == "x" -> '{ DF_ViewSpecFlag_CanSerialize, str8_lit_comp("' .. a.string .. '_view_rule"), str8_lit_comp("' .. a.tab_display_string .. '"), DF_NameKind_Null, DF_IconKind_Binoculars, ' .. 'DF_VIEW_SETUP_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_CMD_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_UI_FUNCTION_NAME(' .. a.string .. ') }')```;
 }
 
 //- rjf: default view spec info table

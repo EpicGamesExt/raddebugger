@@ -529,8 +529,10 @@ df_cmd_params_copy(Arena *arena, DF_CmdParams *src)
   dst.entity_list = df_push_handle_list_copy(arena, src->entity_list);
   dst.string = push_str8_copy(arena, src->string);
   dst.file_path = push_str8_copy(arena, src->file_path);
+  if(src->cfg_node != 0) {dst.cfg_node = df_cfg_tree_copy(arena, src->cfg_node);}
   if(dst.cmd_spec == 0)  {dst.cmd_spec = &df_g_nil_cmd_spec;}
   if(dst.view_spec == 0) {dst.view_spec = &df_g_nil_view_spec;}
+  if(dst.cfg_node == 0)  {dst.cfg_node = &df_g_nil_cfg_node;}
   return dst;
 }
 
@@ -1777,7 +1779,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(!df_panel_is_nil(panel) && spec != &df_g_nil_view_spec)
           {
             DF_View *view = df_view_alloc();
-            df_view_equip_spec(view, spec, entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(view, spec, entity, params.string, params.cfg_node);
             df_panel_insert_tab_view(panel, panel->last_tab_view, view);
             df_panel_notify_mutation(ws, panel);
           }
@@ -5856,18 +5858,29 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 // rjf: build tab contents
                 UI_Parent(tab_box)
                 {
-                  if(icon_kind != DF_IconKind_Null)
+                  UI_WidthFill UI_Row
                   {
-                    UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-                      UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-                      UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-                      UI_TextAlignment(UI_TextAlign_Center)
-                      UI_PrefWidth(ui_em(2.25f, 1.f))
-                      ui_label(df_g_icon_kind_text_table[icon_kind]);
+                    if(icon_kind != DF_IconKind_Null)
+                    {
+                      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                        UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                        UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+                        UI_TextAlignment(UI_TextAlign_Center)
+                        UI_PrefWidth(ui_em(2.25f, 1.f))
+                        ui_label(df_g_icon_kind_text_table[icon_kind]);
+                    }
+                    UI_TextColor(df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText))
+                      UI_PrefWidth(ui_text_dim(10, 1))
+                      ui_label(label);
+                    if(view->query_string_size != 0)
+                    {
+                      UI_Font(df_font_from_slot(DF_FontSlot_Code))
+                        UI_FontSize(ui_top_font_size()*0.8f)
+                        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                        UI_PrefWidth(ui_text_dim(10, 0))
+                        ui_label(str8(view->query_buffer, view->query_string_size));
+                    }
                   }
-                  UI_TextColor(df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText))
-                    UI_WidthFill
-                    ui_label(label);
                   UI_PrefWidth(ui_em(2.35f, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
                     UI_Font(df_font_from_slot(DF_FontSlot_Icons))
                     UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons)*0.75f)

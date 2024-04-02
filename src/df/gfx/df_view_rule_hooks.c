@@ -782,6 +782,13 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
   scratch_end(scratch);
 }
 
+DF_VIEW_SETUP_FUNCTION_DEF(text) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(text) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(text) {}
+DF_VIEW_UI_FUNCTION_DEF(text)
+{
+}
+
 ////////////////////////////////
 //~ rjf: "disasm"
 
@@ -895,6 +902,13 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
+}
+
+DF_VIEW_SETUP_FUNCTION_DEF(disasm) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(disasm) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(disasm) {}
+DF_VIEW_UI_FUNCTION_DEF(disasm)
+{
 }
 
 ////////////////////////////////
@@ -1141,7 +1155,6 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(bitmap) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(bitmap) {}
 DF_VIEW_UI_FUNCTION_DEF(bitmap)
 {
-  
 }
 
 ////////////////////////////////
@@ -1321,4 +1334,11 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
   
   geo_scope_close(geo_scope);
   scratch_end(scratch);
+}
+
+DF_VIEW_SETUP_FUNCTION_DEF(geo) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(geo) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(geo) {}
+DF_VIEW_UI_FUNCTION_DEF(geo)
+{
 }
