@@ -33,7 +33,6 @@ DF_GfxViewKind_Modules,
 DF_GfxViewKind_PendingEntity,
 DF_GfxViewKind_Code,
 DF_GfxViewKind_Disassembly,
-DF_GfxViewKind_EvalViewer,
 DF_GfxViewKind_Watch,
 DF_GfxViewKind_Locals,
 DF_GfxViewKind_Registers,
@@ -140,7 +139,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Modules);
 DF_VIEW_SETUP_FUNCTION_DEF(PendingEntity);
 DF_VIEW_SETUP_FUNCTION_DEF(Code);
 DF_VIEW_SETUP_FUNCTION_DEF(Disassembly);
-DF_VIEW_SETUP_FUNCTION_DEF(EvalViewer);
 DF_VIEW_SETUP_FUNCTION_DEF(Watch);
 DF_VIEW_SETUP_FUNCTION_DEF(Locals);
 DF_VIEW_SETUP_FUNCTION_DEF(Registers);
@@ -171,7 +169,6 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Modules);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(PendingEntity);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Code);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Disassembly);
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(EvalViewer);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Registers);
@@ -202,7 +199,6 @@ DF_VIEW_CMD_FUNCTION_DEF(Modules);
 DF_VIEW_CMD_FUNCTION_DEF(PendingEntity);
 DF_VIEW_CMD_FUNCTION_DEF(Code);
 DF_VIEW_CMD_FUNCTION_DEF(Disassembly);
-DF_VIEW_CMD_FUNCTION_DEF(EvalViewer);
 DF_VIEW_CMD_FUNCTION_DEF(Watch);
 DF_VIEW_CMD_FUNCTION_DEF(Locals);
 DF_VIEW_CMD_FUNCTION_DEF(Registers);
@@ -233,7 +229,6 @@ DF_VIEW_UI_FUNCTION_DEF(Modules);
 DF_VIEW_UI_FUNCTION_DEF(PendingEntity);
 DF_VIEW_UI_FUNCTION_DEF(Code);
 DF_VIEW_UI_FUNCTION_DEF(Disassembly);
-DF_VIEW_UI_FUNCTION_DEF(EvalViewer);
 DF_VIEW_UI_FUNCTION_DEF(Watch);
 DF_VIEW_UI_FUNCTION_DEF(Locals);
 DF_VIEW_UI_FUNCTION_DEF(Registers);
@@ -266,7 +261,10 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text);
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm);
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap);
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo);
-DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_DEF(bitmap);
+DF_VIEW_SETUP_FUNCTION_DEF(bitmap);
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(bitmap);
+DF_VIEW_CMD_FUNCTION_DEF(bitmap);
+DF_VIEW_UI_FUNCTION_DEF(bitmap);
 C_LINKAGE_BEGIN
 extern String8 df_g_theme_preset_display_string_table[9];
 extern String8 df_g_theme_preset_code_string_table[9];
@@ -286,7 +284,7 @@ extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];
 extern DF_StringBindingPair df_g_default_binding_table[97];
 extern String8 df_g_binding_version_remap_old_name_table[3];
 extern String8 df_g_binding_version_remap_new_name_table[3];
-extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[31];
+extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[30];
 extern String8 df_g_theme_color_display_string_table[54];
 extern String8 df_g_theme_color_cfg_string_table[54];
 read_only global U8 df_g_icon_font_bytes__data[] =

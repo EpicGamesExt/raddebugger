@@ -717,6 +717,17 @@ df_gfx_view_rule_spec_from_string(String8 string)
   return spec;
 }
 
+internal DF_ViewSpec *
+df_tab_view_spec_from_gfx_view_rule_spec(DF_GfxViewRuleSpec *spec)
+{
+  DF_ViewSpec *result = &df_g_nil_view_spec;
+  if(spec->info.tab_view_spec_name.size != 0)
+  {
+    result = df_view_spec_from_string(spec->info.tab_view_spec_name);
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: View State Functions
 
@@ -11311,6 +11322,8 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   {
     DF_GfxViewRuleSpecInfoArray array = {df_g_gfx_view_rule_spec_info_table, ArrayCount(df_g_gfx_view_rule_spec_info_table)};
     df_register_gfx_view_rule_specs(array);
+    DF_ViewSpecInfoArray tab_view_specs_array = {df_g_gfx_view_rule_tab_view_spec_info_table, ArrayCount(df_g_gfx_view_rule_tab_view_spec_info_table)};
+    df_register_view_specs(tab_view_specs_array);
   }
   
   // rjf: register cmd param slot -> view specs

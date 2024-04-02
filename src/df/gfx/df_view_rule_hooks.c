@@ -1136,7 +1136,10 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   scratch_end(scratch);
 }
 
-DF_GFX_VIEW_RULE_WHOLE_UI_FUNCTION_DEF(bitmap)
+DF_VIEW_SETUP_FUNCTION_DEF(bitmap) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(bitmap) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(bitmap) {}
+DF_VIEW_UI_FUNCTION_DEF(bitmap)
 {
   
 }

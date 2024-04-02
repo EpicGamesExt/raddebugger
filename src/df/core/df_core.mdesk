@@ -462,12 +462,10 @@ DF_CoreCmdTable://               |            |                  |              
 //                          rows, this stage offers the ability to build a ui
 //                          stretching over all of the rows.
 //
-// whole ui build, "wu"  -> sometimes, more sophisticated interfaces need to be
-//                          provided for a view rule, that stretch beyond the
-//                          limits of what could be offered inside a watch
-//                          window block. in such cases, the eval/view-rule
-//                          combo will be granted its own tab for example, and
-//                          this stage is used to fill such a ui.
+// tab ui build, "tu"    -> when a view rule also wants to implement ui for a
+//                          dedicated tab, it can supply hooks for that as well
+//                          in which case an eval/view-rule can be opened in a
+//                          fully fledged, dedicated ui
 //
 // A few other bits are included for various ways in which a view rule may be
 // applied throughout the eval visualization pipeline. A list follows:
