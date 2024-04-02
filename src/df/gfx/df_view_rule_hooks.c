@@ -957,13 +957,6 @@ struct DF_ViewRuleHooks_BitmapBoxDrawData
   F32 ui_per_bmp_px;
 };
 
-typedef struct DF_ViewRuleHooks_BitmapZoomDrawData DF_ViewRuleHooks_BitmapZoomDrawData;
-struct DF_ViewRuleHooks_BitmapZoomDrawData
-{
-  Rng2F32 src;
-  R_Handle texture;
-};
-
 internal UI_BOX_CUSTOM_DRAW(df_view_rule_hooks__bitmap_box_draw)
 {
   DF_ViewRuleHooks_BitmapBoxDrawData *draw_data = (DF_ViewRuleHooks_BitmapBoxDrawData *)user_data;
@@ -999,12 +992,6 @@ internal UI_BOX_CUSTOM_DRAW(df_view_rule_hooks__bitmap_box_draw)
   }
 }
 
-internal UI_BOX_CUSTOM_DRAW(df_view_rule_hooks__bitmap_zoom_draw)
-{
-  DF_ViewRuleHooks_BitmapZoomDrawData *draw_data = (DF_ViewRuleHooks_BitmapZoomDrawData *)user_data;
-  d_img(box->rect, draw_data->src, draw_data->texture, v4f32(1, 1, 1, 1), 0, 0, 0);
-}
-
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
@@ -1038,28 +1025,52 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   }
   state->last_open_frame_idx = df_frame_index();
   
-  //- rjf: resolve to address value
-  DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
-  U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
-  
-  //- rjf: unpack thread/process of eval
+  //////////////////////////////
+  //- rjf: unpack context
+  //
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   
-  //- rjf: unpack image dimensions & form vaddr range
+  //////////////////////////////
+  //- rjf: evaluate expression
+  //
+  DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
+  U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
   DF_BitmapTopologyInfo topology_info = df_view_rule_hooks__bitmap_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
   U64 expected_size = topology_info.width*topology_info.height*r_tex2d_format_bytes_per_pixel_table[topology_info.fmt];
   Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr+expected_size);
   
-  //- rjf: obtain key for this data range
+  //////////////////////////////
+  //- rjf: map expression artifacts -> texture
+  //
   U128 texture_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
-  
-  //- rjf: hash & topology -> texture
   TEX_Topology topology = tex_topology_make(v2s32((S32)topology_info.width, (S32)topology_info.height), topology_info.fmt);
   R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology);
   
+  //////////////////////////////
+  //- rjf: animate
+  //
+  if(expected_size != 0)
+  {
+    if(r_handle_match(r_handle_zero(), texture))
+    {
+      df_gfx_request_frame();
+      state->loaded_t = 0;
+    }
+    else
+    {
+      F32 rate = 1 - pow_f32(2, (-15.f * df_dt()));
+      state->loaded_t += (1.f - state->loaded_t) * rate;
+      if(state->loaded_t < 0.99f)
+      {
+        df_gfx_request_frame();
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build preview
-  F32 rate = 1 - pow_f32(2, (-15.f * df_dt()));
+  //
   if(expected_size != 0)
   {
     F32 img_dim = dim.y - ui_top_font_size()*2.f;
@@ -1068,105 +1079,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
       UI_Column UI_Padding(ui_pct(1.f, 0.f))
       UI_PrefHeight(ui_px(img_dim, 1.f))
     {
-      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects, "image_box");
-      UI_Signal sig = ui_signal_from_box(box);
-      F32 ui_per_bmp_px = dim.y / (F32)topology_info.height;
-      Vec2F32 mouse_ui_px_off     = sub_2f32(ui_mouse(), box->rect.p0);
-      Vec2S32 mouse_bitmap_px_off = v2s32(floor_f32(mouse_ui_px_off.x/ui_per_bmp_px), floor_f32(mouse_ui_px_off.y/ui_per_bmp_px));
-      DF_ViewRuleHooks_BitmapBoxDrawData *draw_data = push_array(ui_build_arena(), DF_ViewRuleHooks_BitmapBoxDrawData, 1);
-      draw_data->texture = texture;
-      draw_data->src = r2f32(v2f32(0, 0), v2f32((F32)topology_info.width, (F32)topology_info.height));
-      draw_data->loaded_t = state->loaded_t;
-      draw_data->hovered = ui_hovering(sig);
-      draw_data->mouse_px = mouse_bitmap_px_off;
-      draw_data->ui_per_bmp_px = ui_per_bmp_px;
-      ui_box_equip_custom_draw(box, df_view_rule_hooks__bitmap_box_draw, draw_data);
-      if(r_handle_match(r_handle_zero(), texture))
-      {
-        df_gfx_request_frame();
-        state->loaded_t = 0;
-      }
-      else
-      {
-        state->loaded_t += (1.f - state->loaded_t) * rate;
-        if(state->loaded_t < 0.99f)
-        {
-          df_gfx_request_frame();
-        }
-      }
-      if(ui_hovering(sig) && r_handle_match(texture, r_handle_zero())) UI_Tooltip
-      {
-        ui_labelf("Texture not loaded.");
-      }
-      if(ui_hovering(sig) && !r_handle_match(texture, r_handle_zero()))
-      {
-        if(dim.y > (F32)topology_info.height)
-        {
-          U128 hash = hs_hash_from_key(texture_key, 0);
-          String8 data = hs_data_from_hash(hs_scope, hash);
-          U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[topology.fmt];
-          U64 mouse_pixel_off = mouse_bitmap_px_off.y*topology_info.width + mouse_bitmap_px_off.x;
-          U64 mouse_byte_off = mouse_pixel_off * bytes_per_pixel;
-          B32 got_color = 0;
-          Vec4F32 hsva = {0};
-          if(mouse_byte_off + bytes_per_pixel <= data.size)
-          {
-            got_color = 1;
-            switch(topology.fmt)
-            {
-              default:{got_color = 0;}break;
-              case R_Tex2DFormat_RGBA8:
-              {
-                U8 r = data.str[mouse_byte_off+0];
-                U8 g = data.str[mouse_byte_off+1];
-                U8 b = data.str[mouse_byte_off+2];
-                U8 a = data.str[mouse_byte_off+3];
-                Vec4F32 rgba = v4f32(r/255.f, g/255.f, b/255.f, a/255.f);
-                hsva = hsva_from_rgba(rgba);
-              }break;
-              case R_Tex2DFormat_BGRA8:
-              {
-                U8 r = data.str[mouse_byte_off+2];
-                U8 g = data.str[mouse_byte_off+1];
-                U8 b = data.str[mouse_byte_off+0];
-                U8 a = data.str[mouse_byte_off+3];
-                Vec4F32 rgba = v4f32(r/255.f, g/255.f, b/255.f, a/255.f);
-                hsva = hsva_from_rgba(rgba);
-              }break;
-              case R_Tex2DFormat_R8:
-              {
-                U8 r = data.str[mouse_byte_off+0];
-                Vec4F32 rgba = v4f32(r/255.f, 0, 0, 1.f);
-                hsva = hsva_from_rgba(rgba);
-              }break;
-            }
-          }
-          if(got_color)
-          {
-            ui_do_color_tooltip_hsva(hsva);
-          }
-        }
-        else UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Code))
-        {
-          ui_label(r_tex2d_format_display_string_table[topology.fmt]);
-          ui_labelf("%I64u x %I64u", topology_info.width, topology_info.height);
-          UI_Padding(ui_em(2.f, 1.f))
-            UI_PrefWidth(ui_children_sum(1.f))
-            UI_PrefHeight(ui_children_sum(1.f))
-            UI_Row
-            UI_PrefWidth(ui_em(15.f, 1.f))
-            UI_PrefHeight(ui_em(15.f, 1.f))
-            UI_Padding(ui_em(2.f, 1.f))
-          {
-            UI_Box *zoom_box = ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
-            DF_ViewRuleHooks_BitmapZoomDrawData *draw_data = push_array(ui_build_arena(), DF_ViewRuleHooks_BitmapZoomDrawData, 1);
-            draw_data->src = r2f32p(mouse_bitmap_px_off.x - 16, mouse_bitmap_px_off.y - 16, mouse_bitmap_px_off.x + 16, mouse_bitmap_px_off.y + 16);
-            draw_data->texture = texture;
-            ui_box_equip_custom_draw(zoom_box, df_view_rule_hooks__bitmap_zoom_draw, draw_data);
-          }
-        }
-      }
+      ui_image(texture, r2f32(v2f32(0, 0), v2f32((F32)topology_info.width, (F32)topology_info.height)), v4f32(1, 1, 1, 1), 10.f*(1-state->loaded_t), str8_lit("image_box"));
     }
   }
   
