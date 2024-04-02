@@ -912,6 +912,31 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
 }
 
 ////////////////////////////////
+//~ rjf: "graph"
+
+DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(graph)
+{
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->eval = eval;
+  vb->string = string;
+  vb->cfg_table = *cfg_table;
+  vb->visual_idx_range = r1u64(0, 8);
+  vb->semantic_idx_range = r1u64(0, 1);
+  df_eval_viz_block_end(out, vb);
+}
+
+DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(graph)
+{
+}
+
+DF_VIEW_SETUP_FUNCTION_DEF(graph) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(graph) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(graph) {}
+DF_VIEW_UI_FUNCTION_DEF(graph)
+{
+}
+
+////////////////////////////////
 //~ rjf: "bitmap"
 
 typedef struct DF_ViewRuleHooks_BitmapState DF_ViewRuleHooks_BitmapState;

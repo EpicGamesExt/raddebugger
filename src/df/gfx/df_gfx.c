@@ -5870,7 +5870,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                         ui_label(df_g_icon_kind_text_table[icon_kind]);
                     }
                     UI_TextColor(df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText))
-                      UI_PrefWidth(ui_text_dim(10, 1))
+                      UI_PrefWidth(ui_text_dim(10, 0))
                       ui_label(label);
                     if(view->query_string_size != 0)
                     {

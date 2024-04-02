@@ -1077,7 +1077,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             DF_CfgNode *cfg_root = push_array(scratch.arena, DF_CfgNode, 1);
             cfg_root->first = cfg_root->last = cfg;
             cfg_root->next = cfg_root->parent = &df_g_nil_cfg_node;
-            cfg->parent = cfg_root;
+            if(cfg != &df_g_nil_cfg_node)
+            {
+              cfg->parent = cfg_root;
+            }
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             p.string = row->edit_expr;
             p.view_spec = df_tab_view_spec_from_gfx_view_rule_spec(row->expand_ui_rule_spec);
