@@ -617,6 +617,7 @@ internal String8           ui_icon_string_from_kind(UI_IconKind icon_kind);
 internal F32               ui_dt(void);
 
 //- rjf: drag data
+internal Vec2F32           ui_drag_start_mouse(void);
 internal Vec2F32           ui_drag_delta(void);
 internal void              ui_store_drag_data(String8 string);
 internal String8           ui_get_drag_data(U64 min_required_size);

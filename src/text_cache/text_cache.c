@@ -33,6 +33,23 @@ txt_lang_kind_from_extension(String8 extension)
   return kind;
 }
 
+internal String8
+txt_extension_from_lang_kind(TXT_LangKind kind)
+{
+  String8 result = {0};
+  switch(kind)
+  {
+    TXT_LangKind_Null:
+    TXT_LangKind_COUNT:
+    TXT_LangKind_DisasmX64Intel:
+    {}break;
+    TXT_LangKind_C:               {result = str8_lit("c");}break;
+    TXT_LangKind_CPlusPlus:       {result = str8_lit("cpp");}break;
+    TXT_LangKind_Odin:            {result = str8_lit("odin");}break;
+  }
+  return result;
+}
+
 internal TXT_LangKind
 txt_lang_kind_from_architecture(Architecture arch)
 {
@@ -565,6 +582,7 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
         {
           read_only local_persist String8 odin_keywords[] =
           {
+            str8_lit_comp("align_of"),
             str8_lit_comp("asm"),
             str8_lit_comp("auto_cast"),
             str8_lit_comp("bit_set"),
@@ -594,6 +612,7 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
             str8_lit_comp("package"),
             str8_lit_comp("proc"),
             str8_lit_comp("return"),
+            str8_lit_comp("size_of"),
             str8_lit_comp("struct"),
             str8_lit_comp("switch"),
             str8_lit_comp("transmute"),

@@ -331,6 +331,52 @@ ui_line_editf(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size,
 }
 
 ////////////////////////////////
+//~ rjf: Images
+
+typedef struct UI_ImageDrawData UI_ImageDrawData;
+struct UI_ImageDrawData
+{
+  R_Handle texture;
+  Rng2F32 region;
+  Vec4F32 tint;
+  F32 blur;
+};
+
+internal UI_BOX_CUSTOM_DRAW(ui_image_draw)
+{
+  UI_ImageDrawData *draw_data = (UI_ImageDrawData *)user_data;
+  R_Rect2DInst *inst = d_img(box->rect, draw_data->region, draw_data->texture, draw_data->tint, 0, 0, 0);
+  MemoryCopyArray(inst->corner_radii, box->corner_radii);
+}
+
+internal UI_Signal
+ui_image(R_Handle texture, Rng2F32 region, Vec4F32 tint, F32 blur, String8 string)
+{
+  UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable, string);
+  UI_ImageDrawData *draw_data = push_array(ui_build_arena(), UI_ImageDrawData, 1);
+  draw_data->texture = texture;
+  draw_data->region = region;
+  draw_data->tint = tint;
+  draw_data->blur = blur;
+  ui_box_equip_custom_draw(box, ui_image_draw, draw_data);
+  UI_Signal sig = ui_signal_from_box(box);
+  return sig;
+}
+
+internal UI_Signal
+ui_imagef(R_Handle texture, Rng2F32 region, Vec4F32 tint, F32 blur, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  va_end(args);
+  UI_Signal result = ui_image(texture, region, tint, blur, string);
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Special Buttons
 
 internal UI_Signal

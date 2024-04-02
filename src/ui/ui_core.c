@@ -528,6 +528,12 @@ ui_dt(void)
 //- rjf: drag data
 
 internal Vec2F32
+ui_drag_start_mouse(void)
+{
+  return ui_state->drag_start_mouse;
+}
+
+internal Vec2F32
 ui_drag_delta(void)
 {
   return sub_2f32(ui_mouse(), ui_state->drag_start_mouse);

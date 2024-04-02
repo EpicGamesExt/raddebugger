@@ -1073,10 +1073,15 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           //- rjf: double clicked or keyboard clicked -> open dedicated tab
           if(ui_double_clicked(sig) || sig.f & UI_SignalFlag_KeyboardPressed)
           {
+            DF_CfgNode *cfg = df_cfg_tree_copy(scratch.arena, row->expand_ui_rule_node);
+            DF_CfgNode *cfg_root = push_array(scratch.arena, DF_CfgNode, 1);
+            cfg_root->first = cfg_root->last = cfg;
+            cfg_root->next = cfg_root->parent = &df_g_nil_cfg_node;
+            cfg->parent = cfg_root;
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             p.string = row->edit_expr;
             p.view_spec = df_tab_view_spec_from_gfx_view_rule_spec(row->expand_ui_rule_spec);
-            p.cfg_node = row->expand_ui_rule_node;
+            p.cfg_node = cfg_root;
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CfgNode);
@@ -2147,7 +2152,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       if(query_normalized_with_opt_slash_props.flags & FilePropertyFlag_IsFolder)
       {
         String8 new_path = push_str8f(scratch.arena, "%S%S/", path_query.path, path_query.search);
-        df_view_equip_spec(view, view->spec, df_entity_from_handle(view->entity), new_path, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_path, &df_g_nil_cfg_node);
       }
       
       // rjf: is a file -> complete view
@@ -2177,7 +2182,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       {
         String8 existing_path = str8_chop_last_slash(path_query.path);
         String8 new_path = push_str8f(scratch.arena, "%S/%S/", existing_path, files[0].filename);
-        df_view_equip_spec(view, view->spec, df_entity_from_handle(view->entity), new_path, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_path, &df_g_nil_cfg_node);
       }
       else
       {
@@ -2309,7 +2314,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         {
           new_path = path_normalized_from_string(scratch.arena, new_path);
           String8 new_cmd = push_str8f(scratch.arena, "%S/", new_path);
-          df_view_equip_spec(view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
+          df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
         }
       }
     }
@@ -2392,7 +2397,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         if(file->props.flags & FilePropertyFlag_IsFolder)
         {
           String8 new_cmd = push_str8f(scratch.arena, "%S/", new_path);
-          df_view_equip_spec(view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
+          df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
         }
         else
         {
@@ -4894,7 +4899,7 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingEntity)
     {
       view_spec = df_view_spec_from_gfx_view_kind(viewer_kind);
     }
-    df_view_equip_spec(view, view_spec, entity, str8_lit(""), cfg_root);
+    df_view_equip_spec(ws, view, view_spec, entity, str8_lit(""), cfg_root);
     df_panel_notify_mutation(ws, panel);
   }
   

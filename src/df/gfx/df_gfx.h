@@ -73,7 +73,7 @@ struct DF_View;
 struct DF_Panel;
 struct DF_Window;
 
-#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(struct DF_View *view, DF_CfgNode *cfg_root)
+#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_Window *ws, struct DF_View *view, DF_CfgNode *cfg_root)
 #define DF_VIEW_SETUP_FUNCTION_NAME(name) df_view_setup_##name
 #define DF_VIEW_SETUP_FUNCTION_DEF(name) internal DF_VIEW_SETUP_FUNCTION_SIG(DF_VIEW_SETUP_FUNCTION_NAME(name))
 typedef DF_VIEW_SETUP_FUNCTION_SIG(DF_ViewSetupFunctionType);
@@ -866,7 +866,7 @@ internal DF_ViewSpec *df_tab_view_spec_from_gfx_view_rule_spec(DF_GfxViewRuleSpe
 
 internal DF_View *df_view_alloc(void);
 internal void df_view_release(DF_View *view);
-internal void df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 default_query, DF_CfgNode *cfg_root);
+internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 default_query, DF_CfgNode *cfg_root);
 internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
 internal void df_view_clear_user_state(DF_View *view);
 internal void *df_view_get_or_push_user_state(DF_View *view, U64 size);

@@ -46,4 +46,4 @@ internal DF_GeoTopologyInfo df_view_rule_hooks__geo_topology_info_from_cfg(DBGI_
 internal DF_TxtTopologyInfo df_view_rule_hooks__txt_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg);
 internal DF_DisasmTopologyInfo df_view_rule_hooks__disasm_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg);
 
-#endif //DF_VIEW_RULE_HOOKS_H
+#endif // DF_VIEW_RULE_HOOKS_H

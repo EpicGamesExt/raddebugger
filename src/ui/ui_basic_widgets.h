@@ -81,6 +81,12 @@ internal UI_Signal ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64
 internal UI_Signal ui_line_editf(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, char *fmt, ...);
 
 ////////////////////////////////
+//~ rjf: Images
+
+internal UI_Signal ui_image(R_Handle texture, Rng2F32 region, Vec4F32 tint, F32 blur, String8 string);
+internal UI_Signal ui_imagef(R_Handle texture, Rng2F32 region, Vec4F32 tint, F32 blur, char *fmt, ...);
+
+////////////////////////////////
 //~ rjf: Special Buttons
 
 internal UI_Signal ui_close_button(String8 string);

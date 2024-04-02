@@ -781,7 +781,7 @@ df_view_release(DF_View *view)
 }
 
 internal void
-df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 default_query, DF_CfgNode *cfg_root)
+df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 default_query, DF_CfgNode *cfg_root)
 {
   // rjf: fill arguments buffer
   view->query_string_size = Min(sizeof(view->query_buffer), default_query.size);
@@ -798,7 +798,7 @@ df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 
     view->entity = df_handle_from_entity(entity);
     view->is_filtering = 0;
     view->is_filtering_t = 0;
-    view_setup(view, cfg_root);
+    view_setup(window, view, cfg_root);
   }
 }
 
@@ -1337,82 +1337,82 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(df_view_is_nil(watch))
           {
             watch = df_view_alloc();
-            df_view_equip_spec(watch, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Watch), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, watch, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Watch), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(locals))
           {
             locals = df_view_alloc();
-            df_view_equip_spec(locals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Locals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, locals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Locals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(regs))
           {
             regs = df_view_alloc();
-            df_view_equip_spec(regs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Registers), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, regs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Registers), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(globals))
           {
             globals = df_view_alloc();
-            df_view_equip_spec(globals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Globals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, globals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Globals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(tlocals))
           {
             tlocals = df_view_alloc();
-            df_view_equip_spec(tlocals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_ThreadLocals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, tlocals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_ThreadLocals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(types))
           {
             types = df_view_alloc();
-            df_view_equip_spec(types, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Types), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, types, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Types), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(procs))
           {
             procs = df_view_alloc();
-            df_view_equip_spec(procs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Procedures), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, procs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Procedures), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(callstack))
           {
             callstack = df_view_alloc();
-            df_view_equip_spec(callstack, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_CallStack), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, callstack, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_CallStack), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(breakpoints))
           {
             breakpoints = df_view_alloc();
-            df_view_equip_spec(breakpoints, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Breakpoints), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, breakpoints, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Breakpoints), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(watch_pins))
           {
             watch_pins = df_view_alloc();
-            df_view_equip_spec(watch_pins, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_WatchPins), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, watch_pins, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_WatchPins), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(output))
           {
             output = df_view_alloc();
-            df_view_equip_spec(output, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Output), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, output, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Output), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(targets))
           {
             targets = df_view_alloc();
-            df_view_equip_spec(targets, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Targets), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, targets, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Targets), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(scheduler))
           {
             scheduler = df_view_alloc();
-            df_view_equip_spec(scheduler, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Scheduler), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, scheduler, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Scheduler), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(modules))
           {
             modules = df_view_alloc();
-            df_view_equip_spec(modules, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Modules), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, modules, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Modules), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(disasm))
           {
             disasm = df_view_alloc();
-            df_view_equip_spec(disasm, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disassembly), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, disasm, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disassembly), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           if(df_view_is_nil(memory))
           {
             memory = df_view_alloc();
-            df_view_equip_spec(memory, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Memory), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+            df_view_equip_spec(ws, memory, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Memory), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           
           // rjf: root split
@@ -1779,7 +1779,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(!df_panel_is_nil(panel) && spec != &df_g_nil_view_spec)
           {
             DF_View *view = df_view_alloc();
-            df_view_equip_spec(view, spec, entity, params.string, params.cfg_node);
+            df_view_equip_spec(ws, view, spec, entity, params.string, params.cfg_node);
             df_panel_insert_tab_view(panel, panel->last_tab_view, view);
             df_panel_notify_mutation(ws, panel);
           }
@@ -2702,7 +2702,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             if(!df_panel_is_nil(dst_panel) && df_view_is_nil(view_w_this_src_code))
             {
               DF_View *view = df_view_alloc();
-              df_view_equip_spec(view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Code), src_code, str8_lit(""), &df_g_nil_cfg_node);
+              df_view_equip_spec(ws, view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Code), src_code, str8_lit(""), &df_g_nil_cfg_node);
               df_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
               dst_view = view;
             }
@@ -2750,7 +2750,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             if(!df_panel_is_nil(dst_panel) && df_view_is_nil(view_w_disasm))
             {
               DF_View *view = df_view_alloc();
-              df_view_equip_spec(view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disassembly), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
+              df_view_equip_spec(ws, view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disassembly), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
               df_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
               dst_view = view;
             }
@@ -4797,7 +4797,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         
         // rjf: construct & push new view
         DF_View *view = df_view_alloc();
-        df_view_equip_spec(view, view_spec, &df_g_nil_entity, default_query, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view_spec, &df_g_nil_entity, default_query, &df_g_nil_cfg_node);
         if(cmd_spec->info.query.flags & DF_CmdQueryFlag_SelectOldInput)
         {
           view->query_mark = txt_pt(1, 1);
@@ -7988,7 +7988,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
                 Temp scratch = scratch_begin(&arena, 1);
                 String8 query_raw = str8(view->query_buffer, view->query_string_size);
                 String8 query_sanitized = df_cfg_escaped_from_raw_string(scratch.arena, query_raw);
-                str8_list_pushf(arena, &strs, "query:\"%S\" ", query_sanitized);
+                str8_list_pushf(arena, &strs, "query:{\"%S\"} ", query_sanitized);
                 scratch_end(scratch);
               }
               if(view->spec->info.flags & DF_ViewSpecFlag_CanSerializeEntityPath)
@@ -11843,7 +11843,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     }
                     
                     // rjf: set up view
-                    df_view_equip_spec(view, view_spec, entity, view_query, op);
+                    df_view_equip_spec(ws, view, view_spec, entity, view_query, op);
                   }
                   
                   // rjf: insert
