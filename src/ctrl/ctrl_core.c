@@ -2923,7 +2923,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       Architecture arch = thread->arch;
-      U64 thread_rip_vaddr = dmn_rsp_from_thread(event->thread);
+      U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
       DMN_Handle module = {0};
       String8 module_name = {0};
       U64 module_base_vaddr = 0;

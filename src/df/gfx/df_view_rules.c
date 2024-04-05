@@ -979,7 +979,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
       UI_Column UI_Padding(ui_pct(1.f, 0.f))
       UI_PrefHeight(ui_px(img_dim, 1.f))
     {
-      ui_image(texture, r2f32(v2f32(0, 0), v2f32((F32)topology_info.width, (F32)topology_info.height)), v4f32(1, 1, 1, 1), 10.f*(1-state->loaded_t), str8_lit("image_box"));
+      ui_image(texture, r2f32(v2f32(0, 0), v2f32((F32)topology_info.width, (F32)topology_info.height)), v4f32(1, 1, 1, state->loaded_t), 10.f*(1-state->loaded_t), str8_lit("image_box"));
     }
   }
   

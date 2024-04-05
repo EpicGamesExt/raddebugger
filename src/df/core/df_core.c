@@ -8036,9 +8036,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               {
                 df_entity_equip_color_hsva(bp_ent, hsva);
               }
-              if(cond_cfg->string.size != 0)
+              if(cond_cfg->first->string.size != 0)
               {
-                String8 cond_raw = df_cfg_raw_from_escaped_string(scratch.arena, cond_cfg->string);
+                String8 cond_raw = df_cfg_raw_from_escaped_string(scratch.arena, cond_cfg->first->string);
                 DF_Entity *cond = df_entity_alloc(0, bp_ent, DF_EntityKind_Condition);
                 df_entity_equip_name(0, cond, cond_raw);
               }
