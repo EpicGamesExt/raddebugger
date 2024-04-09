@@ -2136,6 +2136,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           break;
                         }
                       }
+                      else
+                      {
+                        read_addr += 256;
+                      }
                     }
                   }
                   e->kind = DMN_EventKind_SetThreadName;

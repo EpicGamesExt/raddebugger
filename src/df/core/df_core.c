@@ -5738,7 +5738,7 @@ df_cfg_escaped_from_raw_string(Arena *arena, String8 string)
   for(U64 idx = 0; idx <= string.size; idx += 1)
   {
     U8 byte = (idx < string.size ? string.str[idx] : 0);
-    if(byte == 0 || byte == '\"')
+    if(byte == 0 || byte == '\"' || byte == '\\')
     {
       String8 part = str8_substr(string, r1u64(split_start_idx, idx));
       str8_list_push(scratch.arena, &parts, part);
@@ -5746,6 +5746,7 @@ df_cfg_escaped_from_raw_string(Arena *arena, String8 string)
       {
         default:{}break;
         case '\"':{str8_list_push(scratch.arena, &parts, str8_lit("\\\""));}break;
+        case '\\':{str8_list_push(scratch.arena, &parts, str8_lit("\\\\"));}break;
       }
       split_start_idx = idx+1;
     }
@@ -5775,7 +5776,8 @@ df_cfg_raw_from_escaped_string(Arena *arena, String8 string)
         switch(string.str[idx+1])
         {
           default:{}break;
-          case '"':{extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\""));}break;
+          case '"': {extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\""));}break;
+          case '\\':{extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\\"));}break;
         }
       }
       split_start_idx = idx+1+extra_advance;
