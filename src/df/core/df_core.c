@@ -7378,9 +7378,16 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             {
               df_ctrl_run(DF_RunKind_Step, thread, 0, &traps);
             }
-            if(good && traps.count == 0)
+            if(good && traps.count == 0 && core_cmd_kind == DF_CoreCmdKind_StepIntoInst)
             {
               df_ctrl_run(DF_RunKind_SingleStep, thread, 0, &traps);
+            }
+            if(good && traps.count == 0 && core_cmd_kind != DF_CoreCmdKind_StepIntoInst)
+            {
+              DF_CmdParams p = params;
+              p.string = str8_lit("Could not read the instruction pointer's current line information.");
+              df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
             }
           }
         }break;
