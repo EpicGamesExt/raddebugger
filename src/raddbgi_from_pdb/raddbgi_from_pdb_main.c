@@ -17,6 +17,8 @@
 //- rjf: [lib]
 #include "lib_raddbgi_format/raddbgi_format.h"
 #include "lib_raddbgi_format/raddbgi_format.c"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.h"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"
@@ -96,8 +98,15 @@ entry_point(CmdLine *cmdline)
     bake2srlz = p2r_bake(arena, convert2bake);
   }
   
+  //- rjf: compress
+  P2R_Bake2Serialize *bake2srlz_compressed = bake2srlz;
+  if(cmd_line_has_flag(cmdline, str8_lit("compress"))) ProfScope("compress")
+  {
+    bake2srlz_compressed = p2r_compress(arena, bake2srlz);
+  }
+  
   //- rjf: serialize
-  String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(arena, &convert2bake->bake_params, &bake2srlz->sections);
+  String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(arena, &convert2bake->bake_params, &bake2srlz_compressed->sections);
   
   //- rjf: write
   ProfScope("write")

@@ -537,23 +537,23 @@ rdi_first_voff_from_proc(RDI_Parsed *p, RDI_U32 proc_id){
 RDI_PROC void*
 rdi_data_from_dsec(RDI_Parsed *parsed, RDI_U32 idx, RDI_U32 item_size,
                    RDI_DataSectionTag expected_tag,
-                   RDI_U64 *count_out){
+                   RDI_U64 *count_out)
+{
   void *result = 0;
   RDI_U32 count_result = 0;
-  
-  // TODO(allen): need a version of this that works with encodings other than "Unpacked"
-  
-  if (0 < idx && idx < parsed->dsec_count){
+  if(0 < idx && idx < parsed->dsec_count)
+  {
     RDI_DataSection *ds = parsed->dsecs + idx;
-    if (ds->tag == expected_tag){
-      RDI_U64 opl = ds->off + ds->encoded_size;
-      if (opl <= parsed->raw_data_size){
-        count_result = ds->encoded_size/item_size;
+    if(ds->tag == expected_tag)
+    {
+      RDI_U64 encoded_opl = ds->off + ds->encoded_size;
+      if(encoded_opl <= parsed->raw_data_size)
+      {
+        count_result = ds->unpacked_size/item_size;
         result = (parsed->raw_data + ds->off);
       }
     }
   }
-  
   *count_out = count_result;
   return(result);
 }

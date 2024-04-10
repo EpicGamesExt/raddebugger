@@ -300,7 +300,8 @@ typedef enum RDI_DataSectionTagEnum{
 
 
 #define RDI_DataSectionEncodingXList(X) \
-X(Unpacked, 0)
+X(Unpacked, 0)\
+X(LZB, 1)
 
 typedef RDI_U32 RDI_DataSectionEncoding;
 typedef enum RDI_DataSectionEncodingEnum{

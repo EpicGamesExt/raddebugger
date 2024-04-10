@@ -811,7 +811,9 @@ typedef struct RDIM_BakeSection RDIM_BakeSection;
 struct RDIM_BakeSection
 {
   void *data;
-  RDI_U64 size;
+  RDI_DataSectionEncoding encoding;
+  RDI_U64 encoded_size;
+  RDI_U64 unpacked_size;
   RDI_DataSectionTag tag;
   RDI_U64 tag_idx;
 };
@@ -1153,7 +1155,7 @@ RDI_PROC void rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, 
 //~ rjf: [Baking Helpers] Data Section List Building Helpers
 
 RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push(RDIM_Arena *arena, RDIM_BakeSectionList *list);
-RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_DataSectionTag tag, RDI_U64 tag_idx);
+RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new_unpacked(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_DataSectionTag tag, RDI_U64 tag_idx);
 RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, RDIM_BakeSectionList *to_push);
 
 ////////////////////////////////

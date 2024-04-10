@@ -95,11 +95,54 @@ p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline)
     }
   }
   
+  //- rjf: define string -> flag bits
+#define FlagNameMapXList \
+Case("sections",            BinarySections)\
+Case("units",               Units)\
+Case("procedures",          Procedures)\
+Case("globals",             GlobalVariables)\
+Case("threadvars",          ThreadVariables)\
+Case("scopes",              Scopes)\
+Case("locals",              Locals)\
+Case("types",               Types)\
+Case("udts",                UDTs)\
+Case("lines",               LineInfo)\
+Case("globals_name_map",    GlobalVariableNameMap)\
+Case("threadvars_name_map", ThreadVariableNameMap)\
+Case("procedure_name_map",  ProcedureNameMap)\
+Case("type_name_map",       TypeNameMap)\
+Case("link_name_map",       LinkNameProcedureNameMap)\
+Case("source_path_name_map",NormalSourcePathNameMap)\
+  
   //- rjf: get flags
   {
     result->flags = P2R_ConvertFlag_All;
+    String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
+    String8List omit_names = cmd_line_strings(cmdline, str8_lit("only"));
+    if(only_names.node_count != 0)
+    {
+      result->flags = 0;
+      for(String8Node *n = only_names.first; n != 0; n = n->next)
+      {
+        String8 string = n->string;
+#define Case(str, flag) if(str8_match(string, str8_lit(str), StringMatchFlag_CaseInsensitive)) {result->flags |= P2R_ConvertFlag_##flag;}
+        FlagNameMapXList;
+#undef Case
+      }
+    }
+    if(omit_names.node_count != 0)
+    {
+      for(String8Node *n = omit_names.first; n != 0; n = n->next)
+      {
+        String8 string = n->string;
+#define Case(str, flag) if(str8_match(string, str8_lit(str), StringMatchFlag_CaseInsensitive)) {result->flags &= ~P2R_ConvertFlag_##flag;}
+        FlagNameMapXList;
+#undef Case
+      }
+    }
   }
   
+#undef FlagNameMapXList
   return result;
 }
 
@@ -4236,5 +4279,60 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   P2R_Bake2Serialize *out = push_array(arena, P2R_Bake2Serialize, 1);
   out->sections = sections;
   scratch_end(scratch);
+  return out;
+}
+
+////////////////////////////////
+//~ rjf: Top-Level Compression Entry Point
+
+internal P2R_Bake2Serialize *
+p2r_compress(Arena *arena, P2R_Bake2Serialize *in)
+{
+  RDIM_BakeSectionList prepack_sections = in->sections;
+  RDIM_BakeSectionList postpack_sections = {0};
+  {
+    //- rjf: set up compression context
+    rr_lzb_simple_context ctx = {0};
+    ctx.m_tableSizeBits = 14;
+    ctx.m_hashTable = push_array(arena, U16, 1<<ctx.m_tableSizeBits);
+    
+    //- rjf: compress, or just copy, all sections
+    for(RDIM_BakeSectionNode *src_n = prepack_sections.first; src_n != 0; src_n = src_n->next)
+    {
+      RDIM_BakeSection *src = &src_n->v;
+      
+      // rjf: push new section
+      RDIM_BakeSection *dst = rdim_bake_section_list_push(arena, &postpack_sections);
+      
+      // rjf: unpack uncompressed section info
+      void *data = src->data;
+      RDI_DataSectionEncoding encoding = src->encoding;
+      RDI_U64 encoded_size = src->encoded_size;
+      RDI_U64 unpacked_size = src->unpacked_size;
+      
+      // rjf: determine if this section should be compressed
+      B32 should_compress = 1;
+      
+      // rjf: compress if needed
+      if(should_compress)
+      {
+        MemoryZero(ctx.m_hashTable, sizeof(U16)*(1<<ctx.m_tableSizeBits));
+        void *raw_data = data;
+        data = push_array_no_zero(arena, U8, unpacked_size);
+        encoded_size = rr_lzb_simple_encode_veryfast(&ctx, raw_data, unpacked_size, data);
+        encoding = RDI_DataSectionEncoding_LZB;
+      }
+      
+      // rjf: fill
+      dst->data          = data;
+      dst->encoding      = encoding;
+      dst->encoded_size  = encoded_size;
+      dst->unpacked_size = unpacked_size;
+      dst->tag           = src->tag;
+      dst->tag_idx       = src->tag_idx;
+    }
+  }
+  P2R_Bake2Serialize *out = push_array(arena, P2R_Bake2Serialize, 1);
+  out->sections = postpack_sections;
   return out;
 }

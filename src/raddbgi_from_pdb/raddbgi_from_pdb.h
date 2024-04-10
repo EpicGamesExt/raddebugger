@@ -5,15 +5,34 @@
 #define RADDBGI_FROM_PDB_H
 
 ////////////////////////////////
-//~ rjf: Conversion Stage Inputs/Outputs
+//~ rjf: Export Artifact Flags
 
 typedef U32 P2R_ConvertFlags;
 enum
 {
-  P2R_ConvertFlag_Types = (1<<0),
-  P2R_ConvertFlag_UDTs  = (1<<1),
+  P2R_ConvertFlag_Strings                 = (1<<0),
+  P2R_ConvertFlag_IndexRuns               = (1<<1),
+  P2R_ConvertFlag_BinarySections          = (1<<2),
+  P2R_ConvertFlag_Units                   = (1<<3),
+  P2R_ConvertFlag_Procedures              = (1<<4),
+  P2R_ConvertFlag_GlobalVariables         = (1<<5),
+  P2R_ConvertFlag_ThreadVariables         = (1<<6),
+  P2R_ConvertFlag_Scopes                  = (1<<7),
+  P2R_ConvertFlag_Locals                  = (1<<8),
+  P2R_ConvertFlag_Types                   = (1<<9),
+  P2R_ConvertFlag_UDTs                    = (1<<10),
+  P2R_ConvertFlag_LineInfo                = (1<<11),
+  P2R_ConvertFlag_GlobalVariableNameMap   = (1<<12),
+  P2R_ConvertFlag_ThreadVariableNameMap   = (1<<13),
+  P2R_ConvertFlag_ProcedureNameMap        = (1<<14),
+  P2R_ConvertFlag_TypeNameMap             = (1<<15),
+  P2R_ConvertFlag_LinkNameProcedureNameMap= (1<<16),
+  P2R_ConvertFlag_NormalSourcePathNameMap = (1<<17),
   P2R_ConvertFlag_All = 0xffffffff,
 };
+
+////////////////////////////////
+//~ rjf: Conversion Stage Inputs/Outputs
 
 typedef struct P2R_User2Convert P2R_User2Convert;
 struct P2R_User2Convert
@@ -601,5 +620,10 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_idx_runs_task__entry_point);
 //~ rjf: Top-Level Baking Entry Point
 
 internal P2R_Bake2Serialize *p2r_bake(Arena *arena, P2R_Convert2Bake *in);
+
+////////////////////////////////
+//~ rjf: Top-Level Compression Entry Point
+
+internal P2R_Bake2Serialize *p2r_compress(Arena *arena, P2R_Bake2Serialize *in);
 
 #endif // RADDBGI_FROM_PDB_H
