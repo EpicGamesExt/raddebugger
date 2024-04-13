@@ -2114,7 +2114,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     U64 total_string_size = 0;
                     for(;total_string_size < KB(4);)
                     {
-                      U8 *buffer = push_array_no_zero(scratch.arena, U8, 256);
+                      U8 *buffer = push_array(scratch.arena, U8, 256);
                       B32 good_read = dmn_w32_process_read(process->handle, r1u64(read_addr, read_addr+256), buffer);
                       if(good_read)
                       {
@@ -2138,7 +2138,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       }
                       else
                       {
-                        read_addr += 256;
+                        break;
                       }
                     }
                   }

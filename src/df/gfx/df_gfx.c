@@ -5869,16 +5869,52 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                         UI_PrefWidth(ui_em(2.25f, 1.f))
                         ui_label(df_g_icon_kind_text_table[icon_kind]);
                     }
-                    UI_TextColor(df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText))
-                      UI_PrefWidth(ui_text_dim(10, 0))
-                      ui_label(label);
                     if(view->query_string_size != 0)
                     {
-                      UI_Font(df_font_from_slot(DF_FontSlot_Code))
-                        UI_FontSize(ui_top_font_size()*0.8f)
-                        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                      UI_PrefWidth(ui_text_dim(10, 0))
+                      {
+                        Temp scratch = scratch_begin(0, 0);
+                        D_FancyStringList fstrs = {0};
+                        {
+                          D_FancyString view_title =
+                          {
+                            df_font_from_slot(DF_FontSlot_Main),
+                            label,
+                            df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText),
+                            ui_top_font_size(),
+                          };
+                          d_fancy_string_list_push(scratch.arena, &fstrs, &view_title);
+                        }
+                        {
+                          D_FancyString space =
+                          {
+                            df_font_from_slot(DF_FontSlot_Code),
+                            str8_lit(" "),
+                            v4f32(0, 0, 0, 0),
+                            ui_top_font_size(),
+                          };
+                          d_fancy_string_list_push(scratch.arena, &fstrs, &space);
+                        }
+                        {
+                          D_FancyString query =
+                          {
+                            df_font_from_slot(DF_FontSlot_Code),
+                            str8(view->query_buffer, view->query_string_size),
+                            df_rgba_from_theme_color(DF_ThemeColor_WeakText),
+                            ui_top_font_size(),
+                          };
+                          d_fancy_string_list_push(scratch.arena, &fstrs, &query);
+                        }
+                        UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                        ui_box_equip_display_fancy_strings(box, &fstrs);
+                        scratch_end(scratch);
+                      }
+                    }
+                    else
+                    {
+                      UI_TextColor(df_rgba_from_theme_color(view_is_selected ? DF_ThemeColor_PlainText : DF_ThemeColor_WeakText))
                         UI_PrefWidth(ui_text_dim(10, 0))
-                        ui_label(str8(view->query_buffer, view->query_string_size));
+                        ui_label(label);
                     }
                   }
                   UI_PrefWidth(ui_em(2.35f, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
