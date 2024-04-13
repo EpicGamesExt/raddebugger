@@ -6380,6 +6380,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         Mat3x3F32 origin2box_xform = make_translate_3x3f32(v2f32(box->rect.x0 + box_dim.x/8, box->rect.y0));
         Mat3x3F32 xform = mul_3x3f32(origin2box_xform, mul_3x3f32(scale_xform, box2origin_xform));
         d_push_xform2d(xform);
+        d_push_tex2d_sample_kind(R_Tex2DSampleKind_Linear);
       }
       
       // rjf: draw drop shadow
@@ -6708,6 +6709,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(b->squish != 0)
           {
             d_pop_xform2d();
+            d_pop_tex2d_sample_kind();
           }
           
           // rjf: pop transparency
