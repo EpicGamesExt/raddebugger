@@ -1869,7 +1869,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         case DF_CoreCmdKind_Switch:
         {
           B32 already_opened = 0;
-          DF_Panel *panel = df_panel_from_handle(params.panel);
           for(DF_Panel *p = ws->root_panel; !df_panel_is_nil(p); p = df_panel_rec_df_pre(p).next)
           {
             for(DF_View *v = p->first_tab_view; !df_view_is_nil(v); v = v->next)
