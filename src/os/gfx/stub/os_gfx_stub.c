@@ -24,7 +24,7 @@ os_get_clipboard_text(Arena *arena)
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
-os_window_open(Vec2F32 resolution, String8 title)
+os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 {
   OS_Handle handle = {1};
   return handle;
@@ -79,12 +79,37 @@ os_window_set_maximized(OS_Handle window, B32 maximized)
 }
 
 internal void
+os_window_minimize(OS_Handle window)
+{
+}
+
+internal void
 os_window_bring_to_front(OS_Handle window)
 {
 }
 
 internal void
 os_window_set_monitor(OS_Handle window, OS_Handle monitor)
+{
+}
+
+internal void
+os_window_clear_custom_border_data(OS_Handle handle)
+{
+}
+
+internal void
+os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
+{
+}
+
+internal void
+os_window_push_custom_edges(OS_Handle handle, F32 thickness)
+{
+}
+
+internal void
+os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
 {
 }
 

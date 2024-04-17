@@ -979,7 +979,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
       UI_Column UI_Padding(ui_pct(1.f, 0.f))
       UI_PrefHeight(ui_px(img_dim, 1.f))
     {
-      ui_image(texture, r2f32(v2f32(0, 0), v2f32((F32)topology_info.width, (F32)topology_info.height)), v4f32(1, 1, 1, state->loaded_t), 10.f*(1-state->loaded_t), str8_lit("image_box"));
+      ui_image(texture, R_Tex2DSampleKind_Nearest, r2f32(v2f32(0, 0), v2f32((F32)topology_info.width, (F32)topology_info.height)), v4f32(1, 1, 1, state->loaded_t), 10.f*(1-state->loaded_t), str8_lit("image_box"));
     }
   }
   
@@ -1148,7 +1148,7 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
     Rng2F32 img_rect_scr = df_bitmap_view_state__screen_from_canvas_rect(bvs, canvas_rect, img_rect_cvs);
     UI_Rect(img_rect_scr) UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_Floating)
     {
-      ui_image(texture, r2f32p(0, 0, (F32)bvs->top.width, (F32)bvs->top.height), v4f32(1, 1, 1, 1), 0, str8_lit("bmp_image"));
+      ui_image(texture, R_Tex2DSampleKind_Nearest, r2f32p(0, 0, (F32)bvs->top.width, (F32)bvs->top.height), v4f32(1, 1, 1, 1), 0, str8_lit("bmp_image"));
     }
   }
   

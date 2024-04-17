@@ -152,6 +152,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
             window->menu_bar_focus_press_started = 0;
           }
         }
+        else if(OS_Key_F1 <= event->key && event->key <= OS_Key_F19)
+        {
+          window->menu_bar_focus_press_started = 0;
+        }
         df_gfx_request_frame();
       }
       else if(event->kind == OS_EventKind_Text)

@@ -8,6 +8,7 @@
 @embed_file df_g_default_main_font_bytes: "../data/Roboto-Regular.ttf"
 @embed_file df_g_default_code_font_bytes: "../data/liberation-mono.ttf"
 //@embed_file df_g_default_code_font_bytes: "../data/Inconsolata-Regular.ttf"
+@embed_file df_g_icon_file_bytes:         "../data/logo.ico"
 
 ////////////////////////////////
 //~ rjf: Default Bindings

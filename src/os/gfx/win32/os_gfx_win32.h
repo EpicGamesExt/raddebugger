@@ -7,8 +7,22 @@
 #pragma comment(lib, "user32")
 #pragma comment(lib, "gdi32")
 
+#ifndef WM_NCUAHDRAWCAPTION
+#define WM_NCUAHDRAWCAPTION (0x00AE)
+#endif
+#ifndef WM_NCUAHDRAWFRAME
+#define WM_NCUAHDRAWFRAME (0x00AF)
+#endif
+
 ////////////////////////////////
 //~ rjf: Windows
+
+typedef struct W32_TitleBarClientArea W32_TitleBarClientArea;
+struct W32_TitleBarClientArea
+{
+  W32_TitleBarClientArea *next;
+  Rng2F32 rect;
+};
 
 typedef struct W32_Window W32_Window;
 struct W32_Window
@@ -22,6 +36,13 @@ struct W32_Window
   F32 dpi;
   B32 first_paint_done;
   B32 maximized;
+  B32 custom_border;
+  F32 custom_border_title_thickness;
+  F32 custom_border_edge_thickness;
+  B32 custom_border_composition_enabled;
+  Arena *paint_arena;
+  W32_TitleBarClientArea *first_title_bar_client_area;
+  W32_TitleBarClientArea *last_title_bar_client_area;
 };
 
 ////////////////////////////////
