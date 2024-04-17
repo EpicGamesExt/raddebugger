@@ -4295,10 +4295,18 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             // rjf: help menu
             UI_Key help_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_help_menu_key_"));
-            UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(40.f, 1.f))
+            UI_CtxMenu(help_menu_key) UI_PrefWidth(ui_em(60.f, 1.f))
             {
               UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
                 ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
+              UI_PrefHeight(ui_children_sum(1)) UI_Row UI_Padding(ui_pct(1, 0))
+              {
+                R_Handle texture = df_gfx_state->icon_texture;
+                Vec2S32 texture_dim = r_size_from_tex2d(texture);
+                UI_PrefWidth(ui_px(ui_top_font_size()*10.f, 1.f))
+                  UI_PrefHeight(ui_px(ui_top_font_size()*10.f, 1.f))
+                  ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+              }
               ui_spacer(ui_em(0.25f, 1.f));
               UI_Row
                 UI_PrefWidth(ui_text_dim(10, 1))

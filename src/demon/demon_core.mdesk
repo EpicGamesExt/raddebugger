@@ -61,6 +61,11 @@ DMN_ExceptionKindTable:
   COUNT
 }
 
+@data(String8) dmn_event_kind_string_table:
+{
+  @expand(DMN_EventKindTable a) `str8_lit_comp("$(a.name)")`
+}
+
 @enum DMN_ErrorKind:
 {
   @expand(DMN_ErrorKindTable a) `$(a.name)`,
@@ -77,4 +82,9 @@ DMN_ExceptionKindTable:
 {
   @expand(DMN_ExceptionKindTable a) `$(a.name)`,
   COUNT
+}
+
+@data(String8) dmn_exception_kind_string_table:
+{
+  @expand(DMN_ExceptionKindTable a) `str8_lit_comp("$(a.name)")`
 }
