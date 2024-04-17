@@ -650,7 +650,6 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         else
         {
           result = DefWindowProcW(hwnd, uMsg, wParam, -1);
-          result = 1;
         }
       }break;
       
@@ -847,7 +846,6 @@ os_graphical_init(void)
     wndclass.lpszClassName = L"graphical-window";
     wndclass.hCursor = LoadCursorA(0, IDC_ARROW);
     wndclass.hIcon = LoadIcon(w32_h_instance, MAKEINTRESOURCE(1));
-    wndclass.style = CS_HREDRAW|CS_VREDRAW|CS_OWNDC|CS_DBLCLKS;
     ATOM wndatom = RegisterClassExW(&wndclass);
     (void)wndatom;
   }
