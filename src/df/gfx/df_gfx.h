@@ -702,6 +702,9 @@ struct DF_GfxState
   String8 cfg_main_font_path;
   String8 cfg_code_font_path;
   F_Tag cfg_font_tags[DF_FontSlot_COUNT];
+  
+  // rjf: icon texture
+  R_Handle icon_texture;
 };
 
 ////////////////////////////////

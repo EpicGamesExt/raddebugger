@@ -2,6 +2,17 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Includes
+
+#include <uxtheme.h>
+#include <dwmapi.h>
+#include <shellscalingapi.h>
+#pragma comment(lib, "gdi32")
+#pragma comment(lib, "dwmapi")
+#pragma comment(lib, "UxTheme")
+#pragma comment(lib, "ole32")
+
+////////////////////////////////
 //~ rjf: Globals
 
 global U32            w32_gfx_thread_tid = 0;
@@ -100,6 +111,10 @@ w32_allocate_window(void)
 internal void
 w32_free_window(W32_Window *window)
 {
+  if(window->paint_arena != 0)
+  {
+    arena_release(window->paint_arena);
+  }
   DestroyWindow(window->hwnd);
   DLLRemove(w32_first_window, w32_last_window, window);
   window->next = w32_first_free_window;
@@ -530,8 +545,19 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       
       case WM_SETCURSOR:
       {
-        if(!w32_resizing &&
-           contains_2f32(os_client_rect_from_window(window_handle), os_mouse_from_window(window_handle)))
+        Rng2F32 window_rect = os_client_rect_from_window(window_handle);
+        Vec2F32 mouse = os_mouse_from_window(window_handle);
+        B32 on_border = 0;
+        DWORD window_style = window ? GetWindowLong(window->hwnd, GWL_STYLE) : 0;
+        B32 is_fullscreen = !(window_style & WS_OVERLAPPEDWINDOW);
+        if(window != 0 && window->custom_border && !is_fullscreen)
+        {
+          B32 on_border_x = (mouse.x <= window->custom_border_edge_thickness || window_rect.x1-window->custom_border_edge_thickness <= mouse.x);
+          B32 on_border_y = (mouse.y <= window->custom_border_edge_thickness || window_rect.y1-window->custom_border_edge_thickness <= mouse.y);
+          on_border = on_border_x || on_border_y;
+        }
+        if(!w32_resizing && !on_border &&
+           contains_2f32(window_rect, mouse))
         {
           SetCursor(w32_hcursor);
         }
@@ -545,6 +571,225 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       {
         F32 new_dpi = (F32)(wParam & 0xffff);
         window->dpi = new_dpi;
+      }break;
+      
+      //- rjf: [custom border]
+      case WM_NCPAINT:
+      {
+        if(window != 0 && window->custom_border && !window->custom_border_composition_enabled)
+        {
+          result = 0;
+        }
+        else
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+      }break;
+      case WM_DWMCOMPOSITIONCHANGED:
+      {
+        if(window != 0 && window->custom_border)
+        {
+          BOOL enabled = 0;
+          DwmIsCompositionEnabled(&enabled);
+          window->custom_border_composition_enabled = enabled;
+          if(enabled)
+          {
+            MARGINS m = { 0, 0, 1, 0 };
+            DwmExtendFrameIntoClientArea(hwnd, &m);
+            DWORD dwmncrp_enabled = DWMNCRP_ENABLED;
+            DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY, &enabled, sizeof(dwmncrp_enabled));
+          }
+        }
+        else
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+      }break;
+      case WM_WINDOWPOSCHANGED:
+      {
+        result = 0;
+      }break;
+      case WM_NCUAHDRAWCAPTION:
+      case WM_NCUAHDRAWFRAME:
+      {
+        // NOTE(rjf): undocumented messages for drawing themed window borders.
+        if(window != 0 && window->custom_border)
+        {
+          result = 0;
+        }
+        else
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+      }break;
+      case WM_SETICON:
+      case WM_SETTEXT:
+      {
+        if(window && window->custom_border && !window->custom_border_composition_enabled)
+        {
+          // NOTE(rjf):
+          // https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
+          LONG_PTR old_style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+          SetWindowLongPtrW(hwnd, GWL_STYLE, old_style & ~WS_VISIBLE);
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+          SetWindowLongPtrW(hwnd, GWL_STYLE, old_style);
+        }
+        else
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+      }break;
+      
+      //- rjf: [custom border] activation - without this `result`, stuff flickers.
+      case WM_NCACTIVATE:
+      {
+        if(window == 0 || window->custom_border == 0)
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+        else
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, -1);
+        }
+      }break;
+      
+      //- rjf: [custom border] client/window size calculation
+      case WM_NCCALCSIZE:
+      if(window != 0)
+      {
+        if(window->custom_border == 0)
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+        else
+        {
+          MARGINS m = {0, 0, 0, 0};
+          RECT *r = (RECT *)lParam;
+          DWORD window_style = window ? GetWindowLong(window->hwnd, GWL_STYLE) : 0;
+          B32 is_fullscreen = !(window_style & WS_OVERLAPPEDWINDOW);
+          if(IsZoomed(hwnd) && !is_fullscreen)
+          {
+            int x_push_in = GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+            int y_push_in = GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+            r->left   += x_push_in;
+            r->top    += y_push_in;
+            r->bottom -= x_push_in;
+            r->right  -= y_push_in;
+            m.cxLeftWidth = m.cxRightWidth = x_push_in;
+            m.cyTopHeight = m.cyBottomHeight = y_push_in;
+          }
+          DwmExtendFrameIntoClientArea(hwnd, &m);
+        }
+      }break;
+      
+      //- rjf: [custom border] client/window hit testing (mapping mouse -> action)
+      case WM_NCHITTEST:
+      {
+        DWORD window_style = window ? GetWindowLong(window->hwnd, GWL_STYLE) : 0;
+        B32 is_fullscreen = !(window_style & WS_OVERLAPPEDWINDOW);
+        if(window == 0 || window->custom_border == 0 || is_fullscreen)
+        {
+          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        }
+        else
+        {
+          POINT pos_monitor;
+          pos_monitor.x = GET_X_LPARAM(lParam);
+          pos_monitor.y = GET_Y_LPARAM(lParam);
+          POINT pos_client = pos_monitor;
+          ScreenToClient(hwnd, &pos_client);
+          
+          //- rjf: check against window boundaries
+          RECT frame_rect;
+          GetWindowRect(hwnd, &frame_rect);
+          B32 is_over_window = (frame_rect.left <= pos_monitor.x && pos_monitor.x < frame_rect.right &&
+                                frame_rect.top <= pos_monitor.y && pos_monitor.y < frame_rect.bottom);
+          
+          //- rjf: check against borders
+          B32 is_over_left   = 0;
+          B32 is_over_right  = 0;
+          B32 is_over_top    = 0;
+          B32 is_over_bottom = 0;
+          {
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            if(!IsZoomed(hwnd))
+            {
+              if(rect.left <= pos_client.x && pos_client.x < rect.left + window->custom_border_edge_thickness)
+              {
+                is_over_left = 1;
+              }
+              if(rect.right - window->custom_border_edge_thickness <= pos_client.x && pos_client.x < rect.right)
+              {
+                is_over_right = 1;
+              }
+              if(rect.bottom - window->custom_border_edge_thickness <= pos_client.y && pos_client.y < rect.bottom)
+              {
+                is_over_bottom = 1;
+              }
+              if(rect.top <= pos_client.y && pos_client.y < rect.top + window->custom_border_edge_thickness)
+              {
+                is_over_top = 1;
+              }
+            }
+          }
+          
+          //- rjf: check against title bar
+          B32 is_over_title_bar = 0;
+          {
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            is_over_title_bar = (rect.left <= pos_client.x && pos_client.x < rect.right &&
+                                 rect.top <= pos_client.y && pos_client.y < rect.top + window->custom_border_title_thickness);
+          }
+          
+          //- rjf: check against title bar client areas
+          B32 is_over_title_bar_client_area = 0;
+          for(W32_TitleBarClientArea *area = window->first_title_bar_client_area;
+              area != 0;
+              area = area->next)
+          {
+            Rng2F32 rect = area->rect;
+            if(rect.x0 <= pos_client.x && pos_client.x < rect.x1 &&
+               rect.y0 <= pos_client.y && pos_client.y < rect.y1)
+            {
+              is_over_title_bar_client_area = 1;
+              break;
+            }
+          }
+          
+          //- rjf: resolve hovering to result
+          result = HTNOWHERE;
+          if(is_over_window)
+          {
+            // rjf: default to client area
+            result = HTCLIENT;
+            
+            // rjf: title bar
+            if(is_over_title_bar)
+            {
+              result = HTCAPTION;
+            }
+            
+            // rjf: title bar client area
+            if(is_over_title_bar_client_area)
+            {
+              result = HTCLIENT;
+            }
+            
+            // rjf: normal edges
+            if(is_over_left)   { result = HTLEFT; }
+            if(is_over_right)  { result = HTRIGHT; }
+            if(is_over_top)    { result = HTTOP; }
+            if(is_over_bottom) { result = HTBOTTOM; }
+            
+            // rjf: corners
+            if(is_over_left  && is_over_top)    { result = HTTOPLEFT; }
+            if(is_over_left  && is_over_bottom) { result = HTBOTTOMLEFT; }
+            if(is_over_right && is_over_top)    { result = HTTOPRIGHT; }
+            if(is_over_right && is_over_bottom) { result = HTBOTTOMRIGHT; }
+          }
+        }
       }break;
     }
   }
@@ -580,7 +825,7 @@ os_graphical_init(void)
   //- rjf: set dpi awareness
   w32_SetProcessDpiAwarenessContext_Type *SetProcessDpiAwarenessContext_func = 0;
   HMODULE module = LoadLibraryA("user32.dll");
-  if (module != 0)
+  if(module != 0)
   {
     SetProcessDpiAwarenessContext_func =
     (w32_SetProcessDpiAwarenessContext_Type*)GetProcAddress(module, "SetProcessDpiAwarenessContext");
@@ -588,7 +833,7 @@ os_graphical_init(void)
     (w32_GetDpiForWindow_Type*)GetProcAddress(module, "GetDpiForWindow");
     FreeLibrary(module);
   }
-  if (SetProcessDpiAwarenessContext_func != 0)
+  if(SetProcessDpiAwarenessContext_func != 0)
   {
     SetProcessDpiAwarenessContext_func(w32_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   }
@@ -601,6 +846,7 @@ os_graphical_init(void)
     wndclass.lpszClassName = L"graphical-window";
     wndclass.hCursor = LoadCursorA(0, IDC_ARROW);
     wndclass.hIcon = LoadIcon(w32_h_instance, MAKEINTRESOURCE(1));
+    wndclass.style = CS_VREDRAW|CS_HREDRAW;
     ATOM wndatom = RegisterClassExW(&wndclass);
     (void)wndatom;
   }
@@ -667,17 +913,17 @@ os_get_clipboard_text(Arena *arena)
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
-os_window_open(Vec2F32 resolution, String8 title)
+os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 {
   //- rjf: make hwnd
   HWND hwnd = 0;
   {
     Temp scratch = scratch_begin(0, 0);
     String16 title16 = str16_from_8(scratch.arena, title);
-    hwnd = CreateWindowExW(0,
+    hwnd = CreateWindowExW(WS_EX_APPWINDOW,
                            L"graphical-window",
                            (WCHAR*)title16.str,
-                           WS_OVERLAPPEDWINDOW,
+                           WS_OVERLAPPEDWINDOW | WS_SIZEBOX,
                            CW_USEDEFAULT, CW_USEDEFAULT,
                            (int)resolution.x,
                            (int)resolution.y,
@@ -699,8 +945,23 @@ os_window_open(Vec2F32 resolution, String8 title)
     }
   }
   
+  //- rjf: early detection of composition
+  {
+    BOOL enabled = 0;
+    DwmIsCompositionEnabled(&enabled);
+    window->custom_border_composition_enabled = enabled;
+  }
+  
+  //- rjf: custom border
+  if(flags & OS_WindowFlag_CustomBorder)
+  {
+    window->custom_border = 1;
+    window->paint_arena = arena_alloc();
+  }
+  
   //- rjf: convert to handle + return
-  return os_window_from_w32_window(window);
+  OS_Handle result = os_window_from_w32_window(window);
+  return result;
 }
 
 internal void
@@ -826,6 +1087,16 @@ os_window_set_maximized(OS_Handle handle, B32 maximized)
 }
 
 internal void
+os_window_minimize(OS_Handle handle)
+{
+  W32_Window *window = w32_window_from_os_window(handle);
+  if(window != 0)
+  {
+    ShowWindow(window->hwnd, SW_MINIMIZE);
+  }
+}
+
+internal void
 os_window_bring_to_front(OS_Handle handle)
 {
   W32_Window *window = w32_window_from_os_window(handle);
@@ -852,6 +1123,48 @@ os_window_set_monitor(OS_Handle window_handle, OS_Handle monitor)
                    (info.rcWork.top + info.rcWork.bottom)/2 - window_size.y/2,
                    window_size.x,
                    window_size.y, 0);
+    }
+  }
+}
+
+internal void
+os_window_clear_custom_border_data(OS_Handle handle)
+{
+  W32_Window *window = w32_window_from_os_window(handle);
+  if(window->custom_border)
+  {
+    arena_clear(window->paint_arena);
+    window->first_title_bar_client_area = window->last_title_bar_client_area = 0;
+    window->custom_border_title_thickness = 0;
+    window->custom_border_edge_thickness = 0;
+  }
+}
+
+internal void
+os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
+{
+  W32_Window *window = w32_window_from_os_window(handle);
+  window->custom_border_title_thickness = thickness;
+}
+
+internal void
+os_window_push_custom_edges(OS_Handle handle, F32 thickness)
+{
+  W32_Window *window = w32_window_from_os_window(handle);
+  window->custom_border_edge_thickness = thickness;
+}
+
+internal void
+os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
+{
+  W32_Window *window = w32_window_from_os_window(handle);
+  if(window->custom_border)
+  {
+    W32_TitleBarClientArea *area = push_array(window->paint_arena, W32_TitleBarClientArea, 1);
+    if(area != 0)
+    {
+      area->rect = rect;
+      SLLQueuePush(window->first_title_bar_client_area, window->last_title_bar_client_area, area);
     }
   }
 }
