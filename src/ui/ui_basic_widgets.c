@@ -374,7 +374,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_image_draw)
 internal UI_Signal
 ui_image(R_Handle texture, R_Tex2DSampleKind sample_kind, Rng2F32 region, Vec4F32 tint, F32 blur, String8 string)
 {
-  UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable, string);
+  UI_Box *box = ui_build_box_from_string(0, string);
   UI_ImageDrawData *draw_data = push_array(ui_build_arena(), UI_ImageDrawData, 1);
   draw_data->texture = texture;
   draw_data->sample_kind = sample_kind;
