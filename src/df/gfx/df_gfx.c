@@ -4505,7 +4505,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                     ui_labelf("Launch all active targets:");
                     for(DF_EntityNode *n = targets.first; n != 0; n = n->next)
                     {
-                      ui_label(n->entity->name);
+                      String8 target_display_name = df_display_string_from_entity(scratch.arena, n->entity);
+                      ui_label(target_display_name);
                     }
                   }
                 }
@@ -4517,7 +4518,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
             }
             
-            if(!can_play) UI_TextAlignment(UI_TextAlign_Center)
+            if(!can_play && processes.count != 0) UI_TextAlignment(UI_TextAlign_Center)
             {
               ui_set_next_text_color(v4f32(0.3f, 0.8f, 0.2f, 1.f));
               UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Redo]);
@@ -4537,7 +4538,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                       DF_Entity *target = df_entity_from_handle(process->entity_handle);
                       if(!df_entity_is_nil(target))
                       {
-                        ui_label(target->name);
+                        String8 target_display_name = df_display_string_from_entity(scratch.arena, target);
+                        ui_label(target_display_name);
                       }
                     }
                   }
