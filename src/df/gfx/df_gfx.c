@@ -3816,11 +3816,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     //- rjf: confirmation popup
     //
     {
-      if(df_gfx_state->confirm_t > 0.005f) UI_TextAlignment(UI_TextAlign_Center)
+      if(df_gfx_state->confirm_t > 0.005f) UI_TextAlignment(UI_TextAlign_Center) UI_Focus(df_gfx_state->confirm_active ? UI_FocusKind_Root : UI_FocusKind_Off)
       {
         Vec2F32 window_dim = dim_2f32(window_rect);
         UI_Box *bg_box = &ui_g_nil_box;
-        UI_Rect(window_rect) UI_ChildLayoutAxis(Axis2_X)
+        UI_Rect(window_rect) UI_ChildLayoutAxis(Axis2_X) UI_Focus(UI_FocusKind_On)
         {
           Vec4F32 bg_color = ui_top_background_color();
           bg_color.w *= df_gfx_state->confirm_t;
@@ -3843,7 +3843,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
                 UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-                if(ui_clicked(ui_buttonf("OK")) || os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return)))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmAccept));
@@ -4478,7 +4478,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             B32 can_stop  = (processes.count != 0);
             B32 can_step =  (processes.count != 0 && can_send_signal);
             
-            if(can_play || !have_targets) UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
+            if(can_play || !have_targets ||
+               processes.count == 0) UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
             {
               ui_set_next_text_color(v4f32(0.3f, 0.8f, 0.2f, 1.f));
               UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Play]);
