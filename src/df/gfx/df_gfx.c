@@ -4476,9 +4476,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             B32 can_play  = (have_targets && (can_send_signal || df_ctrl_last_run_frame_idx()+4 > df_frame_index()));
             B32 can_pause = (!can_send_signal);
             B32 can_stop  = (processes.count != 0);
+            B32 can_step =  (processes.count != 0 && can_send_signal);
             
             if(can_play || !have_targets) UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
             {
+              ui_set_next_text_color(v4f32(0.3f, 0.8f, 0.2f, 1.f));
               UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Play]);
               os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
               if(ui_hovering(sig) && !can_play)
@@ -4517,6 +4519,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             if(!can_play) UI_TextAlignment(UI_TextAlign_Center)
             {
+              ui_set_next_text_color(v4f32(0.3f, 0.8f, 0.2f, 1.f));
               UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Redo]);
               os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
               if(ui_hovering(sig))
@@ -4549,6 +4552,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
             {
+              ui_set_next_text_color(v4f32(0.3f, 0.5f, 0.8f, 1.f));
               UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Pause]);
               os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
               if(ui_hovering(sig) && !can_pause)
@@ -4576,6 +4580,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               UI_Signal sig = {0};
               {
+                ui_set_next_text_color(v4f32(0.8f, 0.4f, 0.2f, 1.f));
                 sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Stop]);
                 os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
               }
@@ -4599,6 +4604,103 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Kill));
               }
             }
+            
+            UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_step ? 0 : UI_BoxFlag_Disabled)
+            {
+              UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_StepOver]);
+              os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
+              if(ui_hovering(sig) && !can_step && can_pause)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Disabled: Running");
+              }
+              if(ui_hovering(sig) && !can_step && !can_stop)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Disabled: No processes are running");
+              }
+              if(ui_hovering(sig) && can_step)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Step Over");
+              }
+              if(ui_clicked(sig))
+              {
+                DF_CmdParams params = df_cmd_params_from_window(ws);
+                df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_StepOver));
+              }
+            }
+            
+            UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_step ? 0 : UI_BoxFlag_Disabled)
+            {
+              UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_StepInto]);
+              os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
+              if(ui_hovering(sig) && !can_step && can_pause)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Disabled: Running");
+              }
+              if(ui_hovering(sig) && !can_step && !can_stop)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Disabled: No processes are running");
+              }
+              if(ui_hovering(sig) && can_step)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Step Into");
+              }
+              if(ui_clicked(sig))
+              {
+                DF_CmdParams params = df_cmd_params_from_window(ws);
+                df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_StepInto));
+              }
+            }
+            
+            UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_step ? 0 : UI_BoxFlag_Disabled)
+            {
+              UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_StepOut]);
+              os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
+              if(ui_hovering(sig) && !can_step && can_pause)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Disabled: Running");
+              }
+              if(ui_hovering(sig) && !can_step && !can_stop)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Disabled: No processes are running");
+              }
+              if(ui_hovering(sig) && can_step)
+              {
+                UI_Tooltip
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
+                  ui_labelf("Step Out");
+              }
+              if(ui_clicked(sig))
+              {
+                DF_CmdParams params = df_cmd_params_from_window(ws);
+                df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_StepOut));
+              }
+            }
+            
             scratch_end(scratch);
           }
         }
