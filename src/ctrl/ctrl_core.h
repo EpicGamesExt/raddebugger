@@ -302,9 +302,6 @@ typedef enum CTRL_EventKind
   CTRL_EventKind_MemDecommit,
   CTRL_EventKind_MemRelease,
   
-  //- rjf: log
-  CTRL_EventKind_Log,
-  
   CTRL_EventKind_COUNT
 }
 CTRL_EventKind;
@@ -517,6 +514,7 @@ struct CTRL_State
   OS_Handle c2u_ring_cv;
   
   // rjf: ctrl thread state
+  String8 ctrl_thread_log_path;
   OS_Handle ctrl_thread;
   Log *ctrl_thread_log;
   CTRL_EntityStore *ctrl_thread_entity_store;
@@ -711,6 +709,9 @@ internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_
 
 //- rjf: eval helpers
 internal B32 ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size);
+
+//- rjf: log flusher
+internal void ctrl_thread__flush_log(String8 string);
 
 //- rjf: msg kind implementations
 internal void ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);

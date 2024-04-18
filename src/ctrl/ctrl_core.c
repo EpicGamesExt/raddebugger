@@ -851,6 +851,14 @@ ctrl_init(void)
   ctrl_state->c2u_ring_base = push_array_no_zero(arena, U8, ctrl_state->c2u_ring_size);
   ctrl_state->c2u_ring_mutex = os_mutex_alloc();
   ctrl_state->c2u_ring_cv = os_condition_variable_alloc();
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
+    String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
+    os_make_directory(user_data_folder);
+    ctrl_state->ctrl_thread_log_path = push_str8f(ctrl_state->arena, "%S/ctrl_thread.raddbg_log", user_data_folder);
+    scratch_end(scratch);
+  }
   ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
@@ -1745,6 +1753,7 @@ ctrl_thread__entry_point(void *p)
   for(;;)
   {
     temp_end(scratch);
+    log_scope_begin();
     
     //- rjf: get next messages
     CTRL_MsgList msgs = ctrl_u2c_pop_msgs(scratch.arena);
@@ -1783,6 +1792,9 @@ ctrl_thread__entry_point(void *p)
         }
       }
     }
+    
+    String8 log = log_scope_end(scratch.arena);
+    ctrl_thread__flush_log(log);
   }
   
   scratch_end(scratch);
@@ -1941,14 +1953,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         log_msgf("string:         \"%S\"\n",   ev->string);
         log_msgf("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
         String8 log = log_scope_end(scratch.arena);
-        if(log.size != 0)
-        {
-          CTRL_EventList evts = {0};
-          CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
-          evt->kind = CTRL_EventKind_Log;
-          evt->string = log;
-          ctrl_c2u_push_events(&evts);
-        }
+        ctrl_thread__flush_log(log);
       }
       
       // rjf: determine if we should filter
@@ -2286,6 +2291,17 @@ ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size)
   U64 read_size = dmn_process_read(process, r1u64(addr, addr+size), out);
   B32 result = (read_size == size);
   return result;
+}
+
+//- rjf: log flusher
+
+internal void
+ctrl_thread__flush_log(String8 string)
+{
+  if(string.size != 0)
+  {
+    os_append_data_to_file_path(ctrl_state->ctrl_thread_log_path, string);
+  }
 }
 
 //- rjf: msg kind implementations
