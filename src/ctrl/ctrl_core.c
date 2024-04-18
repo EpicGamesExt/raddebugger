@@ -1929,6 +1929,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       if(next_event_node != 0)
       {
         DMN_Event *ev = &next_event_node->v;
+        log_scope_begin();
         log_msgf("--- event ---\n");
         log_msgf("kind:           %S\n",       dmn_event_kind_string_table[ev->kind]);
         log_msgf("exception_kind: %S\n",       dmn_exception_kind_string_table[ev->exception_kind]);
@@ -1939,6 +1940,15 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         log_msgf("address:        0x%I64x\n",  ev->address);
         log_msgf("string:         \"%S\"\n",   ev->string);
         log_msgf("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
+        String8 log = log_scope_end(scratch.arena);
+        if(log.size != 0)
+        {
+          CTRL_EventList evts = {0};
+          CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
+          evt->kind = CTRL_EventKind_Log;
+          evt->string = log;
+          ctrl_c2u_push_events(&evts);
+        }
       }
       
       // rjf: determine if we should filter

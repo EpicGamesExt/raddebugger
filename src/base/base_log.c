@@ -18,7 +18,6 @@ log_alloc(void)
   Arena *arena = arena_alloc();
   Log *log = push_array(arena, Log, 1);
   log->arena = arena;
-  log->log_buffer_start_pos = arena_pos(arena);
   return log;
 }
 
@@ -40,9 +39,10 @@ log_select(Log *log)
 internal void
 log_msg(String8 string)
 {
-  if(log_active != 0)
+  if(log_active != 0 && log_active->top_scope != 0)
   {
-    str8_list_push(log_active->arena, &log_active->log_buffer_strings, string);
+    String8 string_copy = push_str8_copy(log_active->arena, string);
+    str8_list_push(log_active->arena, &log_active->top_scope->strings, string_copy);
   }
 }
 
@@ -61,12 +61,37 @@ log_msgf(char *fmt, ...)
   }
 }
 
+////////////////////////////////
+//~ rjf: Log Scopes
+
 internal void
-log_clear(void)
+log_scope_begin(void)
 {
   if(log_active != 0)
   {
-    arena_pop_to(log_active->arena, log_active->log_buffer_start_pos);
-    MemoryZeroStruct(&log_active->log_buffer_strings);
+    U64 pos = arena_pos(log_active->arena);
+    LogScope *scope = push_array(log_active->arena, LogScope, 1);
+    scope->pos = pos;
+    SLLStackPush(log_active->top_scope, scope);
   }
+}
+
+internal String8
+log_scope_end(Arena *arena)
+{
+  String8 result = {0};
+  if(log_active != 0)
+  {
+    LogScope *scope = log_active->top_scope;
+    if(scope != 0)
+    {
+      SLLStackPop(log_active->top_scope);
+      if(arena != 0)
+      {
+        result = str8_list_join(arena, &scope->strings, 0);
+      }
+      arena_pop_to(log_active->arena, scope->pos);
+    }
+  }
+  return result;
 }

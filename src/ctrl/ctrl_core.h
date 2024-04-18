@@ -302,6 +302,9 @@ typedef enum CTRL_EventKind
   CTRL_EventKind_MemDecommit,
   CTRL_EventKind_MemRelease,
   
+  //- rjf: log
+  CTRL_EventKind_Log,
+  
   CTRL_EventKind_COUNT
 }
 CTRL_EventKind;
