@@ -2278,7 +2278,7 @@ ui_box_text_position(UI_Box *box)
   F_Tag font = box->font;
   F32 font_size = box->font_size;
   F_Metrics font_metrics = f_metrics_from_tag_size(font, font_size);
-  result.y = ceil_f32((box->rect.p0.y + box->rect.p1.y)/2.f + (font_metrics.capital_height/2) - font_metrics.line_gap/2);
+  result.y = ceil_f32((box->rect.p0.y + box->rect.p1.y)/2.f + (font_metrics.capital_height/2) - font_metrics.line_gap/2 - 1);
   switch(box->text_align)
   {
     default:
@@ -2289,7 +2289,7 @@ ui_box_text_position(UI_Box *box)
     case UI_TextAlign_Center:
     {
       Vec2F32 advance = box->display_string_runs.dim;
-      result.x = (box->rect.p0.x + box->rect.p1.x)/2 - advance.x/2;
+      result.x = (box->rect.p0.x + box->rect.p1.x)/2 - advance.x/2 - 1;
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
     case UI_TextAlign_Right:
