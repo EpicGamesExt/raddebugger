@@ -865,6 +865,7 @@ ctrl_init(void)
   ctrl_state->u2ms_ring_base = push_array(arena, U8, ctrl_state->u2ms_ring_size);
   ctrl_state->u2ms_ring_mutex = os_mutex_alloc();
   ctrl_state->u2ms_ring_cv = os_condition_variable_alloc();
+  ctrl_state->ctrl_thread_log = log_alloc();
   ctrl_state->ctrl_thread = os_launch_thread(ctrl_thread__entry_point, 0, 0);
   ctrl_state->ms_thread_count = Clamp(1, os_logical_core_count()-1, 4);
   ctrl_state->ms_threads = push_array(arena, OS_Handle, ctrl_state->ms_thread_count);
@@ -1737,6 +1738,7 @@ ctrl_thread__entry_point(void *p)
   ThreadNameF("[ctrl] thread");
   ProfBeginFunction();
   DMN_CtrlCtx *ctrl_ctx = dmn_ctrl_begin();
+  log_select(ctrl_state->ctrl_thread_log);
   
   //- rjf: loop
   Temp scratch = scratch_begin(0, 0);
@@ -1922,6 +1924,22 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       // rjf: grab first event
       DMN_EventNode *next_event_node = ctrl_state->first_dmn_event_node;
+      
+      // rjf: log event
+      if(next_event_node != 0)
+      {
+        DMN_Event *ev = &next_event_node->v;
+        log_msgf("--- event ---\n");
+        log_msgf("kind:           %S\n",       dmn_event_kind_string_table[ev->kind]);
+        log_msgf("exception_kind: %S\n",       dmn_exception_kind_string_table[ev->exception_kind]);
+        log_msgf("process:        [%I64u]\n",  ev->process.u64[0]);
+        log_msgf("thread:         [%I64u]\n",  ev->thread.u64[0]);
+        log_msgf("module:         [%I64u]\n",  ev->module.u64[0]);
+        log_msgf("arch:           %S\n",       string_from_architecture(ev->arch));
+        log_msgf("address:        0x%I64x\n",  ev->address);
+        log_msgf("string:         \"%S\"\n",   ev->string);
+        log_msgf("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
+      }
       
       // rjf: determine if we should filter
       B32 should_filter_event = 0;
