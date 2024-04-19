@@ -515,6 +515,7 @@ struct CTRL_State
   
   // rjf: ctrl thread state
   OS_Handle ctrl_thread;
+  Log *ctrl_thread_log;
   CTRL_EntityStore *ctrl_thread_entity_store;
   Arena *dmn_event_arena;
   DMN_EventNode *first_dmn_event_node;

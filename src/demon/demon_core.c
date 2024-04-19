@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/demon.meta.c"
+
+////////////////////////////////
 //~ rjf: Basic Type Functions (Helpers, Implemented Once)
 
 //- rjf: handles
