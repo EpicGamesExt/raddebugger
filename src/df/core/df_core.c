@@ -6458,7 +6458,7 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
     Temp scratch = scratch_begin(0, 0);
     DF_Entity *entity = df_entity_from_handle(params->entity);
     log_msgf("debug frontend command pushed: \"%S\"\n", spec->info.string);
-#define HandleParamPrint(mem_name) if(!df_handle_match(df_handle_zero(), params->mem_name)) { log_msgf(" %s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
+#define HandleParamPrint(mem_name) if(!df_handle_match(df_handle_zero(), params->mem_name)) { log_msgf("| %s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
     HandleParamPrint(window);
     HandleParamPrint(panel);
     HandleParamPrint(dest_panel);
@@ -6467,7 +6467,7 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
     if(!df_entity_is_nil(entity))
     {
       String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
-      log_msgf(" entity: \"%S\"\n", entity_name);
+      log_msgf("| entity: \"%S\"\n", entity_name);
     }
     U64 idx = 0;
     for(DF_HandleNode *n = params->entity_list.first; n != 0; n = n->next, idx += 1)
@@ -6476,17 +6476,22 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
       if(!df_entity_is_nil(entity))
       {
         String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
-        log_msgf(" entity_list[%I64u]: \"%S\"\n", idx, entity_name);
+        log_msgf("| entity_list[%I64u]: \"%S\"\n", idx, entity_name);
       }
     }
-    if(params->string.size != 0)    { log_msgf(" string: \"%S\"\n", params->string); }
-    if(params->file_path.size != 0) { log_msgf(" file_path: \"%S\"\n", params->file_path); }
-    if(params->text_point.line != 0){ log_msgf(" text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
-    if(params->vaddr != 0)          { log_msgf(" vaddr: 0x%I64x\n", params->vaddr); }
-    if(params->voff != 0)           { log_msgf(" voff: 0x%I64x\n", params->voff); }
-    if(params->index != 0)          { log_msgf(" index: 0x%I64x\n", params->index); }
-    if(params->id != 0)             { log_msgf(" id: 0x%I64x\n", params->id); }
+    if(!df_cmd_spec_is_nil(params->cmd_spec))
+    {
+      log_msgf("| cmd_spec: \"%S\"\n", params->cmd_spec->info.string);
+    }
+    if(params->string.size != 0)    { log_msgf("| string: \"%S\"\n", params->string); }
+    if(params->file_path.size != 0) { log_msgf("| file_path: \"%S\"\n", params->file_path); }
+    if(params->text_point.line != 0){ log_msgf("| text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
+    if(params->vaddr != 0)          { log_msgf("| vaddr: 0x%I64x\n", params->vaddr); }
+    if(params->voff != 0)           { log_msgf("| voff: 0x%I64x\n", params->voff); }
+    if(params->index != 0)          { log_msgf("| index: 0x%I64x\n", params->index); }
+    if(params->id != 0)             { log_msgf("| id: 0x%I64x\n", params->id); }
 #undef HandleParamPrint
+    log_msgf("--------------------------------\n");
     scratch_end(scratch);
   }
   df_cmd_list_push(df_state->root_cmd_arena, &df_state->root_cmds, params, spec);
