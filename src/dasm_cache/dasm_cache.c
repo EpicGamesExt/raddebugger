@@ -249,6 +249,7 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
           DLLPushBack(slot->first, slot->last, node);
           node->hash = hash;
           MemoryCopyStruct(&node->params, params);
+          // TODO(rjf): need to make this releasable - currently all exe_paths just leak
           node->params.exe_path = push_str8_copy(stripe->arena, node->params.exe_path);
           node_is_new = 1;
         }
@@ -361,6 +362,7 @@ dasm_parse_thread__entry_point(void *p)
     dasm_u2p_dequeue_req(scratch.arena, &hash, &params);
     HS_Scope *hs_scope = hs_scope_open();
     DBGI_Scope *dbgi_scope = dbgi_scope_open();
+    TXT_Scope *txt_scope = txt_scope_open();
     
     //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%dasm_shared->slots_count;
@@ -388,18 +390,13 @@ dasm_parse_thread__entry_point(void *p)
     {
       dbgi = dbgi_parse_from_exe_path(dbgi_scope, params.exe_path, max_U64);
     }
+    RDI_Parsed *rdi = &dbgi->rdi;
     
     //- rjf: hash -> data
     String8 data = {0};
     if(got_task)
     {
       data = hs_data_from_hash(hs_scope, hash);
-    }
-    
-    //- rjf: get first line info
-    if(got_task)
-    {
-      // U32 voff_unit_idx = rdi_vmap_idx_from_voff();
     }
     
     //- rjf: data * arch * addr * dbg -> decode artifacts
@@ -425,7 +422,8 @@ dasm_parse_thread__entry_point(void *p)
           ud_set_syntax(&udc, params.syntax == DASM_Syntax_Intel ? UD_SYN_INTEL : UD_SYN_ATT);
           
           // rjf: disassemble
-          U64 byte_process_start_off = 0;
+          RDI_SourceFile *last_file = &rdi_source_file_nil;
+          RDI_Line *last_line = 0;
           for(U64 off = 0; off < data.size;)
           {
             // rjf: disassemble one instruction
@@ -439,11 +437,73 @@ dasm_parse_thread__entry_point(void *p)
             struct ud_operand *first_op = (struct ud_operand *)ud_insn_opr(&udc, 0);
             U64 rel_voff = (first_op != 0 && first_op->type == UD_OP_JIMM) ? ud_syn_rel_target(&udc, first_op) : 0;
             
+            // rjf: push strings derived from voff -> line info
+            if(dbgi != &dbgi_parse_nil)
+            {
+              U64 voff = (params.vaddr+off) - params.base_vaddr;
+              U32 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, voff);
+              RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
+              RDI_ParsedLineInfo unit_line_info = {0};
+              rdi_line_info_from_unit(rdi, unit, &unit_line_info);
+              U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
+              if(line_info_idx < unit_line_info.count)
+              {
+                RDI_Line *line = &unit_line_info.lines[line_info_idx];
+                RDI_SourceFile *file = rdi_element_from_idx(rdi, source_files, line->file_idx);
+                String8 file_normalized_full_path = {0};
+                file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
+                if(file != last_file)
+                {
+                  if(file->normal_full_path_string_idx != 0 && file_normalized_full_path.size != 0)
+                  {
+                    DASM_Inst inst = {0};
+                    dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
+                    str8_list_pushf(scratch.arena, &inst_strings, "| %S", file_normalized_full_path);
+                  }
+                  last_file = file;
+                }
+                if(line && line != last_line && file->normal_full_path_string_idx != 0 && file_normalized_full_path.size != 0)
+                {
+                  FileProperties props = os_properties_from_file_path(file_normalized_full_path);
+                  if(props.modified != 0)
+                  {
+                    // TODO(rjf): need redirection path - this may map to a different path on the local machine,
+                    // need frontend to communicate path remapping info to this layer
+                    U128 key = fs_key_from_path(file_normalized_full_path);
+                    TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
+                    U64 endt_us = max_U64;
+                    U128 hash = {0};
+                    TXT_TextInfo text_info = {0};
+                    for(;os_now_microseconds() <= endt_us;)
+                    {
+                      text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+                      if(!u128_match(hash, u128_zero()))
+                      {
+                        break;
+                      }
+                    }
+                    if(line->line_num < text_info.lines_count)
+                    {
+                      String8 data = hs_data_from_hash(hs_scope, hash);
+                      String8 line_text = str8_skip_chop_whitespace(str8_substr(data, text_info.lines_ranges[line->line_num-1]));
+                      if(line_text.size != 0)
+                      {
+                        DASM_Inst inst = {0};
+                        dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
+                        str8_list_pushf(scratch.arena, &inst_strings, "| %S", line_text);
+                      }
+                    }
+                  }
+                  last_line = line;
+                }
+              }
+            }
+            
             // rjf: push
             String8 addr_part = {0};
             if(params.style_flags & DASM_StyleFlag_Addresses)
             {
-              addr_part = push_str8f(scratch.arena, "%016I64X  ", params.vaddr+off);
+              addr_part = push_str8f(scratch.arena, "%s%016I64X  ", dbgi != &dbgi_parse_nil ? "  " : "", params.vaddr+off);
             }
             String8 code_bytes_part = {0};
             if(params.style_flags & DASM_StyleFlag_CodeBytes)
@@ -530,6 +590,7 @@ dasm_parse_thread__entry_point(void *p)
       }
     }
     
+    txt_scope_close(txt_scope);
     dbgi_scope_close(dbgi_scope);
     hs_scope_close(hs_scope);
     scratch_end(scratch);
