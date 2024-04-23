@@ -1844,7 +1844,7 @@ df_entity_release(DF_StateDeltaHistory *hist, DF_Entity *entity)
       t->e = child;
       SLLQueuePush(first_task, last_task, t);
     }
-    log_msgf("end entity: %S $%I64d\n", task->e->kind, task->e->id);
+    log_msgf("end entity: %S $%I64d\n", df_g_entity_kind_display_string_table[task->e->kind], task->e->id);
     df_state_delta_history_push_struct_delta(hist, &task->e->first);
     df_state_delta_history_push_struct_delta(hist, &task->e->last);
     df_state_delta_history_push_struct_delta(hist, &task->e->next);
@@ -6662,6 +6662,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   df_state->time_in_seconds += dt;
   
   //- rjf: sync with ctrl thread
+  ProfScope("sync with ctrl thread")
   {
     Temp scratch = scratch_begin(&arena, 1);
     
@@ -7072,6 +7073,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   }
   
   //- rjf: sync with dbgi parsers
+  ProfScope("sync with dbgi parsers")
   {
     Temp scratch = scratch_begin(&arena, 1);
     DBGI_EventList events = dbgi_p2u_pop_events(scratch.arena, 0);
@@ -7106,6 +7108,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   }
   
   //- rjf: start/stop telemetry captures
+  ProfScope("start/stop telemetry captures")
   {
     if(!ProfIsCapturing() && DEV_telemetry_capture)
     {
@@ -7136,6 +7139,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   }
   
   //- rjf: process top-level commands
+  ProfScope("process top-level commands")
   {
     Temp scratch = scratch_begin(&arena, 1);
     for(DF_CmdNode *cmd_node = cmds->first;
