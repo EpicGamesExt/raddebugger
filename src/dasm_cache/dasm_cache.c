@@ -458,7 +458,7 @@ dasm_parse_thread__entry_point(void *p)
                   {
                     DASM_Inst inst = {0};
                     dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
-                    str8_list_pushf(scratch.arena, &inst_strings, "| %S", file_normalized_full_path);
+                    str8_list_pushf(scratch.arena, &inst_strings, "> %S", file_normalized_full_path);
                   }
                   last_file = file;
                 }
@@ -490,7 +490,7 @@ dasm_parse_thread__entry_point(void *p)
                       {
                         DASM_Inst inst = {0};
                         dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
-                        str8_list_pushf(scratch.arena, &inst_strings, "| %S", line_text);
+                        str8_list_pushf(scratch.arena, &inst_strings, "> %S", line_text);
                       }
                     }
                   }
