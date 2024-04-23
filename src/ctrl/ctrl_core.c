@@ -857,6 +857,7 @@ ctrl_init(void)
     String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
     os_make_directory(user_data_folder);
     ctrl_state->ctrl_thread_log_path = push_str8f(ctrl_state->arena, "%S/ctrl_thread.raddbg_log", user_data_folder);
+    os_write_data_to_file_path(ctrl_state->ctrl_thread_log_path, str8_zero());
     scratch_end(scratch);
   }
   ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();

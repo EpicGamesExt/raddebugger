@@ -117,7 +117,7 @@ internal B32
 os_append_data_to_file_path(String8 path, String8 data)
 {
   B32 good = 0;
-  OS_Handle file = os_file_open(OS_AccessFlag_Write, path);
+  OS_Handle file = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append, path);
   if(!os_handle_match(file, os_handle_zero()))
   {
     good = 1;
