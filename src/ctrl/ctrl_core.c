@@ -2107,7 +2107,9 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       // rjf: run for new events
       ProfScope("run for new events")
       {
+        CTRL_CtrlThreadLogScope log_msgf("{dmn_ctrl_run ...");
         DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
+        CTRL_CtrlThreadLogScope log_msgf("}\n");
         for(DMN_EventNode *src_n = events.first; src_n != 0; src_n = src_n->next)
         {
           DMN_EventNode *dst_n = ctrl_state->free_dmn_event_node;
@@ -2299,10 +2301,16 @@ ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size)
 internal void
 ctrl_thread__flush_log(String8 string)
 {
-  if(string.size != 0)
-  {
-    os_append_data_to_file_path(ctrl_state->ctrl_thread_log_path, string);
-  }
+  os_append_data_to_file_path(ctrl_state->ctrl_thread_log_path, string);
+}
+
+internal void
+ctrl_thread__end_and_flush_log(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 log = log_scope_end(scratch.arena);
+  ctrl_thread__flush_log(log);
+  scratch_end(scratch);
 }
 
 //- rjf: msg kind implementations

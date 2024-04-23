@@ -442,6 +442,8 @@ read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_sha
 read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
 global U64 frame_time_us_history[64] = {0};
 global U64 frame_time_us_history_idx = 0;
+global Log *main_thread_log = 0;
+global String8 main_thread_log_path = {0};
 
 ////////////////////////////////
 //~ rjf: Frontend Entry Points

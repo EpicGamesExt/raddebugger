@@ -554,6 +554,11 @@ read_only global CTRL_Entity ctrl_entity_nil =
 };
 
 ////////////////////////////////
+//~ rjf: Logging Markup
+
+#define CTRL_CtrlThreadLogScope DeferLoop(log_scope_begin(), ctrl_thread__end_and_flush_log())
+
+////////////////////////////////
 //~ rjf: Basic Type Functions
 
 internal U64 ctrl_hash_from_string(String8 string);
@@ -712,6 +717,7 @@ internal B32 ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size);
 
 //- rjf: log flusher
 internal void ctrl_thread__flush_log(String8 string);
+internal void ctrl_thread__end_and_flush_log(void);
 
 //- rjf: msg kind implementations
 internal void ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);

@@ -1798,6 +1798,9 @@ df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kin
   df_state->kind_alloc_gens[kind] += 1;
   df_entity_notify_mutation(entity);
   
+  // rjf: log
+  log_msgf("new entity: %S $%I64d\n", df_g_entity_kind_display_string_table[kind], entity->id);
+  
   return entity;
 }
 
@@ -1841,6 +1844,7 @@ df_entity_release(DF_StateDeltaHistory *hist, DF_Entity *entity)
       t->e = child;
       SLLQueuePush(first_task, last_task, t);
     }
+    log_msgf("end entity: %S $%I64d\n", task->e->kind, task->e->id);
     df_state_delta_history_push_struct_delta(hist, &task->e->first);
     df_state_delta_history_push_struct_delta(hist, &task->e->last);
     df_state_delta_history_push_struct_delta(hist, &task->e->next);
@@ -6449,6 +6453,42 @@ df_query_cached_member_map_from_binary_voff(DF_Entity *binary, U64 voff)
 internal void
 df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
 {
+  // rjf: log
+  {
+    Temp scratch = scratch_begin(0, 0);
+    DF_Entity *entity = df_entity_from_handle(params->entity);
+    log_msgf("debug frontend command pushed: \"%S\"\n", spec->info.string);
+#define HandleParamPrint(mem_name) if(!df_handle_match(df_handle_zero(), params->mem_name)) { log_msgf(" %s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
+    HandleParamPrint(window);
+    HandleParamPrint(panel);
+    HandleParamPrint(dest_panel);
+    HandleParamPrint(prev_view);
+    HandleParamPrint(view);
+    if(!df_entity_is_nil(entity))
+    {
+      String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
+      log_msgf(" entity: \"%S\"\n", entity_name);
+    }
+    U64 idx = 0;
+    for(DF_HandleNode *n = params->entity_list.first; n != 0; n = n->next, idx += 1)
+    {
+      DF_Entity *entity = df_entity_from_handle(n->handle);
+      if(!df_entity_is_nil(entity))
+      {
+        String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
+        log_msgf(" entity_list[%I64u]: \"%S\"\n", idx, entity_name);
+      }
+    }
+    if(params->string.size != 0)    { log_msgf(" string: \"%S\"\n", params->string); }
+    if(params->file_path.size != 0) { log_msgf(" file_path: \"%S\"\n", params->file_path); }
+    if(params->text_point.line != 0){ log_msgf(" text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
+    if(params->vaddr != 0)          { log_msgf(" vaddr: 0x%I64x\n", params->vaddr); }
+    if(params->voff != 0)           { log_msgf(" voff: 0x%I64x\n", params->voff); }
+    if(params->index != 0)          { log_msgf(" index: 0x%I64x\n", params->index); }
+    if(params->id != 0)             { log_msgf(" id: 0x%I64x\n", params->id); }
+#undef HandleParamPrint
+    scratch_end(scratch);
+  }
   df_cmd_list_push(df_state->root_cmd_arena, &df_state->root_cmds, params, spec);
 }
 

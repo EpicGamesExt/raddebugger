@@ -117,13 +117,16 @@ internal B32
 os_append_data_to_file_path(String8 path, String8 data)
 {
   B32 good = 0;
-  OS_Handle file = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append, path);
-  if(!os_handle_match(file, os_handle_zero()))
+  if(data.size != 0)
   {
-    good = 1;
-    U64 pos = os_properties_from_file(file).size;
-    os_file_write(file, r1u64(pos, pos+data.size), data.str);
-    os_file_close(file);
+    OS_Handle file = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append, path);
+    if(!os_handle_match(file, os_handle_zero()))
+    {
+      good = 1;
+      U64 pos = os_properties_from_file(file).size;
+      os_file_write(file, r1u64(pos, pos+data.size), data.str);
+      os_file_close(file);
+    }
   }
   return good;
 }
