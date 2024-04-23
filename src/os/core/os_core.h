@@ -13,8 +13,9 @@ enum
   OS_AccessFlag_Read       = (1<<0),
   OS_AccessFlag_Write      = (1<<1),
   OS_AccessFlag_Execute    = (1<<2),
-  OS_AccessFlag_ShareRead  = (1<<3),
-  OS_AccessFlag_ShareWrite = (1<<4),
+  OS_AccessFlag_Append     = (1<<3),
+  OS_AccessFlag_ShareRead  = (1<<4),
+  OS_AccessFlag_ShareWrite = (1<<5),
 };
 
 ////////////////////////////////
@@ -171,6 +172,7 @@ internal String8List os_string_list_from_argcv(Arena *arena, int argc, char **ar
 internal String8        os_data_from_file_path(Arena *arena, String8 path);
 internal B32            os_write_data_to_file_path(String8 path, String8 data);
 internal B32            os_write_data_list_to_file_path(String8 path, String8List list);
+internal B32            os_append_data_to_file_path(String8 path, String8 data);
 internal OS_FileID      os_id_from_file_path(String8 path);
 internal S64            os_file_id_compare(OS_FileID a, OS_FileID b);
 internal String8        os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range);

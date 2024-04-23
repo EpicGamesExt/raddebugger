@@ -1168,6 +1168,12 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
             active_token_kind = TXT_TokenKind_Whitespace;
             advance = 1;
           }
+          else if(byte == '>')
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_Comment;
+            advance = 1;
+          }
           else if(('a' <= byte && byte <= 'z') || ('A' <= byte && byte <= 'Z') || byte == '_')
           {
             active_token_start_off = off;
@@ -1286,6 +1292,12 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
         {
           ender_found = 1;
           advance = 0;
+        }break;
+        case TXT_TokenKind_Comment:
+        if(byte == '\n')
+        {
+          ender_found = 1;
+          advance = 1;
         }break;
       }
       if(ender_found != 0)

@@ -664,6 +664,7 @@ os_file_open(OS_AccessFlags flags, String8 path)
   if(flags & OS_AccessFlag_ShareRead)  {share_mode |= FILE_SHARE_READ;}
   if(flags & OS_AccessFlag_ShareWrite) {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
   if(flags & OS_AccessFlag_Write)   {creation_disposition = CREATE_ALWAYS;}
+  if(flags & OS_AccessFlag_Append)  {creation_disposition = OPEN_ALWAYS;}
   HANDLE file = CreateFileW((WCHAR *)path16.str, access_flags, share_mode, 0, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
   if(file != INVALID_HANDLE_VALUE)
   {

@@ -6061,10 +6061,21 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   DF_Entity *process = df_entity_from_handle(dv->process);
   Architecture arch = df_architecture_from_entity(process);
   U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
+  DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
+  DF_Entity *dasm_binary = df_binary_file_from_module(dasm_module);
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
-  DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, dasm_vaddr_range.min, arch, dv->style_flags, DASM_Syntax_Intel, &dasm_data_hash);
+  DASM_Params dasm_params = {0};
+  {
+    dasm_params.vaddr = dasm_vaddr_range.min;
+    dasm_params.arch = arch;
+    dasm_params.style_flags = dv->style_flags;
+    dasm_params.syntax = DASM_Syntax_Intel;
+    dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
+    dasm_params.exe_path = df_full_path_from_entity(scratch.arena, dasm_binary);
+  }
+  DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, txt_lang_kind_from_architecture(arch), &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
@@ -6304,10 +6315,21 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   DF_Entity *process = df_entity_from_handle(dv->process);
   Architecture arch = df_architecture_from_entity(process);
   U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
+  DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
+  DF_Entity *dasm_binary = df_binary_file_from_module(dasm_module);
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
-  DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, dasm_vaddr_range.min, arch, dv->style_flags, DASM_Syntax_Intel, &dasm_data_hash);
+  DASM_Params dasm_params = {0};
+  {
+    dasm_params.vaddr = dasm_vaddr_range.min;
+    dasm_params.arch = arch;
+    dasm_params.style_flags = dv->style_flags;
+    dasm_params.syntax = DASM_Syntax_Intel;
+    dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
+    dasm_params.exe_path = df_full_path_from_entity(scratch.arena, dasm_binary);
+  }
+  DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, txt_lang_kind_from_architecture(arch), &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
