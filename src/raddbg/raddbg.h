@@ -2,14 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Demon/Cleanup Pass Tasks
-//
-// [ ] TLS eval -> in-process-memory EXE info
-// [ ] unwinding -> in-process-memory EXE info
-// [ ] "root" concept in hash store, which buckets keys & allows usage code to
-//     jettison a collection of keys in retained mode fashion
-
-////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
@@ -57,6 +49,9 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
+// [ ] robustify dbgi layer to renames (cache should not be based only on
+//     path - must invalidate naturally when new filetime occurs)
+//
 // [ ] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
@@ -81,6 +76,14 @@
 //     since that's not normally how Windows fonts work.
 //
 // [ ] ** Converter performance & heuristics for asynchronously doing it early
+
+////////////////////////////////
+//~ rjf: Demon/Cleanup Pass Tasks
+//
+// [ ] TLS eval -> in-process-memory EXE info
+// [ ] unwinding -> in-process-memory EXE info
+// [ ] "root" concept in hash store, which buckets keys & allows usage code to
+//     jettison a collection of keys in retained mode fashion
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
@@ -198,7 +201,6 @@
 //      the files myself in the shell, but it seemed weird that there was no
 //      "save" option in the menus.
 //
-// [ ] @cleanup @feature double & triple click select in source views
 // [ ] @feature debug info overrides (both path-based AND module-based)
 // [ ] configure tab size
 // [ ] auto-scroll output window
@@ -315,8 +317,6 @@
 // [ ] @bug view-snapping in scroll-lists, accounting for mapping between
 //     visual positions & logical positions (variably sized rows in watch,
 //     table headers, etc.)
-// [ ] @bug selected frame should be keyed by run_idx or something so that it
-//     can gracefully reset to the top frame when running
 // [ ] @cleanup collapse DF_CfgNodes into just being MD trees, find another way
 //     to encode config source - don't need it at every node
 // [ ] @cleanup straighten out index/number space & types & terminology for
@@ -335,8 +335,6 @@
 //     when editing)
 // [ ] @feature eval system -> somehow evaluate breakpoint hit counts? "meta"
 //     variables?
-// [ ] @feature watch window labels
-// [ ] @feature scheduler -> thread grid view?
 //
 // [ ] @feature disasm view improvement features
 //  [ ] interleaved src/dasm view
@@ -411,6 +409,8 @@
 //      bit more user-friendly?
 //
 //  [x] The cursor feels a bit too huge vertically.
+// [x] @feature watch window labels
+// [x] @cleanup @feature double & triple click select in source views
 
 #ifndef RADDBG_H
 #define RADDBG_H
@@ -442,6 +442,8 @@ read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_sha
 read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
 global U64 frame_time_us_history[64] = {0};
 global U64 frame_time_us_history_idx = 0;
+global Log *main_thread_log = 0;
+global String8 main_thread_log_path = {0};
 
 ////////////////////////////////
 //~ rjf: Frontend Entry Points

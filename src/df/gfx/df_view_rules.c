@@ -684,7 +684,16 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
     
     //- rjf: key -> parsed text info
     U128 data_hash = {0};
-    DASM_Info dasm_info = dasm_info_from_key_addr_arch_style(dasm_scope, dasm_key, vaddr_range.min, top.arch, 0, DASM_Syntax_Intel, &data_hash);
+    DASM_Params dasm_params = {0};
+    {
+      dasm_params.vaddr = vaddr_range.min;
+      dasm_params.arch = top.arch;
+      dasm_params.style_flags = DASM_StyleFlag_Addresses;
+      dasm_params.syntax = DASM_Syntax_Intel;
+      dasm_params.base_vaddr = 0;
+      dasm_params.exe_path = str8_zero();
+    }
+    DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &data_hash);
     String8 dasm_text_data = {0};
     TXT_TextInfo dasm_text_info = {0};
     for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)

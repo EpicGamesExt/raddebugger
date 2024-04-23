@@ -23,6 +23,20 @@ typedef enum DASM_Syntax
 DASM_Syntax;
 
 ////////////////////////////////
+//~ rjf: Disassembling Parameters Bundle
+
+typedef struct DASM_Params DASM_Params;
+struct DASM_Params
+{
+  U64 vaddr;
+  Architecture arch;
+  DASM_StyleFlags style_flags;
+  DASM_Syntax syntax;
+  U64 base_vaddr;
+  String8 exe_path;
+};
+
+////////////////////////////////
 //~ rjf: Instruction Types
 
 typedef struct DASM_Inst DASM_Inst;
@@ -80,10 +94,7 @@ struct DASM_Node
   
   // rjf: key
   U128 hash;
-  U64 addr;
-  Architecture arch;
-  DASM_StyleFlags style_flags;
-  DASM_Syntax syntax;
+  DASM_Params params;
   
   // rjf: value
   Arena *info_arena;
@@ -121,10 +132,7 @@ struct DASM_Touch
 {
   DASM_Touch *next;
   U128 hash;
-  U64 addr;
-  Architecture arch;
-  DASM_StyleFlags style_flags;
-  DASM_Syntax syntax;
+  DASM_Params params;
 };
 
 typedef struct DASM_Scope DASM_Scope;
@@ -132,6 +140,7 @@ struct DASM_Scope
 {
   DASM_Scope *next;
   DASM_Touch *top_touch;
+  U64 base_pos;
 };
 
 ////////////////////////////////
@@ -141,8 +150,6 @@ typedef struct DASM_TCTX DASM_TCTX;
 struct DASM_TCTX
 {
   Arena *arena;
-  DASM_Scope *free_scope;
-  DASM_Touch *free_touch;
 };
 
 ////////////////////////////////
@@ -185,6 +192,11 @@ thread_static DASM_TCTX *dasm_tctx = 0;
 global DASM_Shared *dasm_shared = 0;
 
 ////////////////////////////////
+//~ rjf: Parameter Type Functions
+
+internal B32 dasm_params_match(DASM_Params *a, DASM_Params *b);
+
+////////////////////////////////
 //~ rjf: Instruction Type Functions
 
 internal void dasm_inst_chunk_list_push(Arena *arena, DASM_InstChunkList *list, U64 cap, DASM_Inst *inst);
@@ -213,14 +225,14 @@ internal void dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_No
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal DASM_Info dasm_info_from_hash_addr_arch_style(DASM_Scope *scope, U128 hash, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax);
-internal DASM_Info dasm_info_from_key_addr_arch_style(DASM_Scope *scope, U128 key, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax, U128 *hash_out);
+internal DASM_Info dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params);
+internal DASM_Info dasm_info_from_key_params(DASM_Scope *scope, U128 key, DASM_Params *params, U128 *hash_out);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
 
-internal B32 dasm_u2p_enqueue_req(U128 hash, U64 addr, Architecture arch, DASM_StyleFlags style_flags, DASM_Syntax syntax, U64 endt_us);
-internal void dasm_u2p_dequeue_req(U128 *hash_out, U64 *addr_out, Architecture *arch_out, DASM_StyleFlags *style_flags_out, DASM_Syntax *syntax_out);
+internal B32 dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us);
+internal void dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out);
 internal void dasm_parse_thread__entry_point(void *p);
 
 ////////////////////////////////

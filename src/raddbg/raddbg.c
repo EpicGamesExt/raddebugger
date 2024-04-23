@@ -11,6 +11,19 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
+  //- rjf: begin logging
+  if(main_thread_log == 0)
+  {
+    main_thread_log = log_alloc();
+    String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
+    String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
+    main_thread_log_path = push_str8f(df_state->arena, "%S/ui_thread.raddbg_log", user_data_folder);
+    os_make_directory(user_data_folder);
+    os_write_data_to_file_path(main_thread_log_path, str8_zero());
+  }
+  log_select(main_thread_log);
+  log_scope_begin();
+  
   //- rjf: tick cache layers
   txt_user_clock_tick();
   geo_user_clock_tick();
@@ -327,6 +340,12 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   U64 frame_time_us = end_time_us-begin_time_us;
   frame_time_us_history[frame_time_us_history_idx%ArrayCount(frame_time_us_history)] = frame_time_us;
   frame_time_us_history_idx += 1;
+  
+  //- rjf: end logging
+  {
+    String8 log = log_scope_end(scratch.arena);
+    os_append_data_to_file_path(main_thread_log_path, log);
+  }
   
   scratch_end(scratch);
   ProfEnd();
