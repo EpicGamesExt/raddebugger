@@ -10,8 +10,11 @@
 typedef U32 DASM_StyleFlags;
 enum
 {
-  DASM_StyleFlag_Addresses = (1<<0),
-  DASM_StyleFlag_CodeBytes = (1<<1),
+  DASM_StyleFlag_Addresses        = (1<<0),
+  DASM_StyleFlag_CodeBytes        = (1<<1),
+  DASM_StyleFlag_SourceFilesNames = (1<<2),
+  DASM_StyleFlag_SourceLines      = (1<<3),
+  DASM_StyleFlag_SymbolNames      = (1<<4),
 };
 
 typedef enum DASM_Syntax
