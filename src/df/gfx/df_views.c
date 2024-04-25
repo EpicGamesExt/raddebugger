@@ -6038,7 +6038,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Disassembly)
     dv->mark = txt_pt(1, 1);
     dv->preferred_column = 1;
     dv->find_text_arena = df_view_push_arena_ext(view);
-    dv->style_flags = DASM_StyleFlag_Addresses;
+    dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
   }
 }
 

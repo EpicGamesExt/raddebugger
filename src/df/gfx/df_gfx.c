@@ -11705,7 +11705,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
   }
   
   //- rjf: capture is active? -> keep rendering
-  if(ProfIsCapturing())
+  if(ProfIsCapturing() || DEV_telemetry_capture)
   {
     df_gfx_request_frame();
   }
