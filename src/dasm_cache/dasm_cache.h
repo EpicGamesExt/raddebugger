@@ -99,6 +99,9 @@ struct DASM_Node
   U128 hash;
   DASM_Params params;
   
+  // rjf: generations
+  U64 change_gen;
+  
   // rjf: value
   Arena *info_arena;
   DASM_Info info;
@@ -109,6 +112,8 @@ struct DASM_Node
   U64 last_time_touched_us;
   U64 last_user_clock_idx_touched;
   U64 load_count;
+  U64 last_time_requested_us;
+  U64 last_user_clock_idx_requested;
 };
 
 typedef struct DASM_Slot DASM_Slot;
@@ -184,8 +189,8 @@ struct DASM_Shared
   U64 parse_thread_count;
   OS_Handle *parse_threads;
   
-  // rjf: evictor thread
-  OS_Handle evictor_thread;
+  // rjf: evictor/detector thread
+  OS_Handle evictor_detector_thread;
 };
 
 ////////////////////////////////
@@ -239,8 +244,8 @@ internal void dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *pa
 internal void dasm_parse_thread__entry_point(void *p);
 
 ////////////////////////////////
-//~ rjf: Evictor Threads
+//~ rjf: Evictor/Detector Thread
 
-internal void dasm_evictor_thread__entry_point(void *p);
+internal void dasm_evictor_detector_thread__entry_point(void *p);
 
 #endif // DASM_CACHE_H

@@ -1169,7 +1169,7 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
             active_token_kind = TXT_TokenKind_Whitespace;
             advance = 1;
           }
-          else if(byte == '>')
+          else if(byte == '>' && brace_nest == 0 && paren_nest == 0)
           {
             active_token_start_off = off;
             active_token_kind = TXT_TokenKind_Comment;

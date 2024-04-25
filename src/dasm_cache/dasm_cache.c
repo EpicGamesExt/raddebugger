@@ -118,7 +118,7 @@ dasm_init(void)
   {
     dasm_shared->parse_threads[idx] = os_launch_thread(dasm_parse_thread__entry_point, (void *)idx, 0);
   }
-  dasm_shared->evictor_thread = os_launch_thread(dasm_evictor_thread__entry_point, 0, 0);
+  dasm_shared->evictor_detector_thread = os_launch_thread(dasm_evictor_detector_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////
@@ -360,6 +360,7 @@ dasm_parse_thread__entry_point(void *p)
     U128 hash = {0};
     DASM_Params params = {0};
     dasm_u2p_dequeue_req(scratch.arena, &hash, &params);
+    U64 change_gen = fs_change_gen();
     HS_Scope *hs_scope = hs_scope_open();
     DBGI_Scope *dbgi_scope = dbgi_scope_open();
     TXT_Scope *txt_scope = txt_scope_open();
@@ -613,6 +614,14 @@ dasm_parse_thread__entry_point(void *p)
         {
           n->info_arena = info_arena;
           MemoryCopyStruct(&n->info, &info);
+          if(dbgi != &dbgi_parse_nil && params.style_flags & (DASM_StyleFlag_SourceLines|DASM_StyleFlag_SourceFilesNames))
+          {
+            n->change_gen = change_gen;
+          }
+          else
+          {
+            n->change_gen = 0;
+          }
           ins_atomic_u32_eval_assign(&n->is_working, 0);
           ins_atomic_u64_inc_eval(&n->load_count);
           break;
@@ -628,18 +637,21 @@ dasm_parse_thread__entry_point(void *p)
 }
 
 ////////////////////////////////
-//~ rjf: Evictor Threads
+//~ rjf: Evictor/Detector Thread
 
 internal void
-dasm_evictor_thread__entry_point(void *p)
+dasm_evictor_detector_thread__entry_point(void *p)
 {
-  ThreadNameF("[dasm] evictor thread");
+  ThreadNameF("[dasm] evictor/detector thread");
   for(;;)
   {
+    U64 change_gen = fs_change_gen();
     U64 check_time_us = os_now_microseconds();
     U64 check_time_user_clocks = dasm_user_clock_idx();
     U64 evict_threshold_us = 10*1000000;
+    U64 retry_threshold_us =  1*1000000;
     U64 evict_threshold_user_clocks = 10;
+    U64 retry_threshold_user_clocks = 10;
     for(U64 slot_idx = 0; slot_idx < dasm_shared->slots_count; slot_idx += 1)
     {
       U64 stripe_idx = slot_idx%dasm_shared->stripes_count;
@@ -655,6 +667,13 @@ dasm_evictor_thread__entry_point(void *p)
              n->last_user_clock_idx_touched+evict_threshold_user_clocks <= check_time_user_clocks &&
              n->load_count != 0 &&
              n->is_working == 0)
+          {
+            slot_has_work = 1;
+            break;
+          }
+          if(n->change_gen != 0 && n->change_gen != change_gen &&
+             n->last_time_requested_us+retry_threshold_us <= check_time_us &&
+             n->last_user_clock_idx_requested+retry_threshold_user_clocks <= check_time_user_clocks)
           {
             slot_has_work = 1;
             break;
@@ -679,10 +698,19 @@ dasm_evictor_thread__entry_point(void *p)
             }
             SLLStackPush(stripe->free_node, n);
           }
+          if(n->change_gen != 0 && n->change_gen != change_gen &&
+             n->last_time_requested_us+retry_threshold_us <= check_time_us &&
+             n->last_user_clock_idx_requested+retry_threshold_user_clocks <= check_time_user_clocks)
+          {
+            if(dasm_u2p_enqueue_req(n->hash, &n->params, max_U64))
+            {
+              n->last_time_requested_us = os_now_microseconds();
+              n->last_user_clock_idx_requested = check_time_user_clocks;
+            }
+          }
         }
       }
-      os_sleep_milliseconds(5);
     }
-    os_sleep_milliseconds(1000);
+    os_sleep_milliseconds(100);
   }
 }
