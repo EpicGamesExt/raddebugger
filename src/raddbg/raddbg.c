@@ -26,6 +26,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   
   //- rjf: tick cache layers
   txt_user_clock_tick();
+  dasm_user_clock_tick();
   geo_user_clock_tick();
   tex_user_clock_tick();
   

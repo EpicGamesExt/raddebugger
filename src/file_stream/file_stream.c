@@ -10,6 +10,7 @@ fs_init(void)
   Arena *arena = arena_alloc();
   fs_shared = push_array(arena, FS_Shared, 1);
   fs_shared->arena = arena;
+  fs_shared->change_gen = 1;
   fs_shared->slots_count = 1024;
   fs_shared->stripes_count = os_logical_core_count();
   fs_shared->slots = push_array(arena, FS_Slot, fs_shared->slots_count);
@@ -31,6 +32,15 @@ fs_init(void)
     fs_shared->streamers[idx] = os_launch_thread(fs_streamer_thread__entry_point, (void *)idx, 0);
   }
   fs_shared->detector_thread = os_launch_thread(fs_detector_thread__entry_point, 0, 0);
+}
+
+////////////////////////////////
+//~ rjf: Change Generation
+
+internal U64
+fs_change_gen(void)
+{
+  return ins_atomic_u64_eval(&fs_shared->change_gen);
 }
 
 ////////////////////////////////
@@ -220,6 +230,10 @@ fs_streamer_thread__entry_point(void *p)
       }
       if(node != 0)
       {
+        if(node->timestamp != 0)
+        {
+          ins_atomic_u64_inc_eval(&fs_shared->change_gen);
+        }
         if(post_props.modified == pre_props.modified)
         {
           node->timestamp = post_props.modified;

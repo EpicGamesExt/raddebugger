@@ -38,6 +38,7 @@ typedef struct FS_Shared FS_Shared;
 struct FS_Shared
 {
   Arena *arena;
+  U64 change_gen;
   
   // rjf: path info cache
   U64 slots_count;
@@ -70,6 +71,11 @@ global FS_Shared *fs_shared = 0;
 //~ rjf: Top-Level API
 
 internal void fs_init(void);
+
+////////////////////////////////
+//~ rjf: Change Generation
+
+internal U64 fs_change_gen(void);
 
 ////////////////////////////////
 //~ rjf: Cache Interaction
