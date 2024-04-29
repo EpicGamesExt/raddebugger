@@ -391,6 +391,19 @@ typedef enum Corner
 }
 Corner;
 
+typedef enum Dir2
+{
+  Dir2_Invalid = -1,
+  Dir2_Left,
+  Dir2_Up,
+  Dir2_Right,
+  Dir2_Down,
+  Dir2_COUNT
+}
+Dir2;
+#define axis2_from_dir2(d) (((d) & 1) ? Axis2_Y : Axis2_X)
+#define side_from_dir2(d) (((d) < Dir2_Right) ? Side_Min : Side_Max)
+
 ////////////////////////////////
 //~ rjf: Toolchain/Environment Enums
 

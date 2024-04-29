@@ -5665,6 +5665,133 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
         
         //////////////////////////
+        //- rjf: build combined split+movetab drag/drop sites
+        //
+        B32 split_drop_site_targeted = 0;
+        {
+          DF_Panel *dst_panel = df_panel_from_handle(df_g_last_drag_drop_panel);
+          DF_View *view = df_view_from_handle(df_g_drag_drop_payload.view);
+          if(df_drag_is_active() && !df_view_is_nil(view) && dst_panel == panel)
+          {
+            F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
+            Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
+            Vec2F32 panel_center = center_2f32(panel_rect);
+            F32 corner_radius = ui_top_font_size()*0.5f;
+            F32 padding = ceil_f32(ui_top_font_size()*0.5f);
+            struct
+            {
+              Dir2 split_dir;
+              Rng2F32 rect;
+            }
+            sites[] =
+            {
+              {
+                Dir2_Invalid,
+                r2f32(sub_2f32(panel_center, drop_site_half_dim),
+                      add_2f32(panel_center, drop_site_half_dim))
+              },
+              {
+                Dir2_Up,
+                r2f32p(panel_center.x-drop_site_half_dim.x,
+                       panel_center.y-drop_site_half_dim.y - padding - drop_site_half_dim.y*2,
+                       panel_center.x+drop_site_half_dim.x,
+                       panel_center.y+drop_site_half_dim.y - padding - drop_site_half_dim.y*2),
+              },
+              {
+                Dir2_Down,
+                r2f32p(panel_center.x-drop_site_half_dim.x,
+                       panel_center.y-drop_site_half_dim.y + padding + drop_site_half_dim.y*2,
+                       panel_center.x+drop_site_half_dim.x,
+                       panel_center.y+drop_site_half_dim.y + padding + drop_site_half_dim.y*2),
+              },
+              {
+                Dir2_Left,
+                r2f32p(panel_center.x-drop_site_half_dim.x - padding - drop_site_half_dim.x*2,
+                       panel_center.y-drop_site_half_dim.y,
+                       panel_center.x+drop_site_half_dim.x - padding - drop_site_half_dim.x*2,
+                       panel_center.y+drop_site_half_dim.y),
+              },
+              {
+                Dir2_Right,
+                r2f32p(panel_center.x-drop_site_half_dim.x + padding + drop_site_half_dim.x*2,
+                       panel_center.y-drop_site_half_dim.y,
+                       panel_center.x+drop_site_half_dim.x + padding + drop_site_half_dim.x*2,
+                       panel_center.y+drop_site_half_dim.y),
+              },
+            };
+            UI_CornerRadius(corner_radius)
+              for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
+            {
+              Rng2F32 rect = sites[idx].rect;
+              Dir2 dir = sites[idx].split_dir;
+              Axis2 split_axis = axis2_from_dir2(dir);
+              B32 highlighted = contains_2f32(rect, ui_mouse());
+              {
+                if(highlighted)
+                {
+                  ui_set_next_border_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+                }
+                ui_set_next_child_layout_axis(axis2_flip(split_axis));
+                UI_Box *site_box = &ui_g_nil_box;
+                UI_Rect(rect)
+                  site_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackgroundBlur, ui_key_zero());
+                if(dir != Dir2_Invalid)
+                {
+                  UI_Parent(site_box) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                  {
+                    ui_set_next_child_layout_axis(split_axis);
+                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                    {
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      ui_spacer(ui_px(padding, 1.f));
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                    }
+                  }
+                }
+                else
+                {
+                  UI_Parent(site_box) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                  {
+                    ui_set_next_child_layout_axis(split_axis);
+                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                    {
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                    }
+                  }
+                }
+              }
+              DF_DragDropPayload payload = {0};
+              if(highlighted && df_drag_drop(&payload))
+              {
+                
+              }
+            }
+            for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
+            {
+              Rng2F32 rect = sites[idx].rect;
+              B32 highlighted = contains_2f32(rect, ui_mouse());
+              if(highlighted)
+              {
+                split_drop_site_targeted = 1;
+                Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
+                Side split_side = side_from_dir2(sites[idx].split_dir);
+                Rng2F32 future_split_rect = panel_rect;
+                if(sites[idx].split_dir != Dir2_Invalid)
+                {
+                  Vec2F32 panel_center = center_2f32(panel_rect);
+                  future_split_rect.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
+                }
+                UI_Rect(future_split_rect)
+                {
+                  ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
+                  ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+                }
+              }
+            }
+          }
+        }
+        
+        //////////////////////////
         //- rjf: build filtering box
         //
         {
@@ -6037,21 +6164,24 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               
               // rjf: if before this tab is the prev-view of the current tab drag,
               // draw empty space
-              if(df_drag_is_active())
+              if(df_drag_is_active() && !split_drop_site_targeted)
               {
                 DF_Panel *dst_panel = df_panel_from_handle(df_g_last_drag_drop_panel);
                 DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
                 DF_View *dst_prev_view = df_view_from_handle(df_g_last_drag_drop_prev_tab);
                 if(dst_panel == panel &&
-                   ((!df_view_is_nil(view) && dst_prev_view == view->prev) ||
-                    (df_view_is_nil(view) && dst_prev_view == panel->last_tab_view)) &&
-                   drag_view != view && drag_view != view->prev)
+                   ((!df_view_is_nil(view) && dst_prev_view == view->prev && drag_view != view && drag_view != view->prev) ||
+                    (df_view_is_nil(view) && dst_prev_view == panel->last_tab_view && drag_view != panel->last_tab_view)))
                 {
-                  UI_PrefWidth(ui_em(9.f, 0.2f)) UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay))
-                    UI_CornerRadius00(corner_radius)
-                    UI_CornerRadius10(corner_radius)
+                  UI_PrefWidth(ui_em(9.f, 0.2f)) UI_Column
                   {
-                    UI_Box *drop_site_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                    ui_spacer(ui_em(0.2f, 1.f));
+                    UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay))
+                      UI_CornerRadius00(corner_radius)
+                      UI_CornerRadius10(corner_radius)
+                    {
+                      UI_Box *drop_site_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                    }
                   }
                 }
               }
@@ -6239,10 +6369,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
           
           // rjf: more precise drop-sites on tab bar
+          if(!split_drop_site_targeted)
           {
             Vec2F32 mouse = ui_mouse();
             DF_View *view = df_view_from_handle(df_g_drag_drop_payload.view);
-            if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, mouse) && !df_view_is_nil(view))
+            if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, mouse) && !df_view_is_nil(view) && !split_drop_site_targeted)
             {
               // rjf: mouse => hovered drop site
               F32 min_distance = 0;
@@ -6260,8 +6391,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               // rjf: store closest prev-view
               if(active_drop_site != 0)
               {
-                df_g_last_drag_drop_panel = df_handle_from_panel(panel);
                 df_g_last_drag_drop_prev_tab = df_handle_from_view(active_drop_site->prev_view);
+              }
+              else
+              {
+                df_g_last_drag_drop_prev_tab = df_handle_zero();
               }
               
               // rjf: vis
@@ -6310,6 +6444,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //
         if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, ui_mouse()))
         {
+          df_g_last_drag_drop_panel = df_handle_from_panel(panel);
+          
           DF_DragDropPayload *payload = &df_g_drag_drop_payload;
           DF_View *dragged_view = df_view_from_handle(payload->view);
           B32 view_is_in_panel = 0;

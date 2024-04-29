@@ -940,7 +940,7 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   }
   
   //- rjf: setup parent box for tooltip
-  UI_FixedX(ui_state->mouse.x+15.f) UI_FixedY(ui_state->mouse.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
+  UI_FixedX(ui_state->mouse.x+15.f) UI_FixedY(ui_state->mouse.y+15.f) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
   {
     ui_set_next_child_layout_axis(Axis2_Y);
     ui_state->tooltip_root = ui_build_box_from_stringf(0, "###tooltip_%I64x", window.u64[0]);
@@ -1096,6 +1096,7 @@ ui_end_build(void)
     if(!ui_box_is_nil(root))
     {
       Rng2F32 window_rect = os_client_rect_from_window(ui_window());
+      Vec2F32 window_dim = dim_2f32(window_rect);
       Rng2F32 root_rect = root->rect;
       Vec2F32 shift =
       {
