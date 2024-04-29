@@ -1717,7 +1717,6 @@ internal void
 ui_tooltip_end_base(void)
 {
   ui_pop_flags();
-  ui_pop_transparency();
   ui_pop_parent();
   ui_pop_parent();
 }

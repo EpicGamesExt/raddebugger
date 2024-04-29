@@ -2979,26 +2979,50 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       DF_Panel *panel = df_panel_from_handle(payload->panel);
       DF_Entity *entity = df_entity_from_handle(payload->entity);
       DF_View *view = df_view_from_handle(payload->view);
-      UI_Tooltip
       {
-        UI_Box *tooltip = ui_top_parent();
+        //- rjf: tab dragging
         if(!df_view_is_nil(view))
         {
-          ui_set_next_pref_width(ui_children_sum(1));
-          UI_Row UI_HeightFill
+          UI_Size main_width = ui_top_pref_width();
+          UI_Size main_height = ui_top_pref_height();
+          UI_TextAlign main_text_align = ui_top_text_alignment();
+          ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_TabActive));
+          UI_Tooltip UI_PrefWidth(main_width) UI_PrefHeight(main_height) UI_TextAlignment(main_text_align)
           {
-            DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-            String8 display_name = df_display_string_from_view(scratch.arena, ctrl_ctx, view);
-            DF_IconKind icon_kind = df_icon_kind_from_view(view);
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-              UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-              UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-              ui_label(df_g_icon_kind_text_table[icon_kind]);
-            ui_label(display_name);
-            tooltip->background_color = df_rgba_from_theme_color(DF_ThemeColor_TabActive);
+            ui_set_next_pref_width(ui_em(60.f, 1.f));
+            ui_set_next_pref_height(ui_em(40.f, 1.f));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *container = ui_build_box_from_key(0, ui_key_zero());
+            UI_Parent(container)
+            {
+              UI_Row
+              {
+                DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
+                String8 display_name = df_display_string_from_view(scratch.arena, ctrl_ctx, view);
+                DF_IconKind icon_kind = df_icon_kind_from_view(view);
+                UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                  UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+                  UI_PrefWidth(ui_em(2.5f, 1.f))
+                  ui_label(df_g_icon_kind_text_table[icon_kind]);
+                ui_label(display_name);
+              }
+              ui_set_next_pref_width(ui_pct(1, 0));
+              ui_set_next_pref_height(ui_pct(1, 0));
+              ui_set_next_child_layout_axis(Axis2_Y);
+              UI_Box *view_preview_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_preview_container");
+              UI_Parent(view_preview_container) UI_Focus(UI_FocusKind_Off) UI_WidthFill
+              {
+                DF_ViewSpec *view_spec = view->spec;
+                DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
+                build_view_ui_function(ws, &df_g_nil_panel, view, view_preview_container->rect);
+              }
+            }
           }
         }
-        if(!df_entity_is_nil(entity))
+        
+        //- rjf: entity dragging
+        else if(!df_entity_is_nil(entity)) UI_Tooltip
         {
           ui_set_next_pref_width(ui_children_sum(1));
           UI_Row UI_HeightFill
@@ -3010,7 +3034,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
               ui_label(df_g_icon_kind_text_table[icon_kind]);
             ui_label(display_name);
-            tooltip->background_color = df_rgba_from_theme_color(DF_ThemeColor_EntityBackground);
           }
         }
       }
@@ -6008,9 +6031,36 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_CornerRadius01(panel->tab_side == Side_Min ? 0 : corner_radius)
               UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
               UI_CornerRadius11(panel->tab_side == Side_Min ? 0 : corner_radius)
-              for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next, view_idx += 1)
+              for(DF_View *view = panel->first_tab_view;; view = view->next, view_idx += 1)
             {
               temp_end(scratch);
+              
+              // rjf: if before this tab is the prev-view of the current tab drag,
+              // draw empty space
+              if(df_drag_is_active())
+              {
+                DF_Panel *dst_panel = df_panel_from_handle(df_g_last_drag_drop_panel);
+                DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
+                DF_View *dst_prev_view = df_view_from_handle(df_g_last_drag_drop_prev_tab);
+                if(dst_panel == panel &&
+                   ((!df_view_is_nil(view) && dst_prev_view == view->prev) ||
+                    (df_view_is_nil(view) && dst_prev_view == panel->last_tab_view)) &&
+                   drag_view != view && drag_view != view->prev)
+                {
+                  UI_PrefWidth(ui_em(9.f, 0.2f)) UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay))
+                    UI_CornerRadius00(corner_radius)
+                    UI_CornerRadius10(corner_radius)
+                  {
+                    UI_Box *drop_site_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                  }
+                }
+              }
+              
+              // rjf: end on nil view
+              if(df_view_is_nil(view))
+              {
+                break;
+              }
               
               // rjf: gather info for this tab
               B32 view_is_selected = (view == df_view_from_handle(panel->selected_tab_view));
@@ -6207,34 +6257,26 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 }
               }
               
+              // rjf: store closest prev-view
+              if(active_drop_site != 0)
+              {
+                df_g_last_drag_drop_panel = df_handle_from_panel(panel);
+                df_g_last_drag_drop_prev_tab = df_handle_from_view(active_drop_site->prev_view);
+              }
+              
               // rjf: vis
               DF_Panel *drag_panel = df_panel_from_handle(df_g_drag_drop_payload.panel);
               if(!df_view_is_nil(view) &&
                  active_drop_site != 0 &&
-                 (panel != drag_panel))
+                 (panel != drag_panel || 1))
               {
                 tab_bar_box->flags |= UI_BoxFlag_DrawOverlay;
                 tab_bar_box->overlay_color = df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay);
-                
-                if(panel->tab_view_count != 0)
-                {
-                  D_Bucket *bucket = d_bucket_make();
-                  D_BucketScope(bucket)
-                  {
-                    d_rect(r2f32p(active_drop_site->p - tab_spacing/2,
-                                  tab_bar_box->rect.y0,
-                                  active_drop_site->p + tab_spacing/2,
-                                  tab_bar_box->rect.y1),
-                           v4f32(1, 1, 1, 1),
-                           2.f, 0, 1.f);
-                  }
-                  ui_box_equip_draw_bucket(tab_bar_box, bucket);
-                }
               }
               
               // rjf: drop
               DF_DragDropPayload payload = df_g_drag_drop_payload;
-              if((active_drop_site != 0 && df_drag_drop(&payload)) || df_panel_from_handle(payload.panel) == panel)
+              if((active_drop_site != 0 && df_drag_drop(&payload)) || (df_panel_from_handle(payload.panel) == panel && 0))
               {
                 DF_View *view = df_view_from_handle(payload.view);
                 DF_Panel *src_panel = df_panel_from_handle(payload.panel);

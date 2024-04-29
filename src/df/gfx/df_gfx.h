@@ -763,6 +763,8 @@ read_only global DF_Panel df_g_nil_panel =
 
 global DF_GfxState *df_gfx_state = 0;
 global DF_DragDropPayload df_g_drag_drop_payload = {0};
+global DF_Handle df_g_last_drag_drop_panel = {0};
+global DF_Handle df_g_last_drag_drop_prev_tab = {0};
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
