@@ -1095,7 +1095,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       }
       
       // rjf: set up data for cases
-      Axis2 split_axis = Axis2_X;
+      Dir2 split_dir = Dir2_Invalid;
+      DF_Panel *split_panel = ws->focused_panel;
       U64 panel_sib_off = 0;
       U64 panel_child_off = 0;
       Vec2S32 panel_change_dir = {0};
@@ -1198,16 +1199,27 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }break;
         
         //- rjf: panel creation
-        case DF_CoreCmdKind_NewPanelRight: split_axis = Axis2_X; goto split;
-        case DF_CoreCmdKind_NewPanelDown:  split_axis = Axis2_Y; goto split;
-        split:;
+        case DF_CoreCmdKind_NewPanelLeft: {split_dir = Dir2_Left;}goto split;
+        case DF_CoreCmdKind_NewPanelUp:   {split_dir = Dir2_Up;}goto split;
+        case DF_CoreCmdKind_NewPanelRight:{split_dir = Dir2_Right;}goto split;
+        case DF_CoreCmdKind_NewPanelDown: {split_dir = Dir2_Down;}goto split;
+        case DF_CoreCmdKind_SplitPanel:
         {
-          DF_Panel *panel = ws->focused_panel;
+          split_dir = params.dir2;
+          split_panel = df_panel_from_handle(params.dest_panel);
+        }goto split;
+        split:;
+        if(split_dir != Dir2_Invalid && !df_panel_is_nil(split_panel))
+        {
+          DF_Panel *new_panel = &df_g_nil_panel;
+          Axis2 split_axis = axis2_from_dir2(split_dir);
+          Side split_side = side_from_dir2(split_dir);
+          DF_Panel *panel = split_panel;
           DF_Panel *parent = panel->parent;
           if(!df_panel_is_nil(parent) && parent->split_axis == split_axis)
           {
             DF_Panel *next = df_panel_alloc(ws);
-            df_panel_insert(parent, panel, next);
+            df_panel_insert(parent, split_side == Side_Max ? panel : panel->prev, next);
             next->size_pct_of_parent_target.v[split_axis] = 1.f / parent->child_count;
             next->size_pct_of_parent.v[axis2_flip(split_axis)] = next->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
             for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
@@ -1218,6 +1230,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
             }
             ws->focused_panel = next;
+            new_panel = next;
           }
           else
           {
@@ -1238,6 +1251,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             DF_Panel *left = panel;
             DF_Panel *right = df_panel_alloc(ws);
+            if(split_side == Side_Min)
+            {
+              Swap(DF_Panel *, left, right);
+            }
             df_panel_insert(new_parent, &df_g_nil_panel, left);
             df_panel_insert(new_parent, left, right);
             new_parent->split_axis = split_axis;
@@ -1250,6 +1267,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             right->size_pct_of_parent.v[axis2_flip(split_axis)] = 1.f;
             right->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
             ws->focused_panel = right;
+            new_panel = right;
+          }
+          DF_Panel *move_tab_panel = df_panel_from_handle(params.panel);
+          DF_View *move_tab = df_view_from_handle(params.view);
+          if(!df_panel_is_nil(new_panel) && !df_view_is_nil(move_tab) && !df_panel_is_nil(move_tab_panel) &&
+             core_cmd_kind == DF_CoreCmdKind_SplitPanel)
+          {
+            df_panel_remove_tab_view(move_tab_panel, move_tab);
+            df_panel_insert_tab_view(new_panel, new_panel->last_tab_view, move_tab);
+            new_panel->selected_tab_view = df_handle_from_view(move_tab);
+            if(df_view_is_nil(move_tab_panel->first_tab_view) && move_tab_panel != ws->root_panel)
+            {
+              DF_CmdParams p = df_cmd_params_from_panel(ws, move_tab_panel);
+              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
+            }
           }
           df_panel_notify_mutation(ws, panel);
         }break;
@@ -1808,6 +1840,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             df_panel_remove_tab_view(src_panel, view);
             df_panel_insert_tab_view(dst_panel, prev_view, view);
             ws->focused_panel = dst_panel;
+            if(df_view_is_nil(src_panel->first_tab_view) && src_panel != ws->root_panel)
+            {
+              DF_CmdParams p = df_cmd_params_from_panel(ws, src_panel);
+              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
+            }
             df_panel_notify_mutation(ws, dst_panel);
           }
         }break;
@@ -5725,7 +5762,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               Rng2F32 rect = sites[idx].rect;
               Dir2 dir = sites[idx].split_dir;
               Axis2 split_axis = axis2_from_dir2(dir);
-              B32 highlighted = contains_2f32(rect, ui_mouse());
+              B32 highlighted = contains_2f32(pad_2f32(rect, padding/2), ui_mouse());
               {
                 if(highlighted)
                 {
@@ -5763,13 +5800,30 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_DragDropPayload payload = {0};
               if(highlighted && df_drag_drop(&payload))
               {
-                
+                if(dir != Dir2_Invalid)
+                {
+                  DF_CmdParams p = df_cmd_params_from_window(ws);
+                  p.dest_panel = df_handle_from_panel(panel);
+                  p.panel = payload.panel;
+                  p.view = payload.view;
+                  p.dir2 = dir;
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+                }
+                else
+                {
+                  DF_CmdParams p = df_cmd_params_from_window(ws);
+                  p.dest_panel = df_handle_from_panel(panel);
+                  p.panel = payload.panel;
+                  p.view = payload.view;
+                  p.prev_view = df_handle_from_view(panel->last_tab_view);
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_MoveTab));
+                }
               }
             }
             for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
             {
               Rng2F32 rect = sites[idx].rect;
-              B32 highlighted = contains_2f32(rect, ui_mouse());
+              B32 highlighted = contains_2f32(pad_2f32(rect, padding/2), ui_mouse());
               if(highlighted)
               {
                 split_drop_site_targeted = 1;
