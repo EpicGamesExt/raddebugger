@@ -5574,91 +5574,72 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           !df_panel_is_nil(panel);
           panel = df_panel_rec_df_pre(panel).next)
     {
+      //////////////////////////
       //- rjf: continue on leaf panels
+      //
       if(df_panel_is_nil(panel->first))
       {
         continue;
       }
       
+      //////////////////////////
       //- rjf: grab info
+      //
       Axis2 split_axis = panel->split_axis;
       Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
       
-      //- rjf: drag/drop sites
-#if 0
+      //////////////////////////
+      //- rjf: boundary tab-drag/drop sites
+      //
       {
         DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
-        Vec2F32 mouse = ui_mouse();
-        if(df_drag_is_active() && contains_2f32(panel_rect, mouse) && !df_view_is_nil(drag_view))
+        if(df_drag_is_active() && !df_view_is_nil(drag_view))
         {
+          //- rjf: params
           F32 drop_site_major_dim_px = ceil_f32(ui_top_font_size()*7.f);
           F32 drop_site_minor_dim_px = ceil_f32(ui_top_font_size()*5.f);
-          Vec2F32 panel_center = center_2f32(panel_rect);
           F32 corner_radius = ui_top_font_size()*0.5f;
           F32 padding = ceil_f32(ui_top_font_size()*0.5f);
-          struct
+          
+          //- rjf: iterate all children, build boundary drop sites
+          Axis2 split_axis = panel->split_axis;
+          UI_CornerRadius(corner_radius) for(DF_Panel *child = panel->first;; child = child->next)
           {
-            UI_Key key;
-            Dir2 split_dir;
-            Rng2F32 rect;
-          }
-          sites[] =
-          {
+            // rjf: form rect
+            Rng2F32 child_rect = df_rect_from_panel_child(panel_rect, panel, child);
+            Vec2F32 child_rect_center = center_2f32(child_rect);
+            UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel, child);
+            Rng2F32 site_rect = r2f32(child_rect_center, child_rect_center);
+            site_rect.p0.v[split_axis] = child_rect.p0.v[split_axis] - drop_site_minor_dim_px/2;
+            site_rect.p1.v[split_axis] = child_rect.p0.v[split_axis] + drop_site_minor_dim_px/2;
+            site_rect.p0.v[axis2_flip(split_axis)] -= drop_site_major_dim_px/2;
+            site_rect.p1.v[axis2_flip(split_axis)] += drop_site_major_dim_px/2;
+            
+            // rjf: build
+            UI_Box *site_box = &ui_g_nil_box;
             {
-              ui_key_from_stringf(ui_key_zero(), "drop_split_left_%p", panel),
-              Dir2_Left,
-              r2f32p(panel_rect.x0,
-                     panel_center.y - drop_site_major_dim_px/2,
-                     panel_rect.x0 + drop_site_minor_dim_px,
-                     panel_center.y + drop_site_major_dim_px/2),
-            },
-            {
-              ui_key_from_stringf(ui_key_zero(), "drop_split_up_%p", panel),
-              Dir2_Up,
-              r2f32p(panel_center.x - drop_site_major_dim_px/2,
-                     panel_rect.y0,
-                     panel_center.x + drop_site_major_dim_px/2,
-                     panel_rect.y0 + drop_site_minor_dim_px),
-            },
-            {
-              ui_key_from_stringf(ui_key_zero(), "drop_split_right_%p", panel),
-              Dir2_Right,
-              r2f32p(panel_rect.x1 - drop_site_minor_dim_px,
-                     panel_center.y - drop_site_major_dim_px/2,
-                     panel_rect.x1,
-                     panel_center.y + drop_site_major_dim_px/2),
-            },
-            {
-              ui_key_from_stringf(ui_key_zero(), "drop_split_down_%p", panel),
-              Dir2_Down,
-              r2f32p(panel_center.x - drop_site_major_dim_px/2,
-                     panel_rect.y1 - drop_site_minor_dim_px,
-                     panel_center.x + drop_site_major_dim_px/2,
-                     panel_rect.y1),
-            },
-          };
-          UI_CornerRadius(corner_radius)
-            for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
-          {
-            Dir2 dir = sites[idx].split_dir;
-            Rng2F32 rect = sites[idx].rect;
-            Axis2 split_axis = axis2_from_dir2(dir);
-            {
-              ui_set_next_child_layout_axis(axis2_flip(split_axis));
-              UI_Box *site_box = &ui_g_nil_box;
-              UI_Rect(rect)
-                site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|
-                                                 UI_BoxFlag_DrawBackground|
-                                                 UI_BoxFlag_DrawBorder|
-                                                 UI_BoxFlag_DrawDropShadow|
-                                                 UI_BoxFlag_DrawBackgroundBlur,
-                                                 sites[idx].key);
-              ui_signal_from_box(site_box);
-              if(ui_key_match(site_box->key, ui_drop_hot_key()))
+              UI_Rect(site_rect)
               {
-                site_box->border_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+                site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
+                ui_signal_from_box(site_box);
               }
-              UI_Parent(site_box) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+              UI_Box *site_box_viz = &ui_g_nil_box;
+              UI_Parent(site_box) UI_WidthFill UI_HeightFill
+                UI_Padding(ui_px(padding, 1.f))
+                UI_Column
+                UI_Padding(ui_px(padding, 1.f))
+              {
+                ui_set_next_child_layout_axis(axis2_flip(split_axis));
+                if(ui_key_match(key, ui_drop_hot_key()))
+                {
+                  ui_set_next_border_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+                }
+                site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
+                                                     UI_BoxFlag_DrawBorder|
+                                                     UI_BoxFlag_DrawDropShadow|
+                                                     UI_BoxFlag_DrawBackgroundBlur, ui_key_zero());
+              }
+              UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
               {
                 ui_set_next_child_layout_axis(split_axis);
                 UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
@@ -5669,43 +5650,53 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 }
               }
             }
-            DF_DragDropPayload payload = {0};
-            if(highlighted && df_drag_drop(&payload))
+            
+            // rjf: viz
+            if(ui_key_match(site_box->key, ui_drop_hot_key()))
             {
-              DF_CmdParams p = df_cmd_params_from_window(ws);
-              p.dest_panel = df_handle_from_panel(panel);
-              p.panel = payload.panel;
-              p.view = payload.view;
-              p.dir2 = dir;
-              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
-            }
-          }
-          for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
-          {
-            Rng2F32 rect = sites[idx].rect;
-            B32 highlighted = contains_2f32(pad_2f32(rect, padding/2), ui_mouse());
-            if(highlighted)
-            {
-              Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
-              Side split_side = side_from_dir2(sites[idx].split_dir);
-              Rng2F32 future_split_rect = panel_rect;
-              if(sites[idx].split_dir != Dir2_Invalid)
-              {
-                Vec2F32 panel_center = center_2f32(panel_rect);
-                future_split_rect.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
-              }
+              Rng2F32 future_split_rect = site_rect;
+              future_split_rect.p0.v[split_axis] -= drop_site_major_dim_px;
+              future_split_rect.p1.v[split_axis] += drop_site_major_dim_px;
+              future_split_rect.p0.v[axis2_flip(split_axis)] = child_rect.p0.v[axis2_flip(split_axis)];
+              future_split_rect.p1.v[axis2_flip(split_axis)] = child_rect.p1.v[axis2_flip(split_axis)];
               UI_Rect(future_split_rect)
               {
                 ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
                 ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
               }
             }
+            
+            // rjf: drop
+            DF_DragDropPayload payload = {0};
+            if(ui_key_match(site_box->key, ui_drop_hot_key()) && df_drag_drop(&payload))
+            {
+              Dir2 dir = (panel->split_axis == Axis2_X ? Dir2_Left : Dir2_Up);
+              DF_Panel *split_panel = child;
+              if(df_panel_is_nil(split_panel))
+              {
+                split_panel = panel->last;
+                dir = (panel->split_axis == Axis2_X ? Dir2_Right : Dir2_Down);
+              }
+              DF_CmdParams p = df_cmd_params_from_window(ws);
+              p.dest_panel = df_handle_from_panel(split_panel);
+              p.panel = payload.panel;
+              p.view = payload.view;
+              p.dir2 = dir;
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+            }
+            
+            // rjf: exit on opl child
+            if(df_panel_is_nil(child))
+            {
+              break;
+            }
           }
         }
       }
-#endif
       
-      //- rjf: do UI for boundaries between all children
+      //////////////////////////
+      //- rjf: do UI for drag boundaries between all children
+      //
       for(DF_Panel *child = panel->first; !df_panel_is_nil(child) && !df_panel_is_nil(child->next); child = child->next)
       {
         DF_Panel *min_child = child;
@@ -5826,9 +5817,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //- rjf: build combined split+movetab drag/drop sites
         //
         {
-          DF_Panel *dst_panel = df_panel_from_handle(df_g_last_drag_drop_panel);
           DF_View *view = df_view_from_handle(df_g_drag_drop_payload.view);
-          if(df_drag_is_active() && !df_view_is_nil(view) && dst_panel == panel)
+          if(df_drag_is_active() && !df_view_is_nil(view))
           {
             F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
             Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
@@ -5890,6 +5880,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               Rng2F32 rect = sites[idx].rect;
               Axis2 split_axis = axis2_from_dir2(dir);
               Side split_side = side_from_dir2(dir);
+              if(dir != Dir2_Invalid && split_axis == panel->parent->split_axis)
+              {
+                continue;
+              }
               UI_Box *site_box = &ui_g_nil_box;
               {
                 UI_Rect(rect)
@@ -6392,7 +6386,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                       UI_CornerRadius00(corner_radius)
                       UI_CornerRadius10(corner_radius)
                     {
-                      UI_Box *drop_site_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                      ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
                     }
                   }
                 }
@@ -6653,7 +6647,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //////////////////////////
         //- rjf: less granular panel for tabs & entities drop-site
         //
-        if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, ui_mouse()))
+        if(catchall_drop_site_hovered)
         {
           df_g_last_drag_drop_panel = df_handle_from_panel(panel);
           
