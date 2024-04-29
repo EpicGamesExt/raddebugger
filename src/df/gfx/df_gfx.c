@@ -5566,7 +5566,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     }
     
     ////////////////////////////
-    //- rjf: panel non-leaf UI (drag boundaries)
+    //- rjf: panel non-leaf UI (drag boundaries, drag/drop sites)
     //
     B32 is_changing_panel_boundaries = 0;
     ProfScope("non-leaf panel UI")
@@ -5583,6 +5583,127 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       //- rjf: grab info
       Axis2 split_axis = panel->split_axis;
       Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+      
+      //- rjf: drag/drop sites
+#if 0
+      {
+        DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
+        Vec2F32 mouse = ui_mouse();
+        if(df_drag_is_active() && contains_2f32(panel_rect, mouse) && !df_view_is_nil(drag_view))
+        {
+          F32 drop_site_major_dim_px = ceil_f32(ui_top_font_size()*7.f);
+          F32 drop_site_minor_dim_px = ceil_f32(ui_top_font_size()*5.f);
+          Vec2F32 panel_center = center_2f32(panel_rect);
+          F32 corner_radius = ui_top_font_size()*0.5f;
+          F32 padding = ceil_f32(ui_top_font_size()*0.5f);
+          struct
+          {
+            UI_Key key;
+            Dir2 split_dir;
+            Rng2F32 rect;
+          }
+          sites[] =
+          {
+            {
+              ui_key_from_stringf(ui_key_zero(), "drop_split_left_%p", panel),
+              Dir2_Left,
+              r2f32p(panel_rect.x0,
+                     panel_center.y - drop_site_major_dim_px/2,
+                     panel_rect.x0 + drop_site_minor_dim_px,
+                     panel_center.y + drop_site_major_dim_px/2),
+            },
+            {
+              ui_key_from_stringf(ui_key_zero(), "drop_split_up_%p", panel),
+              Dir2_Up,
+              r2f32p(panel_center.x - drop_site_major_dim_px/2,
+                     panel_rect.y0,
+                     panel_center.x + drop_site_major_dim_px/2,
+                     panel_rect.y0 + drop_site_minor_dim_px),
+            },
+            {
+              ui_key_from_stringf(ui_key_zero(), "drop_split_right_%p", panel),
+              Dir2_Right,
+              r2f32p(panel_rect.x1 - drop_site_minor_dim_px,
+                     panel_center.y - drop_site_major_dim_px/2,
+                     panel_rect.x1,
+                     panel_center.y + drop_site_major_dim_px/2),
+            },
+            {
+              ui_key_from_stringf(ui_key_zero(), "drop_split_down_%p", panel),
+              Dir2_Down,
+              r2f32p(panel_center.x - drop_site_major_dim_px/2,
+                     panel_rect.y1 - drop_site_minor_dim_px,
+                     panel_center.x + drop_site_major_dim_px/2,
+                     panel_rect.y1),
+            },
+          };
+          UI_CornerRadius(corner_radius)
+            for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
+          {
+            Dir2 dir = sites[idx].split_dir;
+            Rng2F32 rect = sites[idx].rect;
+            Axis2 split_axis = axis2_from_dir2(dir);
+            {
+              ui_set_next_child_layout_axis(axis2_flip(split_axis));
+              UI_Box *site_box = &ui_g_nil_box;
+              UI_Rect(rect)
+                site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|
+                                                 UI_BoxFlag_DrawBackground|
+                                                 UI_BoxFlag_DrawBorder|
+                                                 UI_BoxFlag_DrawDropShadow|
+                                                 UI_BoxFlag_DrawBackgroundBlur,
+                                                 sites[idx].key);
+              ui_signal_from_box(site_box);
+              if(ui_key_match(site_box->key, ui_drop_hot_key()))
+              {
+                site_box->border_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+              }
+              UI_Parent(site_box) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+              {
+                ui_set_next_child_layout_axis(split_axis);
+                UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                {
+                  ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                  ui_spacer(ui_px(padding, 1.f));
+                  ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                }
+              }
+            }
+            DF_DragDropPayload payload = {0};
+            if(highlighted && df_drag_drop(&payload))
+            {
+              DF_CmdParams p = df_cmd_params_from_window(ws);
+              p.dest_panel = df_handle_from_panel(panel);
+              p.panel = payload.panel;
+              p.view = payload.view;
+              p.dir2 = dir;
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+            }
+          }
+          for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
+          {
+            Rng2F32 rect = sites[idx].rect;
+            B32 highlighted = contains_2f32(pad_2f32(rect, padding/2), ui_mouse());
+            if(highlighted)
+            {
+              Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
+              Side split_side = side_from_dir2(sites[idx].split_dir);
+              Rng2F32 future_split_rect = panel_rect;
+              if(sites[idx].split_dir != Dir2_Invalid)
+              {
+                Vec2F32 panel_center = center_2f32(panel_rect);
+                future_split_rect.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
+              }
+              UI_Rect(future_split_rect)
+              {
+                ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
+                ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+              }
+            }
+          }
+        }
+      }
+#endif
       
       //- rjf: do UI for boundaries between all children
       for(DF_Panel *child = panel->first; !df_panel_is_nil(child) && !df_panel_is_nil(child->next); child = child->next)
@@ -5704,7 +5825,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //////////////////////////
         //- rjf: build combined split+movetab drag/drop sites
         //
-        B32 split_drop_site_targeted = 0;
         {
           DF_Panel *dst_panel = df_panel_from_handle(df_g_last_drag_drop_panel);
           DF_View *view = df_view_from_handle(df_g_drag_drop_payload.view);
@@ -5717,88 +5837,113 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             F32 padding = ceil_f32(ui_top_font_size()*0.5f);
             struct
             {
+              UI_Key key;
               Dir2 split_dir;
               Rng2F32 rect;
             }
             sites[] =
             {
               {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_center_%p", panel),
                 Dir2_Invalid,
                 r2f32(sub_2f32(panel_center, drop_site_half_dim),
                       add_2f32(panel_center, drop_site_half_dim))
               },
               {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_up_%p", panel),
                 Dir2_Up,
                 r2f32p(panel_center.x-drop_site_half_dim.x,
-                       panel_center.y-drop_site_half_dim.y - padding - drop_site_half_dim.y*2,
+                       panel_center.y-drop_site_half_dim.y - drop_site_half_dim.y*2,
                        panel_center.x+drop_site_half_dim.x,
-                       panel_center.y+drop_site_half_dim.y - padding - drop_site_half_dim.y*2),
+                       panel_center.y+drop_site_half_dim.y - drop_site_half_dim.y*2),
               },
               {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_down_%p", panel),
                 Dir2_Down,
                 r2f32p(panel_center.x-drop_site_half_dim.x,
-                       panel_center.y-drop_site_half_dim.y + padding + drop_site_half_dim.y*2,
+                       panel_center.y-drop_site_half_dim.y + drop_site_half_dim.y*2,
                        panel_center.x+drop_site_half_dim.x,
-                       panel_center.y+drop_site_half_dim.y + padding + drop_site_half_dim.y*2),
+                       panel_center.y+drop_site_half_dim.y + drop_site_half_dim.y*2),
               },
               {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_left_%p", panel),
                 Dir2_Left,
-                r2f32p(panel_center.x-drop_site_half_dim.x - padding - drop_site_half_dim.x*2,
+                r2f32p(panel_center.x-drop_site_half_dim.x - drop_site_half_dim.x*2,
                        panel_center.y-drop_site_half_dim.y,
-                       panel_center.x+drop_site_half_dim.x - padding - drop_site_half_dim.x*2,
+                       panel_center.x+drop_site_half_dim.x - drop_site_half_dim.x*2,
                        panel_center.y+drop_site_half_dim.y),
               },
               {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_right_%p", panel),
                 Dir2_Right,
-                r2f32p(panel_center.x-drop_site_half_dim.x + padding + drop_site_half_dim.x*2,
+                r2f32p(panel_center.x-drop_site_half_dim.x + drop_site_half_dim.x*2,
                        panel_center.y-drop_site_half_dim.y,
-                       panel_center.x+drop_site_half_dim.x + padding + drop_site_half_dim.x*2,
+                       panel_center.x+drop_site_half_dim.x + drop_site_half_dim.x*2,
                        panel_center.y+drop_site_half_dim.y),
               },
             };
             UI_CornerRadius(corner_radius)
               for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
             {
-              Rng2F32 rect = sites[idx].rect;
+              UI_Key key = sites[idx].key;
               Dir2 dir = sites[idx].split_dir;
+              Rng2F32 rect = sites[idx].rect;
               Axis2 split_axis = axis2_from_dir2(dir);
-              B32 highlighted = contains_2f32(pad_2f32(rect, padding/2), ui_mouse());
+              Side split_side = side_from_dir2(dir);
+              UI_Box *site_box = &ui_g_nil_box;
               {
-                if(highlighted)
-                {
-                  ui_set_next_border_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
-                }
-                ui_set_next_child_layout_axis(axis2_flip(split_axis));
-                UI_Box *site_box = &ui_g_nil_box;
                 UI_Rect(rect)
-                  site_box = ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackgroundBlur, ui_key_zero());
+                {
+                  site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
+                  ui_signal_from_box(site_box);
+                }
+                UI_Box *site_box_viz = &ui_g_nil_box;
+                UI_Parent(site_box) UI_WidthFill UI_HeightFill
+                  UI_Padding(ui_px(padding, 1.f))
+                  UI_Column
+                  UI_Padding(ui_px(padding, 1.f))
+                {
+                  ui_set_next_child_layout_axis(axis2_flip(split_axis));
+                  if(ui_key_match(key, ui_drop_hot_key()))
+                  {
+                    ui_set_next_border_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+                  }
+                  site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawDropShadow|
+                                                       UI_BoxFlag_DrawBackgroundBlur, ui_key_zero());
+                }
                 if(dir != Dir2_Invalid)
                 {
-                  UI_Parent(site_box) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                  UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
                   {
                     ui_set_next_child_layout_axis(split_axis);
                     UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
                     {
+                      if(split_side == Side_Min) { ui_set_next_flags(UI_BoxFlag_DrawBackground); ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay)); }
                       ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
                       ui_spacer(ui_px(padding, 1.f));
+                      if(split_side == Side_Max) { ui_set_next_flags(UI_BoxFlag_DrawBackground); ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay)); }
                       ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
                     }
                   }
                 }
                 else
                 {
-                  UI_Parent(site_box) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                  UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
                   {
                     ui_set_next_child_layout_axis(split_axis);
-                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
+                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
                     {
-                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, ui_key_zero());
                     }
                   }
                 }
               }
               DF_DragDropPayload payload = {0};
-              if(highlighted && df_drag_drop(&payload))
+              if(ui_key_match(site_box->key, ui_drop_hot_key()) && df_drag_drop(&payload))
               {
                 if(dir != Dir2_Invalid)
                 {
@@ -5822,11 +5967,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
             {
-              Rng2F32 rect = sites[idx].rect;
-              B32 highlighted = contains_2f32(pad_2f32(rect, padding/2), ui_mouse());
-              if(highlighted)
+              B32 is_drop_hot = ui_key_match(ui_drop_hot_key(), sites[idx].key);
+              if(is_drop_hot)
               {
-                split_drop_site_targeted = 1;
                 Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
                 Side split_side = side_from_dir2(sites[idx].split_dir);
                 Rng2F32 future_split_rect = panel_rect;
@@ -5842,6 +5985,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 }
               }
             }
+          }
+        }
+        
+        //////////////////////////
+        //- rjf: build catch-all panel drop-site
+        //
+        B32 catchall_drop_site_hovered = 0;
+        if(df_drag_is_active() && ui_key_match(ui_key_zero(), ui_drop_hot_key()))
+        {
+          UI_Rect(panel_rect)
+          {
+            UI_Key key = ui_key_from_stringf(ui_key_zero(), "catchall_drop_site_%p", panel);
+            UI_Box *catchall_drop_site = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
+            ui_signal_from_box(catchall_drop_site);
+            catchall_drop_site_hovered = ui_key_match(key, ui_drop_hot_key());
           }
         }
         
@@ -6218,7 +6376,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               
               // rjf: if before this tab is the prev-view of the current tab drag,
               // draw empty space
-              if(df_drag_is_active() && !split_drop_site_targeted)
+              if(df_drag_is_active() && catchall_drop_site_hovered)
               {
                 DF_Panel *dst_panel = df_panel_from_handle(df_g_last_drag_drop_panel);
                 DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
@@ -6423,11 +6581,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
           
           // rjf: more precise drop-sites on tab bar
-          if(!split_drop_site_targeted)
           {
             Vec2F32 mouse = ui_mouse();
             DF_View *view = df_view_from_handle(df_g_drag_drop_payload.view);
-            if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, mouse) && !df_view_is_nil(view) && !split_drop_site_targeted)
+            if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, mouse) && !df_view_is_nil(view))
             {
               // rjf: mouse => hovered drop site
               F32 min_distance = 0;

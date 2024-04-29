@@ -602,6 +602,12 @@ ui_active_key(UI_MouseButtonKind button_kind)
   return ui_state->active_box_key[button_kind];
 }
 
+internal UI_Key
+ui_drop_hot_key(void)
+{
+  return ui_state->drop_hot_box_key;
+}
+
 //- rjf: controls over interaction
 
 internal void
@@ -980,6 +986,11 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     {
       ui_state->hot_box_key = ui_key_zero();
     }
+  }
+  
+  //- rjf: reset drop-hot key
+  {
+    ui_state->drop_hot_box_key = ui_key_zero();
   }
   
   //- rjf: reset active if our active box is disabled
@@ -2720,6 +2731,33 @@ ui_signal_from_box(UI_Box *box)
     {
       ui_state->hot_box_key = box->key;
       sig.f |= UI_SignalFlag_Hovering;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse is over this box's rect, drop site, no other drop hot key? -> set drop hot key
+  //
+  {
+    if(box->flags & UI_BoxFlag_DropSite &&
+       contains_2f32(rect, ui_state->mouse) &&
+       !contains_2f32(blacklist_rect, ui_state->mouse) &&
+       !ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) &&
+       (ui_key_match(ui_state->drop_hot_box_key, ui_key_zero()) || ui_key_match(ui_state->drop_hot_box_key, box->key)))
+    {
+      ui_state->drop_hot_box_key = box->key;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse is not over this box's rect, but this is the drop hot key? -> zero drop hot key
+  //
+  {
+    if(box->flags & UI_BoxFlag_DropSite &&
+       (!contains_2f32(rect, ui_state->mouse) ||
+        contains_2f32(blacklist_rect, ui_state->mouse)) &&
+       ui_key_match(ui_state->drop_hot_box_key, box->key))
+    {
+      ui_state->drop_hot_box_key = ui_key_zero();
     }
   }
   

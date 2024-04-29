@@ -198,57 +198,58 @@ typedef U64 UI_BoxFlags;
 //- rjf: interaction
 # define UI_BoxFlag_MouseClickable            (UI_BoxFlags)(1ull<<0)
 # define UI_BoxFlag_KeyboardClickable         (UI_BoxFlags)(1ull<<1)
-# define UI_BoxFlag_ClickToFocus              (UI_BoxFlags)(1ull<<2)
-# define UI_BoxFlag_Scroll                    (UI_BoxFlags)(1ull<<3)
-# define UI_BoxFlag_ViewScrollX               (UI_BoxFlags)(1ull<<4)
-# define UI_BoxFlag_ViewScrollY               (UI_BoxFlags)(1ull<<5)
-# define UI_BoxFlag_ViewClampX                (UI_BoxFlags)(1ull<<6)
-# define UI_BoxFlag_ViewClampY                (UI_BoxFlags)(1ull<<7)
-# define UI_BoxFlag_FocusHot                  (UI_BoxFlags)(1ull<<8)
-# define UI_BoxFlag_FocusActive               (UI_BoxFlags)(1ull<<9)
-# define UI_BoxFlag_FocusHotDisabled          (UI_BoxFlags)(1ull<<10)
-# define UI_BoxFlag_FocusActiveDisabled       (UI_BoxFlags)(1ull<<11)
-# define UI_BoxFlag_DefaultFocusNavX          (UI_BoxFlags)(1ull<<12)
-# define UI_BoxFlag_DefaultFocusNavY          (UI_BoxFlags)(1ull<<13)
-# define UI_BoxFlag_DefaultFocusEdit          (UI_BoxFlags)(1ull<<14)
-# define UI_BoxFlag_FocusNavSkip              (UI_BoxFlags)(1ull<<15)
-# define UI_BoxFlag_Disabled                  (UI_BoxFlags)(1ull<<16)
+# define UI_BoxFlag_DropSite                  (UI_BoxFlags)(1ull<<2)
+# define UI_BoxFlag_ClickToFocus              (UI_BoxFlags)(1ull<<3)
+# define UI_BoxFlag_Scroll                    (UI_BoxFlags)(1ull<<4)
+# define UI_BoxFlag_ViewScrollX               (UI_BoxFlags)(1ull<<5)
+# define UI_BoxFlag_ViewScrollY               (UI_BoxFlags)(1ull<<6)
+# define UI_BoxFlag_ViewClampX                (UI_BoxFlags)(1ull<<7)
+# define UI_BoxFlag_ViewClampY                (UI_BoxFlags)(1ull<<8)
+# define UI_BoxFlag_FocusHot                  (UI_BoxFlags)(1ull<<9)
+# define UI_BoxFlag_FocusActive               (UI_BoxFlags)(1ull<<10)
+# define UI_BoxFlag_FocusHotDisabled          (UI_BoxFlags)(1ull<<11)
+# define UI_BoxFlag_FocusActiveDisabled       (UI_BoxFlags)(1ull<<12)
+# define UI_BoxFlag_DefaultFocusNavX          (UI_BoxFlags)(1ull<<13)
+# define UI_BoxFlag_DefaultFocusNavY          (UI_BoxFlags)(1ull<<14)
+# define UI_BoxFlag_DefaultFocusEdit          (UI_BoxFlags)(1ull<<15)
+# define UI_BoxFlag_FocusNavSkip              (UI_BoxFlags)(1ull<<16)
+# define UI_BoxFlag_Disabled                  (UI_BoxFlags)(1ull<<17)
 
 //- rjf: layout
-# define UI_BoxFlag_FloatingX                 (UI_BoxFlags)(1ull<<17)
-# define UI_BoxFlag_FloatingY                 (UI_BoxFlags)(1ull<<18)
-# define UI_BoxFlag_FixedWidth                (UI_BoxFlags)(1ull<<19)
-# define UI_BoxFlag_FixedHeight               (UI_BoxFlags)(1ull<<20)
-# define UI_BoxFlag_AllowOverflowX            (UI_BoxFlags)(1ull<<21)
-# define UI_BoxFlag_AllowOverflowY            (UI_BoxFlags)(1ull<<22)
-# define UI_BoxFlag_SkipViewOffX              (UI_BoxFlags)(1ull<<23)
-# define UI_BoxFlag_SkipViewOffY              (UI_BoxFlags)(1ull<<24)
+# define UI_BoxFlag_FloatingX                 (UI_BoxFlags)(1ull<<18)
+# define UI_BoxFlag_FloatingY                 (UI_BoxFlags)(1ull<<19)
+# define UI_BoxFlag_FixedWidth                (UI_BoxFlags)(1ull<<20)
+# define UI_BoxFlag_FixedHeight               (UI_BoxFlags)(1ull<<21)
+# define UI_BoxFlag_AllowOverflowX            (UI_BoxFlags)(1ull<<22)
+# define UI_BoxFlag_AllowOverflowY            (UI_BoxFlags)(1ull<<23)
+# define UI_BoxFlag_SkipViewOffX              (UI_BoxFlags)(1ull<<24)
+# define UI_BoxFlag_SkipViewOffY              (UI_BoxFlags)(1ull<<25)
 
 //- rjf: appearance / animation
-# define UI_BoxFlag_DrawDropShadow            (UI_BoxFlags)(1ull<<25)
-# define UI_BoxFlag_DrawBackgroundBlur        (UI_BoxFlags)(1ull<<26)
-# define UI_BoxFlag_DrawBackground            (UI_BoxFlags)(1ull<<27)
-# define UI_BoxFlag_DrawBorder                (UI_BoxFlags)(1ull<<28)
-# define UI_BoxFlag_DrawSideTop               (UI_BoxFlags)(1ull<<29)
-# define UI_BoxFlag_DrawSideBottom            (UI_BoxFlags)(1ull<<30)
-# define UI_BoxFlag_DrawSideLeft              (UI_BoxFlags)(1ull<<31)
-# define UI_BoxFlag_DrawSideRight             (UI_BoxFlags)(1ull<<32)
-# define UI_BoxFlag_DrawText                  (UI_BoxFlags)(1ull<<33)
-# define UI_BoxFlag_DrawTextFastpathCodepoint (UI_BoxFlags)(1ull<<34)
-# define UI_BoxFlag_DrawHotEffects            (UI_BoxFlags)(1ull<<35)
-# define UI_BoxFlag_DrawActiveEffects         (UI_BoxFlags)(1ull<<36)
-# define UI_BoxFlag_DrawOverlay               (UI_BoxFlags)(1ull<<37)
-# define UI_BoxFlag_DrawBucket                (UI_BoxFlags)(1ull<<38)
-# define UI_BoxFlag_Clip                      (UI_BoxFlags)(1ull<<39)
-# define UI_BoxFlag_AnimatePosX               (UI_BoxFlags)(1ull<<40)
-# define UI_BoxFlag_AnimatePosY               (UI_BoxFlags)(1ull<<41)
-# define UI_BoxFlag_DisableTextTrunc          (UI_BoxFlags)(1ull<<42)
-# define UI_BoxFlag_DisableIDString           (UI_BoxFlags)(1ull<<43)
-# define UI_BoxFlag_DisableFocusViz           (UI_BoxFlags)(1ull<<44)
-# define UI_BoxFlag_RequireFocusBackground    (UI_BoxFlags)(1ull<<45)
-# define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<46)
-# define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<47)
-# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<48)
+# define UI_BoxFlag_DrawDropShadow            (UI_BoxFlags)(1ull<<26)
+# define UI_BoxFlag_DrawBackgroundBlur        (UI_BoxFlags)(1ull<<27)
+# define UI_BoxFlag_DrawBackground            (UI_BoxFlags)(1ull<<28)
+# define UI_BoxFlag_DrawBorder                (UI_BoxFlags)(1ull<<29)
+# define UI_BoxFlag_DrawSideTop               (UI_BoxFlags)(1ull<<30)
+# define UI_BoxFlag_DrawSideBottom            (UI_BoxFlags)(1ull<<31)
+# define UI_BoxFlag_DrawSideLeft              (UI_BoxFlags)(1ull<<32)
+# define UI_BoxFlag_DrawSideRight             (UI_BoxFlags)(1ull<<33)
+# define UI_BoxFlag_DrawText                  (UI_BoxFlags)(1ull<<34)
+# define UI_BoxFlag_DrawTextFastpathCodepoint (UI_BoxFlags)(1ull<<35)
+# define UI_BoxFlag_DrawHotEffects            (UI_BoxFlags)(1ull<<36)
+# define UI_BoxFlag_DrawActiveEffects         (UI_BoxFlags)(1ull<<37)
+# define UI_BoxFlag_DrawOverlay               (UI_BoxFlags)(1ull<<38)
+# define UI_BoxFlag_DrawBucket                (UI_BoxFlags)(1ull<<39)
+# define UI_BoxFlag_Clip                      (UI_BoxFlags)(1ull<<40)
+# define UI_BoxFlag_AnimatePosX               (UI_BoxFlags)(1ull<<41)
+# define UI_BoxFlag_AnimatePosY               (UI_BoxFlags)(1ull<<42)
+# define UI_BoxFlag_DisableTextTrunc          (UI_BoxFlags)(1ull<<43)
+# define UI_BoxFlag_DisableIDString           (UI_BoxFlags)(1ull<<44)
+# define UI_BoxFlag_DisableFocusViz           (UI_BoxFlags)(1ull<<45)
+# define UI_BoxFlag_RequireFocusBackground    (UI_BoxFlags)(1ull<<46)
+# define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<47)
+# define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<48)
+# define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<49)
 
 //- rjf: bundles
 # define UI_BoxFlag_Clickable          (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)
@@ -493,6 +494,7 @@ struct UI_State
   //- rjf: user interaction state
   UI_Key hot_box_key;
   UI_Key active_box_key[UI_MouseButtonKind_COUNT];
+  UI_Key drop_hot_box_key;
   UI_Key clipboard_copy_key;
   U64 press_timestamp_history_us[UI_MouseButtonKind_COUNT][3];
   UI_Key press_key_history[UI_MouseButtonKind_COUNT][3];
@@ -631,6 +633,7 @@ internal D_FancyRunList    ui_string_hover_runs(Arena *arena);
 //- rjf: interaction keys
 internal UI_Key            ui_hot_key(void);
 internal UI_Key            ui_active_key(UI_MouseButtonKind button_kind);
+internal UI_Key            ui_drop_hot_key(void);
 
 //- rjf: controls over interaction
 internal void              ui_kill_action(void);
