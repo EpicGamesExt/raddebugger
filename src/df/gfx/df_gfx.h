@@ -229,6 +229,9 @@ struct DF_Panel
   Axis2 split_axis;
   F32 pct_of_parent;
   
+  // rjf: animated rectangle data
+  Rng2F32 animated_rect_pct;
+  
   // rjf: tab params
   Side tab_side;
   
@@ -802,8 +805,8 @@ internal DF_PanelRec df_panel_rec_df(DF_Panel *panel, U64 sib_off, U64 child_off
 #define df_panel_rec_df_post(panel) df_panel_rec_df(panel, OffsetOf(DF_Panel, prev), OffsetOf(DF_Panel, last))
 
 //- rjf: panel -> rect calculations
-internal Rng2F32 df_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel);
-internal Rng2F32 df_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel);
+internal Rng2F32 df_target_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel);
+internal Rng2F32 df_target_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel);
 
 //- rjf: view ownership insertion/removal
 internal void df_panel_insert_tab_view(DF_Panel *panel, DF_View *prev_view, DF_View *view);

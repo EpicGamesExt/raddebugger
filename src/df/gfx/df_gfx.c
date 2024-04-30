@@ -216,7 +216,7 @@ df_panel_rec_df(DF_Panel *panel, U64 sib_off, U64 child_off)
 //- rjf: panel -> rect calculations
 
 internal Rng2F32
-df_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel)
+df_target_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel)
 {
   Rng2F32 rect = parent_rect;
   if(!df_panel_is_nil(parent))
@@ -244,7 +244,7 @@ df_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel)
 }
 
 internal Rng2F32
-df_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel)
+df_target_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -276,12 +276,12 @@ df_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel)
     DF_Panel *parent = ancestor->parent;
     if(!df_panel_is_nil(parent))
     {
-      parent_rect = df_rect_from_panel_child(parent_rect, parent, ancestor);
+      parent_rect = df_target_rect_from_panel_child(parent_rect, parent, ancestor);
     }
   }
   
   // rjf: calculate final rect
-  Rng2F32 rect = df_rect_from_panel_child(parent_rect, panel->parent, panel);
+  Rng2F32 rect = df_target_rect_from_panel_child(parent_rect, panel->parent, panel);
   
   scratch_end(scratch);
   return rect;
@@ -912,6 +912,7 @@ df_panel_alloc(DF_Window *ws)
   panel->first = panel->last = panel->next = panel->prev = panel->parent = &df_g_nil_panel;
   panel->first_tab_view = panel->last_tab_view = &df_g_nil_view;
   panel->generation += 1;
+  MemoryZeroStruct(&panel->animated_rect_pct);
   return panel;
 }
 
@@ -1258,6 +1259,18 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             left->pct_of_parent = 0.5f;
             right->pct_of_parent = 0.5f;
             ws->focused_panel = new_panel;
+          }
+          if(!df_panel_is_nil(new_panel->prev))
+          {
+            Rng2F32 prev_rect_pct = new_panel->prev->animated_rect_pct;
+            new_panel->animated_rect_pct = prev_rect_pct;
+            new_panel->animated_rect_pct.p0.v[split_axis] = new_panel->animated_rect_pct.p1.v[split_axis];
+          }
+          if(!df_panel_is_nil(new_panel->next))
+          {
+            Rng2F32 next_rect_pct = new_panel->next->animated_rect_pct;
+            new_panel->animated_rect_pct = next_rect_pct;
+            new_panel->animated_rect_pct.p1.v[split_axis] = new_panel->animated_rect_pct.p0.v[split_axis];
           }
           DF_Panel *move_tab_panel = df_panel_from_handle(params.panel);
           DF_View *move_tab = df_view_from_handle(params.view);
@@ -1608,7 +1621,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         focus_panel_dir:;
         {
           DF_Panel *src_panel = ws->focused_panel;
-          Rng2F32 src_panel_rect = df_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, src_panel);
+          Rng2F32 src_panel_rect = df_target_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, src_panel);
           Vec2F32 src_panel_center = center_2f32(src_panel_rect);
           Vec2F32 src_panel_half_dim = scale_2f32(dim_2f32(src_panel_rect), 0.5f);
           Vec2F32 travel_dim = add_2f32(src_panel_half_dim, v2f32(10.f, 10.f));
@@ -1620,7 +1633,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               continue;
             }
-            Rng2F32 p_rect = df_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, p);
+            Rng2F32 p_rect = df_target_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, p);
             if(contains_2f32(p_rect, travel_dst))
             {
               dst_root = p;
@@ -2674,7 +2687,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 continue;
               }
-              Rng2F32 panel_rect = df_rect_from_panel(root_rect, ws->root_panel, panel);
+              Rng2F32 panel_rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
               Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
               F32 area = panel_rect_dim.x * panel_rect_dim.y;
               if((best_panel_area == 0 || area > best_panel_area))
@@ -2696,7 +2709,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 continue;
               }
-              Rng2F32 panel_rect = df_rect_from_panel(root_rect, ws->root_panel, panel);
+              Rng2F32 panel_rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
               Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
               F32 area = panel_rect_dim.x * panel_rect_dim.y;
               if(df_view_is_nil(panel->first_tab_view) && (best_panel_area == 0 || area > best_panel_area))
@@ -5246,7 +5259,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             panel = df_panel_rec_df_pre(panel).next)
         {
           if(!df_panel_is_nil(panel->first)) { continue; }
-          Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+          Rng2F32 panel_rect = df_target_rect_from_panel(content_rect, ws->root_panel, panel);
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
           if(!df_view_is_nil(view) &&
              contains_2f32(panel_rect, ui_mouse()) &&
@@ -5573,7 +5586,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       //- rjf: grab info
       //
       Axis2 split_axis = panel->split_axis;
-      Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+      Rng2F32 panel_rect = df_target_rect_from_panel(content_rect, ws->root_panel, panel);
       
       //////////////////////////
       //- rjf: boundary tab-drag/drop sites
@@ -5677,7 +5690,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           UI_CornerRadius(corner_radius) for(DF_Panel *child = panel->first;; child = child->next)
           {
             // rjf: form rect
-            Rng2F32 child_rect = df_rect_from_panel_child(panel_rect, panel, child);
+            Rng2F32 child_rect = df_target_rect_from_panel_child(panel_rect, panel, child);
             Vec2F32 child_rect_center = center_2f32(child_rect);
             UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel, child);
             Rng2F32 site_rect = r2f32(child_rect_center, child_rect_center);
@@ -5772,8 +5785,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       {
         DF_Panel *min_child = child;
         DF_Panel *max_child = min_child->next;
-        Rng2F32 min_child_rect = df_rect_from_panel_child(panel_rect, panel, min_child);
-        Rng2F32 max_child_rect = df_rect_from_panel_child(panel_rect, panel, max_child);
+        Rng2F32 min_child_rect = df_target_rect_from_panel_child(panel_rect, panel, min_child);
+        Rng2F32 max_child_rect = df_target_rect_from_panel_child(panel_rect, panel, max_child);
         Rng2F32 boundary_rect = {0};
         {
           boundary_rect.p0.v[split_axis] = min_child_rect.p1.v[split_axis] - ui_top_font_size()/3;
@@ -5836,6 +5849,37 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     }
     
     ////////////////////////////
+    //- rjf: animate panels
+    //
+    {
+      F32 rate = 1 - pow_f32(2, (-50.f * df_dt()));
+      Vec2F32 content_rect_dim = dim_2f32(content_rect);
+      for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+      {
+        Rng2F32 target_rect_px = df_target_rect_from_panel(content_rect, ws->root_panel, panel);
+        Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0/content_rect_dim.x,
+                                         target_rect_px.y0/content_rect_dim.y,
+                                         target_rect_px.x1/content_rect_dim.x,
+                                         target_rect_px.y1/content_rect_dim.y);
+        if(abs_f32(target_rect_pct.x0 - panel->animated_rect_pct.x0) > 0.005f ||
+           abs_f32(target_rect_pct.y0 - panel->animated_rect_pct.y0) > 0.005f ||
+           abs_f32(target_rect_pct.x1 - panel->animated_rect_pct.x1) > 0.005f ||
+           abs_f32(target_rect_pct.y1 - panel->animated_rect_pct.y1) > 0.005f)
+        {
+          df_gfx_request_frame();
+        }
+        panel->animated_rect_pct.x0 += rate * (target_rect_pct.x0 - panel->animated_rect_pct.x0);
+        panel->animated_rect_pct.y0 += rate * (target_rect_pct.y0 - panel->animated_rect_pct.y0);
+        panel->animated_rect_pct.x1 += rate * (target_rect_pct.x1 - panel->animated_rect_pct.x1);
+        panel->animated_rect_pct.y1 += rate * (target_rect_pct.y1 - panel->animated_rect_pct.y1);
+        if(ws->frames_alive < 5 || is_changing_panel_boundaries)
+        {
+          panel->animated_rect_pct = target_rect_pct;
+        }
+      }
+    }
+    
+    ////////////////////////////
     //- rjf: panel leaf UI
     //
     ProfScope("leaf panel UI")
@@ -5855,7 +5899,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //////////////////////////
         //- rjf: calculate UI rectangles
         //
-        Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+        Vec2F32 content_rect_dim = dim_2f32(content_rect);
+        Rng2F32 panel_rect_pct = panel->animated_rect_pct;
+        Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
+                                    panel_rect_pct.y0*content_rect_dim.y,
+                                    panel_rect_pct.x1*content_rect_dim.x,
+                                    panel_rect_pct.y1*content_rect_dim.y);
         panel_rect = pad_2f32(panel_rect, -1.f);
         F32 tab_bar_rheight = ui_top_font_size()*3.f;
         F32 tab_bar_vheight = ui_top_font_size()*2.6f;
@@ -6788,25 +6837,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }
       }
     }
-    
-    ////////////////////////////
-    //- rjf: animate panel pcts
-    //
-#if 0
-    {
-      F32 rate = 1 - pow_f32(2, (-50.f * df_dt()));
-      for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
-      {
-        if(abs_f32(panel->off_pct_of_parent.x) > 0.005f ||
-           abs_f32(panel->off_pct_of_parent.y) > 0.005f)
-        {
-          df_gfx_request_frame();
-        }
-        panel->off_pct_of_parent.x += (-panel->off_pct_of_parent.x) * rate;
-        panel->off_pct_of_parent.y += (-panel->off_pct_of_parent.y) * rate;
-      }
-    }
-#endif
     
     ////////////////////////////
     //- rjf: animate views
@@ -12665,7 +12695,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               {
                 if(df_panel_is_nil(panel->first))
                 {
-                  Rng2F32 rect = df_rect_from_panel(root_rect, ws->root_panel, panel);
+                  Rng2F32 rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
                   Vec2F32 dim = dim_2f32(rect);
                   F32 area = dim.x*dim.y;
                   if(best_leaf_panel_area == 0 || area > best_leaf_panel_area)
