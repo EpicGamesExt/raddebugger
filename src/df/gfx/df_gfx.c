@@ -1280,7 +1280,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             df_panel_remove_tab_view(move_tab_panel, move_tab);
             df_panel_insert_tab_view(new_panel, new_panel->last_tab_view, move_tab);
             new_panel->selected_tab_view = df_handle_from_view(move_tab);
-            if(df_view_is_nil(move_tab_panel->first_tab_view) && move_tab_panel != ws->root_panel)
+            if(df_view_is_nil(move_tab_panel->first_tab_view) && move_tab_panel != ws->root_panel &&
+               move_tab_panel != new_panel->prev && move_tab_panel != new_panel->next)
             {
               DF_CmdParams p = df_cmd_params_from_panel(ws, move_tab_panel);
               df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
@@ -5608,7 +5609,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(panel == ws->root_panel) UI_CornerRadius(corner_radius)
           {
             Vec2F32 panel_rect_center = center_2f32(panel_rect);
-            Axis2 axis = Axis2_Y;
+            Axis2 axis = axis2_flip(ws->root_panel->split_axis);
             for(EachEnumVal(Side, side))
             {
               UI_Key key = ui_key_from_stringf(ui_key_zero(), "root_extra_split_%i", side);
@@ -5673,14 +5674,19 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_DragDropPayload payload = {0};
               if(ui_key_match(site_box->key, ui_drop_hot_key()) && df_drag_drop(&payload))
               {
-                Dir2 dir = (side == Side_Min ? Dir2_Up : Dir2_Down);
-                DF_Panel *split_panel = panel;
-                DF_CmdParams p = df_cmd_params_from_window(ws);
-                p.dest_panel = df_handle_from_panel(split_panel);
-                p.panel = payload.panel;
-                p.view = payload.view;
-                p.dir2 = dir;
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+                Dir2 dir = (axis == Axis2_Y ? (side == Side_Min ? Dir2_Up : Dir2_Down) :
+                            axis == Axis2_X ? (side == Side_Min ? Dir2_Left : Dir2_Right) :
+                            Dir2_Invalid);
+                if(dir != Dir2_Invalid)
+                {
+                  DF_Panel *split_panel = panel;
+                  DF_CmdParams p = df_cmd_params_from_window(ws);
+                  p.dest_panel = df_handle_from_panel(split_panel);
+                  p.panel = payload.panel;
+                  p.view = payload.view;
+                  p.dir2 = dir;
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+                }
               }
             }
           }
@@ -6703,13 +6709,16 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               // rjf: mouse => hovered drop site
               F32 min_distance = 0;
               DropSite *active_drop_site = 0;
-              for(U64 drop_site_idx = 0; drop_site_idx < drop_site_count; drop_site_idx += 1)
+              if(catchall_drop_site_hovered)
               {
-                F32 distance = abs_f32(drop_sites[drop_site_idx].p - mouse.x);
-                if(drop_site_idx == 0 || distance < min_distance)
+                for(U64 drop_site_idx = 0; drop_site_idx < drop_site_count; drop_site_idx += 1)
                 {
-                  active_drop_site = &drop_sites[drop_site_idx];
-                  min_distance = distance;
+                  F32 distance = abs_f32(drop_sites[drop_site_idx].p - mouse.x);
+                  if(drop_site_idx == 0 || distance < min_distance)
+                  {
+                    active_drop_site = &drop_sites[drop_site_idx];
+                    min_distance = distance;
+                  }
                 }
               }
               
@@ -6735,7 +6744,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               
               // rjf: drop
               DF_DragDropPayload payload = df_g_drag_drop_payload;
-              if((active_drop_site != 0 && df_drag_drop(&payload)) || (df_panel_from_handle(payload.panel) == panel && 0))
+              if(catchall_drop_site_hovered && (active_drop_site != 0 && df_drag_drop(&payload)) || (df_panel_from_handle(payload.panel) == panel && 0))
               {
                 DF_View *view = df_view_from_handle(payload.view);
                 DF_Panel *src_panel = df_panel_from_handle(payload.panel);
@@ -7291,6 +7300,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1.f), v4f32(1, 1, 1, 0.5f*b->hot_t), 0, 1.f, 1.f);
               MemoryCopyArray(inst->corner_radii, b->corner_radii);
             }
+          }
+          
+          // rjf: debug border rendering
+          if(0)
+          {
+            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1), v4f32(1, 0, 1, 0.25f), 0, 1.f, 1.f);
+            MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
           // rjf: draw sides

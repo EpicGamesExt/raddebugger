@@ -2743,7 +2743,6 @@ ui_signal_from_box(UI_Box *box)
     if(box->flags & UI_BoxFlag_DropSite &&
        contains_2f32(rect, ui_state->mouse) &&
        !contains_2f32(blacklist_rect, ui_state->mouse) &&
-       !ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_key_zero()) &&
        (ui_key_match(ui_state->drop_hot_box_key, ui_key_zero()) || ui_key_match(ui_state->drop_hot_box_key, box->key)))
     {
       ui_state->drop_hot_box_key = box->key;

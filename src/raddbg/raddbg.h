@@ -14,7 +14,6 @@
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
-// [ ] drag/drop tab cleanup
 // [ ] target/breakpoint/watch-pin reordering
 // [ ] watch window reordering
 // [ ] standard way to filter
@@ -184,11 +183,6 @@
 //  [ ] Similarly, pressing the left mouse button on a menu and dragging to an
 //      item, then releasing, does not trigger that item as expected. Instead,
 //      it is a nop, and it waits for you to click again on the item.
-//
-//  [ ] Working with panels felt cumbersome. I couldn't figure out any way to
-//      quickly arrange the display without manually selecting "split panel"
-//      and "close panel" and stuff from the menu, which took a long time.
-//   - @polish @feature ui for dragging tab -> bundling panel split options
 //
 //  [ ] I found the "context menu" convention to be confusing. For example, if
 //      I left-click on a tab, it selects the tab. If I right-click on a tab,
