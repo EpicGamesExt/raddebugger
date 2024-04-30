@@ -1101,6 +1101,7 @@ ui_end_build(void)
   
   //- rjf: ensure special floating roots are within screen bounds
   UI_Box *floating_roots[] = {ui_state->tooltip_root, ui_state->ctx_menu_root};
+  B32 force_contain[]      = {0,                      1};
   for(U64 idx = 0; idx < ArrayCount(floating_roots); idx += 1)
   {
     UI_Box *root = floating_roots[idx];
@@ -1109,10 +1110,11 @@ ui_end_build(void)
       Rng2F32 window_rect = os_client_rect_from_window(ui_window());
       Vec2F32 window_dim = dim_2f32(window_rect);
       Rng2F32 root_rect = root->rect;
+      Vec2F32 root_rect_dim = dim_2f32(root_rect);
       Vec2F32 shift =
       {
-        -ClampBot(0, root_rect.x1 - window_rect.x1),
-        -ClampBot(0, root_rect.y1 - window_rect.y1),
+        -ClampBot(0, root_rect.x1 - window_rect.x1) * (root_rect_dim.x < root->font_size*15.f || force_contain[idx]),
+        -ClampBot(0, root_rect.y1 - window_rect.y1) * (root_rect_dim.y < root->font_size*15.f || force_contain[idx]),
       };
       Rng2F32 new_root_rect = shift_2f32(root_rect, shift);
       root->fixed_position = new_root_rect.p0;
