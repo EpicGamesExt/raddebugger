@@ -227,10 +227,7 @@ struct DF_Panel
   
   // rjf: split data
   Axis2 split_axis;
-  Vec2F32 off_pct_of_parent;
-  Vec2F32 off_pct_of_parent_target;
-  Vec2F32 size_pct_of_parent;
-  Vec2F32 size_pct_of_parent_target;
+  F32 pct_of_parent;
   
   // rjf: tab params
   Side tab_side;

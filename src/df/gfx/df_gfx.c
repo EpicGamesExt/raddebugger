@@ -226,21 +226,20 @@ df_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel)
     rect.p1.v[axis] = rect.p0.v[axis];
     for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
     {
-      rect.p1.v[axis] += parent_rect_size.v[axis] * child->size_pct_of_parent.v[axis];
-      rect.p1.v[axis2_flip(axis)] = rect.p0.v[axis2_flip(axis)] + parent_rect_size.v[axis2_flip(axis)] * child->size_pct_of_parent.v[axis2_flip(axis)];
+      rect.p1.v[axis] += parent_rect_size.v[axis] * child->pct_of_parent;
       if(child == panel)
       {
         break;
       }
       rect.p0.v[axis] = rect.p1.v[axis];
     }
-    rect.p0.v[axis] += parent_rect_size.v[axis] * panel->off_pct_of_parent.v[axis];
-    rect.p0.v[axis2_flip(axis)] += parent_rect_size.v[axis2_flip(axis)] * panel->off_pct_of_parent.v[axis2_flip(axis)];
+    //rect.p0.v[axis] += parent_rect_size.v[axis] * panel->off_pct_of_parent.v[axis];
+    //rect.p0.v[axis2_flip(axis)] += parent_rect_size.v[axis2_flip(axis)] * panel->off_pct_of_parent.v[axis2_flip(axis)];
   }
-  rect.x0 = roundf(rect.x0);
-  rect.x1 = roundf(rect.x1);
-  rect.y0 = roundf(rect.y0);
-  rect.y1 = roundf(rect.y1);
+  rect.x0 = round_f32(rect.x0);
+  rect.x1 = round_f32(rect.x1);
+  rect.y0 = round_f32(rect.y0);
+  rect.y1 = round_f32(rect.y1);
   return rect;
 }
 
@@ -1220,13 +1219,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             DF_Panel *next = df_panel_alloc(ws);
             df_panel_insert(parent, split_side == Side_Max ? panel : panel->prev, next);
-            next->size_pct_of_parent_target.v[split_axis] = 1.f / parent->child_count;
-            next->size_pct_of_parent.v[axis2_flip(split_axis)] = next->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
+            next->pct_of_parent = 1.f/parent->child_count;
             for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
             {
               if(child != next)
               {
-                child->size_pct_of_parent_target.v[split_axis] *= (F32)(parent->child_count-1) / (parent->child_count);
+                child->pct_of_parent *= (F32)(parent->child_count-1) / (parent->child_count);
               }
             }
             ws->focused_panel = next;
@@ -1237,9 +1235,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             DF_Panel *pre_prev = panel->prev;
             DF_Panel *pre_parent = parent;
             DF_Panel *new_parent = df_panel_alloc(ws);
-            new_parent->size_pct_of_parent.v[split_axis] = panel->size_pct_of_parent.v[split_axis];
-            new_parent->size_pct_of_parent_target.v[split_axis] = panel->size_pct_of_parent_target.v[split_axis];
-            new_parent->size_pct_of_parent.v[axis2_flip(split_axis)] = new_parent->size_pct_of_parent_target.v[axis2_flip(split_axis)] = panel->size_pct_of_parent_target.v[axis2_flip(split_axis)];
+            new_parent->pct_of_parent = panel->pct_of_parent;
             if(!df_panel_is_nil(pre_parent))
             {
               df_panel_remove(pre_parent, panel);
@@ -1251,6 +1247,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             DF_Panel *left = panel;
             DF_Panel *right = df_panel_alloc(ws);
+            new_panel = right;
             if(split_side == Side_Min)
             {
               Swap(DF_Panel *, left, right);
@@ -1258,16 +1255,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             df_panel_insert(new_parent, &df_g_nil_panel, left);
             df_panel_insert(new_parent, left, right);
             new_parent->split_axis = split_axis;
-            left->size_pct_of_parent.v[split_axis] = 1.f;
-            left->size_pct_of_parent_target.v[split_axis] = 0.5f;
-            right->size_pct_of_parent.v[split_axis] = 0.f;
-            right->size_pct_of_parent_target.v[split_axis] = 0.5f;
-            left->size_pct_of_parent.v[axis2_flip(split_axis)] = 1.f;
-            left->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
-            right->size_pct_of_parent.v[axis2_flip(split_axis)] = 1.f;
-            right->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
-            ws->focused_panel = right;
-            new_panel = right;
+            left->pct_of_parent = 0.5f;
+            right->pct_of_parent = 0.5f;
+            ws->focused_panel = new_panel;
           }
           DF_Panel *move_tab_panel = df_panel_from_handle(params.panel);
           DF_View *move_tab = df_view_from_handle(params.view);
@@ -1453,8 +1443,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_1 = df_panel_alloc(ws);
           df_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
           df_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
-          root_0->size_pct_of_parent = root_0->size_pct_of_parent_target = v2f32(0.85f, 1.f);
-          root_1->size_pct_of_parent = root_1->size_pct_of_parent_target = v2f32(0.15f, 1.f);
+          root_0->pct_of_parent = 0.85f;
+          root_1->pct_of_parent = 0.15f;
           
           // rjf: root_0 split
           root_0->split_axis = Axis2_Y;
@@ -1462,8 +1452,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_1 = df_panel_alloc(ws);
           df_panel_insert(root_0, root_0->last, root_0_0);
           df_panel_insert(root_0, root_0->last, root_0_1);
-          root_0_0->size_pct_of_parent = root_0_0->size_pct_of_parent_target = v2f32(1.f, 0.80f);
-          root_0_1->size_pct_of_parent = root_0_1->size_pct_of_parent_target = v2f32(1.f, 0.20f);
+          root_0_0->pct_of_parent = 0.80f;
+          root_0_1->pct_of_parent = 0.20f;
           
           // rjf: root_1 split
           root_1->split_axis = Axis2_Y;
@@ -1471,8 +1461,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_1_1 = df_panel_alloc(ws);
           df_panel_insert(root_1, root_1->last, root_1_0);
           df_panel_insert(root_1, root_1->last, root_1_1);
-          root_1_0->size_pct_of_parent = root_1_0->size_pct_of_parent_target = v2f32(1.f, 0.50f);
-          root_1_1->size_pct_of_parent = root_1_1->size_pct_of_parent_target = v2f32(1.f, 0.50f);
+          root_1_0->pct_of_parent = 0.50f;
+          root_1_1->pct_of_parent = 0.50f;
           df_panel_insert_tab_view(root_1_0, root_1_0->last_tab_view, targets);
           df_panel_insert_tab_view(root_1_1, root_1_1->last_tab_view, scheduler);
           root_1_0->selected_tab_view = df_handle_from_view(targets);
@@ -1485,8 +1475,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_0_1 = df_panel_alloc(ws);
           df_panel_insert(root_0_0, root_0_0->last, root_0_0_0);
           df_panel_insert(root_0_0, root_0_0->last, root_0_0_1);
-          root_0_0_0->size_pct_of_parent = root_0_0_0->size_pct_of_parent_target = v2f32(0.25f, 1.f);
-          root_0_0_1->size_pct_of_parent = root_0_0_1->size_pct_of_parent_target = v2f32(0.75f, 1.f);
+          root_0_0_0->pct_of_parent = 0.25f;
+          root_0_0_1->pct_of_parent = 0.75f;
           
           // rjf: root_0_0_0 split
           root_0_0_0->split_axis = Axis2_Y;
@@ -1494,8 +1484,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_0_0_1 = df_panel_alloc(ws);
           df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_0);
           df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_1);
-          root_0_0_0_0->size_pct_of_parent = root_0_0_0_0->size_pct_of_parent_target = v2f32(1.f, 0.5f);
-          root_0_0_0_1->size_pct_of_parent = root_0_0_0_1->size_pct_of_parent_target = v2f32(1.f, 0.5f);
+          root_0_0_0_0->pct_of_parent = 0.5f;
+          root_0_0_0_1->pct_of_parent = 0.5f;
           df_panel_insert_tab_view(root_0_0_0_0, root_0_0_0_0->last_tab_view, disasm);
           root_0_0_0_0->selected_tab_view = df_handle_from_view(disasm);
           df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, breakpoints);
@@ -1510,8 +1500,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_1_1 = df_panel_alloc(ws);
           df_panel_insert(root_0_1, root_0_1->last, root_0_1_0);
           df_panel_insert(root_0_1, root_0_1->last, root_0_1_1);
-          root_0_1_0->size_pct_of_parent = root_0_1_0->size_pct_of_parent_target = v2f32(0.60f, 1.f);
-          root_0_1_1->size_pct_of_parent = root_0_1_1->size_pct_of_parent_target = v2f32(0.40f, 1.f);
+          root_0_1_0->pct_of_parent = 0.60f;
+          root_0_1_1->pct_of_parent = 0.40f;
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
@@ -1682,7 +1672,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_Panel *keep_child = panel == parent->first ? parent->last : parent->first;
               DF_Panel *grandparent = parent->parent;
               DF_Panel *parent_prev = parent->prev;
-              Vec2F32 size_pct_of_parent = parent->size_pct_of_parent_target;
+              F32 pct_of_parent = parent->pct_of_parent;
               
               // rjf: unhook kept child
               df_panel_remove(parent, keep_child);
@@ -1708,9 +1698,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 df_panel_insert(grandparent, parent_prev, keep_child);
               }
-              keep_child->size_pct_of_parent_target = size_pct_of_parent;
-              keep_child->size_pct_of_parent.v[split_axis] *= size_pct_of_parent.v[split_axis];
-              keep_child->size_pct_of_parent.v[axis2_flip(split_axis)] *= size_pct_of_parent.v[axis2_flip(split_axis)];
+              keep_child->pct_of_parent = pct_of_parent;
               
               // rjf: reset focus, if needed
               if(ws->focused_panel == discard_child)
@@ -1733,8 +1721,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   df_panel_remove(keep_child, child);
                   df_panel_insert(grandparent, prev, child);
                   prev = child;
-                  child->size_pct_of_parent_target.v[keep_child->split_axis] *= keep_child->size_pct_of_parent_target.v[grandparent->split_axis];
-                  child->size_pct_of_parent.v[keep_child->split_axis]        *= keep_child->size_pct_of_parent_target.v[grandparent->split_axis];
+                  child->pct_of_parent *= keep_child->pct_of_parent;
                 }
                 df_panel_release(ws, keep_child);
               }
@@ -1743,7 +1730,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             else
             {
               DF_Panel *next = &df_g_nil_panel;
-              F32 removed_size_pct = panel->size_pct_of_parent_target.v[parent->split_axis];
+              F32 removed_size_pct = panel->pct_of_parent;
               if(df_panel_is_nil(next)) { next = panel->prev; }
               if(df_panel_is_nil(next)) { next = panel->next; }
               df_panel_remove(parent, panel);
@@ -1754,7 +1741,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
               for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
               {
-                child->size_pct_of_parent_target.v[parent->split_axis] /= 1.f-removed_size_pct;
+                child->pct_of_parent /= 1.f-removed_size_pct;
               }
             }
           }
@@ -5803,13 +5790,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(ui_double_clicked(sig))
           {
             ui_kill_action();
-            F32 sum_pct = min_child->size_pct_of_parent_target.v[split_axis] + max_child->size_pct_of_parent_target.v[split_axis];
-            min_child->size_pct_of_parent_target.v[split_axis] = 0.5f * sum_pct;
-            max_child->size_pct_of_parent_target.v[split_axis] = 0.5f * sum_pct;
+            F32 sum_pct = min_child->pct_of_parent + max_child->pct_of_parent;
+            min_child->pct_of_parent = 0.5f * sum_pct;
+            max_child->pct_of_parent = 0.5f * sum_pct;
           }
           else if(ui_pressed(sig))
           {
-            Vec2F32 v = {min_child->size_pct_of_parent_target.v[split_axis], max_child->size_pct_of_parent_target.v[split_axis]};
+            Vec2F32 v = {min_child->pct_of_parent, max_child->pct_of_parent};
             ui_store_drag_struct(&v);
           }
           else if(ui_dragging(sig))
@@ -5836,8 +5823,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               pct_delta = -(max_pct__after - max_pct__before);
               min_pct__after = min_pct__before + pct_delta;
             }
-            min_child->size_pct_of_parent.v[split_axis] = min_child->size_pct_of_parent_target.v[split_axis] = min_pct__after;
-            max_child->size_pct_of_parent.v[split_axis] = max_child->size_pct_of_parent_target.v[split_axis] = max_pct__after;
+            min_child->pct_of_parent = min_pct__after;
+            max_child->pct_of_parent = max_pct__after;
             is_changing_panel_boundaries = 1;
           }
           if(ui_released(sig) || ui_double_clicked(sig))
@@ -6805,23 +6792,21 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     ////////////////////////////
     //- rjf: animate panel pcts
     //
+#if 0
     {
       F32 rate = 1 - pow_f32(2, (-50.f * df_dt()));
       for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
       {
         if(abs_f32(panel->off_pct_of_parent.x) > 0.005f ||
-           abs_f32(panel->off_pct_of_parent.y) > 0.005f ||
-           abs_f32(panel->size_pct_of_parent_target.x - panel->size_pct_of_parent.x) > 0.005f ||
-           abs_f32(panel->size_pct_of_parent_target.y - panel->size_pct_of_parent.y) > 0.005f)
+           abs_f32(panel->off_pct_of_parent.y) > 0.005f)
         {
           df_gfx_request_frame();
         }
         panel->off_pct_of_parent.x += (-panel->off_pct_of_parent.x) * rate;
         panel->off_pct_of_parent.y += (-panel->off_pct_of_parent.y) * rate;
-        panel->size_pct_of_parent.x += (panel->size_pct_of_parent_target.x - panel->size_pct_of_parent.x) * rate;
-        panel->size_pct_of_parent.y += (panel->size_pct_of_parent_target.y - panel->size_pct_of_parent.y) * rate;
       }
     }
+#endif
     
     ////////////////////////////
     //- rjf: animate views
@@ -8637,7 +8622,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
           // rjf: non-root needs pct node
           if(p != root_panel)
           {
-            str8_list_pushf(arena, &strs, "%.*s%g:\n", indentation*2, indent_str.str, p->size_pct_of_parent_target.v[p->parent->split_axis]);
+            str8_list_pushf(arena, &strs, "%.*s%g:\n", indentation*2, indent_str.str, p->pct_of_parent);
             str8_list_pushf(arena, &strs, "%.*s{\n", indentation*2, indent_str.str);
             indentation += 1;
           }
@@ -12544,8 +12529,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               if(n == cfg_panels)
               {
                 panel = ws->root_panel;
-                panel->size_pct_of_parent.v[panel_parent->split_axis] = panel->size_pct_of_parent_target.v[panel_parent->split_axis] = 1.f;
-                panel->size_pct_of_parent.v[axis2_flip(panel_parent->split_axis)] = panel->size_pct_of_parent_target.v[axis2_flip(panel_parent->split_axis)] = 1.f;
+                panel->pct_of_parent = 1.f;
               }
               
               // rjf: allocate & insert non-root panels - these will have a numeric string, determining
@@ -12555,8 +12539,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                 panel = df_panel_alloc(ws);
                 df_panel_insert(panel_parent, panel_parent->last, panel);
                 panel->split_axis = axis2_flip(panel_parent->split_axis);
-                panel->size_pct_of_parent.v[panel_parent->split_axis] = panel->size_pct_of_parent_target.v[panel_parent->split_axis] = (F32)f64_from_str8(n->string);
-                panel->size_pct_of_parent.v[axis2_flip(panel_parent->split_axis)] = panel->size_pct_of_parent_target.v[axis2_flip(panel_parent->split_axis)] = 1.f;
+                panel->pct_of_parent = (F32)f64_from_str8(n->string);
               }
               
               // rjf: do general per-panel work
