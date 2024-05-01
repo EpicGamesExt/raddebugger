@@ -1761,13 +1761,51 @@ struct CV_SymBuildInfo
 
 //- (SymKind: INLINESITE)
 
+typedef U32 CV_InlineBinaryAnnotaiton;
+typedef enum CV_InlineBinaryAnnotationenum
+{
+  CV_InlineBinaryAnnotation_Null,
+  CV_InlineBinaryAnnotation_CodeOffset,
+  CV_InlineBinaryAnnotation_ChangeCodeOffsetBase,
+  CV_InlineBinaryAnnotation_ChangeCodeOffset,
+  CV_InlineBinaryAnnotation_ChangeCodeLength,
+  CV_InlineBinaryAnnotation_ChnageFile,
+  CV_InlineBinaryAnnotation_ChangeLineOffset,
+  CV_InlineBinaryAnnotation_ChnageLineEndDelta,
+  CV_InlineBinaryAnnotation_ChangeRangeKind,
+  CV_InlineBinaryAnnotation_ChangeColumnStart,
+  CV_InlineBinaryAnnotation_ChangeColumnEndDelta,
+  CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset,
+  CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset,
+  CV_InlineBinaryAnnotaiton_ChangeColumnEnd
+};
+
+typedef U32 CV_InlineRangeKind;
+typedef enum CV_InlnineRangeKindEnum
+{
+  CV_InlineRangeKind_Expr,
+  CV_InlineRangeKind_Stmt
+};
+
 typedef struct CV_SymInlineSite CV_SymInlineSite;
 struct CV_SymInlineSite
 {
   U32 parent;
   U32 end;
   CV_ItemId inlinee;
-  // CV_BinaryAnnotation annotations (rest of data)
+  // U8 annotations[] (rest of data)
+};
+
+//- (SymKind: INLINESITE2)
+
+typedef struct CV_SymInlineSite2 CV_SymInlineSite2;
+struct CV_SymInlineSite2
+{
+  U32 parent_off;
+  U32 end_off;
+  CV_ItemId inlinee;
+  U32 invocations;
+  // U8 annotations[] (rest of data)
 };
 
 //- (SymKind: INLINESITE_END) (empty)
@@ -1833,18 +1871,6 @@ struct CV_SymPogoInfo
   U64 dynamic_inst_count;
   U32 static_inst_count;
   U32 post_inline_static_inst_count;
-};
-
-//- (SymKind: INLINESITE2)
-
-typedef struct CV_SymInlineSite2 CV_SymInlineSite2;
-struct CV_SymInlineSite2
-{
-  U32 parent_off;
-  U32 end_off;
-  CV_ItemId inlinee;
-  U32 invocations;
-  // CV_BinaryAnnotation annotations (rest of data)
 };
 
 //- (SymKind: HEAPALLOCSITE)
@@ -2904,6 +2930,12 @@ internal B32              cv_numeric_fits_in_f64(CV_NumericParsed *num);
 internal U64              cv_u64_from_numeric(CV_NumericParsed *num);
 internal S64              cv_s64_from_numeric(CV_NumericParsed *num);
 internal F64              cv_f64_from_numeric(CV_NumericParsed *num);
+
+////////////////////////////////
+//~ Inline Binary Annotation Helpers
+
+internal U64 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value);
+internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value);
 
 ////////////////////////////////
 //~ CodeView Sym/Leaf Parser Functions
