@@ -216,6 +216,7 @@ cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value)
   {
     *out_value = value;
   }
+  
   U64 read_size = cursor - offset;
   return read_size;
 }
@@ -224,9 +225,7 @@ internal U64
 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value)
 {
   U32 value;
-  
   U64 read_size = cv_decode_inline_annot_u32(data, offset, &value);
-  
   if(value & 1)
   {
     value = -(value >> 1);
@@ -235,9 +234,7 @@ cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value)
   {
     value = value >> 1;
   }
-  
   *out_value = (S32)value;
-  
   return read_size;
 }
 
