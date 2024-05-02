@@ -1907,15 +1907,15 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         case DF_CoreCmdKind_Switch:
         {
           B32 already_opened = 0;
-          for(DF_Panel *p = ws->root_panel; !df_panel_is_nil(p); p = df_panel_rec_df_pre(p).next)
+          for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
           {
-            for(DF_View *v = p->first_tab_view; !df_view_is_nil(v); v = v->next)
+            for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
             {
-              DF_Entity *v_param_entity = df_entity_from_handle(v->entity);
+              DF_Entity *v_param_entity = df_entity_from_handle(view->entity);
               if(v_param_entity == df_entity_from_handle(params.entity))
               {
-                p->selected_tab_view = df_handle_from_view(v);
-                ws->focused_panel = p;
+                panel->selected_tab_view = df_handle_from_view(view);
+                ws->focused_panel = panel;
                 already_opened = 1;
                 break;
               }
