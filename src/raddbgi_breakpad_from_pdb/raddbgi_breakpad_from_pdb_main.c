@@ -16,6 +16,9 @@
 #include "lib_raddbgi_format/raddbgi_format_parse.h"
 #include "lib_raddbgi_format/raddbgi_format.c"
 #include "lib_raddbgi_format/raddbgi_format_parse.c"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.h"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.c"
+
 
 //- rjf: [h]
 #include "base/base_inc.h"
@@ -78,7 +81,7 @@ internal TS_TASK_FUNCTION_DEF(p2b_bake_unit_vmap_task__entry_point)
   if(vmap_section != 0)
   {
     out->vmap_entries = (RDI_VMapEntry *)vmap_section->data;
-    out->vmap_entries_count = vmap_section->size/sizeof(RDI_VMapEntry);
+    out->vmap_entries_count = vmap_section->unpacked_size/sizeof(RDI_VMapEntry);
   }
   return out;
 }
@@ -117,7 +120,7 @@ internal TS_TASK_FUNCTION_DEF(p2b_bake_unit_task__entry_point)
   }
   if(voffs_section != 0 && lines_section != 0)
   {
-    out->unit_line_count = lines_section->size/sizeof(RDI_Line);
+    out->unit_line_count = lines_section->unpacked_size/sizeof(RDI_Line);
     out->unit_line_voffs = (U64 *)voffs_section->data;
     out->unit_lines      = (RDI_Line *)lines_section->data;
   }

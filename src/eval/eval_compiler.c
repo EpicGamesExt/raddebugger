@@ -952,8 +952,10 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, E
             // generate ir tree
             if (can_generate){
               EVAL_IRTree *new_tree = l.tree;
+              EVAL_EvalMode mode = l.mode;
               if (l_resolve){
                 new_tree = eval_irtree_resolve_to_value(arena, graph, rdi, l.mode, new_tree, l_restype);
+                mode = EVAL_EvalMode_Addr;
               }
               if (r_off != 0){
                 EVAL_IRTree *const_tree = eval_irtree_const_u(arena, r_off);
@@ -963,7 +965,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, E
               // fill result
               result.tree     = new_tree;
               result.type_key = r_type;
-              result.mode     = l.mode;
+              result.mode     = mode;
             }
           }break;
         }

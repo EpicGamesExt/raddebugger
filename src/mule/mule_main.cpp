@@ -326,6 +326,9 @@ type_coverage_eval_tests(void){
     swea.z = 'z';
   }
   
+  Struct_With_Embedded_Arrays *swea_ptr = &swea;
+  int access_via_ptr_member = swea_ptr->x;
+  
   Custom_Index_Type custom_index = 42;
   Custom_Index_Type more_custom_indices[] = {
     04,13,22,31,40

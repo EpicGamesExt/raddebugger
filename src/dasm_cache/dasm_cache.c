@@ -495,7 +495,7 @@ dasm_parse_thread__entry_point(void *p)
                           break;
                         }
                       }
-                      if(line->line_num < text_info.lines_count)
+                      if(0 < line->line_num && line->line_num < text_info.lines_count)
                       {
                         String8 data = hs_data_from_hash(hs_scope, hash);
                         String8 line_text = str8_skip_chop_whitespace(str8_substr(data, text_info.lines_ranges[line->line_num-1]));

@@ -14,7 +14,6 @@
 // [ ] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
-// [ ] drag/drop tab cleanup
 // [ ] target/breakpoint/watch-pin reordering
 // [ ] watch window reordering
 // [ ] standard way to filter
@@ -59,23 +58,9 @@
 //
 // [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
-// [ ] ** Thread/process control bullet-proofing, including solo-step mode
-//
-// [ ] ** In solo-stepping mode, if I step over something like CreateFileA, it
-//     pseudo-hangs the debugger. I can't seem to do anything else, including
-//     "Kill All". I have to close the debugger and restart it, AFAICT?
-//
-// [ ] ** I tried to debug a console program, and "step into" didn't seem to
-//     work. Instead, it just started running the program, but the program
-//     seemed to hang, and then the debugger pseudo-hung with a continual
-//     progress bar in the disassembly window. I had to close and restart. Is
-//     console app debugging not working yet, perhaps?
-//
 // [ ] Setting the code_font/main_font values to a font name doesn't work.
 //     Should probably make note that you have to set it to a path to a TTF,
 //     since that's not normally how Windows fonts work.
-//
-// [ ] ** Converter performance & heuristics for asynchronously doing it early
 
 ////////////////////////////////
 //~ rjf: Demon/Cleanup Pass Tasks
@@ -90,6 +75,8 @@
 //
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
+//
+// [ ] ** Converter performance & heuristics for asynchronously doing it early
 //
 // [ ] visualize conversion failures
 //
@@ -184,11 +171,6 @@
 //  [ ] Similarly, pressing the left mouse button on a menu and dragging to an
 //      item, then releasing, does not trigger that item as expected. Instead,
 //      it is a nop, and it waits for you to click again on the item.
-//
-//  [ ] Working with panels felt cumbersome. I couldn't figure out any way to
-//      quickly arrange the display without manually selecting "split panel"
-//      and "close panel" and stuff from the menu, which took a long time.
-//   - @polish @feature ui for dragging tab -> bundling panel split options
 //
 //  [ ] I found the "context menu" convention to be confusing. For example, if
 //      I left-click on a tab, it selects the tab. If I right-click on a tab,
@@ -395,22 +377,7 @@
 ////////////////////////////////
 //~ rjf: Recently Completed Task Log
 //
-// [x] solidify synchronization mechanisms for usage of demon layer
-// [x] TLS eval correctness
-// [x] freezing thread while running -> soft-halt
-// [x] Watch Window Filtering
-// [x] @feature disasm keyboard navigation & copy/paste
-// [x] run-to-line needs to work if no processes are running
-//     - place temp bp, attach "die on hit" flag or something like that?
-// [x] disasm animation & go-to-address
-//  [x]  middle mouse button on tab should close it
-//  [x] I didn't understand the terminology "Equip With Color". Does that just
-//      mean specify the color used to display it? Is "Apply Color" perhaps a
-//      bit more user-friendly?
 //
-//  [x] The cursor feels a bit too huge vertically.
-// [x] @feature watch window labels
-// [x] @cleanup @feature double & triple click select in source views
 
 #ifndef RADDBG_H
 #define RADDBG_H

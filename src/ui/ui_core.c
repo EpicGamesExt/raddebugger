@@ -602,6 +602,12 @@ ui_active_key(UI_MouseButtonKind button_kind)
   return ui_state->active_box_key[button_kind];
 }
 
+internal UI_Key
+ui_drop_hot_key(void)
+{
+  return ui_state->drop_hot_box_key;
+}
+
 //- rjf: controls over interaction
 
 internal void
@@ -940,7 +946,7 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   }
   
   //- rjf: setup parent box for tooltip
-  UI_FixedX(ui_state->mouse.x+15.f) UI_FixedY(ui_state->mouse.y) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
+  UI_FixedX(ui_state->mouse.x+15.f) UI_FixedY(ui_state->mouse.y+15.f) UI_PrefWidth(ui_children_sum(1.f)) UI_PrefHeight(ui_children_sum(1.f))
   {
     ui_set_next_child_layout_axis(Axis2_Y);
     ui_state->tooltip_root = ui_build_box_from_stringf(0, "###tooltip_%I64x", window.u64[0]);
@@ -980,6 +986,11 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
     {
       ui_state->hot_box_key = ui_key_zero();
     }
+  }
+  
+  //- rjf: reset drop-hot key
+  {
+    ui_state->drop_hot_box_key = ui_key_zero();
   }
   
   //- rjf: reset active if our active box is disabled
@@ -1090,17 +1101,20 @@ ui_end_build(void)
   
   //- rjf: ensure special floating roots are within screen bounds
   UI_Box *floating_roots[] = {ui_state->tooltip_root, ui_state->ctx_menu_root};
+  B32 force_contain[]      = {0,                      1};
   for(U64 idx = 0; idx < ArrayCount(floating_roots); idx += 1)
   {
     UI_Box *root = floating_roots[idx];
     if(!ui_box_is_nil(root))
     {
       Rng2F32 window_rect = os_client_rect_from_window(ui_window());
+      Vec2F32 window_dim = dim_2f32(window_rect);
       Rng2F32 root_rect = root->rect;
+      Vec2F32 root_rect_dim = dim_2f32(root_rect);
       Vec2F32 shift =
       {
-        -ClampBot(0, root_rect.x1 - window_rect.x1),
-        -ClampBot(0, root_rect.y1 - window_rect.y1),
+        -ClampBot(0, root_rect.x1 - window_rect.x1) * (root_rect_dim.x < root->font_size*15.f || force_contain[idx]),
+        -ClampBot(0, root_rect.y1 - window_rect.y1) * (root_rect_dim.y < root->font_size*15.f || force_contain[idx]),
       };
       Rng2F32 new_root_rect = shift_2f32(root_rect, shift);
       root->fixed_position = new_root_rect.p0;
@@ -1717,7 +1731,6 @@ internal void
 ui_tooltip_end_base(void)
 {
   ui_pop_flags();
-  ui_pop_transparency();
   ui_pop_parent();
   ui_pop_parent();
 }
@@ -2720,6 +2733,32 @@ ui_signal_from_box(UI_Box *box)
     {
       ui_state->hot_box_key = box->key;
       sig.f |= UI_SignalFlag_Hovering;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse is over this box's rect, drop site, no other drop hot key? -> set drop hot key
+  //
+  {
+    if(box->flags & UI_BoxFlag_DropSite &&
+       contains_2f32(rect, ui_state->mouse) &&
+       !contains_2f32(blacklist_rect, ui_state->mouse) &&
+       (ui_key_match(ui_state->drop_hot_box_key, ui_key_zero()) || ui_key_match(ui_state->drop_hot_box_key, box->key)))
+    {
+      ui_state->drop_hot_box_key = box->key;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse is not over this box's rect, but this is the drop hot key? -> zero drop hot key
+  //
+  {
+    if(box->flags & UI_BoxFlag_DropSite &&
+       (!contains_2f32(rect, ui_state->mouse) ||
+        contains_2f32(blacklist_rect, ui_state->mouse)) &&
+       ui_key_match(ui_state->drop_hot_box_key, box->key))
+    {
+      ui_state->drop_hot_box_key = ui_key_zero();
     }
   }
   

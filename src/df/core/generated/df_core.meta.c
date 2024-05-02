@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 df_g_cmd_param_slot_range_table[20] =
+Rng1U64 df_g_cmd_param_slot_range_table[21] =
 {
 {0},
 {OffsetOf(DF_CmdParams, window), OffsetOf(DF_CmdParams, window) + sizeof(DF_Handle)},
@@ -26,6 +26,7 @@ Rng1U64 df_g_cmd_param_slot_range_table[20] =
 {OffsetOf(DF_CmdParams, id), OffsetOf(DF_CmdParams, id) + sizeof(U64)},
 {OffsetOf(DF_CmdParams, prefer_dasm), OffsetOf(DF_CmdParams, prefer_dasm) + sizeof(B32)},
 {OffsetOf(DF_CmdParams, force_confirm), OffsetOf(DF_CmdParams, force_confirm) + sizeof(B32)},
+{OffsetOf(DF_CmdParams, dir2), OffsetOf(DF_CmdParams, dir2) + sizeof(Dir2)},
 };
 
 DF_IconKind df_g_entity_kind_icon_kind_table[27] =
@@ -215,7 +216,7 @@ DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 
-DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[209] =
+DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[212] =
 {
 { str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp("Exit"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_X},
@@ -269,8 +270,11 @@ DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[209] =
 { str8_lit_comp("confirm_accept"), str8_lit_comp("Accepts the active confirmation prompt."), str8_lit_comp(""), str8_lit_comp("Confirm Accept"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("confirm_cancel"), str8_lit_comp("Cancels the active confirmation prompt."), str8_lit_comp(""), str8_lit_comp("Confirm Cancel"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("reset_to_default_panels"), str8_lit_comp("Resets the window to the default panel layout."), str8_lit_comp("panel"), str8_lit_comp("Reset To Default Panel Layout"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Window},
-{ str8_lit_comp("new_panel_right"), str8_lit_comp("Creates a new panel to the right of the active panel."), str8_lit_comp("panel"), str8_lit_comp("Split Panel Vertically"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_XSplit},
-{ str8_lit_comp("new_panel_down"), str8_lit_comp("Creates a new panel at the bottom of the active panel."), str8_lit_comp("panel"), str8_lit_comp("Split Panel Horizontally"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_YSplit},
+{ str8_lit_comp("new_panel_left"), str8_lit_comp("Creates a new panel to the left of the active panel."), str8_lit_comp("panel"), str8_lit_comp("Split Panel Left"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_XSplit},
+{ str8_lit_comp("new_panel_up"), str8_lit_comp("Creates a new panel at the top of the active panel."), str8_lit_comp("panel"), str8_lit_comp("Split Panel Up"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_YSplit},
+{ str8_lit_comp("new_panel_right"), str8_lit_comp("Creates a new panel to the right of the active panel."), str8_lit_comp("panel"), str8_lit_comp("Split Panel Right"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_XSplit},
+{ str8_lit_comp("new_panel_down"), str8_lit_comp("Creates a new panel at the bottom of the active panel."), str8_lit_comp("panel"), str8_lit_comp("Split Panel Down"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_YSplit},
+{ str8_lit_comp("split_panel"), str8_lit_comp("Creates a new panel in a given direction, and moves a tab to it, if specified."), str8_lit_comp(""), str8_lit_comp("Split Panel"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("rotate_panel_columns"), str8_lit_comp("Rotates all panels at the closest column level of the panel hierarchy."), str8_lit_comp(""), str8_lit_comp("Rotate Panel Columns"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("next_panel"), str8_lit_comp("Cycles the active panel forward."), str8_lit_comp(""), str8_lit_comp("Focus Next Panel"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_RightArrow},
 { str8_lit_comp("prev_panel"), str8_lit_comp("Cycles the active panel backwards."), str8_lit_comp(""), str8_lit_comp("Focus Previous Panel"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_LeftArrow},

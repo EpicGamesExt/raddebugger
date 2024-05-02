@@ -2920,9 +2920,10 @@ rdim_bake_global_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParam
         {
           RDIM_Symbol *global_var = &n->v[chunk_idx];
           RDI_U32 global_var_idx = (RDI_U32)rdim_idx_from_symbol(global_var); // TODO(rjf): @u64_to_u32
+          RDI_U64 global_var_size = global_var->type ? global_var->type->byte_size : 1;
           
           RDI_U64 first = global_var->offset;
-          RDI_U64 opl   = first + global_var->type->byte_size;
+          RDI_U64 opl   = first + global_var_size;
           
           key_ptr->key = first;
           key_ptr->val = marker_ptr;
