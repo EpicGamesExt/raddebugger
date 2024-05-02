@@ -216,7 +216,7 @@ df_panel_rec_df(DF_Panel *panel, U64 sib_off, U64 child_off)
 //- rjf: panel -> rect calculations
 
 internal Rng2F32
-df_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel)
+df_target_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel)
 {
   Rng2F32 rect = parent_rect;
   if(!df_panel_is_nil(parent))
@@ -226,26 +226,25 @@ df_rect_from_panel_child(Rng2F32 parent_rect, DF_Panel *parent, DF_Panel *panel)
     rect.p1.v[axis] = rect.p0.v[axis];
     for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
     {
-      rect.p1.v[axis] += parent_rect_size.v[axis] * child->size_pct_of_parent.v[axis];
-      rect.p1.v[axis2_flip(axis)] = rect.p0.v[axis2_flip(axis)] + parent_rect_size.v[axis2_flip(axis)] * child->size_pct_of_parent.v[axis2_flip(axis)];
+      rect.p1.v[axis] += parent_rect_size.v[axis] * child->pct_of_parent;
       if(child == panel)
       {
         break;
       }
       rect.p0.v[axis] = rect.p1.v[axis];
     }
-    rect.p0.v[axis] += parent_rect_size.v[axis] * panel->off_pct_of_parent.v[axis];
-    rect.p0.v[axis2_flip(axis)] += parent_rect_size.v[axis2_flip(axis)] * panel->off_pct_of_parent.v[axis2_flip(axis)];
+    //rect.p0.v[axis] += parent_rect_size.v[axis] * panel->off_pct_of_parent.v[axis];
+    //rect.p0.v[axis2_flip(axis)] += parent_rect_size.v[axis2_flip(axis)] * panel->off_pct_of_parent.v[axis2_flip(axis)];
   }
-  rect.x0 = roundf(rect.x0);
-  rect.x1 = roundf(rect.x1);
-  rect.y0 = roundf(rect.y0);
-  rect.y1 = roundf(rect.y1);
+  rect.x0 = round_f32(rect.x0);
+  rect.x1 = round_f32(rect.x1);
+  rect.y0 = round_f32(rect.y0);
+  rect.y1 = round_f32(rect.y1);
   return rect;
 }
 
 internal Rng2F32
-df_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel)
+df_target_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel)
 {
   Temp scratch = scratch_begin(0, 0);
   
@@ -277,12 +276,12 @@ df_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel)
     DF_Panel *parent = ancestor->parent;
     if(!df_panel_is_nil(parent))
     {
-      parent_rect = df_rect_from_panel_child(parent_rect, parent, ancestor);
+      parent_rect = df_target_rect_from_panel_child(parent_rect, parent, ancestor);
     }
   }
   
   // rjf: calculate final rect
-  Rng2F32 rect = df_rect_from_panel_child(parent_rect, panel->parent, panel);
+  Rng2F32 rect = df_target_rect_from_panel_child(parent_rect, panel->parent, panel);
   
   scratch_end(scratch);
   return rect;
@@ -913,6 +912,7 @@ df_panel_alloc(DF_Window *ws)
   panel->first = panel->last = panel->next = panel->prev = panel->parent = &df_g_nil_panel;
   panel->first_tab_view = panel->last_tab_view = &df_g_nil_view;
   panel->generation += 1;
+  MemoryZeroStruct(&panel->animated_rect_pct);
   return panel;
 }
 
@@ -1095,7 +1095,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       }
       
       // rjf: set up data for cases
-      Axis2 split_axis = Axis2_X;
+      Dir2 split_dir = Dir2_Invalid;
+      DF_Panel *split_panel = ws->focused_panel;
       U64 panel_sib_off = 0;
       U64 panel_child_off = 0;
       Vec2S32 panel_change_dir = {0};
@@ -1198,35 +1199,44 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         }break;
         
         //- rjf: panel creation
-        case DF_CoreCmdKind_NewPanelRight: split_axis = Axis2_X; goto split;
-        case DF_CoreCmdKind_NewPanelDown:  split_axis = Axis2_Y; goto split;
-        split:;
+        case DF_CoreCmdKind_NewPanelLeft: {split_dir = Dir2_Left;}goto split;
+        case DF_CoreCmdKind_NewPanelUp:   {split_dir = Dir2_Up;}goto split;
+        case DF_CoreCmdKind_NewPanelRight:{split_dir = Dir2_Right;}goto split;
+        case DF_CoreCmdKind_NewPanelDown: {split_dir = Dir2_Down;}goto split;
+        case DF_CoreCmdKind_SplitPanel:
         {
-          DF_Panel *panel = ws->focused_panel;
+          split_dir = params.dir2;
+          split_panel = df_panel_from_handle(params.dest_panel);
+        }goto split;
+        split:;
+        if(split_dir != Dir2_Invalid && !df_panel_is_nil(split_panel))
+        {
+          DF_Panel *new_panel = &df_g_nil_panel;
+          Axis2 split_axis = axis2_from_dir2(split_dir);
+          Side split_side = side_from_dir2(split_dir);
+          DF_Panel *panel = split_panel;
           DF_Panel *parent = panel->parent;
           if(!df_panel_is_nil(parent) && parent->split_axis == split_axis)
           {
             DF_Panel *next = df_panel_alloc(ws);
-            df_panel_insert(parent, panel, next);
-            next->size_pct_of_parent_target.v[split_axis] = 1.f / parent->child_count;
-            next->size_pct_of_parent.v[axis2_flip(split_axis)] = next->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
+            df_panel_insert(parent, split_side == Side_Max ? panel : panel->prev, next);
+            next->pct_of_parent = 1.f/parent->child_count;
             for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
             {
               if(child != next)
               {
-                child->size_pct_of_parent_target.v[split_axis] *= (F32)(parent->child_count-1) / (parent->child_count);
+                child->pct_of_parent *= (F32)(parent->child_count-1) / (parent->child_count);
               }
             }
             ws->focused_panel = next;
+            new_panel = next;
           }
           else
           {
             DF_Panel *pre_prev = panel->prev;
             DF_Panel *pre_parent = parent;
             DF_Panel *new_parent = df_panel_alloc(ws);
-            new_parent->size_pct_of_parent.v[split_axis] = panel->size_pct_of_parent.v[split_axis];
-            new_parent->size_pct_of_parent_target.v[split_axis] = panel->size_pct_of_parent_target.v[split_axis];
-            new_parent->size_pct_of_parent.v[axis2_flip(split_axis)] = new_parent->size_pct_of_parent_target.v[axis2_flip(split_axis)] = panel->size_pct_of_parent_target.v[axis2_flip(split_axis)];
+            new_parent->pct_of_parent = panel->pct_of_parent;
             if(!df_panel_is_nil(pre_parent))
             {
               df_panel_remove(pre_parent, panel);
@@ -1238,18 +1248,44 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             DF_Panel *left = panel;
             DF_Panel *right = df_panel_alloc(ws);
+            new_panel = right;
+            if(split_side == Side_Min)
+            {
+              Swap(DF_Panel *, left, right);
+            }
             df_panel_insert(new_parent, &df_g_nil_panel, left);
             df_panel_insert(new_parent, left, right);
             new_parent->split_axis = split_axis;
-            left->size_pct_of_parent.v[split_axis] = 1.f;
-            left->size_pct_of_parent_target.v[split_axis] = 0.5f;
-            right->size_pct_of_parent.v[split_axis] = 0.f;
-            right->size_pct_of_parent_target.v[split_axis] = 0.5f;
-            left->size_pct_of_parent.v[axis2_flip(split_axis)] = 1.f;
-            left->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
-            right->size_pct_of_parent.v[axis2_flip(split_axis)] = 1.f;
-            right->size_pct_of_parent_target.v[axis2_flip(split_axis)] = 1.f;
-            ws->focused_panel = right;
+            left->pct_of_parent = 0.5f;
+            right->pct_of_parent = 0.5f;
+            ws->focused_panel = new_panel;
+          }
+          if(!df_panel_is_nil(new_panel->prev))
+          {
+            Rng2F32 prev_rect_pct = new_panel->prev->animated_rect_pct;
+            new_panel->animated_rect_pct = prev_rect_pct;
+            new_panel->animated_rect_pct.p0.v[split_axis] = new_panel->animated_rect_pct.p1.v[split_axis];
+          }
+          if(!df_panel_is_nil(new_panel->next))
+          {
+            Rng2F32 next_rect_pct = new_panel->next->animated_rect_pct;
+            new_panel->animated_rect_pct = next_rect_pct;
+            new_panel->animated_rect_pct.p1.v[split_axis] = new_panel->animated_rect_pct.p0.v[split_axis];
+          }
+          DF_Panel *move_tab_panel = df_panel_from_handle(params.panel);
+          DF_View *move_tab = df_view_from_handle(params.view);
+          if(!df_panel_is_nil(new_panel) && !df_view_is_nil(move_tab) && !df_panel_is_nil(move_tab_panel) &&
+             core_cmd_kind == DF_CoreCmdKind_SplitPanel)
+          {
+            df_panel_remove_tab_view(move_tab_panel, move_tab);
+            df_panel_insert_tab_view(new_panel, new_panel->last_tab_view, move_tab);
+            new_panel->selected_tab_view = df_handle_from_view(move_tab);
+            if(df_view_is_nil(move_tab_panel->first_tab_view) && move_tab_panel != ws->root_panel &&
+               move_tab_panel != new_panel->prev && move_tab_panel != new_panel->next)
+            {
+              DF_CmdParams p = df_cmd_params_from_panel(ws, move_tab_panel);
+              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
+            }
           }
           df_panel_notify_mutation(ws, panel);
         }break;
@@ -1421,8 +1457,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_1 = df_panel_alloc(ws);
           df_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
           df_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
-          root_0->size_pct_of_parent = root_0->size_pct_of_parent_target = v2f32(0.85f, 1.f);
-          root_1->size_pct_of_parent = root_1->size_pct_of_parent_target = v2f32(0.15f, 1.f);
+          root_0->pct_of_parent = 0.85f;
+          root_1->pct_of_parent = 0.15f;
           
           // rjf: root_0 split
           root_0->split_axis = Axis2_Y;
@@ -1430,8 +1466,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_1 = df_panel_alloc(ws);
           df_panel_insert(root_0, root_0->last, root_0_0);
           df_panel_insert(root_0, root_0->last, root_0_1);
-          root_0_0->size_pct_of_parent = root_0_0->size_pct_of_parent_target = v2f32(1.f, 0.80f);
-          root_0_1->size_pct_of_parent = root_0_1->size_pct_of_parent_target = v2f32(1.f, 0.20f);
+          root_0_0->pct_of_parent = 0.80f;
+          root_0_1->pct_of_parent = 0.20f;
           
           // rjf: root_1 split
           root_1->split_axis = Axis2_Y;
@@ -1439,8 +1475,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_1_1 = df_panel_alloc(ws);
           df_panel_insert(root_1, root_1->last, root_1_0);
           df_panel_insert(root_1, root_1->last, root_1_1);
-          root_1_0->size_pct_of_parent = root_1_0->size_pct_of_parent_target = v2f32(1.f, 0.50f);
-          root_1_1->size_pct_of_parent = root_1_1->size_pct_of_parent_target = v2f32(1.f, 0.50f);
+          root_1_0->pct_of_parent = 0.50f;
+          root_1_1->pct_of_parent = 0.50f;
           df_panel_insert_tab_view(root_1_0, root_1_0->last_tab_view, targets);
           df_panel_insert_tab_view(root_1_1, root_1_1->last_tab_view, scheduler);
           root_1_0->selected_tab_view = df_handle_from_view(targets);
@@ -1453,8 +1489,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_0_1 = df_panel_alloc(ws);
           df_panel_insert(root_0_0, root_0_0->last, root_0_0_0);
           df_panel_insert(root_0_0, root_0_0->last, root_0_0_1);
-          root_0_0_0->size_pct_of_parent = root_0_0_0->size_pct_of_parent_target = v2f32(0.25f, 1.f);
-          root_0_0_1->size_pct_of_parent = root_0_0_1->size_pct_of_parent_target = v2f32(0.75f, 1.f);
+          root_0_0_0->pct_of_parent = 0.25f;
+          root_0_0_1->pct_of_parent = 0.75f;
           
           // rjf: root_0_0_0 split
           root_0_0_0->split_axis = Axis2_Y;
@@ -1462,8 +1498,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_0_0_1 = df_panel_alloc(ws);
           df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_0);
           df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_1);
-          root_0_0_0_0->size_pct_of_parent = root_0_0_0_0->size_pct_of_parent_target = v2f32(1.f, 0.5f);
-          root_0_0_0_1->size_pct_of_parent = root_0_0_0_1->size_pct_of_parent_target = v2f32(1.f, 0.5f);
+          root_0_0_0_0->pct_of_parent = 0.5f;
+          root_0_0_0_1->pct_of_parent = 0.5f;
           df_panel_insert_tab_view(root_0_0_0_0, root_0_0_0_0->last_tab_view, disasm);
           root_0_0_0_0->selected_tab_view = df_handle_from_view(disasm);
           df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, breakpoints);
@@ -1478,8 +1514,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_Panel *root_0_1_1 = df_panel_alloc(ws);
           df_panel_insert(root_0_1, root_0_1->last, root_0_1_0);
           df_panel_insert(root_0_1, root_0_1->last, root_0_1_1);
-          root_0_1_0->size_pct_of_parent = root_0_1_0->size_pct_of_parent_target = v2f32(0.60f, 1.f);
-          root_0_1_1->size_pct_of_parent = root_0_1_1->size_pct_of_parent_target = v2f32(0.40f, 1.f);
+          root_0_1_0->pct_of_parent = 0.60f;
+          root_0_1_1->pct_of_parent = 0.40f;
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
           df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
@@ -1586,7 +1622,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         focus_panel_dir:;
         {
           DF_Panel *src_panel = ws->focused_panel;
-          Rng2F32 src_panel_rect = df_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, src_panel);
+          Rng2F32 src_panel_rect = df_target_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, src_panel);
           Vec2F32 src_panel_center = center_2f32(src_panel_rect);
           Vec2F32 src_panel_half_dim = scale_2f32(dim_2f32(src_panel_rect), 0.5f);
           Vec2F32 travel_dim = add_2f32(src_panel_half_dim, v2f32(10.f, 10.f));
@@ -1598,7 +1634,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               continue;
             }
-            Rng2F32 p_rect = df_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, p);
+            Rng2F32 p_rect = df_target_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, p);
             if(contains_2f32(p_rect, travel_dst))
             {
               dst_root = p;
@@ -1650,7 +1686,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               DF_Panel *keep_child = panel == parent->first ? parent->last : parent->first;
               DF_Panel *grandparent = parent->parent;
               DF_Panel *parent_prev = parent->prev;
-              Vec2F32 size_pct_of_parent = parent->size_pct_of_parent_target;
+              F32 pct_of_parent = parent->pct_of_parent;
               
               // rjf: unhook kept child
               df_panel_remove(parent, keep_child);
@@ -1676,9 +1712,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 df_panel_insert(grandparent, parent_prev, keep_child);
               }
-              keep_child->size_pct_of_parent_target = size_pct_of_parent;
-              keep_child->size_pct_of_parent.v[split_axis] *= size_pct_of_parent.v[split_axis];
-              keep_child->size_pct_of_parent.v[axis2_flip(split_axis)] *= size_pct_of_parent.v[axis2_flip(split_axis)];
+              keep_child->pct_of_parent = pct_of_parent;
               
               // rjf: reset focus, if needed
               if(ws->focused_panel == discard_child)
@@ -1701,8 +1735,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                   df_panel_remove(keep_child, child);
                   df_panel_insert(grandparent, prev, child);
                   prev = child;
-                  child->size_pct_of_parent_target.v[keep_child->split_axis] *= keep_child->size_pct_of_parent_target.v[grandparent->split_axis];
-                  child->size_pct_of_parent.v[keep_child->split_axis]        *= keep_child->size_pct_of_parent_target.v[grandparent->split_axis];
+                  child->pct_of_parent *= keep_child->pct_of_parent;
                 }
                 df_panel_release(ws, keep_child);
               }
@@ -1711,7 +1744,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             else
             {
               DF_Panel *next = &df_g_nil_panel;
-              F32 removed_size_pct = panel->size_pct_of_parent_target.v[parent->split_axis];
+              F32 removed_size_pct = panel->pct_of_parent;
               if(df_panel_is_nil(next)) { next = panel->prev; }
               if(df_panel_is_nil(next)) { next = panel->next; }
               df_panel_remove(parent, panel);
@@ -1722,7 +1755,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
               for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
               {
-                child->size_pct_of_parent_target.v[parent->split_axis] /= 1.f-removed_size_pct;
+                child->pct_of_parent /= 1.f-removed_size_pct;
               }
             }
           }
@@ -1808,6 +1841,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             df_panel_remove_tab_view(src_panel, view);
             df_panel_insert_tab_view(dst_panel, prev_view, view);
             ws->focused_panel = dst_panel;
+            if(df_view_is_nil(src_panel->first_tab_view) && src_panel != ws->root_panel)
+            {
+              DF_CmdParams p = df_cmd_params_from_panel(ws, src_panel);
+              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
+            }
             df_panel_notify_mutation(ws, dst_panel);
           }
         }break;
@@ -2657,7 +2695,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 continue;
               }
-              Rng2F32 panel_rect = df_rect_from_panel(root_rect, ws->root_panel, panel);
+              Rng2F32 panel_rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
               Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
               F32 area = panel_rect_dim.x * panel_rect_dim.y;
               if((best_panel_area == 0 || area > best_panel_area))
@@ -2679,7 +2717,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 continue;
               }
-              Rng2F32 panel_rect = df_rect_from_panel(root_rect, ws->root_panel, panel);
+              Rng2F32 panel_rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
               Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
               F32 area = panel_rect_dim.x * panel_rect_dim.y;
               if(df_view_is_nil(panel->first_tab_view) && (best_panel_area == 0 || area > best_panel_area))
@@ -2986,26 +3024,50 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       DF_Panel *panel = df_panel_from_handle(payload->panel);
       DF_Entity *entity = df_entity_from_handle(payload->entity);
       DF_View *view = df_view_from_handle(payload->view);
-      UI_Tooltip
       {
-        UI_Box *tooltip = ui_top_parent();
+        //- rjf: tab dragging
         if(!df_view_is_nil(view))
         {
-          ui_set_next_pref_width(ui_children_sum(1));
-          UI_Row UI_HeightFill
+          UI_Size main_width = ui_top_pref_width();
+          UI_Size main_height = ui_top_pref_height();
+          UI_TextAlign main_text_align = ui_top_text_alignment();
+          ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_TabActive));
+          UI_Tooltip UI_PrefWidth(main_width) UI_PrefHeight(main_height) UI_TextAlignment(main_text_align)
           {
-            DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-            String8 display_name = df_display_string_from_view(scratch.arena, ctrl_ctx, view);
-            DF_IconKind icon_kind = df_icon_kind_from_view(view);
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-              UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-              UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-              ui_label(df_g_icon_kind_text_table[icon_kind]);
-            ui_label(display_name);
-            tooltip->background_color = df_rgba_from_theme_color(DF_ThemeColor_TabActive);
+            ui_set_next_pref_width(ui_em(60.f, 1.f));
+            ui_set_next_pref_height(ui_em(40.f, 1.f));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *container = ui_build_box_from_key(0, ui_key_zero());
+            UI_Parent(container)
+            {
+              UI_Row
+              {
+                DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
+                String8 display_name = df_display_string_from_view(scratch.arena, ctrl_ctx, view);
+                DF_IconKind icon_kind = df_icon_kind_from_view(view);
+                UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                  UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                  UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+                  UI_PrefWidth(ui_em(2.5f, 1.f))
+                  ui_label(df_g_icon_kind_text_table[icon_kind]);
+                ui_label(display_name);
+              }
+              ui_set_next_pref_width(ui_pct(1, 0));
+              ui_set_next_pref_height(ui_pct(1, 0));
+              ui_set_next_child_layout_axis(Axis2_Y);
+              UI_Box *view_preview_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_preview_container");
+              UI_Parent(view_preview_container) UI_Focus(UI_FocusKind_Off) UI_WidthFill
+              {
+                DF_ViewSpec *view_spec = view->spec;
+                DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
+                build_view_ui_function(ws, &df_g_nil_panel, view, view_preview_container->rect);
+              }
+            }
           }
         }
-        if(!df_entity_is_nil(entity))
+        
+        //- rjf: entity dragging
+        else if(!df_entity_is_nil(entity)) UI_Tooltip
         {
           ui_set_next_pref_width(ui_children_sum(1));
           UI_Row UI_HeightFill
@@ -3017,7 +3079,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
               ui_label(df_g_icon_kind_text_table[icon_kind]);
             ui_label(display_name);
-            tooltip->background_color = df_rgba_from_theme_color(DF_ThemeColor_EntityBackground);
           }
         }
       }
@@ -5206,7 +5267,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             panel = df_panel_rec_df_pre(panel).next)
         {
           if(!df_panel_is_nil(panel->first)) { continue; }
-          Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+          Rng2F32 panel_rect = df_target_rect_from_panel(content_rect, ws->root_panel, panel);
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
           if(!df_view_is_nil(view) &&
              contains_2f32(panel_rect, ui_mouse()) &&
@@ -5513,7 +5574,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     }
     
     ////////////////////////////
-    //- rjf: panel non-leaf UI (drag boundaries)
+    //- rjf: panel non-leaf UI (drag boundaries, drag/drop sites)
     //
     B32 is_changing_panel_boundaries = 0;
     ProfScope("non-leaf panel UI")
@@ -5521,23 +5582,224 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           !df_panel_is_nil(panel);
           panel = df_panel_rec_df_pre(panel).next)
     {
+      //////////////////////////
       //- rjf: continue on leaf panels
+      //
       if(df_panel_is_nil(panel->first))
       {
         continue;
       }
       
+      //////////////////////////
       //- rjf: grab info
+      //
       Axis2 split_axis = panel->split_axis;
-      Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+      Rng2F32 panel_rect = df_target_rect_from_panel(content_rect, ws->root_panel, panel);
       
-      //- rjf: do UI for boundaries between all children
+      //////////////////////////
+      //- rjf: boundary tab-drag/drop sites
+      //
+      {
+        DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
+        if(df_drag_is_active() && !df_view_is_nil(drag_view))
+        {
+          //- rjf: params
+          F32 drop_site_major_dim_px = ceil_f32(ui_top_font_size()*7.f);
+          F32 drop_site_minor_dim_px = ceil_f32(ui_top_font_size()*5.f);
+          F32 corner_radius = ui_top_font_size()*0.5f;
+          F32 padding = ceil_f32(ui_top_font_size()*0.5f);
+          
+          //- rjf: special case - build Y boundary drop sites on root panel
+          //
+          // (this does not naturally follow from the below algorithm, since the
+          // root level panel only splits on X)
+          if(panel == ws->root_panel) UI_CornerRadius(corner_radius)
+          {
+            Vec2F32 panel_rect_center = center_2f32(panel_rect);
+            Axis2 axis = axis2_flip(ws->root_panel->split_axis);
+            for(EachEnumVal(Side, side))
+            {
+              UI_Key key = ui_key_from_stringf(ui_key_zero(), "root_extra_split_%i", side);
+              Rng2F32 site_rect = panel_rect;
+              site_rect.p0.v[axis2_flip(axis)] = panel_rect_center.v[axis2_flip(axis)] - drop_site_major_dim_px/2;
+              site_rect.p1.v[axis2_flip(axis)] = panel_rect_center.v[axis2_flip(axis)] + drop_site_major_dim_px/2;
+              site_rect.p0.v[axis] = panel_rect.v[side].v[axis] - drop_site_minor_dim_px/2;
+              site_rect.p1.v[axis] = panel_rect.v[side].v[axis] + drop_site_minor_dim_px/2;
+              
+              // rjf: build
+              UI_Box *site_box = &ui_g_nil_box;
+              {
+                UI_Rect(site_rect)
+                {
+                  site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
+                  ui_signal_from_box(site_box);
+                }
+                UI_Box *site_box_viz = &ui_g_nil_box;
+                UI_Parent(site_box) UI_WidthFill UI_HeightFill
+                  UI_Padding(ui_px(padding, 1.f))
+                  UI_Column
+                  UI_Padding(ui_px(padding, 1.f))
+                {
+                  ui_set_next_child_layout_axis(axis2_flip(axis));
+                  if(ui_key_match(key, ui_drop_hot_key()))
+                  {
+                    ui_set_next_border_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+                  }
+                  site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawDropShadow|
+                                                       UI_BoxFlag_DrawBackgroundBlur, ui_key_zero());
+                }
+                UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                {
+                  ui_set_next_child_layout_axis(axis);
+                  UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                  {
+                    ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                    ui_spacer(ui_px(padding, 1.f));
+                    ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                  }
+                }
+              }
+              
+              // rjf: viz
+              if(ui_key_match(site_box->key, ui_drop_hot_key()))
+              {
+                Rng2F32 future_split_rect = site_rect;
+                future_split_rect.p0.v[axis] -= drop_site_major_dim_px;
+                future_split_rect.p1.v[axis] += drop_site_major_dim_px;
+                future_split_rect.p0.v[axis2_flip(axis)] = panel_rect.p0.v[axis2_flip(axis)];
+                future_split_rect.p1.v[axis2_flip(axis)] = panel_rect.p1.v[axis2_flip(axis)];
+                UI_Rect(future_split_rect)
+                {
+                  ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
+                  ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+                }
+              }
+              
+              // rjf: drop
+              DF_DragDropPayload payload = {0};
+              if(ui_key_match(site_box->key, ui_drop_hot_key()) && df_drag_drop(&payload))
+              {
+                Dir2 dir = (axis == Axis2_Y ? (side == Side_Min ? Dir2_Up : Dir2_Down) :
+                            axis == Axis2_X ? (side == Side_Min ? Dir2_Left : Dir2_Right) :
+                            Dir2_Invalid);
+                if(dir != Dir2_Invalid)
+                {
+                  DF_Panel *split_panel = panel;
+                  DF_CmdParams p = df_cmd_params_from_window(ws);
+                  p.dest_panel = df_handle_from_panel(split_panel);
+                  p.panel = payload.panel;
+                  p.view = payload.view;
+                  p.dir2 = dir;
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+                }
+              }
+            }
+          }
+          
+          //- rjf: iterate all children, build boundary drop sites
+          Axis2 split_axis = panel->split_axis;
+          UI_CornerRadius(corner_radius) for(DF_Panel *child = panel->first;; child = child->next)
+          {
+            // rjf: form rect
+            Rng2F32 child_rect = df_target_rect_from_panel_child(panel_rect, panel, child);
+            Vec2F32 child_rect_center = center_2f32(child_rect);
+            UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel, child);
+            Rng2F32 site_rect = r2f32(child_rect_center, child_rect_center);
+            site_rect.p0.v[split_axis] = child_rect.p0.v[split_axis] - drop_site_minor_dim_px/2;
+            site_rect.p1.v[split_axis] = child_rect.p0.v[split_axis] + drop_site_minor_dim_px/2;
+            site_rect.p0.v[axis2_flip(split_axis)] -= drop_site_major_dim_px/2;
+            site_rect.p1.v[axis2_flip(split_axis)] += drop_site_major_dim_px/2;
+            
+            // rjf: build
+            UI_Box *site_box = &ui_g_nil_box;
+            {
+              UI_Rect(site_rect)
+              {
+                site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
+                ui_signal_from_box(site_box);
+              }
+              UI_Box *site_box_viz = &ui_g_nil_box;
+              UI_Parent(site_box) UI_WidthFill UI_HeightFill
+                UI_Padding(ui_px(padding, 1.f))
+                UI_Column
+                UI_Padding(ui_px(padding, 1.f))
+              {
+                ui_set_next_child_layout_axis(axis2_flip(split_axis));
+                if(ui_key_match(key, ui_drop_hot_key()))
+                {
+                  ui_set_next_border_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+                }
+                site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
+                                                     UI_BoxFlag_DrawBorder|
+                                                     UI_BoxFlag_DrawDropShadow|
+                                                     UI_BoxFlag_DrawBackgroundBlur, ui_key_zero());
+              }
+              UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+              {
+                ui_set_next_child_layout_axis(split_axis);
+                UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                {
+                  ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                  ui_spacer(ui_px(padding, 1.f));
+                  ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                }
+              }
+            }
+            
+            // rjf: viz
+            if(ui_key_match(site_box->key, ui_drop_hot_key()))
+            {
+              Rng2F32 future_split_rect = site_rect;
+              future_split_rect.p0.v[split_axis] -= drop_site_major_dim_px;
+              future_split_rect.p1.v[split_axis] += drop_site_major_dim_px;
+              future_split_rect.p0.v[axis2_flip(split_axis)] = child_rect.p0.v[axis2_flip(split_axis)];
+              future_split_rect.p1.v[axis2_flip(split_axis)] = child_rect.p1.v[axis2_flip(split_axis)];
+              UI_Rect(future_split_rect)
+              {
+                ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
+                ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+              }
+            }
+            
+            // rjf: drop
+            DF_DragDropPayload payload = {0};
+            if(ui_key_match(site_box->key, ui_drop_hot_key()) && df_drag_drop(&payload))
+            {
+              Dir2 dir = (panel->split_axis == Axis2_X ? Dir2_Left : Dir2_Up);
+              DF_Panel *split_panel = child;
+              if(df_panel_is_nil(split_panel))
+              {
+                split_panel = panel->last;
+                dir = (panel->split_axis == Axis2_X ? Dir2_Right : Dir2_Down);
+              }
+              DF_CmdParams p = df_cmd_params_from_window(ws);
+              p.dest_panel = df_handle_from_panel(split_panel);
+              p.panel = payload.panel;
+              p.view = payload.view;
+              p.dir2 = dir;
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+            }
+            
+            // rjf: exit on opl child
+            if(df_panel_is_nil(child))
+            {
+              break;
+            }
+          }
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: do UI for drag boundaries between all children
+      //
       for(DF_Panel *child = panel->first; !df_panel_is_nil(child) && !df_panel_is_nil(child->next); child = child->next)
       {
         DF_Panel *min_child = child;
         DF_Panel *max_child = min_child->next;
-        Rng2F32 min_child_rect = df_rect_from_panel_child(panel_rect, panel, min_child);
-        Rng2F32 max_child_rect = df_rect_from_panel_child(panel_rect, panel, max_child);
+        Rng2F32 min_child_rect = df_target_rect_from_panel_child(panel_rect, panel, min_child);
+        Rng2F32 max_child_rect = df_target_rect_from_panel_child(panel_rect, panel, max_child);
         Rng2F32 boundary_rect = {0};
         {
           boundary_rect.p0.v[split_axis] = min_child_rect.p1.v[split_axis] - ui_top_font_size()/3;
@@ -5554,13 +5816,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(ui_double_clicked(sig))
           {
             ui_kill_action();
-            F32 sum_pct = min_child->size_pct_of_parent_target.v[split_axis] + max_child->size_pct_of_parent_target.v[split_axis];
-            min_child->size_pct_of_parent_target.v[split_axis] = 0.5f * sum_pct;
-            max_child->size_pct_of_parent_target.v[split_axis] = 0.5f * sum_pct;
+            F32 sum_pct = min_child->pct_of_parent + max_child->pct_of_parent;
+            min_child->pct_of_parent = 0.5f * sum_pct;
+            max_child->pct_of_parent = 0.5f * sum_pct;
           }
           else if(ui_pressed(sig))
           {
-            Vec2F32 v = {min_child->size_pct_of_parent_target.v[split_axis], max_child->size_pct_of_parent_target.v[split_axis]};
+            Vec2F32 v = {min_child->pct_of_parent, max_child->pct_of_parent};
             ui_store_drag_struct(&v);
           }
           else if(ui_dragging(sig))
@@ -5587,14 +5849,45 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               pct_delta = -(max_pct__after - max_pct__before);
               min_pct__after = min_pct__before + pct_delta;
             }
-            min_child->size_pct_of_parent.v[split_axis] = min_child->size_pct_of_parent_target.v[split_axis] = min_pct__after;
-            max_child->size_pct_of_parent.v[split_axis] = max_child->size_pct_of_parent_target.v[split_axis] = max_pct__after;
+            min_child->pct_of_parent = min_pct__after;
+            max_child->pct_of_parent = max_pct__after;
             is_changing_panel_boundaries = 1;
           }
           if(ui_released(sig) || ui_double_clicked(sig))
           {
             df_panel_notify_mutation(ws, min_child);
           }
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: animate panels
+    //
+    {
+      F32 rate = 1 - pow_f32(2, (-50.f * df_dt()));
+      Vec2F32 content_rect_dim = dim_2f32(content_rect);
+      for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+      {
+        Rng2F32 target_rect_px = df_target_rect_from_panel(content_rect, ws->root_panel, panel);
+        Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0/content_rect_dim.x,
+                                         target_rect_px.y0/content_rect_dim.y,
+                                         target_rect_px.x1/content_rect_dim.x,
+                                         target_rect_px.y1/content_rect_dim.y);
+        if(abs_f32(target_rect_pct.x0 - panel->animated_rect_pct.x0) > 0.005f ||
+           abs_f32(target_rect_pct.y0 - panel->animated_rect_pct.y0) > 0.005f ||
+           abs_f32(target_rect_pct.x1 - panel->animated_rect_pct.x1) > 0.005f ||
+           abs_f32(target_rect_pct.y1 - panel->animated_rect_pct.y1) > 0.005f)
+        {
+          df_gfx_request_frame();
+        }
+        panel->animated_rect_pct.x0 += rate * (target_rect_pct.x0 - panel->animated_rect_pct.x0);
+        panel->animated_rect_pct.y0 += rate * (target_rect_pct.y0 - panel->animated_rect_pct.y0);
+        panel->animated_rect_pct.x1 += rate * (target_rect_pct.x1 - panel->animated_rect_pct.x1);
+        panel->animated_rect_pct.y1 += rate * (target_rect_pct.y1 - panel->animated_rect_pct.y1);
+        if(ws->frames_alive < 5 || is_changing_panel_boundaries)
+        {
+          panel->animated_rect_pct = target_rect_pct;
         }
       }
     }
@@ -5619,7 +5912,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //////////////////////////
         //- rjf: calculate UI rectangles
         //
-        Rng2F32 panel_rect = df_rect_from_panel(content_rect, ws->root_panel, panel);
+        Vec2F32 content_rect_dim = dim_2f32(content_rect);
+        Rng2F32 panel_rect_pct = panel->animated_rect_pct;
+        Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
+                                    panel_rect_pct.y0*content_rect_dim.y,
+                                    panel_rect_pct.x1*content_rect_dim.x,
+                                    panel_rect_pct.y1*content_rect_dim.y);
         panel_rect = pad_2f32(panel_rect, -1.f);
         F32 tab_bar_rheight = ui_top_font_size()*3.f;
         F32 tab_bar_vheight = ui_top_font_size()*2.6f;
@@ -5645,6 +5943,190 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             filter_rect.x1 = content_rect.x1;
             content_rect.y0 += filter_bar_height*tab->is_filtering_t;
             filter_rect.y1 = content_rect.y0;
+          }
+        }
+        
+        //////////////////////////
+        //- rjf: build combined split+movetab drag/drop sites
+        //
+        {
+          DF_View *view = df_view_from_handle(df_g_drag_drop_payload.view);
+          if(df_drag_is_active() && !df_view_is_nil(view) && contains_2f32(panel_rect, ui_mouse()))
+          {
+            F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
+            Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
+            Vec2F32 panel_center = center_2f32(panel_rect);
+            F32 corner_radius = ui_top_font_size()*0.5f;
+            F32 padding = ceil_f32(ui_top_font_size()*0.5f);
+            struct
+            {
+              UI_Key key;
+              Dir2 split_dir;
+              Rng2F32 rect;
+            }
+            sites[] =
+            {
+              {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_center_%p", panel),
+                Dir2_Invalid,
+                r2f32(sub_2f32(panel_center, drop_site_half_dim),
+                      add_2f32(panel_center, drop_site_half_dim))
+              },
+              {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_up_%p", panel),
+                Dir2_Up,
+                r2f32p(panel_center.x-drop_site_half_dim.x,
+                       panel_center.y-drop_site_half_dim.y - drop_site_half_dim.y*2,
+                       panel_center.x+drop_site_half_dim.x,
+                       panel_center.y+drop_site_half_dim.y - drop_site_half_dim.y*2),
+              },
+              {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_down_%p", panel),
+                Dir2_Down,
+                r2f32p(panel_center.x-drop_site_half_dim.x,
+                       panel_center.y-drop_site_half_dim.y + drop_site_half_dim.y*2,
+                       panel_center.x+drop_site_half_dim.x,
+                       panel_center.y+drop_site_half_dim.y + drop_site_half_dim.y*2),
+              },
+              {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_left_%p", panel),
+                Dir2_Left,
+                r2f32p(panel_center.x-drop_site_half_dim.x - drop_site_half_dim.x*2,
+                       panel_center.y-drop_site_half_dim.y,
+                       panel_center.x+drop_site_half_dim.x - drop_site_half_dim.x*2,
+                       panel_center.y+drop_site_half_dim.y),
+              },
+              {
+                ui_key_from_stringf(ui_key_zero(), "drop_split_right_%p", panel),
+                Dir2_Right,
+                r2f32p(panel_center.x-drop_site_half_dim.x + drop_site_half_dim.x*2,
+                       panel_center.y-drop_site_half_dim.y,
+                       panel_center.x+drop_site_half_dim.x + drop_site_half_dim.x*2,
+                       panel_center.y+drop_site_half_dim.y),
+              },
+            };
+            UI_CornerRadius(corner_radius)
+              for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
+            {
+              UI_Key key = sites[idx].key;
+              Dir2 dir = sites[idx].split_dir;
+              Rng2F32 rect = sites[idx].rect;
+              Axis2 split_axis = axis2_from_dir2(dir);
+              Side split_side = side_from_dir2(dir);
+              if(dir != Dir2_Invalid && split_axis == panel->parent->split_axis)
+              {
+                continue;
+              }
+              UI_Box *site_box = &ui_g_nil_box;
+              {
+                UI_Rect(rect)
+                {
+                  site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
+                  ui_signal_from_box(site_box);
+                }
+                UI_Box *site_box_viz = &ui_g_nil_box;
+                UI_Parent(site_box) UI_WidthFill UI_HeightFill
+                  UI_Padding(ui_px(padding, 1.f))
+                  UI_Column
+                  UI_Padding(ui_px(padding, 1.f))
+                {
+                  ui_set_next_child_layout_axis(axis2_flip(split_axis));
+                  if(ui_key_match(key, ui_drop_hot_key()))
+                  {
+                    ui_set_next_border_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+                  }
+                  site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawDropShadow|
+                                                       UI_BoxFlag_DrawBackgroundBlur, ui_key_zero());
+                }
+                if(dir != Dir2_Invalid)
+                {
+                  UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                  {
+                    ui_set_next_child_layout_axis(split_axis);
+                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                    {
+                      if(split_side == Side_Min) { ui_set_next_flags(UI_BoxFlag_DrawBackground); ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay)); }
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      ui_spacer(ui_px(padding, 1.f));
+                      if(split_side == Side_Max) { ui_set_next_flags(UI_BoxFlag_DrawBackground); ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay)); }
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                    }
+                  }
+                }
+                else
+                {
+                  UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                  {
+                    ui_set_next_child_layout_axis(split_axis);
+                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
+                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                    {
+                      ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, ui_key_zero());
+                    }
+                  }
+                }
+              }
+              DF_DragDropPayload payload = {0};
+              if(ui_key_match(site_box->key, ui_drop_hot_key()) && df_drag_drop(&payload))
+              {
+                if(dir != Dir2_Invalid)
+                {
+                  DF_CmdParams p = df_cmd_params_from_window(ws);
+                  p.dest_panel = df_handle_from_panel(panel);
+                  p.panel = payload.panel;
+                  p.view = payload.view;
+                  p.dir2 = dir;
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SplitPanel));
+                }
+                else
+                {
+                  DF_CmdParams p = df_cmd_params_from_window(ws);
+                  p.dest_panel = df_handle_from_panel(panel);
+                  p.panel = payload.panel;
+                  p.view = payload.view;
+                  p.prev_view = df_handle_from_view(panel->last_tab_view);
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_MoveTab));
+                }
+              }
+            }
+            for(U64 idx = 0; idx < ArrayCount(sites); idx += 1)
+            {
+              B32 is_drop_hot = ui_key_match(ui_drop_hot_key(), sites[idx].key);
+              if(is_drop_hot)
+              {
+                Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
+                Side split_side = side_from_dir2(sites[idx].split_dir);
+                Rng2F32 future_split_rect = panel_rect;
+                if(sites[idx].split_dir != Dir2_Invalid)
+                {
+                  Vec2F32 panel_center = center_2f32(panel_rect);
+                  future_split_rect.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
+                }
+                UI_Rect(future_split_rect)
+                {
+                  ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay));
+                  ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+                }
+              }
+            }
+          }
+        }
+        
+        //////////////////////////
+        //- rjf: build catch-all panel drop-site
+        //
+        B32 catchall_drop_site_hovered = 0;
+        if(df_drag_is_active() && ui_key_match(ui_key_zero(), ui_drop_hot_key()))
+        {
+          UI_Rect(panel_rect)
+          {
+            UI_Key key = ui_key_from_stringf(ui_key_zero(), "catchall_drop_site_%p", panel);
+            UI_Box *catchall_drop_site = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
+            ui_signal_from_box(catchall_drop_site);
+            catchall_drop_site_hovered = ui_key_match(key, ui_drop_hot_key());
           }
         }
         
@@ -6015,9 +6497,39 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_CornerRadius01(panel->tab_side == Side_Min ? 0 : corner_radius)
               UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
               UI_CornerRadius11(panel->tab_side == Side_Min ? 0 : corner_radius)
-              for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next, view_idx += 1)
+              for(DF_View *view = panel->first_tab_view;; view = view->next, view_idx += 1)
             {
               temp_end(scratch);
+              
+              // rjf: if before this tab is the prev-view of the current tab drag,
+              // draw empty space
+              if(df_drag_is_active() && catchall_drop_site_hovered)
+              {
+                DF_Panel *dst_panel = df_panel_from_handle(df_g_last_drag_drop_panel);
+                DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
+                DF_View *dst_prev_view = df_view_from_handle(df_g_last_drag_drop_prev_tab);
+                if(dst_panel == panel &&
+                   ((!df_view_is_nil(view) && dst_prev_view == view->prev && drag_view != view && drag_view != view->prev) ||
+                    (df_view_is_nil(view) && dst_prev_view == panel->last_tab_view && drag_view != panel->last_tab_view)))
+                {
+                  UI_PrefWidth(ui_em(9.f, 0.2f)) UI_Column
+                  {
+                    ui_spacer(ui_em(0.2f, 1.f));
+                    UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay))
+                      UI_CornerRadius00(corner_radius)
+                      UI_CornerRadius10(corner_radius)
+                    {
+                      ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                    }
+                  }
+                }
+              }
+              
+              // rjf: end on nil view
+              if(df_view_is_nil(view))
+              {
+                break;
+              }
               
               // rjf: gather info for this tab
               B32 view_is_selected = (view == df_view_from_handle(panel->selected_tab_view));
@@ -6204,44 +6716,42 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               // rjf: mouse => hovered drop site
               F32 min_distance = 0;
               DropSite *active_drop_site = 0;
-              for(U64 drop_site_idx = 0; drop_site_idx < drop_site_count; drop_site_idx += 1)
+              if(catchall_drop_site_hovered)
               {
-                F32 distance = abs_f32(drop_sites[drop_site_idx].p - mouse.x);
-                if(drop_site_idx == 0 || distance < min_distance)
+                for(U64 drop_site_idx = 0; drop_site_idx < drop_site_count; drop_site_idx += 1)
                 {
-                  active_drop_site = &drop_sites[drop_site_idx];
-                  min_distance = distance;
+                  F32 distance = abs_f32(drop_sites[drop_site_idx].p - mouse.x);
+                  if(drop_site_idx == 0 || distance < min_distance)
+                  {
+                    active_drop_site = &drop_sites[drop_site_idx];
+                    min_distance = distance;
+                  }
                 }
+              }
+              
+              // rjf: store closest prev-view
+              if(active_drop_site != 0)
+              {
+                df_g_last_drag_drop_prev_tab = df_handle_from_view(active_drop_site->prev_view);
+              }
+              else
+              {
+                df_g_last_drag_drop_prev_tab = df_handle_zero();
               }
               
               // rjf: vis
               DF_Panel *drag_panel = df_panel_from_handle(df_g_drag_drop_payload.panel);
               if(!df_view_is_nil(view) &&
                  active_drop_site != 0 &&
-                 (panel != drag_panel))
+                 (panel != drag_panel || 1))
               {
                 tab_bar_box->flags |= UI_BoxFlag_DrawOverlay;
                 tab_bar_box->overlay_color = df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay);
-                
-                if(panel->tab_view_count != 0)
-                {
-                  D_Bucket *bucket = d_bucket_make();
-                  D_BucketScope(bucket)
-                  {
-                    d_rect(r2f32p(active_drop_site->p - tab_spacing/2,
-                                  tab_bar_box->rect.y0,
-                                  active_drop_site->p + tab_spacing/2,
-                                  tab_bar_box->rect.y1),
-                           v4f32(1, 1, 1, 1),
-                           2.f, 0, 1.f);
-                  }
-                  ui_box_equip_draw_bucket(tab_bar_box, bucket);
-                }
               }
               
               // rjf: drop
               DF_DragDropPayload payload = df_g_drag_drop_payload;
-              if((active_drop_site != 0 && df_drag_drop(&payload)) || df_panel_from_handle(payload.panel) == panel)
+              if(catchall_drop_site_hovered && (active_drop_site != 0 && df_drag_drop(&payload)) || (df_panel_from_handle(payload.panel) == panel && 0))
               {
                 DF_View *view = df_view_from_handle(payload.view);
                 DF_Panel *src_panel = df_panel_from_handle(payload.panel);
@@ -6273,8 +6783,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //////////////////////////
         //- rjf: less granular panel for tabs & entities drop-site
         //
-        if(df_drag_is_active() && window_is_focused && contains_2f32(panel_rect, ui_mouse()))
+        if(catchall_drop_site_hovered)
         {
+          df_g_last_drag_drop_panel = df_handle_from_panel(panel);
+          
           DF_DragDropPayload *payload = &df_g_drag_drop_payload;
           DF_View *dragged_view = df_view_from_handle(payload->view);
           B32 view_is_in_panel = 0;
@@ -6339,27 +6851,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
           }
         }
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: animate panel pcts
-    //
-    {
-      F32 rate = 1 - pow_f32(2, (-50.f * df_dt()));
-      for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
-      {
-        if(abs_f32(panel->off_pct_of_parent.x) > 0.005f ||
-           abs_f32(panel->off_pct_of_parent.y) > 0.005f ||
-           abs_f32(panel->size_pct_of_parent_target.x - panel->size_pct_of_parent.x) > 0.005f ||
-           abs_f32(panel->size_pct_of_parent_target.y - panel->size_pct_of_parent.y) > 0.005f)
-        {
-          df_gfx_request_frame();
-        }
-        panel->off_pct_of_parent.x += (-panel->off_pct_of_parent.x) * rate;
-        panel->off_pct_of_parent.y += (-panel->off_pct_of_parent.y) * rate;
-        panel->size_pct_of_parent.x += (panel->size_pct_of_parent_target.x - panel->size_pct_of_parent.x) * rate;
-        panel->size_pct_of_parent.y += (panel->size_pct_of_parent_target.y - panel->size_pct_of_parent.y) * rate;
       }
     }
     
@@ -6816,6 +7307,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1.f), v4f32(1, 1, 1, 0.5f*b->hot_t), 0, 1.f, 1.f);
               MemoryCopyArray(inst->corner_radii, b->corner_radii);
             }
+          }
+          
+          // rjf: debug border rendering
+          if(0)
+          {
+            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1), v4f32(1, 0, 1, 0.25f), 0, 1.f, 1.f);
+            MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
           // rjf: draw sides
@@ -8177,7 +8675,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
           // rjf: non-root needs pct node
           if(p != root_panel)
           {
-            str8_list_pushf(arena, &strs, "%.*s%g:\n", indentation*2, indent_str.str, p->size_pct_of_parent_target.v[p->parent->split_axis]);
+            str8_list_pushf(arena, &strs, "%.*s%g:\n", indentation*2, indent_str.str, p->pct_of_parent);
             str8_list_pushf(arena, &strs, "%.*s{\n", indentation*2, indent_str.str);
             indentation += 1;
           }
@@ -12084,8 +12582,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               if(n == cfg_panels)
               {
                 panel = ws->root_panel;
-                panel->size_pct_of_parent.v[panel_parent->split_axis] = panel->size_pct_of_parent_target.v[panel_parent->split_axis] = 1.f;
-                panel->size_pct_of_parent.v[axis2_flip(panel_parent->split_axis)] = panel->size_pct_of_parent_target.v[axis2_flip(panel_parent->split_axis)] = 1.f;
+                panel->pct_of_parent = 1.f;
               }
               
               // rjf: allocate & insert non-root panels - these will have a numeric string, determining
@@ -12095,8 +12592,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                 panel = df_panel_alloc(ws);
                 df_panel_insert(panel_parent, panel_parent->last, panel);
                 panel->split_axis = axis2_flip(panel_parent->split_axis);
-                panel->size_pct_of_parent.v[panel_parent->split_axis] = panel->size_pct_of_parent_target.v[panel_parent->split_axis] = (F32)f64_from_str8(n->string);
-                panel->size_pct_of_parent.v[axis2_flip(panel_parent->split_axis)] = panel->size_pct_of_parent_target.v[axis2_flip(panel_parent->split_axis)] = 1.f;
+                panel->pct_of_parent = (F32)f64_from_str8(n->string);
               }
               
               // rjf: do general per-panel work
@@ -12222,7 +12718,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               {
                 if(df_panel_is_nil(panel->first))
                 {
-                  Rng2F32 rect = df_rect_from_panel(root_rect, ws->root_panel, panel);
+                  Rng2F32 rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
                   Vec2F32 dim = dim_2f32(rect);
                   F32 area = dim.x*dim.y;
                   if(best_leaf_panel_area == 0 || area > best_leaf_panel_area)
