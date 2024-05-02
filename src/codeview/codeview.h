@@ -1785,7 +1785,7 @@ typedef enum CV_InlnineRangeKindEnum
 {
   CV_InlineRangeKind_Expr,
   CV_InlineRangeKind_Stmt
-};
+} CV_InlnineRangeKindEnum;
 
 typedef struct CV_SymInlineSite CV_SymInlineSite;
 struct CV_SymInlineSite
@@ -2768,6 +2768,26 @@ struct CV_C13_FrameData
   U16 prolog_size;
   U16 saved_reg_size;
   CV_C13_FrameDataFlags flags;
+};
+
+//- InlineLines sub-section 
+
+typedef U32 CV_C13_InlineeLinesSig;
+enum
+{
+  CV_C13_InlineeLinesSig_NORMAL,
+  CV_C13_InlineeLinesSig_EXTRA_FILES,
+};
+
+typedef struct CV_C13_InlineeSourceLineHeader CV_C13_InlineeSourceLineHeader;
+struct CV_C13_InlineeSourceLineHeader
+{
+  CV_ItemId inlinee;          // LF_FUNC_ID or LF_MFUNC_ID
+  U32 file_off;               // offset into FileChksms sub-section
+  U32 first_source_ln;        // base source line number for binary annotations
+  // if sig set to CV_C13_InlineeLinesSig_EXTRA_FILES
+  //  U32 extra_file_count;
+  //  U32 files[];
 };
 
 #pragma pack(pop)
