@@ -2664,7 +2664,9 @@ X(IlLines,             0xF9)\
 X(FuncMDTokenMap,      0xFA)\
 X(TypeMDTokenMap,      0xFB)\
 X(MergedAssemblyInput, 0xFC)\
-X(CoffSymbolRVA,       0xFD)
+X(CoffSymbolRVA,       0xFD)\
+X(XfgHashType,         0xFF)\
+X(XfgHashVirtual,      0x100)
 
 typedef U32 CV_C13_SubSectionKind;
 typedef enum
