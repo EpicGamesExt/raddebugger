@@ -108,40 +108,25 @@ neg_inf32(void){
   return(x.f);
 }
 
+#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
+
 internal U16
 bswap_u16(U16 x)
 {
-  U16 result = (((x & 0xFF00) >> 8) |
-                ((x & 0x00FF) << 8));
-  return result;
+  return _byteswap_ushort(x);
 }
 
 internal U32
 bswap_u32(U32 x)
 {
-  U32 result = (((x & 0xFF000000) >> 24) |
-                ((x & 0x00FF0000) >> 8)  |
-                ((x & 0x0000FF00) << 8)  |
-                ((x & 0x000000FF) << 24));
-  return result;
+  return _byteswap_ulong(x);
 }
 
 internal U64
 bswap_u64(U64 x)
 {
-  // TODO(nick): naive bswap, replace with something that is faster like an intrinsic
-  U64 result = (((x & 0xFF00000000000000ULL) >> 56) |
-                ((x & 0x00FF000000000000ULL) >> 40) |
-                ((x & 0x0000FF0000000000ULL) >> 24) |
-                ((x & 0x000000FF00000000ULL) >> 8)  |
-                ((x & 0x00000000FF000000ULL) << 8)  |
-                ((x & 0x0000000000FF0000ULL) << 24) |
-                ((x & 0x000000000000FF00ULL) << 40) |
-                ((x & 0x00000000000000FFULL) << 56));
-  return result;
+  return _byteswap_uint64(x);
 }
-
-#if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 
 internal U64
 count_bits_set16(U16 val)
@@ -194,6 +179,24 @@ clz64(U64 mask)
 }
 
 #elif COMPILER_CLANG || COMPILER_GCC
+
+internal U16
+bswap_u16(U16 x)
+{
+  return __builtin_bswap16(x);
+}
+
+internal U32
+bswap_u32(U32 x)
+{
+  return __builtin_bswap32(x);
+}
+
+internal U64
+bswap_u64(U64 x)
+{
+  return __builtin_bswap64(x);
+}
 
 internal U64
 count_bits_set16(U16 val)
