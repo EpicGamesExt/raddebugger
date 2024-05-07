@@ -192,7 +192,10 @@ entry_point(CmdLine *cmd_line)
       RDI_SourceFile *ptr = raddbg->source_files;
       for(U32 i = 0; i < raddbg->source_files_count; i += 1, ptr += 1)
       {
-        str8_list_pushf(arena, &dump, " source_file[%u]:\n", i);
+        String8 path = {0};
+        path.str = rdi_string_from_idx(raddbg, ptr->normal_full_path_string_idx, &path.size);
+
+        str8_list_pushf(arena, &dump, " source_file[%u] %.*s:\n", i, str8_varg(path));
         rdi_stringize_source_file(arena, &dump, raddbg, ptr, 2);
         str8_list_push(arena, &dump, str8_lit("\n"));
       }
