@@ -77,6 +77,6 @@ internal void cv_stringize_leaf_array(Arena *arena, String8List *out,
 ////////////////////////////////
 //~ CodeView C13 Stringize Functions
 
-internal void cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13);
+internal void cv_stringize_c13_parsed(Arena *arena, String8List *out, String8 c13_data, String8 file_chksms, String8 string_table, CV_C13SubSectionList c13);
 
 #endif // CODEVIEW_STRINGIZE_H

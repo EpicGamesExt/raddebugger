@@ -2269,62 +2269,61 @@ cv_stringize_leaf_array(Arena *arena, String8List *out,
 //~ CodeView C13 Stringize Functions
 
 internal void
-cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13){
-  for(CV_C13SubSectionNode *node = c13->first_sub_section;
-      node != 0;
-      node = node->next)
+cv_stringize_c13_parsed(Arena *arena, String8List *out, String8 c13_data, String8 file_chksms, String8 string_table, CV_C13SubSectionList c13)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  for(CV_C13SubSectionNode *ss = c13.first; ss != 0; ss = ss->next)
   {
-    String8 kind_str = cv_string_from_c13_sub_section_kind(node->kind);
-    str8_list_pushf(arena, out, "C13 Sub Section [%llx] (%.*s):\n",
-                    node->off, str8_varg(kind_str));
+    String8 kind_str = cv_string_from_c13_sub_section_kind(ss->kind);
+    str8_list_pushf(arena, out, "C13 Sub Section [%08llx-%08llx] (%.*s):\n", ss->range.min, ss->range.max, str8_varg(kind_str));
     
-    switch(node->kind)
+    switch(ss->kind)
     {
-      case CV_C13_SubSectionKind_Lines:
+    case CV_C13_SubSectionKind_Lines:
+    {
+      CV_C13LinesParsedList line_list = cv_c13_lines_from_sub_sections(arena, c13_data, ss->range);
+      for(CV_C13LinesParsedNode *lines_n = line_list.first; lines_n != 0; lines_n = lines_n->next)
       {
-        if (node->lines_first == 0)
+        CV_C13LinesParsed lines = lines_n->v;
+        
+        CV_C13_Checksum checksum_header = {0};
+        str8_deserial_read_struct(file_chksms, lines.file_off, &checksum_header);
+
+        String8 file_name = {0};
+        str8_deserial_read_cstr(string_table, checksum_header.name_off, &file_name);
+        
+        str8_list_pushf(arena, out, " section:    %X:%08X-%08X\n", lines.sec_idx, lines.sec_off_lo, lines.sec_off_hi);
+        str8_list_pushf(arena, out, " file off:   %u\n",           lines.file_off);
+        str8_list_pushf(arena, out, " file name:  %.*s\n",         str8_varg(file_name));
+        str8_list_pushf(arena, out, " line pairs: %u\n",           lines.line_count);
+        
+        CV_C13LineArray line_array = cv_c13_line_array_from_data(scratch.arena, c13_data, 0, lines);
+        for(U32 line_idx = 0; line_idx < line_array.line_count; line_idx += 1)
         {
-          str8_list_push(arena, out, str8_lit(" failed to extract info\n"));
+          str8_list_pushf(arena, out, "  %08X %u\n", line_array.voffs[line_idx], line_array.line_nums[line_idx]);
         }
-        else for(CV_C13LinesParsedNode *n = node->lines_first; n != 0; n = n->next)
-        {
-          CV_C13LinesParsed *lines = &n->v;
-          
-          str8_list_pushf(arena, out, " section:    %u\n", lines->sec_idx);
-          str8_list_pushf(arena, out, " file off:   %u\n", lines->file_off);
-          str8_list_pushf(arena, out, " file name:  %.*s\n", str8_varg(lines->file_name));
-          str8_list_pushf(arena, out, " line count: %u\n", lines->line_count);
-          
-          U64 base_off = lines->secrel_base_off;
-          U64 *line_offs = lines->voffs;
-          U32 *line_nums = lines->line_nums;
-          
-          U32 line_count = lines->line_count;
-          for (U32 i = 0; i < line_count; i += 1){
-            str8_list_pushf(arena, out, "  {secrel_off=%llx, line_num=%u}\n",
-                            line_offs[i], line_nums[i]);
-          }
-          
-          str8_list_pushf(arena, out, "  {secrel_off=%x, ender}\n", line_offs[line_count]);
-        }
-      }break;
+      }
+    }break;
       
-      case CV_C13_SubSectionKind_FileChksms:
-      {
-        str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
-      }break;
-      
-      case CV_C13_SubSectionKind_InlineeLines:
-      {
-        str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
-      }break;
-      
-      default:
-      {
-        str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
-      }break;
+    case CV_C13_SubSectionKind_FileChksms:
+    {
+      str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
+    }break;
+    
+    case CV_C13_SubSectionKind_InlineeLines:
+    {
+      str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
+    }break;
+    
+    default:
+    {
+      str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
+    }break;
     }
     
     str8_list_push(arena, out, str8_lit("\n"));
   }
+
+  scratch_end(scratch);
 }

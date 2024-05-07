@@ -103,8 +103,6 @@ typedef struct P2R_C13StreamParseIn P2R_C13StreamParseIn;
 struct P2R_C13StreamParseIn
 {
   String8 data;
-  PDB_Strtbl *strtbl;
-  PDB_CoffSectionArray *coff_sections;
 };
 
 //- rjf: comp unit parsing
@@ -169,6 +167,9 @@ struct P2R_UnitConvertIn
 {
   PDB_CompUnitArray *comp_units;
   PDB_CompUnitContributionArray *comp_unit_contributions;
+  String8 *c13_data_for_unit;
+  PDB_CoffSectionArray *sections;
+  PDB_Strtbl *strtbl;
   CV_SymParsed **comp_unit_syms;
   CV_C13Parsed **comp_unit_c13s;
 };

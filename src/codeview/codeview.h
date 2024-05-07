@@ -9,7 +9,7 @@
 // https://github.com/microsoft/microsoft-pdb/blob/master/include/cvinfo.h
 
 ////////////////////////////////
-//~ rjf: CodeView Format Shared Types
+//~ rjf: Format Shared Types
 
 typedef U32 CV_TypeId;
 typedef U32 CV_ItemId;
@@ -958,7 +958,7 @@ typedef enum CV_LanguageEnum
 CV_LanguageEnum;
 
 ////////////////////////////////
-//~ rjf: CodeView Format "Sym" and "Leaf" Header Type
+//~ rjf: "Sym" and "Leaf" Header Type
 
 typedef struct CV_RecHeader CV_RecHeader;
 struct CV_RecHeader
@@ -968,7 +968,7 @@ struct CV_RecHeader
 };
 
 ////////////////////////////////
-//~ rjf: CodeView Format "Sym" Types
+//~ rjf: "Sym" Types
 //
 // (per-compilation-unit info, variables, procedures, etc.)
 //
@@ -2645,7 +2645,7 @@ struct CV_LeafUDTModSrcLine
 };
 
 ////////////////////////////////
-//~ CodeView Format C13 Line Info Types
+//~ C13 Line Info Types
 
 #define CV_C13_SubSectionKind_IgnoreFlag 0x80000000
 
@@ -2672,7 +2672,18 @@ typedef enum
 #define X(N,c) CV_C13_SubSectionKind_##N = c,
   CV_C13_SubSectionKindXList(X)
 #undef X
+  CV_C13_SubSectionKind_FIRST = CV_C13_SubSectionKind_Symbols
 } CV_C13_SubSectionKindEnum;
+
+typedef U32 CV_C13_SubSectionIdxKind;
+typedef enum
+{
+  CV_C13_SubSectionIdxKind_NULL,
+#define X(N,c) CV_C13_SubSectionIdxKind_##N,
+  CV_C13_SubSectionKindXList(X)
+#undef X
+  CV_C13_SubSectionIdxKind_COUNT
+} CV_C13SubSectionIdxKind;
 
 typedef struct CV_C13_SubSectionHeader CV_C13_SubSectionHeader;
 struct CV_C13_SubSectionHeader
@@ -2793,7 +2804,7 @@ struct CV_C13_InlineeSourceLineHeader
 #pragma pack(pop)
 
 ////////////////////////////////
-//~ CodeView Common Parser Types
+//~ Common Parser Types
 
 // CV_Numeric layout
 // x: U16
@@ -2841,7 +2852,7 @@ struct CV_RecRangeArray
 };
 
 ////////////////////////////////
-//~ CodeView Sym Parser Types
+//~ Sym Parser Types
 
 typedef struct CV_SymTopLevelInfo CV_SymTopLevelInfo;
 struct CV_SymTopLevelInfo
@@ -2867,7 +2878,7 @@ struct CV_SymParsed
 
 
 ////////////////////////////////
-//~ CodeView Leaf Parser Types
+//~ Leaf Parser Types
 
 typedef struct CV_LeafParsed CV_LeafParsed;
 struct CV_LeafParsed
@@ -2882,22 +2893,31 @@ struct CV_LeafParsed
 };
 
 ////////////////////////////////
-//~ CodeView C13 Info Parser Types
+//~ C13 Info Parser Types
+
+//- $$LINES
+
+typedef struct CV_C13LineArray CV_C13LineArray;
+struct CV_C13LineArray
+{
+  U64 line_count;
+  U64 col_count;
+  U64 *voffs;     // [line_count + 1]
+  U32 *line_nums; // [line_count]
+  U16 *col_nums;  // [line_count * 2]
+};
 
 typedef struct CV_C13LinesParsed CV_C13LinesParsed;
 struct CV_C13LinesParsed
 {
-  // raw info
-  U32 sec_idx;
-  U32 file_off;
-  U64 secrel_base_off;
-  
-  // parsed info
-  String8 file_name;
-  U64 *voffs;     // [line_count + 1]
-  U32 *line_nums; // [line_count]
-  U16 *col_nums;  // [2*line_count]
-  U32 line_count;
+  U64 sec_idx;
+  U64 sec_off_lo;
+  U64 sec_off_hi;
+  U64 file_off;
+  U64 line_count;
+  U64 col_count;
+  U64 line_array_off;
+  U64 col_array_off;
 };
 
 typedef struct CV_C13LinesParsedNode CV_C13LinesParsedNode;
@@ -2907,30 +2927,75 @@ struct CV_C13LinesParsedNode
   CV_C13LinesParsed v;
 };
 
+typedef struct CV_C13LinesParsedList CV_C13LinesParsedList;
+struct CV_C13LinesParsedList
+{
+  CV_C13LinesParsedNode *first;
+  CV_C13LinesParsedNode *last;
+  U64 count;
+};
+//- $$INLINEE_LINES
+
+typedef struct CV_C13InlineeLinesParsed CV_C13InlineeLinesParsed;
+struct CV_C13InlineeLinesParsed
+{
+  CV_ItemId inlinee;
+  U32 file_off;
+  U32 first_source_ln;
+  U32 extra_file_count;
+  U32 *extra_files;
+};
+
+typedef struct CV_C13InlineeLinesParsedNode CV_C13InlineeLinesParsedNode;
+struct CV_C13InlineeLinesParsedNode
+{
+  struct CV_C13InlineeLinesParsedNode *next;
+  CV_C13InlineeLinesParsed v;
+};
+
+typedef struct CV_C13InlineeLinesParsedList CV_C13InlineeLinesParsedList;
+struct CV_C13InlineeLinesParsedList
+{
+  CV_C13InlineeLinesParsedNode *first;
+  CV_C13InlineeLinesParsedNode *last;
+  U64 count;
+};
+
 typedef struct CV_C13SubSectionNode CV_C13SubSectionNode;
 struct CV_C13SubSectionNode
 {
   struct CV_C13SubSectionNode *next;
   CV_C13_SubSectionKind kind;
-  U32 off;
-  U32 size;
-  CV_C13LinesParsedNode *lines_first;
-  CV_C13LinesParsedNode *lines_last;
+  Rng1U64 range;
+};
+
+typedef struct CV_C13SubSectionList CV_C13SubSectionList;
+struct CV_C13SubSectionList
+{
+  CV_C13SubSectionNode *first;
+  CV_C13SubSectionNode *last;
+  U64 count;
 };
 
 typedef struct CV_C13Parsed CV_C13Parsed;
 struct CV_C13Parsed
 {
-  CV_C13SubSectionNode *first_sub_section;
-  CV_C13SubSectionNode *last_sub_section;
-  U64 sub_section_count;
-  
-  // accelerator
-  CV_C13SubSectionNode *file_chksms_sub_section;
+  CV_C13SubSectionList v[CV_C13_SubSectionIdxKind_COUNT];
 };
 
 ////////////////////////////////
-//~ CodeView Compound Types
+//~ $$INLINEE_LINES Accel
+
+typedef struct CV_C13InlineeLinesAccel CV_C13InlineeLinesAccel;
+struct CV_C13InlineeLinesAccel
+{
+  U64 bucket_count;
+  U64 bucket_max;
+  CV_C13InlineeLinesParsed **buckets;
+};
+
+////////////////////////////////
+//~ Compound Types
 
 typedef struct CV_TypeIdArray CV_TypeIdArray;
 struct CV_TypeIdArray
@@ -2941,7 +3006,7 @@ struct CV_TypeIdArray
 
 
 ////////////////////////////////
-//~ CodeView Common Functions
+//~ Common Functions
 
 internal CV_NumericParsed cv_numeric_from_data_range(U8 *first, U8 *opl);
 
@@ -2960,7 +3025,7 @@ internal U64 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value
 internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value);
 
 ////////////////////////////////
-//~ CodeView Sym/Leaf Parser Functions
+//~ Sym/Leaf Parser Functions
 
 //- the first pass parser
 internal CV_RecRangeStream* cv_rec_range_stream_from_data(Arena *arena, String8 data, U64 align);
@@ -2983,10 +3048,23 @@ internal CV_RecRangeChunk* cv_rec_range_stream_push_chunk(Arena *arena,
 internal CV_RecRangeArray  cv_rec_range_array_from_stream(Arena *arena, CV_RecRangeStream *stream);
 
 ////////////////////////////////
-//~ CodeView C13 Parser Functions
+//~ C13 $$ Parsers
 
-typedef struct PDB_Strtbl PDB_Strtbl;
-typedef struct PDB_CoffSectionArray PDB_CoffSectionArray;
-internal CV_C13Parsed* cv_c13_from_data(Arena *arena, String8 c13_data, struct PDB_Strtbl *strtbl, struct PDB_CoffSectionArray *sections);
+internal CV_C13_SubSectionIdxKind cv_c13_sub_section_idx_from_kind(CV_C13_SubSectionKind kind);
+
+internal CV_C13SubSectionList         cv_c13_sub_section_list_from_data(Arena *arena, String8 data, U64 align);
+internal String8                      cv_c13_file_chksms_from_sub_sections(String8 c13_data, CV_C13Parsed *ss);
+internal CV_C13LinesParsedList        cv_c13_lines_from_sub_sections(Arena *arena, String8 c13_data, Rng1U64 ss_range);
+internal CV_C13InlineeLinesParsedList cv_c13_inlinee_lines_from_sub_sections(Arena *arena, String8 c13_data, U64 sub_sect_off, U64 sub_sect_size);
+internal CV_C13Parsed                 cv_c13_parsed_from_list(CV_C13SubSectionList *list);
+
+internal CV_C13LineArray cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13LinesParsed parsed_lines);
+
+//- $$INLINEE_LINES Accel
+
+internal U64                        cv_c13_inlinee_lines_accel_hash(void *buffer, U64 size);
+internal B32                        cv_c13_inlinee_lines_accel_push(CV_C13InlineeLinesAccel *accel, CV_C13InlineeLinesParsed *parsed);
+internal CV_C13InlineeLinesParsed * cv_c13_inlinee_lines_accel_find(CV_C13InlineeLinesAccel *accel, CV_ItemId inlinee);
+internal CV_C13InlineeLinesAccel *  cv_c13_make_inlinee_lines_accel(Arena *arena, String8 c13_data, CV_C13InlineeLinesParsedList sub_sects);
 
 #endif // CODEVIEW_H
