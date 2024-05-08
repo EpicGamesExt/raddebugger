@@ -293,78 +293,12 @@ cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align){
   result->data = sym_data;
   result->sym_align = sym_align;
   result->sym_ranges = cv_rec_range_array_from_stream(arena, stream);
-  cv_sym_top_level_info_from_syms(arena, sym_data, &result->sym_ranges, &result->info);
   
   scratch_end(scratch);
   
   ProfEnd();
   
   return(result);
-}
-
-internal void
-cv_sym_top_level_info_from_syms(Arena *arena, String8 sym_data,
-                                CV_RecRangeArray *ranges,
-                                CV_SymTopLevelInfo *info_out){
-  MemoryZeroStruct(info_out);
-  
-  CV_RecRange *range = ranges->ranges;
-  CV_RecRange *opl = range + ranges->count;
-  for (; range < opl; range += 1){
-    U8 *first = sym_data.str + range->off + 2;
-    U64 cap = range->hdr.size - 2;
-    
-    switch (range->hdr.kind){
-      case CV_SymKind_COMPILE:
-      {
-        if (sizeof(CV_SymCompile) <= cap){
-          CV_SymCompile *compile = (CV_SymCompile*)first;
-          
-          String8 ver_str = str8_cstring_capped((char*)(compile + 1), (char *)(first + cap));
-          
-          info_out->arch = compile->machine;
-          info_out->language = CV_CompileFlags_ExtractLanguage(compile->flags);;
-          info_out->compiler_name = ver_str;
-        }
-      }break;
-      
-      case CV_SymKind_COMPILE2:
-      {
-        if (sizeof(CV_SymCompile2) <= cap){
-          CV_SymCompile2 *compile2 = (CV_SymCompile2*)first;
-          
-          String8 ver_str = str8_cstring_capped((char*)(compile2 + 1), (char*)(first + cap));
-          String8 compiler_name = push_str8f(arena, "%.*s %u.%u.%u",
-                                             str8_varg(ver_str),
-                                             compile2->ver_major,
-                                             compile2->ver_minor,
-                                             compile2->ver_build);
-          
-          info_out->arch = compile2->machine;
-          info_out->language = CV_Compile2Flags_ExtractLanguage(compile2->flags);;
-          info_out->compiler_name = compiler_name;
-        }
-      }break;
-      
-      case CV_SymKind_COMPILE3:
-      {
-        if (sizeof(CV_SymCompile3) <= cap){
-          CV_SymCompile3 *compile3 = (CV_SymCompile3*)first;
-          
-          String8 ver_str = str8_cstring_capped((char*)(compile3 + 1), (char *)(first + cap));
-          String8 compiler_name = push_str8f(arena, "%.*s %u.%u.%u",
-                                             str8_varg(ver_str),
-                                             compile3->ver_major,
-                                             compile3->ver_minor,
-                                             compile3->ver_build);
-          
-          info_out->arch = compile3->machine;
-          info_out->language = CV_Compile3Flags_ExtractLanguage(compile3->flags);;
-          info_out->compiler_name = compiler_name;
-        }
-      }break;
-    }
-  }
 }
 
 //- leaf

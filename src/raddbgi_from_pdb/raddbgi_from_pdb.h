@@ -160,27 +160,6 @@ struct P2R_SrcFileMap
   U64 slots_count;
 };
 
-//- rjf: unit conversion tasks
-
-typedef struct P2R_UnitConvertIn P2R_UnitConvertIn;
-struct P2R_UnitConvertIn
-{
-  PDB_CompUnitArray *comp_units;
-  PDB_CompUnitContributionArray *comp_unit_contributions;
-  String8 *c13_data_for_unit;
-  PDB_CoffSectionArray *sections;
-  PDB_Strtbl *strtbl;
-  CV_SymParsed **comp_unit_syms;
-  CV_C13Parsed **comp_unit_c13s;
-};
-
-typedef struct P2R_UnitConvertOut P2R_UnitConvertOut;
-struct P2R_UnitConvertOut
-{
-  RDIM_UnitChunkList units;
-  RDIM_SrcFileChunkList src_files;
-};
-
 //- rjf: link name map building tasks
 
 typedef struct P2R_LinkNameMapBuildIn P2R_LinkNameMapBuildIn;
@@ -236,29 +215,54 @@ struct P2R_UDTConvertIn
 
 //- rjf: symbol stream conversion
 
-typedef struct P2R_SymbolStreamConvertIn P2R_SymbolStreamConvertIn;
-struct P2R_SymbolStreamConvertIn
+typedef struct
 {
+  String8 compiler_name;
   RDI_Arch arch;
-  PDB_CoffSectionArray *coff_sections;
-  PDB_TpiHashParsed *tpi_hash;
-  CV_LeafParsed *tpi_leaf;
-  CV_SymParsed *sym;
-  U64 sym_ranges_first;
-  U64 sym_ranges_opl;
-  CV_TypeId *itype_fwd_map;
-  RDIM_Type **itype_type_ptrs;
-  P2R_LinkNameMap *link_name_map;
-};
-
-typedef struct P2R_SymbolStreamConvertOut P2R_SymbolStreamConvertOut;
-struct P2R_SymbolStreamConvertOut
-{
+  CV_Language language;
   RDIM_SymbolChunkList procedures;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_ScopeChunkList scopes;
-};
+} P2R_SymbolConvertResult;
+
+typedef struct
+{
+  PDB_CompUnit *pdb_unit;
+  PDB_CoffSectionArray *sections;
+  PDB_TpiHashParsed *tpi_hash;
+  CV_LeafParsed *tpi_leaf;
+  CV_TypeId *itype_fwd_map;
+  RDIM_Type **itype_type_ptrs;
+  P2R_LinkNameMap *link_name_map;
+  PDB_Strtbl *strtbl;
+  String8 sym_data;
+  String8 c11_data;
+  String8 c13_data;
+} P2R_UnitConvertIn;
+
+typedef struct
+{
+  RDIM_Unit unit;
+  RDIM_SymbolChunkList procedures;
+  RDIM_SymbolChunkList global_variables;
+  RDIM_SymbolChunkList thread_variables;
+  RDIM_ScopeChunkList scopes;
+  RDIM_SrcFileChunkList src_files;
+} P2R_UnitConvertOut;
+
+typedef struct
+{
+  PDB_CoffSectionArray *sections;
+  PDB_TpiHashParsed *tpi_hash;
+  CV_LeafParsed *tpi_leaf;
+  CV_TypeId *itype_fwd_map;
+  RDIM_Type **itype_type_ptrs;
+  P2R_LinkNameMap *link_name_map;
+  CV_SymParsed *sym;
+  U64 sym_ranges_first;
+  U64 sym_ranges_opl;
+} P2R_GsiBlockConvertIn;
 
 ////////////////////////////////
 //~ rjf: Baking Task Types
@@ -541,7 +545,6 @@ internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkLis
 internal TS_TASK_FUNCTION_DEF(p2r_exe_hash_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_tpi_hash_parse_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_tpi_leaf_parse_task__entry_point);
-internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_parse_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_c13_stream_parse_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_comp_unit_parse_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_comp_unit_contributions_parse_task__entry_point);

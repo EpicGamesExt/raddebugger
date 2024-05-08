@@ -7,10 +7,6 @@
 ////////////////////////////////
 //~ CodeView Stringize Helper Types
 
-typedef struct CV_StringizeSymParams{
-  CV_Arch arch;
-} CV_StringizeSymParams;
-
 typedef struct CV_StringizeLeafParams{
   U32 dummy;
 } CV_StringizeLeafParams;
@@ -56,10 +52,10 @@ internal void cv_stringize_sym_parsed(Arena *arena, String8List *out, CV_SymPars
 
 internal void cv_stringize_sym_range(Arena *arena, String8List *out,
                                      CV_RecRange *range, String8 data,
-                                     CV_StringizeSymParams *p);
+                                     CV_Arch arch);
 internal void cv_stringize_sym_array(Arena *arena, String8List *out,
                                      CV_RecRangeArray *ranges, String8 data,
-                                     CV_StringizeSymParams *p);
+                                     CV_Arch arch);
 
 ////////////////////////////////
 //~ CodeView Leaf Stringize Functions

@@ -165,3 +165,36 @@ path_normalized_from_string(Arena *arena, String8 path_string){
   return(result);
 }
 
+internal String8
+path_convert_slashes(Arena *arena, String8 path, PathKind path_kind)
+{
+  read_only static U8 slash_arr[PathKind_Count] = {
+    0,    // Path_Null
+    '\\', // Path_Windows
+    '/',  // Path_Unix
+  };
+  read_only static U8 inv_slash_arr[PathKind_Count] = {
+    0,    // Path_Null
+    '/',  // Path_Windows
+    '\\', // Path_Unix
+  };
+
+  String8 result = push_str8_copy(arena, path);
+
+  for (U64 i = 0; i < result.size; ) {
+    // decode
+    UnicodeDecode dec = utf8_decode(result.str + i, result.size - i);
+
+    // replace
+    if (dec.codepoint == inv_slash_arr[path_kind]) {
+      U32 enc = utf8_encode(result.str + i, slash_arr[path_kind]);
+      Assert(enc == dec.inc);
+    }
+
+    // advance
+    Assert(dec.inc > 0);
+    i += dec.inc;
+  }
+
+  return result;
+}

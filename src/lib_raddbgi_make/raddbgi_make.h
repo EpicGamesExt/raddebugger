@@ -524,6 +524,7 @@ struct RDIM_Unit
   RDIM_String8 object_file;
   RDIM_String8 archive_file;
   RDIM_String8 build_path;
+  RDI_Arch arch;
   RDI_Language language;
   RDIM_LineSequenceList line_sequences;
   RDIM_Rng1U64List voff_ranges;

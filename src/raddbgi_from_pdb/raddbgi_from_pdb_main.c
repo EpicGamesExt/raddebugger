@@ -23,6 +23,7 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "path/path.h"
 #include "task_system/task_system.h"
 #include "raddbgi_make_local/raddbgi_make_local.h"
 #include "coff/coff.h"
@@ -36,6 +37,7 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "path/path.c"
 #include "task_system/task_system.c"
 #include "raddbgi_make_local/raddbgi_make_local.c"
 #include "coff/coff.c"

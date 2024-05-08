@@ -2854,14 +2854,6 @@ struct CV_RecRangeArray
 ////////////////////////////////
 //~ Sym Parser Types
 
-typedef struct CV_SymTopLevelInfo CV_SymTopLevelInfo;
-struct CV_SymTopLevelInfo
-{
-  CV_Arch arch;
-  CV_Language language; 
-  String8 compiler_name;
-};
-
 typedef struct CV_SymParsed CV_SymParsed;
 struct CV_SymParsed
 {
@@ -2871,9 +2863,6 @@ struct CV_SymParsed
   
   // sym index derived from source
   CV_RecRangeArray sym_ranges;
-  
-  // top-level info derived from the syms
-  CV_SymTopLevelInfo info;
 };
 
 
@@ -3032,10 +3021,6 @@ internal CV_RecRangeStream* cv_rec_range_stream_from_data(Arena *arena, String8 
 
 //- sym
 internal CV_SymParsed* cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align);
-
-internal void cv_sym_top_level_info_from_syms(Arena *arena, String8 sym_data,
-                                              CV_RecRangeArray *ranges,
-                                              CV_SymTopLevelInfo *info_out);
 
 //- leaf
 internal CV_LeafParsed* cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId first);

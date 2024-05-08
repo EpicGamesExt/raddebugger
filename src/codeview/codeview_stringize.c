@@ -318,16 +318,33 @@ cv_stringize_local_flags(Arena *arena, String8List *out,
 
 internal void
 cv_stringize_sym_parsed(Arena *arena, String8List *out, CV_SymParsed *sym){
-  CV_StringizeSymParams params = {0};
-  params.arch = sym->info.arch;
-  
-  cv_stringize_sym_array(arena, out, &sym->sym_ranges, sym->data, &params);
+  CV_Arch arch = max_U16;
+  {
+    CV_RecRange *ptr = sym->sym_ranges.ranges;
+    CV_RecRange *opl = sym->sym_ranges.ranges + sym->sym_ranges.count;
+    for (;ptr < opl; ptr += 1){
+      U8 *first = sym->data.str + ptr->off + 2;
+      if (ptr->hdr.kind == CV_SymKind_COMPILE) {
+        CV_SymCompile *compile = (CV_SymCompile *)first;
+        arch = compile->machine;
+        break;
+      } else if (ptr->hdr.kind == CV_SymKind_COMPILE2) {
+        CV_SymCompile2 *compile = (CV_SymCompile2 *)first;
+        arch = compile->machine;
+        break;
+      } else if (ptr->hdr.kind == CV_SymKind_COMPILE3) {
+        CV_SymCompile3 *compile = (CV_SymCompile3 *)first;
+        arch = compile->machine;
+        break;
+      }
+    }
+  }
+
+  cv_stringize_sym_array(arena, out, &sym->sym_ranges, sym->data, arch);
 }
 
 internal void
-cv_stringize_sym_range(Arena *arena, String8List *out,
-                       CV_RecRange *range, String8 data,
-                       CV_StringizeSymParams *p){
+cv_stringize_sym_range(Arena *arena, String8List *out, CV_RecRange *range, String8 data, CV_Arch arch){
   U64 opl_off = range->off + range->hdr.size;
   if (opl_off > data.size){
     str8_list_push(arena, out, str8_lit("bad symbol range\n"));
@@ -344,7 +361,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
     // details
     U8 *first = data.str + range->off + 2;
     U64 cap = range->hdr.size - 2;
-    
+
     switch (range->hdr.kind){
       default:break;
       
@@ -641,7 +658,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           str8_list_pushf(arena, out, " itype=%u\n", regrel32->itype);
           
           // reg
-          String8 reg = cv_string_from_reg(p->arch, regrel32->reg);
+          String8 reg = cv_string_from_reg(arch, regrel32->reg);
           str8_list_pushf(arena, out, " reg=%.*s\n", str8_varg(reg));
           
           // name
@@ -819,7 +836,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           str8_list_pushf(arena, out, " off=%x\n", framecookie->off);
           
           // reg
-          String8 reg = cv_string_from_reg(p->arch, framecookie->reg);
+          String8 reg = cv_string_from_reg(arch, framecookie->reg);
           str8_list_pushf(arena, out, " reg=%.*s\n",
                           str8_varg(reg));
           
@@ -919,7 +936,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)first;
           
           // reg
-          String8 reg = cv_string_from_reg(p->arch, defrange_register->reg);
+          String8 reg = cv_string_from_reg(arch, defrange_register->reg);
           str8_list_pushf(arena, out, " reg=%.*s\n", str8_varg(reg));
           
           // range attribs
@@ -966,7 +983,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)first;
           
           // reg
-          String8 reg = cv_string_from_reg(p->arch, defrange_subfield_register->reg);
+          String8 reg = cv_string_from_reg(arch, defrange_subfield_register->reg);
           str8_list_pushf(arena, out, " reg=%.*s\n", str8_varg(reg));
           
           // range attribs
@@ -1010,7 +1027,7 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
           CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)first;
           
           // reg
-          String8 reg = cv_string_from_reg(p->arch, defrange_register_rel->reg);
+          String8 reg = cv_string_from_reg(arch, defrange_register_rel->reg);
           str8_list_pushf(arena, out, " reg=%.*s\n", str8_varg(reg));
           
           // flags
@@ -1322,13 +1339,11 @@ cv_stringize_sym_range(Arena *arena, String8List *out,
 }
 
 internal void
-cv_stringize_sym_array(Arena *arena, String8List *out,
-                       CV_RecRangeArray *ranges, String8 data,
-                       CV_StringizeSymParams *p){
+cv_stringize_sym_array(Arena *arena, String8List *out, CV_RecRangeArray *ranges, String8 data, CV_Arch arch){
   CV_RecRange *ptr = ranges->ranges;
   CV_RecRange *opl = ranges->ranges + ranges->count;
   for (;ptr < opl; ptr += 1){
-    cv_stringize_sym_range(arena, out, ptr, data, p);
+    cv_stringize_sym_range(arena, out, ptr, data, arch);
     str8_list_push(arena, out, str8_lit("\n"));
   }
 }
