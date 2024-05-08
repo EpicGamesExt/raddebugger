@@ -165,6 +165,9 @@ rdi_idx_run_from_first_count(RDI_Parsed *parsed, RDI_U32 first, RDI_U32 raw_coun
 
 //- line info
 RDI_PROC void
+rdi_parse_line_info(RDI_Parsed *rdi, RDI_U64 line_info_idx, RDI_ParsedLineInfo *out);
+
+RDI_PROC void
 rdi_line_info_from_unit(RDI_Parsed *p, RDI_Unit *unit, RDI_ParsedLineInfo *out);
 
 RDI_PROC RDI_U64

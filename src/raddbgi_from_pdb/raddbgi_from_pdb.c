@@ -1373,8 +1373,11 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
   }
   ProfEnd();
 
-  ProfBegin("convert line tables");
-  RDIM_LineSequenceList line_sequences = {0};
+  U64                            lines_cap = 256;
+  RDIM_LineSequenceListChunkList lines     = {0};
+
+  RDIM_LineSequenceList *main_line_table = rdim_line_sequence_list_chunk_list_push(arena, &lines, lines_cap);
+  ProfBegin("convert main line table");
   for(CV_C13SubSectionNode *ss = c13_parsed.v[CV_C13_SubSectionIdxKind_Lines].first; ss != 0; ss = ss->next)
   {
     CV_C13LinesParsedList parsed_lines = cv_c13_lines_from_sub_sections(scratch.arena, in->c13_data, ss->range);
@@ -1401,7 +1404,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
       RDIM_SrcFile *src_file       = p2r_src_file_map_search(src_file_map, file_path_orig);
 
       // make line sequence
-      RDIM_LineSequence *seq = rdim_line_sequence_list_push(arena, &line_sequences);
+      RDIM_LineSequence *seq = rdim_line_sequence_list_push(arena, main_line_table);
       rdim_src_file_push_line_sequence(arena, 0, src_file, seq);
       seq->src_file   = src_file;
       seq->voffs      = lines.voffs;
@@ -1444,15 +1447,15 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
     }
 
     // fill out unit
-    unit.unit_name      = unit_name;
-    unit.compiler_name  = symbol_result.compiler_name;
-    unit.source_file    = str8(0,0);
-    unit.object_file    = obj_name;
-    unit.archive_file   = in->pdb_unit->group_name;
-    unit.build_path     = str8(0,0);
-    unit.arch           = symbol_result.arch;
-    unit.language       = p2r_rdi_language_from_cv_language(symbol_result.language);
-    unit.line_sequences = line_sequences;
+    unit.unit_name       = unit_name;
+    unit.compiler_name   = symbol_result.compiler_name;
+    unit.source_file     = str8(0,0);
+    unit.object_file     = obj_name;
+    unit.archive_file    = in->pdb_unit->group_name;
+    unit.build_path      = str8(0,0);
+    unit.arch            = symbol_result.arch;
+    unit.language        = p2r_rdi_language_from_cv_language(symbol_result.language);
+    unit.main_line_table = main_line_table;
   }
   ProfEnd();
 
@@ -1483,6 +1486,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
   out->thread_variables = symbol_result.thread_variables;
   out->scopes           = symbol_result.scopes;
   out->src_files        = src_files_chunk_list;
+  out->lines            = lines;
 
   scratch_end(scratch);
   return out;
@@ -3460,14 +3464,18 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     link_name_map = &link_name_map__in_progress;
   }
   
-  RDIM_UnitChunkList    all_units            = {0};
-  RDIM_SymbolChunkList  all_procedures       = {0};
-  RDIM_SymbolChunkList  all_global_variables = {0};
-  RDIM_SymbolChunkList  all_thread_variables = {0};
-  RDIM_ScopeChunkList   all_scopes           = {0};
-  RDIM_SrcFileChunkList all_src_files        = {0};
+  RDIM_UnitChunkList             all_units            = {0};
+  RDIM_SymbolChunkList           all_procedures       = {0};
+  RDIM_SymbolChunkList           all_global_variables = {0};
+  RDIM_SymbolChunkList           all_thread_variables = {0};
+  RDIM_ScopeChunkList            all_scopes           = {0};
+  RDIM_SrcFileChunkList          all_src_files        = {0};
+  RDIM_LineSequenceListChunkList all_lines            = {0};
   ProfScope("produce units, symbols, and source files")
   {
+    // TODO: move push null line sequence to raddbgi_make.c
+    rdim_line_sequence_list_chunk_list_push(arena, &all_lines, 1);
+
     P2R_UnitConvertIn *unit_tasks_inputs  = push_array(scratch.arena, P2R_UnitConvertIn, comp_unit_count);
     TS_Ticket         *unit_tasks_tickets = push_array(scratch.arena, TS_Ticket,         comp_unit_count);
     ProfBegin("kick off comp unit conversion tasks");
@@ -3530,26 +3538,27 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
 
     RDIM_Unit *units = push_array_no_zero(arena, RDIM_Unit, comp_unit_count);
     ProfBegin("join comp unit conversion tasks");
-      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
-      {
-        P2R_UnitConvertOut *out = ts_join_struct(unit_tasks_tickets[comp_unit_idx], max_U64, P2R_UnitConvertOut);
-        units[comp_unit_idx] = out->unit;
-        rdim_symbol_chunk_list_concat_in_place(&all_procedures,       &out->procedures);
-        rdim_symbol_chunk_list_concat_in_place(&all_global_variables, &out->global_variables);
-        rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &out->thread_variables);
-        rdim_scope_chunk_list_concat_in_place(&all_scopes,            &out->scopes);
-        rdim_src_file_chunk_list_concat_in_place(&all_src_files,      &out->src_files);
-      }
+    for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+    {
+      P2R_UnitConvertOut *out = ts_join_struct(unit_tasks_tickets[comp_unit_idx], max_U64, P2R_UnitConvertOut);
+      units[comp_unit_idx] = out->unit;
+      rdim_symbol_chunk_list_concat_in_place(&all_procedures,        &out->procedures);
+      rdim_symbol_chunk_list_concat_in_place(&all_global_variables,  &out->global_variables);
+      rdim_symbol_chunk_list_concat_in_place(&all_thread_variables,  &out->thread_variables);
+      rdim_scope_chunk_list_concat_in_place(&all_scopes,             &out->scopes);
+      rdim_src_file_chunk_list_concat_in_place(&all_src_files,       &out->src_files);
+      rdim_line_sequence_list_chunk_list_concat_in_place(&all_lines, &out->lines);
+    }
     ProfEnd();
     
     ProfBegin("join GSI-block conversion tasks");
     for(U64 gsi_block_idx = 0; gsi_block_idx < gsi_block_count; gsi_block_idx += 1)
     {
       P2R_SymbolConvertResult *out = ts_join_struct(gsi_tasks_tickets[gsi_block_idx], max_U64, P2R_SymbolConvertResult);
-      rdim_symbol_chunk_list_concat_in_place(&all_procedures,       &out->procedures);
-      rdim_symbol_chunk_list_concat_in_place(&all_global_variables, &out->global_variables);
-      rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &out->thread_variables);
-      rdim_scope_chunk_list_concat_in_place(&all_scopes,            &out->scopes);
+      rdim_symbol_chunk_list_concat_in_place(&all_procedures,        &out->procedures);
+      rdim_symbol_chunk_list_concat_in_place(&all_global_variables,  &out->global_variables);
+      rdim_symbol_chunk_list_concat_in_place(&all_thread_variables,  &out->thread_variables);
+      rdim_scope_chunk_list_concat_in_place(&all_scopes,             &out->scopes);
     }
     ProfEnd();
 
@@ -3613,6 +3622,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     out->bake_params.thread_variables = all_thread_variables;
     out->bake_params.procedures       = all_procedures;
     out->bake_params.scopes           = all_scopes;
+    out->bake_params.lines            = all_lines;
   }
   
   scratch_end(scratch);
@@ -3771,16 +3781,16 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_units_top_level_task__entry_point)
 {
   P2R_BakeUnitsTopLevelIn *in = (P2R_BakeUnitsTopLevelIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake units") *s = rdim_bake_unit_top_level_section_list_from_params(arena, in->strings, in->path_tree, in->params);
+  ProfScope("bake units") *s = rdim_bake_unit_top_level_section_list(arena, in->strings, in->path_tree, in->params->units);
   return s;
 }
 
-internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_task__entry_point)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_lines_task__entry_point)
 {
-  P2R_BakeUnitIn *in = (P2R_BakeUnitIn *)p;
-  RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake unit") *s = rdim_bake_section_list_from_unit(arena, in->unit);
-  return s;
+  P2R_BakeLinesIn *in = (P2R_BakeLinesIn *)p;
+  RDIM_BakedLineChunk *out = push_array(arena, RDIM_BakedLineChunk, 1);
+  ProfScope("bake lines") *out = rdim_bake_section_list_from_lines(arena, in->layout, in->chunk);
+  return out;
 }
 
 internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_vmap_task__entry_point)
@@ -3914,18 +3924,17 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     path_tree = rdim_bake_path_tree_from_params(arena, params);
   }
   
-  //- rjf: kick off per-unit baking tasks
-  P2R_BakeUnitIn *bake_units_in = push_array(scratch.arena, P2R_BakeUnitIn, params->units.total_count);
-  TS_Ticket *bake_units_tickets = push_array(scratch.arena, TS_Ticket, params->units.total_count);
+  //- kick off line baking tasks
+  P2R_BakeLinesIn    *bake_lines_in      = push_array(scratch.arena, P2R_BakeLinesIn, params->lines.chunk_count);
+  TS_Ticket          *bake_lines_tickets = push_array(scratch.arena, TS_Ticket,       params->lines.chunk_count);
+  RDIM_LineInfoLayout line_info_layout   = rdim_make_line_info_layout(scratch.arena, params->lines);
   {
-    U64 idx = 0;
-    for(RDIM_UnitChunkNode *n = params->units.first; n != 0; n = n->next)
+    U64 chunk_idx = 0;
+    for(RDIM_LineSequenceListChunkNode *chunk = params->lines.first; chunk != 0; chunk = chunk->next, chunk_idx += 1)
     {
-      for(U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, idx += 1)
-      {
-        bake_units_in[idx].unit = &n->v[chunk_idx];
-        bake_units_tickets[idx] = ts_kickoff(p2r_bake_unit_task__entry_point, 0, &bake_units_in[idx]);
-      }
+      bake_lines_in[chunk_idx].layout = line_info_layout;
+      bake_lines_in[chunk_idx].chunk  = chunk;
+      bake_lines_tickets[chunk_idx] = ts_kickoff(p2r_bake_lines_task__entry_point, 0, bake_lines_in + chunk_idx);
     }
   }
   
@@ -4343,15 +4352,31 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     RDIM_BakeSectionList *s = ts_join_struct(bake_idx_runs_ticket, max_U64, RDIM_BakeSectionList);
     rdim_bake_section_list_concat_in_place(&sections, s);
   }
-  
-  //- rjf: join per-unit bakes
-  ProfScope("units")
+
+  ProfScope("join line bakes")
   {
-    for(U64 idx = 0; idx < params->units.total_count; idx += 1)
+    RDIM_String8List line_infos = {0};
+    RDIM_String8List voffs      = {0};
+    RDIM_String8List lines      = {0};
+    RDIM_String8List cols       = {0};
+    for(U64 idx = 0; idx < params->lines.chunk_count; idx += 1)
     {
-      RDIM_BakeSectionList *s = ts_join_struct(bake_units_tickets[idx], max_U64, RDIM_BakeSectionList);
-      rdim_bake_section_list_concat_in_place(&sections, s);
+      RDIM_BakedLineChunk *baked_line_chunk = ts_join_struct(bake_lines_tickets[idx], max_U64, RDIM_BakedLineChunk);
+      rdim_str8_list_concat_in_place(&line_infos, &baked_line_chunk->line_infos);
+      rdim_str8_list_concat_in_place(&voffs,      &baked_line_chunk->voffs);
+      rdim_str8_list_concat_in_place(&lines,      &baked_line_chunk->lines);
+      rdim_str8_list_concat_in_place(&cols,       &baked_line_chunk->cols);
     }
+    
+    String8 line_infos_data = str8_list_join(arena, &line_infos, 0);
+    String8 voffs_data      = str8_list_join(arena, &voffs,      0);
+    String8 lines_data      = str8_list_join(arena, &lines,      0);
+    String8 cols_data       = str8_list_join(arena, &cols,       0);
+
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, line_infos_data.str, line_infos_data.size, RDI_DataSectionTag_LineInfo,        0);
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, voffs_data.str,      voffs_data.size,      RDI_DataSectionTag_LineInfoVoffs,   0);
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, lines_data.str,      lines_data.size,      RDI_DataSectionTag_LineInfoData,    0);
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, cols_data.str,       cols_data.size,       RDI_DataSectionTag_LineInfoColumns, 0);
   }
   
   //- rjf: fill & return

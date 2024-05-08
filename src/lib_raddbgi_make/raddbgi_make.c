@@ -260,6 +260,26 @@ rdim_str8_list_join(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 sep)
   return result;
 }
 
+internal void
+rdim_str8_list_concat_in_place(RDIM_String8List *list, RDIM_String8List *to_push)
+{
+  if(to_push->node_count != 0)
+  {
+    if (list->last)
+    {
+      list->node_count += to_push->node_count;
+      list->total_size += to_push->total_size;
+      list->last->next = to_push->first;
+      list->last = to_push->last;
+    }
+    else
+    {
+      *list = *to_push;
+    }
+    rdim_memzero_struct(to_push);
+  }
+}
+
 //- rjf: sortable range sorting
 
 RDI_PROC RDIM_SortKey *
@@ -515,6 +535,84 @@ rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_f
 }
 
 ////////////////////////////////
+// Lines
+
+RDI_PROC RDIM_LineSequence *
+rdim_line_sequence_list_push(RDIM_Arena *arena, RDIM_LineSequenceList *list)
+{
+  RDIM_LineSequenceNode *n = rdim_push_array(arena, RDIM_LineSequenceNode, 1);
+  RDIM_SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+  return &n->v;
+}
+
+RDI_PROC RDI_U64
+rdim_total_line_count_from_line_sequence_list(RDIM_LineSequenceList *list)
+{
+  RDI_U64 total_line_count = 0;
+  if(list != 0)
+  {
+    for(RDIM_LineSequenceNode *n = list->first; n != 0; n = n->next)
+    {
+      total_line_count += n->v.line_count;
+    }
+  }
+  return total_line_count;
+}
+
+RDI_PROC RDIM_LineSequenceList *
+rdim_line_sequence_list_chunk_list_push(RDIM_Arena *arena, RDIM_LineSequenceListChunkList *list, RDI_U64 cap)
+{
+  RDIM_LineSequenceListChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_LineSequenceListChunkNode, 1);
+    n->cap = cap;
+    n->base_idx = list->total_count;
+    n->v = rdim_push_array(arena, RDIM_LineSequenceList, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_LineSequenceList *result = &n->v[n->count];
+  result->chunk = n;
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC void
+rdim_line_sequence_list_chunk_list_concat_in_place(RDIM_LineSequenceListChunkList *dst, RDIM_LineSequenceListChunkList *to_push)
+{
+  for(RDIM_LineSequenceListChunkNode *n = to_push->first; n != 0; n = n->next)
+  {
+    n->base_idx += dst->total_count;
+  }
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->chunk_count += to_push->chunk_count;
+    dst->total_count += to_push->total_count;
+  }
+  else if(dst->first == 0)
+  {
+    rdim_memcpy_struct(dst, to_push);
+  }
+  rdim_memzero_struct(to_push);
+}
+
+RDI_PROC RDI_U64
+rdim_idx_from_line_sequence_list(RDIM_LineSequenceList *list)
+{
+  RDI_U64 idx = 0;
+  if(list != 0 && list->chunk != 0)
+  {
+    idx = list->chunk->base_idx + (list - list->chunk->v);
+  }
+  return idx;
+}
+
+////////////////////////////////
 //~ rjf: [Building] Unit List Building
 
 RDI_PROC RDIM_Unit *
@@ -567,15 +665,6 @@ rdim_unit_chunk_list_concat_in_place(RDIM_UnitChunkList *dst, RDIM_UnitChunkList
     rdim_memcpy_struct(dst, to_push);
   }
   rdim_memzero_struct(to_push);
-}
-
-RDI_PROC RDIM_LineSequence *
-rdim_line_sequence_list_push(RDIM_Arena *arena, RDIM_LineSequenceList *list)
-{
-  RDIM_LineSequenceNode *n = rdim_push_array(arena, RDIM_LineSequenceNode, 1);
-  RDIM_SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-  return &n->v;
 }
 
 ////////////////////////////////
@@ -992,9 +1081,6 @@ rdim_bake_section_count_from_params(RDIM_BakeParams *params)
   RDI_U64 section_count = 0;
   {
     section_count += RDI_DataSectionTag_PRIMARY_COUNT;
-    section_count += params->units.total_count;     // PER-UNIT line info voffs
-    section_count += params->units.total_count;     // PER-UNIT line info data
-    section_count += params->units.total_count;     // PER-UNIT line info columns
     section_count += params->src_files.total_count; // PER-SOURCE-FILE line map numbers
     section_count += params->src_files.total_count; // PER-SOURCE-FILE line map ranges
     section_count += params->src_files.total_count; // PER-SOURCE-FILE line map voffs
@@ -1016,50 +1102,33 @@ rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSecti
   {
     default:{}break;
     
-    //- rjf: per-unit sections
-    case (RDI_U32)RDI_DataSectionTag_LineInfoVoffs:
-    if(idx != 0)
-    {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 0*params->units.total_count + (idx-1)%params->units.total_count;
-    }break;
-    case (RDI_U32)RDI_DataSectionTag_LineInfoData:
-    if(idx != 0)
-    {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 1*params->units.total_count + (idx-1)%params->units.total_count;
-    }break;
-    case (RDI_U32)RDI_DataSectionTag_LineInfoColumns:
-    if(idx != 0)
-    {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 2*params->units.total_count + (idx-1)%params->units.total_count;
-    }break;
-    
     //- rjf: per-source-file sections
     case (RDI_U32)RDI_DataSectionTag_LineMapNumbers:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 0*params->src_files.total_count + (idx-1)%params->src_files.total_count;
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 0*params->src_files.total_count + (idx-1)%params->src_files.total_count;
     }break;
     case (RDI_U32)RDI_DataSectionTag_LineMapRanges:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 1*params->src_files.total_count + (idx-1)%params->src_files.total_count;
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 1*params->src_files.total_count + (idx-1)%params->src_files.total_count;
     }break;
     case (RDI_U32)RDI_DataSectionTag_LineMapVoffs:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 2*params->src_files.total_count + (idx-1)%params->src_files.total_count;
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 2*params->src_files.total_count + (idx-1)%params->src_files.total_count;
     }break;
     
     //- rjf: per-name-map sections
     case (RDI_U32)RDI_DataSectionTag_NameMapBuckets:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 0*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->src_files.total_count + 0*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
     }break;
     case (RDI_U32)RDI_DataSectionTag_NameMapNodes:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->units.total_count + 3*params->src_files.total_count + 1*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->src_files.total_count + 1*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
     }break;
   }
   return result;
@@ -2174,146 +2243,196 @@ rdim_bake_binary_section_section_list_from_params(RDIM_Arena *arena, RDIM_BakeSt
 
 //- rjf: units
 
-RDI_PROC RDIM_BakeSectionList
-rdim_bake_section_list_from_unit(RDIM_Arena *arena, RDIM_Unit *unit)
+RDI_PROC RDIM_LineInfo
+rdim_bake_line_info(RDIM_Arena *arena, RDIM_LineSequenceList *line_sequences)
 {
-  RDIM_BakeSectionList sections = {0};
-  
-  ////////////////////////
-  //- rjf: produce combined unit line info
+  RDIM_ProfBegin("rdim_bake_line_info");
+  RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+
+  //- rjf: gather up all line info into two arrays:
   //
-  RDI_U64  *unit_voffs      = 0;
-  RDI_Line *unit_lines      = 0;
-  RDI_U16  *unit_cols       = 0;
-  RDI_U32   unit_line_count = 0;
-  RDIM_ProfScope("produce combined unit line info")
+  // [1] keys: sortable array; pairs voffs with line info records; null records are sequence enders
+  // [2] recs: contains all the source coordinates for a range of voffs
+  //
+  typedef struct RDIM_LineRec RDIM_LineRec;
+  struct RDIM_LineRec
   {
-    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
-    
-    //- rjf: gather up all line info into two arrays:
-    //
-    // [1] keys: sortable array; pairs voffs with line info records; null records are sequence enders
-    // [2] recs: contains all the source coordinates for a range of voffs
-    //
-    typedef struct RDIM_LineRec RDIM_LineRec;
-    struct RDIM_LineRec
+    RDI_U32 file_id;
+    RDI_U32 line_num;
+    RDI_U16 col_first;
+    RDI_U16 col_opl;
+  };
+  RDI_U64 line_count = 0;
+  RDI_U64 seq_count = 0;
+  for(RDIM_LineSequenceNode *seq_n = line_sequences->first; seq_n != 0; seq_n = seq_n->next)
+  {
+    seq_count += 1;
+    line_count += seq_n->v.line_count;
+  }
+  RDI_U64 key_count = line_count + seq_count;
+  RDIM_SortKey *line_keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, key_count);
+  RDIM_LineRec *line_recs = rdim_push_array_no_zero(scratch.arena, RDIM_LineRec, line_count);
+  {
+    RDIM_SortKey *key_ptr = line_keys;
+    RDIM_LineRec *rec_ptr = line_recs;
+    for(RDIM_LineSequenceNode *seq_n = line_sequences->first; seq_n != 0; seq_n = seq_n->next)
     {
-      RDI_U32 file_id;
-      RDI_U32 line_num;
-      RDI_U16 col_first;
-      RDI_U16 col_opl;
-    };
-    RDI_U64 line_count = 0;
-    RDI_U64 seq_count = 0;
-    for(RDIM_LineSequenceNode *seq_n = unit->line_sequences.first; seq_n != 0; seq_n = seq_n->next)
-    {
-      seq_count += 1;
-      line_count += seq_n->v.line_count;
-    }
-    RDI_U64 key_count = line_count + seq_count;
-    RDIM_SortKey *line_keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, key_count);
-    RDIM_LineRec *line_recs = rdim_push_array_no_zero(scratch.arena, RDIM_LineRec, line_count);
-    {
-      RDIM_SortKey *key_ptr = line_keys;
-      RDIM_LineRec *rec_ptr = line_recs;
-      for(RDIM_LineSequenceNode *seq_n = unit->line_sequences.first; seq_n != 0; seq_n = seq_n->next)
+      RDIM_LineSequence *seq = &seq_n->v;
+      for(RDI_U64 line_idx = 0; line_idx < seq->line_count; line_idx += 1)
       {
-        RDIM_LineSequence *seq = &seq_n->v;
-        for(RDI_U64 line_idx = 0; line_idx < seq->line_count; line_idx += 1)
-        {
-          key_ptr->key = seq->voffs[line_idx];
-          key_ptr->val = rec_ptr;
-          key_ptr += 1;
-          rec_ptr->file_id = (RDI_U32)rdim_idx_from_src_file(seq->src_file); // TODO(rjf): @u64_to_u32
-          rec_ptr->line_num = seq->line_nums[line_idx];
-          if(seq->col_nums != 0)
-          {
-            rec_ptr->col_first = seq->col_nums[line_idx*2];
-            rec_ptr->col_opl = seq->col_nums[line_idx*2 + 1];
-          }
-          rec_ptr += 1;
-        }
-        key_ptr->key = seq->voffs[seq->line_count];
-        key_ptr->val = 0;
+        key_ptr->key = seq->voffs[line_idx];
+        key_ptr->val = rec_ptr;
         key_ptr += 1;
-      }
-    }
-    
-    //- rjf: sort
-    RDIM_SortKey *sorted_line_keys = 0;
-    RDIM_ProfScope("sort")
-    {
-      sorted_line_keys = rdim_sort_key_array(scratch.arena, line_keys, key_count);
-    }
-    
-    // TODO(rjf): do a pass over sorted keys to make sure duplicate keys
-    // are sorted with null record first, and no more than one null
-    // record and one non-null record
-    
-    //- rjf: arrange output
-    RDI_U64 *arranged_voffs = rdim_push_array_no_zero(arena, RDI_U64, key_count + 1);
-    RDI_Line *arranged_lines = rdim_push_array_no_zero(arena, RDI_Line, key_count);
-    RDIM_ProfScope("arrange output")
-    {
-      for(RDI_U64 i = 0; i < key_count; i += 1)
-      {
-        arranged_voffs[i] = sorted_line_keys[i].key;
-      }
-      arranged_voffs[key_count] = ~0ull;
-      for(RDI_U64 i = 0; i < key_count; i += 1)
-      {
-        RDIM_LineRec *rec = (RDIM_LineRec*)sorted_line_keys[i].val;
-        if(rec != 0)
+        rec_ptr->file_id = (RDI_U32)rdim_idx_from_src_file(seq->src_file); // TODO(rjf): @u64_to_u32
+        rec_ptr->line_num = seq->line_nums[line_idx];
+        if(seq->col_nums != 0)
         {
-          arranged_lines[i].file_idx = rec->file_id;
-          arranged_lines[i].line_num = rec->line_num;
+          rec_ptr->col_first = seq->col_nums[line_idx*2];
+          rec_ptr->col_opl = seq->col_nums[line_idx*2 + 1];
         }
-        else
-        {
-          arranged_lines[i].file_idx = 0;
-          arranged_lines[i].line_num = 0;
-        }
+        rec_ptr += 1;
       }
+      key_ptr->key = seq->voffs[seq->line_count];
+      key_ptr->val = 0;
+      key_ptr += 1;
     }
-    
-    //- rjf: fill output
-    unit_voffs      = arranged_voffs;
-    unit_lines      = arranged_lines;
-    unit_cols       = 0;
-    unit_line_count = key_count;
-    rdim_scratch_end(scratch);
   }
   
-  ////////////////////////
-  //- rjf: build line info sections
-  //
-  U64 unit_idx = rdim_idx_from_unit(unit);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, unit_voffs, sizeof(RDI_U64)*(unit_line_count+1), RDI_DataSectionTag_LineInfoVoffs, unit_idx);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, unit_lines, sizeof(RDI_Line)*unit_line_count, RDI_DataSectionTag_LineInfoData, unit_idx);
-  if(unit_cols != 0)
+  //- rjf: sort
+  RDIM_SortKey *sorted_line_keys = 0;
+  RDIM_ProfScope("sort")
   {
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, unit_cols, sizeof(RDI_Column)*unit_line_count, RDI_DataSectionTag_LineInfoColumns, unit_idx);
+    sorted_line_keys = rdim_sort_key_array(scratch.arena, line_keys, key_count);
   }
   
-  return sections;
+  // TODO(rjf): do a pass over sorted keys to make sure duplicate keys
+  // are sorted with null record first, and no more than one null
+  // record and one non-null record
+  
+  //- rjf: arrange output
+  RDI_U64 *arranged_voffs = rdim_push_array_no_zero(arena, RDI_U64, key_count + 1);
+  RDI_Line *arranged_lines = rdim_push_array_no_zero(arena, RDI_Line, key_count);
+  RDIM_ProfScope("arrange output")
+  {
+    for(RDI_U64 i = 0; i < key_count; i += 1)
+    {
+      arranged_voffs[i] = sorted_line_keys[i].key;
+    }
+    arranged_voffs[key_count] = ~0ull;
+    for(RDI_U64 i = 0; i < key_count; i += 1)
+    {
+      RDIM_LineRec *rec = (RDIM_LineRec*)sorted_line_keys[i].val;
+      if(rec != 0)
+      {
+        arranged_lines[i].file_idx = rec->file_id;
+        arranged_lines[i].line_num = rec->line_num;
+      }
+      else
+      {
+        arranged_lines[i].file_idx = 0;
+        arranged_lines[i].line_num = 0;
+      }
+    }
+  }
+  
+  // fill out line info
+  RDIM_LineInfo line_info = {0};
+  line_info.voff_count = key_count > 0 ? key_count + 1 : 0;
+  line_info.line_count = key_count;
+  line_info.col_count  = 0;
+  line_info.voffs      = arranged_voffs;
+  line_info.lines      = arranged_lines;
+  line_info.cols       = 0;
+  
+  rdim_scratch_end(scratch);
+  RDIM_ProfEnd();
+  return line_info;
+}
+
+RDI_PROC RDIM_LineInfoLayout
+rdim_make_line_info_layout(Arena *arena, RDIM_LineSequenceListChunkList lines)
+{
+  RDIM_ProfBegin("rdim_make_line_info_layout");
+
+  RDI_U64 *voff_indices = rdim_push_array_no_zero(arena, RDI_U64, lines.total_count);
+  RDI_U64 *line_indices = rdim_push_array_no_zero(arena, RDI_U64, lines.total_count);
+  RDI_U64 *col_indices  = rdim_push_array_no_zero(arena, RDI_U64, lines.total_count);
+
+  RDI_U64 line_info_idx = 0;
+  RDI_U64 voff_cursor = 0, line_cursor = 0, col_cursor = 0;
+  for(RDIM_LineSequenceListChunkNode *chunk = lines.first; chunk != 0; chunk = chunk->next)
+  {
+    for(U64 seq_idx = 0; seq_idx < chunk->count; seq_idx += 1, line_info_idx += 1)
+    {
+      voff_indices[line_info_idx] = voff_cursor;
+      line_indices[line_info_idx] = line_cursor;
+      col_indices[line_info_idx]  = col_cursor;
+
+      RDIM_LineSequenceList *seq_list = chunk->v + seq_idx;
+      for(RDIM_LineSequenceNode *seq_node = seq_list->first; seq_node != 0; seq_node = seq_node->next)
+      {
+        voff_cursor += seq_node->v.line_count > 0 ? seq_node->v.line_count + 1 : 0;
+        line_cursor += seq_node->v.line_count;
+        //col_cursor  += seq_node->v.col_count;
+      }
+    }
+  }
+
+  RDIM_LineInfoLayout layout = {0};
+  layout.voff_indices = voff_indices;
+  layout.line_indices = line_indices;
+  layout.col_indices  = col_indices;
+  layout.voff_count   = voff_cursor;
+  layout.line_count   = line_cursor;
+  layout.col_count    = col_cursor;
+
+  RDIM_ProfEnd();
+  return layout;
+}
+
+RDI_PROC RDIM_BakedLineChunk
+rdim_bake_section_list_from_lines(RDIM_Arena *arena, RDIM_LineInfoLayout layout, RDIM_LineSequenceListChunkNode *chunk)
+{
+  RDIM_ProfBegin("rdim_bake_section_list_from_lines");
+  RDIM_BakedLineChunk baked_chunk = {0};
+  for(U64 seq_idx = 0; seq_idx < chunk->count; seq_idx += 1)
+  {
+    RDIM_LineSequenceList *seq           = chunk->v + seq_idx;
+    RDI_U64                line_info_idx = rdim_idx_from_line_sequence_list(seq);
+    RDIM_LineInfo          line_info     = rdim_bake_line_info(arena, seq);
+
+    // fill out line info
+    RDI_LineInfo *dst_line_info = rdim_push_array_no_zero(arena, RDI_LineInfo, 1);
+    dst_line_info->line_count    = line_info.line_count;
+    dst_line_info->col_count     = 0;
+    dst_line_info->voff_data_idx = layout.voff_indices[line_info_idx];
+    dst_line_info->line_data_idx = layout.line_indices[line_info_idx];
+    dst_line_info->col_data_idx  = layout.col_indices[line_info_idx];
+
+    // push line arrays
+    rdim_str8_list_push(arena, &baked_chunk.line_infos, rdim_str8((RDI_U8 *)dst_line_info,   sizeof(*dst_line_info)));
+    rdim_str8_list_push(arena, &baked_chunk.voffs,      rdim_str8((RDI_U8 *)line_info.voffs, sizeof(line_info.voffs[0]) * line_info.voff_count));
+    rdim_str8_list_push(arena, &baked_chunk.lines,      rdim_str8((RDI_U8 *)line_info.lines, sizeof(line_info.lines[0]) * line_info.line_count));
+    rdim_str8_list_push(arena, &baked_chunk.cols,       rdim_str8((RDI_U8 *)line_info.cols,  sizeof(line_info.cols[0])  * line_info.col_count));
+  }
+  RDIM_ProfEnd();
+  return baked_chunk;
 }
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_unit_top_level_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_unit_top_level_section_list(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_UnitChunkList units)
 {
+  RDIM_ProfBegin("rdim_bake_unit_top_level_section_list_from_params");
   RDIM_BakeSectionList sections = {0};
-  RDI_Unit *dst_base = rdim_push_array(arena, RDI_Unit, params->units.total_count+1);
-  RDI_U64 dst_idx = 1;
-  for(RDIM_UnitChunkNode *src_n = params->units.first; src_n != 0; src_n = src_n->next)
+  RDI_Unit *dst_base = rdim_push_array(arena, RDI_Unit, units.total_count+1);
+  RDI_U64   dst_idx  = 1;
+  for(RDIM_UnitChunkNode *src_n = units.first; src_n != 0; src_n = src_n->next)
   {
     for(RDI_U64 src_chunk_idx = 0; src_chunk_idx < src_n->count; src_chunk_idx += 1, dst_idx += 1)
     {
-      RDIM_Unit *src = &src_n->v[src_chunk_idx];
-      RDI_Unit *dst = &dst_base[dst_idx];
-      
-      ////////////////////////
-      //- rjf: fill output
-      //
+      RDIM_Unit *src = src_n->v + src_chunk_idx;
+      RDI_Unit  *dst = dst_base + dst_idx;
+
       dst->unit_name_string_idx     = rdim_bake_idx_from_string(strings, src->unit_name);
       dst->compiler_name_string_idx = rdim_bake_idx_from_string(strings, src->compiler_name);
       dst->source_file_path_node    = rdim_bake_path_node_idx_from_string(path_tree, src->source_file);
@@ -2321,12 +2440,11 @@ rdim_bake_unit_top_level_section_list_from_params(RDIM_Arena *arena, RDIM_BakeSt
       dst->archive_file_path_node   = rdim_bake_path_node_idx_from_string(path_tree, src->archive_file);
       dst->build_path_node          = rdim_bake_path_node_idx_from_string(path_tree, src->build_path);
       dst->language                 = src->language;
-      dst->line_info_voffs_data_idx = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_LineInfoVoffs,    dst_idx); // TODO(rjf): @u64_to_u32
-      dst->line_info_data_idx       = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_LineInfoData,     dst_idx); // TODO(rjf): @u64_to_u32
-      dst->line_info_col_data_idx   = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_LineInfoColumns,  dst_idx); // TODO(rjf): @u64_to_u32
+      dst->line_info_idx            = rdim_idx_from_line_sequence_list(src->main_line_table);
     }
   }
   rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_base, sizeof(*dst_base)*dst_idx, RDI_DataSectionTag_Units, 0);
+  RDIM_ProfEnd();
   return sections;
 }
 

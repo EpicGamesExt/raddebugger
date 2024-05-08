@@ -278,16 +278,17 @@ X(Locals,              0x0015)\
 X(LocationBlocks,      0x0016)\
 X(LocationData,        0x0017)\
 X(NameMaps,            0x0018)\
+X(LineInfo,            0x0019)\
+X(LineInfoVoffs,       0x001A)\
+X(LineInfoData,        0x001B)\
+X(LineInfoColumns,     0x001C)\
 Y(PRIMARY_COUNT)\
 X(SKIP,                RDI_DataSectionTag_SECONDARY|0x0000)\
-X(LineInfoVoffs,       RDI_DataSectionTag_SECONDARY|0x0001)\
-X(LineInfoData,        RDI_DataSectionTag_SECONDARY|0x0002)\
-X(LineInfoColumns,     RDI_DataSectionTag_SECONDARY|0x0003)\
-X(LineMapNumbers,      RDI_DataSectionTag_SECONDARY|0x0004)\
-X(LineMapRanges,       RDI_DataSectionTag_SECONDARY|0x0005)\
-X(LineMapVoffs,        RDI_DataSectionTag_SECONDARY|0x0006)\
-X(NameMapBuckets,      RDI_DataSectionTag_SECONDARY|0x0007)\
-X(NameMapNodes,        RDI_DataSectionTag_SECONDARY|0x0008)
+X(LineMapNumbers,      RDI_DataSectionTag_SECONDARY|0x0001)\
+X(LineMapRanges,       RDI_DataSectionTag_SECONDARY|0x0002)\
+X(LineMapVoffs,        RDI_DataSectionTag_SECONDARY|0x0003)\
+X(NameMapBuckets,      RDI_DataSectionTag_SECONDARY|0x0004)\
+X(NameMapNodes,        RDI_DataSectionTag_SECONDARY|0x0005)
 
 typedef RDI_U32 RDI_DataSectionTag;
 typedef enum RDI_DataSectionTagEnum{
@@ -375,26 +376,7 @@ typedef struct RDI_SourceFile{
   RDI_U32 line_map_voff_data_idx;  // U64[...] (idx by line_map_range_data)
 } RDI_SourceFile;
 
-
-//- units & line info
-typedef struct RDI_Unit{
-  RDI_U32 unit_name_string_idx;
-  RDI_U32 compiler_name_string_idx;
-  RDI_U32 source_file_path_node;
-  RDI_U32 object_file_path_node;
-  RDI_U32 archive_file_path_node;
-  RDI_U32 build_path_node;
-  RDI_Language language;
-  
-  // usage of line info to go from voff to file & line number:
-  //  (line_info_voffs * voff) -> (nil + index)
-  //  (line_info_data * index) -> (RDI_Line = (file_idx * line_number))
-  
-  RDI_U32 line_info_voffs_data_idx; // U64[line_info_count + 1] (sorted ranges)
-  RDI_U32 line_info_data_idx;       // RDI_Line[line_info_count]
-  RDI_U32 line_info_col_data_idx;   // RDI_Col[line_info_count]
-  RDI_U32 line_info_count;
-} RDI_Unit;
+//- line info
 
 typedef struct RDI_Line{
   RDI_U32 file_idx;
@@ -406,6 +388,30 @@ typedef struct RDI_Column{
   RDI_U16 col_opl;
 } RDI_Column;
 
+typedef struct RDI_LineInfo{
+  // usage of line info to go from voff to file & line number:
+  //  (line_info_voffs * voff) -> (nil + index)
+  //  (line_info_data * index) -> (RDI_Line = (file_idx * line_number))
+  
+  RDI_U32 line_count;
+  RDI_U32 col_count;
+  RDI_U32 voff_data_idx;  // RDI_U64[line_count + 1] (sorted ranges)
+  RDI_U32 line_data_idx;  // RDI_Line[line_count]
+  RDI_U32 col_data_idx;   // RDI_Col[line_count]
+} RDI_LineInfo;
+
+//- units
+
+typedef struct RDI_Unit{
+  RDI_U32 unit_name_string_idx;
+  RDI_U32 compiler_name_string_idx;
+  RDI_U32 source_file_path_node;
+  RDI_U32 object_file_path_node;
+  RDI_U32 archive_file_path_node;
+  RDI_U32 build_path_node;
+  RDI_Language language;
+  RDI_U64 line_info_idx;
+} RDI_Unit;
 
 //- type info
 
