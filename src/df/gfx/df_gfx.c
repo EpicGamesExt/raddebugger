@@ -1290,7 +1290,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           df_panel_notify_mutation(ws, panel);
         }break;
         case DF_CoreCmdKind_ResetToDefaultPanels:
+        case DF_CoreCmdKind_ResetToCompactPanels:
         {
+          typedef enum Layout
+          {
+            Layout_Default,
+            Layout_Compact,
+          }
+          Layout;
+          Layout layout = Layout_Default;
+          switch(core_cmd_kind)
+          {
+            default:{}break;
+            case DF_CoreCmdKind_ResetToDefaultPanels:{layout = Layout_Default;}break;
+            case DF_CoreCmdKind_ResetToCompactPanels:{layout = Layout_Compact;}break;
+          }
+          
           //- rjf: gather all panels in the panel tree - remove & gather views
           // we'd like to keep in the next layout
           DF_HandleList panels_to_close = {0};
@@ -1377,22 +1392,22 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             watch = df_view_alloc();
             df_view_equip_spec(ws, watch, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Watch), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(df_view_is_nil(locals))
+          if(layout == Layout_Default && df_view_is_nil(locals))
           {
             locals = df_view_alloc();
             df_view_equip_spec(ws, locals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Locals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(df_view_is_nil(regs))
+          if(layout == Layout_Default && df_view_is_nil(regs))
           {
             regs = df_view_alloc();
             df_view_equip_spec(ws, regs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Registers), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(df_view_is_nil(globals))
+          if(layout == Layout_Default && df_view_is_nil(globals))
           {
             globals = df_view_alloc();
             df_view_equip_spec(ws, globals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Globals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(df_view_is_nil(tlocals))
+          if(layout == Layout_Default && df_view_is_nil(tlocals))
           {
             tlocals = df_view_alloc();
             df_view_equip_spec(ws, tlocals, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_ThreadLocals), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
@@ -1402,7 +1417,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             types = df_view_alloc();
             df_view_equip_spec(ws, types, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Types), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(df_view_is_nil(procs))
+          if(layout == Layout_Default && df_view_is_nil(procs))
           {
             procs = df_view_alloc();
             df_view_equip_spec(ws, procs, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Procedures), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
@@ -1417,7 +1432,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             breakpoints = df_view_alloc();
             df_view_equip_spec(ws, breakpoints, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Breakpoints), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(df_view_is_nil(watch_pins))
+          if(layout == Layout_Default && df_view_is_nil(watch_pins))
           {
             watch_pins = df_view_alloc();
             df_view_equip_spec(ws, watch_pins, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_WatchPins), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
@@ -1447,7 +1462,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             disasm = df_view_alloc();
             df_view_equip_spec(ws, disasm, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disassembly), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(df_view_is_nil(memory))
+          if(layout == Layout_Default && df_view_is_nil(memory))
           {
             memory = df_view_alloc();
             df_view_equip_spec(ws, memory, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Memory), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
@@ -1458,101 +1473,176 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             df_view_equip_spec(ws, getting_started, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_GettingStarted), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
           
-          // rjf: root split
-          ws->root_panel->split_axis = Axis2_X;
-          DF_Panel *root_0 = df_panel_alloc(ws);
-          DF_Panel *root_1 = df_panel_alloc(ws);
-          df_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
-          df_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
-          root_0->pct_of_parent = 0.85f;
-          root_1->pct_of_parent = 0.15f;
-          
-          // rjf: root_0 split
-          root_0->split_axis = Axis2_Y;
-          DF_Panel *root_0_0 = df_panel_alloc(ws);
-          DF_Panel *root_0_1 = df_panel_alloc(ws);
-          df_panel_insert(root_0, root_0->last, root_0_0);
-          df_panel_insert(root_0, root_0->last, root_0_1);
-          root_0_0->pct_of_parent = 0.80f;
-          root_0_1->pct_of_parent = 0.20f;
-          
-          // rjf: root_1 split
-          root_1->split_axis = Axis2_Y;
-          DF_Panel *root_1_0 = df_panel_alloc(ws);
-          DF_Panel *root_1_1 = df_panel_alloc(ws);
-          df_panel_insert(root_1, root_1->last, root_1_0);
-          df_panel_insert(root_1, root_1->last, root_1_1);
-          root_1_0->pct_of_parent = 0.50f;
-          root_1_1->pct_of_parent = 0.50f;
-          df_panel_insert_tab_view(root_1_0, root_1_0->last_tab_view, targets);
-          df_panel_insert_tab_view(root_1_1, root_1_1->last_tab_view, scheduler);
-          root_1_0->selected_tab_view = df_handle_from_view(targets);
-          root_1_1->selected_tab_view = df_handle_from_view(scheduler);
-          root_1_1->tab_side = Side_Max;
-          
-          // rjf: root_0_0 split
-          root_0_0->split_axis = Axis2_X;
-          DF_Panel *root_0_0_0 = df_panel_alloc(ws);
-          DF_Panel *root_0_0_1 = df_panel_alloc(ws);
-          df_panel_insert(root_0_0, root_0_0->last, root_0_0_0);
-          df_panel_insert(root_0_0, root_0_0->last, root_0_0_1);
-          root_0_0_0->pct_of_parent = 0.25f;
-          root_0_0_1->pct_of_parent = 0.75f;
-          
-          // rjf: root_0_0_0 split
-          root_0_0_0->split_axis = Axis2_Y;
-          DF_Panel *root_0_0_0_0 = df_panel_alloc(ws);
-          DF_Panel *root_0_0_0_1 = df_panel_alloc(ws);
-          df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_0);
-          df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_1);
-          root_0_0_0_0->pct_of_parent = 0.5f;
-          root_0_0_0_1->pct_of_parent = 0.5f;
-          df_panel_insert_tab_view(root_0_0_0_0, root_0_0_0_0->last_tab_view, disasm);
-          root_0_0_0_0->selected_tab_view = df_handle_from_view(disasm);
-          df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, breakpoints);
-          df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, watch_pins);
-          df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, output);
-          df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, memory);
-          root_0_0_0_1->selected_tab_view = df_handle_from_view(output);
-          
-          // rjf: root_0_1 split
-          root_0_1->split_axis = Axis2_X;
-          DF_Panel *root_0_1_0 = df_panel_alloc(ws);
-          DF_Panel *root_0_1_1 = df_panel_alloc(ws);
-          df_panel_insert(root_0_1, root_0_1->last, root_0_1_0);
-          df_panel_insert(root_0_1, root_0_1->last, root_0_1_1);
-          root_0_1_0->pct_of_parent = 0.60f;
-          root_0_1_1->pct_of_parent = 0.40f;
-          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
-          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
-          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
-          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, globals);
-          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, tlocals);
-          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, types);
-          df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, procs);
-          root_0_1_0->selected_tab_view = df_handle_from_view(watch);
-          root_0_1_0->tab_side = Side_Max;
-          df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, callstack);
-          df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, modules);
-          root_0_1_1->selected_tab_view = df_handle_from_view(callstack);
-          root_0_1_1->tab_side = Side_Max;
-          
-          // rjf: fill main panel with getting started, OR all collected code views
-          if(code_views.count == 0)
+          //- rjf: apply layout
+          switch(layout)
           {
-            df_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, getting_started);
-          }
-          else for(DF_HandleNode *n = code_views.first; n != 0; n = n->next)
-          {
-            DF_View *view = df_view_from_handle(n->handle);
-            if(!df_view_is_nil(view))
+            //- rjf: default layout
+            case Layout_Default:
             {
-              df_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, view);
-            }
+              // rjf: root split
+              ws->root_panel->split_axis = Axis2_X;
+              DF_Panel *root_0 = df_panel_alloc(ws);
+              DF_Panel *root_1 = df_panel_alloc(ws);
+              df_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
+              df_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
+              root_0->pct_of_parent = 0.85f;
+              root_1->pct_of_parent = 0.15f;
+              
+              // rjf: root_0 split
+              root_0->split_axis = Axis2_Y;
+              DF_Panel *root_0_0 = df_panel_alloc(ws);
+              DF_Panel *root_0_1 = df_panel_alloc(ws);
+              df_panel_insert(root_0, root_0->last, root_0_0);
+              df_panel_insert(root_0, root_0->last, root_0_1);
+              root_0_0->pct_of_parent = 0.80f;
+              root_0_1->pct_of_parent = 0.20f;
+              
+              // rjf: root_1 split
+              root_1->split_axis = Axis2_Y;
+              DF_Panel *root_1_0 = df_panel_alloc(ws);
+              DF_Panel *root_1_1 = df_panel_alloc(ws);
+              df_panel_insert(root_1, root_1->last, root_1_0);
+              df_panel_insert(root_1, root_1->last, root_1_1);
+              root_1_0->pct_of_parent = 0.50f;
+              root_1_1->pct_of_parent = 0.50f;
+              df_panel_insert_tab_view(root_1_0, root_1_0->last_tab_view, targets);
+              df_panel_insert_tab_view(root_1_1, root_1_1->last_tab_view, scheduler);
+              root_1_0->selected_tab_view = df_handle_from_view(targets);
+              root_1_1->selected_tab_view = df_handle_from_view(scheduler);
+              root_1_1->tab_side = Side_Max;
+              
+              // rjf: root_0_0 split
+              root_0_0->split_axis = Axis2_X;
+              DF_Panel *root_0_0_0 = df_panel_alloc(ws);
+              DF_Panel *root_0_0_1 = df_panel_alloc(ws);
+              df_panel_insert(root_0_0, root_0_0->last, root_0_0_0);
+              df_panel_insert(root_0_0, root_0_0->last, root_0_0_1);
+              root_0_0_0->pct_of_parent = 0.25f;
+              root_0_0_1->pct_of_parent = 0.75f;
+              
+              // rjf: root_0_0_0 split
+              root_0_0_0->split_axis = Axis2_Y;
+              DF_Panel *root_0_0_0_0 = df_panel_alloc(ws);
+              DF_Panel *root_0_0_0_1 = df_panel_alloc(ws);
+              df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_0);
+              df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_1);
+              root_0_0_0_0->pct_of_parent = 0.5f;
+              root_0_0_0_1->pct_of_parent = 0.5f;
+              df_panel_insert_tab_view(root_0_0_0_0, root_0_0_0_0->last_tab_view, disasm);
+              root_0_0_0_0->selected_tab_view = df_handle_from_view(disasm);
+              df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, breakpoints);
+              df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, watch_pins);
+              df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, output);
+              df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, memory);
+              root_0_0_0_1->selected_tab_view = df_handle_from_view(output);
+              
+              // rjf: root_0_1 split
+              root_0_1->split_axis = Axis2_X;
+              DF_Panel *root_0_1_0 = df_panel_alloc(ws);
+              DF_Panel *root_0_1_1 = df_panel_alloc(ws);
+              df_panel_insert(root_0_1, root_0_1->last, root_0_1_0);
+              df_panel_insert(root_0_1, root_0_1->last, root_0_1_1);
+              root_0_1_0->pct_of_parent = 0.60f;
+              root_0_1_1->pct_of_parent = 0.40f;
+              df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
+              df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
+              df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
+              df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, globals);
+              df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, tlocals);
+              df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, types);
+              df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, procs);
+              root_0_1_0->selected_tab_view = df_handle_from_view(watch);
+              root_0_1_0->tab_side = Side_Max;
+              df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, callstack);
+              df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, modules);
+              root_0_1_1->selected_tab_view = df_handle_from_view(callstack);
+              root_0_1_1->tab_side = Side_Max;
+              
+              // rjf: fill main panel with getting started, OR all collected code views
+              if(code_views.count == 0)
+              {
+                df_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, getting_started);
+              }
+              else for(DF_HandleNode *n = code_views.first; n != 0; n = n->next)
+              {
+                DF_View *view = df_view_from_handle(n->handle);
+                if(!df_view_is_nil(view))
+                {
+                  df_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, view);
+                }
+              }
+              
+              // rjf: choose initial focused panel
+              ws->focused_panel = root_0_0_1;
+            }break;
+            
+            //- rjf: compact layout:
+            case Layout_Compact:
+            {
+              // rjf: root split
+              ws->root_panel->split_axis = Axis2_X;
+              DF_Panel *root_0 = df_panel_alloc(ws);
+              DF_Panel *root_1 = df_panel_alloc(ws);
+              df_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
+              df_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
+              root_0->pct_of_parent = 0.25f;
+              root_1->pct_of_parent = 0.75f;
+              
+              // rjf: root_0 split
+              root_0->split_axis = Axis2_Y;
+              DF_Panel *root_0_0 = df_panel_alloc(ws);
+              {
+                if(!df_view_is_nil(watch)) { df_panel_insert_tab_view(root_0_0, root_0_0->last_tab_view, watch); }
+                if(!df_view_is_nil(types)) { df_panel_insert_tab_view(root_0_0, root_0_0->last_tab_view, types); }
+                root_0_0->selected_tab_view = df_handle_from_view(watch);
+              }
+              DF_Panel *root_0_1 = df_panel_alloc(ws);
+              {
+                if(!df_view_is_nil(scheduler))     { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, scheduler); }
+                if(!df_view_is_nil(targets))       { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, targets); }
+                if(!df_view_is_nil(breakpoints))   { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, breakpoints); }
+                if(!df_view_is_nil(watch_pins))    { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, watch_pins); }
+                root_0_1->selected_tab_view = df_handle_from_view(scheduler);
+              }
+              DF_Panel *root_0_2 = df_panel_alloc(ws);
+              {
+                if(!df_view_is_nil(disasm))    { df_panel_insert_tab_view(root_0_2, root_0_2->last_tab_view, disasm); }
+                if(!df_view_is_nil(output))    { df_panel_insert_tab_view(root_0_2, root_0_2->last_tab_view, output); }
+                root_0_2->selected_tab_view = df_handle_from_view(disasm);
+              }
+              DF_Panel *root_0_3 = df_panel_alloc(ws);
+              {
+                if(!df_view_is_nil(callstack))    { df_panel_insert_tab_view(root_0_3, root_0_3->last_tab_view, callstack); }
+                if(!df_view_is_nil(modules))      { df_panel_insert_tab_view(root_0_3, root_0_3->last_tab_view, modules); }
+                root_0_3->selected_tab_view = df_handle_from_view(callstack);
+              }
+              df_panel_insert(root_0, root_0->last, root_0_0);
+              df_panel_insert(root_0, root_0->last, root_0_1);
+              df_panel_insert(root_0, root_0->last, root_0_2);
+              df_panel_insert(root_0, root_0->last, root_0_3);
+              root_0_0->pct_of_parent = 0.25f;
+              root_0_1->pct_of_parent = 0.25f;
+              root_0_2->pct_of_parent = 0.25f;
+              root_0_3->pct_of_parent = 0.25f;
+              
+              // rjf: fill main panel with getting started, OR all collected code views
+              if(code_views.count == 0)
+              {
+                df_panel_insert_tab_view(root_1, root_1->last_tab_view, getting_started);
+              }
+              else for(DF_HandleNode *n = code_views.first; n != 0; n = n->next)
+              {
+                DF_View *view = df_view_from_handle(n->handle);
+                if(!df_view_is_nil(view))
+                {
+                  df_panel_insert_tab_view(root_1, root_1->last_tab_view, view);
+                }
+              }
+              
+              // rjf: choose initial focused panel
+              ws->focused_panel = root_1;
+            }break;
           }
-          
-          // rjf: choose initial focused panel
-          ws->focused_panel = root_0_0_1;
           
           // rjf: dispatch cfg saves
           for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
@@ -4216,6 +4306,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 DF_CoreCmdKind_TabBarTop,
                 DF_CoreCmdKind_TabBarBottom,
                 DF_CoreCmdKind_ResetToDefaultPanels,
+                DF_CoreCmdKind_ResetToCompactPanels,
               };
               U32 codepoints[] =
               {
@@ -4228,6 +4319,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 't',
                 'b',
                 'v',
+                0,
                 0,
                 0,
                 0,
