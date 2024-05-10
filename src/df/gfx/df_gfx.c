@@ -1825,8 +1825,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           {
             df_panel_remove_tab_view(panel, view);
             df_view_release(view);
-            df_panel_notify_mutation(ws, panel);
+            if(df_view_is_nil(panel->first_tab_view))
+            {
+              DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
+            }
           }
+          df_panel_notify_mutation(ws, panel);
         }break;
         case DF_CoreCmdKind_MoveTab:
         {
@@ -6677,7 +6682,6 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
               
               // rjf: space for next tab
-              if(!df_view_is_nil(view->next))
               {
                 ui_spacer(ui_em(0.15f, 1.f));
               }
@@ -6686,6 +6690,40 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               drop_sites[view_idx].p = tab_column_box->rect.x0 - tab_spacing/2;
               drop_sites[view_idx].prev_view = view->prev;
               drop_site_max_p = Max(tab_column_box->rect.x1, drop_site_max_p);
+            }
+            
+            // rjf: build add-new-tab button
+            UI_TextAlignment(UI_TextAlign_Center)
+              UI_PrefWidth(ui_px(tab_bar_vheight, 1.f))
+              UI_PrefHeight(ui_px(tab_bar_vheight, 1.f))
+              UI_Column
+            {
+              ui_spacer(ui_px(tab_bar_rv_diff/2.f, 1.f));
+              UI_CornerRadius(tab_bar_vheight/2.f)
+                UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+                UI_FontSize(ui_top_font_size()*0.75f)
+                UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+                UI_HoverCursor(OS_Cursor_HandPoint)
+              {
+                UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|
+                                                                UI_BoxFlag_DrawText|
+                                                                UI_BoxFlag_DrawBorder|
+                                                                UI_BoxFlag_DrawHotEffects|
+                                                                UI_BoxFlag_DrawActiveEffects|
+                                                                UI_BoxFlag_Clickable|
+                                                                UI_BoxFlag_DisableTextTrunc,
+                                                                "%S##add_new_tab_button_%p",
+                                                                df_g_icon_kind_text_table[DF_IconKind_Add],
+                                                                panel);
+                UI_Signal sig = ui_signal_from_box(add_new_box);
+                if(ui_clicked(sig))
+                {
+                  DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+                  UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
+                  ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
+                }
+              }
             }
             
             scratch_end(scratch);

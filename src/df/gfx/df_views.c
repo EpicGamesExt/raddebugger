@@ -1660,6 +1660,37 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Empty) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(Empty) {}
 DF_VIEW_UI_FUNCTION_DEF(Empty)
 {
+  ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
+  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
+  {
+    UI_PrefHeight(ui_em(3.f, 1.f))
+      UI_Row
+      UI_Padding(ui_pct(1, 0))
+      UI_TextAlignment(UI_TextAlign_Center)
+      UI_PrefWidth(ui_em(15.f, 1.f))
+      UI_CornerRadius(ui_top_font_size()/2.f)
+      UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+      UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBorder))
+      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureText))
+    {
+      if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Panel")))
+      {
+        DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+        df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
+      }
+    }
+  }
+}
+
+////////////////////////////////
+//~ rjf: GettingStarted @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(GettingStarted) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(GettingStarted) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(GettingStarted) {}
+DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
+{
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
