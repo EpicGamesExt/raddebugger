@@ -13051,7 +13051,14 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
             Vec2F32 window_dim = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
             DF_Window *ws = df_window_open(window_dim, preferred_monitor, DF_CfgSrc_User);
             DF_CmdParams blank_params = df_cmd_params_from_window(ws);
-            df_cmd_list_push(arena, cmds, &blank_params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ResetToDefaultPanels));
+            if(monitor_dim.x < 1920)
+            {
+              df_cmd_list_push(arena, cmds, &blank_params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ResetToCompactPanels));
+            }
+            else
+            {
+              df_cmd_list_push(arena, cmds, &blank_params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ResetToDefaultPanels));
+            }
           }
           
           //- rjf: if config bound 0 keys, we need to do some sensible default
