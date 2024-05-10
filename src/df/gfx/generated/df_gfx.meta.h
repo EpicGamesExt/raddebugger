@@ -17,6 +17,7 @@ typedef enum DF_GfxViewKind
 {
 DF_GfxViewKind_Null,
 DF_GfxViewKind_Empty,
+DF_GfxViewKind_GettingStarted,
 DF_GfxViewKind_Commands,
 DF_GfxViewKind_FileSystem,
 DF_GfxViewKind_SystemProcesses,
@@ -123,6 +124,7 @@ DF_ThemePreset_COUNT,
 
 DF_VIEW_SETUP_FUNCTION_DEF(Null);
 DF_VIEW_SETUP_FUNCTION_DEF(Empty);
+DF_VIEW_SETUP_FUNCTION_DEF(GettingStarted);
 DF_VIEW_SETUP_FUNCTION_DEF(Commands);
 DF_VIEW_SETUP_FUNCTION_DEF(FileSystem);
 DF_VIEW_SETUP_FUNCTION_DEF(SystemProcesses);
@@ -153,6 +155,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(ExceptionFilters);
 DF_VIEW_SETUP_FUNCTION_DEF(Theme);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Null);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Empty);
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(GettingStarted);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Commands);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(FileSystem);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(SystemProcesses);
@@ -183,6 +186,7 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ExceptionFilters);
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Theme);
 DF_VIEW_CMD_FUNCTION_DEF(Null);
 DF_VIEW_CMD_FUNCTION_DEF(Empty);
+DF_VIEW_CMD_FUNCTION_DEF(GettingStarted);
 DF_VIEW_CMD_FUNCTION_DEF(Commands);
 DF_VIEW_CMD_FUNCTION_DEF(FileSystem);
 DF_VIEW_CMD_FUNCTION_DEF(SystemProcesses);
@@ -213,6 +217,7 @@ DF_VIEW_CMD_FUNCTION_DEF(ExceptionFilters);
 DF_VIEW_CMD_FUNCTION_DEF(Theme);
 DF_VIEW_UI_FUNCTION_DEF(Null);
 DF_VIEW_UI_FUNCTION_DEF(Empty);
+DF_VIEW_UI_FUNCTION_DEF(GettingStarted);
 DF_VIEW_UI_FUNCTION_DEF(Commands);
 DF_VIEW_UI_FUNCTION_DEF(FileSystem);
 DF_VIEW_UI_FUNCTION_DEF(SystemProcesses);
@@ -295,7 +300,7 @@ extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];
 extern DF_StringBindingPair df_g_default_binding_table[97];
 extern String8 df_g_binding_version_remap_old_name_table[3];
 extern String8 df_g_binding_version_remap_new_name_table[3];
-extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[30];
+extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[31];
 extern String8 df_g_theme_color_display_string_table[54];
 extern String8 df_g_theme_color_cfg_string_table[54];
 read_only global U8 df_g_icon_font_bytes__data[] =

@@ -811,8 +811,8 @@ unw_unwind_pe_x64(String8 bindata, PE_BinInfo *bin, U64 base_vaddr, UNW_MemView 
           break;
         }
         
-        U64 code_count_rounded = AlignPow2(unwind_info->codes_num, 2);
-        U64 code_size = code_count_rounded*sizeof(PE_UnwindOpCode);
+        U64 code_count_rounded = AlignPow2(unwind_info->codes_num, sizeof(PE_UnwindCode));
+        U64 code_size = code_count_rounded*sizeof(PE_UnwindCode);
         U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfo) + code_size;
         
         last_pdata = pdata;
