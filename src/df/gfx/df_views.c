@@ -1700,6 +1700,35 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
     DF_EntityList targets = df_push_active_target_list(scratch.arena);
     DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
     
+    //- rjf: icon & info
+    UI_Padding(ui_em(2.f, 1.f))
+    {
+      //- rjf: icon
+      {
+        F32 icon_dim = ui_top_font_size()*10.f;
+        UI_PrefHeight(ui_px(icon_dim, 1.f))
+          UI_Row
+          UI_Padding(ui_pct(1, 0))
+          UI_PrefWidth(ui_px(icon_dim, 1.f))
+        {
+          R_Handle texture = df_gfx_state->icon_texture;
+          Vec2S32 texture_dim = r_size_from_tex2d(texture);
+          ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+        }
+      }
+      
+      //- rjf: info
+      UI_Padding(ui_em(2.f, 1.f))
+        UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
+        UI_Row
+        UI_Padding(ui_pct(1, 0))
+        UI_TextAlignment(UI_TextAlign_Center)
+        UI_PrefWidth(ui_text_dim(10, 1))
+      {
+        ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
+      }
+    }
+    
     //- rjf: targets state dependent helper
     B32 helper_built = 0;
     if(processes.count == 0)

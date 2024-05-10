@@ -1073,6 +1073,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   //////////////////////////////
   //- rjf: do core-layer commands & batch up commands to be dispatched to views
   //
+  B32 panel_reset_done = 0;
   UI_NavActionList nav_actions = {0};
   ProfScope("do commands")
   {
@@ -1292,6 +1293,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         case DF_CoreCmdKind_ResetToDefaultPanels:
         case DF_CoreCmdKind_ResetToCompactPanels:
         {
+          panel_reset_done = 1;
+          
           typedef enum Layout
           {
             Layout_Default,
@@ -1467,7 +1470,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             memory = df_view_alloc();
             df_view_equip_spec(ws, memory, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Memory), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
           }
-          if(code_views.count == 0)
+          if(code_views.count == 0 && df_view_is_nil(getting_started))
           {
             getting_started = df_view_alloc();
             df_view_equip_spec(ws, getting_started, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_GettingStarted), &df_g_nil_entity, str8_lit(""), &df_g_nil_cfg_node);
@@ -1559,11 +1562,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               root_0_1_1->tab_side = Side_Max;
               
               // rjf: fill main panel with getting started, OR all collected code views
-              if(code_views.count == 0)
+              if(!df_view_is_nil(getting_started))
               {
                 df_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, getting_started);
               }
-              else for(DF_HandleNode *n = code_views.first; n != 0; n = n->next)
+              for(DF_HandleNode *n = code_views.first; n != 0; n = n->next)
               {
                 DF_View *view = df_view_from_handle(n->handle);
                 if(!df_view_is_nil(view))
@@ -1626,11 +1629,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               root_0_3->pct_of_parent = 0.25f;
               
               // rjf: fill main panel with getting started, OR all collected code views
-              if(code_views.count == 0)
+              if(!df_view_is_nil(getting_started))
               {
                 df_panel_insert_tab_view(root_1, root_1->last_tab_view, getting_started);
               }
-              else for(DF_HandleNode *n = code_views.first; n != 0; n = n->next)
+              for(DF_HandleNode *n = code_views.first; n != 0; n = n->next)
               {
                 DF_View *view = df_view_from_handle(n->handle);
                 if(!df_view_is_nil(view))
@@ -4353,6 +4356,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 DF_CoreCmdKind_FilePathMap,
                 DF_CoreCmdKind_Theme,
                 DF_CoreCmdKind_ExceptionFilters,
+                DF_CoreCmdKind_GettingStarted,
               };
               U32 codepoints[] =
               {
@@ -4375,6 +4379,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 'p',
                 'e',
                 'g',
+                0,
               };
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));
               df_cmd_list_menu_buttons(ws, ArrayCount(cmds), cmds, codepoints);
@@ -5981,7 +5986,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         panel->animated_rect_pct.y0 += rate * (target_rect_pct.y0 - panel->animated_rect_pct.y0);
         panel->animated_rect_pct.x1 += rate * (target_rect_pct.x1 - panel->animated_rect_pct.x1);
         panel->animated_rect_pct.y1 += rate * (target_rect_pct.y1 - panel->animated_rect_pct.y1);
-        if(ws->frames_alive < 5 || is_changing_panel_boundaries)
+        if(ws->frames_alive < 5 || is_changing_panel_boundaries || panel_reset_done)
         {
           panel->animated_rect_pct = target_rect_pct;
         }
