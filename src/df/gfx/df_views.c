@@ -1660,6 +1660,37 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Empty) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(Empty) {}
 DF_VIEW_UI_FUNCTION_DEF(Empty)
 {
+  ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
+  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
+  {
+    UI_PrefHeight(ui_em(3.f, 1.f))
+      UI_Row
+      UI_Padding(ui_pct(1, 0))
+      UI_TextAlignment(UI_TextAlign_Center)
+      UI_PrefWidth(ui_em(15.f, 1.f))
+      UI_CornerRadius(ui_top_font_size()/2.f)
+      UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+      UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBorder))
+      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureText))
+    {
+      if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Panel")))
+      {
+        DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+        df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
+      }
+    }
+  }
+}
+
+////////////////////////////////
+//~ rjf: GettingStarted @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(GettingStarted) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(GettingStarted) { return str8_lit(""); }
+DF_VIEW_CMD_FUNCTION_DEF(GettingStarted) {}
+DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
+{
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
@@ -1668,6 +1699,35 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
   {
     DF_EntityList targets = df_push_active_target_list(scratch.arena);
     DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+    
+    //- rjf: icon & info
+    UI_Padding(ui_em(2.f, 1.f))
+    {
+      //- rjf: icon
+      {
+        F32 icon_dim = ui_top_font_size()*10.f;
+        UI_PrefHeight(ui_px(icon_dim, 1.f))
+          UI_Row
+          UI_Padding(ui_pct(1, 0))
+          UI_PrefWidth(ui_px(icon_dim, 1.f))
+        {
+          R_Handle texture = df_gfx_state->icon_texture;
+          Vec2S32 texture_dim = r_size_from_tex2d(texture);
+          ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+        }
+      }
+      
+      //- rjf: info
+      UI_Padding(ui_em(2.f, 1.f))
+        UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
+        UI_Row
+        UI_Padding(ui_pct(1, 0))
+        UI_TextAlignment(UI_TextAlign_Center)
+        UI_PrefWidth(ui_text_dim(10, 1))
+      {
+        ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
+      }
+    }
     
     //- rjf: targets state dependent helper
     B32 helper_built = 0;
