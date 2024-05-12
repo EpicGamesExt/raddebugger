@@ -73,6 +73,18 @@
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
+// [ ] Jeff Notes
+//  [ ] highlighted text & ctrl+f -> auto-fill search query
+//  [ ] double-click any part of frame in callstack view -> snap to function
+//  [ ] sort locals by appearance in source code (or maybe just debug info)
+//  [ ] bit more padding on the tabs
+//  [ ] sum view rule
+//  [ ] plot view rule
+//  [ ] histogram view rule
+//  [ ] max view rule
+//  [ ] min view rule
+//  [ ] double click on procedure in procedures tab to jump to source
+//
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
 //
