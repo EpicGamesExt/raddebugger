@@ -12577,7 +12577,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
           fstr->color.w *= 0.5f;
           fstr->size = ui_top_font_size();
           autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
-          prev_n ? (prev_n->next = autocomp_fstr_n) : (void)0;
+          if(prev_n != 0) {prev_n->next = autocomp_fstr_n;}
           if(prev_n == 0)
           {
             code_fancy_strings.first = code_fancy_strings.last = autocomp_fstr_n;
