@@ -11609,6 +11609,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
     {
       String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(*cursor, *mark));
       os_set_clipboard_text(text);
+      taken = 1;
     }
     
     //- rjf: consume
@@ -11633,7 +11634,10 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
   {
     next = n->next;
     B32 taken = 0;
-    
+    if(n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Edit)
+    {
+      continue;
+    }
     String8 line = txti_string_from_handle_line_num(scratch.arena, handle, cursor->line);
     UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, line, *cursor, *mark);
     
@@ -11787,6 +11791,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
     {
       String8 text = txti_string_from_handle_txt_rng(scratch.arena, handle, txt_rng(*cursor, *mark));
       os_set_clipboard_text(text);
+      taken = 1;
     }
     
     //- rjf: consume

@@ -1355,10 +1355,11 @@ ui_end_build(void)
   
   //- rjf: clipboard commits
   {
-    Temp scratch = scratch_begin(0, 0);
     UI_Box *box = ui_box_from_key(ui_state->clipboard_copy_key);
-    String8List strs = {0};
+    if(!ui_box_is_nil(box))
     {
+      Temp scratch = scratch_begin(0, 0);
+      String8List strs = {0};
       UI_BoxRec rec = {0};
       for(UI_Box *b = box; !ui_box_is_nil(b); rec = ui_box_rec_df_pre(b, box), b = rec.next)
       {
@@ -1375,8 +1376,8 @@ ui_end_build(void)
         String8 string = str8_list_join(scratch.arena, &strs, &join);
         os_set_clipboard_text(string);
       }
+      scratch_end(scratch);
     }
-    scratch_end(scratch);
   }
   
   //- rjf: hovering possibly-truncated drawn text -> store text
@@ -2568,7 +2569,8 @@ ui_signal_from_box(UI_Box *box)
     
     //- rjf: focus is hot & copy event -> remember to copy this box tree's text content
     if(is_focus_hot &&
-       evt->flags & UI_EventFlag_Copy)
+       evt->flags & UI_EventFlag_Copy &&
+       !ui_key_match(ui_key_zero(), box->key))
     {
       ui_state->clipboard_copy_key = box->key;
       taken = 1;
