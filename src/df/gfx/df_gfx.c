@@ -8791,7 +8791,7 @@ df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
       word_start_off = off+1;
     }
   }
-  String8 query = str8_skip(input, word_start_off);
+  String8 query = str8_skip(str8_prefix(input, cursor_off), word_start_off);
   return query;
 }
 
@@ -8822,7 +8822,7 @@ df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
     for(U64 idx = 0; idx < input_tokenize.tokens.count; idx += 1)
     {
       MD_Token *token = &input_tokenize.tokens.v[idx];
-      if(token->range.min > cursor_off)
+      if(token->range.min >= cursor_off)
       {
         break;
       }
