@@ -1125,7 +1125,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           OS_Event *os_event = params.os_event;
           if(os_event != 0 && os_handle_match(os_event->window, ws->os))
           {
-            UI_Event ui_event = {0};
+            UI_Event ui_event = zero_struct;
             UI_EventKind kind = UI_EventKind_Null;
             {
               switch(os_event->kind)
@@ -2114,7 +2114,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         //
         case DF_CoreCmdKind_MoveLeft:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_PickSelectSide|UI_EventFlag_ZeroDeltaOnSelect|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2123,7 +2123,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveRight:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_PickSelectSide|UI_EventFlag_ZeroDeltaOnSelect|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2132,7 +2132,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUp:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2141,7 +2141,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDown:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2150,7 +2150,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveLeftSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2159,7 +2159,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveRightSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2168,7 +2168,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUpSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2177,7 +2177,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDownSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2186,7 +2186,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveLeftChunk:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2195,7 +2195,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveRightChunk:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2204,7 +2204,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUpChunk:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2213,7 +2213,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDownChunk:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2222,7 +2222,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUpPage:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.delta_unit = UI_EventDeltaUnit_Page;
           evt.delta_2s32 = v2s32(+0, -1);
@@ -2230,7 +2230,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDownPage:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.delta_unit = UI_EventDeltaUnit_Page;
           evt.delta_2s32 = v2s32(+0, +1);
@@ -2238,7 +2238,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUpWhole:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.delta_unit = UI_EventDeltaUnit_Whole;
           evt.delta_2s32 = v2s32(+0, -1);
@@ -2246,7 +2246,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDownWhole:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.delta_unit = UI_EventDeltaUnit_Whole;
           evt.delta_2s32 = v2s32(+0, +1);
@@ -2254,7 +2254,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveLeftChunkSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2263,7 +2263,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveRightChunkSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2272,7 +2272,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUpChunkSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2281,7 +2281,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDownChunkSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2290,7 +2290,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUpPageSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark;
           evt.delta_unit = UI_EventDeltaUnit_Page;
@@ -2299,7 +2299,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDownPageSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark;
           evt.delta_unit = UI_EventDeltaUnit_Page;
@@ -2308,7 +2308,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveUpWholeSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark;
           evt.delta_unit = UI_EventDeltaUnit_Whole;
@@ -2317,7 +2317,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveDownWholeSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark;
           evt.delta_unit = UI_EventDeltaUnit_Whole;
@@ -2326,7 +2326,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveHome:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.delta_unit = UI_EventDeltaUnit_Line;
           evt.delta_2s32 = v2s32(-1, +0);
@@ -2334,7 +2334,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveEnd:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.delta_unit = UI_EventDeltaUnit_Line;
           evt.delta_2s32 = v2s32(+1, +0);
@@ -2342,7 +2342,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveHomeSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark;
           evt.delta_unit = UI_EventDeltaUnit_Line;
@@ -2351,7 +2351,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_MoveEndSelect:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Navigate;
           evt.flags      = UI_EventFlag_KeepMark;
           evt.delta_unit = UI_EventDeltaUnit_Line;
@@ -2360,12 +2360,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_SelectAll:
         {
-          UI_Event evt1 = {0};
+          UI_Event evt1 = zero_struct;
           evt1.kind       = UI_EventKind_Navigate;
           evt1.delta_unit = UI_EventDeltaUnit_Whole;
           evt1.delta_2s32 = v2s32(-1, +0);
           ui_event_list_push(ui_build_arena(), &events, &evt1);
-          UI_Event evt2 = {0};
+          UI_Event evt2 = zero_struct;
           evt2.kind       = UI_EventKind_Navigate;
           evt2.flags      = UI_EventFlag_KeepMark;
           evt2.delta_unit = UI_EventDeltaUnit_Whole;
@@ -2374,7 +2374,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_DeleteSingle:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Edit;
           evt.flags      = UI_EventFlag_Delete;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2383,7 +2383,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_DeleteChunk:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Edit;
           evt.flags      = UI_EventFlag_Delete;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2392,7 +2392,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_BackspaceSingle:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Edit;
           evt.flags      = UI_EventFlag_Delete|UI_EventFlag_ZeroDeltaOnSelect;
           evt.delta_unit = UI_EventDeltaUnit_Char;
@@ -2401,7 +2401,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_BackspaceChunk:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind       = UI_EventKind_Edit;
           evt.flags      = UI_EventFlag_Delete;
           evt.delta_unit = UI_EventDeltaUnit_Word;
@@ -2410,28 +2410,28 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }break;
         case DF_CoreCmdKind_Copy:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind  = UI_EventKind_Edit;
           evt.flags = UI_EventFlag_Copy|UI_EventFlag_KeepMark;
           ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_Cut:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind  = UI_EventKind_Edit;
           evt.flags = UI_EventFlag_Copy|UI_EventFlag_Delete;
           ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_Paste:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind   = UI_EventKind_Text;
           evt.string = os_get_clipboard_text(ui_build_arena());
           ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_InsertText:
         {
-          UI_Event evt = {0};
+          UI_Event evt = zero_struct;
           evt.kind   = UI_EventKind_Text;
           evt.string = params.string;
           ui_event_list_push(ui_build_arena(), &events, &evt);
@@ -7048,27 +7048,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 tab_bar_box->flags |= UI_BoxFlag_DrawOverlay;
                 tab_bar_box->overlay_color = df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay);
-              }
-              
-              // rjf: drop
-              DF_DragDropPayload payload = df_g_drag_drop_payload;
-              if(catchall_drop_site_hovered && (active_drop_site != 0 && df_drag_drop(&payload)) || (df_panel_from_handle(payload.panel) == panel && 0))
-              {
-                DF_View *view = df_view_from_handle(payload.view);
-                DF_Panel *src_panel = df_panel_from_handle(payload.panel);
-                if(!df_panel_is_nil(panel) && !df_view_is_nil(view))
-                {
-                  DF_CmdParams params = df_cmd_params_from_window(ws);
-                  params.panel = df_handle_from_panel(src_panel);
-                  params.dest_panel = df_handle_from_panel(panel);
-                  params.view = df_handle_from_view(view);
-                  params.prev_view = df_handle_from_view(active_drop_site->prev_view);
-                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Panel);
-                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_DestPanel);
-                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
-                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_PrevView);
-                  df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_MoveTab));
-                }
               }
             }
           }

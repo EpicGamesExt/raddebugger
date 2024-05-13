@@ -1732,6 +1732,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               switch(child->kind)
               {
+                default:{}break;
                 case DMN_W32_EntityKind_Thread:
                 {
                   DMN_Event *e = dmn_event_list_push(arena, &events);

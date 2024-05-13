@@ -108,13 +108,21 @@ enum
   DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<6),
 };
 
+typedef enum DF_NameKind
+{
+  DF_NameKind_Null,
+  DF_NameKind_EntityName,
+  DF_NameKind_COUNT
+}
+DF_NameKind;
+
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;
 struct DF_ViewSpecInfo
 {
   DF_ViewSpecFlags flags;
   String8 name;
   String8 display_string;
-  enum DF_NameKind name_kind;
+  DF_NameKind name_kind;
   DF_IconKind icon_kind;
   DF_ViewSetupFunctionType *setup_hook;
   DF_ViewStringFromStateFunctionType *string_from_state_hook;

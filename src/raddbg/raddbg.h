@@ -6,7 +6,7 @@
 //
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
-// [ ] UI_NavActions, OS_Event -> UI_Event (single event stream)
+// [x] UI_NavActions, OS_Event -> UI_Event (single event stream)
 //
 // [ ] better discoverability for view rules - have better help hover tooltip,
 //     info on arguments, and better autocomplete lister

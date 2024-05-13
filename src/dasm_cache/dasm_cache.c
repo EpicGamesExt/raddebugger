@@ -440,7 +440,7 @@ dasm_parse_thread__entry_point(void *p)
             U64 jump_dst_vaddr = rel_voff;
             
             // rjf: push strings derived from voff -> line info
-            if(params.style_flags & DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines)
+            if(params.style_flags & (DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines))
             {
               if(dbgi != &dbgi_parse_nil)
               {

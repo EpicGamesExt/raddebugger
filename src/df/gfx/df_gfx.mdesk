@@ -178,13 +178,6 @@ DF_BindingVersionRemapTable:
 ////////////////////////////////
 //~ rjf: Gfx Layer View Kinds
 
-@table(name)
-DF_NameKindTable:
-{
-  {Null}
-  {EntityName}
-}
-
 @table(name, name_lower, display_string, name_kind, icon, parameterized_by_entity, can_serialize, can_serialize_entity_path, can_filter, filter_is_code, typing_automatically_filters, inc_in_docs, docs_desc)
 DF_GfxViewTable:
 {
@@ -411,12 +404,6 @@ DF_ThemePresetColorTable:
 //~ rjf: Generators
 
 //- rjf: enums
-
-@enum DF_NameKind:
-{
-  @expand(DF_NameKindTable, a) `$(a.name)`,
-  COUNT,
-}
 
 @enum DF_GfxViewKind:
 {
