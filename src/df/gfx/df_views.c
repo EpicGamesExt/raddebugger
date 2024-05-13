@@ -1481,7 +1481,12 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               if(rule_editing_active && !edit_end && txt_pt_match(ewv->input_cursor, ewv->input_mark))
               {
                 String8 input = str8(ewv->input_buffer, ewv->input_size);
-                df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, DF_AutoCompListerFlag_ViewRules|DF_AutoCompListerFlag_Locals, input, ewv->input_cursor.column-1);
+                DF_AutoCompListerFlags flags = df_view_rule_autocomp_lister_flags_from_input_cursor(input, ewv->input_cursor.column-1);
+                if(flags == 0)
+                {
+                  flags = DF_AutoCompListerFlag_ViewRules;
+                }
+                df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, flags, input, ewv->input_cursor.column-1);
               }
             }
           }

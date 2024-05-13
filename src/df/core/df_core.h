@@ -354,6 +354,7 @@ struct DF_CoreViewRuleSpecInfo
 {
   String8 string;
   String8 display_string;
+  String8 schema;
   String8 description;
   DF_CoreViewRuleSpecInfoFlags flags;
   DF_CoreViewRuleEvalResolutionHookFunctionType *eval_resolution;

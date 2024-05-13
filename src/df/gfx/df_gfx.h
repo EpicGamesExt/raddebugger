@@ -442,9 +442,13 @@ struct DF_CodeSliceSignal
 typedef U32 DF_AutoCompListerFlags;
 enum
 {
-  DF_AutoCompListerFlag_Locals    = (1<<0),
-  DF_AutoCompListerFlag_Registers = (1<<1),
-  DF_AutoCompListerFlag_ViewRules = (1<<2),
+  DF_AutoCompListerFlag_Locals        = (1<<0),
+  DF_AutoCompListerFlag_Registers     = (1<<1),
+  DF_AutoCompListerFlag_ViewRules     = (1<<2),
+  DF_AutoCompListerFlag_Members       = (1<<3),
+  DF_AutoCompListerFlag_Languages     = (1<<4),
+  DF_AutoCompListerFlag_Architectures = (1<<5),
+  DF_AutoCompListerFlag_Tex2DFormats  = (1<<6),
 };
 
 typedef struct DF_AutoCompListerItem DF_AutoCompListerItem;
@@ -932,6 +936,7 @@ internal int df_autocomp_lister_item_qsort_compare(DF_AutoCompListerItem *a, DF_
 internal void df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItemArray *array);
 
 internal String8 df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
+internal DF_AutoCompListerFlags df_view_rule_autocomp_lister_flags_from_input_cursor(String8 string, U64 cursor_off);
 internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 input, U64 cursor_off);
 
 ////////////////////////////////

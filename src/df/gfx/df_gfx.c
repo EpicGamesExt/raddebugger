@@ -4218,6 +4218,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         //- rjf: gather lister items
         DF_AutoCompListerItemChunkList item_list = {0};
         {
+          //- rjf: gather locals
           if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Locals)
           {
             EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, thread_rip_voff);
@@ -4235,6 +4236,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               }
             }
           }
+          
+          //- rjf: gather registers
           if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Registers)
           {
             Architecture arch = df_architecture_from_entity(thread);
@@ -4275,6 +4278,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               }
             }
           }
+          
+          //- rjf: gather view rules
           if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_ViewRules)
           {
             for(U64 slot_idx = 0; slot_idx < df_state->view_rule_spec_table_size; slot_idx += 1)
@@ -4291,6 +4296,60 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 {
                   df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
                 }
+              }
+            }
+          }
+          
+          //- rjf: gather languages
+          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Languages)
+          {
+            for(EachNonZeroEnumVal(TXT_LangKind, lang))
+            {
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = txt_extension_from_lang_kind(lang);
+                item.kind_string = str8_lit("Language");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather architectures
+          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Architectures)
+          {
+            for(EachNonZeroEnumVal(Architecture, arch))
+            {
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = string_from_architecture(arch);
+                item.kind_string = str8_lit("Architecture");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather tex2dformats
+          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Tex2DFormats)
+          {
+            for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
+            {
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = lower_from_str8(scratch.arena, r_tex2d_format_display_string_table[fmt]);
+                item.kind_string = str8_lit("Format");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
             }
           }
@@ -8714,6 +8773,87 @@ df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
   }
   String8 query = str8_skip(input, word_start_off);
   return query;
+}
+
+internal DF_AutoCompListerFlags
+df_view_rule_autocomp_lister_flags_from_input_cursor(String8 string, U64 cursor_off)
+{
+  DF_AutoCompListerFlags flags = 0;
+  {
+    Temp scratch = scratch_begin(0, 0);
+    
+    //- rjf: do partial parse of input
+    MD_TokenizeResult input_tokenize = md_tokenize_from_text(scratch.arena, string);
+    
+    //- rjf: find descension steps to cursor
+    typedef struct DescendStep DescendStep;
+    struct DescendStep
+    {
+      DescendStep *next;
+      String8 string;
+    };
+    DescendStep *first_step = 0;
+    DescendStep *last_step = 0;
+    DescendStep *free_step = 0;
+    for(U64 idx = 0; idx < input_tokenize.tokens.count; idx += 1)
+    {
+      MD_Token *token = &input_tokenize.tokens.v[idx];
+      if(token->range.min < cursor_off && token->flags & (MD_TokenFlag_Identifier|MD_TokenFlag_StringLiteral))
+      {
+        DescendStep *step = free_step;
+        if(step != 0)
+        {
+          SLLStackPop(free_step);
+          MemoryZeroStruct(step);
+        }
+        else
+        {
+          step = push_array(scratch.arena, DescendStep, 1);
+        }
+        step->string = str8_substr(string, token->range);
+        SLLQueuePush(first_step, last_step, step);
+      }
+    }
+    
+    //- rjf: map view rule root to spec
+    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(first_step ? first_step->string : str8_zero());
+    
+    //- rjf: do parse of schema
+    MD_TokenizeResult schema_tokenize = md_tokenize_from_text(scratch.arena, spec->info.schema);
+    MD_ParseResult schema_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), spec->info.schema, schema_tokenize.tokens);
+    MD_Node *schema_rule_root = md_child_from_string(schema_parse.root, str8_lit("x"), 0);
+    
+    //- rjf: follow schema according to descend steps, gather flags from schema node matching cursor node
+    if(first_step != 0)
+    {
+      MD_Node *schema_node = schema_rule_root;
+      for(DescendStep *step = first_step->next;;)
+      {
+        if(md_node_is_nil(schema_node->first))
+        {
+          if(str8_match(schema_node->string, str8_lit("expr"),           StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Locals;}
+          if(str8_match(schema_node->string, str8_lit("member"),         StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Members;}
+          if(str8_match(schema_node->string, str8_lit("lang"),           StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Languages;}
+          if(str8_match(schema_node->string, str8_lit("arch"),           StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Architectures;}
+          if(str8_match(schema_node->string, str8_lit("tex2dformat"),    StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Tex2DFormats;}
+          break;
+        }
+        if(step != 0)
+        {
+          MD_Node *next_node = md_child_from_string(schema_node, step->string, StringMatchFlag_CaseInsensitive);
+          schema_node = next_node;
+          step = step->next;
+        }
+        else
+        {
+          schema_node = schema_node->first;
+        }
+      }
+    }
+    
+    scratch_end(scratch);
+  }
+  return flags;
 }
 
 internal void
