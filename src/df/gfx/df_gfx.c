@@ -7049,6 +7049,27 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 tab_bar_box->flags |= UI_BoxFlag_DrawOverlay;
                 tab_bar_box->overlay_color = df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay);
               }
+              
+              // rjf: drop
+              DF_DragDropPayload payload = df_g_drag_drop_payload;
+              if(catchall_drop_site_hovered && (active_drop_site != 0 && df_drag_drop(&payload)))
+              {
+                DF_View *view = df_view_from_handle(payload.view);
+                DF_Panel *src_panel = df_panel_from_handle(payload.panel);
+                if(!df_panel_is_nil(panel) && !df_view_is_nil(view))
+                {
+                  DF_CmdParams params = df_cmd_params_from_window(ws);
+                  params.panel = df_handle_from_panel(src_panel);
+                  params.dest_panel = df_handle_from_panel(panel);
+                  params.view = df_handle_from_view(view);
+                  params.prev_view = df_handle_from_view(active_drop_site->prev_view);
+                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Panel);
+                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_DestPanel);
+                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
+                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_PrevView);
+                  df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_MoveTab));
+                }
+              }
             }
           }
           
