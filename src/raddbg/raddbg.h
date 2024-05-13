@@ -16,7 +16,7 @@
 //     & scrollbars etc.
 // [ ] target/breakpoint/watch-pin reordering
 // [ ] watch window reordering
-// [ ] standard way to filter
+// [x] standard way to filter
 // [ ] visualize remapped files (via path map)
 // [ ] theme lister -> fonts & font sizes
 // [ ] font lister
@@ -32,7 +32,7 @@
 //     that you use to tag them. Just some way that would make it easier to
 //     focus on your own threads.
 //
-// [ ] autocomplete lister should respect position in edited expression,
+// [x] autocomplete lister should respect position in edited expression,
 //     tabbing through should autocomplete but not exit, etc.
 //
 //  [ ]  it would be nice to have "show in explorer" for right click on source
