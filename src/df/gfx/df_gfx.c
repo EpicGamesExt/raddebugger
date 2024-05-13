@@ -968,6 +968,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   window->tab_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
   window->hover_eval_arena = arena_alloc();
+  window->autocomp_lister_params_arena = arena_alloc();
   window->free_panel = &df_g_nil_panel;
   window->root_panel = df_panel_alloc(window);
   window->focused_panel = window->root_panel;
@@ -4219,7 +4220,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         DF_AutoCompListerItemChunkList item_list = {0};
         {
           //- rjf: gather locals
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Locals)
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Locals)
           {
             EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, thread_rip_voff);
             for(EVAL_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
@@ -4238,7 +4239,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           //- rjf: gather registers
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Registers)
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Registers)
           {
             Architecture arch = df_architecture_from_entity(thread);
             U64 reg_names_count = regs_reg_code_count_from_architecture(arch);
@@ -4280,7 +4281,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           //- rjf: gather view rules
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_ViewRules)
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_ViewRules)
           {
             for(U64 slot_idx = 0; slot_idx < df_state->view_rule_spec_table_size; slot_idx += 1)
             {
@@ -4301,7 +4302,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           //- rjf: gather languages
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Languages)
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Languages)
           {
             for(EachNonZeroEnumVal(TXT_LangKind, lang))
             {
@@ -4319,7 +4320,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           //- rjf: gather architectures
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Architectures)
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Architectures)
           {
             for(EachNonZeroEnumVal(Architecture, arch))
             {
@@ -4337,7 +4338,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           //- rjf: gather tex2dformats
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Tex2DFormats)
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Tex2DFormats)
           {
             for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
             {
@@ -4345,6 +4346,25 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 item.string      = lower_from_str8(scratch.arena, r_tex2d_format_display_string_table[fmt]);
                 item.kind_string = str8_lit("Format");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather view rule params
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_ViewRuleParams)
+          {
+            for(String8Node *n = ws->autocomp_lister_params.strings.first; n != 0; n = n->next)
+            {
+              String8 string = n->string;
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = string;
+                item.kind_string = str8_lit("Parameter");
                 item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
               }
               if(query.size == 0 || item.matches.count != 0)
@@ -8775,12 +8795,12 @@ df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
   return query;
 }
 
-internal DF_AutoCompListerFlags
-df_view_rule_autocomp_lister_flags_from_input_cursor(String8 string, U64 cursor_off)
+internal DF_AutoCompListerParams
+df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off)
 {
-  DF_AutoCompListerFlags flags = 0;
+  DF_AutoCompListerParams params = {0};
   {
-    Temp scratch = scratch_begin(0, 0);
+    Temp scratch = scratch_begin(&arena, 1);
     
     //- rjf: do partial parse of input
     MD_TokenizeResult input_tokenize = md_tokenize_from_text(scratch.arena, string);
@@ -8790,28 +8810,68 @@ df_view_rule_autocomp_lister_flags_from_input_cursor(String8 string, U64 cursor_
     struct DescendStep
     {
       DescendStep *next;
+      DescendStep *prev;
       String8 string;
     };
     DescendStep *first_step = 0;
     DescendStep *last_step = 0;
     DescendStep *free_step = 0;
+    S32 paren_nest = 0;
+    S32 colon_nest = 0;
+    String8 last_step_string = {0};
     for(U64 idx = 0; idx < input_tokenize.tokens.count; idx += 1)
     {
       MD_Token *token = &input_tokenize.tokens.v[idx];
-      if(token->range.min < cursor_off && token->flags & (MD_TokenFlag_Identifier|MD_TokenFlag_StringLiteral))
+      if(token->range.min > cursor_off)
       {
-        DescendStep *step = free_step;
-        if(step != 0)
+        break;
+      }
+      String8 token_string = str8_substr(string, token->range);
+      if(token->flags & (MD_TokenFlag_Identifier|MD_TokenFlag_StringLiteral))
+      {
+        last_step_string = token_string;
+      }
+      if(str8_match(token_string, str8_lit("("), 0) || str8_match(token_string, str8_lit("["), 0) || str8_match(token_string, str8_lit("{"), 0))
+      {
+        paren_nest += 1;
+      }
+      if(str8_match(token_string, str8_lit(")"), 0) || str8_match(token_string, str8_lit("]"), 0) || str8_match(token_string, str8_lit("}"), 0))
+      {
+        paren_nest -= 1;
+        if(paren_nest == 0 && last_step != 0)
         {
-          SLLStackPop(free_step);
-          MemoryZeroStruct(step);
+          DescendStep *step = last_step;
+          DLLRemove(first_step, last_step, step);
+          SLLStackPush(free_step, step);
         }
-        else
+      }
+      if(str8_match(token_string, str8_lit(":"), 0))
+      {
+        colon_nest += 1;
+        if(last_step_string.size != 0)
         {
-          step = push_array(scratch.arena, DescendStep, 1);
+          DescendStep *step = free_step;
+          if(step != 0)
+          {
+            SLLStackPop(free_step);
+            MemoryZeroStruct(step);
+          }
+          else
+          {
+            step = push_array(scratch.arena, DescendStep, 1);
+          }
+          step->string = last_step_string;
+          DLLPushBack(first_step, last_step, step);
         }
-        step->string = str8_substr(string, token->range);
-        SLLQueuePush(first_step, last_step, step);
+      }
+      if(str8_match(token_string, str8_lit(";"), 0) || str8_match(token_string, str8_lit(","), 0))
+      {
+        for(;colon_nest > paren_nest; colon_nest -= 1)
+        {
+          DescendStep *step = last_step;
+          DLLRemove(first_step, last_step, step);
+          SLLStackPush(free_step, step);
+        }
       }
     }
     
@@ -8823,19 +8883,28 @@ df_view_rule_autocomp_lister_flags_from_input_cursor(String8 string, U64 cursor_
     MD_ParseResult schema_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), spec->info.schema, schema_tokenize.tokens);
     MD_Node *schema_rule_root = md_child_from_string(schema_parse.root, str8_lit("x"), 0);
     
-    //- rjf: follow schema according to descend steps, gather flags from schema node matching cursor node
+    //- rjf: follow schema according to descend steps, gather flags from schema node matching cursor descension steps
     if(first_step != 0)
     {
       MD_Node *schema_node = schema_rule_root;
       for(DescendStep *step = first_step->next;;)
       {
-        if(md_node_is_nil(schema_node->first))
+        if(step == 0)
         {
-          if(str8_match(schema_node->string, str8_lit("expr"),           StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Locals;}
-          if(str8_match(schema_node->string, str8_lit("member"),         StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Members;}
-          if(str8_match(schema_node->string, str8_lit("lang"),           StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Languages;}
-          if(str8_match(schema_node->string, str8_lit("arch"),           StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Architectures;}
-          if(str8_match(schema_node->string, str8_lit("tex2dformat"),    StringMatchFlag_CaseInsensitive)) {flags |= DF_AutoCompListerFlag_Tex2DFormats;}
+          for(MD_EachNode(child, schema_node->first))
+          {
+            if(0){}
+            else if(str8_match(child->string, str8_lit("expr"),           StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Locals;}
+            else if(str8_match(child->string, str8_lit("member"),         StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Members;}
+            else if(str8_match(child->string, str8_lit("lang"),           StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Languages;}
+            else if(str8_match(child->string, str8_lit("arch"),           StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Architectures;}
+            else if(str8_match(child->string, str8_lit("tex2dformat"),    StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Tex2DFormats;}
+            else if(child->flags & (MD_NodeFlag_StringSingleQuote|MD_NodeFlag_StringDoubleQuote|MD_NodeFlag_StringTick))
+            {
+              str8_list_push(arena, &params.strings, child->string);
+              params.flags |= DF_AutoCompListerFlag_ViewRuleParams;
+            }
+          }
           break;
         }
         if(step != 0)
@@ -8853,11 +8922,11 @@ df_view_rule_autocomp_lister_flags_from_input_cursor(String8 string, U64 cursor_
     
     scratch_end(scratch);
   }
-  return flags;
+  return params;
 }
 
 internal void
-df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 input, U64 cursor_off)
+df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerParams *params, String8 input, U64 cursor_off)
 {
   String8 query = df_autocomp_query_word_from_input_string_off(input, cursor_off);
   String8 current_query = str8(ws->autocomp_lister_query_buffer, ws->autocomp_lister_query_size);
@@ -8884,7 +8953,9 @@ df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx
   }
   ws->autocomp_ctrl_ctx = ctrl_ctx;
   ws->autocomp_root_key = root_key;
-  ws->autocomp_lister_flags = flags;
+  arena_clear(ws->autocomp_lister_params_arena);
+  MemoryCopyStruct(&ws->autocomp_lister_params, params);
+  ws->autocomp_lister_params.strings = str8_list_copy(ws->autocomp_lister_params_arena, &ws->autocomp_lister_params.strings);
   ws->autocomp_lister_query_size = Min(query.size, sizeof(ws->autocomp_lister_query_buffer));
   MemoryCopy(ws->autocomp_lister_query_buffer, query.str, ws->autocomp_lister_query_size);
   ws->autocomp_last_frame_idx = df_frame_index();
@@ -12896,6 +12967,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               os_window_close(ws->os);
               arena_release(ws->query_cmd_arena);
               arena_release(ws->hover_eval_arena);
+              arena_release(ws->autocomp_lister_params_arena);
               arena_release(ws->arena);
               SLLStackPush(df_gfx_state->free_window, ws);
               ws->gen += 1;
