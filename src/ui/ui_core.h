@@ -65,6 +65,9 @@ typedef enum UI_EventKind
   UI_EventKind_Press,
   UI_EventKind_Release,
   UI_EventKind_Text,
+  UI_EventKind_Navigate,
+  UI_EventKind_Edit,
+  UI_EventKind_MouseMove,
   UI_EventKind_Scroll,
   UI_EventKind_COUNT
 }
@@ -88,6 +91,7 @@ typedef enum UI_EventDeltaUnit
   UI_EventDeltaUnit_Char,
   UI_EventDeltaUnit_Word,
   UI_EventDeltaUnit_Line,
+  UI_EventDeltaUnit_Page,
   UI_EventDeltaUnit_Whole,
   UI_EventDeltaUnit_COUNT
 }
@@ -105,6 +109,7 @@ struct UI_Event
   Vec2F32 pos;
   Vec2F32 delta_2f32;
   Vec2S32 delta_2s32;
+  U64 timestamp_us;
 };
 
 typedef struct UI_EventNode UI_EventNode;
@@ -144,6 +149,7 @@ struct UI_TxtOp
   TxtPt mark;
 };
 
+#if 0
 ////////////////////////////////
 //~ rjf: Navigation Types
 
@@ -213,6 +219,7 @@ struct UI_NavTxtOp
   TxtPt cursor;
   TxtPt mark;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: Keys
@@ -573,8 +580,7 @@ struct UI_State
   //- rjf: build parameters
   UI_IconInfo icon_info;
   OS_Handle window;
-  OS_EventList *events;
-  UI_NavActionList *nav_actions;
+  UI_EventList *events;
   Vec2F32 mouse;
   F32 animation_dt;
   B32 external_focus_commit;
@@ -639,6 +645,15 @@ internal B32 ui_key_release(UI_EventList *list, OS_EventFlags mods, OS_Key key);
 internal B32 ui_text(UI_EventList *list, U32 character);
 
 ////////////////////////////////
+//~ rjf: Text Operation Functions
+
+internal B32 ui_char_is_scan_boundary(U8 c);
+internal S64 ui_scanned_column_from_column(String8 string, S64 start_column, Side side);
+internal UI_TxtOp ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, TxtPt cursor, TxtPt mark);
+internal String8 ui_push_string_replace_range(Arena *arena, String8 string, Rng1S64 range, String8 replace);
+
+#if 0
+////////////////////////////////
 //~ rjf: Navigation Action List Building & Consumption Functions
 
 internal void ui_nav_action_list_push(Arena *arena, UI_NavActionList *list, UI_NavAction action);
@@ -655,6 +670,7 @@ internal UI_NavTxtOp ui_nav_single_line_txt_op_from_action(Arena *arena, UI_NavA
 //~ rjf: Single-Line String Modification
 
 internal String8 ui_nav_push_string_replace_range(Arena *arena, String8 string, Rng1S64 col_range, String8 replace);
+#endif
 
 ////////////////////////////////
 //~ rjf: Size Type Functions
@@ -708,8 +724,7 @@ internal UI_State *ui_get_selected_state(void);
 //- rjf: per-frame info
 internal Arena *           ui_build_arena(void);
 internal OS_Handle         ui_window(void);
-internal OS_EventList *    ui_events(void);
-internal UI_NavActionList *ui_nav_actions(void);
+internal UI_EventList *    ui_events(void);
 internal Vec2F32           ui_mouse(void);
 internal F_Tag             ui_icon_font(void);
 internal String8           ui_icon_string_from_kind(UI_IconKind icon_kind);
@@ -741,7 +756,7 @@ internal UI_Box *          ui_box_from_key(UI_Key key);
 ////////////////////////////////
 //~ rjf: Top-Level Building API
 
-internal void ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_actions, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt);
+internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt);
 internal void ui_end_build(void);
 internal void ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis);
 internal void ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis);

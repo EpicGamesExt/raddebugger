@@ -167,8 +167,240 @@ ui_text(UI_EventList *list, U32 character)
 }
 
 ////////////////////////////////
+//~ rjf: Text Operation Functions
+
+internal B32
+ui_char_is_scan_boundary(U8 c)
+{
+  return (char_is_alpha(c) || char_is_digit(c, 10) || c == '_');
+}
+
+internal S64
+ui_scanned_column_from_column(String8 string, S64 start_column, Side side)
+{
+  S64 new_column = start_column;
+  S64 delta = (!!side)*2 - 1;
+  B32 found_text = 0;
+  B32 found_non_space = 0;
+  S64 start_off = delta < 0 ? delta : 0;
+  for(S64 col = start_column+start_off; 1 <= col && col <= string.size+1; col += delta)
+  {
+    U8 byte = (col <= string.size) ? string.str[col-1] : 0;
+    B32 is_non_space = !char_is_space(byte);
+    B32 is_name = ui_char_is_scan_boundary(byte);
+    if(((side == Side_Min) && (col == 1)) || 
+       ((side == Side_Max) && (col == string.size+1)) ||
+       (found_non_space && !is_non_space) || 
+       (found_text && !is_name))
+    {
+      new_column = col + (!side && col != 1);  
+      break;
+    }
+    else if (!found_text && is_name)
+    {
+      found_text = 1;
+    }
+    else if (!found_non_space && is_non_space)
+    {
+      found_non_space = 1;
+    }
+  }
+  return new_column;
+}
+
+internal UI_TxtOp
+ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, TxtPt cursor, TxtPt mark)
+{
+  TxtPt next_cursor = cursor;
+  TxtPt next_mark = mark;
+  TxtRng range = {0};
+  String8 replace = {0};
+  String8 copy = {0};
+  UI_TxtOpFlags flags = 0;
+  Vec2S32 delta = event->delta_2s32;
+  Vec2S32 original_delta = delta;
+  
+  //- rjf: resolve high-level delta into byte delta, based on unit
+  switch(event->delta_unit)
+  {
+    default:{}break;
+    case UI_EventDeltaUnit_Char:
+    {
+      // TODO(rjf): this should account for multi-byte characters in UTF-8... for now, just assume ASCII and
+      // no-op
+    }break;
+    case UI_EventDeltaUnit_Word:
+    {
+      delta.x = (S32)ui_scanned_column_from_column(string, cursor.column, delta.x > 0 ? Side_Max : Side_Min) - cursor.column;
+    }break;
+    case UI_EventDeltaUnit_Line:
+    case UI_EventDeltaUnit_Whole:
+    case UI_EventDeltaUnit_Page:
+    {
+      S64 first_nonwhitespace_column = 1;
+      for(U64 idx = 0; idx < string.size; idx += 1)
+      {
+        if(!char_is_space(string.str[idx]))
+        {
+          first_nonwhitespace_column = (S64)idx + 1;
+          break;
+        }
+      }
+      S64 home_dest_column = (cursor.column == first_nonwhitespace_column) ? 1 : first_nonwhitespace_column;
+      delta.x = (delta.x > 0) ? ((S64)string.size+1 - cursor.column) : (home_dest_column - cursor.column);
+    }break;
+  }
+  
+  //- rjf: zero delta
+  if(!txt_pt_match(cursor, mark) && event->flags & UI_EventFlag_ZeroDeltaOnSelect)
+  {
+    delta = v2s32(0, 0);
+  }
+  
+  //- rjf: form next cursor
+  if(txt_pt_match(cursor, mark) || !(event->flags & UI_EventFlag_ZeroDeltaOnSelect))
+  {
+    next_cursor.column += delta.x;
+  }
+  
+  //- rjf: cap at line
+  if(event->flags & UI_EventFlag_CapAtLine)
+  {
+    next_cursor.column = Clamp(1, next_cursor.column, (S64)(string.size+1));
+  }
+  
+  //- rjf: in some cases, we want to pick a selection side based on the delta
+  if(!txt_pt_match(cursor, mark) && event->flags & UI_EventFlag_PickSelectSide)
+  {
+    if(original_delta.x < 0 || original_delta.y < 0)
+    {
+      next_cursor = next_mark = txt_pt_min(cursor, mark);
+    }
+    else if(original_delta.x > 0 || original_delta.y > 0)
+    {
+      next_cursor = next_mark = txt_pt_max(cursor, mark);
+    }
+  }
+  
+  //- rjf: copying
+  if(event->flags & UI_EventFlag_Copy)
+  {
+    if(cursor.line == mark.line)
+    {
+      copy = str8_substr(string, r1u64(cursor.column-1, mark.column-1));
+      flags |= UI_TxtOpFlag_Copy;
+    }
+    else
+    {
+      flags |= UI_TxtOpFlag_Invalid;
+    }
+  }
+  
+  //- rjf: pasting
+  if(event->flags & UI_EventFlag_Paste)
+  {
+    range = txt_rng(cursor, mark);
+    replace = os_get_clipboard_text(arena);
+    next_cursor = next_mark = txt_pt(cursor.line, cursor.column+replace.size);
+  }
+  
+  //- rjf: deletion
+  if(event->flags & UI_EventFlag_Delete)
+  {
+    TxtPt new_pos = txt_pt_min(next_cursor, next_mark);
+    range = txt_rng(next_cursor, next_mark);
+    replace = str8_lit("");
+    next_cursor = next_mark = new_pos;
+  }
+  
+  //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
+  if(!(event->flags & UI_EventFlag_KeepMark))
+  {
+    next_mark = next_cursor;
+  }
+  
+  //- rjf: insertion
+  if(event->string.size != 0)
+  {
+    range = txt_rng(cursor, mark);
+    replace = push_str8_copy(arena, event->string);
+    next_cursor = next_mark = txt_pt(range.min.line, range.min.column + event->string.size);
+  }
+  
+  //- rjf: replace & commit -> replace entire range
+#if 0
+  if(event->flags & UI_EventFlag_ReplaceAndCommit)
+  {
+    range = txt_rng(txt_pt(cursor.line, 1), txt_pt(cursor.line, line.size+1));
+  }
+#endif
+  
+  //- rjf: determine if this event should be taken, based on bounds of cursor
+  {
+    if(next_cursor.column > string.size+1 || 1 > next_cursor.column || event->delta_2s32.y != 0)
+    {
+      flags |= UI_TxtOpFlag_Invalid;
+    }
+    next_cursor.column = Clamp(1, next_cursor.column, string.size+replace.size+1);
+    next_mark.column = Clamp(1, next_mark.column, string.size+replace.size+1);
+  }
+  
+  //- rjf: build+fill
+  UI_TxtOp op = {0};
+  {
+    op.flags   = flags;
+    op.replace = replace;
+    op.copy    = copy;
+    op.range   = range;
+    op.cursor  = next_cursor;
+    op.mark    = next_mark;
+  }
+  return op;
+}
+
+internal String8
+ui_push_string_replace_range(Arena *arena, String8 string, Rng1S64 col_range, String8 replace)
+{
+  //- rjf: convert to offset range
+  Rng1U64 range =
+  {
+    (U64)(col_range.min-1),
+    (U64)(col_range.max-1),
+  };
+  
+  //- rjf: clamp range
+  if(range.min > string.size)
+  {
+    range.min = 0;
+  }
+  if(range.max > string.size)
+  {
+    range.max = string.size;
+  }
+  
+  //- rjf: calculate new size
+  U64 old_size = string.size;
+  U64 new_size = old_size - (range.max - range.min) + replace.size;
+  
+  //- rjf: push+fill new string storage
+  U8 *push_base = push_array(arena, U8, new_size);
+  {
+    MemoryCopy(push_base+0, string.str, range.min);
+    MemoryCopy(push_base+range.min+replace.size, string.str+range.max, string.size-range.max);
+    if(replace.str != 0)
+    {
+      MemoryCopy(push_base+range.min, replace.str, replace.size);
+    }
+  }
+  
+  String8 result = str8(push_base, new_size);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Navigation Action List Building & Consumption Functions
 
+#if 0
 internal void
 ui_nav_action_list_push(Arena *arena, UI_NavActionList *list, UI_NavAction action)
 {
@@ -187,8 +419,9 @@ ui_nav_eat_action_node(UI_NavActionList *list, UI_NavActionNode *node)
 
 ////////////////////////////////
 //~ rjf: High Level Navigation Action => Text Operations
+
 internal B32
-ui_nav_char_is_code_symbol(U8 c)
+ui_nav_char_is_scan_boundary(U8 c)
 {
   return (char_is_alpha(c) || char_is_digit(c, 10) || c == '_');
 }
@@ -205,7 +438,7 @@ ui_nav_scanned_column_from_column(String8 string, S64 start_column, Side side)
   {
     U8 byte = (col <= string.size) ? string.str[col-1] : 0;
     B32 is_non_space = !char_is_space(byte);
-    B32 is_name = ui_nav_char_is_code_symbol(byte);
+    B32 is_name = ui_nav_char_is_scan_boundary(byte);
     
     if (((side == Side_Min) && (col == 1)) || 
         ((side == Side_Max) && (col == string.size+1)) ||
@@ -411,6 +644,8 @@ ui_nav_push_string_replace_range(Arena *arena, String8 string, Rng1S64 col_range
   return str8(push_base, new_size);
 }
 
+#endif
+
 ////////////////////////////////
 //~ rjf: Sizes
 
@@ -561,16 +796,10 @@ ui_window(void)
   return ui_state->window;
 }
 
-internal OS_EventList *
+internal UI_EventList *
 ui_events(void)
 {
   return ui_state->events;
-}
-
-internal UI_NavActionList *
-ui_nav_actions(void)
-{
-  return ui_state->nav_actions;
 }
 
 internal Vec2F32
@@ -718,7 +947,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_actions, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -734,9 +963,9 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   }
   
   //- rjf: detect mouse-moves
-  for(OS_Event *e = events->first; e != 0; e = e->next)
+  for(UI_EventNode *n = events->first; n != 0; n = n->next)
   {
-    if(e->kind == OS_EventKind_MouseMove && os_handle_match(e->window, window))
+    if(n->v.kind == UI_EventKind_MouseMove)
     {
       ui_state->last_time_mousemoved_us = os_now_microseconds();
     }
@@ -746,7 +975,6 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
   {
     ui_state->events = events;
     ui_state->window = window;
-    ui_state->nav_actions = nav_actions;
     ui_state->mouse = (os_window_is_focused(window) || ui_state->last_time_mousemoved_us+500000 >= os_now_microseconds()) ? os_mouse_from_window(window) : v2f32(-100, -100);
     ui_state->animation_dt = animation_dt;
     MemoryZeroStruct(&ui_state->icon_info);
@@ -780,43 +1008,41 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
             B32 nav_next = 0;
             B32 nav_prev = 0;
             Axis2 axis_lock = Axis2_Invalid;
-            if(os_key_press(events, window, 0, OS_Key_Tab))
+            if(ui_key_press(events, 0, OS_Key_Tab))
             {
               nav_next = 1;
             }
-            if(os_key_press(events, window, OS_EventFlag_Shift, OS_Key_Tab))
+            if(ui_key_press(events, OS_EventFlag_Shift, OS_Key_Tab))
             {
               nav_prev = 1;
             }
-            for(UI_NavActionNode *node = nav_actions->first, *next = 0;
-                node != 0;
-                node = next)
+            for(UI_EventNode *node = events->first, *next = 0; node != 0; node = next)
             {
               next = node->next;
               B32 taken = 0;
-              if(node->v.delta.x == 0 && node->v.delta.y == 0)
+              if(node->v.delta_2s32.x == 0 && node->v.delta_2s32.y == 0)
               {
                 continue;
               }
-              if(((node->v.delta.x > 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavX) || node->v.delta.x == 0) &&
-                 ((node->v.delta.y > 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavY) || node->v.delta.y == 0))
+              if(((node->v.delta_2s32.x > 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavX) || node->v.delta_2s32.x == 0) &&
+                 ((node->v.delta_2s32.y > 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavY) || node->v.delta_2s32.y == 0))
               {
                 taken = 1;
                 nav_next = 1;
               }
-              if(((node->v.delta.x < 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavX) || node->v.delta.x == 0) &&
-                 ((node->v.delta.y < 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavY) || node->v.delta.y == 0))
+              if(((node->v.delta_2s32.x < 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavX) || node->v.delta_2s32.x == 0) &&
+                 ((node->v.delta_2s32.y < 0 && nav_root->flags & UI_BoxFlag_DefaultFocusNavY) || node->v.delta_2s32.y == 0))
               {
                 taken = 1;
                 nav_prev = 1;
               }
-              if(node->v.flags & UI_NavActionFlag_ExplicitDirectional)
+              if(node->v.flags & UI_EventFlag_ExplicitDirectional)
               {
-                axis_lock = node->v.delta.x != 0 ? Axis2_X : Axis2_Y;
+                axis_lock = node->v.delta_2s32.x != 0 ? Axis2_X : Axis2_Y;
               }
               if(taken)
               {
-                ui_nav_eat_action_node(nav_actions, node);
+                ui_eat_event(events, node);
               }
             }
             
@@ -944,7 +1170,7 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
         //- rjf: some child has the active focus -> accept escape keys to pop from the active key stack
         if(!ui_key_match(ui_key_zero(), nav_root->default_nav_focus_active_key))
         {
-          for(;os_key_press(events, window, 0, OS_Key_Esc);)
+          for(;ui_key_press(events, 0, OS_Key_Esc);)
           {
             UI_Box *prev_focus_root = nav_root;
             for(UI_Box *focus_root = ui_box_from_key(nav_root->default_nav_focus_active_key);
@@ -972,12 +1198,9 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
           UI_Box *active_box = ui_box_from_key(nav_root->default_nav_focus_active_key);
           if(!ui_box_is_nil(active_box))
           {
-            for(OS_Event *event = events->first; event != 0; event = event->next)
+            for(UI_EventNode *n = events->first; n != 0; n = n->next)
             {
-              if(!os_handle_match(event->window, window))
-              {
-                continue;
-              }
+              UI_Event *event = &n->v;
               if(event->kind == OS_EventKind_Press &&
                  event->key == OS_Key_LeftMouseButton &&
                  !contains_2f32(active_box->rect, ui_mouse()))
@@ -1087,20 +1310,6 @@ ui_begin_build(OS_EventList *events, OS_Handle window, UI_NavActionList *nav_act
       ui_state->active_box_key[k] = ui_key_zero();
     }
   }
-  
-  //- rjf: reset active keys if there is clicking activity on other windows
-  for(OS_Event *event = events->first; event != 0; event = event->next)
-  {
-    if((event->kind == OS_EventKind_Press || event->kind == OS_EventKind_Release) &&
-       !os_handle_match(event->window, window))
-    {
-      for(EachEnumVal(UI_MouseButtonKind, k))
-      {
-        ui_state->active_box_key[k] = ui_key_zero();
-      }
-      break;
-    }
-  }
 }
 
 internal void
@@ -1109,7 +1318,7 @@ ui_end_build(void)
   ProfBeginFunction();
   
   //- rjf: escape -> close context menu
-  if(ui_state->ctx_menu_open != 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+  if(ui_state->ctx_menu_open != 0 && ui_key_press(ui_events(), 0, OS_Key_Esc))
   {
     ui_ctx_menu_close();
   }
@@ -1359,12 +1568,16 @@ ui_end_build(void)
   }
   
   //- rjf: close ctx menu if unconsumed clicks
-  for(OS_Event *event = ui_events()->first; event != 0; event = event->next)
   {
-    if(event->kind == OS_EventKind_Press && os_handle_match(event->window, ui_window()) &&
-       (event->key == OS_Key_LeftMouseButton || event->key == OS_Key_RightMouseButton))
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first; n != 0; n = n->next)
     {
-      ui_ctx_menu_close();
+      UI_Event *event = &n->v;
+      if(event->kind == UI_EventKind_Press &&
+         (event->key == OS_Key_LeftMouseButton || event->key == OS_Key_RightMouseButton))
+      {
+        ui_ctx_menu_close();
+      }
     }
   }
   
@@ -2408,33 +2621,33 @@ ui_do_single_line_string_edits(TxtPt *cursor, TxtPt *mark, U64 string_max, Strin
 {
   B32 change = 0;
   Temp scratch = scratch_begin(0, 0);
-  UI_NavActionList *nav_actions = ui_nav_actions();
-  for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+  UI_EventList *events = ui_events();
+  for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
   {
     next = n->next;
     
     // rjf: do not consume anything that doesn't fit a single-line's operations
-    if(n->v.delta.y != 0)
+    if(n->v.delta_2s32.y != 0)
     {
       continue;
     }
     
     // rjf: map this action to an op
     B32 taken = 0;
-    UI_NavTxtOp op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, *out_string, *cursor, *mark);
+    UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, *out_string, *cursor, *mark);
     
     // rjf: perform replace range
     if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
     {
       taken = 1;
-      String8 new_string = ui_nav_push_string_replace_range(scratch.arena, *out_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+      String8 new_string = ui_push_string_replace_range(scratch.arena, *out_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
       new_string.size = Min(string_max, new_string.size);
       MemoryCopy(out_string->str, new_string.str, new_string.size);
       out_string->size = new_string.size;
     }
     
     // rjf: perform copy
-    if(op.flags & UI_NavTxtOpFlag_Copy)
+    if(op.flags & UI_TxtOpFlag_Copy)
     {
       taken = 1;
       os_set_clipboard_text(op.copy);
@@ -2448,7 +2661,7 @@ ui_do_single_line_string_edits(TxtPt *cursor, TxtPt *mark, U64 string_max, Strin
     // rjf: consume event
     if(taken)
     {
-      ui_nav_eat_action_node(nav_actions, n);
+      ui_eat_event(events, n);
       change = 1;
     }
   }
@@ -2507,15 +2720,13 @@ ui_signal_from_box(UI_Box *box)
   //- rjf: process events related to this box
   //
   B32 view_scrolled = 0;
-  for(OS_Event *evt = ui_state->events->first, *next = 0;
-      evt != 0;
-      evt = next)
+  for(UI_EventNode *n = ui_state->events->first, *next = 0;
+      n != 0;
+      n = next)
   {
     B32 taken = 0;
-    next = evt->next;
-    
-    //- rjf: skip disqualified events
-    if(!os_handle_match(evt->window, ui_state->window)) {continue;}
+    next = n->next;
+    UI_Event *evt = &n->v;
     
     //- rjf: unpack event
     Vec2F32 evt_mouse = evt->pos;
@@ -2527,7 +2738,7 @@ ui_signal_from_box(UI_Box *box)
     B32 evt_key_is_mouse = (evt->key == OS_Key_LeftMouseButton ||
                             evt->key == OS_Key_MiddleMouseButton ||
                             evt->key == OS_Key_RightMouseButton);
-    sig.event_flags |= evt->flags;
+    sig.event_flags |= evt->modifiers;
     
     //- rjf: mouse presses in box -> set hot/active; mark signal accordingly
     if(box->flags & UI_BoxFlag_MouseClickable &&
@@ -2599,14 +2810,52 @@ ui_signal_from_box(UI_Box *box)
       taken = 1;
     }
     
+    //- rjf: focus is hot & copy event -> remember to copy this box tree's text content
+    if(is_focus_hot &&
+       evt->flags & UI_EventFlag_Copy)
+    {
+      ui_state->clipboard_copy_key = box->key;
+      taken = 1;
+    }
+    
+    //- rjf: ancestor is focused & fastpath codepoint pressed -> press
+    if(box->flags & UI_BoxFlag_Clickable && box->fastpath_codepoint != 0 && evt->string.size != 0)
+    {
+      B32 ancestor_is_focused = 0;
+      for(UI_Box *parent = box->parent; !ui_box_is_nil(parent); parent = parent->parent)
+      {
+        if(parent->flags & UI_BoxFlag_FocusActive)
+        {
+          ancestor_is_focused = 1;
+          if(parent->flags & UI_BoxFlag_FocusActiveDisabled ||
+             !ui_key_match(parent->default_nav_focus_active_key, ui_key_zero()))
+          {
+            ancestor_is_focused = 0;
+            break;
+          }
+        }
+      }
+      if(ancestor_is_focused)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        String32 insertion32 = str32_from_8(scratch.arena, evt->string);
+        if(insertion32.size == 1 && insertion32.str[0] == box->fastpath_codepoint)
+        {
+          taken = 1;
+          sig.f |= UI_SignalFlag_Clicked|UI_SignalFlag_Pressed;
+        }
+        scratch_end(scratch);
+      }
+    }
+    
     //- rjf: scrolling
     if(box->flags & UI_BoxFlag_Scroll &&
        evt->kind == OS_EventKind_Scroll &&
-       evt->flags != OS_EventFlag_Ctrl &&
+       evt->modifiers != OS_EventFlag_Ctrl &&
        evt_mouse_in_bounds)
     {
-      Vec2F32 delta = evt->delta;
-      if(evt->flags & OS_EventFlag_Shift)
+      Vec2F32 delta = evt->delta_2f32;
+      if(evt->modifiers & OS_EventFlag_Shift)
       {
         Swap(F32, delta.x, delta.y);
       }
@@ -2623,11 +2872,11 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: view scrolling
     if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
        evt->kind == OS_EventKind_Scroll &&
-       evt->flags != OS_EventFlag_Ctrl &&
+       evt->modifiers != OS_EventFlag_Ctrl &&
        evt_mouse_in_bounds)
     {
-      Vec2F32 delta = evt->delta;
-      if(evt->flags & OS_EventFlag_Shift)
+      Vec2F32 delta = evt->delta_2f32;
+      if(evt->modifiers & OS_EventFlag_Shift)
       {
         Swap(F32, delta.x, delta.y);
       }
@@ -2647,7 +2896,6 @@ ui_signal_from_box(UI_Box *box)
         }
         delta.y = 0;
       }
-      os_eat_event(ui_state->events, evt);
       box->view_off_target.x += delta.x;
       box->view_off_target.y += delta.y;
       view_scrolled = 1;
@@ -2657,58 +2905,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: taken -> eat event
     if(taken)
     {
-      os_eat_event(ui_state->events, evt);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: process nav actions related to this box
-  //
-  {
-    for(UI_NavActionNode *n = ui_state->nav_actions->first, *next = 0;
-        n != 0;
-        n = next)
-    {
-      next = n->next;
-      UI_NavAction *action = &n->v;
-      B32 taken = 0;
-      if(is_focus_hot && box->flags & UI_BoxFlag_KeyboardClickable && action->flags & UI_NavActionFlag_Copy)
-      {
-        ui_state->clipboard_copy_key = box->key;
-        taken = 1;
-      }
-      if(box->flags & UI_BoxFlag_Clickable && box->fastpath_codepoint != 0)
-      {
-        B32 ancestor_is_focused = 0;
-        for(UI_Box *parent = box->parent; !ui_box_is_nil(parent); parent = parent->parent)
-        {
-          if(parent->flags & UI_BoxFlag_FocusActive)
-          {
-            ancestor_is_focused = 1;
-            if(parent->flags & UI_BoxFlag_FocusActiveDisabled ||
-               !ui_key_match(parent->default_nav_focus_active_key, ui_key_zero()))
-            {
-              ancestor_is_focused = 0;
-              break;
-            }
-          }
-        }
-        if(ancestor_is_focused && action->insertion.size != 0)
-        {
-          Temp scratch = scratch_begin(0, 0);
-          String32 insertion32 = str32_from_8(scratch.arena, action->insertion);
-          if(insertion32.size == 1 && insertion32.str[0] == box->fastpath_codepoint)
-          {
-            taken = 1;
-            sig.f |= UI_SignalFlag_Clicked|UI_SignalFlag_Pressed;
-          }
-          scratch_end(scratch);
-        }
-      }
-      if(taken)
-      {
-        ui_nav_eat_action_node(ui_nav_actions(), n);
-      }
+      ui_eat_event(ui_state->events, n);
     }
   }
   

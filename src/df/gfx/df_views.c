@@ -850,41 +850,42 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   {
     if(!ewv->input_editing && ui_is_focus_active())
     {
-      UI_NavActionList *nav_actions = ui_nav_actions();
-      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
       {
-        if(!str8_match(n->v.insertion, str8_lit(" "), 0) && (n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste))
+        if(!str8_match(n->v.string, str8_lit(" "), 0) && (n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste))
         {
           edit_begin = 1;
           break;
         }
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_F2))
+      if(ui_key_press(ui_events(), 0, OS_Key_F2))
       {
         edit_begin = 1;
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+      if(ui_key_press(ui_events(), 0, OS_Key_Return))
       {
         edit_begin_or_expand = 1;
       }
     }
     if(ewv->input_editing && ui_is_focus_active())
     {
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+      if(ui_key_press(ui_events(), 0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
         edit_submit = 1;
       }
-      UI_NavActionList *nav_actions = ui_nav_actions();
-      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+#if 0
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
       {
-        if(n->v.flags & UI_NavActionFlag_ReplaceAndCommit)
+        if(n->v.flags & UI_EventFlag_ReplaceAndCommit)
         {
           edit_commit = 1;
           edit_end = 1;
@@ -893,6 +894,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           break;
         }
       }
+#endif
     }
   }
   
@@ -1855,7 +1857,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
   df_cmd_lister_item_array_sort_by_strength__in_place(cmd_array);
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(cv->selected_cmd_spec == &df_g_nil_cmd_spec && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+  if(cv->selected_cmd_spec == &df_g_nil_cmd_spec && ui_key_press(ui_events(), 0, OS_Key_Return))
   {
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
     if(cmd_array.count > 0)
@@ -2194,7 +2196,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(ps->cursor.y == 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+  if(ps->cursor.y == 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
   {
     FileProperties query_normalized_with_opt_slash_props = os_properties_from_file_path(query_normalized_with_opt_slash);
     FileProperties path_query_path_props = os_properties_from_file_path(path_query.path);
@@ -2533,7 +2535,7 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(sp->selected_pid == 0 && process_info_array.count > 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+  if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
   {
     DF_ProcessInfo *info = &process_info_array.v[0];
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2690,7 +2692,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
   df_entity_lister_item_array_sort_by_strength__in_place(ent_arr);
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(df_entity_is_nil(df_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+  if(df_entity_is_nil(df_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
   {
     DF_Entity *ent = ent_arr.v[0].entity;
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2843,7 +2845,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(slv->cursor.y == 0 && items.count != 0 && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+  if(slv->cursor.y == 0 && items.count != 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
   {
     RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, items.v[0].idx);
     U64 name_size = 0;
@@ -3043,32 +3045,32 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   {
     if(!tv->input_editing)
     {
-      UI_NavActionList *nav_actions = ui_nav_actions();
-      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
       {
-        if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+        if(n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste)
         {
           edit_begin = 1;
           break;
         }
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_F2))
+      if(ui_key_press(ui_events(), 0, OS_Key_F2))
       {
         edit_begin = 1;
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+      if(ui_key_press(ui_events(), 0, OS_Key_Return))
       {
         edit_begin = 1;
       }
     }
     if(tv->input_editing)
     {
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+      if(ui_key_press(ui_events(), 0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -3518,28 +3520,28 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
   {
     if(!fpms->input_editing)
     {
-      UI_NavActionList *nav_actions = ui_nav_actions();
-      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
       {
-        if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+        if(n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste)
         {
           edit_begin = 1;
           break;
         }
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_F2))
+      if(ui_key_press(ui_events(), 0, OS_Key_F2))
       {
         edit_begin = 1;
       }
     }
     if(fpms->input_editing)
     {
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+      if(ui_key_press(ui_events(), 0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -3836,28 +3838,28 @@ DF_VIEW_UI_FUNCTION_DEF(AutoViewRules)
   {
     if(!avrs->input_editing)
     {
-      UI_NavActionList *nav_actions = ui_nav_actions();
-      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
       {
-        if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+        if(n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste)
         {
           edit_begin = 1;
           break;
         }
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_F2))
+      if(ui_key_press(ui_events(), 0, OS_Key_F2))
       {
         edit_begin = 1;
       }
     }
     if(avrs->input_editing)
     {
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+      if(ui_key_press(ui_events(), 0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -4652,29 +4654,29 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   B32 edit_submit          = 0;
   if(!mv->txt_editing && ui_is_focus_active())
   {
-    UI_NavActionList *nav_actions = ui_nav_actions();
-    for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first; n != 0; n = n->next)
     {
-      if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+      if(n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste)
       {
         edit_begin = 1;
         break;
       }
     }
-    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_F2) ||
-       os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+    if(ui_key_press(ui_events(), 0, OS_Key_F2) ||
+       ui_key_press(ui_events(), 0, OS_Key_Return))
     {
       edit_begin = 1;
     }
   }
   if(mv->txt_editing && ui_is_focus_active())
   {
-    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+    if(ui_key_press(ui_events(), 0, OS_Key_Esc))
     {
       edit_end = 1;
       edit_commit = 0;
     }
-    if(os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+    if(ui_key_press(ui_events(), 0, OS_Key_Return))
     {
       edit_end = 1;
       edit_commit = 1;
@@ -7847,47 +7849,47 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   {
     U64 next_cursor = mv->cursor;
     U64 next_mark = mv->mark;
-    UI_NavActionList *nav_actions = ui_nav_actions();
-    for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       next = n->next;
-      UI_NavAction *action = &n->v;
+      UI_Event *evt = &n->v;
       Vec2S64 cell_delta = {0};
-      switch(action->delta_unit)
+      switch(evt->delta_unit)
       {
         default:{}break;
-        case UI_NavDeltaUnit_Element:
+        case UI_EventDeltaUnit_Char:
         {
-          cell_delta.x = (S64)action->delta.x;
-          cell_delta.y = (S64)action->delta.y;
+          cell_delta.x = (S64)evt->delta_2s32.x;
+          cell_delta.y = (S64)evt->delta_2s32.y;
         }break;
-        case UI_NavDeltaUnit_Chunk:
-        case UI_NavDeltaUnit_Whole:
+        case UI_EventDeltaUnit_Word:
+        case UI_EventDeltaUnit_Page:
         {
-          if(action->delta.x < 0)
+          if(evt->delta_2s32.x < 0)
           {
             cell_delta.x = -(S64)(mv->cursor%mv->num_columns);
           }
-          else if(action->delta.x > 0)
+          else if(evt->delta_2s32.x > 0)
           {
             cell_delta.x = (mv->num_columns-1) - (S64)(mv->cursor%mv->num_columns);
           }
-          if(action->delta.y < 0)
+          if(evt->delta_2s32.y < 0)
           {
             cell_delta.y = -4;
           }
-          else if(action->delta.y > 0)
+          else if(evt->delta_2s32.y > 0)
           {
             cell_delta.y = +4;
           }
         }break;
       }
       B32 good_action = 0;
-      if(action->delta.x != 0 || action->delta.y != 0)
+      if(evt->delta_2s32.x != 0 || evt->delta_2s32.y != 0)
       {
         good_action = 1;
       }
-      if(good_action && action->flags & UI_NavActionFlag_ZeroDeltaOnSelect && mv->cursor != mv->mark)
+      if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && mv->cursor != mv->mark)
       {
         MemoryZeroStruct(&cell_delta);
       }
@@ -7899,9 +7901,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         next_cursor += cell_delta.y*mv->num_columns;
         next_cursor = ClampTop(0x7FFFFFFFFFFFull, next_cursor);
       }
-      if(good_action && action->flags & UI_NavActionFlag_PickSelectSide && mv->cursor != mv->mark)
+      if(good_action && evt->flags & UI_EventFlag_PickSelectSide && mv->cursor != mv->mark)
       {
-        if(action->delta.x < 0 || action->delta.y < 0)
+        if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
         {
           next_cursor = Min(mv->cursor, mv->mark);
         }
@@ -7910,14 +7912,14 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
           next_cursor = Max(mv->cursor, mv->mark);
         }
       }
-      if(good_action && !(action->flags & UI_NavActionFlag_KeepMark))
+      if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
       {
         next_mark = next_cursor;
       }
       if(good_action)
       {
         mv->contain_cursor = 1;
-        ui_nav_eat_action_node(nav_actions, n);
+        ui_eat_event(events, n);
       }
     }
     mv->cursor = next_cursor;
@@ -8320,18 +8322,20 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     // rjf: ctrl+scroll -> change font size
     if(ui_hovering(sig))
     {
-      for(OS_Event *event = ui_events()->first, *next = 0; event != 0; event = next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
       {
-        next = event->next;
-        if(os_handle_match(event->window, ui_window()) && event->kind == OS_EventKind_Scroll && event->flags & OS_EventFlag_Ctrl)
+        next = n->next;
+        UI_Event *event = &n->v;
+        if(event->kind == UI_EventKind_Scroll && event->modifiers & OS_EventFlag_Ctrl)
         {
-          os_eat_event(ui_events(), event);
-          if(event->delta.y < 0)
+          ui_eat_event(events, n);
+          if(event->delta_2f32.y < 0)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncCodeFontScale));
           }
-          else if(event->delta.y > 0)
+          else if(event->delta_2f32.y > 0)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecCodeFontScale));

@@ -1074,7 +1074,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   //- rjf: do core-layer commands & batch up commands to be dispatched to views
   //
   B32 panel_reset_done = 0;
-  UI_NavActionList nav_actions = {0};
+  UI_EventList events_ui = {0};
   ProfScope("do commands")
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -2084,191 +2084,317 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //
         case DF_CoreCmdKind_MoveLeft:
         {
-          UI_NavAction action = {UI_NavActionFlag_PickSelectSide|UI_NavActionFlag_ZeroDeltaOnSelect|UI_NavActionFlag_ExplicitDirectional, {-1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_PickSelectSide|UI_EventFlag_ZeroDeltaOnSelect|UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveRight:
         {
-          UI_NavAction action = {UI_NavActionFlag_PickSelectSide|UI_NavActionFlag_ZeroDeltaOnSelect|UI_NavActionFlag_ExplicitDirectional, {+1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_PickSelectSide|UI_EventFlag_ZeroDeltaOnSelect|UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUp:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, -1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDown:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, +1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveLeftSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {-1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveRightSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, -1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, +1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveLeftChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {-1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveRightChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, -1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, +1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpPage:
         {
-          UI_NavAction action = {0, {+0, -1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownPage:
         {
-          UI_NavAction action = {0, {+0, +1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpWhole:
         {
-          UI_NavAction action = {0, {+0, -1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownWhole:
         {
-          UI_NavAction action = {0, {+0, +1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveLeftChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {-1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveRightChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, -1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, +1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpPageSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, -1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownPageSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, +1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpWholeSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {+0, -1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownWholeSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {+0, +1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveHome:
         {
-          UI_NavAction action = {0, {-1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveEnd:
         {
-          UI_NavAction action = {0, {+1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveHomeSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {-1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_MoveEndSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {+1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_SelectAll:
         {
-          UI_NavAction action1 = {0, {-1, +0}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action1);
-          UI_NavAction action2 = {UI_NavActionFlag_KeepMark, {+1, +0}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action2);
+          UI_Event evt1 = {0};
+          evt1.kind       = UI_EventKind_Navigate;
+          evt1.delta_unit = UI_EventDeltaUnit_Whole;
+          evt1.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt1);
+          UI_Event evt2 = {0};
+          evt2.kind       = UI_EventKind_Navigate;
+          evt2.flags      = UI_EventFlag_KeepMark;
+          evt2.delta_unit = UI_EventDeltaUnit_Whole;
+          evt2.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt2);
         }break;
         case DF_CoreCmdKind_DeleteSingle:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete, {+1, +0}, UI_NavDeltaUnit_Element};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_DeleteChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete, {+1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete;
+          evt.delta_2s32 = v2s32(+1, +0);
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_BackspaceSingle:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete|UI_NavActionFlag_ZeroDeltaOnSelect, {-1, +0}, UI_NavDeltaUnit_Element};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete|UI_EventFlag_ZeroDeltaOnSelect;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_BackspaceChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete|UI_NavActionFlag_ZeroDeltaOnSelect, {-1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete;
+          evt.delta_2s32 = v2s32(-1, +0);
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_Copy:
         {
-          UI_NavAction action = {UI_NavActionFlag_Copy|UI_NavActionFlag_KeepMark};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind  = UI_EventKind_Edit;
+          evt.flags = UI_EventFlag_Copy|UI_EventFlag_KeepMark;
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_Cut:
         {
-          UI_NavAction action = {UI_NavActionFlag_Copy|UI_NavActionFlag_Delete};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind  = UI_EventKind_Edit;
+          evt.flags = UI_EventFlag_Copy|UI_EventFlag_Delete;
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_Paste:
         {
-          UI_NavAction action = {UI_NavActionFlag_Paste};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind   = UI_EventKind_Text;
+          evt.string = os_get_clipboard_text(ui_build_arena());
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         case DF_CoreCmdKind_InsertText:
         {
-          String8 insertion = params.string;
-          UI_NavAction action = {0, {0}, (UI_NavDeltaUnit)0, push_str8_copy(ui_build_arena(), insertion)};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = {0};
+          evt.kind   = UI_EventKind_Text;
+          evt.string = params.string;
+          ui_event_list_push(ui_build_arena(), &events_ui, &evt);
         }break;
         
         //- rjf: address finding
@@ -3073,7 +3199,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       }
       
       // rjf: begin & push initial stack values
-      ui_begin_build(events, ws->os, &nav_actions, &icon_info, df_dt(), df_dt());
+      ui_begin_build(ws->os, &events_ui, &icon_info, df_dt(), df_dt());
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_pref_width(ui_em(20.f, 1));
@@ -4008,14 +4134,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
                 UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return)))
+                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_key_press(ui_events(), 0, OS_Key_Return)))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmAccept));
               }
               UI_CornerRadius10(ui_top_font_size()*0.25f)
                 UI_CornerRadius11(ui_top_font_size()*0.25f)
-                if(ui_clicked(ui_buttonf("Cancel")) || os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+                if(ui_clicked(ui_buttonf("Cancel")) || ui_key_press(ui_events(), 0, OS_Key_Esc))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmCancel));
@@ -4203,8 +4329,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_Signal item_sig = ui_signal_from_box(item_box);
               if(ui_clicked(item_sig))
               {
-                UI_NavAction autocomp_action = {UI_NavActionFlag_ReplaceAndCommit, {0}, (UI_NavDeltaUnit)0, push_str8_copy(ui_build_arena(), item->string)};
-                ui_nav_action_list_push(ui_build_arena(), ui_nav_actions(), autocomp_action);
+                // UI_NavAction autocomp_action = {UI_NavActionFlag_ReplaceAndCommit, {0}, (UI_NavDeltaUnit)0, push_str8_copy(ui_build_arena(), item->string)};
+                // ui_nav_action_list_push(ui_build_arena(), ui_nav_actions(), autocomp_action);
               }
             }
           }
@@ -4544,28 +4670,28 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               U64 open_menu_idx_prime = open_menu_idx;
               if(menu_open && ws->menu_bar_focused && window_is_focused)
               {
-                UI_NavActionList *nav_actions = ui_nav_actions();
-                for(UI_NavActionNode *n = nav_actions->first, *next = 0;
+                UI_EventList *events = ui_events();
+                for(UI_EventNode *n = events->first, *next = 0;
                     n != 0;
                     n = next)
                 {
                   next = n->next;
-                  UI_NavAction *action = &n->v;
+                  UI_Event *evt = &n->v;
                   B32 taken = 0;
-                  if(action->delta.x > 0)
+                  if(evt->delta_2s32.x > 0)
                   {
                     taken = 1;
                     open_menu_idx_prime += 1;
                     open_menu_idx_prime = open_menu_idx_prime%ArrayCount(items);
                   }
-                  if(action->delta.x < 0)
+                  if(evt->delta_2s32.x < 0)
                   {
                     taken = 1;
                     open_menu_idx_prime = open_menu_idx_prime > 0 ? open_menu_idx_prime-1 : (ArrayCount(items)-1);
                   }
                   if(taken)
                   {
-                    ui_nav_eat_action_node(nav_actions, n);
+                    ui_eat_event(events, n);
                   }
                 }
               }
@@ -4575,7 +4701,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 ui_set_next_fastpath_codepoint(items[idx].codepoint);
                 B32 alt_fastpath_key = 0;
-                if(os_key_press(ui_events(), ui_window(), OS_EventFlag_Alt, items[idx].key))
+                if(ui_key_press(ui_events(), OS_EventFlag_Alt, items[idx].key))
                 {
                   alt_fastpath_key = 1;
                 }
@@ -6238,7 +6364,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
           UI_Focus(UI_FocusKind_On)
           {
-            if(view->is_filtering && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+            if(view->is_filtering && ui_is_focus_active() && ui_key_press(ui_events(), 0, OS_Key_Return))
             {
               DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ApplyFilter));
@@ -6457,25 +6583,26 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-            for(UI_NavActionNode *n = ui_nav_actions()->first, *next = 0; n != 0; n = next)
+            UI_EventList *events = ui_events();
+            for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
             {
               next = n->next;
-              if(n->v.flags & UI_NavActionFlag_Paste)
+              if(n->v.flags & UI_EventFlag_Paste)
               {
-                ui_nav_eat_action_node(ui_nav_actions(), n);
+                ui_eat_event(events, n);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Paste));
               }
-              else if(n->v.insertion.size != 0)
+              else if(n->v.string.size != 0)
               {
-                ui_nav_eat_action_node(ui_nav_actions(), n);
+                ui_eat_event(events, n);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
-                p.string = n->v.insertion;
+                p.string = n->v.string;
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_InsertText));
               }
             }
           }
-          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_key_press(ui_events(), 0, OS_Key_Esc))
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
@@ -7046,7 +7173,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     ////////////////////////////
     //- rjf: drag/drop cancelling
     //
-    if(df_drag_is_active() && os_key_press(events, ws->os, 0, OS_Key_Esc))
+    if(df_drag_is_active() && ui_key_press(&events_ui, 0, OS_Key_Esc))
     {
       df_drag_kill();
       ui_kill_action();
@@ -7055,17 +7182,19 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     ////////////////////////////
     //- rjf: font size changing
     //
-    for(OS_Event *event = events->first; event != 0; event = event->next)
+    for(UI_EventNode *n = events_ui.first, *next = 0; n != 0; n = next)
     {
-      if(os_handle_match(event->window, ws->os) && event->kind == OS_EventKind_Scroll && event->flags & OS_EventFlag_Ctrl)
+      next = n->next;
+      UI_Event *event = &n->v;
+      if(event->kind == OS_EventKind_Scroll && event->flags & OS_EventFlag_Ctrl)
       {
-        os_eat_event(ui_events(), event);
-        if(event->delta.y < 0)
+        ui_eat_event(&events_ui, n);
+        if(event->delta_2f32.y < 0)
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncUIFontScale));
         }
-        else if(event->delta.y > 0)
+        else if(event->delta_2f32.y > 0)
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecUIFontScale));
@@ -10673,17 +10802,20 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     //- rjf: hovering text container & ctrl+scroll -> change font size
     if(ui_hovering(text_container_sig))
     {
-      for(OS_Event *event = ui_events()->first; event != 0; event = event->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
       {
-        if(os_handle_match(event->window, ui_window()) && event->kind == OS_EventKind_Scroll && event->flags & OS_EventFlag_Ctrl)
+        next = n->next;
+        UI_Event *event = &n->v;
+        if(event->kind == OS_EventKind_Scroll && event->flags & OS_EventFlag_Ctrl)
         {
-          os_eat_event(ui_events(), event);
-          if(event->delta.y < 0)
+          ui_eat_event(events, n);
+          if(event->delta_2f32.y < 0)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncCodeFontScale));
           }
-          else if(event->delta.y > 0)
+          else if(event->delta_2f32.y > 0)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecCodeFontScale));
@@ -11275,25 +11407,25 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;
-  UI_NavActionList *nav_actions = ui_nav_actions();
-  for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+  UI_EventList *events = ui_events();
+  for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
   {
     next = n->next;
     B32 taken = 0;
     
     String8 line = txt_string_from_info_data_line_num(info, data, cursor->line);
-    UI_NavTxtOp single_line_op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, line, *cursor, *mark);
+    UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, line, *cursor, *mark);
     
     //- rjf: invalid single-line op or endpoint units => try multiline
-    if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint || single_line_op.flags & UI_NavTxtOpFlag_Invalid)
+    if(n->v.delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
     {
       U64 line_count = info->lines_count;
       String8 prev_line = txt_string_from_info_data_line_num(info, data, cursor->line-1);
       String8 next_line = txt_string_from_info_data_line_num(info, data, cursor->line+1);
-      Vec2S32 delta = n->v.delta;
+      Vec2S32 delta = n->v.delta_2s32;
       
       //- rjf: wrap lines right
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = 1;
@@ -11303,7 +11435,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: wrap lines left
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = prev_line.size+1;
@@ -11313,7 +11445,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && delta.y > 0 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = Min(*preferred_column, next_line.size+1);
@@ -11322,7 +11454,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = Min(*preferred_column, prev_line.size+1);
@@ -11331,7 +11463,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
       {
         for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
         {
@@ -11354,7 +11486,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
       {
         for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
         {
@@ -11377,7 +11509,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y > 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
       {
         cursor->line += line_count_per_page;
         cursor->column = 1;
@@ -11387,7 +11519,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y < 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
       {
         cursor->line -= line_count_per_page;
         cursor->column = 1;
@@ -11397,7 +11529,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement to endpoint (+)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y > 0 || delta.x > 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
       {
         *cursor = txt_pt(line_count, info->lines_count ? dim_1u64(info->lines_ranges[info->lines_count-1])+1 : 1);
         change = 1;
@@ -11405,7 +11537,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement to endpoint (-)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y < 0 || delta.x < 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
       {
         *cursor = txt_pt(1, 1);
         change = 1;
@@ -11413,7 +11545,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-      if(!(n->v.flags & UI_NavActionFlag_KeepMark))
+      if(!(n->v.flags & UI_EventFlag_KeepMark))
       {
         *mark = *cursor;
       }
@@ -11430,7 +11562,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
     }
     
     //- rjf: copy
-    if(n->v.flags & UI_NavActionFlag_Copy)
+    if(n->v.flags & UI_EventFlag_Copy)
     {
       String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(*cursor, *mark));
       os_set_clipboard_text(text);
@@ -11439,7 +11571,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
     //- rjf: consume
     if(taken)
     {
-      ui_nav_eat_action_node(nav_actions, n);
+      ui_eat_event(events, n);
     }
   }
   
@@ -11452,26 +11584,26 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;
-  UI_NavActionList *nav_actions = ui_nav_actions();
+  UI_EventList *events = ui_events();
   TXTI_BufferInfo buffer_info = txti_buffer_info_from_handle(scratch.arena, handle);
-  for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+  for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
   {
     next = n->next;
     B32 taken = 0;
     
     String8 line = txti_string_from_handle_line_num(scratch.arena, handle, cursor->line);
-    UI_NavTxtOp single_line_op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, line, *cursor, *mark);
+    UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, line, *cursor, *mark);
     
     //- rjf: invalid single-line op or endpoint units => try multiline
-    if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint || single_line_op.flags & UI_NavTxtOpFlag_Invalid)
+    if(n->v.delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
     {
       U64 line_count = buffer_info.total_line_count;
       String8 prev_line = txti_string_from_handle_line_num(scratch.arena, handle, cursor->line-1);
       String8 next_line = txti_string_from_handle_line_num(scratch.arena, handle, cursor->line+1);
-      Vec2S32 delta = n->v.delta;
+      Vec2S32 delta = n->v.delta_2s32;
       
       //- rjf: wrap lines right
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = 1;
@@ -11481,7 +11613,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: wrap lines left
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = prev_line.size+1;
@@ -11491,7 +11623,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement down (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = Min(*preferred_column, next_line.size+1);
@@ -11500,7 +11632,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement up (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = Min(*preferred_column, prev_line.size+1);
@@ -11509,7 +11641,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement down (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
       {
         for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
         {
@@ -11532,7 +11664,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement up (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
       {
         for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
         {
@@ -11555,7 +11687,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement down (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y > 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
       {
         cursor->line += line_count_per_page;
         cursor->column = 1;
@@ -11565,7 +11697,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement up (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y < 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
       {
         cursor->line -= line_count_per_page;
         cursor->column = 1;
@@ -11575,7 +11707,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement to endpoint (+)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y > 0 || delta.x > 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
       {
         *cursor = txt_pt(line_count, buffer_info.last_line_size);
         change = 1;
@@ -11583,7 +11715,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement to endpoint (-)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y < 0 || delta.x < 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
       {
         *cursor = txt_pt(1, 1);
         change = 1;
@@ -11591,7 +11723,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-      if(!(n->v.flags & UI_NavActionFlag_KeepMark))
+      if(!(n->v.flags & UI_EventFlag_KeepMark))
       {
         *mark = *cursor;
       }
@@ -11608,7 +11740,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
     }
     
     //- rjf: copy
-    if(n->v.flags & UI_NavActionFlag_Copy)
+    if(n->v.flags & UI_EventFlag_Copy)
     {
       String8 text = txti_string_from_handle_txt_rng(scratch.arena, handle, txt_rng(*cursor, *mark));
       os_set_clipboard_text(text);
@@ -11617,7 +11749,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
     //- rjf: consume
     if(taken)
     {
-      ui_nav_eat_action_node(nav_actions, n);
+      ui_eat_event(events, n);
     }
   }
   
@@ -11914,16 +12046,16 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   B32 commit = 0;
   if(!is_focus_active && is_focus_hot)
   {
-    UI_NavActionList *nav_actions = ui_nav_actions();
-    for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       next = n->next;
-      UI_NavAction *action = &n->v;
-      if(action->flags & UI_NavActionFlag_Copy)
+      UI_Event *evt = &n->v;
+      if(evt->flags & UI_EventFlag_Copy)
       {
         os_set_clipboard_text(pre_edit_value);
       }
-      if(action->flags & UI_NavActionFlag_Delete)
+      if(evt->flags & UI_EventFlag_Delete)
       {
         commit = 1;
         edit_string_size_out[0] = 0;
@@ -11946,17 +12078,17 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     B32 start_editing_via_typing = 0;
     if(is_focus_hot)
     {
-      UI_NavActionList *nav_actions = ui_nav_actions();
-      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
       {
-        if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+        if(n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste)
         {
           start_editing_via_typing = 1;
           break;
         }
       }
     }
-    if(is_focus_hot && os_key_press(ui_events(), ui_window(), 0, OS_Key_F2))
+    if(is_focus_hot && ui_key_press(ui_events(), 0, OS_Key_F2))
     {
       start_editing_via_typing = 1;
     }
@@ -11984,32 +12116,32 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   if(!(flags & DF_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
   {
     Temp scratch = scratch_begin(0, 0);
-    UI_NavActionList *nav_actions = ui_nav_actions();
-    for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       next = n->next;
       
       // rjf: do not consume anything that doesn't fit a single-line's operations
-      if(n->v.delta.y != 0)
+      if(n->v.delta_2s32.y != 0)
       {
         continue;
       }
       
       // rjf: map this action to an op
-      UI_NavTxtOp op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, edit_string, *cursor, *mark);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
       
       // rjf: perform replace range
       if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
       {
-        String8 new_string = ui_nav_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
         new_string.size = Min(edit_buffer_size, new_string.size);
         MemoryCopy(edit_buffer, new_string.str, new_string.size);
         edit_string_size_out[0] = new_string.size;
       }
       
       // rjf: perform copy
-      if(op.flags & UI_NavTxtOpFlag_Copy)
+      if(op.flags & UI_TxtOpFlag_Copy)
       {
         os_set_clipboard_text(op.copy);
       }
@@ -12020,7 +12152,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       
       // rjf: consume event
       {
-        ui_nav_eat_action_node(nav_actions, n);
+        ui_eat_event(events, n);
         changes_made = 1;
       }
     }
