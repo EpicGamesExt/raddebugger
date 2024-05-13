@@ -57,6 +57,94 @@ typedef enum UI_FocusKind
 UI_FocusKind;
 
 ////////////////////////////////
+//~ rjf: Events
+
+typedef enum UI_EventKind
+{
+  UI_EventKind_Null,
+  UI_EventKind_Press,
+  UI_EventKind_Release,
+  UI_EventKind_Text,
+  UI_EventKind_Scroll,
+  UI_EventKind_COUNT
+}
+UI_EventKind;
+
+typedef U32 UI_EventFlags;
+enum
+{
+  UI_EventFlag_KeepMark            = (1<<0),
+  UI_EventFlag_Delete              = (1<<1),
+  UI_EventFlag_Copy                = (1<<2),
+  UI_EventFlag_Paste               = (1<<3),
+  UI_EventFlag_ZeroDeltaOnSelect   = (1<<4),
+  UI_EventFlag_PickSelectSide      = (1<<5),
+  UI_EventFlag_CapAtLine           = (1<<6),
+  UI_EventFlag_ExplicitDirectional = (1<<7),
+};
+
+typedef enum UI_EventDeltaUnit
+{
+  UI_EventDeltaUnit_Char,
+  UI_EventDeltaUnit_Word,
+  UI_EventDeltaUnit_Line,
+  UI_EventDeltaUnit_Whole,
+  UI_EventDeltaUnit_COUNT
+}
+UI_EventDeltaUnit;
+
+typedef struct UI_Event UI_Event;
+struct UI_Event
+{
+  UI_EventKind kind;
+  UI_EventFlags flags;
+  UI_EventDeltaUnit delta_unit;
+  OS_Key key;
+  OS_EventFlags modifiers;
+  String8 string;
+  Vec2F32 pos;
+  Vec2F32 delta_2f32;
+  Vec2S32 delta_2s32;
+};
+
+typedef struct UI_EventNode UI_EventNode;
+struct UI_EventNode
+{
+  UI_EventNode *next;
+  UI_EventNode *prev;
+  UI_Event v;
+};
+
+typedef struct UI_EventList UI_EventList;
+struct UI_EventList
+{
+  UI_EventNode *first;
+  UI_EventNode *last;
+  U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Textual Operations
+
+typedef U32 UI_TxtOpFlags;
+enum
+{
+  UI_TxtOpFlag_Invalid = (1<<0),
+  UI_TxtOpFlag_Copy    = (1<<1),
+};
+
+typedef struct UI_TxtOp UI_TxtOp;
+struct UI_TxtOp
+{
+  UI_TxtOpFlags flags;
+  String8 replace;
+  String8 copy;
+  TxtRng range;
+  TxtPt cursor;
+  TxtPt mark;
+};
+
+////////////////////////////////
 //~ rjf: Navigation Types
 
 typedef enum UI_NavDeltaUnit
@@ -540,6 +628,15 @@ internal UI_Key  ui_key_make(U64 v);
 internal UI_Key  ui_key_from_string(UI_Key seed_key, String8 string);
 internal UI_Key  ui_key_from_stringf(UI_Key seed_key, char *fmt, ...);
 internal B32     ui_key_match(UI_Key a, UI_Key b);
+
+////////////////////////////////
+//~ rjf: Event Functions
+
+internal UI_EventNode *ui_event_list_push(Arena *arena, UI_EventList *list, UI_Event *v);
+internal void ui_eat_event(UI_EventList *list, UI_EventNode *node);
+internal B32 ui_key_press(UI_EventList *list, OS_EventFlags mods, OS_Key key);
+internal B32 ui_key_release(UI_EventList *list, OS_EventFlags mods, OS_Key key);
+internal B32 ui_text(UI_EventList *list, U32 character);
 
 ////////////////////////////////
 //~ rjf: Navigation Action List Building & Consumption Functions

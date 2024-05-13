@@ -95,6 +95,78 @@ ui_key_match(UI_Key a, UI_Key b)
 }
 
 ////////////////////////////////
+//~ rjf: Event Functions
+
+internal UI_EventNode *
+ui_event_list_push(Arena *arena, UI_EventList *list, UI_Event *v)
+{
+  UI_EventNode *n = push_array(arena, UI_EventNode, 1);
+  MemoryCopyStruct(&n->v, v);
+  n->v.string = push_str8_copy(arena, n->v.string);
+  DLLPushBack(list->first, list->last, n);
+  list->count += 1;
+  return n;
+}
+
+internal void
+ui_eat_event(UI_EventList *list, UI_EventNode *node)
+{
+  DLLRemove(list->first, list->last, node);
+  list->count -= 1;
+}
+
+internal B32
+ui_key_press(UI_EventList *list, OS_EventFlags mods, OS_Key key)
+{
+  B32 result = 0;
+  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_EventKind_Press && n->v.key == key && n->v.modifiers == mods)
+    {
+      result = 1;
+      ui_eat_event(list, n);
+      break;
+    }
+  }
+  return result;
+}
+
+internal B32
+ui_key_release(UI_EventList *list, OS_EventFlags mods, OS_Key key)
+{
+  B32 result = 0;
+  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_EventKind_Release && n->v.key == key && n->v.modifiers == mods)
+    {
+      result = 1;
+      ui_eat_event(list, n);
+      break;
+    }
+  }
+  return result;
+}
+
+internal B32
+ui_text(UI_EventList *list, U32 character)
+{
+  B32 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  String8 character_text = str8_from_32(scratch.arena, str32(&character, 1));
+  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_EventKind_Text && str8_match(character_text, n->v.string, 0))
+    {
+      result = 1;
+      ui_eat_event(list, n);
+      break;
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Navigation Action List Building & Consumption Functions
 
 internal void
