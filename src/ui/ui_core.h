@@ -69,6 +69,7 @@ typedef enum UI_EventKind
   UI_EventKind_Edit,
   UI_EventKind_MouseMove,
   UI_EventKind_Scroll,
+  UI_EventKind_AutocompleteHint,
   UI_EventKind_COUNT
 }
 UI_EventKind;

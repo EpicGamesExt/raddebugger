@@ -1266,9 +1266,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                   
                   scratch_end(scratch);
                 }
-                if(expr_editing_active && !edit_end)
+                if(expr_editing_active && !edit_end && txt_pt_match(ewv->input_cursor, ewv->input_mark))
                 {
-                  df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, DF_AutoCompListerFlag_Locals, str8(ewv->input_buffer, ewv->input_size));
+                  String8 input = str8(ewv->input_buffer, ewv->input_size);
+                  df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, DF_AutoCompListerFlag_Locals, input, ewv->input_cursor.column-1);
                 }
               }
               
@@ -1477,9 +1478,10 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               }
               
               // rjf: autocomplete lister
-              if(rule_editing_active && !edit_end)
+              if(rule_editing_active && !edit_end && txt_pt_match(ewv->input_cursor, ewv->input_mark))
               {
-                df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, DF_AutoCompListerFlag_ViewRules, str8(ewv->input_buffer, ewv->input_size));
+                String8 input = str8(ewv->input_buffer, ewv->input_size);
+                df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, DF_AutoCompListerFlag_ViewRules|DF_AutoCompListerFlag_Locals, input, ewv->input_cursor.column-1);
               }
             }
           }

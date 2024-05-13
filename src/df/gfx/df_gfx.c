@@ -4305,7 +4305,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           // rjf: animate target # of rows
           {
             F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
-            F32 target = Min((F32)item_array.count, 8.f);
+            F32 target = Min((F32)item_array.count, 16.f);
             if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
             {
               df_gfx_request_frame();
@@ -4350,6 +4350,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Transparency(1.f-ws->autocomp_open_t)
           {
             autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_Clickable|UI_BoxFlag_Clip|UI_BoxFlag_RoundChildrenByParent|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackground, "autocomp_box");
+            if(ws->autocomp_query_dirty)
+            {
+              ws->autocomp_query_dirty = 0;
+              autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
+            }
           }
           UI_Parent(autocomp_box) UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_HoverCursor(OS_Cursor_HandPoint)
             UI_Focus(UI_FocusKind_Null)
@@ -4360,7 +4365,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_Clickable, "autocomp_%I64x", idx);
               UI_Parent(item_box)
               {
-                UI_WidthFill ui_label(item->string);
+                UI_WidthFill
+                {
+                  UI_Box *box = ui_label(item->string).box;
+                  ui_box_equip_fuzzy_match_ranges(box, &item->matches);
+                }
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
                   UI_PrefWidth(ui_text_dim(10, 1))
                   UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
@@ -4369,8 +4378,23 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               UI_Signal item_sig = ui_signal_from_box(item_box);
               if(ui_clicked(item_sig))
               {
-                // UI_NavAction autocomp_action = {UI_NavActionFlag_ReplaceAndCommit, {0}, (UI_NavDeltaUnit)0, push_str8_copy(ui_build_arena(), item->string)};
-                // ui_nav_action_list_push(ui_build_arena(), ui_nav_actions(), autocomp_action);
+                UI_Event move_back_evt = zero_struct;
+                move_back_evt.kind = UI_EventKind_Navigate;
+                move_back_evt.flags = UI_EventFlag_KeepMark;
+                move_back_evt.delta_2s32.x = -(S32)query.size;
+                ui_event_list_push(ui_build_arena(), &events, &move_back_evt);
+                UI_Event paste_evt = zero_struct;
+                paste_evt.kind = UI_EventKind_Text;
+                paste_evt.string = item->string;
+                ui_event_list_push(ui_build_arena(), &events, &paste_evt);
+                autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
+              }
+              else if(item_box->flags & UI_BoxFlag_FocusHot && !(item_box->flags & UI_BoxFlag_FocusHotDisabled))
+              {
+                UI_Event evt = zero_struct;
+                evt.kind   = UI_EventKind_AutocompleteHint;
+                evt.string = item->string;
+                ui_event_list_push(ui_build_arena(), &events, &evt);
               }
             }
           }
@@ -6633,7 +6657,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Paste));
               }
-              else if(n->v.string.size != 0)
+              else if(n->v.string.size != 0 && n->v.kind == UI_EventKind_Text)
               {
                 ui_eat_event(events, n);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
@@ -8677,10 +8701,31 @@ df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItemArray *array)
   qsort(array->v, array->count, sizeof(array->v[0]), (int (*)(const void*, const void*))df_autocomp_lister_item_qsort_compare);
 }
 
-internal void
-df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 query)
+internal String8
+df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
 {
+  U64 word_start_off = 0;
+  for(U64 off = 0; off < input.size && off < cursor_off; off += 1)
+  {
+    if(!char_is_alpha(input.str[off]) && !char_is_digit(input.str[off], 10) && input.str[off] != '_')
+    {
+      word_start_off = off+1;
+    }
+  }
+  String8 query = str8_skip(input, word_start_off);
+  return query;
+}
+
+internal void
+df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 input, U64 cursor_off)
+{
+  String8 query = df_autocomp_query_word_from_input_string_off(input, cursor_off);
   String8 current_query = str8(ws->autocomp_lister_query_buffer, ws->autocomp_lister_query_size);
+  if(cursor_off != ws->autocomp_cursor_off)
+  {
+    ws->autocomp_query_dirty = 1;
+    ws->autocomp_cursor_off = cursor_off;
+  }
   if(!str8_match(query, current_query, 0))
   {
     ws->autocomp_force_closed = 0;
@@ -12159,6 +12204,19 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     sig.f |= UI_SignalFlag_Commit;
   }
   
+  //- rjf: determine autocompletion string
+  String8 autocomplete_hint_string = {0};
+  {
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first; n != 0; n = n->next)
+    {
+      if(n->v.kind == UI_EventKind_AutocompleteHint)
+      {
+        autocomplete_hint_string = n->v.string;
+      }
+    }
+  }
+  
   //- rjf: take navigation actions for editing
   B32 changes_made = 0;
   if(!(flags & DF_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
@@ -12178,6 +12236,21 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       
       // rjf: map this action to an op
       UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
+      
+      // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
+      if(autocomplete_hint_string.size != 0)
+      {
+        String8 word_query = df_autocomp_query_word_from_input_string_off(edit_string, cursor->column-1);
+        U64 word_off = (U64)(word_query.str - edit_string.str);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
+        new_string.size = Min(edit_buffer_size, new_string.size);
+        MemoryCopy(edit_buffer, new_string.str, new_string.size);
+        edit_string_size_out[0] = new_string.size;
+        *cursor = *mark = txt_pt(1, word_off+1+autocomplete_hint_string.size);
+        edit_string = str8(edit_buffer, edit_string_size_out[0]);
+        op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
+        MemoryZeroStruct(&autocomplete_hint_string);
+      }
       
       // rjf: perform replace range
       if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
@@ -12268,6 +12341,44 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       D_FancyStringList code_fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_text_color(), edit_string);
+      if(autocomplete_hint_string.size != 0)
+      {
+        String8 query_word = df_autocomp_query_word_from_input_string_off(edit_string, cursor->column-1);
+        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
+        U64 off = 0;
+        U64 cursor_off = cursor->column-1;
+        D_FancyStringNode *prev_n = 0;
+        for(D_FancyStringNode *n = code_fancy_strings.first; n != 0; n = n->next)
+        {
+          if(off <= cursor_off && cursor_off <= off+n->v.string.size)
+          {
+            prev_n = n;
+            break;
+          }
+          off += n->v.string.size;
+        }
+        {
+          D_FancyStringNode *autocomp_fstr_n = push_array(scratch.arena, D_FancyStringNode, 1);
+          D_FancyString *fstr = &autocomp_fstr_n->v;
+          fstr->font = ui_top_font();
+          fstr->string = autocomplete_append_string;
+          fstr->color = ui_top_text_color();
+          fstr->color.w *= 0.5f;
+          fstr->size = ui_top_font_size();
+          autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
+          prev_n ? (prev_n->next = autocomp_fstr_n) : (void)0;
+          if(prev_n == 0)
+          {
+            code_fancy_strings.first = code_fancy_strings.last = autocomp_fstr_n;
+          }
+          if(prev_n != 0 && prev_n->next == 0)
+          {
+            code_fancy_strings.last = autocomp_fstr_n;
+          }
+          code_fancy_strings.node_count += 1;
+          code_fancy_strings.total_size += autocomplete_hint_string.size;
+        }
+      }
       ui_box_equip_display_fancy_strings(editstr_box, &code_fancy_strings);
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);

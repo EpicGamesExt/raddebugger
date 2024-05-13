@@ -525,9 +525,11 @@ struct DF_Window
   // rjf: autocomplete lister state
   U64 autocomp_last_frame_idx;
   B32 autocomp_force_closed;
+  B32 autocomp_query_dirty;
   UI_Key autocomp_root_key;
   DF_CtrlCtx autocomp_ctrl_ctx;
   DF_AutoCompListerFlags autocomp_lister_flags;
+  U64 autocomp_cursor_off;
   U8 autocomp_lister_query_buffer[1024];
   U64 autocomp_lister_query_size;
   F32 autocomp_open_t;
@@ -929,7 +931,8 @@ internal DF_AutoCompListerItemArray df_autocomp_lister_item_array_from_chunk_lis
 internal int df_autocomp_lister_item_qsort_compare(DF_AutoCompListerItem *a, DF_AutoCompListerItem *b);
 internal void df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItemArray *array);
 
-internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 query);
+internal String8 df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
+internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 input, U64 cursor_off);
 
 ////////////////////////////////
 //~ rjf: Search Strings
