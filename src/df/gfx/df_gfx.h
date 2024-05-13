@@ -899,7 +899,7 @@ internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
 
-internal void df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, DF_CmdList *cmds);
+internal void df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds);
 
 ////////////////////////////////
 //~ rjf: Eval Viz

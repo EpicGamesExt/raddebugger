@@ -88,6 +88,7 @@ enum
 
 typedef enum UI_EventDeltaUnit
 {
+  UI_EventDeltaUnit_Null,
   UI_EventDeltaUnit_Char,
   UI_EventDeltaUnit_Word,
   UI_EventDeltaUnit_Line,
@@ -148,78 +149,6 @@ struct UI_TxtOp
   TxtPt cursor;
   TxtPt mark;
 };
-
-#if 0
-////////////////////////////////
-//~ rjf: Navigation Types
-
-typedef enum UI_NavDeltaUnit
-{
-  UI_NavDeltaUnit_Element,
-  UI_NavDeltaUnit_Chunk,
-  UI_NavDeltaUnit_Whole,
-  UI_NavDeltaUnit_EndPoint,
-  UI_NavDeltaUnit_COUNT,
-}
-UI_NavDeltaUnit;
-
-typedef U32 UI_NavActionFlags;
-enum
-{
-  UI_NavActionFlag_KeepMark            = (1<<0),
-  UI_NavActionFlag_Delete              = (1<<1),
-  UI_NavActionFlag_Copy                = (1<<2),
-  UI_NavActionFlag_Paste               = (1<<3),
-  UI_NavActionFlag_ZeroDeltaOnSelect   = (1<<4),
-  UI_NavActionFlag_PickSelectSide      = (1<<5),
-  UI_NavActionFlag_CapAtLine           = (1<<6),
-  UI_NavActionFlag_ExplicitDirectional = (1<<7),
-  UI_NavActionFlag_ReplaceAndCommit    = (1<<8),
-};
-
-typedef struct UI_NavAction UI_NavAction;
-struct UI_NavAction
-{
-  UI_NavActionFlags flags;
-  Vec2S32 delta;
-  UI_NavDeltaUnit delta_unit;
-  String8 insertion;
-};
-
-typedef struct UI_NavActionNode UI_NavActionNode;
-struct UI_NavActionNode
-{
-  UI_NavActionNode *next;
-  UI_NavActionNode *prev;
-  UI_NavAction v;
-};
-
-typedef struct UI_NavActionList UI_NavActionList;
-struct UI_NavActionList
-{
-  UI_NavActionNode *first;
-  UI_NavActionNode *last;
-  U64 count;
-};
-
-typedef U32 UI_NavTxtOpFlags;
-enum
-{
-  UI_NavTxtOpFlag_Invalid = (1<<0),
-  UI_NavTxtOpFlag_Copy    = (1<<1),
-};
-
-typedef struct UI_NavTxtOp UI_NavTxtOp;
-struct UI_NavTxtOp
-{
-  UI_NavTxtOpFlags flags;
-  String8 replace;
-  String8 copy;
-  TxtRng range;
-  TxtPt cursor;
-  TxtPt mark;
-};
-#endif
 
 ////////////////////////////////
 //~ rjf: Keys
@@ -636,13 +565,10 @@ internal UI_Key  ui_key_from_stringf(UI_Key seed_key, char *fmt, ...);
 internal B32     ui_key_match(UI_Key a, UI_Key b);
 
 ////////////////////////////////
-//~ rjf: Event Functions
+//~ rjf: Event Type Functions
 
 internal UI_EventNode *ui_event_list_push(Arena *arena, UI_EventList *list, UI_Event *v);
 internal void ui_eat_event(UI_EventList *list, UI_EventNode *node);
-internal B32 ui_key_press(UI_EventList *list, OS_EventFlags mods, OS_Key key);
-internal B32 ui_key_release(UI_EventList *list, OS_EventFlags mods, OS_Key key);
-internal B32 ui_text(UI_EventList *list, U32 character);
 
 ////////////////////////////////
 //~ rjf: Text Operation Functions
@@ -651,26 +577,6 @@ internal B32 ui_char_is_scan_boundary(U8 c);
 internal S64 ui_scanned_column_from_column(String8 string, S64 start_column, Side side);
 internal UI_TxtOp ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, TxtPt cursor, TxtPt mark);
 internal String8 ui_push_string_replace_range(Arena *arena, String8 string, Rng1S64 range, String8 replace);
-
-#if 0
-////////////////////////////////
-//~ rjf: Navigation Action List Building & Consumption Functions
-
-internal void ui_nav_action_list_push(Arena *arena, UI_NavActionList *list, UI_NavAction action);
-internal void ui_nav_eat_action_node(UI_NavActionList *list, UI_NavActionNode *node);
-
-////////////////////////////////
-//~ rjf: High Level Navigation Action => Text Operations
-
-internal B32 ui_nav_char_is_scan_boundary(U8 c);
-internal S64 ui_nav_scanned_column_from_column(String8 string, S64 start_column, Side side);
-internal UI_NavTxtOp ui_nav_single_line_txt_op_from_action(Arena *arena, UI_NavAction action, String8 line, TxtPt cursor, TxtPt mark);
-
-////////////////////////////////
-//~ rjf: Single-Line String Modification
-
-internal String8 ui_nav_push_string_replace_range(Arena *arena, String8 string, Rng1S64 col_range, String8 replace);
-#endif
 
 ////////////////////////////////
 //~ rjf: Size Type Functions
@@ -729,6 +635,11 @@ internal Vec2F32           ui_mouse(void);
 internal F_Tag             ui_icon_font(void);
 internal String8           ui_icon_string_from_kind(UI_IconKind icon_kind);
 internal F32               ui_dt(void);
+
+//- rjf: event consumption helpers
+internal B32 ui_key_press(OS_EventFlags mods, OS_Key key);
+internal B32 ui_key_release(OS_EventFlags mods, OS_Key key);
+internal B32 ui_text(U32 character);
 
 //- rjf: drag data
 internal Vec2F32           ui_drag_start_mouse(void);

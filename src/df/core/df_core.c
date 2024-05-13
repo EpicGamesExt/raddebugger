@@ -6490,6 +6490,24 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
     if(params->voff != 0)           { log_msgf("| voff: 0x%I64x\n", params->voff); }
     if(params->index != 0)          { log_msgf("| index: 0x%I64x\n", params->index); }
     if(params->id != 0)             { log_msgf("| id: 0x%I64x\n", params->id); }
+    if(params->os_event != 0)
+    {
+      String8 kind_string = str8_lit("<unknown>");
+      switch(params->os_event->kind)
+      {
+        default:{}break;
+        case OS_EventKind_Press:          {kind_string = str8_lit("press");}break;
+        case OS_EventKind_Release:        {kind_string = str8_lit("release");}break;
+        case OS_EventKind_MouseMove:      {kind_string = str8_lit("mousemove");}break;
+        case OS_EventKind_Text:           {kind_string = str8_lit("text");}break;
+        case OS_EventKind_Scroll:         {kind_string = str8_lit("scroll");}break;
+        case OS_EventKind_WindowLoseFocus:{kind_string = str8_lit("losefocus");}break;
+        case OS_EventKind_WindowClose:    {kind_string = str8_lit("closewindow");}break;
+        case OS_EventKind_FileDrop:       {kind_string = str8_lit("filedrop");}break;
+        case OS_EventKind_Wakeup:         {kind_string = str8_lit("wakeup");}break;
+      }
+      log_msgf("| os_event->kind: %S\n", kind_string);
+    }
 #undef HandleParamPrint
     log_msgf("--------------------------------\n");
     scratch_end(scratch);

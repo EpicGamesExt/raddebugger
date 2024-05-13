@@ -859,23 +859,23 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           break;
         }
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_F2))
+      if(ui_key_press(0, OS_Key_F2))
       {
         edit_begin = 1;
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_Return))
+      if(ui_key_press(0, OS_Key_Return))
       {
         edit_begin_or_expand = 1;
       }
     }
     if(ewv->input_editing && ui_is_focus_active())
     {
-      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
+      if(ui_key_press(0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_Return))
+      if(ui_key_press(0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -1857,7 +1857,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
   df_cmd_lister_item_array_sort_by_strength__in_place(cmd_array);
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(cv->selected_cmd_spec == &df_g_nil_cmd_spec && ui_key_press(ui_events(), 0, OS_Key_Return))
+  if(cv->selected_cmd_spec == &df_g_nil_cmd_spec && ui_key_press(0, OS_Key_Return))
   {
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
     if(cmd_array.count > 0)
@@ -2196,7 +2196,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(ps->cursor.y == 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
+  if(ps->cursor.y == 0 && ui_key_press(0, OS_Key_Return))
   {
     FileProperties query_normalized_with_opt_slash_props = os_properties_from_file_path(query_normalized_with_opt_slash);
     FileProperties path_query_path_props = os_properties_from_file_path(path_query.path);
@@ -2535,7 +2535,7 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
+  if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_key_press(0, OS_Key_Return))
   {
     DF_ProcessInfo *info = &process_info_array.v[0];
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2692,7 +2692,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
   df_entity_lister_item_array_sort_by_strength__in_place(ent_arr);
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(df_entity_is_nil(df_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
+  if(df_entity_is_nil(df_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_key_press(0, OS_Key_Return))
   {
     DF_Entity *ent = ent_arr.v[0].entity;
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2845,7 +2845,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(slv->cursor.y == 0 && items.count != 0 && ui_key_press(ui_events(), 0, OS_Key_Return))
+  if(slv->cursor.y == 0 && items.count != 0 && ui_key_press(0, OS_Key_Return))
   {
     RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, items.v[0].idx);
     U64 name_size = 0;
@@ -3054,23 +3054,23 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
           break;
         }
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_F2))
+      if(ui_key_press(0, OS_Key_F2))
       {
         edit_begin = 1;
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_Return))
+      if(ui_key_press(0, OS_Key_Return))
       {
         edit_begin = 1;
       }
     }
     if(tv->input_editing)
     {
-      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
+      if(ui_key_press(0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_Return))
+      if(ui_key_press(0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -3529,19 +3529,19 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
           break;
         }
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_F2))
+      if(ui_key_press(0, OS_Key_F2))
       {
         edit_begin = 1;
       }
     }
     if(fpms->input_editing)
     {
-      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
+      if(ui_key_press(0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_Return))
+      if(ui_key_press(0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -3847,19 +3847,19 @@ DF_VIEW_UI_FUNCTION_DEF(AutoViewRules)
           break;
         }
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_F2))
+      if(ui_key_press(0, OS_Key_F2))
       {
         edit_begin = 1;
       }
     }
     if(avrs->input_editing)
     {
-      if(ui_key_press(ui_events(), 0, OS_Key_Esc))
+      if(ui_key_press(0, OS_Key_Esc))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(ui_key_press(ui_events(), 0, OS_Key_Return))
+      if(ui_key_press(0, OS_Key_Return))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -4663,20 +4663,20 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
         break;
       }
     }
-    if(ui_key_press(ui_events(), 0, OS_Key_F2) ||
-       ui_key_press(ui_events(), 0, OS_Key_Return))
+    if(ui_key_press(0, OS_Key_F2) ||
+       ui_key_press(0, OS_Key_Return))
     {
       edit_begin = 1;
     }
   }
   if(mv->txt_editing && ui_is_focus_active())
   {
-    if(ui_key_press(ui_events(), 0, OS_Key_Esc))
+    if(ui_key_press(0, OS_Key_Esc))
     {
       edit_end = 1;
       edit_commit = 0;
     }
-    if(ui_key_press(ui_events(), 0, OS_Key_Return))
+    if(ui_key_press(0, OS_Key_Return))
     {
       edit_end = 1;
       edit_commit = 1;

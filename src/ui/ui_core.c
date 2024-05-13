@@ -95,7 +95,7 @@ ui_key_match(UI_Key a, UI_Key b)
 }
 
 ////////////////////////////////
-//~ rjf: Event Functions
+//~ rjf: Event Type Functions
 
 internal UI_EventNode *
 ui_event_list_push(Arena *arena, UI_EventList *list, UI_Event *v)
@@ -113,57 +113,6 @@ ui_eat_event(UI_EventList *list, UI_EventNode *node)
 {
   DLLRemove(list->first, list->last, node);
   list->count -= 1;
-}
-
-internal B32
-ui_key_press(UI_EventList *list, OS_EventFlags mods, OS_Key key)
-{
-  B32 result = 0;
-  for(UI_EventNode *n = list->first; n != 0; n = n->next)
-  {
-    if(n->v.kind == UI_EventKind_Press && n->v.key == key && n->v.modifiers == mods)
-    {
-      result = 1;
-      ui_eat_event(list, n);
-      break;
-    }
-  }
-  return result;
-}
-
-internal B32
-ui_key_release(UI_EventList *list, OS_EventFlags mods, OS_Key key)
-{
-  B32 result = 0;
-  for(UI_EventNode *n = list->first; n != 0; n = n->next)
-  {
-    if(n->v.kind == UI_EventKind_Release && n->v.key == key && n->v.modifiers == mods)
-    {
-      result = 1;
-      ui_eat_event(list, n);
-      break;
-    }
-  }
-  return result;
-}
-
-internal B32
-ui_text(UI_EventList *list, U32 character)
-{
-  B32 result = 0;
-  Temp scratch = scratch_begin(0, 0);
-  String8 character_text = str8_from_32(scratch.arena, str32(&character, 1));
-  for(UI_EventNode *n = list->first; n != 0; n = n->next)
-  {
-    if(n->v.kind == UI_EventKind_Text && str8_match(character_text, n->v.string, 0))
-    {
-      result = 1;
-      ui_eat_event(list, n);
-      break;
-    }
-  }
-  scratch_end(scratch);
-  return result;
 }
 
 ////////////////////////////////
@@ -398,255 +347,6 @@ ui_push_string_replace_range(Arena *arena, String8 string, Rng1S64 col_range, St
 }
 
 ////////////////////////////////
-//~ rjf: Navigation Action List Building & Consumption Functions
-
-#if 0
-internal void
-ui_nav_action_list_push(Arena *arena, UI_NavActionList *list, UI_NavAction action)
-{
-  UI_NavActionNode *node = push_array(arena, UI_NavActionNode, 1);
-  DLLPushBack(list->first, list->last, node);
-  MemoryCopyStruct(&node->v, &action);
-  list->count += 1;
-}
-
-internal void
-ui_nav_eat_action_node(UI_NavActionList *list, UI_NavActionNode *node)
-{
-  DLLRemove(list->first, list->last, node);
-  list->count -= 1;
-}
-
-////////////////////////////////
-//~ rjf: High Level Navigation Action => Text Operations
-
-internal B32
-ui_nav_char_is_scan_boundary(U8 c)
-{
-  return (char_is_alpha(c) || char_is_digit(c, 10) || c == '_');
-}
-
-internal S64
-ui_nav_scanned_column_from_column(String8 string, S64 start_column, Side side)
-{
-  S64 new_column = start_column;
-  S64 delta = (!!side)*2 - 1;
-  B32 found_text = 0;
-  B32 found_non_space = 0;
-  S64 start_off = delta < 0 ? delta : 0;
-  for(S64 col = start_column+start_off; 1 <= col && col <= string.size+1; col += delta)
-  {
-    U8 byte = (col <= string.size) ? string.str[col-1] : 0;
-    B32 is_non_space = !char_is_space(byte);
-    B32 is_name = ui_nav_char_is_scan_boundary(byte);
-    
-    if (((side == Side_Min) && (col == 1)) || 
-        ((side == Side_Max) && (col == string.size+1)) ||
-        (found_non_space && !is_non_space) || 
-        (found_text && !is_name))
-    {
-      new_column = col + (!side && col != 1);  
-      break;
-    } else if (!found_text && is_name) {
-      found_text = 1;
-    } else if (!found_non_space && is_non_space ) {
-      found_non_space = 1;
-    }
-  }
-  return new_column;
-}
-
-internal UI_NavTxtOp
-ui_nav_single_line_txt_op_from_action(Arena *arena, UI_NavAction action, String8 line, TxtPt cursor, TxtPt mark)
-{
-  TxtPt next_cursor = cursor;
-  TxtPt next_mark = mark;
-  TxtRng range = {0};
-  String8 replace = {0};
-  String8 copy = {0};
-  UI_NavTxtOpFlags flags = 0;
-  Vec2S32 delta = action.delta;
-  Vec2S32 original_delta = delta;
-  
-  //- rjf: resolve high-level delta into byte delta, based on unit
-  switch(action.delta_unit)
-  {
-    default:{}break;
-    case UI_NavDeltaUnit_Element:
-    {
-      // TODO(rjf): this should account for multi-byte characters in UTF-8... for now, just assume ASCII and
-      // no-op
-    }break;
-    case UI_NavDeltaUnit_Chunk:
-    {
-      delta.x = (S32)ui_nav_scanned_column_from_column(line, cursor.column, delta.x > 0 ? Side_Max : Side_Min) - cursor.column;
-    }break;
-    case UI_NavDeltaUnit_Whole:
-    case UI_NavDeltaUnit_EndPoint:
-    {
-      S64 first_nonwhitespace_column = 1;
-      for(U64 idx = 0; idx < line.size; idx += 1)
-      {
-        if(!char_is_space(line.str[idx]))
-        {
-          first_nonwhitespace_column = (S64)idx + 1;
-          break;
-        }
-      }
-      S64 home_dest_column = (cursor.column == first_nonwhitespace_column) ? 1 : first_nonwhitespace_column;
-      delta.x = (delta.x > 0) ? ((S64)line.size+1 - cursor.column) : (home_dest_column - cursor.column);
-    }break;
-  }
-  
-  //- rjf: zero delta
-  if(!txt_pt_match(cursor, mark) && action.flags & UI_NavActionFlag_ZeroDeltaOnSelect)
-  {
-    delta = v2s32(0, 0);
-  }
-  
-  //- rjf: form next cursor
-  if(txt_pt_match(cursor, mark) || !(action.flags & UI_NavActionFlag_ZeroDeltaOnSelect))
-  {
-    next_cursor.column += delta.x;
-  }
-  
-  //- rjf: cap at line
-  if(action.flags & UI_NavActionFlag_CapAtLine)
-  {
-    next_cursor.column = Clamp(1, next_cursor.column, (S64)(line.size+1));
-  }
-  
-  //- rjf: in some cases, we want to pick a selection side based on the delta
-  if(!txt_pt_match(cursor, mark) && action.flags & UI_NavActionFlag_PickSelectSide)
-  {
-    if(original_delta.x < 0 || original_delta.y < 0)
-    {
-      next_cursor = next_mark = txt_pt_min(cursor, mark);
-    }
-    else if(original_delta.x > 0 || original_delta.y > 0)
-    {
-      next_cursor = next_mark = txt_pt_max(cursor, mark);
-    }
-  }
-  
-  //- rjf: copying
-  if(action.flags & UI_NavActionFlag_Copy)
-  {
-    if(cursor.line == mark.line)
-    {
-      copy = str8_substr(line, r1u64(cursor.column-1, mark.column-1));
-      flags |= UI_NavTxtOpFlag_Copy;
-    }
-    else
-    {
-      flags |= UI_NavTxtOpFlag_Invalid;
-    }
-  }
-  
-  //- rjf: pasting
-  if(action.flags & UI_NavActionFlag_Paste)
-  {
-    range = txt_rng(cursor, mark);
-    replace = os_get_clipboard_text(arena);
-    next_cursor = next_mark = txt_pt(cursor.line, cursor.column+replace.size);
-  }
-  
-  //- rjf: deletion
-  if(action.flags & UI_NavActionFlag_Delete)
-  {
-    TxtPt new_pos = txt_pt_min(next_cursor, next_mark);
-    range = txt_rng(next_cursor, next_mark);
-    replace = str8_lit("");
-    next_cursor = next_mark = new_pos;
-  }
-  
-  //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-  if(!(action.flags & UI_NavActionFlag_KeepMark))
-  {
-    next_mark = next_cursor;
-  }
-  
-  //- rjf: insertion
-  if(action.insertion.size != 0)
-  {
-    range = txt_rng(cursor, mark);
-    replace = push_str8_copy(arena, action.insertion);
-    next_cursor = next_mark = txt_pt(range.min.line, range.min.column + action.insertion.size);
-  }
-  
-  //- rjf: replace & commit -> replace entire range
-  if(action.flags & UI_NavActionFlag_ReplaceAndCommit)
-  {
-    range = txt_rng(txt_pt(cursor.line, 1), txt_pt(cursor.line, line.size+1));
-  }
-  
-  //- rjf: determine if this event should be taken, based on bounds of cursor
-  {
-    if(next_cursor.column > line.size+1 || 1 > next_cursor.column || action.delta.y != 0)
-    {
-      flags |= UI_NavTxtOpFlag_Invalid;
-    }
-    next_cursor.column = Clamp(1, next_cursor.column, line.size+replace.size+1);
-    next_mark.column = Clamp(1, next_mark.column, line.size+replace.size+1);
-  }
-  
-  //- rjf: build+fill
-  UI_NavTxtOp op = {0};
-  {
-    op.flags   = flags;
-    op.replace = replace;
-    op.copy    = copy;
-    op.range   = range;
-    op.cursor  = next_cursor;
-    op.mark    = next_mark;
-  }
-  return op;
-}
-
-////////////////////////////////
-//~ rjf: Single-Line String Modification
-
-internal String8
-ui_nav_push_string_replace_range(Arena *arena, String8 string, Rng1S64 col_range, String8 replace)
-{
-  //- rjf: convert to offset range
-  Rng1U64 range =
-  {
-    (U64)(col_range.min-1),
-    (U64)(col_range.max-1),
-  };
-  
-  //- rjf: clamp range
-  if(range.min > string.size)
-  {
-    range.min = 0;
-  }
-  if(range.max > string.size)
-  {
-    range.max = string.size;
-  }
-  
-  //- rjf: calculate new size
-  U64 old_size = string.size;
-  U64 new_size = old_size - (range.max - range.min) + replace.size;
-  
-  //- rjf: push+fill new string storage
-  U8 *push_base = push_array(arena, U8, new_size);
-  {
-    MemoryCopy(push_base+0, string.str, range.min);
-    MemoryCopy(push_base+range.min+replace.size, string.str+range.max, string.size-range.max);
-    if(replace.str != 0)
-    {
-      MemoryCopy(push_base+range.min, replace.str, replace.size);
-    }
-  }
-  
-  return str8(push_base, new_size);
-}
-
-#endif
-
-////////////////////////////////
 //~ rjf: Sizes
 
 internal UI_Size
@@ -824,6 +524,62 @@ internal F32
 ui_dt(void)
 {
   return ui_state->animation_dt;
+}
+
+//- rjf: event consumption helpers
+
+internal B32
+ui_key_press(OS_EventFlags mods, OS_Key key)
+{
+  UI_EventList *list = ui_events();
+  B32 result = 0;
+  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_EventKind_Press && n->v.key == key && n->v.modifiers == mods)
+    {
+      result = 1;
+      ui_eat_event(list, n);
+      break;
+    }
+  }
+  return result;
+}
+
+internal B32
+ui_key_release(OS_EventFlags mods, OS_Key key)
+{
+  UI_EventList *list = ui_events();
+  B32 result = 0;
+  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_EventKind_Release && n->v.key == key && n->v.modifiers == mods)
+    {
+      result = 1;
+      ui_eat_event(list, n);
+      break;
+    }
+  }
+  return result;
+}
+
+internal B32
+ui_text(U32 character)
+{
+  UI_EventList *list = ui_events();
+  B32 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  String8 character_text = str8_from_32(scratch.arena, str32(&character, 1));
+  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_EventKind_Text && str8_match(character_text, n->v.string, 0))
+    {
+      result = 1;
+      ui_eat_event(list, n);
+      break;
+    }
+  }
+  scratch_end(scratch);
+  return result;
 }
 
 //- rjf: drag data
@@ -1008,11 +764,11 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F
             B32 nav_next = 0;
             B32 nav_prev = 0;
             Axis2 axis_lock = Axis2_Invalid;
-            if(ui_key_press(events, 0, OS_Key_Tab))
+            if(ui_key_press(0, OS_Key_Tab))
             {
               nav_next = 1;
             }
-            if(ui_key_press(events, OS_EventFlag_Shift, OS_Key_Tab))
+            if(ui_key_press(OS_EventFlag_Shift, OS_Key_Tab))
             {
               nav_prev = 1;
             }
@@ -1170,7 +926,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F
         //- rjf: some child has the active focus -> accept escape keys to pop from the active key stack
         if(!ui_key_match(ui_key_zero(), nav_root->default_nav_focus_active_key))
         {
-          for(;ui_key_press(events, 0, OS_Key_Esc);)
+          for(;ui_key_press(0, OS_Key_Esc);)
           {
             UI_Box *prev_focus_root = nav_root;
             for(UI_Box *focus_root = ui_box_from_key(nav_root->default_nav_focus_active_key);
@@ -1201,7 +957,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F
             for(UI_EventNode *n = events->first; n != 0; n = n->next)
             {
               UI_Event *event = &n->v;
-              if(event->kind == OS_EventKind_Press &&
+              if(event->kind == UI_EventKind_Press &&
                  event->key == OS_Key_LeftMouseButton &&
                  !contains_2f32(active_box->rect, ui_mouse()))
               {
@@ -1318,7 +1074,7 @@ ui_end_build(void)
   ProfBeginFunction();
   
   //- rjf: escape -> close context menu
-  if(ui_state->ctx_menu_open != 0 && ui_key_press(ui_events(), 0, OS_Key_Esc))
+  if(ui_state->ctx_menu_open != 0 && ui_key_press(0, OS_Key_Esc))
   {
     ui_ctx_menu_close();
   }
@@ -2627,7 +2383,7 @@ ui_do_single_line_string_edits(TxtPt *cursor, TxtPt *mark, U64 string_max, Strin
     next = n->next;
     
     // rjf: do not consume anything that doesn't fit a single-line's operations
-    if(n->v.delta_2s32.y != 0)
+    if((n->v.kind != UI_EventKind_Edit && n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Text) || n->v.delta_2s32.y != 0)
     {
       continue;
     }
@@ -2742,7 +2498,7 @@ ui_signal_from_box(UI_Box *box)
     
     //- rjf: mouse presses in box -> set hot/active; mark signal accordingly
     if(box->flags & UI_BoxFlag_MouseClickable &&
-       evt->kind == OS_EventKind_Press &&
+       evt->kind == UI_EventKind_Press &&
        evt_mouse_in_bounds &&
        evt_key_is_mouse)
     {
@@ -2776,7 +2532,7 @@ ui_signal_from_box(UI_Box *box)
     
     //- rjf: mouse releases in active box -> unset active; mark signal accordingly
     if(box->flags & UI_BoxFlag_MouseClickable &&
-       evt->kind == OS_EventKind_Release &&
+       evt->kind == UI_EventKind_Release &&
        ui_key_match(ui_state->active_box_key[evt_mouse_button_kind], box->key) &&
        evt_mouse_in_bounds &&
        evt_key_is_mouse)
@@ -2789,7 +2545,7 @@ ui_signal_from_box(UI_Box *box)
     
     //- rjf: mouse releases outside active box -> unset hot/active
     if(box->flags & UI_BoxFlag_MouseClickable &&
-       evt->kind == OS_EventKind_Release &&
+       evt->kind == UI_EventKind_Release &&
        ui_key_match(ui_state->active_box_key[evt_mouse_button_kind], box->key) &&
        !evt_mouse_in_bounds &&
        evt_key_is_mouse)
@@ -2803,7 +2559,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: focus is hot & keyboard click -> mark signal
     if(box->flags & UI_BoxFlag_KeyboardClickable &&
        is_focus_hot &&
-       evt->kind == OS_EventKind_Press &&
+       evt->kind == UI_EventKind_Press &&
        evt->key == OS_Key_Return)
     {
       sig.f |= UI_SignalFlag_KeyboardPressed;
@@ -2850,7 +2606,7 @@ ui_signal_from_box(UI_Box *box)
     
     //- rjf: scrolling
     if(box->flags & UI_BoxFlag_Scroll &&
-       evt->kind == OS_EventKind_Scroll &&
+       evt->kind == UI_EventKind_Scroll &&
        evt->modifiers != OS_EventFlag_Ctrl &&
        evt_mouse_in_bounds)
     {
@@ -2871,7 +2627,7 @@ ui_signal_from_box(UI_Box *box)
     
     //- rjf: view scrolling
     if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
-       evt->kind == OS_EventKind_Scroll &&
+       evt->kind == UI_EventKind_Scroll &&
        evt->modifiers != OS_EventFlag_Ctrl &&
        evt_mouse_in_bounds)
     {

@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 df_g_cmd_param_slot_range_table[21] =
+Rng1U64 df_g_cmd_param_slot_range_table[22] =
 {
 {0},
 {OffsetOf(DF_CmdParams, window), OffsetOf(DF_CmdParams, window) + sizeof(DF_Handle)},
@@ -20,6 +20,7 @@ Rng1U64 df_g_cmd_param_slot_range_table[21] =
 {OffsetOf(DF_CmdParams, cmd_spec), OffsetOf(DF_CmdParams, cmd_spec) + sizeof(struct DF_CmdSpec *)},
 {OffsetOf(DF_CmdParams, view_spec), OffsetOf(DF_CmdParams, view_spec) + sizeof(struct DF_ViewSpec *)},
 {OffsetOf(DF_CmdParams, cfg_node), OffsetOf(DF_CmdParams, cfg_node) + sizeof(struct DF_CfgNode *)},
+{OffsetOf(DF_CmdParams, os_event), OffsetOf(DF_CmdParams, os_event) + sizeof(struct OS_Event *)},
 {OffsetOf(DF_CmdParams, vaddr), OffsetOf(DF_CmdParams, vaddr) + sizeof(U64)},
 {OffsetOf(DF_CmdParams, voff), OffsetOf(DF_CmdParams, voff) + sizeof(U64)},
 {OffsetOf(DF_CmdParams, index), OffsetOf(DF_CmdParams, index) + sizeof(U64)},
@@ -216,12 +217,13 @@ DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 
-DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[214] =
+DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[215] =
 {
 { str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp("Exit"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_X},
 { str8_lit_comp("run_command"), str8_lit_comp("Runs a command from the command palette."), str8_lit_comp("help,cmd"), str8_lit_comp("Run Command"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_CmdSpec, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("error"), str8_lit_comp("Notifies of an error."), str8_lit_comp(""), str8_lit_comp("Error"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
+{ str8_lit_comp("os_event"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("OS Event"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp("Launch and Run"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_EntityList, DF_EntityKind_Target, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Play},
 { str8_lit_comp("launch_and_init"), str8_lit_comp("Starts debugging a new instance of a target, then stops at the program's entry point."), str8_lit_comp("launch,start,entry,point"), str8_lit_comp("Launch and Initialize"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_EntityList, DF_EntityKind_Target, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_PlayStepForward},
 { str8_lit_comp("kill"), str8_lit_comp("Kills the specified existing debugged process(es)."), str8_lit_comp("stop,kill"), str8_lit_comp("Kill"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_EntityList, DF_EntityKind_Process, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Stop},

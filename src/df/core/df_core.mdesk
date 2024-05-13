@@ -89,6 +89,7 @@ DF_CmdParamSlotTable:
   {CmdSpec           cmd_spec              `struct DF_CmdSpec *`}
   {ViewSpec          view_spec             `struct DF_ViewSpec *`}
   {CfgNode           cfg_node              `struct DF_CfgNode *`}
+  {OSEvent           os_event              `struct OS_Event *`}
   {VirtualAddr       vaddr                 `U64`}
   {VirtualOff        voff                  `U64`}
   {Index             index                 `U64`}
@@ -113,6 +114,9 @@ DF_CoreCmdTable://               |            |                  |              
   
   //- rjf: notifications
   {Error                          1            Null               Nil                0  0  0  0  0  0                                                           Null                  "error"                       "Error"                                       "Notifies of an error."                                                                                            ""                               }
+  
+  //- rjf: os event passthrough
+  {OSEvent                        1            Null               Nil                0  0  0  0  0  0                                                           Null                  "os_event"                    "OS Event"                                    ""                                                                                                                 ""                               }
   
   //- rjf: low-level target control operations
   {LaunchAndRun                   0            EntityList         Target             0  0  0  0  0  1                                                           Play                  "launch_and_run"              "Launch and Run"                              "Starts debugging a new instance of a target, then runs."                                                          "launch,start,run,target"        }
