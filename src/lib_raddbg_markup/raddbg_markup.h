@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RDI_MARKUP_H
-#define RDI_MARKUP_H
+#ifndef RADDBG_MARKUP_H
+#define RADDBG_MARKUP_H
 
 ////////////////////////////////
 //~ Usage Macros
@@ -75,4 +75,4 @@ raddbg_log__impl(char *fmt, ...)
 
 #endif // defined(_WIN32)
 
-#endif // RDI_MARKUP_H
+#endif // RADDBG_MARKUP_H

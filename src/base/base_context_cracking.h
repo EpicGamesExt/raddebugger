@@ -234,4 +234,14 @@
 # define LANG_C 0
 #endif
 
+////////////////////////////////
+//~ rjf: Unsupported Errors
+
+#if ARCH_X86
+# error You tried to build in x86 (32 bit) mode, but currently, only building in x64 (64 bit) mode is supported.
+#endif
+#if !ARCH_X64
+# error You tried to build with an unsupported architecture. Currently, only building in x64 mode is supported.
+#endif
+
 #endif // BASE_CONTEXT_CRACKING_H

@@ -743,6 +743,8 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
     CTRL_Event *event = &n->v;
     switch(event->kind)
     {
+      default:{}break;
+      
       //- rjf: processes
       case CTRL_EventKind_NewProc:
       {

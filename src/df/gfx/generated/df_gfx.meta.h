@@ -6,13 +6,6 @@
 #ifndef DF_GFX_META_H
 #define DF_GFX_META_H
 
-typedef enum DF_NameKind
-{
-DF_NameKind_Null,
-DF_NameKind_EntityName,
-DF_NameKind_COUNT,
-} DF_NameKind;
-
 typedef enum DF_GfxViewKind
 {
 DF_GfxViewKind_Null,

@@ -108,13 +108,21 @@ enum
   DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<6),
 };
 
+typedef enum DF_NameKind
+{
+  DF_NameKind_Null,
+  DF_NameKind_EntityName,
+  DF_NameKind_COUNT
+}
+DF_NameKind;
+
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;
 struct DF_ViewSpecInfo
 {
   DF_ViewSpecFlags flags;
   String8 name;
   String8 display_string;
-  enum DF_NameKind name_kind;
+  DF_NameKind name_kind;
   DF_IconKind icon_kind;
   DF_ViewSetupFunctionType *setup_hook;
   DF_ViewStringFromStateFunctionType *string_from_state_hook;
@@ -517,9 +525,11 @@ struct DF_Window
   // rjf: autocomplete lister state
   U64 autocomp_last_frame_idx;
   B32 autocomp_force_closed;
+  B32 autocomp_query_dirty;
   UI_Key autocomp_root_key;
   DF_CtrlCtx autocomp_ctrl_ctx;
   DF_AutoCompListerFlags autocomp_lister_flags;
+  U64 autocomp_cursor_off;
   U8 autocomp_lister_query_buffer[1024];
   U64 autocomp_lister_query_size;
   F32 autocomp_open_t;
@@ -899,7 +909,7 @@ internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
 
-internal void df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, DF_CmdList *cmds);
+internal void df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds);
 
 ////////////////////////////////
 //~ rjf: Eval Viz
@@ -921,7 +931,8 @@ internal DF_AutoCompListerItemArray df_autocomp_lister_item_array_from_chunk_lis
 internal int df_autocomp_lister_item_qsort_compare(DF_AutoCompListerItem *a, DF_AutoCompListerItem *b);
 internal void df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItemArray *array);
 
-internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 query);
+internal String8 df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
+internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 input, U64 cursor_off);
 
 ////////////////////////////////
 //~ rjf: Search Strings
