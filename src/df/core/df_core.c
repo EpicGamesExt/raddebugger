@@ -7229,6 +7229,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               String8 args = df_entity_child_from_kind(target, DF_EntityKind_Arguments)->name;
               String8 path = df_entity_child_from_kind(target, DF_EntityKind_ExecutionPath)->name;
               String8 entry= df_entity_child_from_kind(target, DF_EntityKind_EntryPointName)->name;
+              name  = str8_skip_chop_whitespace(name);
+              args  = str8_skip_chop_whitespace(args);
+              path  = str8_skip_chop_whitespace(path);
+              entry = str8_skip_chop_whitespace(entry);
               if(path.size == 0)
               {
                 String8List current_path_strs = {0};
