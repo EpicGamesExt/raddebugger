@@ -2057,7 +2057,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           // rjf: unpack proc's container type
           RDIM_Type *container_type = 0;
           U64 container_name_opl = p2r_end_of_cplusplus_container_name(name);
-          if(container_name_opl > 2)
+          if(container_name_opl > 2 && in->tpi_hash != 0 && in->tpi_leaf != 0)
           {
             String8 container_name = str8(name.str, container_name_opl - 2);
             CV_TypeId cv_type_id = pdb_tpi_first_itype_from_name(in->tpi_hash, in->tpi_leaf, container_name, 0);
