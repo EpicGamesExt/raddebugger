@@ -125,8 +125,10 @@ DF_DefaultBindingTable:
   { "backspace_single"            Backspace 0        0         0          }
   { "backspace_chunk"             Backspace ctrl     0         0          }
   { "copy"                        C         ctrl     0         0          }
+  { "copy"                        Insert    ctrl     0         0          }
   { "cut"                         X         ctrl     0         0          }
   { "paste"                       V         ctrl     0         0          }
+  { "paste"                       Insert    0        shift     0          }
   { "insert_text"                 Null      0        0         0          }
   
   //- rjf: code navigation

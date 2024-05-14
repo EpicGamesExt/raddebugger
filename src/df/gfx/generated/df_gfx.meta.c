@@ -598,7 +598,7 @@ str8_lit_comp("goto_name"),
 str8_lit_comp("function_breakpoint"),
 };
 
-DF_StringBindingPair df_g_default_binding_table[97] =
+DF_StringBindingPair df_g_default_binding_table[99] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_EventFlag_Alt}},
@@ -678,8 +678,10 @@ DF_StringBindingPair df_g_default_binding_table[97] =
 {str8_lit_comp("backspace_single"), {OS_Key_Backspace, 0   }},
 {str8_lit_comp("backspace_chunk"), {OS_Key_Backspace, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("copy"), {OS_Key_C, 0 |OS_EventFlag_Ctrl  }},
+{str8_lit_comp("copy"), {OS_Key_Insert, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("cut"), {OS_Key_X, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("paste"), {OS_Key_V, 0 |OS_EventFlag_Ctrl  }},
+{str8_lit_comp("paste"), {OS_Key_Insert, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("insert_text"), {OS_Key_Null, 0   }},
 {str8_lit_comp("goto_line"), {OS_Key_G, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("goto_address"), {OS_Key_G, 0   |OS_EventFlag_Alt}},
