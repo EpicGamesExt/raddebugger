@@ -157,7 +157,7 @@ internal U64 ui_scroll_list_row_from_item(UI_ScrollListRowBlockArray *blocks, U6
 internal U64 ui_scroll_list_item_from_row(UI_ScrollListRowBlockArray *blocks, U64 row);
 
 internal UI_ScrollPt ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_range, S64 view_num_indices);
-internal void ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt_out, Vec2S64 *cursor_out, Rng1S64 *visible_row_range_out, UI_ScrollListSignal *signal_out);
+internal void ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt_out, Vec2S64 *cursor_out, Vec2S64 *mark_out, Rng1S64 *visible_row_range_out, UI_ScrollListSignal *signal_out);
 internal void ui_scroll_list_end(void);
 
 ////////////////////////////////
@@ -180,6 +180,6 @@ internal void ui_scroll_list_end(void);
 #define UI_TableCell DeferLoop(ui_table_cell_begin(), ui_table_cell_end())
 #define UI_TableCellSized(size) DeferLoop(ui_table_cell_sized_begin(size), ui_table_cell_end())
 
-#define UI_ScrollList(params, scroll_pt_out, cursor_out, visible_row_range_out, signal_out) DeferLoop(ui_scroll_list_begin((params), (scroll_pt_out), (cursor_out), (visible_row_range_out), (signal_out)), ui_scroll_list_end())
+#define UI_ScrollList(params, scroll_pt_out, cursor_out, mark_out, visible_row_range_out, signal_out) DeferLoop(ui_scroll_list_begin((params), (scroll_pt_out), (cursor_out), (mark_out), (visible_row_range_out), (signal_out)), ui_scroll_list_end())
 
 #endif // UI_BASIC_WIDGETS_H

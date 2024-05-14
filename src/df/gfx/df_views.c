@@ -370,12 +370,12 @@ df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray 
 }
 
 ////////////////////////////////
-//~ rjf: Eval/Watch Views
+//~ rjf: Watch Views
 
 //- rjf: eval watch view instance -> eval view key
 
 internal DF_EvalViewKey
-df_eval_view_key_from_eval_watch_view(DF_EvalWatchViewState *ewv)
+df_eval_view_key_from_eval_watch_view(DF_WatchViewState *ewv)
 {
   DF_EvalViewKey key = df_eval_view_key_make((U64)ewv, df_hash_from_string(str8_struct(&ewv)));
   return key;
@@ -384,7 +384,7 @@ df_eval_view_key_from_eval_watch_view(DF_EvalWatchViewState *ewv)
 //- rjf: root allocation/deallocation/mutation
 
 internal DF_EvalRoot *
-df_eval_root_alloc(DF_View *view, DF_EvalWatchViewState *ews)
+df_eval_root_alloc(DF_View *view, DF_WatchViewState *ews)
 {
   DF_EvalRoot *result = ews->first_free_root;
   if(result != 0)
@@ -404,7 +404,7 @@ df_eval_root_alloc(DF_View *view, DF_EvalWatchViewState *ews)
 }
 
 internal void
-df_eval_root_release(DF_EvalWatchViewState *ews, DF_EvalRoot *root)
+df_eval_root_release(DF_WatchViewState *ews, DF_EvalRoot *root)
 {
   DLLRemove(ews->first_root, ews->last_root, root);
   SLLStackPush(ews->first_free_root, root);
@@ -419,7 +419,7 @@ df_eval_root_equip_string(DF_EvalRoot *root, String8 string)
 }
 
 internal DF_EvalRoot *
-df_eval_root_from_string(DF_EvalWatchViewState *ews, String8 string)
+df_eval_root_from_string(DF_WatchViewState *ews, String8 string)
 {
   DF_EvalRoot *root = 0;
   for(DF_EvalRoot *r = ews->first_root; r != 0; r = r->next)
@@ -435,7 +435,7 @@ df_eval_root_from_string(DF_EvalWatchViewState *ews, String8 string)
 }
 
 internal DF_EvalRoot *
-df_eval_root_from_expand_key(DF_EvalWatchViewState *ews, DF_EvalView *eval_view, DF_ExpandKey expand_key)
+df_eval_root_from_expand_key(DF_WatchViewState *ews, DF_EvalView *eval_view, DF_ExpandKey expand_key)
 {
   DF_EvalRoot *root = 0;
   for(DF_EvalRoot *r = ews->first_root; r != 0; r = r->next)
@@ -475,7 +475,7 @@ df_expand_key_from_eval_root(DF_EvalRoot *root)
 //- rjf: windowed watch tree visualization (both single-line and multi-line)
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_EvalWatchViewState *ews)
+df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_WatchViewState *ews)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -490,7 +490,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     //- rjf: mutable watch fill -> build blocks from top-level mutable root expressions
     //
     default:
-    case DF_EvalWatchViewFillKind_Mutable:
+    case DF_WatchViewFillKind_Mutable:
     {
       for(DF_EvalRoot *root = ews->first_root; root != 0; root = root->next)
       {
@@ -509,7 +509,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     ////////////////////////////
     //- rjf: registers fill -> build blocks via iterating all registers/aliases as root-level expressions
     //
-    case DF_EvalWatchViewFillKind_Registers:
+    case DF_WatchViewFillKind_Registers:
     {
       DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
       Architecture arch = df_architecture_from_entity(thread);
@@ -547,7 +547,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     ////////////////////////////
     //- rjf: locals fill -> build blocks via iterating all locals as root-level expressions
     //
-    case DF_EvalWatchViewFillKind_Locals:
+    case DF_WatchViewFillKind_Locals:
     {
       U64 num = 1;
       for(EVAL_String2NumMapNode *n = parse_ctx->locals_map->first; n != 0; n = n->order_next, num += 1)
@@ -567,10 +567,10 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     ////////////////////////////
     //- rjf: debug info table fill -> build split debug info table blocks
     //
-    case DF_EvalWatchViewFillKind_Globals:      dbgi_target = DBGI_FuzzySearchTarget_GlobalVariables; goto dbgi_table;
-    case DF_EvalWatchViewFillKind_ThreadLocals: dbgi_target = DBGI_FuzzySearchTarget_ThreadVariables; goto dbgi_table;
-    case DF_EvalWatchViewFillKind_Types:        dbgi_target = DBGI_FuzzySearchTarget_UDTs;            goto dbgi_table;
-    case DF_EvalWatchViewFillKind_Procedures:   dbgi_target = DBGI_FuzzySearchTarget_Procedures;      goto dbgi_table;
+    case DF_WatchViewFillKind_Globals:      dbgi_target = DBGI_FuzzySearchTarget_GlobalVariables; goto dbgi_table;
+    case DF_WatchViewFillKind_ThreadLocals: dbgi_target = DBGI_FuzzySearchTarget_ThreadVariables; goto dbgi_table;
+    case DF_WatchViewFillKind_Types:        dbgi_target = DBGI_FuzzySearchTarget_UDTs;            goto dbgi_table;
+    case DF_WatchViewFillKind_Procedures:   dbgi_target = DBGI_FuzzySearchTarget_Procedures;      goto dbgi_table;
     dbgi_table:;
     {
       //- rjf: unpack context
@@ -699,7 +699,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
 //- rjf: eval/watch views main hooks
 
 internal void
-df_eval_watch_view_init(DF_EvalWatchViewState *ewv, DF_View *view, DF_EvalWatchViewFillKind fill_kind)
+df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind fill_kind)
 {
   if(ewv->initialized == 0)
   {
@@ -713,7 +713,7 @@ df_eval_watch_view_init(DF_EvalWatchViewState *ewv, DF_View *view, DF_EvalWatchV
 }
 
 internal void
-df_eval_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalWatchViewState *ewv, DF_CmdList *cmds)
+df_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, DF_CmdList *cmds)
 {
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -745,7 +745,7 @@ df_eval_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalWa
 }
 
 internal void
-df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalWatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect)
+df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect)
 {
   ProfBeginFunction();
   DBGI_Scope *scope = dbgi_scope_open();
@@ -755,7 +755,6 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //- rjf: unpack arguments
   //
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
-  F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -830,12 +829,62 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //
   Vec2S64 cursor_tbl = {0};
   Vec2S64 mark_tbl = {0};
+  Rng2S64 selection_tbl = {0};
   {
     cursor_tbl.x = ewv->cursor.column_kind;
     cursor_tbl.y = df_row_num_from_viz_block_list_key(&blocks, ewv->cursor.key);
     mark_tbl.x = ewv->mark.column_kind;
     mark_tbl.y = df_row_num_from_viz_block_list_key(&blocks, ewv->mark.key);
+    mark_tbl = cursor_tbl;
+    selection_tbl = r2s64p(Min(cursor_tbl.x, mark_tbl.x), Min(cursor_tbl.y, mark_tbl.y),
+                           Max(cursor_tbl.x, mark_tbl.x), Max(cursor_tbl.y, mark_tbl.y));
   }
+  
+#if 0
+  //////////////////////////////
+  //- rjf: consume events & perform navigations/edits
+  //
+  UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
+  {
+    Vec2S64 cursor = cursor_tbl;
+    Vec2S64 mark = mark_tbl;
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+    {
+      next = n->next;
+      UI_Event *evt = &n->v;
+      B32 taken = 0;
+      
+      //- rjf: navigations
+      switch(evt->delta_unit)
+      {
+        case UI_EventDeltaUnit_Char:
+        {
+          
+        }break;
+        case UI_EventDeltaUnit_Line:
+        {
+          
+        }break;
+        case UI_EventDeltaUnit_Whole:
+        {
+          for(Axis2 axis = (Axis2)0; axis < Axis2_COUNT; axis = (Axis2)(axis+1))
+          {
+            cursor.v[axis] = (evt->delta_2s32.v[axis]>0 ? params->cursor_range.max.v[axis] : evt->delta_2s32.v[axis]<0 ? params->cursor_range.min.v[axis] + !!params->cursor_min_is_empty_selection[axis] : cursor.v[axis]);
+          }
+        }break;
+      }
+      
+      //- rjf: consume
+      if(taken)
+      {
+        ui_eat_event(events, n);
+      }
+    }
+    cursor_tbl = cursor;
+    mark_tbl = mark;
+  }
+#endif
   
   //////////////////////////////
   //- rjf: do start/end editing interaction
@@ -845,7 +894,6 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   B32 edit_commit          = 0;
   B32 edit_end             = 0;
   B32 edit_submit          = 0;
-  String8 edit_autocomplete_string = {0};
   UI_Focus(UI_FocusKind_On)
   {
     if(!ewv->input_editing && ui_is_focus_active())
@@ -881,20 +929,6 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         edit_commit = 1;
         edit_submit = 1;
       }
-#if 0
-      UI_EventList *events = ui_events();
-      for(UI_EventNode *n = events->first; n != 0; n = n->next)
-      {
-        if(n->v.flags & UI_EventFlag_ReplaceAndCommit)
-        {
-          edit_commit = 1;
-          edit_end = 1;
-          edit_autocomplete_string = n->v.insertion;
-          ui_nav_eat_action_node(nav_actions, n);
-          break;
-        }
-      }
-#endif
     }
   }
   
@@ -938,7 +972,11 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, ewv->input_editing ? 0 : &cursor_tbl, &visible_row_rng, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y,
+                  ewv->input_editing ? 0 : &cursor_tbl,
+                  0,
+                  &visible_row_rng,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "table_header")
   {
@@ -988,7 +1026,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
     //- rjf: viz blocks -> rows
     DF_EvalVizWindowedRowList rows = {0};
     {
-      rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, code_font_size, r1s64(visible_row_rng.min-1, visible_row_rng.max), &blocks);
+      rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(), r1s64(visible_row_rng.min-1, visible_row_rng.max), &blocks);
     }
     
     //- rjf: build table
@@ -1001,7 +1039,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         U64 row_hash = df_hash_from_expand_key(row->key);
         U64 expr_hash = df_hash_from_string(row->display_expr);
         df_expand_tree_table_animate(&eval_view->expand_tree_table, df_dt());
-        B32 row_selected = ((semantic_idx+1) == cursor_tbl.y);
+        B32 row_selected = (selection_tbl.min.y <= (semantic_idx+1) && (semantic_idx+1) <= selection_tbl.max.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
         
         //- rjf: determine if row's data is fresh and/or bad
@@ -1068,7 +1106,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
           if(ui_pressed(sig))
           {
             edit_commit = edit_commit || (!row_selected && ewv->input_editing);
-            next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
+            next_cursor_tbl = v2s64(DF_WatchViewColumnKind_Expr, (semantic_idx+1));
             pressed = 1;
           }
           
@@ -1144,7 +1182,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: expression
             ProfScope("expr")
             {
-              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_Expr);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_Expr && DF_WatchViewColumnKind_Expr <= selection_tbl.max.x);
               B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
               
               // rjf: begin editing
@@ -1278,7 +1316,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               if(ui_pressed(sig))
               {
                 edit_commit = edit_commit || (!cell_selected && ewv->input_editing);
-                next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Expr, (semantic_idx+1));
+                next_cursor_tbl = v2s64(DF_WatchViewColumnKind_Expr, (semantic_idx+1));
                 pressed = 1;
               }
               
@@ -1309,7 +1347,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: value
             ProfScope("value")
             {
-              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_Value);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_Value && DF_WatchViewColumnKind_Value <= selection_tbl.max.x);
               B32 value_is_error   = (row->eval.errors.count != 0);
               B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
               B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
@@ -1390,7 +1428,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               {
                 pressed = 1;
                 edit_commit = edit_commit || (ewv->input_editing && !cell_selected);
-                next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Value, (semantic_idx+1));
+                next_cursor_tbl = v2s64(DF_WatchViewColumnKind_Value, (semantic_idx+1));
               }
               
               // rjf: double-click -> start editing
@@ -1408,7 +1446,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: type
             ProfScope("type")
             {
-              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_Type);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_Type && DF_WatchViewColumnKind_Type <= selection_tbl.max.x);
               UI_TableCell UI_Font(code_font)
                 UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_FocusActive((cell_selected && ewv->input_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -1426,7 +1464,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
                 {
                   pressed = 1;
                   edit_commit = edit_commit || (ewv->input_editing && !cell_selected);
-                  next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_Type, (semantic_idx+1));
+                  next_cursor_tbl = v2s64(DF_WatchViewColumnKind_Type, (semantic_idx+1));
                 }
               }
             }
@@ -1434,7 +1472,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
             //- rjf: view rule
             ProfScope("view rule")
             {
-              B32 cell_selected = (row_selected && cursor_tbl.x == DF_EvalWatchViewColumnKind_ViewRule);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_ViewRule && DF_WatchViewColumnKind_ViewRule <= selection_tbl.max.x);
               String8 view_rule = df_eval_view_rule_from_key(eval_view, row->key);
               
               // rjf: begin editing
@@ -1464,7 +1502,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
               {
                 pressed = 1;
                 edit_commit = edit_commit || (ewv->input_editing && !cell_selected);
-                next_cursor_tbl = v2s64(DF_EvalWatchViewColumnKind_ViewRule, (semantic_idx+1));
+                next_cursor_tbl = v2s64(DF_WatchViewColumnKind_ViewRule, (semantic_idx+1));
               }
               
               // rjf: double-click -> begin editing
@@ -1509,22 +1547,22 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //- rjf: commit edits
   //
   {
-    DF_EvalWatchViewColumnKind commit_column = (DF_EvalWatchViewColumnKind)cursor_tbl.x;
+    DF_WatchViewColumnKind commit_column = (DF_WatchViewColumnKind)cursor_tbl.x;
+    if(!MemoryMatchStruct(&cursor_tbl, &next_cursor_tbl))
+    {
+      mark_tbl = next_cursor_tbl;
+    }
     cursor_tbl = next_cursor_tbl;
     if(commit_row != 0 && edit_commit)
     {
       ewv->input_editing = 0;
       String8 commit_string = str8(ewv->input_buffer, ewv->input_size);
-      if(edit_autocomplete_string.size != 0)
-      {
-        commit_string = edit_autocomplete_string;
-      }
       switch(commit_column)
       {
         default:break;
         
         //- rjf: expression commits
-        case DF_EvalWatchViewColumnKind_Expr: if(modifiable)
+        case DF_WatchViewColumnKind_Expr: if(modifiable)
         {
           if(commit_string.size == 0)
           {
@@ -1553,7 +1591,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         }break;
         
         //- rjf: value commits
-        case DF_EvalWatchViewColumnKind_Value:
+        case DF_WatchViewColumnKind_Value:
         {
           Temp scratch = scratch_begin(0, 0);
           DF_Eval write_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &macro_map, commit_string);
@@ -1569,12 +1607,12 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
         }break;
         
         //- rjf: type commits
-        case DF_EvalWatchViewColumnKind_Type:
+        case DF_WatchViewColumnKind_Type:
         {
         }break;
         
         //- rjf: view rule commits
-        case DF_EvalWatchViewColumnKind_ViewRule:
+        case DF_WatchViewColumnKind_ViewRule:
         {
           df_eval_view_set_key_rule(eval_view, commit_row->key, commit_string);
         }break;
@@ -1613,7 +1651,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   //
   struct
   {
-    DF_EvalWatchViewPoint *pt_state;
+    DF_WatchViewPoint *pt_state;
     Vec2S64 pt_tbl;
   }
   points[] =
@@ -1625,7 +1663,7 @@ df_eval_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_EvalW
   {
     DF_ExpandKey last_key = points[point_idx].pt_state->key;
     DF_ExpandKey last_parent_key = points[point_idx].pt_state->parent_key;
-    points[point_idx].pt_state->column_kind= (DF_EvalWatchViewColumnKind)points[point_idx].pt_tbl.x;
+    points[point_idx].pt_state->column_kind= (DF_WatchViewColumnKind)points[point_idx].pt_tbl.x;
     points[point_idx].pt_state->key        = df_key_from_viz_block_list_row_num(&blocks, points[point_idx].pt_tbl.y);
     points[point_idx].pt_state->parent_key = df_parent_key_from_viz_block_list_row_num(&blocks, points[point_idx].pt_tbl.y);
     if(df_expand_key_match(df_expand_key_zero(), points[point_idx].pt_state->key))
@@ -1902,7 +1940,13 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
-  UI_Focus(UI_FocusKind_On) UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cursor, &visible_row_range, &scroll_list_sig)
+  UI_Focus(UI_FocusKind_On)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     //- rjf: build buttons
@@ -2346,7 +2390,13 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
-  UI_Focus(UI_FocusKind_On) UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &ps->cursor, &visible_row_range, &scroll_list_sig)
+  UI_Focus(UI_FocusKind_On)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &ps->cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     // rjf: up-one-directory button (at idx 0)
@@ -2579,7 +2629,12 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     //- rjf: build rows
@@ -2738,7 +2793,12 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     for(S64 idx = visible_row_range.min;
@@ -2882,7 +2942,12 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &slv->cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &slv->cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_Font(df_font_from_slot(DF_FontSlot_Code))
   {
@@ -3102,7 +3167,12 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   Vec2S64 next_cursor = tv->cursor;
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, tv->input_editing ? 0 : &tv->cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  tv->input_editing ? 0 : &tv->cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     next_cursor = tv->cursor;
@@ -3344,7 +3414,12 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     // rjf: add new ctrl
@@ -3575,7 +3650,12 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, fpms->input_editing ? 0 : &fpms->cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  fpms->input_editing ? 0 : &fpms->cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "###tbl")
   {
@@ -3893,7 +3973,12 @@ DF_VIEW_UI_FUNCTION_DEF(AutoViewRules)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, avrs->input_editing ? 0 : &avrs->cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  avrs->input_editing ? 0 : &avrs->cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "###tbl")
   {
@@ -4179,7 +4264,12 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(0, 0, "scheduler_table")
   {
@@ -4348,6 +4438,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   {
     B32 initialized;
     Vec2S64 cursor;
+    Vec2S64 mark;
     F32 selection_col_pct;
     F32 module_col_pct;
     F32 function_name_col_pct;
@@ -4376,7 +4467,12 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cs->cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cs->cursor,
+                  &cs->mark,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     Vec2S64 next_cursor = cs->cursor;
@@ -4706,7 +4802,12 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, mv->txt_editing ? 0 : &cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  mv->txt_editing ? 0 : &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "modules_table")
   {
@@ -6955,8 +7056,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
 DF_VIEW_SETUP_FUNCTION_DEF(Watch)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Mutable);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Mutable);
   
   // rjf: add roots for watches
   {
@@ -6988,7 +7089,7 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   {
@@ -7018,16 +7119,16 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch)
 DF_VIEW_CMD_FUNCTION_DEF(Watch)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_cmds(ws, panel, view, ewv, cmds);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_cmds(ws, panel, view, ewv, cmds);
   ProfEnd();
 }
 
 DF_VIEW_UI_FUNCTION_DEF(Watch)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
   ProfEnd();
 }
 
@@ -7040,9 +7141,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Locals) {}
 DF_VIEW_UI_FUNCTION_DEF(Locals)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Locals);
-  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Locals);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -7055,9 +7156,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Registers) {}
 DF_VIEW_UI_FUNCTION_DEF(Registers)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Registers);
-  df_eval_watch_view_build(ws, panel, view, ewv, 0, 16, rect);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Registers);
+  df_watch_view_build(ws, panel, view, ewv, 0, 16, rect);
   ProfEnd();
 }
 
@@ -7070,9 +7171,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Globals) {}
 DF_VIEW_UI_FUNCTION_DEF(Globals)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Globals);
-  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Globals);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -7085,9 +7186,9 @@ DF_VIEW_CMD_FUNCTION_DEF(ThreadLocals) {}
 DF_VIEW_UI_FUNCTION_DEF(ThreadLocals)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_ThreadLocals);
-  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_ThreadLocals);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -7100,9 +7201,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Types) {}
 DF_VIEW_UI_FUNCTION_DEF(Types)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Types);
-  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Types);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -7115,9 +7216,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Procedures) {}
 DF_VIEW_UI_FUNCTION_DEF(Procedures)
 {
   ProfBeginFunction();
-  DF_EvalWatchViewState *ewv = df_view_user_state(view, DF_EvalWatchViewState);
-  df_eval_watch_view_init(ewv, view, DF_EvalWatchViewFillKind_Procedures);
-  df_eval_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Procedures);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -8669,7 +8770,12 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "breakpoints_table")
   {
@@ -8839,7 +8945,12 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "pins_table")
   {
@@ -9013,7 +9124,12 @@ DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &sv->cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &sv->cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     for(S64 row = visible_row_range.min; row <= visible_row_range.max && row < opts.count; row += 1)
@@ -9369,7 +9485,12 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &sv->cursor, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params,
+                  &view->scroll_pos.y,
+                  &sv->cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     for(S64 row = visible_row_range.min; row <= visible_row_range.max; row += 1)
