@@ -8838,6 +8838,15 @@ df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
       if(str8_match(token_string, str8_lit(")"), 0) || str8_match(token_string, str8_lit("]"), 0) || str8_match(token_string, str8_lit("}"), 0))
       {
         paren_nest -= 1;
+        for(;colon_nest > paren_nest; colon_nest -= 1)
+        {
+          if(last_step != 0)
+          {
+            DescendStep *step = last_step;
+            DLLRemove(first_step, last_step, step);
+            SLLStackPush(free_step, step);
+          }
+        }
         if(paren_nest == 0 && last_step != 0)
         {
           DescendStep *step = last_step;
@@ -8868,9 +8877,12 @@ df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
       {
         for(;colon_nest > paren_nest; colon_nest -= 1)
         {
-          DescendStep *step = last_step;
-          DLLRemove(first_step, last_step, step);
-          SLLStackPush(free_step, step);
+          if(last_step != 0)
+          {
+            DescendStep *step = last_step;
+            DLLRemove(first_step, last_step, step);
+            SLLStackPush(free_step, step);
+          }
         }
       }
     }
@@ -12577,7 +12589,10 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
           fstr->color.w *= 0.5f;
           fstr->size = ui_top_font_size();
           autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
-          if(prev_n != 0) {prev_n->next = autocomp_fstr_n;}
+          if(prev_n != 0)
+          {
+            prev_n->next = autocomp_fstr_n;
+          }
           if(prev_n == 0)
           {
             code_fancy_strings.first = code_fancy_strings.last = autocomp_fstr_n;
@@ -12588,6 +12603,29 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
           }
           code_fancy_strings.node_count += 1;
           code_fancy_strings.total_size += autocomplete_hint_string.size;
+          if(prev_n != 0 && cursor_off - off < prev_n->v.string.size)
+          {
+            String8 full_string = prev_n->v.string;
+            U64 chop_amt = full_string.size - (cursor_off - off);
+            prev_n->v.string = str8_chop(full_string, chop_amt);
+            code_fancy_strings.total_size -= chop_amt;
+            if(chop_amt != 0)
+            {
+              String8 post_cursor = str8_skip(full_string, cursor_off - off);
+              D_FancyStringNode *post_fstr_n = push_array(scratch.arena, D_FancyStringNode, 1);
+              D_FancyString *post_fstr = &post_fstr_n->v;
+              MemoryCopyStruct(post_fstr, &prev_n->v);
+              post_fstr->string   = post_cursor;
+              if(autocomp_fstr_n->next == 0)
+              {
+                code_fancy_strings.last = post_fstr_n;
+              }
+              post_fstr_n->next = autocomp_fstr_n->next;
+              autocomp_fstr_n->next = post_fstr_n;
+              code_fancy_strings.node_count += 1;
+              code_fancy_strings.total_size += post_cursor.size;
+            }
+          }
         }
       }
       ui_box_equip_display_fancy_strings(editstr_box, &code_fancy_strings);
