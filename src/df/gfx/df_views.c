@@ -477,7 +477,7 @@ df_expand_key_from_eval_root(DF_EvalRoot *root)
 internal DF_WatchViewPoint
 df_watch_view_point_from_tbl(DF_EvalVizBlockList *blocks, Vec2S64 tbl)
 {
-  DF_WatchViewPoint pt = {0};
+  DF_WatchViewPoint pt = zero_struct;
   pt.column_kind = (DF_WatchViewColumnKind)(tbl.x%DF_WatchViewColumnKind_COUNT);
   pt.key         = df_key_from_viz_block_list_row_num(blocks, tbl.y);
   pt.parent_key  = df_parent_key_from_viz_block_list_row_num(blocks, tbl.y);
@@ -501,6 +501,7 @@ df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, TG_Graph 
   String8 result = {0};
   switch(col_kind)
   {
+    default:{}break;
     case DF_WatchViewColumnKind_Expr:    {result = editable ? row->edit_expr : row->display_expr;}break;
     case DF_WatchViewColumnKind_Value:   {result = editable ? row->edit_value : row->display_value;}break;
     case DF_WatchViewColumnKind_Type:    {result = tg_string_from_key(arena, graph, rdi, row->eval.type_key);}break;
@@ -981,7 +982,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       if(!ewv->text_editing &&
          (evt->kind == UI_EventKind_Text ||
           evt->flags & UI_EventFlag_Paste ||
-          (evt->kind == UI_EventKind_Press && evt->key == OS_Key_Return || evt->key == OS_Key_F2)))
+          (evt->kind == UI_EventKind_Press && (evt->key == OS_Key_Return || evt->key == OS_Key_F2))))
       {
         Vec2S64 selection_dim = dim_2s64(selection_tbl);
         ewv->text_editing = 1;
@@ -1014,13 +1015,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       //
       if(ewv->text_editing)
       {
-        B32 editing_complete = ((evt->kind == UI_EventKind_Press && evt->key == OS_Key_Esc || evt->key == OS_Key_Return) ||
+        B32 editing_complete = ((evt->kind == UI_EventKind_Press && (evt->key == OS_Key_Esc || evt->key == OS_Key_Return)) ||
                                 (evt->kind == UI_EventKind_Navigate && evt->delta_2s32.y != 0));
         if(editing_complete ||
-           (evt->kind == UI_EventKind_Edit ||
-            evt->kind == UI_EventKind_Navigate ||
-            evt->kind == UI_EventKind_Text) &&
-           evt->delta_2s32.y == 0)
+           ((evt->kind == UI_EventKind_Edit ||
+             evt->kind == UI_EventKind_Navigate ||
+             evt->kind == UI_EventKind_Text) &&
+            evt->delta_2s32.y == 0))
         {
           taken = 1;
           U64 edit_idx = 0;
@@ -1056,6 +1057,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               Vec2S64 tbl = v2s64(x, y);
               switch((DF_WatchViewColumnKind)x)
               {
+                default:{}break;
                 case DF_WatchViewColumnKind_Expr:
                 {
                   DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, tbl);
