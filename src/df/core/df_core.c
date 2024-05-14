@@ -1799,7 +1799,7 @@ df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kin
   df_entity_notify_mutation(entity);
   
   // rjf: log
-  log_msgf("new entity: %S $%I64d\n", df_g_entity_kind_display_string_table[kind], entity->id);
+  log_infof("new entity: %S $%I64d\n", df_g_entity_kind_display_string_table[kind], entity->id);
   
   return entity;
 }
@@ -1844,7 +1844,7 @@ df_entity_release(DF_StateDeltaHistory *hist, DF_Entity *entity)
       t->e = child;
       SLLQueuePush(first_task, last_task, t);
     }
-    log_msgf("end entity: %S $%I64d\n", df_g_entity_kind_display_string_table[task->e->kind], task->e->id);
+    log_infof("end entity: %S $%I64d\n", df_g_entity_kind_display_string_table[task->e->kind], task->e->id);
     df_state_delta_history_push_struct_delta(hist, &task->e->first);
     df_state_delta_history_push_struct_delta(hist, &task->e->last);
     df_state_delta_history_push_struct_delta(hist, &task->e->next);
@@ -6457,8 +6457,8 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
   {
     Temp scratch = scratch_begin(0, 0);
     DF_Entity *entity = df_entity_from_handle(params->entity);
-    log_msgf("debug frontend command pushed: \"%S\"\n", spec->info.string);
-#define HandleParamPrint(mem_name) if(!df_handle_match(df_handle_zero(), params->mem_name)) { log_msgf("| %s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
+    log_infof("debug frontend command pushed: \"%S\"\n", spec->info.string);
+#define HandleParamPrint(mem_name) if(!df_handle_match(df_handle_zero(), params->mem_name)) { log_infof("| %s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
     HandleParamPrint(window);
     HandleParamPrint(panel);
     HandleParamPrint(dest_panel);
@@ -6467,7 +6467,7 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
     if(!df_entity_is_nil(entity))
     {
       String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
-      log_msgf("| entity: \"%S\"\n", entity_name);
+      log_infof("| entity: \"%S\"\n", entity_name);
     }
     U64 idx = 0;
     for(DF_HandleNode *n = params->entity_list.first; n != 0; n = n->next, idx += 1)
@@ -6476,20 +6476,20 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
       if(!df_entity_is_nil(entity))
       {
         String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
-        log_msgf("| entity_list[%I64u]: \"%S\"\n", idx, entity_name);
+        log_infof("| entity_list[%I64u]: \"%S\"\n", idx, entity_name);
       }
     }
     if(!df_cmd_spec_is_nil(params->cmd_spec))
     {
-      log_msgf("| cmd_spec: \"%S\"\n", params->cmd_spec->info.string);
+      log_infof("| cmd_spec: \"%S\"\n", params->cmd_spec->info.string);
     }
-    if(params->string.size != 0)    { log_msgf("| string: \"%S\"\n", params->string); }
-    if(params->file_path.size != 0) { log_msgf("| file_path: \"%S\"\n", params->file_path); }
-    if(params->text_point.line != 0){ log_msgf("| text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
-    if(params->vaddr != 0)          { log_msgf("| vaddr: 0x%I64x\n", params->vaddr); }
-    if(params->voff != 0)           { log_msgf("| voff: 0x%I64x\n", params->voff); }
-    if(params->index != 0)          { log_msgf("| index: 0x%I64x\n", params->index); }
-    if(params->id != 0)             { log_msgf("| id: 0x%I64x\n", params->id); }
+    if(params->string.size != 0)    { log_infof("| string: \"%S\"\n", params->string); }
+    if(params->file_path.size != 0) { log_infof("| file_path: \"%S\"\n", params->file_path); }
+    if(params->text_point.line != 0){ log_infof("| text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
+    if(params->vaddr != 0)          { log_infof("| vaddr: 0x%I64x\n", params->vaddr); }
+    if(params->voff != 0)           { log_infof("| voff: 0x%I64x\n", params->voff); }
+    if(params->index != 0)          { log_infof("| index: 0x%I64x\n", params->index); }
+    if(params->id != 0)             { log_infof("| id: 0x%I64x\n", params->id); }
     if(params->os_event != 0)
     {
       String8 kind_string = str8_lit("<unknown>");
@@ -6506,10 +6506,10 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
         case OS_EventKind_FileDrop:       {kind_string = str8_lit("filedrop");}break;
         case OS_EventKind_Wakeup:         {kind_string = str8_lit("wakeup");}break;
       }
-      log_msgf("| os_event->kind: %S\n", kind_string);
+      log_infof("| os_event->kind: %S\n", kind_string);
     }
 #undef HandleParamPrint
-    log_msgf("--------------------------------\n");
+    log_infof("--------------------------------\n");
     scratch_end(scratch);
   }
   df_cmd_list_push(df_state->root_cmd_arena, &df_state->root_cmds, params, spec);
@@ -6702,6 +6702,13 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       switch(event->kind)
       {
         default:{}break;
+        
+        //- rjf: errors
+        
+        case CTRL_EventKind_Error:
+        {
+          log_user_error(event->string);
+        }break;
         
         //- rjf: starts/stops
         

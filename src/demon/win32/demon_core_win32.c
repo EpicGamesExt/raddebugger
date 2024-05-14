@@ -1205,7 +1205,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
       IsWow64Process(process_info.hProcess, &is_wow);
       if(is_wow)
       {
-        MessageBox(0, "Sorry, The RAD Debugger only debugs 64-bit applications currently.", "Process error", MB_OK|MB_ICONSTOP);
+        log_user_errorf("Only 64-bit applications can be debugged currently.");
         DebugActiveProcessStop(process_info.dwProcessId);
         TerminateProcess(process_info.hProcess,0xffffffff);
       }
