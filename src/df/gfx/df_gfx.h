@@ -416,6 +416,7 @@ struct DF_CodeSliceParams
   F32 line_num_width_px;
   F32 line_text_max_width_px;
   DF_EntityList flash_ranges;
+  F32 margin_float_off_px;
 };
 
 typedef struct DF_CodeSliceSignal DF_CodeSliceSignal;

@@ -5411,6 +5411,11 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
+    code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    if(code_slice_params.margin_float_off_px < 1)
+    {
+      code_slice_params.margin_float_off_px = 0;
+    }
     
     // rjf: fill text info
     {
@@ -6494,6 +6499,11 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, process, DF_EntityKind_FlashMarker);
+    code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    if(code_slice_params.margin_float_off_px < 1)
+    {
+      code_slice_params.margin_float_off_px = 0;
+    }
     df_entity_list_push(scratch.arena, &code_slice_params.relevant_binaries, binary);
     
     // rjf: fill text info
@@ -7329,6 +7339,11 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
+    code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    if(code_slice_params.margin_float_off_px < 1)
+    {
+      code_slice_params.margin_float_off_px = 0;
+    }
   }
   
   //////////////////////////////

@@ -4,6 +4,8 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] editing multiple bindings for commands
+//
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
 // [x] UI_NavActions, OS_Event -> UI_Event (single event stream)
@@ -11,7 +13,7 @@
 // [ ] better discoverability for view rules - have better help hover tooltip,
 //     info on arguments, and better autocomplete lister
 //
-// [ ] source view -> floating margin/line-nums
+// [x] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
 // [ ] target/breakpoint/watch-pin reordering

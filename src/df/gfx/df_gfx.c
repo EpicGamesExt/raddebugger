@@ -10501,6 +10501,14 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   UI_Box *margin_container_box = &ui_g_nil_box;
   if(params->flags & DF_CodeSliceFlag_Margin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build margins")
   {
+    if(params->margin_float_off_px != 0)
+    {
+      ui_set_next_pref_width(ui_px(params->margin_width_px, 1));
+      ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+      ui_build_box_from_key(0, ui_key_zero());
+      ui_set_next_fixed_x(params->margin_float_off_px);
+      ui_set_next_flags(UI_BoxFlag_DrawBackground);
+    }
     ui_set_next_pref_width(ui_px(params->margin_width_px, 1));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_set_next_child_layout_axis(Axis2_Y);
@@ -11291,9 +11299,20 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     TxtRng select_rng = txt_rng(*cursor, *mark);
     Vec4F32 inactive_color = df_rgba_from_theme_color(DF_ThemeColor_WeakText);
     Vec4F32 active_color = df_rgba_from_theme_color(DF_ThemeColor_PlainText);
+    if(params->margin_float_off_px != 0)
+    {
+      ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
+      ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+      ui_build_box_from_key(0, ui_key_zero());
+      ui_set_next_fixed_x(params->margin_float_off_px);
+      ui_set_next_flags(UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideLeft);
+    }
+    else
+    {
+      ui_set_next_flags(UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideLeft);
+    }
     ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
-    ui_set_next_flags(UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideLeft);
     UI_Column
       UI_PrefHeight(ui_px(params->line_height_px, 1.f))
       UI_Font(params->font)
