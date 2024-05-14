@@ -312,6 +312,17 @@ struct DF_WatchViewPoint
   DF_ExpandKey key;
 };
 
+typedef struct DF_WatchViewTextEditState DF_WatchViewTextEditState;
+struct DF_WatchViewTextEditState
+{
+  TxtPt cursor;
+  TxtPt mark;
+  U8 input_buffer[1024];
+  U64 input_size;
+  U8 initial_buffer[1024];
+  U64 initial_size;
+};
+
 typedef struct DF_WatchViewState DF_WatchViewState;
 struct DF_WatchViewState
 {
@@ -325,11 +336,10 @@ struct DF_WatchViewState
   DF_WatchViewPoint mark;
   
   // rjf: text input state
-  TxtPt input_cursor;
-  TxtPt input_mark;
-  U8 input_buffer[1024];
-  U64 input_size;
-  B32 input_editing;
+  Arena *text_edit_arena;
+  U64 text_edit_count;
+  DF_WatchViewTextEditState *text_edit_states;
+  B32 text_editing;
   
   // rjf: table column width state
   F32 expr_column_pct;
@@ -468,6 +478,13 @@ internal DF_EvalRoot *  df_eval_root_from_expand_key(DF_WatchViewState *ews, DF_
 internal String8        df_string_from_eval_root(DF_EvalRoot *root);
 internal DF_ExpandKey   df_parent_expand_key_from_eval_root(DF_EvalRoot *root);
 internal DF_ExpandKey   df_expand_key_from_eval_root(DF_EvalRoot *root);
+
+//- rjf: watch view points <-> table coordinates
+internal DF_WatchViewPoint df_watch_view_point_from_tbl(DF_EvalVizBlockList *blocks, Vec2S64 tbl);
+internal Vec2S64 df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
+
+//- rjf: table coordinates -> strings
+internal String8 df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, TG_Graph *graph, RDI_Parsed *rdi, DF_EvalVizRow *row, DF_WatchViewColumnKind col_kind, B32 editable);
 
 //- rjf: windowed watch tree visualization
 internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_WatchViewState *ews);
