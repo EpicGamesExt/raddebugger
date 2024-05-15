@@ -2348,6 +2348,24 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           evt.delta_2s32 = v2s32(+0, +1);
           ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
+        case DF_CoreCmdKind_MoveUpReorder:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_Reorder;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        case DF_CoreCmdKind_MoveDownReorder:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_Reorder;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
         case DF_CoreCmdKind_MoveHome:
         {
           UI_Event evt = zero_struct;

@@ -1302,7 +1302,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       //////////////////////////
       //- rjf: [table] apply deltas to cursor & mark
       //
-      if(!ewv->text_editing && !(evt->flags & UI_EventFlag_Delete))
+      if(!ewv->text_editing && !(evt->flags & UI_EventFlag_Delete) && !(evt->flags & UI_EventFlag_Reorder))
       {
         B32 cursor_tbl_min_is_empty_selection[Axis2_COUNT] = {0, 1};
         Rng2S64 cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(3, blocks.total_semantic_row_count));
@@ -1418,6 +1418,44 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       }
       
       //////////////////////////
+      //- rjf: [table] do cell-granularity reorders
+      //
+      if(!ewv->text_editing && evt->flags & UI_EventFlag_Reorder)
+      {
+        taken = 1;
+        DF_ExpandKey first_root_key = df_key_from_viz_block_list_row_num(&blocks, selection_tbl.min.y);
+        DF_EvalRoot *first_root = df_eval_root_from_expand_key(ewv, eval_view, first_root_key);
+        DF_EvalRoot *last_root = first_root;
+        if(first_root != 0)
+        {
+          for(S64 y = selection_tbl.min.y+1; y <= selection_tbl.max.y; y += 1)
+          {
+            DF_ExpandKey key = df_key_from_viz_block_list_row_num(&blocks, y);
+            DF_EvalRoot *new_root = df_eval_root_from_expand_key(ewv, eval_view, key);
+            if(new_root != 0)
+            {
+              last_root = new_root;
+            }
+          }
+        }
+        if(evt->delta_2s32.y < 0 && first_root != 0 && first_root->prev != 0)
+        {
+          state_dirty = 1;
+          DF_EvalRoot *reordered = first_root->prev;
+          DLLRemove(ewv->first_root, ewv->last_root, reordered);
+          DLLInsert(ewv->first_root, ewv->last_root, last_root, reordered);
+        }
+        if(evt->delta_2s32.y > 0 && last_root != 0 && last_root->next != 0)
+        {
+          state_dirty = 1;
+          DF_EvalRoot *prev_child = first_root->prev;
+          DF_EvalRoot *reordered = last_root->next;
+          DLLRemove(ewv->first_root, ewv->last_root, reordered);
+          DLLInsert(ewv->first_root, ewv->last_root, prev_child, reordered);
+        }
+      }
+      
+      //////////////////////////
       //- rjf: consume event, if taken
       //
       if(taken && evt != &dummy_evt)
@@ -1493,7 +1531,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       UI_TableCell if(df_help_label(str8_lit("View Rule"))) UI_Tooltip
       {
         F32 max_width = ui_top_font_size()*35;
-        ui_label_multiline(max_width, str8_lit("View rules are used to tweak the way evaluated expressions are visualized. Multiple rules can be specified on each row. They are specified in a key:(value) form."));
+        ui_label_multiline(max_width, str8_lit("View rules are used to tweak the way evaluated expressions are visualized. Multiple rules can be specified on each row. They are specified in a key:(value) form. Some examples follow:"));
         ui_spacer(ui_em(1.5f, 1));
         UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("array:(N)");
         ui_label_multiline(max_width, str8_lit("Specifies that a pointer points to N elements, rather than only 1."));

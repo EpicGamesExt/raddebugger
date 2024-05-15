@@ -120,6 +120,8 @@ DF_DefaultBindingTable:
   { "move_down_page_select"       PageDown  0        shift     0          }
   { "move_up_whole_select"        Home      ctrl     shift     0          }
   { "move_down_whole_select"      End       ctrl     shift     0          }
+  { "move_up_reorder"             Up        0        0         alt        }
+  { "move_down_reorder"           Down      0        0         alt        }
   { "move_home"                   Home      0        0         0          }
   { "move_end"                    End       0        0         0          }
   { "move_home_select"            Home      0        shift     0          }

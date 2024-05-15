@@ -97,6 +97,7 @@ enum
   UI_EventFlag_PickSelectSide      = (1<<5),
   UI_EventFlag_CapAtLine           = (1<<6),
   UI_EventFlag_ExplicitDirectional = (1<<7),
+  UI_EventFlag_Reorder             = (1<<8),
 };
 
 typedef enum UI_EventDeltaUnit

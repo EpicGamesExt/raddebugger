@@ -598,7 +598,7 @@ str8_lit_comp("goto_name"),
 str8_lit_comp("function_breakpoint"),
 };
 
-DF_StringBindingPair df_g_default_binding_table[102] =
+DF_StringBindingPair df_g_default_binding_table[104] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_EventFlag_Alt}},
@@ -671,6 +671,8 @@ DF_StringBindingPair df_g_default_binding_table[102] =
 {str8_lit_comp("move_down_page_select"), {OS_Key_PageDown, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("move_up_whole_select"), {OS_Key_Home, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift }},
 {str8_lit_comp("move_down_whole_select"), {OS_Key_End, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift }},
+{str8_lit_comp("move_up_reorder"), {OS_Key_Up, 0   |OS_EventFlag_Alt}},
+{str8_lit_comp("move_down_reorder"), {OS_Key_Down, 0   |OS_EventFlag_Alt}},
 {str8_lit_comp("move_home"), {OS_Key_Home, 0   }},
 {str8_lit_comp("move_end"), {OS_Key_End, 0   }},
 {str8_lit_comp("move_home_select"), {OS_Key_Home, 0  |OS_EventFlag_Shift }},
