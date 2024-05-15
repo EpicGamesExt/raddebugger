@@ -2107,6 +2107,29 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
         }break;
         
+        //- rjf: meta controls
+        case DF_CoreCmdKind_Edit:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Press;
+          evt.slot       = UI_EventActionSlot_Edit;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        case DF_CoreCmdKind_Accept:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Press;
+          evt.slot       = UI_EventActionSlot_Accept;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        case DF_CoreCmdKind_Cancel:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Press;
+          evt.slot       = UI_EventActionSlot_Cancel;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        
         //- rjf: directional movement & text controls
         //
         // NOTE(rjf): These all get funneled into a separate intermediate that
@@ -4175,14 +4198,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
                 UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_key_press(0, OS_Key_Return)))
+                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmAccept));
               }
               UI_CornerRadius10(ui_top_font_size()*0.25f)
                 UI_CornerRadius11(ui_top_font_size()*0.25f)
-                if(ui_clicked(ui_buttonf("Cancel")) || ui_key_press(0, OS_Key_Esc))
+                if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmCancel));
@@ -4441,7 +4464,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             for(U64 idx = 0; idx < item_array.count; idx += 1)
             {
               DF_AutoCompListerItem *item = &item_array.v[idx];
-              UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_Clickable, "autocomp_%I64x", idx);
+              UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_MouseClickable, "autocomp_%I64x", idx);
               UI_Parent(item_box)
               {
                 UI_WidthFill
@@ -5579,14 +5602,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       
       //- rjf: query submission
       if((ui_is_focus_active() || (window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && !ws->query_view_selected)) &&
-         ui_key_press(0, OS_Key_Esc))
+         ui_slot_press(UI_EventActionSlot_Cancel))
       {
         DF_CmdParams params = df_cmd_params_from_window(ws);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CancelQuery));
       }
       if(ui_is_focus_active())
       {
-        if(ui_key_press(0, OS_Key_Return))
+        if(ui_slot_press(UI_EventActionSlot_Accept))
         {
           Temp scratch = scratch_begin(&arena, 1);
           DF_View *view = ws->query_view_stack_top;
@@ -5620,6 +5643,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
       }
+    }
+    else
+    {
+      ws->query_view_selected = 0;
     }
     
     ////////////////////////////
@@ -6507,7 +6534,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
           UI_Focus(UI_FocusKind_On)
           {
-            if(view->is_filtering && ui_is_focus_active() && ui_key_press(0, OS_Key_Return))
+            if(view->is_filtering && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
             {
               DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ApplyFilter));
@@ -6745,7 +6772,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               }
             }
           }
-          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_key_press(0, OS_Key_Esc))
+          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
@@ -7316,7 +7343,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     ////////////////////////////
     //- rjf: drag/drop cancelling
     //
-    if(df_drag_is_active() && ui_key_press(0, OS_Key_Esc))
+    if(df_drag_is_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
       df_drag_kill();
       ui_kill_action();
@@ -7399,7 +7426,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
   //////////////////////////////
   //- rjf: hover eval cancelling
   //
-  if(ws->hover_eval_string.size != 0 && ui_key_press(0, OS_Key_Esc))
+  if(ws->hover_eval_string.size != 0 && ui_slot_press(UI_EventActionSlot_Cancel))
   {
     MemoryZeroStruct(&ws->hover_eval_string);
     arena_clear(ws->hover_eval_arena);
@@ -12423,7 +12450,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
         }
       }
     }
-    if(is_focus_hot && ui_key_press(0, OS_Key_F2))
+    if(is_focus_hot && ui_slot_press(UI_EventActionSlot_Edit))
     {
       start_editing_via_typing = 1;
     }
@@ -13634,6 +13661,31 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               DF_StringBindingPair *pair = &df_g_default_binding_table[idx];
               DF_CmdSpec *cmd_spec = df_cmd_spec_from_string(pair->string);
               df_bind_spec(cmd_spec, pair->binding);
+            }
+          }
+          
+          //- rjf: always ensure that the meta controls have bindings
+          if(src == DF_CfgSrc_User)
+          {
+            struct
+            {
+              DF_CmdSpec *spec;
+              OS_Key fallback_key;
+            }
+            meta_ctrls[] =
+            {
+              { df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit), OS_Key_F2 },
+              { df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Accept), OS_Key_Return },
+              { df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Cancel), OS_Key_Esc },
+            };
+            for(U64 idx = 0; idx < ArrayCount(meta_ctrls); idx += 1)
+            {
+              DF_BindingList bindings = df_bindings_from_spec(scratch.arena, meta_ctrls[idx].spec);
+              if(bindings.count == 0)
+              {
+                DF_Binding binding = {meta_ctrls[idx].fallback_key, 0};
+                df_bind_spec(meta_ctrls[idx].spec, binding);
+              }
             }
           }
         }break;

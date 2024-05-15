@@ -504,7 +504,7 @@ df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, TG_Graph 
     default:{}break;
     case DF_WatchViewColumnKind_Expr:    {result = editable ? row->edit_expr : row->display_expr;}break;
     case DF_WatchViewColumnKind_Value:   {result = editable ? row->edit_value : row->display_value;}break;
-    case DF_WatchViewColumnKind_Type:    {result = tg_string_from_key(arena, graph, rdi, row->eval.type_key);}break;
+    case DF_WatchViewColumnKind_Type:    {result = !tg_key_match(row->eval.type_key, tg_key_zero()) ? tg_string_from_key(arena, graph, rdi, row->eval.type_key) : str8_zero();}break;
     case DF_WatchViewColumnKind_ViewRule:{result = df_eval_view_rule_from_key(ev, row->key);}break;
   }
   return result;
@@ -1023,7 +1023,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       if(!ewv->text_editing &&
          (evt->kind == UI_EventKind_Text ||
           evt->flags & UI_EventFlag_Paste ||
-          (evt->kind == UI_EventKind_Press && (evt->key == OS_Key_Return || evt->key == OS_Key_F2))))
+          (evt->kind == UI_EventKind_Press && (evt->slot == UI_EventActionSlot_Accept || evt->slot == UI_EventActionSlot_Edit))) &&
+         selection_tbl.min.x == selection_tbl.max.x)
       {
         Vec2S64 selection_dim = dim_2s64(selection_tbl);
         ewv->text_editing = 1;
@@ -1062,7 +1063,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       //
       if(ewv->text_editing)
       {
-        B32 editing_complete = ((evt->kind == UI_EventKind_Press && (evt->key == OS_Key_Esc || evt->key == OS_Key_Return)) ||
+        B32 editing_complete = ((evt->kind == UI_EventKind_Press && (evt->slot == UI_EventActionSlot_Cancel || evt->slot == UI_EventActionSlot_Accept)) ||
                                 (evt->kind == UI_EventKind_Navigate && evt->delta_2s32.y != 0));
         if(editing_complete ||
            ((evt->kind == UI_EventKind_Edit ||
@@ -1096,7 +1097,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               }
               
               // rjf: cancel? -> revert to initial string
-              if(editing_complete && evt->key == OS_Key_Esc)
+              if(editing_complete && evt->slot == UI_EventActionSlot_Cancel)
               {
                 string = str8(edit_state->initial_buffer, edit_state->initial_size);
               }
@@ -1137,7 +1138,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   }
                 }break;
                 case DF_WatchViewColumnKind_Value:
-                if(editing_complete)
+                if(editing_complete && evt->slot != UI_EventActionSlot_Cancel)
                 {
                   DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
                                                                                                      r1s64(ui_scroll_list_row_from_item(&row_blocks, y-1),
@@ -1190,7 +1191,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             String8 cell_string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, parse_ctx.type_graph, parse_ctx.rdi, row, (DF_WatchViewColumnKind)x, 0);
-            str8_list_pushf(scratch.arena, &strs, "%S%s", cell_string, x+1 <= selection_tbl.max.x ? "  " : "");
+            cell_string = str8_skip_chop_whitespace(cell_string);
+            U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
+            str8_list_pushf(scratch.arena, &strs, "%s%S%s%s",
+                            comma_pos < cell_string.size ? "\"" : "",
+                            cell_string,
+                            comma_pos < cell_string.size ? "\"" : "",
+                            x+1 <= selection_tbl.max.x ? "," : "");
           }
           if(y+1 <= selection_tbl.max.y)
           {
@@ -1202,11 +1209,32 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       }
       
       //////////////////////////
+      //- rjf: [table] do cell-granularity expansions
+      //
+      if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept && selection_tbl.min.x <= 0)
+      {
+        taken = 1;
+        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
+                                                                                           r1s64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y-1),
+                                                                                                 ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y-1)+1), &blocks);
+        DF_EvalVizRow *row = rows.first;
+        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row != 0; y += 1, row = row->next)
+        {
+          if(row->flags & DF_EvalVizRowFlag_CanExpand)
+          {
+            B32 is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
+            df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !is_expanded);
+          }
+        }
+      }
+      
+      //////////////////////////
       //- rjf: [table] do cell-granularity deletions
       //
       if(!ewv->text_editing && evt->flags & UI_EventFlag_Delete)
       {
         taken = 1;
+        state_dirty = 1;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1)
         {
           DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, v2s64(0, y));
@@ -2405,7 +2433,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
   df_cmd_lister_item_array_sort_by_strength__in_place(cmd_array);
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(cv->selected_cmd_spec == &df_g_nil_cmd_spec && ui_key_press(0, OS_Key_Return))
+  if(cv->selected_cmd_spec == &df_g_nil_cmd_spec && ui_slot_press(UI_EventActionSlot_Accept))
   {
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
     if(cmd_array.count > 0)
@@ -2750,7 +2778,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(ps->cursor.y == 0 && ui_key_press(0, OS_Key_Return))
+  if(ps->cursor.y == 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     FileProperties query_normalized_with_opt_slash_props = os_properties_from_file_path(query_normalized_with_opt_slash);
     FileProperties path_query_path_props = os_properties_from_file_path(path_query.path);
@@ -3095,7 +3123,7 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_key_press(0, OS_Key_Return))
+  if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     DF_ProcessInfo *info = &process_info_array.v[0];
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -3257,7 +3285,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
   df_entity_lister_item_array_sort_by_strength__in_place(ent_arr);
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(df_entity_is_nil(df_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_key_press(0, OS_Key_Return))
+  if(df_entity_is_nil(df_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     DF_Entity *ent = ent_arr.v[0].entity;
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -3415,7 +3443,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
-  if(slv->cursor.y == 0 && items.count != 0 && ui_key_press(0, OS_Key_Return))
+  if(slv->cursor.y == 0 && items.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, items.v[0].idx);
     U64 name_size = 0;
@@ -3629,23 +3657,23 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
           break;
         }
       }
-      if(ui_key_press(0, OS_Key_F2))
+      if(ui_slot_press(UI_EventActionSlot_Edit))
       {
         edit_begin = 1;
       }
-      if(ui_key_press(0, OS_Key_Return))
+      if(ui_slot_press(UI_EventActionSlot_Accept))
       {
         edit_begin = 1;
       }
     }
     if(tv->input_editing)
     {
-      if(ui_key_press(0, OS_Key_Esc))
+      if(ui_slot_press(UI_EventActionSlot_Cancel))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(ui_key_press(0, OS_Key_Return))
+      if(ui_slot_press(UI_EventActionSlot_Accept))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -4114,19 +4142,19 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
           break;
         }
       }
-      if(ui_key_press(0, OS_Key_F2))
+      if(ui_slot_press(UI_EventActionSlot_Edit))
       {
         edit_begin = 1;
       }
     }
     if(fpms->input_editing)
     {
-      if(ui_key_press(0, OS_Key_Esc))
+      if(ui_slot_press(UI_EventActionSlot_Cancel))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(ui_key_press(0, OS_Key_Return))
+      if(ui_slot_press(UI_EventActionSlot_Accept))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -4437,19 +4465,19 @@ DF_VIEW_UI_FUNCTION_DEF(AutoViewRules)
           break;
         }
       }
-      if(ui_key_press(0, OS_Key_F2))
+      if(ui_slot_press(UI_EventActionSlot_Edit))
       {
         edit_begin = 1;
       }
     }
     if(avrs->input_editing)
     {
-      if(ui_key_press(0, OS_Key_Esc))
+      if(ui_slot_press(UI_EventActionSlot_Cancel))
       {
         edit_end = 1;
         edit_commit = 0;
       }
-      if(ui_key_press(0, OS_Key_Return))
+      if(ui_slot_press(UI_EventActionSlot_Accept))
       {
         edit_end = 1;
         edit_commit = 1;
@@ -5269,20 +5297,19 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
         break;
       }
     }
-    if(ui_key_press(0, OS_Key_F2) ||
-       ui_key_press(0, OS_Key_Return))
+    if(ui_slot_press(UI_EventActionSlot_Edit))
     {
       edit_begin = 1;
     }
   }
   if(mv->txt_editing && ui_is_focus_active())
   {
-    if(ui_key_press(0, OS_Key_Esc))
+    if(ui_slot_press(UI_EventActionSlot_Cancel))
     {
       edit_end = 1;
       edit_commit = 0;
     }
-    if(ui_key_press(0, OS_Key_Return))
+    if(ui_slot_press(UI_EventActionSlot_Accept))
     {
       edit_end = 1;
       edit_commit = 1;

@@ -582,6 +582,23 @@ ui_text(U32 character)
   return result;
 }
 
+internal B32
+ui_slot_press(UI_EventActionSlot slot)
+{
+  UI_EventList *list = ui_events();
+  B32 result = 0;
+  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  {
+    if(n->v.kind == UI_EventKind_Press && n->v.slot == slot)
+    {
+      result = 1;
+      ui_eat_event(list, n);
+      break;
+    }
+  }
+  return result;
+}
+
 //- rjf: drag data
 
 internal Vec2F32
@@ -926,7 +943,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F
         //- rjf: some child has the active focus -> accept escape keys to pop from the active key stack
         if(!ui_key_match(ui_key_zero(), nav_root->default_nav_focus_active_key))
         {
-          for(;ui_key_press(0, OS_Key_Esc);)
+          for(;ui_slot_press(UI_EventActionSlot_Cancel);)
           {
             UI_Box *prev_focus_root = nav_root;
             for(UI_Box *focus_root = ui_box_from_key(nav_root->default_nav_focus_active_key);
@@ -1074,7 +1091,7 @@ ui_end_build(void)
   ProfBeginFunction();
   
   //- rjf: escape -> close context menu
-  if(ui_state->ctx_menu_open != 0 && ui_key_press(0, OS_Key_Esc))
+  if(ui_state->ctx_menu_open != 0 && ui_slot_press(UI_EventActionSlot_Cancel))
   {
     ui_ctx_menu_close();
   }
@@ -2561,7 +2578,7 @@ ui_signal_from_box(UI_Box *box)
     if(box->flags & UI_BoxFlag_KeyboardClickable &&
        is_focus_hot &&
        evt->kind == UI_EventKind_Press &&
-       evt->key == OS_Key_Return)
+       evt->slot == UI_EventActionSlot_Accept)
     {
       sig.f |= UI_SignalFlag_KeyboardPressed;
       taken = 1;

@@ -131,6 +131,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
          event->key != OS_Key_Delete &&
          event->key != OS_Key_LeftMouseButton &&
          event->key != OS_Key_RightMouseButton &&
+         event->key != OS_Key_MiddleMouseButton &&
          event->key != OS_Key_Ctrl &&
          event->key != OS_Key_Alt &&
          event->key != OS_Key_Shift)

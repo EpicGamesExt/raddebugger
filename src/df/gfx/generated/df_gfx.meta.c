@@ -598,7 +598,7 @@ str8_lit_comp("goto_name"),
 str8_lit_comp("function_breakpoint"),
 };
 
-DF_StringBindingPair df_g_default_binding_table[99] =
+DF_StringBindingPair df_g_default_binding_table[102] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_EventFlag_Alt}},
@@ -644,6 +644,9 @@ DF_StringBindingPair df_g_default_binding_table[99] =
 {str8_lit_comp("switch_to_partner_file"), {OS_Key_O, 0   |OS_EventFlag_Alt}},
 {str8_lit_comp("load_user"), {OS_Key_O, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift |OS_EventFlag_Alt}},
 {str8_lit_comp("load_profile"), {OS_Key_O, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
+{str8_lit_comp("edit"), {OS_Key_F2, 0   }},
+{str8_lit_comp("accept"), {OS_Key_Return, 0   }},
+{str8_lit_comp("cancel"), {OS_Key_Esc, 0   }},
 {str8_lit_comp("move_left"), {OS_Key_Left, 0   }},
 {str8_lit_comp("move_right"), {OS_Key_Right, 0   }},
 {str8_lit_comp("move_up"), {OS_Key_Up, 0   }},

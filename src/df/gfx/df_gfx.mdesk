@@ -90,6 +90,11 @@ DF_DefaultBindingTable:
   { "load_user"                   O         ctrl     shift     alt        }
   { "load_profile"                O         ctrl     0         alt        }
   
+  //- rjf: meta controls
+  { "edit"                        F2        0        0         0          }
+  { "accept"                      Return    0        0         0          }
+  { "cancel"                      Esc       0        0         0          }
+  
   //- rjf: directional movement & text controls
   { "move_left"                   Left      0        0         0          }
   { "move_right"                  Right     0        0         0          }
