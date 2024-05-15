@@ -1032,7 +1032,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       {
         break;
       }
-      UI_Event dummy_evt = {0};
+      UI_Event dummy_evt = zero_struct;
       UI_Event *evt = &dummy_evt;
       if(event_n != 0)
       {
