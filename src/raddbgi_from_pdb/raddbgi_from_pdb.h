@@ -217,6 +217,28 @@ struct P2R_UDTConvertIn
 
 typedef struct
 {
+  String8 sym_data;
+  String8 c13_data;
+} P2R_C13ParseIn;
+
+typedef struct
+{
+  CV_SymParsed sym_parsed;
+  CV_C13Parsed c13_parsed;
+} P2R_C13ParseOut;
+
+typedef struct
+{
+  String8 c13_data;
+  CV_C13Parsed c13_parsed;
+  PDB_Strtbl *strtbl;
+  U64 src_file_ht_cap;
+  RDIM_SrcFile **src_file_ht_slots;
+  PDB_CoffSectionArray *sections;
+} P2R_C13ConvertIn;
+
+typedef struct
+{
   String8 compiler_name;
   RDI_Arch arch;
   CV_Language language;
@@ -235,10 +257,10 @@ typedef struct
   CV_TypeId *itype_fwd_map;
   RDIM_Type **itype_type_ptrs;
   P2R_LinkNameMap *link_name_map;
-  PDB_Strtbl *strtbl;
-  String8 sym_data;
-  String8 c11_data;
-  String8 c13_data;
+  U64 src_file_ht_cap;
+  RDIM_SrcFile **src_file_ht_slots;
+  CV_SymParsed sym_parsed;
+  RDIM_LineSequenceList *main_line_table;
 } P2R_UnitConvertIn;
 
 typedef struct
@@ -248,7 +270,6 @@ typedef struct
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_ScopeChunkList scopes;
-  RDIM_SrcFileChunkList src_files;
 } P2R_UnitConvertOut;
 
 typedef struct
@@ -407,6 +428,13 @@ typedef struct P2R_BakeUnitIn P2R_BakeUnitIn;
 struct P2R_BakeUnitIn
 {
   RDIM_Unit *unit;
+};
+
+typedef struct P2R_BakeLinesIn P2R_BakeLinesIn;
+struct P2R_BakeLinesIn
+{
+  RDIM_LineInfoLayout layout;
+  RDIM_LineSequenceListChunkNode *chunk;
 };
 
 typedef struct P2R_BakeUnitVMapIn P2R_BakeUnitVMapIn;

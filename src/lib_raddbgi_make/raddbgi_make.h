@@ -463,8 +463,8 @@ struct RDIM_SrcFile
 {
   struct RDIM_SrcFileChunkNode *chunk;
   RDIM_String8 normal_full_path;
-  RDIM_SrcFileLineMapFragment *first_line_map_fragment;
-  RDIM_SrcFileLineMapFragment *last_line_map_fragment;
+  RDIM_SrcFileLineMapFragment *fragment_list;
+  RDIM_SrcFileLineMapFragment **next_fragment;
 };
 
 typedef struct RDIM_SrcFileChunkNode RDIM_SrcFileChunkNode;
@@ -487,7 +487,7 @@ struct RDIM_SrcFileChunkList
 };
 
 ////////////////////////////////
-//~ rjf: Per-Compilation-Unit Info Types
+//~ Lines
 
 typedef struct RDIM_LineSequence RDIM_LineSequence;
 struct RDIM_LineSequence
@@ -509,10 +509,64 @@ struct RDIM_LineSequenceNode
 typedef struct RDIM_LineSequenceList RDIM_LineSequenceList;
 struct RDIM_LineSequenceList
 {
+  struct RDIM_LineSequenceListChunkNode *chunk;
   RDIM_LineSequenceNode *first;
   RDIM_LineSequenceNode *last;
   RDI_U64 count;
 };
+
+typedef struct RDIM_LineSequenceListChunkNode RDIM_LineSequenceListChunkNode;
+struct RDIM_LineSequenceListChunkNode
+{
+  struct RDIM_LineSequenceListChunkNode *next;
+  RDIM_LineSequenceList *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_LineSequenceListChunkList RDIM_LineSequenceListChunkList;
+struct RDIM_LineSequenceListChunkList
+{
+  RDIM_LineSequenceListChunkNode *first;
+  RDIM_LineSequenceListChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+typedef struct RDIM_LineInfo RDIM_LineInfo;
+struct RDIM_LineInfo
+{
+  RDI_U32 voff_count;
+  RDI_U32 line_count;
+  RDI_U32 col_count;
+  RDI_U64 *voffs;
+  RDI_Line *lines;
+  RDI_U16 *cols;
+};
+
+typedef struct RDIM_LineInfoLayout RDIM_LineInfoLayout;
+struct RDIM_LineInfoLayout
+{
+  RDI_U64 voff_count;
+  RDI_U64 line_count;
+  RDI_U64 col_count;
+  RDI_U64 *voff_indices;
+  RDI_U64 *line_indices;
+  RDI_U64 *col_indices;
+};
+
+typedef struct RDIM_BakedLineChunk RDIM_BakedLineChunk;
+struct RDIM_BakedLineChunk
+{
+  RDIM_String8List line_infos;
+  RDIM_String8List voffs;
+  RDIM_String8List lines;
+  RDIM_String8List cols;
+};
+
+////////////////////////////////
+//~ rjf: Per-Compilation-Unit Info Types
 
 typedef struct RDIM_Unit RDIM_Unit;
 struct RDIM_Unit
@@ -526,7 +580,7 @@ struct RDIM_Unit
   RDIM_String8 build_path;
   RDI_Arch arch;
   RDI_Language language;
-  RDIM_LineSequenceList line_sequences;
+  RDIM_LineSequenceList *main_line_table;
   RDIM_Rng1U64List voff_ranges;
 };
 
@@ -804,6 +858,7 @@ struct RDIM_BakeParams
   RDIM_SymbolChunkList thread_variables;
   RDIM_SymbolChunkList procedures;
   RDIM_ScopeChunkList scopes;
+  RDIM_LineSequenceListChunkList lines;
 };
 
 //- rjf: data sections
@@ -1037,6 +1092,7 @@ RDI_PROC void rdim_str8_list_push(RDIM_Arena *arena, RDIM_String8List *list, RDI
 RDI_PROC void rdim_str8_list_push_front(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 string);
 RDI_PROC void rdim_str8_list_push_align(RDIM_Arena *arena, RDIM_String8List *list, RDI_U64 align);
 RDI_PROC RDIM_String8 rdim_str8_list_join(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 sep);
+internal void rdim_str8_list_concat_in_place(RDIM_String8List *list, RDIM_String8List *to_push);
 
 //- rjf: sortable range sorting
 RDI_PROC RDIM_SortKey *rdim_sort_key_array(RDIM_Arena *arena, RDIM_SortKey *keys, RDI_U64 count);
@@ -1056,6 +1112,9 @@ RDI_PROC RDIM_SrcFile *rdim_src_file_chunk_list_push(RDIM_Arena *arena, RDIM_Src
 RDI_PROC RDI_U64 rdim_idx_from_src_file(RDIM_SrcFile *src_file);
 RDI_PROC void rdim_src_file_chunk_list_concat_in_place(RDIM_SrcFileChunkList *dst, RDIM_SrcFileChunkList *to_push);
 RDI_PROC void rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_files, RDIM_SrcFile *src_file, RDIM_LineSequence *seq);
+
+RDI_PROC int rdim_src_file_ptr_compar(const void *a, const void *b);
+RDI_PROC RDI_S32 rdim_src_file_match(RDIM_SrcFile *a, RDIM_SrcFile *b);
 
 ////////////////////////////////
 //~ rjf: [Building] Unit Info Building
@@ -1201,9 +1260,12 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_info_section_list_from_params(
 //- rjf: binary sections
 RDI_PROC RDIM_BakeSectionList rdim_bake_binary_section_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
+//- lines
+
+RDI_PROC RDIM_LineInfo rdim_bake_line_info(RDIM_Arena *arena, RDIM_LineSequenceList *line_sequences);
+
 //- rjf: units
-RDI_PROC RDIM_BakeSectionList rdim_bake_section_list_from_unit(RDIM_Arena *arena, RDIM_Unit *unit);
-RDI_PROC RDIM_BakeSectionList rdim_bake_unit_top_level_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_unit_top_level_section_list(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_UnitChunkList units);
 
 //- rjf: unit vmap
 RDI_PROC RDIM_BakeSectionList rdim_bake_unit_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);

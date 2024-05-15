@@ -489,6 +489,8 @@ rdim_src_file_chunk_list_push(RDIM_Arena *arena, RDIM_SrcFileChunkList *list, RD
   }
   RDIM_SrcFile *src_file = &n->v[n->count];
   src_file->chunk = n;
+  src_file->fragment_list = 0;
+  src_file->next_fragment = &src_file->fragment_list;
   n->count += 1;
   list->total_count += 1;
   return src_file;
@@ -531,7 +533,29 @@ rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_f
 {
   RDIM_SrcFileLineMapFragment *fragment = rdim_push_array(arena, RDIM_SrcFileLineMapFragment, 1);
   fragment->seq = seq;
-  RDIM_SLLQueuePush(src_file->first_line_map_fragment, src_file->last_line_map_fragment, fragment);
+
+  *src_file->next_fragment = fragment;
+  src_file->next_fragment  = &fragment->next;
+}
+
+RDI_PROC int
+rdim_src_file_ptr_compar(const void *a_, const void *b_)
+{
+  RDIM_SrcFile *a = **(RDIM_SrcFile ***)a_;
+  RDIM_SrcFile *b = **(RDIM_SrcFile ***)b_;
+  int a_idx = rdim_idx_from_src_file(a);
+  int b_idx = rdim_idx_from_src_file(b);
+  int cmp = a_idx < b_idx ? -1 :
+            a_idx > b_idx ? +1 :
+            0;
+  return cmp;
+}
+
+RDI_PROC RDI_S32
+rdim_src_file_match(RDIM_SrcFile *a, RDIM_SrcFile *b)
+{
+  RDI_S32 is_match = rdim_str8_match(a->normal_full_path, b->normal_full_path, 0);
+  return is_match;
 }
 
 ////////////////////////////////
@@ -2587,7 +2611,7 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
         RDI_U64 voff_count = 0;
         RDI_U64 max_line_num = 0;
         {
-          for(RDIM_SrcFileLineMapFragment *map_fragment = src_file->first_line_map_fragment;
+          for(RDIM_SrcFileLineMapFragment *map_fragment = src_file->fragment_list;
               map_fragment != 0;
               map_fragment = map_fragment->next)
           {

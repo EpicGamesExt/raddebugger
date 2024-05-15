@@ -146,6 +146,100 @@ Case("source_path_name_map",NormalSourcePathNameMap)\
   return result;
 }
 
+internal String8
+p2r_normalize_file_path(Arena *arena, String8 file_path)
+{
+  Temp scratch = scratch_begin(&arena,1);
+  String8 file_path_lower  = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+  String8 file_path_normal = path_convert_slashes(arena, file_path_lower, Path_Unix);
+  scratch_end(scratch);
+  return file_path_normal;
+}
+
+internal U64
+p2r_src_file_hash_table_lookup_slot(RDIM_SrcFile **slots, U64 cap, U64 hash, String8 normal_file_path)
+{
+  U64 best = hash % cap;
+  U64 idx  = best;
+  do
+  {
+    RDIM_SrcFile *src_file = slots[idx];
+
+    if(src_file == 0)
+    {
+      break;
+    }
+
+    if(str8_match(src_file->normal_full_path, normal_file_path, 0)) 
+    {
+      return idx;
+    }
+
+    idx = (idx + 1) % cap;
+  } while (idx != best);
+
+  return max_U64;
+}
+
+internal B32
+p2r_src_file_hash_table_insert_or_update(RDIM_SrcFile **slots, U64 cap, U64 hash, RDIM_SrcFile *src_file)
+{
+  B32 is_inserted_or_updated = 0;
+
+  U64 best = hash % cap;
+  U64 idx  = best;
+  do
+  {
+    retry:;
+
+    RDIM_SrcFile *curr_slot = slots[idx];
+    if(curr_slot == 0)
+    {
+      RDIM_SrcFile *now_slot = (RDIM_SrcFile *)ins_atomic_ptr_eval_cond_assign(&slots[idx], src_file, curr_slot);
+      if(now_slot == curr_slot)
+      {
+        // success, slot was inserted
+        is_inserted_or_updated = 1;
+        break;
+      }
+
+      // another thread took the slot
+      goto retry;
+    }
+    else
+    {
+      // TODO: compare file checksum
+      if(rdim_src_file_match(curr_slot, src_file))
+      {
+        U64 curr_idx = rdim_idx_from_src_file(curr_slot);
+        U64 new_idx  = rdim_idx_from_src_file(src_file);
+        if(new_idx < curr_idx)
+        {
+          // try inserting src file into hash table
+          RDIM_SrcFile *now_slot = (RDIM_SrcFile *)ins_atomic_ptr_eval_cond_assign(&slots[idx], src_file, curr_slot);
+          if(now_slot == curr_slot)
+          {
+            is_inserted_or_updated = 1;
+            break;
+          }
+        }
+        else
+        {
+          // there is a more recent version of src file in the slot
+          break;
+        }
+
+        // another thread took the slot
+        goto retry;
+      }
+    }
+
+    idx = (idx + 1) % cap;
+  } while(idx != best);
+
+  return is_inserted_or_updated;
+}
+
 ////////////////////////////////
 //~ rjf: COFF <-> RADDBGI Canonical Conversions
 
@@ -570,8 +664,8 @@ internal TS_TASK_FUNCTION_DEF(p2r_tpi_leaf_parse_task__entry_point)
 internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_parse_task__entry_point)
 {
   P2R_SymbolStreamParseIn *in = (P2R_SymbolStreamParseIn *)p;
-  void *out = 0;
-  ProfScope("parse symbol stream") out = cv_sym_from_data(arena, in->data, 4);
+  CV_SymParsed *out = push_array(arena, CV_SymParsed, 1);
+  ProfScope("parse symbol stream") *out = cv_sym_from_data(arena, in->data, 4);
   return out;
 }
 
@@ -594,18 +688,200 @@ internal TS_TASK_FUNCTION_DEF(p2r_comp_unit_contributions_parse_task__entry_poin
 ////////////////////////////////
 //~ rjf: Unit Conversion Tasks
 
+internal TS_TASK_FUNCTION_DEF(p2r_c13_parse__entry_point)
+{
+  ProfBeginFunction();
+  P2R_C13ParseIn *in = (P2R_C13ParseIn *)p;
+
+  ProfBeginDynamic("parse symbol data [size %llu]", in->sym_data.size);
+  CV_SymParsed sym_parsed = cv_sym_from_data(arena, in->sym_data, 4);
+  ProfEnd();
+
+  ProfBeginDynamic("parse c13 sub sections [size %llu]", in->c13_data.size);
+  CV_C13SubSectionList c13_ss_list = cv_c13_sub_section_list_from_data(arena, in->c13_data, 4);
+  CV_C13Parsed         c13_parsed  = cv_c13_parsed_from_list(&c13_ss_list);
+  ProfEnd();
+
+  // fill out output
+  P2R_C13ParseOut *out = push_array(arena, P2R_C13ParseOut, 1);
+  out->sym_parsed = sym_parsed;
+  out->c13_parsed = c13_parsed;
+  
+  ProfEnd();
+  return out;
+}
+
+internal TS_TASK_FUNCTION_DEF(p2r_c13_count_src_files__entry_point)
+{
+  ProfBeginFunction();
+  P2R_C13ConvertIn *in = (P2R_C13ConvertIn *)p;
+
+  String8 raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
+  U64 *count = push_array(arena, U64, 1);
+
+  for(U64 cursor = 0, src_idx = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; src_idx += 1)
+  {
+    CV_C13_Checksum *checksum = (CV_C13_Checksum *)(raw_checksums.str + cursor);
+    *count += 1;
+
+    // advance cursor
+    cursor += sizeof(*checksum);
+    cursor += checksum->len;
+    cursor = AlignPow2(cursor, 4);
+  }
+
+  ProfEnd();
+  return count;
+}
+
+internal TS_TASK_FUNCTION_DEF(p2r_c13_src_files_convert__entry_point)
+{
+  ProfBeginFunction();
+  P2R_C13ConvertIn *in = (P2R_C13ConvertIn *)p;
+
+  String8 raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
+
+  RDIM_SrcFile *src_file = 0;
+  for(U64 cursor = 0, src_idx = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; src_idx += 1)
+  {
+    // parse checksum
+    CV_C13_Checksum *checksum      = (CV_C13_Checksum *)(raw_checksums.str + cursor);
+    U8              *checksum_data = (U8 *)(checksum + 1);
+
+    // normalize file name
+    String8 file_path_orig   = pdb_strtbl_string_from_off(in->strtbl, checksum->name_off);
+    String8 file_path_normal = p2r_normalize_file_path(arena, file_path_orig);
+
+    if(src_file == 0)
+    {
+      src_file = push_array(arena, RDIM_SrcFile, 1);
+    }
+
+    // fill out src file
+    src_file->normal_full_path = file_path_normal;
+    src_file->fragment_list    = 0;
+    src_file->next_fragment    = 0;
+
+    // insert src file
+    U64 hash        = rdi_hash(file_path_normal.str, file_path_normal.size);
+    B32 is_inserted = p2r_src_file_hash_table_insert_or_update(in->src_file_ht_slots, in->src_file_ht_cap, hash, src_file);
+
+    if(is_inserted)
+    {
+      src_file = 0;
+    }
+
+    // advance cursor
+    cursor += sizeof(*checksum);
+    cursor += checksum->len;
+    cursor = AlignPow2(cursor, 4);
+  }
+
+  ProfEnd();
+  return 0;
+}
+
+internal TS_TASK_FUNCTION_DEF(p2r_rewrite_file_chksms_task__entry_point)
+{
+  P2R_C13ConvertIn *in = (P2R_C13ConvertIn *)p;
+  String8 raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
+  ProfBeginDynamic("rewrite checksum [size %llu]", raw_checksums.size);
+
+  for(U64 cursor = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; )
+  {
+    CV_C13_Checksum *checksum = (CV_C13_Checksum *)str8_deserial_get_raw_ptr(raw_checksums, cursor, sizeof(*checksum));
+
+    // normalize file name
+    String8 file_path_orig   = pdb_strtbl_string_from_off(in->strtbl, checksum->name_off);
+    String8 file_path_normal = p2r_normalize_file_path(arena, file_path_orig);
+
+    // find src file slot 
+    U64 hash = rdi_hash(file_path_normal.str, file_path_normal.size);
+    U64 slot = p2r_src_file_hash_table_lookup_slot(in->src_file_ht_slots, in->src_file_ht_cap, hash, file_path_normal);
+
+    // overwrite checksum with file slot  
+    AssertAlways(slot <= max_U32);
+    MemoryCopy(checksum, &slot, sizeof(U32));
+
+    // advance
+    cursor += sizeof(*checksum);
+    cursor += checksum->len;
+    cursor = AlignPow2(cursor, 4);
+  }
+
+  ProfEnd();
+  return 0;
+}
+
+internal TS_TASK_FUNCTION_DEF(p2r_convert_main_line_table_task__entry_point)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+  P2R_C13ConvertIn *in = (P2R_C13ConvertIn *)p;
+
+  String8                raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
+  RDIM_LineSequenceList *line_table    = push_array(arena, RDIM_LineSequenceList, 1);
+
+  for(CV_C13SubSectionNode *ss = in->c13_parsed.v[CV_C13_SubSectionIdxKind_Lines].first; ss != 0; ss = ss->next)
+  {
+    CV_C13LinesParsedList parsed_lines = cv_c13_lines_from_sub_sections(scratch.arena, in->c13_data, ss->range);
+    for(CV_C13LinesParsedNode *lines_n = parsed_lines.first; lines_n != 0; lines_n = lines_n->next)
+    {
+      U32           slot_idx = *(U32 *)str8_deserial_get_raw_ptr(raw_checksums, lines_n->v.file_off, sizeof(slot_idx));
+      RDIM_SrcFile *src_file = in->src_file_ht_slots[slot_idx];
+      if(src_file)
+      {
+        if(0 < lines_n->v.sec_idx && lines_n->v.sec_idx <= in->sections->count)
+        {
+          U64             sec_voff = in->sections->sections[lines_n->v.sec_idx - 1].voff;
+          CV_C13LineArray lines    = cv_c13_line_array_from_data(arena, in->c13_data, sec_voff, lines_n->v);
+
+          // fill out sequence
+          RDIM_LineSequence* seq = rdim_line_sequence_list_push(arena, line_table);
+          seq->src_file   = src_file;
+          seq->voffs      = lines.voffs;
+          seq->line_nums  = lines.line_nums;
+          seq->col_nums   = lines.col_nums;
+          seq->line_count = lines.line_count;
+
+          RDIM_SrcFileLineMapFragment *fragment = rdim_push_array(arena, RDIM_SrcFileLineMapFragment, 1);
+          fragment->next = 0;
+          fragment->seq  = seq;
+
+          // atomic line fragment insert
+          RDIM_SrcFileLineMapFragment **next_fragment = (RDIM_SrcFileLineMapFragment **)ins_atomic_ptr_eval_assign(&src_file->next_fragment, &fragment->next);
+          *next_fragment = fragment;
+        }
+        else
+        {
+          Assert(!"error: out of bounds section index"); 
+        }
+      }
+      else
+      {
+        Assert(!"error: invalid $$FILE_CHKSMS offset");
+      }
+    }
+  }
+
+  scratch_end(scratch);
+  ProfEnd();
+  return line_table;
+}
+
 internal P2R_SymbolConvertResult
-p2r_convert_symbols(Arena                *arena,
-                    P2R_SrcFileMap        src_file_map,
-                    PDB_CoffSectionArray *sections,
-                    PDB_TpiHashParsed    *tpi_hash,
-                    CV_LeafParsed        *tpi_leaf,
-                    CV_TypeId            *itype_fwd_map,
-                    RDIM_Type           **itype_type_ptrs,
-                    P2R_LinkNameMap      *link_name_map,
-                    CV_SymParsed         *sym,
-                    U64                   sym_ranges_first,
-                    U64                   sym_ranges_opl)
+p2r_convert_symbols(Arena                     *arena,
+                    U64                        src_file_ht_cap,
+                    RDIM_SrcFile             **src_file_ht_slots,
+                    PDB_CoffSectionArray      *sections,
+                    PDB_TpiHashParsed         *tpi_hash,
+                    CV_LeafParsed             *tpi_leaf,
+                    CV_TypeId                 *itype_fwd_map,
+                    RDIM_Type                **itype_type_ptrs,
+                    P2R_LinkNameMap           *link_name_map,
+                    CV_SymParsed              *sym,
+                    U64                        sym_ranges_first,
+                    U64                        sym_ranges_opl)
 {
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < tpi_leaf->itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
   ProfBeginFunction();
@@ -1276,156 +1552,23 @@ p2r_convert_symbols(Arena                *arena,
 #undef p2r_type_ptr_from_itype
 }
 
-internal String8
-p2r_normalize_file_path(Arena *arena, String8 file_path)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8 file_path_lower  = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
-  String8 file_path_normal = path_convert_slashes(arena, file_path_lower, Path_Unix);
-  scratch_end(scratch);
-  return file_path_normal;
-}
-
-internal RDIM_SrcFile *
-p2r_src_file_map_search(P2R_SrcFileMap src_file_map, String8 file_path)
-{
-  Temp scratch = scratch_begin(0,0);
-
-  RDIM_SrcFile *result = 0;
-
-  String8 file_path_normal = p2r_normalize_file_path(scratch.arena, file_path);
-  U64 hash = rdi_hash(file_path_normal.str, file_path_normal.size);
-  U64 slot = hash % src_file_map.slots_count;
-
-  for(P2R_SrcFileNode *node = src_file_map.slots[slot]; node != 0; node = node->next)
-  {
-    if(str8_match(node->src_file->normal_full_path, file_path_normal, 0))
-    {
-      result = node->src_file;
-      break;
-    }
-  }
-
-  scratch_end(scratch);
-  return result;
-}
-
 internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
 {
   Temp scratch = scratch_begin(&arena, 1);
   P2R_UnitConvertIn *in = (P2R_UnitConvertIn *)p;
 
-  ProfBegin("parse symbols");
-  CV_SymParsed *sym = cv_sym_from_data(scratch.arena, in->sym_data, 4);
-  ProfEnd();
-
-  ProfBegin("parse c13 sub sections");
-  CV_C13SubSectionList c13_ss_list = cv_c13_sub_section_list_from_data(scratch.arena, in->c13_data, 4);
-  CV_C13Parsed         c13_parsed  = cv_c13_parsed_from_list(&c13_ss_list);
-  ProfEnd();
-
-  String8 raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &c13_parsed);
-
-  ProfBegin("count src files");
-  U64 src_file_count = 0;
-  for(U64 cursor = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; )
-  {
-    CV_C13_Checksum *checksum = (CV_C13_Checksum *)str8_deserial_get_raw_ptr(raw_checksums, cursor, sizeof(*checksum));
-    cursor += sizeof(*checksum);
-    cursor += checksum->len;
-    cursor = AlignPow2(cursor, 4);
-    src_file_count += 1;
-  }
-  ProfEnd();
-
-  // make file path -> src file hash table
-  P2R_SrcFileMap src_file_map = {0};
-  src_file_map.slots_count = (U64)((F64)src_file_count * 1.5);
-  src_file_map.slots       = push_array(scratch.arena, P2R_SrcFileNode *, src_file_map.slots_count);
-
-  ProfBegin("convert src files");
-  RDIM_SrcFile *src_files = push_array_no_zero(arena, RDIM_SrcFile, src_file_count);
-  for(U64 cursor = 0, src_idx = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; src_idx += 1)
-  {
-    // parse checksum
-    CV_C13_Checksum *checksum      = (CV_C13_Checksum *)(raw_checksums.str + cursor);
-    U8              *checksum_data = (U8 *)(checksum + 1);
-
-    // normalize file name
-    String8 file_path_orig   = pdb_strtbl_string_from_off(in->strtbl, checksum->name_off);
-    String8 file_path_normal = p2r_normalize_file_path(arena, file_path_orig);
-
-    // fill out src file
-    RDIM_SrcFile *src_file = src_files + src_idx;
-    src_file->normal_full_path = file_path_normal;
-
-    // push to hash table
-    P2R_SrcFileNode *src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
-    U64              src_file_hash = rdi_hash(file_path_normal.str, file_path_normal.size);
-    U64              src_file_slot = src_file_hash % src_file_map.slots_count;
-    src_file_node->src_file = src_file;
-    SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
-
-    // advance cursor
-    cursor += sizeof(*checksum);
-    cursor += checksum->len;
-    cursor = AlignPow2(cursor, 4);
-  }
-  ProfEnd();
-
-  U64                            lines_cap = 256;
-  RDIM_LineSequenceListChunkList lines     = {0};
-
-  RDIM_LineSequenceList *main_line_table = rdim_line_sequence_list_chunk_list_push(arena, &lines, lines_cap);
-  ProfBegin("convert main line table");
-  for(CV_C13SubSectionNode *ss = c13_parsed.v[CV_C13_SubSectionIdxKind_Lines].first; ss != 0; ss = ss->next)
-  {
-    CV_C13LinesParsedList parsed_lines = cv_c13_lines_from_sub_sections(scratch.arena, in->c13_data, ss->range);
-    for(CV_C13LinesParsedNode *lines_n = parsed_lines.first; lines_n != 0; lines_n = lines_n->next)
-    {
-      // read checksum header
-      CV_C13_Checksum checksum = {0};
-      str8_deserial_read_struct(raw_checksums, lines_n->v.file_off, &checksum);
-
-      // read lines
-      CV_C13LineArray lines = {0};
-      if(0 < lines_n->v.sec_idx && lines_n->v.sec_idx <= in->sections->count)
-      {
-        U64 sec_base = in->sections->sections[lines_n->v.sec_idx - 1].voff;
-        lines = cv_c13_line_array_from_data(arena, in->c13_data, sec_base, lines_n->v);
-      }
-      else
-      {
-        Assert(!"error: out of bounds section index"); 
-      }
-
-      // file name -> source file 
-      String8       file_path_orig = pdb_strtbl_string_from_off(in->strtbl, checksum.name_off);
-      RDIM_SrcFile *src_file       = p2r_src_file_map_search(src_file_map, file_path_orig);
-
-      // make line sequence
-      RDIM_LineSequence *seq = rdim_line_sequence_list_push(arena, main_line_table);
-      rdim_src_file_push_line_sequence(arena, 0, src_file, seq);
-      seq->src_file   = src_file;
-      seq->voffs      = lines.voffs;
-      seq->line_nums  = lines.line_nums;
-      seq->col_nums   = lines.col_nums;
-      seq->line_count = lines.line_count;
-    }
-  }
-  ProfEnd();
-
   P2R_SymbolConvertResult symbol_result = p2r_convert_symbols(arena,
-                                                              src_file_map,
+                                                              in->src_file_ht_cap,
+                                                              in->src_file_ht_slots,
                                                               in->sections,
                                                               in->tpi_hash,
                                                               in->tpi_leaf,
                                                               in->itype_fwd_map,
                                                               in->itype_type_ptrs,
                                                               in->link_name_map,
-                                                              sym,
+                                                              &in->sym_parsed,
                                                               0,
-                                                              sym->sym_ranges.count);
+                                                              in->sym_parsed.sym_ranges.count);
 
   RDIM_Unit unit = {0};
   ProfBegin("fill out unit header");
@@ -1455,29 +1598,10 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
     unit.build_path      = str8(0,0);
     unit.arch            = symbol_result.arch;
     unit.language        = p2r_rdi_language_from_cv_language(symbol_result.language);
-    unit.main_line_table = main_line_table;
+    unit.main_line_table = in->main_line_table;
   }
   ProfEnd();
 
-  // make chunk list wrapper for source files array
-  RDIM_SrcFileChunkList src_files_chunk_list = {0};
-  {
-    RDIM_SrcFileChunkNode *src_files_chunk = push_array(arena, RDIM_SrcFileChunkNode, 1);
-    src_files_chunk->v        = src_files;
-    src_files_chunk->count    = src_file_count;
-    src_files_chunk->cap      = src_file_count;
-    src_files_chunk->base_idx = 0;
-
-    for(U64 src_file_idx = 0; src_file_idx < src_file_count; src_file_idx += 1)
-    {
-      src_files[src_file_idx].chunk = src_files_chunk;
-    } 
-
-    SLLQueuePush(src_files_chunk_list.first, src_files_chunk_list.last, src_files_chunk);
-    src_files_chunk_list.chunk_count = 1;
-    src_files_chunk_list.total_count = src_file_count;
-  }
-  
   // fill out output
   P2R_UnitConvertOut *out = push_array(arena, P2R_UnitConvertOut, 1);
   out->unit             = unit;
@@ -1485,8 +1609,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
   out->global_variables = symbol_result.global_variables;
   out->thread_variables = symbol_result.thread_variables;
   out->scopes           = symbol_result.scopes;
-  out->src_files        = src_files_chunk_list;
-  out->lines            = lines;
 
   scratch_end(scratch);
   return out;
@@ -1495,19 +1617,18 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
 internal TS_TASK_FUNCTION_DEF(p2r_convert_gsi_block__task_entry_point)
 {
   P2R_GsiBlockConvertIn *in = (P2R_GsiBlockConvertIn *)p;
-  P2R_SrcFileMap src_file_map = {0};
   P2R_SymbolConvertResult *result = push_array_no_zero(arena, P2R_SymbolConvertResult, 1);
   *result = p2r_convert_symbols(arena,
-                                 src_file_map,
-                                 in->sections,
-                                 in->tpi_hash,
-                                 in->tpi_leaf,
-                                 in->itype_fwd_map,
-                                 in->itype_type_ptrs,
-                                 in->link_name_map,
-                                 in->sym,
-                                 in->sym_ranges_first,
-                                 in->sym_ranges_opl);
+                                0, 0, // global stream doesn't have $$FILE_CHCKSMS
+                                in->sections,
+                                in->tpi_hash,
+                                in->tpi_leaf,
+                                in->itype_fwd_map,
+                                in->itype_type_ptrs,
+                                in->link_name_map,
+                                in->sym,
+                                in->sym_ranges_first,
+                                in->sym_ranges_opl);
 
   return result;
 }
@@ -2629,15 +2750,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_udt_convert_task__entry_point)
 }
 
 ////////////////////////////////
-//~ rjf: Symbol Stream Conversion Tasks
-
-internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
-{
-  NotImplemented;
-  return 0;
-}
-
-////////////////////////////////
 //~ rjf: Top-Level Conversion Entry Point
 
 internal P2R_Convert2Bake *
@@ -3471,31 +3583,185 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   RDIM_ScopeChunkList            all_scopes           = {0};
   RDIM_SrcFileChunkList          all_src_files        = {0};
   RDIM_LineSequenceListChunkList all_lines            = {0};
-  ProfScope("produce units, symbols, and source files")
+  ProfScope("produce units, symbols, lines, and source files")
   {
-    // TODO: move push null line sequence to raddbgi_make.c
-    rdim_line_sequence_list_chunk_list_push(arena, &all_lines, 1);
+    P2R_C13ParseOut **c13_per_unit;
+    {
+      ProfBegin("parse symbols & c13 data [comp unit count: %llu]", comp_unit_count);
+      P2R_C13ParseIn *inputs  = push_array(scratch.arena, P2R_C13ParseIn, comp_unit_count);
+      TS_Ticket      *tickets = push_array(scratch.arena, TS_Ticket,      comp_unit_count);
+      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      {
+        P2R_C13ParseIn *in = inputs + comp_unit_idx;
+        in->sym_data = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_Symbols);
+        in->c13_data = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
+        tickets[comp_unit_idx] = ts_kickoff(p2r_c13_parse__entry_point, 0, in);
+      }
+      c13_per_unit = push_array(scratch.arena, P2R_C13ParseOut *, comp_unit_count);
+      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      {
+        c13_per_unit[comp_unit_idx] = ts_join_struct(tickets[comp_unit_idx], max_U64, P2R_C13ParseOut);
+      }
+      ProfEnd();
+    }
+
+    U64            src_file_ht_count;
+    U64            src_file_ht_cap;
+    RDIM_SrcFile **src_file_ht_slots;
+    {
+      U64 total_src_file_count = 0;
+      {
+        ProfBegin("count total number of src files");
+        P2R_C13ConvertIn *inputs  = push_array(scratch.arena, P2R_C13ConvertIn, comp_unit_count);
+        TS_Ticket        *tickets = push_array(scratch.arena, TS_Ticket,        comp_unit_count);
+        for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+        {
+          P2R_C13ConvertIn *in = inputs + comp_unit_idx;
+          in->c13_data   = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
+          in->c13_parsed = c13_per_unit[comp_unit_idx]->c13_parsed;
+          tickets[comp_unit_idx] = ts_kickoff(p2r_c13_count_src_files__entry_point, 0, in);
+        }
+        for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+        {
+          U64 *count = ts_join_struct(tickets[comp_unit_idx], max_U64, U64);
+          total_src_file_count += *count;
+        }
+        ProfEnd();
+      }
+
+      src_file_ht_cap   = (U64)((F64)total_src_file_count * 1.3);
+      src_file_ht_slots = push_array(scratch.arena, RDIM_SrcFile *, src_file_ht_cap);
+      {
+        ProfBegin("dedup src files");
+        P2R_C13ConvertIn *inputs  = push_array(scratch.arena, P2R_C13ConvertIn, comp_unit_count);
+        TS_Ticket        *tickets = push_array(scratch.arena, TS_Ticket,        comp_unit_count);
+        for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+        {
+          P2R_C13ConvertIn *in = inputs + comp_unit_idx;
+          in->c13_data          = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
+          in->c13_parsed        = c13_per_unit[comp_unit_idx]->c13_parsed;
+          in->strtbl            = strtbl;
+          in->src_file_ht_cap   = src_file_ht_cap;
+          in->src_file_ht_slots = src_file_ht_slots;
+          tickets[comp_unit_idx] = ts_kickoff(p2r_c13_src_files_convert__entry_point, 0, in);
+        }
+        for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+        {
+          ts_join(tickets[comp_unit_idx], max_U64);
+        }
+        ProfEnd();
+      }
+
+      // TODO: prallel
+      ProfBegin("count unique src files");
+      src_file_ht_count = 0;
+      for(U64 slot = 0; slot < src_file_ht_cap; slot += 1)
+      {
+        if(src_file_ht_slots[slot] != 0)
+        {
+          src_file_ht_count += 1;
+        }
+      }
+      ProfEnd();
+    }
+
+    U64           src_file_count;
+    RDIM_SrcFile *src_files;
+    {
+      ProfBegin("copy out slots with src files from the hash table");
+      RDIM_SrcFile ***unique_src_file_ptrs = push_array_no_zero(scratch.arena, RDIM_SrcFile **, src_file_ht_count);
+      for(U64 slot = 0, unique_src_file_idx = 0; slot < src_file_ht_cap; slot += 1)
+      {
+        if(src_file_ht_slots[slot] != 0)
+        {
+          unique_src_file_ptrs[unique_src_file_idx] = &src_file_ht_slots[slot];
+          unique_src_file_idx += 1;
+        }
+      }
+      ProfEnd();
+
+      // make sure we get deterministic src file array in output
+      ProfBeginDynamic("sort unique src files [count %llu]", src_file_ht_count);
+      qsort(unique_src_file_ptrs, src_file_ht_count, sizeof(unique_src_file_ptrs[0]), rdim_src_file_ptr_compar);
+      ProfEnd();
+
+      ProfBegin("make final src file array");
+      src_file_count = src_file_ht_count;
+      src_files      = push_array_no_zero(arena, RDIM_SrcFile, src_file_count);
+      for(U64 src_file_idx = 0; src_file_idx < src_file_count; src_file_idx += 1)
+      {
+        // copy src file to unique array
+        src_files[src_file_idx] = **unique_src_file_ptrs[src_file_idx];
+        src_files[src_file_idx].fragment_list = 0;
+        src_files[src_file_idx].next_fragment = &src_files[src_file_idx].fragment_list;
+
+        // update src file pointer in the hash table, so we can skip on src file rehash
+        *unique_src_file_ptrs[src_file_idx] = src_files + src_file_idx;
+      }
+      ProfEnd();
+    }
+
+    {
+      ProfBegin("rewrite $$FILE_CHCKSMS");
+      P2R_C13ConvertIn *inputs  = push_array(scratch.arena, P2R_C13ConvertIn, comp_unit_count);
+      TS_Ticket        *tickets = push_array(scratch.arena, TS_Ticket,        comp_unit_count);
+      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      {
+        P2R_C13ConvertIn *in = inputs + comp_unit_idx;
+        in->c13_data          = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
+        in->c13_parsed        = c13_per_unit[comp_unit_idx]->c13_parsed;
+        in->strtbl            = strtbl;
+        in->src_file_ht_cap   = src_file_ht_cap;
+        in->src_file_ht_slots = src_file_ht_slots;
+        tickets[comp_unit_idx] = ts_kickoff(p2r_rewrite_file_chksms_task__entry_point, 0, in);
+      }
+      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      {
+        ts_join(tickets[comp_unit_idx], max_U64);
+      }
+      ProfEnd();
+    }
+
+    RDIM_LineSequenceList *lines_per_unit = push_array(scratch.arena, RDIM_LineSequenceList, comp_unit_count);
+    {
+      ProfBegin("convert main line tables");
+      P2R_C13ConvertIn *inputs  = push_array(scratch.arena, P2R_C13ConvertIn, comp_unit_count);
+      TS_Ticket        *tickets = push_array(scratch.arena, TS_Ticket,        comp_unit_count);
+      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      {
+        P2R_C13ConvertIn *in = inputs + comp_unit_idx;
+        in->c13_data          = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
+        in->c13_parsed        = c13_per_unit[comp_unit_idx]->c13_parsed;
+        in->src_file_ht_cap   = src_file_ht_cap;
+        in->src_file_ht_slots = src_file_ht_slots;
+        in->sections          = coff_sections;
+        tickets[comp_unit_idx] = ts_kickoff(p2r_convert_main_line_table_task__entry_point, 0, in);
+      }
+      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      {
+        lines_per_unit[comp_unit_idx] = *ts_join_struct(tickets[comp_unit_idx], max_U64, RDIM_LineSequenceList);
+      }
+      ProfEnd();
+    }
 
     P2R_UnitConvertIn *unit_tasks_inputs  = push_array(scratch.arena, P2R_UnitConvertIn, comp_unit_count);
     TS_Ticket         *unit_tasks_tickets = push_array(scratch.arena, TS_Ticket,         comp_unit_count);
     ProfBegin("kick off comp unit conversion tasks");
     for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
     {
-      PDB_CompUnit *pdb_unit = comp_units->units[comp_unit_idx];
-
       // fill out task context
       P2R_UnitConvertIn *in = unit_tasks_inputs + comp_unit_idx;
-      in->pdb_unit        = pdb_unit;
-      in->sections        = coff_sections;
-      in->tpi_hash        = tpi_hash;
-      in->tpi_leaf        = tpi_leaf;
-      in->itype_fwd_map   = itype_fwd_map;
-      in->itype_type_ptrs = itype_type_ptrs;
-      in->link_name_map   = link_name_map;
-      in->strtbl          = strtbl;
-      in->sym_data        = pdb_data_from_unit_range(msf, pdb_unit, PDB_DbiCompUnitRange_Symbols);
-      in->c11_data        = pdb_data_from_unit_range(msf, pdb_unit, PDB_DbiCompUnitRange_C11);
-      in->c13_data        = pdb_data_from_unit_range(msf, pdb_unit, PDB_DbiCompUnitRange_C13);
+      in->pdb_unit          = comp_units->units[comp_unit_idx];
+      in->sections          = coff_sections;
+      in->tpi_hash          = tpi_hash;
+      in->tpi_leaf          = tpi_leaf;
+      in->itype_fwd_map     = itype_fwd_map;
+      in->itype_type_ptrs   = itype_type_ptrs;
+      in->link_name_map     = link_name_map;
+      in->sym_parsed        = c13_per_unit[comp_unit_idx]->sym_parsed;
+      in->src_file_ht_cap   = src_file_ht_cap;
+      in->src_file_ht_slots = src_file_ht_slots;
+      in->main_line_table   = &lines_per_unit[comp_unit_idx];
       
       // start task
       unit_tasks_tickets[comp_unit_idx] = ts_kickoff(p2r_unit_convert__entry_point, 0, in);
@@ -3546,11 +3812,9 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       rdim_symbol_chunk_list_concat_in_place(&all_global_variables,  &out->global_variables);
       rdim_symbol_chunk_list_concat_in_place(&all_thread_variables,  &out->thread_variables);
       rdim_scope_chunk_list_concat_in_place(&all_scopes,             &out->scopes);
-      rdim_src_file_chunk_list_concat_in_place(&all_src_files,       &out->src_files);
-      rdim_line_sequence_list_chunk_list_concat_in_place(&all_lines, &out->lines);
     }
     ProfEnd();
-    
+
     ProfBegin("join GSI-block conversion tasks");
     for(U64 gsi_block_idx = 0; gsi_block_idx < gsi_block_count; gsi_block_idx += 1)
     {
@@ -3578,22 +3842,59 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     }
     ProfEnd();
 
-    // fill out chunk list wrapper
+    // TODO: move push null line sequence to raddbgi_make.c
+    rdim_line_sequence_list_chunk_list_push(arena, &all_lines, 1);
     {
-      RDIM_UnitChunkNode *unit_chunk_node = push_array(arena, RDIM_UnitChunkNode, 1);
-      unit_chunk_node->v        = units;
-      unit_chunk_node->count    = comp_unit_count;
-      unit_chunk_node->cap      = comp_unit_count;
-      unit_chunk_node->base_idx = 0;
+      RDIM_LineSequenceListChunkNode *chunk = push_array(arena, RDIM_LineSequenceListChunkNode, 1);
+      chunk->v        = lines_per_unit;
+      chunk->count    = comp_unit_count;
+      chunk->cap      = comp_unit_count;
+      chunk->base_idx = all_lines.total_count;
 
-      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
+      for(U64 i = 0; i < chunk->count; i += 1)
       {
-        units[comp_unit_idx].chunk = unit_chunk_node;
+        chunk->v[i].chunk = chunk;
+      } 
+
+      SLLQueuePush(all_lines.first, all_lines.last, chunk);
+      all_lines.chunk_count += 1;
+      all_lines.total_count += comp_unit_count;
+    }
+
+    // make chunk list wrapper for source files array
+    {
+      RDIM_SrcFileChunkNode *chunk = push_array(arena, RDIM_SrcFileChunkNode, 1);
+      chunk->v        = src_files;
+      chunk->count    = src_file_count;
+      chunk->cap      = src_file_count;
+      chunk->base_idx = all_src_files.total_count;
+
+      for(U64 i = 0; i < chunk->count; i += 1)
+      {
+        chunk->v[i].chunk = chunk;
+      } 
+
+      SLLQueuePush(all_src_files.first, all_src_files.last, chunk);
+      all_src_files.chunk_count += 1;
+      all_src_files.total_count += chunk->count;
+    }
+
+    // make chunk list wrapper for unit array
+    {
+      RDIM_UnitChunkNode *chunk = push_array(arena, RDIM_UnitChunkNode, 1);
+      chunk->v        = units;
+      chunk->count    = comp_unit_count;
+      chunk->cap      = comp_unit_count;
+      chunk->base_idx = all_units.total_count;
+
+      for(U64 i = 0; i < chunk->count; i += 1)
+      {
+        chunk->v[i].chunk = chunk;
       }
 
-      SLLQueuePush(all_units.first, all_units.last, unit_chunk_node);
-      all_units.chunk_count = 1;
-      all_units.total_count = comp_unit_count;
+      SLLQueuePush(all_units.first, all_units.last, chunk);
+      all_units.chunk_count += 1;
+      all_units.total_count += comp_unit_count;
     }
   }
   
@@ -3606,7 +3907,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     RDIM_UDTChunkList *udts = ts_join_struct(udt_tasks_tickets[idx], max_U64, RDIM_UDTChunkList);
     rdim_udt_chunk_list_concat_in_place(&all_udts, udts);
   }
-  
+
   //////////////////////////////////////////////////////////////
   //- rjf: fill output
   //
@@ -3916,7 +4217,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   Temp scratch = scratch_begin(&arena, 1);
   RDIM_BakeParams *params = &in->bake_params;
   RDIM_BakeSectionList sections = {0};
-  
+
   //- rjf: build interned path tree
   RDIM_BakePathTree *path_tree = 0;
   ProfScope("build interned path tree")
