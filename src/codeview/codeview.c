@@ -171,7 +171,7 @@ cv_f64_from_numeric(CV_NumericParsed *num){
 internal U64
 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value)
 {
-  U32 value;
+  U32 value = 0;
 
   U64 cursor = offset;
 
@@ -205,6 +205,10 @@ cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value)
   else if((header & 0xE0) == 0xE0)
   {
     value = max_U32;
+  }
+  else
+  {
+    InvalidPath;
   }
 
   *out_value = value;
@@ -278,27 +282,26 @@ cv_rec_range_stream_from_data(Arena *arena, String8 sym_data, U64 sym_align){
 
 //- sym
 
-internal CV_SymParsed*
-cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align){
+internal CV_SymParsed
+cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align)
+{
   Assert(1 <= sym_align && IsPow2OrZero(sym_align));
   ProfBegin("cv_sym_from_data");
-  
   Temp scratch = scratch_begin(&arena, 1);
   
   // gather up symbols
   CV_RecRangeStream *stream = cv_rec_range_stream_from_data(scratch.arena, sym_data, sym_align);
   
   // convert to result
-  CV_SymParsed *result = push_array(arena, CV_SymParsed, 1);
-  result->data = sym_data;
-  result->sym_align = sym_align;
-  result->sym_ranges = cv_rec_range_array_from_stream(arena, stream);
+  CV_SymParsed result = {0};
+  result.data       = sym_data;
+  result.sym_align  = sym_align;
+  result.sym_ranges = cv_rec_range_array_from_stream(arena, stream);
   
   scratch_end(scratch);
   
   ProfEnd();
-  
-  return(result);
+  return result;
 }
 
 //- leaf

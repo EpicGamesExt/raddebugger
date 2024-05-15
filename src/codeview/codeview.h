@@ -3020,7 +3020,7 @@ internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value
 internal CV_RecRangeStream* cv_rec_range_stream_from_data(Arena *arena, String8 data, U64 align);
 
 //- sym
-internal CV_SymParsed* cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align);
+internal CV_SymParsed cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align);
 
 //- leaf
 internal CV_LeafParsed* cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId first);
