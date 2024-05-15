@@ -173,6 +173,7 @@
 #  define ins_atomic_u32_eval_assign(x,c) InterlockedExchange((volatile LONG *)(x),(c))
 #  define ins_atomic_u32_eval_cond_assign(x,k,c) InterlockedCompareExchange((volatile LONG *)(x),(k),(c))
 #  define ins_atomic_ptr_eval_assign(x,c) (void*)ins_atomic_u64_eval_assign((volatile __int64 *)(x), (__int64)(c))
+#  define ins_atomic_ptr_eval_cond_assign(x,k,c) InterlockedCompareExchangePointer((volatile PVOID *)(x),(k),(c))
 # else
 #  error Atomic intrinsics not defined for this operating system / architecture combination.
 # endif
