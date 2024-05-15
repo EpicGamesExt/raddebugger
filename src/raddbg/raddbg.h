@@ -66,7 +66,6 @@
 //  [ ] highlighted text & ctrl+f -> auto-fill search query
 //  [ ] double-click any part of frame in callstack view -> snap to function
 //  [ ] sort locals by appearance in source code (or maybe just debug info)
-//  [ ] bit more padding on the tabs
 //  [ ] sum view rule
 //  [ ] plot view rule
 //  [ ] histogram view rule
@@ -130,23 +129,10 @@
 //      have alternating bright/dim letters to show sections of a number. Is
 //      this in the theme colors somewhere?
 //
-//  [ ] ** I couldn't figure out how to really view threads in the debugger.
-//      The only place I found a thread list was in "The Scheduler", but it
-//      only lists threads by ID, which is hard to use. I can hover over them
-//      to get the stack, which helps, but it would be much nicer if the top
-//      function was displayed in the window by default next to the thread.
-//  [ ] ** It would be nice if thread listings displayed the name of the
-//      thread, instead of just the ID.
-//
 //  [ ] ** Scrollbars are barely visible for me, for some reason. I could not
 //      find anything in the theme that would fill them with a solid, bright
 //      color. Instead they are just a thin outline and the same color as the
 //      scroll bar background.
-//
-//  [ ] Dragging a window tab (like Locals or Registers or whatnot) and
-//      canceling with ESC should revert the window tab to where it was.
-//      Currently, it leaves the window tab reordered if you dragged over its
-//      window and shuffled its position.
 //
 //  [ ] Many of the UI elements, like the menus, would like better if they had
 //      a little bit of margin. Having the text right next to the edges, and
@@ -206,11 +192,6 @@
 //      be fine with them, but they would have to be much more light (like
 //      alpha 0.1 or something)
 //
-//  [ ] It's confusing that ENTER is the way you expand and collapse things in
-//      the watch window, but then also how you edit them if they are not
-//      expandable? It seems like this should be consistent (one way to edit,
-//      one way to expand/collapse, that are distinct)
-//
 //  [ ] The hex format for color values in the config file was a real
 //      mindbender. It's prefixed with "0x", so I was assuming it was either
 //      Windows Big Endian (0xAARRGGBB) or Mac Little Endian (0xAABBGGRR). To
@@ -235,16 +216,10 @@
 //  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
 //  [ ]  mouse back button should make view to go back after I double clicked
 //       on function to open it
-//  [ ]  pressing random keyboard keys in source code advances text cursor like
-//       you were inputting text, very strange.
 //  [ ]  Alt+8 to switch to disassembly would be nice (regardless on which
 //       panel was previous, don't want to use ctrl+, multiple times)
 //       Alt+8 for disasm and Alt+6 for memory view are shortcuts I often use
 //       in VS
-//  [ ]  in watch window when I enter some new expression and then click mouse
-//       away from cell, then it should behave the same as if I pressed enter.
-//       Currently it does the same as if I have pressed esc and I have lost my
-//       expression
 //  [ ]  default font size is too small for me - not only source code, but
 //       menus/tab/watch names (which don't resize). Maybe you could query
 //       Windows for initial font size?
@@ -320,7 +295,6 @@
 //     variables?
 //
 // [ ] @feature disasm view improvement features
-//  [ ] interleaved src/dasm view
 //  [ ] visualize jump destinations in disasm
 //
 // [ ] @feature eval ui improvement features
@@ -356,14 +330,6 @@
 // [ ] fancy string runs can include "weakness" information for text truncation
 //     ... can prioritize certain parts of strings to be truncated before
 //     others. would be good for e.g. the middle of a path
-// [ ] ui code maintenance, simplification, design, & robustness pass
-//  [ ] page-up & page-down correct handling in keyboard nav
-//  [ ] collapse context menus & command lister into same codepaths. filter by
-//      context. parameterize by context.
-//  [ ] collapse text cells & command lister & etc. into same codepath (?)
-//  [ ] nested context menus
-//  [ ] unified top-level cursor/typing/lister helper
-//  [ ] font selection lister
 // [ ] font cache eviction (both for font tags, closing fp handles, and
 //     rasterizations)
 // [ ] frontend speedup opportunities
@@ -387,6 +353,32 @@
 // [x] autocomplete lister should respect position in edited expression,
 //     tabbing through should autocomplete but not exit, etc.
 // [x] pipe failure-to-launch errors back to frontend
+//  [x] bit more padding on the tabs
+//  [x] unified top-level cursor/typing/lister helper
+//  [x] collapse text cells & command lister & etc. into same codepath (?)
+//  [x] page-up & page-down correct handling in keyboard nav
+//  [x] interleaved src/dasm view
+//  [x]  in watch window when I enter some new expression and then click mouse
+//       away from cell, then it should behave the same as if I pressed enter.
+//       Currently it does the same as if I have pressed esc and I have lost my
+//       expression
+//  [x]  pressing random keyboard keys in source code advances text cursor like
+//       you were inputting text, very strange.
+//  [x] It's confusing that ENTER is the way you expand and collapse things in
+//      the watch window, but then also how you edit them if they are not
+//      expandable? It seems like this should be consistent (one way to edit,
+//      one way to expand/collapse, that are distinct)
+//  [x] Dragging a window tab (like Locals or Registers or whatnot) and
+//      canceling with ESC should revert the window tab to where it was.
+//      Currently, it leaves the window tab reordered if you dragged over its
+//      window and shuffled its position.
+//  [x] ** I couldn't figure out how to really view threads in the debugger.
+//      The only place I found a thread list was in "The Scheduler", but it
+//      only lists threads by ID, which is hard to use. I can hover over them
+//      to get the stack, which helps, but it would be much nicer if the top
+//      function was displayed in the window by default next to the thread.
+//  [x] ** It would be nice if thread listings displayed the name of the
+//      thread, instead of just the ID.
 
 #ifndef RADDBG_H
 #define RADDBG_H

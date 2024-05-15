@@ -7101,7 +7101,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               
               // rjf: space for next tab
               {
-                ui_spacer(ui_em(0.15f, 1.f));
+                ui_spacer(ui_em(0.3f, 1.f));
               }
               
               // rjf: store off drop-site
