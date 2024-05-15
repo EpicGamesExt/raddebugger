@@ -336,6 +336,8 @@ struct DF_WatchViewState
   // rjf; table cursor state
   DF_WatchViewPoint cursor;
   DF_WatchViewPoint mark;
+  DF_WatchViewPoint next_cursor;
+  DF_WatchViewPoint next_mark;
   
   // rjf: text input state
   Arena *text_edit_arena;
@@ -483,6 +485,7 @@ internal DF_ExpandKey   df_parent_expand_key_from_eval_root(DF_EvalRoot *root);
 internal DF_ExpandKey   df_expand_key_from_eval_root(DF_EvalRoot *root);
 
 //- rjf: watch view points <-> table coordinates
+internal B32 df_watch_view_point_match(DF_WatchViewPoint a, DF_WatchViewPoint b);
 internal DF_WatchViewPoint df_watch_view_point_from_tbl(DF_EvalVizBlockList *blocks, Vec2S64 tbl);
 internal Vec2S64 df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
 
