@@ -510,6 +510,30 @@ df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, TG_Graph 
   return result;
 }
 
+//- rjf: table coordinates -> text edit state
+
+internal DF_WatchViewTextEditState *
+df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint pt)
+{
+  DF_WatchViewTextEditState *result = &wv->dummy_text_edit_state;
+  if(wv->text_edit_state_slots_count != 0 && wv->text_editing != 0)
+  {
+    U64 hash = df_hash_from_expand_key(pt.key);
+    U64 slot_idx = hash%wv->text_edit_state_slots_count;
+    for(DF_WatchViewTextEditState *s = wv->text_edit_state_slots[slot_idx]; s != 0; s = s->pt_hash_next)
+    {
+      if(pt.column_kind == s->pt.column_kind &&
+         df_expand_key_match(pt.parent_key, s->pt.parent_key) &&
+         df_expand_key_match(pt.key, s->pt.key))
+      {
+        result = s;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 //- rjf: windowed watch tree visualization (both single-line and multi-line)
 
 internal DF_EvalVizBlockList
@@ -810,6 +834,22 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_ip_vaddr);
   
   //////////////////////////////
+  //- rjf: determine autocompletion string
+  //
+  String8 autocomplete_hint_string = {0};
+  {
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first; n != 0; n = n->next)
+    {
+      if(n->v.kind == UI_EventKind_AutocompleteHint)
+      {
+        autocomplete_hint_string = n->v.string;
+        break;
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: consume events & perform navigations/edits - calculate state
   //
   EVAL_String2ExprMap macro_map = {0};
@@ -823,6 +863,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
     UI_EventList *events = ui_events();
     B32 state_dirty = 1;
     B32 cursor_dirty__tbl = 0;
+    B32 take_autocomplete = 0;
     for(UI_EventNode *event_n = events->first, *next = 0;; event_n = next)
     {
       //////////////////////////
@@ -987,25 +1028,31 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         Vec2S64 selection_dim = dim_2s64(selection_tbl);
         ewv->text_editing = 1;
         arena_clear(ewv->text_edit_arena);
-        ewv->text_edit_count = (selection_dim.x+1)*(selection_dim.y+1);
-        ewv->text_edit_states = push_array(ewv->text_edit_arena, DF_WatchViewTextEditState, ewv->text_edit_count);
+        ewv->text_edit_state_slots_count = u64_up_to_pow2(selection_dim.y+1);
+        ewv->text_edit_state_slots_count = Max(ewv->text_edit_state_slots_count, 64);
+        ewv->text_edit_state_slots = push_array(ewv->text_edit_arena, DF_WatchViewTextEditState*, ewv->text_edit_state_slots_count);
         DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
                                                                                            r1s64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y-1),
                                                                                                  ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y-1)+1), &blocks);
         DF_EvalVizRow *row = rows.first;
-        U64 edit_idx = 0;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row = row->next)
         {
-          for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1, edit_idx += 1)
+          for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             String8 string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, parse_ctx.type_graph, parse_ctx.rdi, row, (DF_WatchViewColumnKind)x, 1);
-            string.size = Min(string.size, sizeof(ewv->text_edit_states[edit_idx].input_buffer));
-            ewv->text_edit_states[edit_idx].cursor = txt_pt(1, string.size+1);
-            ewv->text_edit_states[edit_idx].mark = txt_pt(1, 1);
-            ewv->text_edit_states[edit_idx].input_size = string.size;
-            MemoryCopy(ewv->text_edit_states[edit_idx].input_buffer, string.str, string.size);
-            ewv->text_edit_states[edit_idx].initial_size = string.size;
-            MemoryCopy(ewv->text_edit_states[edit_idx].initial_buffer, string.str, string.size);
+            string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
+            DF_WatchViewPoint pt = {(DF_WatchViewColumnKind)x, row->parent_key, row->key};
+            U64 hash = df_hash_from_expand_key(pt.key);
+            U64 slot_idx = hash%ewv->text_edit_state_slots_count;
+            DF_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, DF_WatchViewTextEditState, 1);
+            SLLStackPush_N(ewv->text_edit_state_slots[slot_idx], edit_state, pt_hash_next);
+            edit_state->pt = pt;
+            edit_state->cursor = txt_pt(1, string.size+1);
+            edit_state->mark = txt_pt(1, 1);
+            edit_state->input_size = string.size;
+            MemoryCopy(edit_state->input_buffer, string.str, string.size);
+            edit_state->initial_size = string.size;
+            MemoryCopy(edit_state->initial_buffer, string.str, string.size);
           }
         }
       }
@@ -1024,14 +1071,29 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             evt->delta_2s32.y == 0))
         {
           taken = 1;
-          U64 edit_idx = 0;
           for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1)
           {
-            for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x && edit_idx < ewv->text_edit_count; x += 1, edit_idx += 1)
+            for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
             {
-              DF_WatchViewTextEditState *edit_state = &ewv->text_edit_states[edit_idx];
+              DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, v2s64(x, y));
+              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
               String8 string = str8(edit_state->input_buffer, edit_state->input_size);
               UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
+              
+              // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
+              if(autocomplete_hint_string.size != 0)
+              {
+                take_autocomplete = 1;
+                String8 word_query = df_autocomp_query_word_from_input_string_off(string, edit_state->cursor.column-1);
+                U64 word_off = (U64)(word_query.str - string.str);
+                String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
+                new_string.size = Min(sizeof(edit_state->input_buffer), new_string.size);
+                MemoryCopy(edit_state->input_buffer, new_string.str, new_string.size);
+                edit_state->input_size = new_string.size;
+                edit_state->cursor = edit_state->mark = txt_pt(1, word_off+1+autocomplete_hint_string.size);
+                string = str8(edit_state->input_buffer, edit_state->input_size);
+                op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
+              }
               
               // rjf: cancel? -> revert to initial string
               if(editing_complete && evt->key == OS_Key_Esc)
@@ -1148,24 +1210,35 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1)
         {
           DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, v2s64(0, y));
-          DF_EvalRoot *root = df_eval_root_from_expand_key(ewv, eval_view, pt.key);
-          if(root != 0)
+          
+          // rjf: row deletions
+          if(selection_tbl.min.x <= 0)
           {
-            DF_ExpandKey new_cursor_key = empty_row_key;
-            DF_ExpandKey new_cursor_parent_key = empty_row_parent_key;
-            if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && root->prev != 0)
+            DF_EvalRoot *root = df_eval_root_from_expand_key(ewv, eval_view, pt.key);
+            if(root != 0)
             {
-              new_cursor_key = df_expand_key_from_eval_root(root->prev);
-              new_cursor_parent_key = df_parent_expand_key_from_eval_root(root->prev);
+              DF_ExpandKey new_cursor_key = empty_row_key;
+              DF_ExpandKey new_cursor_parent_key = empty_row_parent_key;
+              if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && root->prev != 0)
+              {
+                new_cursor_key = df_expand_key_from_eval_root(root->prev);
+                new_cursor_parent_key = df_parent_expand_key_from_eval_root(root->prev);
+              }
+              else if(root->next != 0)
+              {
+                new_cursor_key = df_expand_key_from_eval_root(root->next);
+                new_cursor_parent_key = df_parent_expand_key_from_eval_root(root->next);
+              }
+              DF_WatchViewPoint new_cursor_pt = {DF_WatchViewColumnKind_Expr, new_cursor_parent_key, new_cursor_key};
+              df_eval_root_release(ewv, root);
+              ewv->cursor = ewv->mark = new_cursor_pt;
             }
-            else if(root->next != 0)
-            {
-              new_cursor_key = df_expand_key_from_eval_root(root->next);
-              new_cursor_parent_key = df_parent_expand_key_from_eval_root(root->next);
-            }
-            DF_WatchViewPoint new_cursor_pt = {DF_WatchViewColumnKind_Expr, new_cursor_parent_key, new_cursor_key};
-            df_eval_root_release(ewv, root);
-            ewv->cursor = ewv->mark = new_cursor_pt;
+          }
+          
+          // rjf: view rule deletions
+          else if(selection_tbl.min.x <= DF_WatchViewColumnKind_ViewRule && DF_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
+          {
+            df_eval_view_set_key_rule(eval_view, pt.key, str8_zero());
           }
         }
       }
@@ -1296,6 +1369,17 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ui_eat_event(events, event_n);
       }
     }
+    if(take_autocomplete)
+    {
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
+      {
+        if(n->v.kind == UI_EventKind_AutocompleteHint)
+        {
+          ui_eat_event(events, n);
+          break;
+        }
+      }
+    }
   }
   
   //////////////////////////////
@@ -1309,7 +1393,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
     &ewv->view_rule_column_pct,
   };
   B32 pressed = 0;
-  DF_EvalVizRow *commit_row = 0;
   Vec2S64 next_cursor_tbl = cursor_tbl;
   Rng1S64 visible_row_rng = {0};
   UI_ScrollListParams scroll_list_params = {0};
@@ -1399,10 +1482,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
     ProfScope("build table")
     {
       //- rjf: build rows
-      DF_WatchViewTextEditState dummy_edit_state = {0};
       U64 semantic_idx = rows.count_before_semantic;
       for(DF_EvalVizRow *row = rows.first; row != 0; row = row->next, semantic_idx += 1)
       {
+        //- rjf: unpack row info
         U64 row_hash = df_hash_from_expand_key(row->key);
         U64 expr_hash = df_hash_from_string(row->display_expr);
         df_expand_tree_table_animate(&eval_view->expand_tree_table, df_dt());
@@ -1433,12 +1516,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               }
             }
           }break;
-        }
-        
-        //- rjf: store root edit commit info
-        if(row_selected)
-        {
-          commit_row = row;
         }
         
         //- rjf: build canvas row
@@ -1549,15 +1626,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             //- rjf: expression
             ProfScope("expr")
             {
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_Expr && DF_WatchViewColumnKind_Expr <= selection_tbl.max.x);
+              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Expr, row->parent_key, row->key};
+              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
               B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
-              
-              // rjf: obtain edit state for this cell
-              DF_WatchViewTextEditState *edit_state = &dummy_edit_state;
-              if(ewv->text_editing && cell_selected)
-              {
-                edit_state = &ewv->text_edit_states[(semantic_idx+1 - selection_tbl.min.y)*(dim_2s64(selection_tbl).x+1) + DF_WatchViewColumnKind_Expr-selection_tbl.min.x];
-              }
               
               // rjf: begin editing
 #if 0
@@ -1680,6 +1752,17 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   
                   scratch_end(scratch);
                 }
+                
+                // rjf: autocomplete lister
+                if(expr_editing_active &&
+                   selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
+                   txt_pt_match(edit_state->cursor, edit_state->mark))
+                {
+                  String8 input = str8(edit_state->input_buffer, edit_state->input_size);
+                  DF_AutoCompListerParams params = {DF_AutoCompListerFlag_Locals};
+                  df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, &params, input, edit_state->cursor.column-1);
+                }
+                
 #if 0 // TODO(rjf):
                 if(expr_editing_active && !edit_end && txt_pt_match(ewv->input_cursor, ewv->input_mark))
                 {
@@ -1732,18 +1815,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             //- rjf: value
             ProfScope("value")
             {
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_Value && DF_WatchViewColumnKind_Value <= selection_tbl.max.x);
+              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Value, row->parent_key, row->key};
+              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
               B32 value_is_error   = (row->eval.errors.count != 0);
               B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
               B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
               B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
-              
-              // rjf: obtain edit state for this cell
-              DF_WatchViewTextEditState *edit_state = &dummy_edit_state;
-              if(ewv->text_editing && cell_selected)
-              {
-                edit_state = &ewv->text_edit_states[(semantic_idx+1 - selection_tbl.min.y)*(dim_2s64(selection_tbl).x+1) + DF_WatchViewColumnKind_Value-selection_tbl.min.x];
-              }
               
               // rjf: begin editing
 #if 0 // TODO(rjf):
@@ -1842,7 +1920,9 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             //- rjf: type
             ProfScope("type")
             {
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_Type && DF_WatchViewColumnKind_Type <= selection_tbl.max.x);
+              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Type, row->parent_key, row->key};
+              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
               UI_TableCell UI_Font(code_font)
                 UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -1868,15 +1948,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             //- rjf: view rule
             ProfScope("view rule")
             {
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= DF_WatchViewColumnKind_ViewRule && DF_WatchViewColumnKind_ViewRule <= selection_tbl.max.x);
+              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_ViewRule, row->parent_key, row->key};
+              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
               String8 view_rule = df_eval_view_rule_from_key(eval_view, row->key);
-              
-              // rjf: obtain edit state for this cell
-              DF_WatchViewTextEditState *edit_state = &dummy_edit_state;
-              if(ewv->text_editing && cell_selected)
-              {
-                edit_state = &ewv->text_edit_states[(semantic_idx+1 - selection_tbl.min.y)*(dim_2s64(selection_tbl).x+1) + DF_WatchViewColumnKind_ViewRule-selection_tbl.min.x];
-              }
               
               // rjf: begin editing
 #if 0 // TODO(rjf):
@@ -1908,6 +1983,20 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 pressed = 1;
                 // TODO(rjf): edit_commit = edit_commit || (ewv->text_editing && !cell_selected);
                 next_cursor_tbl = v2s64(DF_WatchViewColumnKind_ViewRule, (semantic_idx+1));
+              }
+              
+              // rjf: autocomplete lister
+              if(rule_editing_active &&
+                 selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
+                 txt_pt_match(edit_state->cursor, edit_state->mark))
+              {
+                String8 input = str8(edit_state->input_buffer, edit_state->input_size);
+                DF_AutoCompListerParams params = df_view_rule_autocomp_lister_params_from_input_cursor(scratch.arena, input, edit_state->cursor.column-1);
+                if(params.flags == 0)
+                {
+                  params.flags = DF_AutoCompListerFlag_ViewRules;
+                }
+                df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, &params, input, edit_state->cursor.column-1);
               }
               
               // rjf: double-click -> begin editing
