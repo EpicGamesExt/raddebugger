@@ -8720,9 +8720,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_RegisterAsJITDebugger:
         {
 #if OS_WINDOWS
-          String8 path_to_debugger_binary = os_string_from_system_path(scratch.arena, OS_SystemPath_Binary);
+          char filename_cstr[MAX_PATH] = {0};
+          GetModuleFileName(0, filename_cstr, sizeof(filename_cstr));
+          String8 debugger_binary_path = str8_cstring(filename_cstr);
           String8 name8 = str8_lit("Debugger");
-          String8 data8 = push_str8f(scratch.arena, "%S --jit_pid:%%ld --jit_code:%%ld --jit_addr:0x%%p", path_to_debugger_binary);
+          String8 data8 = push_str8f(scratch.arena, "%S --jit_pid:%%ld --jit_code:%%ld --jit_addr:0x%%p", debugger_binary_path);
           String16 name16 = str16_from_8(scratch.arena, name8);
           String16 data16 = str16_from_8(scratch.arena, data8);
           B32 likely_not_in_admin_mode = 0;

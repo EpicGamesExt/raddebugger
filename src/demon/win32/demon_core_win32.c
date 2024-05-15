@@ -1242,6 +1242,23 @@ dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
   {
     result = 1;
     dmn_w32_shared->new_process_pending = 1;
+    
+#if 0
+    // TODO(rjf): JIT debugging info
+    {
+      typedef struct JIT_DEBUG_INFO JIT_DEBUG_INFO;
+      struct JIT_DEBUG_INFO
+      {
+        DWORD dwSize;
+        DWORD dwProcessorArchitecture;
+        DWORD dwThreadID;
+        DWORD dwReserved0;
+        ULONG64 lpExceptionAddress;
+        ULONG64 lpExceptionRecord;
+        ULONG64 lpContextRecord;
+      };
+    }
+#endif
   }
   return result;
 }

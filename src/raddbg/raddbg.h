@@ -5,20 +5,12 @@
 //~ rjf: Frontend/UI Pass Tasks
 //
 // [ ] editing multiple bindings for commands
-//
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
-// [x] UI_NavActions, OS_Event -> UI_Event (single event stream)
 //
-// [x] better discoverability for view rules - have better help hover tooltip,
-//     info on arguments, and better autocomplete lister
-//
-// [x] source view -> floating margin/line-nums
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
 // [ ] target/breakpoint/watch-pin reordering
-// [x] watch window reordering
-// [x] standard way to filter
 // [ ] visualize remapped files (via path map)
 // [ ] theme lister -> fonts & font sizes
 // [ ] font lister
@@ -34,9 +26,6 @@
 //     that you use to tag them. Just some way that would make it easier to
 //     focus on your own threads.
 //
-// [x] autocomplete lister should respect position in edited expression,
-//     tabbing through should autocomplete but not exit, etc.
-//
 //  [ ]  it would be nice to have "show in explorer" for right click on source
 //       file tab (opens explorer & selects the file)
 //
@@ -44,8 +33,6 @@
 //       different color? can I turn it off? And why sometimes digits in number
 //       start with brighter color, but sometimes with darker - shouldn't it
 //       always have the same color ordering?
-//
-// [ ] pipe failure-to-launch errors back to frontend
 
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
@@ -391,7 +378,15 @@
 ////////////////////////////////
 //~ rjf: Recently Completed Task Log
 //
-//
+// [x] UI_NavActions, OS_Event -> UI_Event (single event stream)
+// [x] better discoverability for view rules - have better help hover tooltip,
+//     info on arguments, and better autocomplete lister
+// [x] source view -> floating margin/line-nums
+// [x] watch window reordering
+// [x] standard way to filter
+// [x] autocomplete lister should respect position in edited expression,
+//     tabbing through should autocomplete but not exit, etc.
+// [x] pipe failure-to-launch errors back to frontend
 
 #ifndef RADDBG_H
 #define RADDBG_H
