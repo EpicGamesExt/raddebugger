@@ -69,11 +69,10 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   }
   
   // rjf: read pe magic
-  U32 coff_off = dos_header.coff_file_offset;
   U32 pe_magic = 0;
   if(valid)
   {
-    str8_deserial_read_struct(data, coff_off, &pe_magic);
+    str8_deserial_read_struct(data, dos_header.coff_file_offset, &pe_magic);
   }
   
   // rjf: bad pe magic -> abort
@@ -83,7 +82,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   }
   
   // rjf: read coff header
-  U32 coff_header_off = coff_off + sizeof(pe_magic);
+  U32 coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
   COFF_Header coff_header = {0};
   if(valid)
   {

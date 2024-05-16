@@ -107,6 +107,15 @@ struct CTRL_EntityStore
 ////////////////////////////////
 //~ rjf: Unwind Types
 
+typedef struct CTRL_UnwindStepResult CTRL_UnwindStepResult;
+struct CTRL_UnwindStepResult
+{
+  B32 dead;
+  B32 missed_read;
+  U64 missed_read_addr;
+  U64 stack_pointer;
+};
+
 typedef struct CTRL_UnwindFrame CTRL_UnwindFrame;
 struct CTRL_UnwindFrame
 {
@@ -654,6 +663,8 @@ internal U128 ctrl_hash_store_key_from_process_vaddr_range(CTRL_MachineID machin
 //- rjf: process memory cache reading helpers
 internal CTRL_ProcessMemorySlice ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, U64 endt_us);
 internal CTRL_ProcessMemorySlice ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, U64 vaddr, U64 limit, U64 element_size, U64 endt_us);
+internal B32 ctrl_read_cached_process_memory(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 *is_stale_out, void *out, U64 endt_us);
+#define ctrl_read_cached_process_memory_struct(machine_id, process, vaddr, is_stale_out, ptr, endt_us) ctrl_read_cached_process_memory((machine_id), (process), r1u64((vaddr), (vaddr)+(sizeof(*(ptr)))), (is_stale_out), (ptr), (endt_us))
 
 //- rjf: process memory writing
 internal B32 ctrl_process_write(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, void *src);
@@ -672,6 +683,14 @@ internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle t
 ////////////////////////////////
 //~ rjf: Unwinding Functions
 
+//- rjf: [x64]
+internal REGS_Reg64 *ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 gpr_reg);
+internal CTRL_UnwindStepResult ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle module, REGS_RegBlockX64 *regs, U64 endt_us);
+
+//- rjf: abstracted unwind step
+internal CTRL_UnwindStepResult ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle module, Architecture arch, void *reg_block, U64 endt_us);
+
+//- rjf: abstracted full unwind
 internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us);
 
 ////////////////////////////////

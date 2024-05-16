@@ -6474,7 +6474,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         ui_label(full_path);
         ui_spacer(ui_em(1.5f, 1));
-        ui_labelf("Row: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
+        ui_labelf("Line: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
         ui_labelf("%s",
@@ -7326,7 +7326,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       U64 cursor_vaddr = (1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count) ? (dasm_vaddr_range.min+dasm_info.insts.v[dv->cursor.line-1].code_off) : 0;
       ui_labelf("%S", path_normalized_from_string(scratch.arena, module->name));
       ui_spacer(ui_em(1.5f, 1));
-      ui_labelf("Address: 0x%I64x, Row: %I64d, Col: %I64d", cursor_vaddr, dv->cursor.line, dv->cursor.column);
+      ui_labelf("Address: 0x%I64x, Line: %I64d, Col: %I64d", cursor_vaddr, dv->cursor.line, dv->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
       ui_labelf("bin");
@@ -8120,7 +8120,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
       UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
       UI_Font(code_font)
     {
-      ui_labelf("Row: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
+      ui_labelf("Line: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
     }

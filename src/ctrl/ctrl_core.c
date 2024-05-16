@@ -1245,6 +1245,25 @@ ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(Arena *arena, CT
   return result;
 }
 
+internal B32
+ctrl_read_cached_process_memory(CTRL_MachineID machine_id, DMN_Handle process, Rng1U64 range, B32 *is_stale_out, void *out, U64 endt_us)
+{
+  Temp scratch = scratch_begin(0, 0);
+  U64 needed_size = dim_1u64(range);
+  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, machine_id, process, range, endt_us);
+  B32 good = (slice.data.size >= needed_size && !slice.any_byte_bad);
+  if(good)
+  {
+    MemoryCopy(out, slice.data.str, needed_size);
+  }
+  if(slice.stale && is_stale_out)
+  {
+    *is_stale_out = 1;
+  }
+  scratch_end(scratch);
+  return good;
+}
+
 //- rjf: process memory writing
 
 internal B32
@@ -1431,6 +1450,1138 @@ ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *
 
 ////////////////////////////////
 //~ rjf: Unwinding Functions
+
+//- rjf: [x64]
+
+internal REGS_Reg64 *
+ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 gpr_reg)
+{
+  local_persist REGS_Reg64 dummy = {0};
+  REGS_Reg64 *result = &dummy;
+  switch(gpr_reg)
+  {
+    case PE_UnwindGprRegX64_RAX:{result = &regs->rax;}break;
+    case PE_UnwindGprRegX64_RCX:{result = &regs->rcx;}break;
+    case PE_UnwindGprRegX64_RDX:{result = &regs->rdx;}break;
+    case PE_UnwindGprRegX64_RBX:{result = &regs->rbx;}break;
+    case PE_UnwindGprRegX64_RSP:{result = &regs->rsp;}break;
+    case PE_UnwindGprRegX64_RBP:{result = &regs->rbp;}break;
+    case PE_UnwindGprRegX64_RSI:{result = &regs->rsi;}break;
+    case PE_UnwindGprRegX64_RDI:{result = &regs->rdi;}break;
+    case PE_UnwindGprRegX64_R8 :{result = &regs->r8 ;}break;
+    case PE_UnwindGprRegX64_R9 :{result = &regs->r9 ;}break;
+    case PE_UnwindGprRegX64_R10:{result = &regs->r10;}break;
+    case PE_UnwindGprRegX64_R11:{result = &regs->r11;}break;
+    case PE_UnwindGprRegX64_R12:{result = &regs->r12;}break;
+    case PE_UnwindGprRegX64_R13:{result = &regs->r13;}break;
+    case PE_UnwindGprRegX64_R14:{result = &regs->r14;}break;
+    case PE_UnwindGprRegX64_R15:{result = &regs->r15;}break;
+  }
+  return result;
+}
+
+internal CTRL_UnwindStepResult
+ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle module_handle, REGS_RegBlockX64 *regs, U64 endt_us)
+{
+  B32 is_stale = 0;
+  Temp scratch = scratch_begin(0, 0);
+  
+  //////////////////////////////
+  //- rjf: unpack parameters
+  //
+  CTRL_Entity *module = ctrl_entity_from_machine_id_handle(store, machine_id, module_handle);
+  CTRL_Entity *process = module->parent;
+  U64 rip_voff = regs->rip.u64 - module->vaddr_range.min;
+  
+  //////////////////////////////
+  //- rjf: unpack relevant PE info
+  //
+  PE_IntelPdata *pdatas = 0;
+  U64 pdatas_count = 0;
+  if(module != &ctrl_entity_nil)
+  {
+    B32 is_valid = 1;
+    
+    //- rjf: read DOS header
+    PE_DosHeader dos_header = {0};
+    if(is_valid)
+    {
+      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min, &is_stale, &dos_header, endt_us) ||
+         dos_header.magic != PE_DOS_MAGIC)
+      {
+        is_valid = 0;
+      }
+    }
+    
+    //- rjf: read PE magic
+    U32 pe_magic = 0;
+    if(is_valid)
+    {
+      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + dos_header.coff_file_offset, &is_stale, &pe_magic, endt_us) ||
+         pe_magic != PE_MAGIC)
+      {
+        is_valid = 0;
+      }
+    }
+    
+    //- rjf: read COFF header
+    U64 coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+    COFF_Header coff_header = {0};
+    if(is_valid)
+    {
+      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + coff_header_off, &is_stale, &coff_header, endt_us))
+      {
+        is_valid = 0;
+      }
+    }
+    
+    //- rjf: unpack range of optional extension header
+    U32 opt_ext_size = coff_header.optional_header_size;
+    Rng1U64 opt_ext_off_range = r1u64(coff_header_off + sizeof(coff_header),
+                                      coff_header_off + sizeof(coff_header) + opt_ext_size);
+    
+    //- rjf: read optional header
+    U16 optional_magic = 0;
+    U64 image_base = 0;
+    U64 entry_point = 0;
+    U32 data_dir_count = 0;
+    U64 virt_section_align = 0;
+    U64 file_section_align = 0;
+    Rng1U64 *data_dir_franges = 0;
+    if(opt_ext_size > 0)
+    {
+      // rjf: read magic number
+      U16 opt_ext_magic = 0;
+      ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min, &is_stale, &opt_ext_magic, endt_us);
+      
+      // rjf: read info
+      U32 reported_data_dir_offset = 0;
+      U32 reported_data_dir_count = 0;
+      switch(opt_ext_magic)
+      {
+        case PE_PE32_MAGIC:
+        {
+          PE_OptionalHeader32 pe_optional = {0};
+          ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min, &is_stale, &pe_optional, endt_us);
+          image_base = pe_optional.image_base;
+          entry_point = pe_optional.entry_point_va;
+          virt_section_align = pe_optional.section_alignment;
+          file_section_align = pe_optional.file_alignment;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count = pe_optional.data_dir_count;
+        }break;
+        case PE_PE32PLUS_MAGIC:
+        {
+          PE_OptionalHeader32Plus pe_optional = {0};
+          ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min, &is_stale, &pe_optional, endt_us);
+          image_base = pe_optional.image_base;
+          entry_point = pe_optional.entry_point_va;
+          virt_section_align = pe_optional.section_alignment;
+          file_section_align = pe_optional.file_alignment;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count = pe_optional.data_dir_count;
+        }break;
+      }
+      
+      // rjf: find number of data directories
+      U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
+      data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
+      
+      // rjf: grab pdatas from exceptions section
+      if(data_dir_count > PE_DataDirectoryIndex_EXCEPTIONS)
+      {
+        PE_DataDirectory dir = {0};
+        ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &is_stale, &dir, endt_us);
+        Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
+        if(ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(module->vaddr_range.min + pdatas_voff_range.min, module->vaddr_range.min + pdatas_voff_range.max), &is_stale, pdatas, endt_us))
+        {
+          pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: find current rip's pdata entry
+  //
+  PE_IntelPdata *first_pdata = 0;
+  if(pdatas_count != 0)
+  {
+    U64 first_pdata_voff = 0;
+    if(rip_voff >= pdatas[0].voff_first)
+    {
+      // NOTE(rjf):
+      //
+      // binary search:
+      //  find max index s.t. pdata_array[index].voff_first <= voff
+      //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
+      U64 index = pdatas_count;
+      U64 min = 0;
+      U64 opl = pdatas_count;
+      for(;;)
+      {
+        U64 mid = (min + opl)/2;
+        PE_IntelPdata *pdata = pdatas + mid;
+        if(rip_voff < pdata->voff_first)
+        {
+          opl = mid;
+        }
+        else if(pdata->voff_first < rip_voff)
+        {
+          min = mid;
+        }
+        else
+        {
+          index = mid;
+          break;
+        }
+        if(min + 1 >= opl)
+        {
+          index = min;
+          break;
+        }
+      }
+      
+      // rjf: if we are in range fill result
+      {
+        PE_IntelPdata *pdata = pdatas + index;
+        if(pdata->voff_first <= rip_voff && rip_voff < pdata->voff_one_past_last)
+        {
+          first_pdata = pdata;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: pdata -> detect if in epilog
+  //
+  B32 has_pdata_and_in_epilog = 0;
+  if(first_pdata)
+  {
+    // NOTE(allen): There are restrictions placed on how an epilog is allowed
+    // to be formed (https://docs.microsoft.com/en-us/cpp/build/prolog-and-epilog?view=msvc-160)
+    // Here we interpret machine code directly according to the rules
+    // given there to determine if the code we're looking at looks like an epilog.
+    
+    //- rjf: set up parsing state
+    B32 is_epilog = 0;
+    B32 keep_parsing = 1;
+    U64 read_vaddr = regs->rip.u64;
+    U64 read_vaddr_opl = read_vaddr + 256;
+    
+    //- rjf: check first instruction
+    {
+      B32 inst_good = 0;
+      U8 inst[4] = {0};
+      if(read_vaddr + sizeof(inst) <= read_vaddr_opl)
+      {
+        inst_good = ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, inst, endt_us);
+      }
+      if(!inst_good)
+      {
+        keep_parsing = 0;
+      }
+      else if((inst[0] & 0xF8) == 0x48)
+      {
+        switch(inst[1])
+        {
+          // rjf: add $nnnn,%rsp
+          case 0x81:
+          {
+            if(inst[0] == 0x48 && inst[2] == 0xC4)
+            {
+              read_vaddr += 7;
+            }
+            else
+            {
+              keep_parsing = 0;
+            }
+          }break;
+          
+          // rjf: add $n,%rsp
+          case 0x83:
+          {
+            if(inst[0] == 0x48 && inst[2] == 0xC4)
+            {
+              read_vaddr += 4;
+            }
+            else
+            {
+              keep_parsing = 0;
+            }
+          }break;
+          
+          // rjf: lea n(reg),%rsp
+          case 0x8D:
+          {
+            if((inst[0] & 0x06) == 0 &&
+               ((inst[2] >> 3) & 0x07) == 0x04 &&
+               (inst[2] & 0x07) != 0x04)
+            {
+              U8 imm_size = (inst[2] >> 6);
+              
+              // rjf: 1-byte immediate
+              if(imm_size == 1)
+              {
+                read_vaddr += 4;
+              }
+              
+              // rjf: 4-byte immediate
+              else if(imm_size == 2)
+              {
+                read_vaddr += 7;
+              }
+              
+              // rjf: other case
+              else
+              {
+                keep_parsing = 0;
+              }
+            }
+            else
+            {
+              keep_parsing = 0;
+            }
+          }break;
+        }
+      }
+    }
+    
+    //- rjf: continue parsing instructions
+    for(;keep_parsing;)
+    {
+      // rjf: read next instruction byte
+      B32 inst_byte_good = 0;
+      U8 inst_byte = 0;
+      if(read_vaddr + sizeof(inst_byte) <= read_vaddr_opl)
+      {
+        inst_byte_good = ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+      }
+      if(!inst_byte_good)
+      {
+        keep_parsing = 0;
+      }
+      
+      // rjf: when (... I don't know ...) rely on the next byte
+      B32 check_inst_byte_good = inst_byte_good;
+      U64 check_vaddr = read_vaddr;
+      U8 check_inst_byte = inst_byte;
+      if(inst_byte_good && (inst_byte & 0xF0) == 0x40)
+      {
+        check_vaddr = read_vaddr + 1;
+        if(read_vaddr + sizeof(check_inst_byte) <= read_vaddr_opl)
+        {
+          check_inst_byte_good = ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &check_inst_byte, endt_us);
+        }
+        if(!check_inst_byte_good)
+        {
+          keep_parsing = 0;
+        }
+      }
+      
+      // rjf: check instruction byte
+      if(check_inst_byte_good)
+      {
+        switch(check_inst_byte)
+        {
+          // rjf: pop
+          case 0x58:case 0x59:case 0x5A:case 0x5B:
+          case 0x5C:case 0x5D:case 0x5E:case 0x5F:
+          {
+            read_vaddr = check_vaddr + 1;
+          }break;
+          
+          // rjf: ret
+          case 0xC2:
+          case 0xC3:
+          { 
+            is_epilog = 1;
+            keep_parsing = 0;
+          }break;
+          
+          // rjf: jmp nnnn
+          case 0xE9:
+          {
+            U64 imm_vaddr = check_vaddr + 1;
+            S32 imm = 0;
+            B32 imm_good = 0;
+            if(read_vaddr + sizeof(imm) <= read_vaddr_opl)
+            {
+              imm_good = ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us);
+            }
+            if(!imm_good)
+            {
+              keep_parsing = 0;
+            }
+            if(imm_good)
+            {
+              U64 next_vaddr = (U64)(imm_vaddr + sizeof(imm) + imm);
+              U64 next_voff = next_vaddr - module->vaddr_range.min; // TODO(rjf): verify that this offset is from module base vaddr, not section
+              if(!(first_pdata->voff_first <= next_voff && next_voff < first_pdata->voff_one_past_last))
+              {
+                keep_parsing = 0;
+              }
+              else
+              {
+                read_vaddr = next_vaddr;
+              }
+            }
+            // TODO(allen): why isn't this just the end of the epilog?
+          }break;
+          
+          // rjf: rep; ret (for amd64 prediction bug)
+          case 0xF3:
+          {
+            U8 next_inst_byte = 0;
+            B32 next_inst_byte_good = 0;
+            if(read_vaddr + sizeof(next_inst_byte) <= read_vaddr_opl)
+            {
+              next_inst_byte_good = ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &next_inst_byte, endt_us);
+            }
+            if(next_inst_byte_good)
+            {
+              is_epilog = (next_inst_byte == 0xC3);
+            }
+            keep_parsing = 0;
+          }break;
+          
+          default:{keep_parsing = 0;}break;
+        }
+      }
+    }
+    has_pdata_and_in_epilog = is_epilog;
+  }
+  
+  //////////////////////////////
+  //- rjf: pdata & in epilog -> epilog unwind
+  //
+  if(first_pdata && has_pdata_and_in_epilog)
+  {
+    
+  }
+  
+  //////////////////////////////
+  //- rjf: pdata & not in epilog -> xdata unwind
+  //
+  B32 xdata_unwind_did_machframe = 0;
+  if(first_pdata && !has_pdata_and_in_epilog)
+  {
+    //- rjf: get frame reg
+    B32 bad_frame_reg_info = 0;
+    REGS_Reg64 *frame_reg = 0;
+    U64 frame_off = 0;
+    {
+      U64 unwind_info_off = first_pdata->voff_unwind_info;
+      PE_UnwindInfo unwind_info = {0};
+      ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us);
+      U32 frame_reg_id = PE_UNWIND_INFO_REG_FROM_FRAME(unwind_info.frame);
+      U64 frame_off_val = PE_UNWIND_INFO_OFF_FROM_FRAME(unwind_info.frame);
+      if(frame_reg_id != 0)
+      {
+        frame_reg = ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(regs, frame_reg_id);
+        bad_frame_reg_info = (frame_reg == 0); // NOTE(rjf): frame_reg should never be 0 at this point, in valid exe
+      }
+      frame_off = frame_off_val;
+    }
+    
+    //- rjf: iterate pdatas, apply opcodes
+    PE_IntelPdata *last_pdata = 0;
+    PE_IntelPdata *pdata = first_pdata;
+    if(!bad_frame_reg_info) for(B32 good = 1; good && pdata != last_pdata;)
+    {
+      //- rjf: unpack unwind info & codes
+      B32 good_unwind_info = 1;
+      U64 unwind_info_off = pdata->voff_unwind_info;
+      PE_UnwindInfo unwind_info = {0};
+      good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us);
+      PE_UnwindCode *unwind_codes = push_array(scratch.arena, PE_UnwindCode, unwind_info.codes_num);
+      good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(module->vaddr_range.min+unwind_info_off+sizeof(unwind_info),
+                                                                                                                module->vaddr_range.min+unwind_info_off+sizeof(unwind_info)+sizeof(PE_UnwindCode)*unwind_info.codes_num),
+                                                                             &is_stale, unwind_codes, endt_us);
+      
+      //- rjf: bad unwind info -> abort
+      if(!good_unwind_info)
+      {
+        break;
+      }
+      
+      //- rjf: unpack frame base
+      U64 frame_base = regs->rsp.u64;
+      if(frame_reg != 0)
+      {
+        U64 raw_frame_base = frame_reg->u64;
+        U64 adjusted_frame_base = raw_frame_base - frame_off*16;
+        if(adjusted_frame_base < raw_frame_base)
+        {
+          frame_base = adjusted_frame_base;
+        }
+      }
+      
+      //- rjf: apply opcodes
+      PE_UnwindCode *code_ptr = unwind_codes;
+      PE_UnwindCode *code_opl = unwind_codes + unwind_info.codes_num;
+      for(PE_UnwindCode *next_code_ptr = 0; code_ptr < code_opl; code_ptr = next_code_ptr)
+      {
+        // rjf: unpack opcode info
+        U32 op_code = PE_UNWIND_OPCODE_FROM_FLAGS(code_ptr->flags);
+        U32 op_info = PE_UNWIND_INFO_FROM_FLAGS(code_ptr->flags);
+        U32 slot_count = pe_slot_count_from_unwind_op_code(op_code);
+        if(op_code == PE_UnwindOpCode_ALLOC_LARGE && op_info == 1)
+        {
+          slot_count += 1;
+        }
+        
+        // rjf: detect bad slot counts
+        if(slot_count == 0 || code_ptr+slot_count > code_opl)
+        {
+          good = 0;
+          break;
+        }
+        
+        // rjf: set next op code pointer
+        next_code_ptr = code_ptr + slot_count;
+        
+        // rjf: interpret this op code
+        U64 code_voff = pdata->voff_first + code_ptr->off_in_prolog;
+        if(code_voff <= rip_voff)
+        {
+          switch(op_code)
+          {
+            case PE_UnwindOpCode_PUSH_NONVOL:
+            {
+              // rjf: read value from stack pointer
+              U64 rsp = regs->rsp.u64;
+              U64 value = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, rsp, &is_stale, &rsp, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: advance stack ptr
+              U64 new_rsp = rsp + 8;
+              
+              // rjf: commit registers
+              REGS_Reg64 *reg = ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
+              reg->u64 = value;
+              regs->rsp.u64 = new_rsp;
+            }break;
+            
+            case PE_UnwindOpCode_ALLOC_LARGE:
+            {
+              // rjf: read alloc size
+              U64 size = 0;
+              if(op_info == 0)
+              {
+                size = code_ptr[1].u16*8;
+              }
+              else if(op_info == 1)
+              {
+                size = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
+              }
+              else
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: advance stack pointer
+              U64 rsp = regs->rsp.u64;
+              U64 new_rsp = rsp + size;
+              
+              // rjf: advance stack pointer
+              regs->rsp.u64 = new_rsp;
+            }break;
+            
+            case PE_UnwindOpCode_ALLOC_SMALL:
+            {
+              // rjf: advance stack pointer
+              regs->rsp.u64 += op_info*8 + 8;
+            }break;
+            
+            case PE_UnwindOpCode_SET_FPREG:
+            {
+              // rjf: put stack pointer back to the frame base
+              regs->rsp.u64 = frame_base;
+            }break;
+            
+            case PE_UnwindOpCode_SAVE_NONVOL:
+            {
+              // rjf: read value from frame base
+              U64 off = code_ptr[1].u16*8;
+              U64 addr = frame_base + off;
+              U64 value = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: commit to register
+              REGS_Reg64 *reg = ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
+              reg->u64 = value;
+            }break;
+            
+            case PE_UnwindOpCode_SAVE_NONVOL_FAR:
+            {
+              // rjf: read value from frame base
+              U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
+              U64 addr = frame_base + off;
+              U64 value = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: commit to register
+              REGS_Reg64 *reg = ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(regs, op_info);
+              reg->u64 = value;
+            }break;
+            
+            case PE_UnwindOpCode_EPILOG:
+            {
+              good = 0;
+            }break;
+            
+            case PE_UnwindOpCode_SPARE_CODE:
+            {
+              good = 0;
+              // TODO(rjf): ???
+            }break;
+            
+            case PE_UnwindOpCode_SAVE_XMM128:
+            {
+              // rjf: read new register values
+              U8 buf[16];
+              U64 off = code_ptr[1].u16*16;
+              U64 addr = frame_base + off;
+              if(!ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(addr, addr+sizeof(buf)), &is_stale, buf, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: commit to register
+              void *xmm_reg = (&regs->ymm0) + op_info;
+              MemoryCopy(xmm_reg, buf, sizeof(buf));
+            }break;
+            
+            case PE_UnwindOpCode_SAVE_XMM128_FAR:
+            {
+              // rjf: read new register values
+              U8 buf[16];
+              U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
+              U64 addr = frame_base + off;
+              if(!ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(addr, addr+16), &is_stale, buf, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: commit to register
+              void *xmm_reg = (&regs->ymm0) + op_info;
+              MemoryCopy(xmm_reg, buf, sizeof(buf));
+            }break;
+            
+            case PE_UnwindOpCode_PUSH_MACHFRAME:
+            {
+              // NOTE(rjf): this was found by stepping through kernel code after an exception was
+              // thrown, encountered in the exception_stepping_tests (after the throw) in mule_main
+              if(op_info > 1)
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: read values
+              U64 sp_og = regs->rsp.u64;
+              U64 sp_adj = sp_og;
+              if(op_info == 1)
+              {
+                sp_adj += 8;
+              }
+              U64 ip_value = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_adj, &is_stale, &ip_value, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              U64 sp_after_ip = sp_adj + 8;
+              U16 ss_value = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ip, &is_stale, &ss_value, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              U64 sp_after_ss = sp_after_ip + 8;
+              U64 rflags_value = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ss, &is_stale, &rflags_value, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              U64 sp_after_rflags = sp_after_ss + 8;
+              U64 sp_value = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_rflags, &is_stale, &sp_value, endt_us))
+              {
+                good = 0;
+                break;
+              }
+              
+              // rjf: commit registers
+              regs->rip.u64 = ip_value;
+              regs->ss.u16 = ss_value;
+              regs->rflags.u64 = rflags_value;
+              regs->rsp.u64 = sp_value;
+              
+              // rjf: mark machine frame
+              xdata_unwind_did_machframe = 1;
+            }break;
+          }
+        }
+      }
+      
+      //- rjf: iterate to next pdata
+      if(good)
+      {
+        U32 flags = PE_UNWIND_INFO_FLAGS_FROM_HDR(unwind_info.header);
+        if(!(flags & PE_UnwindInfoFlag_CHAINED))
+        {
+          break;
+        }
+        U64 code_count_rounded = AlignPow2(unwind_info.codes_num, sizeof(PE_UnwindCode));
+        U64 code_size = code_count_rounded*sizeof(PE_UnwindCode);
+        U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfo) + code_size;
+        last_pdata = pdata;
+        pdata = push_array(scratch.arena, PE_IntelPdata, 1);
+        ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+chained_pdata_off, &is_stale, pdata, endt_us);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: no pdata, or didn't do machframe in xdata unwind -> unwind by reading stack pointer
+  //
+  if(!first_pdata || xdata_unwind_did_machframe)
+  {
+    // rjf: read rip from stack pointer
+    U64 rsp = regs->rsp.u64;
+    U64 new_rip = 0;
+    ctrl_read_cached_process_memory_struct(machine_id, process->handle, rsp, &is_stale, &new_rip, endt_us);
+    
+    // rjf: advance stack pointer
+    U64 new_rsp = rsp + 8;
+    
+    // rjf: commit registers
+    regs->rip.u64 = new_rip;
+    regs->rsp.u64 = new_rsp;
+  }
+  
+  scratch_end(scratch);
+  CTRL_UnwindStepResult result = {0};
+  return result;
+  
+  //~ TODO(rjf): OLD
+#if 0
+  DMN_UnwindStepResult result = {0};
+  U64 missed_read_addr = 0;
+  
+  //- grab ip_voff (several places can use this)
+  U64 ip_voff = regs->rip.u64 - base_vaddr;
+  
+  //- get pdata entry from current ip
+  PE_IntelPdata *initial_pdata = 0;
+  {
+    U64 initial_pdata_off = pe_intel_pdata_off_from_voff__binary_search(bindata, bin, ip_voff);
+    if(initial_pdata_off != 0)
+    {
+      initial_pdata = (PE_IntelPdata*)(bindata.str + initial_pdata_off);
+    }
+  }
+  
+  //- no pdata; unwind by reading stack pointer
+  if(initial_pdata == 0)
+  {
+    // read ip from stack pointer
+    U64 sp = regs->rsp.u64;
+    U64 new_ip = 0;
+    if(!unw_memview_read_struct(memview, sp, &new_ip))
+    {
+      missed_read_addr = sp;
+      goto error_out;
+    }
+    
+    // advance stack pointer
+    U64 new_sp = sp + 8;
+    
+    // commit registers
+    regs->rip.u64 = new_ip;
+    regs->rsp.u64 = new_sp;
+  }
+  
+  //- got pdata; perform unwinding with exception handling
+  else
+  {
+    // try epilog unwind
+    B32 did_epilog_unwind = 0;
+    if(unw_pe_x64__voff_is_in_epilog(bindata, bin, ip_voff, initial_pdata))
+    {
+      result = unw_pe_x64__epilog(bindata, bin, base_vaddr, memview, regs);
+      did_epilog_unwind = 1;
+    }
+    
+    // try xdata unwind
+    if(!did_epilog_unwind)
+    {
+      B32 did_machframe = 0;
+      
+      // get frame reg
+      REGS_Reg64 *frame_reg = 0;
+      U64 frame_off = 0;
+      
+      {
+        U64 unwind_info_off = initial_pdata->voff_unwind_info;
+        PE_UnwindInfo *unwind_info = (PE_UnwindInfo*)(pe_ptr_from_voff(bindata, bin, unwind_info_off));
+        
+        U32 frame_reg_id = PE_UNWIND_INFO_REG_FROM_FRAME(unwind_info->frame);
+        U64 frame_off_val = PE_UNWIND_INFO_OFF_FROM_FRAME(unwind_info->frame);
+        
+        if (frame_reg_id != 0){
+          frame_reg = unw_pe_x64__gpr_reg(regs, frame_reg_id);
+          // TODO(allen): at this point if frame_reg is zero, the exe is corrupted.
+        }
+        frame_off = frame_off_val;
+      }
+      
+      PE_IntelPdata *last_pdata = 0;
+      PE_IntelPdata *pdata = initial_pdata;
+      for (;pdata != last_pdata;)
+      {
+        //- rjf: unpack unwind info & codes
+        U64 unwind_info_off = pdata->voff_unwind_info;
+        PE_UnwindInfo *unwind_info = (PE_UnwindInfo*)(pe_ptr_from_voff(bindata, bin, unwind_info_off));
+        PE_UnwindCode *unwind_codes = (PE_UnwindCode*)(unwind_info + 1);
+        
+        //- rjf: unpack frame base
+        U64 frame_base = regs->rsp.u64;
+        if(frame_reg != 0)
+        {
+          U64 raw_frame_base = frame_reg->u64;
+          U64 adjusted_frame_base = raw_frame_base - frame_off*16;
+          if(adjusted_frame_base < raw_frame_base)
+          {
+            frame_base = adjusted_frame_base;
+          }
+          else
+          {
+            frame_base = 0;
+          }
+        }
+        
+        //- rjf: bad unwind info -> abort
+        if(unwind_info == 0)
+        {
+          result.dead = 1;
+          goto error_out;
+        }
+        
+        //- op code interpreter
+        PE_UnwindCode *code_ptr = unwind_codes;
+        PE_UnwindCode *code_opl = unwind_codes + unwind_info->codes_num;
+        for(PE_UnwindCode  *next_code_ptr = 0; code_ptr < code_opl; code_ptr = next_code_ptr)
+        {
+          // extract op code parts
+          U32 op_code = PE_UNWIND_OPCODE_FROM_FLAGS(code_ptr->flags);
+          U32 op_info = PE_UNWIND_INFO_FROM_FLAGS(code_ptr->flags);
+          
+          // determine number of op code slots
+          U32 slot_count = pe_slot_count_from_unwind_op_code(op_code);
+          if(op_code == PE_UnwindOpCode_ALLOC_LARGE && op_info == 1)
+          {
+            slot_count += 1;
+          }
+          
+          // check op code slot count
+          if (slot_count == 0 || code_ptr + slot_count > code_opl){
+            result.dead = 1;
+            goto end_xdata_unwind;
+          }
+          
+          // set next op code pointer
+          next_code_ptr = code_ptr + slot_count;
+          
+          // interpret this op code
+          U64 code_voff = pdata->voff_first + code_ptr->off_in_prolog;
+          if (code_voff <= ip_voff){
+            switch (op_code){
+              case PE_UnwindOpCode_PUSH_NONVOL:
+              {
+                // read value from stack pointer
+                U64 sp = regs->rsp.u64;
+                U64 value = 0;
+                if(!unw_memview_read_struct(memview, sp, &value))
+                {
+                  missed_read_addr = sp;
+                  goto error_out;
+                }
+                
+                // advance stack pointer
+                U64 new_sp = sp + 8;
+                
+                // commit registers
+                REGS_Reg64 *reg = unw_pe_x64__gpr_reg(regs, op_info);
+                reg->u64 = value;
+                regs->rsp.u64 = new_sp;
+              }break;
+              
+              case PE_UnwindOpCode_ALLOC_LARGE:
+              {
+                // read alloc size
+                U64 size = 0;
+                if (op_info == 0){
+                  size = code_ptr[1].u16*8;
+                }
+                else if (op_info == 1){
+                  size = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
+                }
+                else{
+                  result.dead = 1;
+                  goto end_xdata_unwind;
+                }
+                
+                // advance stack pointer
+                U64 sp = regs->rsp.u64;
+                U64 new_sp = sp + size;
+                
+                // advance stack pointer
+                regs->rsp.u64 = new_sp;
+              }break;
+              
+              case PE_UnwindOpCode_ALLOC_SMALL:
+              {
+                // advance stack pointer
+                regs->rsp.u64 += op_info*8 + 8;
+              }break;
+              
+              case PE_UnwindOpCode_SET_FPREG:
+              {
+                // put stack pointer back to the frame base
+                regs->rsp.u64 = frame_base;
+              }break;
+              
+              case PE_UnwindOpCode_SAVE_NONVOL:
+              {
+                // read value from frame base
+                U64 off = code_ptr[1].u16*8;
+                U64 addr = frame_base + off;
+                U64 value = 0;
+                if (!unw_memview_read_struct(memview, addr, &value)){
+                  missed_read_addr = addr;
+                  goto error_out;
+                }
+                
+                // commit to register
+                REGS_Reg64 *reg = unw_pe_x64__gpr_reg(regs, op_info);
+                reg->u64 = value;
+              }break;
+              
+              case PE_UnwindOpCode_SAVE_NONVOL_FAR:
+              {
+                // read value from frame base
+                U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
+                U64 addr = frame_base + off;
+                U64 value = 0;
+                if (!unw_memview_read_struct(memview, addr, &value)){
+                  missed_read_addr = addr;
+                  goto error_out;
+                }
+                
+                // commit to register
+                REGS_Reg64 *reg = unw_pe_x64__gpr_reg(regs, op_info);
+                reg->u64 = value;
+              }break;
+              
+              case PE_UnwindOpCode_EPILOG:
+              {
+                result.dead = 1;
+              }break;
+              
+              case PE_UnwindOpCode_SPARE_CODE:
+              {
+                result.dead = 1;
+                // Assert(!"Hit me!");
+                // TODO(allen): ???
+              }break;
+              
+              case PE_UnwindOpCode_SAVE_XMM128:
+              {
+                // read new register values
+                U8 buf[16];
+                U64 off = code_ptr[1].u16*16;
+                U64 addr = frame_base + off;
+                if (!unw_memview_read(memview, addr, 16, buf)){
+                  missed_read_addr = addr;
+                  goto error_out;
+                }
+                
+                // commit to register
+                void *xmm_reg = (&regs->ymm0) + op_info;
+                MemoryCopy(xmm_reg, buf, sizeof(buf));
+              }break;
+              
+              case PE_UnwindOpCode_SAVE_XMM128_FAR:
+              {
+                // read new register values
+                U8 buf[16];
+                U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
+                U64 addr = frame_base + off;
+                if (!unw_memview_read(memview, addr, 16, buf)){
+                  missed_read_addr = addr;
+                  goto error_out;
+                }
+                
+                // commit to register
+                void *xmm_reg = (&regs->ymm0) + op_info;
+                MemoryCopy(xmm_reg, buf, sizeof(buf));
+              }break;
+              
+              case PE_UnwindOpCode_PUSH_MACHFRAME:
+              {
+                // NOTE(rjf): this was found by stepping through kernel code after an exception was
+                // thrown, encountered in the exception_stepping_tests (after the throw) in mule_main
+                
+                if(op_info > 1)
+                {
+                  result.dead = 1;
+                  goto end_xdata_unwind;
+                }
+                
+                // read values
+                U64 sp_og = regs->rsp.u64;
+                U64 sp_adj = sp_og;
+                if(op_info == 1)
+                {
+                  sp_adj += 8;
+                }
+                
+                U64 ip_value = 0;
+                if(!unw_memview_read_struct(memview, sp_adj, &ip_value))
+                {
+                  missed_read_addr = sp_adj;
+                  goto error_out;
+                }
+                
+                U64 sp_after_ip = sp_adj + 8;
+                U16 ss_value = 0;
+                if(!unw_memview_read_struct(memview, sp_after_ip, &ss_value))
+                {
+                  missed_read_addr = sp_after_ip;
+                  goto error_out;
+                }
+                
+                U64 sp_after_ss = sp_after_ip + 8;
+                U64 rflags_value = 0;
+                if(!unw_memview_read_struct(memview, sp_after_ss, &rflags_value))
+                {
+                  missed_read_addr = sp_after_ss;
+                  goto error_out;
+                }
+                
+                U64 sp_after_rflags = sp_after_ss + 8;
+                U64 sp_value = 0;
+                if(!unw_memview_read_struct(memview, sp_after_rflags, &sp_value))
+                {
+                  missed_read_addr = sp_after_rflags;
+                  goto error_out;
+                }
+                
+                // commit registers
+                regs->rip.u64 = ip_value;
+                regs->ss.u16 = ss_value;
+                regs->rflags.u64 = rflags_value;
+                regs->rsp.u64 = sp_value;
+                
+                // mark machine frame
+                did_machframe = 1;
+              }break;
+            }
+          }
+        }
+        
+        //- iterate pdata chain
+        U32 flags = PE_UNWIND_INFO_FLAGS_FROM_HDR(unwind_info->header);
+        if (!(flags & PE_UnwindInfoFlag_CHAINED)){
+          break;
+        }
+        
+        U64 code_count_rounded = AlignPow2(unwind_info->codes_num, sizeof(PE_UnwindCode));
+        U64 code_size = code_count_rounded*sizeof(PE_UnwindCode);
+        U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfo) + code_size;
+        
+        last_pdata = pdata;
+        pdata = (PE_IntelPdata*)pe_ptr_from_voff(bindata, bin, chained_pdata_off);
+      }
+      
+      if(!did_machframe)
+      {
+        U64 sp = regs->rsp.u64;
+        U64 new_ip = 0;
+        if(!unw_memview_read_struct(memview, sp, &new_ip))
+        {
+          missed_read_addr = sp;
+          goto error_out;
+        }
+        
+        // advance stack pointer
+        U64 new_sp = sp + 8;
+        
+        // commit registers
+        regs->rip.u64 = new_ip;
+        regs->rsp.u64 = new_sp;
+      }
+      
+      end_xdata_unwind:;
+    }
+  }
+  
+  error_out:;
+  
+  if(missed_read_addr != 0)
+  {
+    result.dead = 1;
+    result.missed_read = 1;
+    result.missed_read_addr = missed_read_addr;
+  }
+  
+  if(!result.dead)
+  {
+    result.stack_pointer = regs->rsp.u64;
+  }
+  
+  return(result);
+#endif
+}
+
+//- rjf: abstracted unwind step
+
+internal CTRL_UnwindStepResult
+ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle module, Architecture arch, void *reg_block, U64 endt_us)
+{
+  CTRL_UnwindStepResult result = {0};
+  switch(arch)
+  {
+    default:{}break;
+    case Architecture_x64:
+    {
+      result = ctrl_unwind_step__pe_x64(store, machine_id, module, (REGS_RegBlockX64 *)reg_block, endt_us);
+    }break;
+  }
+  return result;
+}
+
+//- rjf: abstracted full unwind
 
 internal CTRL_Unwind
 ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us)
