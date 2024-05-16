@@ -101,7 +101,6 @@ struct DF_PendingEntityViewState
 {
   Arena *deferred_cmd_arena;
   DF_CmdList deferred_cmds;
-  DF_Handle pick_file_override_target;
   Arena *complete_cfg_arena;
   DF_CfgNode *complete_cfg_root;
 };

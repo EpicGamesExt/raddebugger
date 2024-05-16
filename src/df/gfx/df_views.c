@@ -5356,24 +5356,6 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingEntity)
     {
       default:break;
       
-      // rjf: pick file
-      case DF_CoreCmdKind_PickFile:
-      {
-        DF_Entity *missing_file = df_entity_from_handle(pves->pick_file_override_target);
-        String8 pick_string = cmd->params.file_path;
-        if(!df_entity_is_nil(missing_file) && pick_string.size != 0)
-        {
-          DF_Entity *replacement = df_entity_from_path(pick_string, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-          view->entity = df_handle_from_entity(replacement);
-          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-          p.entity = df_handle_from_entity(missing_file);
-          p.file_path = pick_string;
-          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
-          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetFileReplacementPath));
-        }
-      }break;
-      
       // rjf: gather deferred commands to redispatch when entity is ready
       case DF_CoreCmdKind_GoToLine:
       case DF_CoreCmdKind_GoToAddress:
@@ -5442,52 +5424,8 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingEntity)
 
 DF_VIEW_UI_FUNCTION_DEF(PendingEntity)
 {
-  // rjf: grab state
-  DF_PendingEntityViewState *pves = df_view_user_state(view, DF_PendingEntityViewState);
-  DF_Entity *entity = df_entity_from_handle(view->entity);
-  
-  // rjf: entity is missing -> notify user
-  if(entity->flags & DF_EntityFlag_IsMissing)
-  {
-    UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_pct(1, 0))
-    {
-      Temp scratch = scratch_begin(0, 0);
-      String8 full_path = df_full_path_from_entity(scratch.arena, entity);
-      UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_em(3, 1))
-        UI_Row UI_Padding(ui_pct(1, 0))
-        UI_PrefWidth(ui_text_dim(10, 1))
-        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
-      {
-        UI_Font(ui_icon_font()) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
-        ui_labelf("Could not find \"%S\".", full_path);
-      }
-      UI_PrefHeight(ui_em(3, 1))
-        UI_Row UI_Padding(ui_pct(1, 0))
-        UI_PrefWidth(ui_text_dim(10, 1))
-        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
-        UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
-        UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-        UI_CornerRadius(ui_top_font_size()/3)
-        UI_PrefWidth(ui_text_dim(10, 1))
-        UI_Focus(UI_FocusKind_On)
-        if(ui_clicked(ui_buttonf("Find alternative...")))
-      {
-        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-        params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFile);
-        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
-        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
-        pves->pick_file_override_target = df_handle_from_entity(entity);
-      }
-      scratch_end(scratch);
-    }
-  }
-  
-  // rjf: entity is still loading -> loading animation
-  else
-  {
-    view->loading_t = view->loading_t_target = 1.f;
-    df_gfx_request_frame();
-  }
+  view->loading_t = view->loading_t_target = 1.f;
+  df_gfx_request_frame();
 }
 
 ////////////////////////////////
@@ -5950,7 +5888,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: build missing & override interface
   //
-  if(entity_is_missing)
+  if(entity_is_missing && !text_info_is_ready)
   {
     UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_pct(1, 0))
     {
