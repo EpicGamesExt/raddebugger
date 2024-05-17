@@ -1484,6 +1484,7 @@ internal CTRL_UnwindStepResult
 ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle module_handle, REGS_RegBlockX64 *regs, U64 endt_us)
 {
   B32 is_stale = 0;
+  B32 is_good = 1;
   Temp scratch = scratch_begin(0, 0);
   
   //////////////////////////////
@@ -1498,7 +1499,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   //
   PE_IntelPdata *pdatas = 0;
   U64 pdatas_count = 0;
-  if(module != &ctrl_entity_nil)
+  ProfScope("unpack relevant PE info") if(module != &ctrl_entity_nil)
   {
     B32 is_valid = 1;
     
@@ -1510,6 +1511,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
          dos_header.magic != PE_DOS_MAGIC)
       {
         is_valid = 0;
+        is_good = 0;
       }
     }
     
@@ -1521,6 +1523,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
          pe_magic != PE_MAGIC)
       {
         is_valid = 0;
+        is_good = 0;
       }
     }
     
@@ -1532,6 +1535,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + coff_header_off, &is_stale, &coff_header, endt_us))
       {
         is_valid = 0;
+        is_good = 0;
       }
     }
     
@@ -1593,10 +1597,9 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
         PE_DataDirectory dir = {0};
         ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &is_stale, &dir, endt_us);
         Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-        if(ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(module->vaddr_range.min + pdatas_voff_range.min, module->vaddr_range.min + pdatas_voff_range.max), &is_stale, pdatas, endt_us))
-        {
-          pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
-        }
+        pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
+        pdatas = push_array(scratch.arena, PE_IntelPdata, pdatas_count);
+        ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(module->vaddr_range.min + pdatas_voff_range.min, module->vaddr_range.min + pdatas_voff_range.max), &is_stale, pdatas, endt_us);
       }
     }
   }
@@ -1605,7 +1608,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   //- rjf: find current rip's pdata entry
   //
   PE_IntelPdata *first_pdata = 0;
-  if(pdatas_count != 0)
+  if(pdatas_count != 0) ProfScope("find current RIP's pdata entry")
   {
     U64 first_pdata_voff = 0;
     if(rip_voff >= pdatas[0].voff_first)
@@ -1657,7 +1660,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   //- rjf: pdata -> detect if in epilog
   //
   B32 has_pdata_and_in_epilog = 0;
-  if(first_pdata)
+  if(first_pdata) ProfScope("pdata -> detect if in epilog")
   {
     // NOTE(allen): There are restrictions placed on how an epilog is allowed
     // to be formed (https://docs.microsoft.com/en-us/cpp/build/prolog-and-epilog?view=msvc-160)
@@ -1856,16 +1859,228 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   //////////////////////////////
   //- rjf: pdata & in epilog -> epilog unwind
   //
-  if(first_pdata && has_pdata_and_in_epilog)
+  if(first_pdata && has_pdata_and_in_epilog) ProfScope("pdata & in epilog -> epilog unwind")
   {
-    
+    U64 read_vaddr = regs->rip.u64;
+    for(B32 keep_parsing = 1;keep_parsing != 0;)
+    {
+      //- rjf: assume no more parsing after this instruction
+      keep_parsing = 0;
+      
+      //- rjf: read next instruction byte
+      U8 inst_byte = 0;
+      is_good = is_good && ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+      read_vaddr += 1;
+      
+      //- rjf: extract rex from instruction byte
+      U8 rex = 0;
+      if((inst_byte & 0xF0) == 0x40)
+      {
+        rex = inst_byte & 0xF; // rex prefix
+        is_good = is_good && ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+        read_vaddr += 1;
+      }
+      
+      //- rjf: parse remainder of instruction
+      switch(inst_byte)
+      {
+        // rjf: pop
+        case 0x58:
+        case 0x59:
+        case 0x5A:
+        case 0x5B:
+        case 0x5C:
+        case 0x5D:
+        case 0x5E:
+        case 0x5F:
+        {
+          // rjf: read value at rsp
+          U64 sp = regs->rsp.u64;
+          U64 value = 0;
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &sp, endt_us))
+          {
+            is_good = 0;
+            break;
+          }
+          
+          // rjf: modify registers
+          PE_UnwindGprRegX64 gpr_reg = (inst_byte - 0x58) + (rex & 1)*8;
+          REGS_Reg64 *reg = ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(regs, gpr_reg);
+          reg->u64 = value;
+          regs->rsp.u64 = sp + 8;
+          
+          // rjf: not a final instruction, so keep mparsing
+          keep_parsing = 1;
+        }break;
+        
+        // rjf: add $nnnn,%rsp 
+        case 0x81:
+        {
+          // rjf: skip one byte (we already know what it is in this scenario)
+          read_vaddr += 1;
+          
+          // rjf: read the 4-byte immediate
+          S32 imm = 0;
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+          {
+            is_good = 0;
+            break;
+          }
+          read_vaddr += 4;
+          
+          // rjf: update stack pointer
+          regs->rsp.u64 = (U64)(regs->rsp.u64 + imm);
+          
+          // rjf: not a final instruction; keep parsing
+          keep_parsing = 1;
+        }break;
+        
+        // rjf: add $n,%rsp
+        case 0x83:
+        {
+          // rjf: skip one byte (we already know what it is in this scenario)
+          read_vaddr += 1;
+          
+          // rjf: read the 4-byte immediate
+          S8 imm = 0;
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+          {
+            is_good = 0;
+            break;
+          }
+          read_vaddr += 1;
+          
+          // rjf: update stack pointer
+          regs->rsp.u64 = (U64)(regs->rsp.u64 + imm);
+          
+          // rjf: not a final instruction; keep parsing
+          keep_parsing = 1;
+        }break;
+        
+        // rjf: lea imm8/imm32,$rsp
+        case 0x8D:
+        {
+          // rjf: read source register
+          U8 modrm = 0;
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &modrm, endt_us))
+          {
+            is_good = 0;
+            break;
+          }
+          read_vaddr += 1;
+          PE_UnwindGprRegX64 gpr_reg = (modrm & 7) + (rex & 1)*8;
+          REGS_Reg64 *reg = ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(regs, gpr_reg);
+          U64 reg_value = reg->u64;
+          
+          // rjf: read immediate
+          S32 imm = 0;
+          {
+            // rjf: read 1-byte immediate
+            if((modrm >> 6) == 1)
+            {
+              S8 imm8 = 0;
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm8, endt_us))
+              {
+                is_good = 0;
+                break;
+              }
+              read_vaddr += 1;
+              imm = (S32)imm8;
+            }
+            
+            // rjf: read 4-byte immediate
+            else
+            {
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+              {
+                is_good = 0;
+                break;
+              }
+              read_vaddr += 4;
+            }
+          }
+          
+          // rjf: update stack pointer
+          regs->rsp.u64 = (U64)(reg_value + imm);
+          
+          // rjf: not a final instruction; keep parsing
+          keep_parsing = 1;
+        }break;
+        
+        // rjf: ret $nn
+        case 0xC2:
+        {
+          // rjf: read new ip
+          U64 sp = regs->rsp.u64;
+          U64 new_ip = 0;
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &new_ip, endt_us))
+          {
+            is_good = 0;
+            break;
+          }
+          
+          // rjf: read 2-byte immediate & advance stack pointer
+          U16 imm = 0;
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+          {
+            is_good = 0;
+            break;
+          }
+          U64 new_sp = sp + 8 + imm;
+          
+          // rjf: commit registers
+          regs->rip.u64 = new_ip;
+          regs->rsp.u64 = new_sp;
+        }break;
+        
+        // rjf: ret / rep; ret
+        case 0xF3:
+        {
+          // Assert(!"Hit me!");
+        }break;
+        case 0xC3:
+        {
+          // rjf: read new ip
+          U64 sp = regs->rsp.u64;
+          U64 new_ip = 0;
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &new_ip, endt_us))
+          {
+            is_good = 0;
+            break;
+          }
+          
+          // rjf: advance stack pointer
+          U64 new_sp = sp + 8;
+          
+          // rjf: commit registers
+          regs->rip.u64 = new_ip;
+          regs->rsp.u64 = new_sp;
+        }break;
+        
+        // rjf: jmp nnnn
+        case 0xE9:
+        {
+          // Assert(!"Hit Me");
+          // TODO(allen): general idea: read the immediate, move the ip, leave the sp, done
+          // we don't have any cases to exercise this right now. no guess implementation!
+        }break;
+        
+        // rjf: Sjmp n
+        case 0xEB:
+        {
+          // Assert(!"Hit Me");
+          // TODO(allen): general idea: read the immediate, move the ip, leave the sp, done
+          // we don't have any cases to exercise this right now. no guess implementation!
+        }break;
+      }
+    }
   }
   
   //////////////////////////////
   //- rjf: pdata & not in epilog -> xdata unwind
   //
   B32 xdata_unwind_did_machframe = 0;
-  if(first_pdata && !has_pdata_and_in_epilog)
+  if(first_pdata && !has_pdata_and_in_epilog) ProfScope("pdata & not in epilog -> xdata unwind")
   {
     //- rjf: get frame reg
     B32 bad_frame_reg_info = 0;
@@ -1874,7 +2089,10 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     {
       U64 unwind_info_off = first_pdata->voff_unwind_info;
       PE_UnwindInfo unwind_info = {0};
-      ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us);
+      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us))
+      {
+        is_good = 0;
+      }
       U32 frame_reg_id = PE_UNWIND_INFO_REG_FROM_FRAME(unwind_info.frame);
       U64 frame_off_val = PE_UNWIND_INFO_OFF_FROM_FRAME(unwind_info.frame);
       if(frame_reg_id != 0)
@@ -1888,7 +2106,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     //- rjf: iterate pdatas, apply opcodes
     PE_IntelPdata *last_pdata = 0;
     PE_IntelPdata *pdata = first_pdata;
-    if(!bad_frame_reg_info) for(B32 good = 1; good && pdata != last_pdata;)
+    if(!bad_frame_reg_info) for(B32 keep_parsing = 1; keep_parsing && pdata != last_pdata;)
     {
       //- rjf: unpack unwind info & codes
       B32 good_unwind_info = 1;
@@ -1903,6 +2121,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       //- rjf: bad unwind info -> abort
       if(!good_unwind_info)
       {
+        is_good = 0;
         break;
       }
       
@@ -1935,7 +2154,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
         // rjf: detect bad slot counts
         if(slot_count == 0 || code_ptr+slot_count > code_opl)
         {
-          good = 0;
+          keep_parsing = 0;
+          is_good = 0;
           break;
         }
         
@@ -1955,7 +2175,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 value = 0;
               if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, rsp, &is_stale, &rsp, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -1982,7 +2203,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               }
               else
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -2014,7 +2236,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 value = 0;
               if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -2031,7 +2254,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 value = 0;
               if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -2042,13 +2266,15 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
             
             case PE_UnwindOpCode_EPILOG:
             {
-              good = 0;
+              keep_parsing = 0;
+              is_good = 0;
             }break;
             
             case PE_UnwindOpCode_SPARE_CODE:
             {
-              good = 0;
               // TODO(rjf): ???
+              keep_parsing = 0;
+              is_good = 0;
             }break;
             
             case PE_UnwindOpCode_SAVE_XMM128:
@@ -2059,7 +2285,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 addr = frame_base + off;
               if(!ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(addr, addr+sizeof(buf)), &is_stale, buf, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -2076,7 +2303,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 addr = frame_base + off;
               if(!ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(addr, addr+16), &is_stale, buf, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -2091,7 +2319,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               // thrown, encountered in the exception_stepping_tests (after the throw) in mule_main
               if(op_info > 1)
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -2105,28 +2334,32 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 ip_value = 0;
               if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_adj, &is_stale, &ip_value, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               U64 sp_after_ip = sp_adj + 8;
               U16 ss_value = 0;
               if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ip, &is_stale, &ss_value, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               U64 sp_after_ss = sp_after_ip + 8;
               U64 rflags_value = 0;
               if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ss, &is_stale, &rflags_value, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               U64 sp_after_rflags = sp_after_ss + 8;
               U64 sp_value = 0;
               if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_rflags, &is_stale, &sp_value, endt_us))
               {
-                good = 0;
+                keep_parsing = 0;
+                is_good = 0;
                 break;
               }
               
@@ -2144,7 +2377,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       }
       
       //- rjf: iterate to next pdata
-      if(good)
+      if(keep_parsing)
       {
         U32 flags = PE_UNWIND_INFO_FLAGS_FROM_HDR(unwind_info.header);
         if(!(flags & PE_UnwindInfoFlag_CHAINED))
@@ -2164,7 +2397,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   //////////////////////////////
   //- rjf: no pdata, or didn't do machframe in xdata unwind -> unwind by reading stack pointer
   //
-  if(!first_pdata || xdata_unwind_did_machframe)
+  if(!first_pdata || !xdata_unwind_did_machframe) ProfScope("no pdata, or didn't do machframe in xdata unwind -> unwind by reading stack pointer")
   {
     // rjf: read rip from stack pointer
     U64 rsp = regs->rsp.u64;
@@ -2179,389 +2412,14 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     regs->rsp.u64 = new_rsp;
   }
   
+  //////////////////////////////
+  //- rjf: fill & return
+  //
   scratch_end(scratch);
   CTRL_UnwindStepResult result = {0};
+  if(!is_good) {result.flags |= CTRL_UnwindFlag_Error;}
+  if(is_stale) {result.flags |= CTRL_UnwindFlag_Stale;}
   return result;
-  
-  //~ TODO(rjf): OLD
-#if 0
-  DMN_UnwindStepResult result = {0};
-  U64 missed_read_addr = 0;
-  
-  //- grab ip_voff (several places can use this)
-  U64 ip_voff = regs->rip.u64 - base_vaddr;
-  
-  //- get pdata entry from current ip
-  PE_IntelPdata *initial_pdata = 0;
-  {
-    U64 initial_pdata_off = pe_intel_pdata_off_from_voff__binary_search(bindata, bin, ip_voff);
-    if(initial_pdata_off != 0)
-    {
-      initial_pdata = (PE_IntelPdata*)(bindata.str + initial_pdata_off);
-    }
-  }
-  
-  //- no pdata; unwind by reading stack pointer
-  if(initial_pdata == 0)
-  {
-    // read ip from stack pointer
-    U64 sp = regs->rsp.u64;
-    U64 new_ip = 0;
-    if(!unw_memview_read_struct(memview, sp, &new_ip))
-    {
-      missed_read_addr = sp;
-      goto error_out;
-    }
-    
-    // advance stack pointer
-    U64 new_sp = sp + 8;
-    
-    // commit registers
-    regs->rip.u64 = new_ip;
-    regs->rsp.u64 = new_sp;
-  }
-  
-  //- got pdata; perform unwinding with exception handling
-  else
-  {
-    // try epilog unwind
-    B32 did_epilog_unwind = 0;
-    if(unw_pe_x64__voff_is_in_epilog(bindata, bin, ip_voff, initial_pdata))
-    {
-      result = unw_pe_x64__epilog(bindata, bin, base_vaddr, memview, regs);
-      did_epilog_unwind = 1;
-    }
-    
-    // try xdata unwind
-    if(!did_epilog_unwind)
-    {
-      B32 did_machframe = 0;
-      
-      // get frame reg
-      REGS_Reg64 *frame_reg = 0;
-      U64 frame_off = 0;
-      
-      {
-        U64 unwind_info_off = initial_pdata->voff_unwind_info;
-        PE_UnwindInfo *unwind_info = (PE_UnwindInfo*)(pe_ptr_from_voff(bindata, bin, unwind_info_off));
-        
-        U32 frame_reg_id = PE_UNWIND_INFO_REG_FROM_FRAME(unwind_info->frame);
-        U64 frame_off_val = PE_UNWIND_INFO_OFF_FROM_FRAME(unwind_info->frame);
-        
-        if (frame_reg_id != 0){
-          frame_reg = unw_pe_x64__gpr_reg(regs, frame_reg_id);
-          // TODO(allen): at this point if frame_reg is zero, the exe is corrupted.
-        }
-        frame_off = frame_off_val;
-      }
-      
-      PE_IntelPdata *last_pdata = 0;
-      PE_IntelPdata *pdata = initial_pdata;
-      for (;pdata != last_pdata;)
-      {
-        //- rjf: unpack unwind info & codes
-        U64 unwind_info_off = pdata->voff_unwind_info;
-        PE_UnwindInfo *unwind_info = (PE_UnwindInfo*)(pe_ptr_from_voff(bindata, bin, unwind_info_off));
-        PE_UnwindCode *unwind_codes = (PE_UnwindCode*)(unwind_info + 1);
-        
-        //- rjf: unpack frame base
-        U64 frame_base = regs->rsp.u64;
-        if(frame_reg != 0)
-        {
-          U64 raw_frame_base = frame_reg->u64;
-          U64 adjusted_frame_base = raw_frame_base - frame_off*16;
-          if(adjusted_frame_base < raw_frame_base)
-          {
-            frame_base = adjusted_frame_base;
-          }
-          else
-          {
-            frame_base = 0;
-          }
-        }
-        
-        //- rjf: bad unwind info -> abort
-        if(unwind_info == 0)
-        {
-          result.dead = 1;
-          goto error_out;
-        }
-        
-        //- op code interpreter
-        PE_UnwindCode *code_ptr = unwind_codes;
-        PE_UnwindCode *code_opl = unwind_codes + unwind_info->codes_num;
-        for(PE_UnwindCode  *next_code_ptr = 0; code_ptr < code_opl; code_ptr = next_code_ptr)
-        {
-          // extract op code parts
-          U32 op_code = PE_UNWIND_OPCODE_FROM_FLAGS(code_ptr->flags);
-          U32 op_info = PE_UNWIND_INFO_FROM_FLAGS(code_ptr->flags);
-          
-          // determine number of op code slots
-          U32 slot_count = pe_slot_count_from_unwind_op_code(op_code);
-          if(op_code == PE_UnwindOpCode_ALLOC_LARGE && op_info == 1)
-          {
-            slot_count += 1;
-          }
-          
-          // check op code slot count
-          if (slot_count == 0 || code_ptr + slot_count > code_opl){
-            result.dead = 1;
-            goto end_xdata_unwind;
-          }
-          
-          // set next op code pointer
-          next_code_ptr = code_ptr + slot_count;
-          
-          // interpret this op code
-          U64 code_voff = pdata->voff_first + code_ptr->off_in_prolog;
-          if (code_voff <= ip_voff){
-            switch (op_code){
-              case PE_UnwindOpCode_PUSH_NONVOL:
-              {
-                // read value from stack pointer
-                U64 sp = regs->rsp.u64;
-                U64 value = 0;
-                if(!unw_memview_read_struct(memview, sp, &value))
-                {
-                  missed_read_addr = sp;
-                  goto error_out;
-                }
-                
-                // advance stack pointer
-                U64 new_sp = sp + 8;
-                
-                // commit registers
-                REGS_Reg64 *reg = unw_pe_x64__gpr_reg(regs, op_info);
-                reg->u64 = value;
-                regs->rsp.u64 = new_sp;
-              }break;
-              
-              case PE_UnwindOpCode_ALLOC_LARGE:
-              {
-                // read alloc size
-                U64 size = 0;
-                if (op_info == 0){
-                  size = code_ptr[1].u16*8;
-                }
-                else if (op_info == 1){
-                  size = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
-                }
-                else{
-                  result.dead = 1;
-                  goto end_xdata_unwind;
-                }
-                
-                // advance stack pointer
-                U64 sp = regs->rsp.u64;
-                U64 new_sp = sp + size;
-                
-                // advance stack pointer
-                regs->rsp.u64 = new_sp;
-              }break;
-              
-              case PE_UnwindOpCode_ALLOC_SMALL:
-              {
-                // advance stack pointer
-                regs->rsp.u64 += op_info*8 + 8;
-              }break;
-              
-              case PE_UnwindOpCode_SET_FPREG:
-              {
-                // put stack pointer back to the frame base
-                regs->rsp.u64 = frame_base;
-              }break;
-              
-              case PE_UnwindOpCode_SAVE_NONVOL:
-              {
-                // read value from frame base
-                U64 off = code_ptr[1].u16*8;
-                U64 addr = frame_base + off;
-                U64 value = 0;
-                if (!unw_memview_read_struct(memview, addr, &value)){
-                  missed_read_addr = addr;
-                  goto error_out;
-                }
-                
-                // commit to register
-                REGS_Reg64 *reg = unw_pe_x64__gpr_reg(regs, op_info);
-                reg->u64 = value;
-              }break;
-              
-              case PE_UnwindOpCode_SAVE_NONVOL_FAR:
-              {
-                // read value from frame base
-                U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
-                U64 addr = frame_base + off;
-                U64 value = 0;
-                if (!unw_memview_read_struct(memview, addr, &value)){
-                  missed_read_addr = addr;
-                  goto error_out;
-                }
-                
-                // commit to register
-                REGS_Reg64 *reg = unw_pe_x64__gpr_reg(regs, op_info);
-                reg->u64 = value;
-              }break;
-              
-              case PE_UnwindOpCode_EPILOG:
-              {
-                result.dead = 1;
-              }break;
-              
-              case PE_UnwindOpCode_SPARE_CODE:
-              {
-                result.dead = 1;
-                // Assert(!"Hit me!");
-                // TODO(allen): ???
-              }break;
-              
-              case PE_UnwindOpCode_SAVE_XMM128:
-              {
-                // read new register values
-                U8 buf[16];
-                U64 off = code_ptr[1].u16*16;
-                U64 addr = frame_base + off;
-                if (!unw_memview_read(memview, addr, 16, buf)){
-                  missed_read_addr = addr;
-                  goto error_out;
-                }
-                
-                // commit to register
-                void *xmm_reg = (&regs->ymm0) + op_info;
-                MemoryCopy(xmm_reg, buf, sizeof(buf));
-              }break;
-              
-              case PE_UnwindOpCode_SAVE_XMM128_FAR:
-              {
-                // read new register values
-                U8 buf[16];
-                U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
-                U64 addr = frame_base + off;
-                if (!unw_memview_read(memview, addr, 16, buf)){
-                  missed_read_addr = addr;
-                  goto error_out;
-                }
-                
-                // commit to register
-                void *xmm_reg = (&regs->ymm0) + op_info;
-                MemoryCopy(xmm_reg, buf, sizeof(buf));
-              }break;
-              
-              case PE_UnwindOpCode_PUSH_MACHFRAME:
-              {
-                // NOTE(rjf): this was found by stepping through kernel code after an exception was
-                // thrown, encountered in the exception_stepping_tests (after the throw) in mule_main
-                
-                if(op_info > 1)
-                {
-                  result.dead = 1;
-                  goto end_xdata_unwind;
-                }
-                
-                // read values
-                U64 sp_og = regs->rsp.u64;
-                U64 sp_adj = sp_og;
-                if(op_info == 1)
-                {
-                  sp_adj += 8;
-                }
-                
-                U64 ip_value = 0;
-                if(!unw_memview_read_struct(memview, sp_adj, &ip_value))
-                {
-                  missed_read_addr = sp_adj;
-                  goto error_out;
-                }
-                
-                U64 sp_after_ip = sp_adj + 8;
-                U16 ss_value = 0;
-                if(!unw_memview_read_struct(memview, sp_after_ip, &ss_value))
-                {
-                  missed_read_addr = sp_after_ip;
-                  goto error_out;
-                }
-                
-                U64 sp_after_ss = sp_after_ip + 8;
-                U64 rflags_value = 0;
-                if(!unw_memview_read_struct(memview, sp_after_ss, &rflags_value))
-                {
-                  missed_read_addr = sp_after_ss;
-                  goto error_out;
-                }
-                
-                U64 sp_after_rflags = sp_after_ss + 8;
-                U64 sp_value = 0;
-                if(!unw_memview_read_struct(memview, sp_after_rflags, &sp_value))
-                {
-                  missed_read_addr = sp_after_rflags;
-                  goto error_out;
-                }
-                
-                // commit registers
-                regs->rip.u64 = ip_value;
-                regs->ss.u16 = ss_value;
-                regs->rflags.u64 = rflags_value;
-                regs->rsp.u64 = sp_value;
-                
-                // mark machine frame
-                did_machframe = 1;
-              }break;
-            }
-          }
-        }
-        
-        //- iterate pdata chain
-        U32 flags = PE_UNWIND_INFO_FLAGS_FROM_HDR(unwind_info->header);
-        if (!(flags & PE_UnwindInfoFlag_CHAINED)){
-          break;
-        }
-        
-        U64 code_count_rounded = AlignPow2(unwind_info->codes_num, sizeof(PE_UnwindCode));
-        U64 code_size = code_count_rounded*sizeof(PE_UnwindCode);
-        U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfo) + code_size;
-        
-        last_pdata = pdata;
-        pdata = (PE_IntelPdata*)pe_ptr_from_voff(bindata, bin, chained_pdata_off);
-      }
-      
-      if(!did_machframe)
-      {
-        U64 sp = regs->rsp.u64;
-        U64 new_ip = 0;
-        if(!unw_memview_read_struct(memview, sp, &new_ip))
-        {
-          missed_read_addr = sp;
-          goto error_out;
-        }
-        
-        // advance stack pointer
-        U64 new_sp = sp + 8;
-        
-        // commit registers
-        regs->rip.u64 = new_ip;
-        regs->rsp.u64 = new_sp;
-      }
-      
-      end_xdata_unwind:;
-    }
-  }
-  
-  error_out:;
-  
-  if(missed_read_addr != 0)
-  {
-    result.dead = 1;
-    result.missed_read = 1;
-    result.missed_read_addr = missed_read_addr;
-  }
-  
-  if(!result.dead)
-  {
-    result.stack_pointer = regs->rsp.u64;
-  }
-  
-  return(result);
-#endif
 }
 
 //- rjf: abstracted unwind step
@@ -2590,7 +2448,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   Temp scratch = scratch_begin(&arena, 1);
   DBGI_Scope *scope = dbgi_scope_open();
   CTRL_Unwind unwind = {0};
-  unwind.error = 1;
+  unwind.flags |= CTRL_UnwindFlag_Error;
   
   //- rjf: unpack args
   CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
@@ -2630,21 +2488,17 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   UNW_MemView memview = stack_memview;
   if(regs_block_good && stack_memview_good)
   {
-    unwind.error = 0;
+    unwind.flags = 0;
     for(;;)
     {
       // rjf: regs -> rip*module
       U64 rip = regs_rip_from_arch_block(arch, regs_block);
       DMN_Handle module = {0};
-      String8 module_name = {0};
-      Rng1U64 module_vaddr_range = {0};
       for(CTRL_Entity *m = process_entity->first; m != &ctrl_entity_nil; m = m->next)
       {
         if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, rip))
         {
           module = m->handle;
-          module_name = m->string;
-          module_vaddr_range = m->vaddr_range;
           break;
         }
       }
@@ -2652,18 +2506,6 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       // rjf: cancel on 0 rip
       if(rip == 0)
       {
-        break;
-      }
-      
-      // rjf: module -> all the binary info
-      String8 binary_full_path = module_name;
-      DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, binary_full_path, 0);
-      String8 binary_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
-      
-      // rjf: cancel on bad data
-      if(binary_data.size == 0)
-      {
-        unwind.error = 1;
         break;
       }
       
@@ -2676,6 +2518,15 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       unwind.count += 1;
       
       // rjf: unwind one step
+      CTRL_UnwindStepResult step = ctrl_unwind_step(store, machine_id, module, arch, regs_block, endt_us);
+      unwind.flags |= step.flags;
+      if(step.flags & CTRL_UnwindFlag_Error || regs_rsp_from_arch_block(arch, regs_block) == 0)
+      {
+        break;
+      }
+      
+      // rjf: unwind one step (OLD)
+#if 0
       UNW_Step unwind_step = {0};
       switch(arch)
       {
@@ -2700,6 +2551,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       {
         break;
       }
+#endif
     }
   }
   

@@ -6245,7 +6245,7 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
     else
     {
       result = ctrl_unwind_from_thread(cache->arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
-      if(!result.error)
+      if(!(result.flags & CTRL_UnwindFlag_Error))
       {
         node = push_array(cache->arena, DF_RunUnwindCacheNode, 1);
         SLLQueuePush_N(slot->first, slot->last, node, hash_next);

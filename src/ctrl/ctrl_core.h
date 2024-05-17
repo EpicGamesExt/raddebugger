@@ -107,13 +107,17 @@ struct CTRL_EntityStore
 ////////////////////////////////
 //~ rjf: Unwind Types
 
+typedef U32 CTRL_UnwindFlags;
+enum
+{
+  CTRL_UnwindFlag_Error = (1<<0),
+  CTRL_UnwindFlag_Stale = (1<<1),
+};
+
 typedef struct CTRL_UnwindStepResult CTRL_UnwindStepResult;
 struct CTRL_UnwindStepResult
 {
-  B32 dead;
-  B32 missed_read;
-  U64 missed_read_addr;
-  U64 stack_pointer;
+  CTRL_UnwindFlags flags;
 };
 
 typedef struct CTRL_UnwindFrame CTRL_UnwindFrame;
@@ -131,7 +135,7 @@ struct CTRL_Unwind
   CTRL_UnwindFrame *first;
   CTRL_UnwindFrame *last;
   U64 count;
-  B32 error;
+  CTRL_UnwindFlags flags;
 };
 
 ////////////////////////////////
