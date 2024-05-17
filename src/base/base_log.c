@@ -37,17 +37,17 @@ log_select(Log *log)
 //~ rjf: Log Building/Clearing
 
 internal void
-log_msg(String8 string)
+log_msg(LogMsgKind kind, String8 string)
 {
   if(log_active != 0 && log_active->top_scope != 0)
   {
     String8 string_copy = push_str8_copy(log_active->arena, string);
-    str8_list_push(log_active->arena, &log_active->top_scope->strings, string_copy);
+    str8_list_push(log_active->arena, &log_active->top_scope->strings[kind], string_copy);
   }
 }
 
 internal void
-log_msgf(char *fmt, ...)
+log_msgf(LogMsgKind kind, char *fmt, ...)
 {
   if(log_active != 0)
   {
@@ -55,7 +55,7 @@ log_msgf(char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     String8 string = push_str8fv(scratch.arena, fmt, args);
-    log_msg(string);
+    log_msg(kind, string);
     va_end(args);
     scratch_end(scratch);
   }
@@ -76,10 +76,10 @@ log_scope_begin(void)
   }
 }
 
-internal String8
+internal LogScopeResult
 log_scope_end(Arena *arena)
 {
-  String8 result = {0};
+  LogScopeResult result = {0};
   if(log_active != 0)
   {
     LogScope *scope = log_active->top_scope;
@@ -88,7 +88,10 @@ log_scope_end(Arena *arena)
       SLLStackPop(log_active->top_scope);
       if(arena != 0)
       {
-        result = str8_list_join(arena, &scope->strings, 0);
+        for(EachEnumVal(LogMsgKind, kind))
+        {
+          result.strings[kind] = str8_list_join(arena, &scope->strings[kind], 0);
+        }
       }
       arena_pop_to(log_active->arena, scope->pos);
     }

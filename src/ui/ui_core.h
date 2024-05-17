@@ -59,6 +59,8 @@ UI_FocusKind;
 ////////////////////////////////
 //~ rjf: Events
 
+// TODO(rjf): clean all this up
+
 typedef enum UI_EventKind
 {
   UI_EventKind_Null,
@@ -74,6 +76,16 @@ typedef enum UI_EventKind
 }
 UI_EventKind;
 
+typedef enum UI_EventActionSlot
+{
+  UI_EventActionSlot_Null,
+  UI_EventActionSlot_Accept,
+  UI_EventActionSlot_Cancel,
+  UI_EventActionSlot_Edit,
+  UI_EventActionSlot_COUNT
+}
+UI_EventActionSlot;
+
 typedef U32 UI_EventFlags;
 enum
 {
@@ -85,6 +97,7 @@ enum
   UI_EventFlag_PickSelectSide      = (1<<5),
   UI_EventFlag_CapAtLine           = (1<<6),
   UI_EventFlag_ExplicitDirectional = (1<<7),
+  UI_EventFlag_Reorder             = (1<<8),
 };
 
 typedef enum UI_EventDeltaUnit
@@ -103,6 +116,7 @@ typedef struct UI_Event UI_Event;
 struct UI_Event
 {
   UI_EventKind kind;
+  UI_EventActionSlot slot;
   UI_EventFlags flags;
   UI_EventDeltaUnit delta_unit;
   OS_Key key;
@@ -641,6 +655,7 @@ internal F32               ui_dt(void);
 internal B32 ui_key_press(OS_EventFlags mods, OS_Key key);
 internal B32 ui_key_release(OS_EventFlags mods, OS_Key key);
 internal B32 ui_text(U32 character);
+internal B32 ui_slot_press(UI_EventActionSlot slot);
 
 //- rjf: drag data
 internal Vec2F32           ui_drag_start_mouse(void);

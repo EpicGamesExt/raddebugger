@@ -1335,7 +1335,7 @@ thread_static Vec2F32 ui_scroll_list_dim_px = {0};
 thread_static Rng1S64 ui_scroll_list_scroll_idx_rng = {0};
 
 internal void
-ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S64 *cursor_out, Rng1S64 *visible_row_range_out, UI_ScrollListSignal *signal_out)
+ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S64 *cursor_out, Vec2S64 *mark_out, Rng1S64 *visible_row_range_out, UI_ScrollListSignal *signal_out)
 {
   //- rjf: unpack arguments
   Rng1S64 scroll_row_idx_range = r1s64(params->item_range.min, ClampBot(params->item_range.min, params->item_range.max-1));
@@ -1347,12 +1347,13 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   {
     UI_EventList *events = ui_events();
     Vec2S64 cursor = *cursor_out;
+    Vec2S64 mark = mark_out ? *mark_out : cursor;
     for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       next = n->next;
       UI_Event *evt = &n->v;
       if((evt->delta_2s32.x == 0 && evt->delta_2s32.y == 0) ||
-         evt->flags & (UI_EventFlag_KeepMark|UI_EventFlag_Delete))
+         evt->flags & UI_EventFlag_Delete)
       {
         continue;
       }
@@ -1393,10 +1394,18 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
           }
         }break;
       }
+      if(!(evt->flags & UI_EventFlag_KeepMark))
+      {
+        mark = cursor;
+      }
     }
     if(moved)
     {
       *cursor_out = cursor;
+      if(mark_out)
+      {
+        *mark_out = mark;
+      }
     }
   }
   

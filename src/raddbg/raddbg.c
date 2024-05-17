@@ -131,6 +131,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
          event->key != OS_Key_Delete &&
          event->key != OS_Key_LeftMouseButton &&
          event->key != OS_Key_RightMouseButton &&
+         event->key != OS_Key_MiddleMouseButton &&
          event->key != OS_Key_Ctrl &&
          event->key != OS_Key_Alt &&
          event->key != OS_Key_Shift)
@@ -378,8 +379,14 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //- rjf: end logging
   //
   {
-    String8 log = log_scope_end(scratch.arena);
-    os_append_data_to_file_path(main_thread_log_path, log);
+    LogScopeResult log = log_scope_end(scratch.arena);
+    os_append_data_to_file_path(main_thread_log_path, log.strings[LogMsgKind_Info]);
+    if(log.strings[LogMsgKind_UserError].size != 0)
+    {
+      DF_CmdParams p = df_cmd_params_from_gfx();
+      p.string = log.strings[LogMsgKind_UserError];
+      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+    }
   }
   
   scratch_end(scratch);

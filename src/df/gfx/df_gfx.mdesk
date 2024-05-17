@@ -90,6 +90,11 @@ DF_DefaultBindingTable:
   { "load_user"                   O         ctrl     shift     alt        }
   { "load_profile"                O         ctrl     0         alt        }
   
+  //- rjf: meta controls
+  { "edit"                        F2        0        0         0          }
+  { "accept"                      Return    0        0         0          }
+  { "cancel"                      Esc       0        0         0          }
+  
   //- rjf: directional movement & text controls
   { "move_left"                   Left      0        0         0          }
   { "move_right"                  Right     0        0         0          }
@@ -115,6 +120,8 @@ DF_DefaultBindingTable:
   { "move_down_page_select"       PageDown  0        shift     0          }
   { "move_up_whole_select"        Home      ctrl     shift     0          }
   { "move_down_whole_select"      End       ctrl     shift     0          }
+  { "move_up_reorder"             Up        0        0         alt        }
+  { "move_down_reorder"           Down      0        0         alt        }
   { "move_home"                   Home      0        0         0          }
   { "move_end"                    End       0        0         0          }
   { "move_home_select"            Home      0        shift     0          }
@@ -125,8 +132,10 @@ DF_DefaultBindingTable:
   { "backspace_single"            Backspace 0        0         0          }
   { "backspace_chunk"             Backspace ctrl     0         0          }
   { "copy"                        C         ctrl     0         0          }
+  { "copy"                        Insert    ctrl     0         0          }
   { "cut"                         X         ctrl     0         0          }
   { "paste"                       V         ctrl     0         0          }
+  { "paste"                       Insert    0        shift     0          }
   { "insert_text"                 Null      0        0         0          }
   
   //- rjf: code navigation
