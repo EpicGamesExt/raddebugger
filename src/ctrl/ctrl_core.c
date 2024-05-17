@@ -1052,7 +1052,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     //- rjf: out of time? -> exit
     if(os_now_microseconds() >= endt_us)
     {
-      if(is_good && is_stale && out_is_stale)
+      if(is_stale && out_is_stale)
       {
         out_is_stale[0] = 1;
       }
@@ -1902,7 +1902,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
           // rjf: read value at rsp
           U64 sp = regs->rsp.u64;
           U64 value = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &sp, endt_us) ||
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &value, endt_us) ||
              is_stale)
           {
             is_good = 0;
@@ -2128,11 +2128,11 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       U64 unwind_info_off = pdata->voff_unwind_info;
       PE_UnwindInfo unwind_info = {0};
       good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us);
-      good_unwind_info = good_unwind_info && !is_stale;
       PE_UnwindCode *unwind_codes = push_array(scratch.arena, PE_UnwindCode, unwind_info.codes_num);
       good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(module->vaddr_range.min+unwind_info_off+sizeof(unwind_info),
                                                                                                                 module->vaddr_range.min+unwind_info_off+sizeof(unwind_info)+sizeof(PE_UnwindCode)*unwind_info.codes_num),
                                                                              &is_stale, unwind_codes, endt_us);
+      good_unwind_info = good_unwind_info && !is_stale;
       
       //- rjf: bad unwind info -> abort
       if(!good_unwind_info)
@@ -2413,7 +2413,12 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
         U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfo) + code_size;
         last_pdata = pdata;
         pdata = push_array(scratch.arena, PE_IntelPdata, 1);
-        ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+chained_pdata_off, &is_stale, pdata, endt_us);
+        if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+chained_pdata_off, &is_stale, pdata, endt_us) ||
+           is_stale)
+        {
+          is_good = 0;
+          break;
+        }
       }
     }
   }
@@ -2426,14 +2431,19 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     // rjf: read rip from stack pointer
     U64 rsp = regs->rsp.u64;
     U64 new_rip = 0;
-    ctrl_read_cached_process_memory_struct(machine_id, process->handle, rsp, &is_stale, &new_rip, endt_us);
-    
-    // rjf: advance stack pointer
-    U64 new_rsp = rsp + 8;
+    if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, rsp, &is_stale, &new_rip, endt_us) ||
+       is_stale)
+    {
+      is_good = 0;
+    }
     
     // rjf: commit registers
-    regs->rip.u64 = new_rip;
-    regs->rsp.u64 = new_rsp;
+    if(is_good)
+    {
+      U64 new_rsp = rsp + 8;
+      regs->rip.u64 = new_rip;
+      regs->rsp.u64 = new_rsp;
+    }
   }
   
   //////////////////////////////
@@ -2481,39 +2491,14 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
   
   //- rjf: grab initial register block
-  void *regs_block = push_array(scratch.arena, U8, arch_reg_block_size);
-  B32 regs_block_good = dmn_thread_read_reg_block(thread, regs_block);
-  
-  //- rjf: grab initial memory view
-  B32 stack_memview_good = 0;
-  UNW_MemView stack_memview = {0};
-  {
-    U64 stack_base_unrounded = dmn_stack_base_vaddr_from_thread(thread);
-    U64 stack_top_unrounded = regs_rsp_from_arch_block(arch, regs_block);
-    U64 stack_base = AlignPow2(stack_base_unrounded, KB(4));
-    U64 stack_top = AlignDownPow2(stack_top_unrounded, KB(4));
-    U64 stack_size = stack_base - stack_top;
-    if(stack_base >= stack_top)
-    {
-      U8 *stack_memory_base = push_array(scratch.arena, U8, stack_size);
-      U64 actual_stack_bytes_read = dmn_process_read(process_entity->handle, r1u64(stack_top, stack_top+stack_size), stack_memory_base);
-      String8 stack_memory = str8(stack_memory_base, actual_stack_bytes_read);
-      if(stack_memory.size >= stack_size)
-      {
-        stack_memview_good = 1;
-        stack_memview.data = stack_memory.str;
-        stack_memview.addr_first = stack_top;
-        stack_memview.addr_opl = stack_base;
-      }
-    }
-  }
+  void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, store, machine_id, thread);
+  B32 regs_block_good = (regs_block != 0);
   
   //- rjf: loop & unwind
   CTRL_UnwindFrameNode *first_frame_node = 0;
   CTRL_UnwindFrameNode *last_frame_node = 0;
   U64 frame_node_count = 0;
-  UNW_MemView memview = stack_memview;
-  if(regs_block_good && stack_memview_good)
+  if(arch != Architecture_Null && regs_block_good)
   {
     unwind.flags = 0;
     for(;;)
@@ -2547,7 +2532,9 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       // rjf: unwind one step
       CTRL_UnwindStepResult step = ctrl_unwind_step(store, machine_id, module, arch, regs_block, endt_us);
       unwind.flags |= step.flags;
-      if(step.flags & CTRL_UnwindFlag_Error || regs_rsp_from_arch_block(arch, regs_block) == 0)
+      if(step.flags & CTRL_UnwindFlag_Error ||
+         regs_rsp_from_arch_block(arch, regs_block) == 0 ||
+         regs_rip_from_arch_block(arch, regs_block) == 0)
       {
         break;
       }

@@ -59,7 +59,7 @@ if "%clang%"=="1"   set only_compile=-c
 if "%msvc%"=="1"    set EHsc=/EHsc
 if "%clang%"=="1"   set EHsc=
 if "%msvc%"=="1"    set no_aslr=/DYNAMICBASE:NO
-if "%clang%"=="1"   set no_aslr=/DYNAMICBASE:NO
+if "%clang%"=="1"   set no_aslr=
 if "%msvc%"=="1"    set rc=rc.exe
 if "%clang%"=="1"   set rc=llvm-rc.exe
 
