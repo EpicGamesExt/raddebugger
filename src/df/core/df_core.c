@@ -1535,9 +1535,10 @@ df_search_tags_from_entity(Arena *arena, DF_Entity *entity)
     DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
     CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
     String8List strings = {0};
-    for(CTRL_UnwindFrame *f = unwind.last; f != 0; f = f->prev)
+    for(U64 frame_num = unwind.frames.count; frame_num > 0; frame_num -= 1)
     {
-      U64 rip_vaddr = f->rip;
+      CTRL_UnwindFrame *f = &unwind.frames.v[frame_num-1];
+      U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
       DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
       DF_Entity *binary = df_binary_file_from_module(module);
@@ -3672,9 +3673,9 @@ df_set_thread_rip(DF_Entity *thread, U64 vaddr)
       DF_RunUnwindCacheSlot *slot = &unwind_cache->slots[slot_idx];
       for(DF_RunUnwindCacheNode *n = slot->first; n != 0; n = n->hash_next)
       {
-        if(df_handle_match(n->thread, thread_handle) && n->unwind.first != 0)
+        if(df_handle_match(n->thread, thread_handle) && n->unwind.frames.count != 0)
         {
-          n->unwind.first->rip = vaddr;
+          regs_arch_block_write_rip(thread->arch, n->unwind.frames.v[0].regs, vaddr);
           break;
         }
       }
@@ -4084,17 +4085,10 @@ df_eval_from_string(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
   U64 reg_size = regs_block_size_from_architecture(arch);
   U64 thread_unwind_ip_vaddr = 0;
   void *thread_unwind_regs_block = push_array(scratch.arena, U8, reg_size);
+  if(unwind.frames.count != 0)
   {
-    U64 idx = 0;
-    for(CTRL_UnwindFrame *f = unwind.first; f != 0; f = f->next, idx += 1)
-    {
-      if(idx == unwind_count)
-      {
-        thread_unwind_ip_vaddr = f->rip;
-        thread_unwind_regs_block = f->regs;
-        break;
-      }
-    }
+    thread_unwind_regs_block = unwind.frames.v[unwind_count%unwind.frames.count].regs;
+    thread_unwind_ip_vaddr = regs_rip_from_arch_block(arch, thread_unwind_regs_block);
   }
   
   //- rjf: unpack module info & produce eval machine
@@ -4269,17 +4263,10 @@ df_value_mode_eval_from_eval(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_
       U64 type_byte_size = tg_byte_size_from_graph_rdi_key(graph, rdi, type_key);
       U64 reg_off = eval.offset;
       CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
-      if(unwind.first != 0)
+      if(unwind.frames.count != 0)
       {
-        U64 unwind_idx = 0;
-        for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
-        {
-          if(unwind_idx == ctrl_ctx->unwind_count && frame->regs != 0)
-          {
-            MemoryCopy(&eval.imm_u128[0], ((U8 *)frame->regs + reg_off), Min(type_byte_size, sizeof(U64)*2));
-            break;
-          }
-        }
+        CTRL_UnwindFrame *frame = &unwind.frames.v[ctrl_ctx->unwind_count%unwind.frames.count];
+        MemoryCopy(&eval.imm_u128[0], ((U8 *)frame->regs + reg_off), Min(type_byte_size, sizeof(U64)*2));
       }
       eval.mode = EVAL_EvalMode_Value;
     }break;
@@ -4790,11 +4777,11 @@ df_commit_eval_value(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, DF_
         CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
         Architecture arch = df_architecture_from_entity(thread);
         U64 reg_block_size = regs_block_size_from_architecture(arch);
-        if(unwind.first != 0 &&
+        if(unwind.frames.count != 0 &&
            (0 <= dst_eval.offset && dst_eval.offset+commit_data.size < reg_block_size))
         {
           void *new_regs = push_array(scratch.arena, U8, reg_block_size);
-          MemoryCopy(new_regs, unwind.first->regs, reg_block_size);
+          MemoryCopy(new_regs, unwind.frames.v[0].regs, reg_block_size);
           MemoryCopy((U8 *)new_regs+dst_eval.offset, commit_data.str, commit_data.size);
           result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, new_regs);
         }
@@ -6245,7 +6232,7 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
     else
     {
       result = ctrl_unwind_from_thread(cache->arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
-      if(!(result.flags & CTRL_UnwindFlag_Error))
+      if(!(result.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)))
       {
         node = push_array(cache->arena, DF_RunUnwindCacheNode, 1);
         SLLQueuePush_N(slot->first, slot->last, node, hash_next);
@@ -6276,14 +6263,9 @@ df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count)
   else
   {
     CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
-    U64 unwind_idx = 0;
-    for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, unwind_idx += 1)
+    if(unwind.frames.count != 0)
     {
-      if(unwind_idx == unwind_count)
-      {
-        result = frame->rip;
-        break;
-      }
+      result = regs_rip_from_arch_block(thread->arch, unwind.frames.v[unwind_count%unwind.frames.count].regs);
     }
   }
   return result;
@@ -7436,9 +7418,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                 CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
                 
                 // rjf: use first unwind frame to generate trap
-                if(unwind.first != 0 && unwind.first->next != 0)
+                if(unwind.frames.count > 1)
                 {
-                  U64 vaddr = unwind.first->next->rip;
+                  U64 vaddr = regs_rip_from_arch_block(thread->arch, unwind.frames.v[1].regs);
                   CTRL_Trap trap = {CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck, vaddr};
                   ctrl_trap_list_push(scratch.arena, &traps, &trap);
                 }
@@ -7603,7 +7585,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           DF_Entity *thread = df_entity_from_handle(df_state->ctrl_ctx.thread);
           CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
-          U64 max_unwind = unwind.count ? unwind.count-1 : 0;
+          U64 max_unwind = unwind.frames.count ? unwind.frames.count-1 : 0;
           U64 index = Clamp(0, params.index, max_unwind);
           df_state->ctrl_ctx.unwind_count = index;
         }break;

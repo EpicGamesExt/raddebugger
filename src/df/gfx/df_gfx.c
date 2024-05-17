@@ -3924,9 +3924,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
                 CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
                 String8List lines = {0};
-                for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
+                for(U64 frame_idx = 0; frame_idx < unwind.frames.count; frame_idx += 1)
                 {
-                  U64 rip_vaddr = frame->rip;
+                  U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[frame_idx].regs);
                   DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
                   DF_Entity *binary = df_binary_file_from_module(module);
                   U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
@@ -9938,9 +9938,9 @@ df_entity_tooltips(DF_Entity *entity)
       ui_spacer(ui_em(1.5f, 1.f));
       DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
       CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
-      for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
+      for(U64 idx = 0; idx < unwind.frames.count; idx += 1)
       {
-        U64 rip_vaddr = frame->rip;
+        U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[idx].regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         DF_Entity *binary = df_binary_file_from_module(module);
         U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
@@ -10133,9 +10133,10 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
       U64 idx = 0;
       U64 limit = 3;
       ui_spacer(ui_em(1.f, 1.f));
-      for(CTRL_UnwindFrame *f = unwind.last; f != 0 && idx < limit; f = f->prev)
+      for(U64 num = unwind.frames.count; num > 0; num -= 1)
       {
-        U64 rip_vaddr = f->rip;
+        CTRL_UnwindFrame *f = &unwind.frames.v[num-1];
+        U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
         DF_Entity *binary = df_binary_file_from_module(module);

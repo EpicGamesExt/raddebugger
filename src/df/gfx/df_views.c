@@ -888,19 +888,12 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
           Architecture arch = df_architecture_from_entity(thread);
           U64 reg_size = regs_block_size_from_architecture(arch);
-          U64 thread_unwind_ip_vaddr = 0;
           void *thread_unwind_regs_block = push_array(scratch.arena, U8, reg_size);
+          U64 thread_unwind_ip_vaddr = 0;
+          if(unwind.frames.count != 0)
           {
-            U64 idx = 0;
-            for(CTRL_UnwindFrame *f = unwind.first; f != 0; f = f->next, idx += 1)
-            {
-              if(idx == unwind_count)
-              {
-                thread_unwind_ip_vaddr = f->rip;
-                thread_unwind_regs_block = f->regs;
-                break;
-              }
-            }
+            thread_unwind_regs_block = unwind.frames.v[unwind_count%unwind.frames.count].regs;
+            thread_unwind_ip_vaddr = regs_rip_from_arch_block(arch, thread_unwind_regs_block);
           }
           
           //- rjf: lex & parse
@@ -4815,8 +4808,8 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
     scroll_list_params.flags         = UI_ScrollListFlag_All;
     scroll_list_params.row_height_px = floor_f32(ui_top_font_size()*2.5f);
     scroll_list_params.dim_px        = dim_2f32(rect);
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, unwind.count));
-    scroll_list_params.item_range    = r1s64(0, unwind.count+1);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, unwind.frames.count));
+    scroll_list_params.item_range    = r1s64(0, unwind.frames.count+1);
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
@@ -4849,20 +4842,20 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
       }
       
       //- rjf: frame rows
-      U64 frame_idx = 0;
-      for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next, frame_idx += 1)
+      for(S64 row_num = visible_row_range.min; row_num <= visible_row_range.max && row_num <= unwind.frames.count; row_num += 1)
       {
-        // rjf: out of range -> skip (TODO(rjf): this should be an array...)
-        if(frame_idx+1 < visible_row_range.min || visible_row_range.max < frame_idx+1)
+        if(row_num == 0)
         {
           continue;
         }
+        U64 frame_idx = row_num-1;
+        CTRL_UnwindFrame *frame = &unwind.frames.v[frame_idx];
         
         // rjf: determine selection
-        B32 row_selected = cs->cursor.y == ((S64)frame_idx+1);
+        B32 row_selected = (cs->cursor.y == row_num);
         
         // rjf: regs => rip
-        U64 rip_vaddr = frame->rip;
+        U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, frame->regs);
         
         // rjf: rip_vaddr => module
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
@@ -8485,20 +8478,22 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
     
     //- rjf: fill unwind frame annotations
-    if(unwind.first != 0)
+    if(unwind.frames.count != 0)
     {
-      U64 last_stack_top = regs_rsp_from_arch_block(thread->arch, unwind.first->regs);
-      for(CTRL_UnwindFrame *f = unwind.first->next; f != 0; f = f->next)
+      U64 last_stack_top = regs_rsp_from_arch_block(thread->arch, unwind.frames.v[0].regs);
+      for(U64 idx = 1; idx < unwind.frames.count; idx += 1)
       {
+        CTRL_UnwindFrame *f = &unwind.frames.v[idx];
         U64 f_stack_top = regs_rsp_from_arch_block(thread->arch, f->regs);
         Rng1U64 frame_vaddr_range = r1u64(last_stack_top, f_stack_top);
         Rng1U64 frame_vaddr_range_in_viz = intersect_1u64(frame_vaddr_range, viz_range_bytes);
         last_stack_top = f_stack_top;
         if(dim_1u64(frame_vaddr_range_in_viz) != 0)
         {
-          DF_Entity *module = df_module_from_process_vaddr(process, f->rip);
+          U64 f_rip = regs_rip_from_arch_block(thread->arch, f->regs);
+          DF_Entity *module = df_module_from_process_vaddr(process, f_rip);
           DF_Entity *binary = df_binary_file_from_module(module);
-          U64 rip_voff = df_voff_from_vaddr(module, f->rip);
+          U64 rip_voff = df_voff_from_vaddr(module, f_rip);
           String8 symbol_name = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
@@ -8515,10 +8510,10 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     }
     
     //- rjf: fill selected thread stack range annotation
-    if(unwind.first != 0)
+    if(unwind.frames.count > 0)
     {
       U64 stack_base_vaddr = thread->stack_base;
-      U64 stack_top_vaddr = regs_rsp_from_arch_block(thread->arch, unwind.first->regs);
+      U64 stack_top_vaddr = regs_rsp_from_arch_block(thread->arch, unwind.frames.v[0].regs);
       Rng1U64 stack_vaddr_range = r1u64(stack_base_vaddr, stack_top_vaddr);
       Rng1U64 stack_vaddr_range_in_viz = intersect_1u64(stack_vaddr_range, viz_range_bytes);
       if(dim_1u64(stack_vaddr_range_in_viz) != 0)

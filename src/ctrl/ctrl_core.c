@@ -1036,7 +1036,6 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
           {
             U64 range_slot_idx = range_hash%n->range_hash_slots_count;
             CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
-            B32 range_node_exists = 0;
             for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
             {
               if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
@@ -1508,6 +1507,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     if(is_valid)
     {
       if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min, &is_stale, &dos_header, endt_us) ||
+         is_stale ||
          dos_header.magic != PE_DOS_MAGIC)
       {
         is_valid = 0;
@@ -1520,6 +1520,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     if(is_valid)
     {
       if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + dos_header.coff_file_offset, &is_stale, &pe_magic, endt_us) ||
+         is_stale ||
          pe_magic != PE_MAGIC)
       {
         is_valid = 0;
@@ -1532,7 +1533,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     COFF_Header coff_header = {0};
     if(is_valid)
     {
-      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + coff_header_off, &is_stale, &coff_header, endt_us))
+      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + coff_header_off, &is_stale, &coff_header, endt_us) ||
+         is_stale)
       {
         is_valid = 0;
         is_good = 0;
@@ -1680,6 +1682,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       if(read_vaddr + sizeof(inst) <= read_vaddr_opl)
       {
         inst_good = ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, inst, endt_us);
+        inst_good = inst_good && !is_stale;
       }
       if(!inst_good)
       {
@@ -1761,7 +1764,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       {
         inst_byte_good = ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
       }
-      if(!inst_byte_good)
+      if(!inst_byte_good || is_stale)
       {
         keep_parsing = 0;
       }
@@ -1777,7 +1780,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
         {
           check_inst_byte_good = ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &check_inst_byte, endt_us);
         }
-        if(!check_inst_byte_good)
+        if(!check_inst_byte_good || is_stale)
         {
           keep_parsing = 0;
         }
@@ -1813,7 +1816,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
             {
               imm_good = ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us);
             }
-            if(!imm_good)
+            if(!imm_good || is_stale)
             {
               keep_parsing = 0;
             }
@@ -1870,6 +1873,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       //- rjf: read next instruction byte
       U8 inst_byte = 0;
       is_good = is_good && ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+      is_good = is_good && !is_stale;
       read_vaddr += 1;
       
       //- rjf: extract rex from instruction byte
@@ -1878,6 +1882,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       {
         rex = inst_byte & 0xF; // rex prefix
         is_good = is_good && ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &inst_byte, endt_us);
+        is_good = is_good && !is_stale;
         read_vaddr += 1;
       }
       
@@ -1897,7 +1902,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
           // rjf: read value at rsp
           U64 sp = regs->rsp.u64;
           U64 value = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &sp, endt_us))
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &sp, endt_us) ||
+             is_stale)
           {
             is_good = 0;
             break;
@@ -1921,7 +1927,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
           
           // rjf: read the 4-byte immediate
           S32 imm = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+             is_stale)
           {
             is_good = 0;
             break;
@@ -1943,7 +1950,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
           
           // rjf: read the 4-byte immediate
           S8 imm = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+             is_stale)
           {
             is_good = 0;
             break;
@@ -1962,7 +1970,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
         {
           // rjf: read source register
           U8 modrm = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &modrm, endt_us))
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &modrm, endt_us) ||
+             is_stale)
           {
             is_good = 0;
             break;
@@ -1979,7 +1988,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
             if((modrm >> 6) == 1)
             {
               S8 imm8 = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm8, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm8, endt_us) ||
+                 is_stale)
               {
                 is_good = 0;
                 break;
@@ -1991,7 +2001,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
             // rjf: read 4-byte immediate
             else
             {
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+                 is_stale)
               {
                 is_good = 0;
                 break;
@@ -2013,7 +2024,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
           // rjf: read new ip
           U64 sp = regs->rsp.u64;
           U64 new_ip = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &new_ip, endt_us))
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &new_ip, endt_us) ||
+             is_stale)
           {
             is_good = 0;
             break;
@@ -2021,7 +2033,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
           
           // rjf: read 2-byte immediate & advance stack pointer
           U16 imm = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us))
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, read_vaddr, &is_stale, &imm, endt_us) ||
+             is_stale)
           {
             is_good = 0;
             break;
@@ -2043,7 +2056,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
           // rjf: read new ip
           U64 sp = regs->rsp.u64;
           U64 new_ip = 0;
-          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &new_ip, endt_us))
+          if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp, &is_stale, &new_ip, endt_us) ||
+             is_stale)
           {
             is_good = 0;
             break;
@@ -2089,7 +2103,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
     {
       U64 unwind_info_off = first_pdata->voff_unwind_info;
       PE_UnwindInfo unwind_info = {0};
-      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us))
+      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us) ||
+         is_stale)
       {
         is_good = 0;
       }
@@ -2113,6 +2128,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
       U64 unwind_info_off = pdata->voff_unwind_info;
       PE_UnwindInfo unwind_info = {0};
       good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us);
+      good_unwind_info = good_unwind_info && !is_stale;
       PE_UnwindCode *unwind_codes = push_array(scratch.arena, PE_UnwindCode, unwind_info.codes_num);
       good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(module->vaddr_range.min+unwind_info_off+sizeof(unwind_info),
                                                                                                                 module->vaddr_range.min+unwind_info_off+sizeof(unwind_info)+sizeof(PE_UnwindCode)*unwind_info.codes_num),
@@ -2173,7 +2189,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               // rjf: read value from stack pointer
               U64 rsp = regs->rsp.u64;
               U64 value = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, rsp, &is_stale, &rsp, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, rsp, &is_stale, &value, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2234,7 +2251,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 off = code_ptr[1].u16*8;
               U64 addr = frame_base + off;
               U64 value = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2252,7 +2270,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
               U64 addr = frame_base + off;
               U64 value = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, addr, &is_stale, &value, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2301,7 +2320,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               U8 buf[16];
               U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
               U64 addr = frame_base + off;
-              if(!ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(addr, addr+16), &is_stale, buf, endt_us))
+              if(!ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(addr, addr+16), &is_stale, buf, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2332,7 +2352,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
                 sp_adj += 8;
               }
               U64 ip_value = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_adj, &is_stale, &ip_value, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_adj, &is_stale, &ip_value, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2340,7 +2361,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               }
               U64 sp_after_ip = sp_adj + 8;
               U16 ss_value = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ip, &is_stale, &ss_value, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ip, &is_stale, &ss_value, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2348,7 +2370,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               }
               U64 sp_after_ss = sp_after_ip + 8;
               U64 rflags_value = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ss, &is_stale, &rflags_value, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_ss, &is_stale, &rflags_value, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2356,7 +2379,8 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               }
               U64 sp_after_rflags = sp_after_ss + 8;
               U64 sp_value = 0;
-              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_rflags, &is_stale, &sp_value, endt_us))
+              if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, sp_after_rflags, &is_stale, &sp_value, endt_us) ||
+                 is_stale)
               {
                 keep_parsing = 0;
                 is_good = 0;
@@ -2485,6 +2509,9 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   }
   
   //- rjf: loop & unwind
+  CTRL_UnwindFrameNode *first_frame_node = 0;
+  CTRL_UnwindFrameNode *last_frame_node = 0;
+  U64 frame_node_count = 0;
   UNW_MemView memview = stack_memview;
   if(regs_block_good && stack_memview_good)
   {
@@ -2510,12 +2537,12 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       }
       
       // rjf: valid step -> push frame
-      CTRL_UnwindFrame *frame = push_array(arena, CTRL_UnwindFrame, 1);
-      frame->rip = rip;
+      CTRL_UnwindFrameNode *frame_node = push_array(scratch.arena, CTRL_UnwindFrameNode, 1);
+      CTRL_UnwindFrame *frame = &frame_node->v;
       frame->regs = push_array_no_zero(arena, U8, arch_reg_block_size);
       MemoryCopy(frame->regs, regs_block, arch_reg_block_size);
-      DLLPushBack(unwind.first, unwind.last, frame);
-      unwind.count += 1;
+      DLLPushBack(first_frame_node, last_frame_node, frame_node);
+      frame_node_count += 1;
       
       // rjf: unwind one step
       CTRL_UnwindStepResult step = ctrl_unwind_step(store, machine_id, module, arch, regs_block, endt_us);
@@ -2524,34 +2551,17 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       {
         break;
       }
-      
-      // rjf: unwind one step (OLD)
-#if 0
-      UNW_Step unwind_step = {0};
-      switch(arch)
-      {
-        default:{unwind_step.dead = 1;}break;
-        case Architecture_x64:
-        {
-          unwind_step = unw_unwind_pe_x64(binary_data, &dbgi->pe, module_vaddr_range.min, &memview, (REGS_RegBlockX64 *)regs_block);
-        }break;
-      }
-      
-      // rjf: cancel on bad step
-      if(unwind_step.dead != 0)
-      {
-        break;
-      }
-      if(unwind_step.missed_read != 0)
-      {
-        unwind.error = 1;
-        break;
-      }
-      if(unwind_step.stack_pointer == 0)
-      {
-        break;
-      }
-#endif
+    }
+  }
+  
+  //- rjf: bake frames list into result array
+  {
+    unwind.frames.count = frame_node_count;
+    unwind.frames.v = push_array(arena, CTRL_UnwindFrame, unwind.frames.count);
+    U64 idx = 0;
+    for(CTRL_UnwindFrameNode *n = first_frame_node; n != 0; n = n->next, idx += 1)
+    {
+      unwind.frames.v[idx] = n->v;
     }
   }
   
@@ -4636,8 +4646,9 @@ ctrl_mem_stream_thread__entry_point(void *p)
     Arena *range_arena = 0;
     void *range_base = 0;
     U64 zero_terminated_size = 0;
-    U64 mem_gen = dmn_mem_gen();
-    if(got_task && mem_gen != preexisting_mem_gen)
+    U64 pre_read_mem_gen = dmn_mem_gen();
+    U64 post_read_mem_gen = 0;
+    if(got_task && pre_read_mem_gen != preexisting_mem_gen)
     {
       range_size = dim_1u64(vaddr_range_clamped);
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, os_page_size());
@@ -4656,7 +4667,12 @@ ctrl_mem_stream_thread__entry_point(void *p)
           bytes_read = dmn_process_read(process, vaddr_range_clamped_retry, range_base);
           if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
           {
-            vaddr_range_clamped_retry.max -= (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
+            U64 diff = (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
+            vaddr_range_clamped_retry.max -= diff;
+            if(diff == 0)
+            {
+              break;
+            }
           }
           else
           {
@@ -4687,6 +4703,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
           }
         }
       }
+      post_read_mem_gen = dmn_mem_gen();
     }
     
     //- rjf: read successful -> submit to hash store
@@ -4712,7 +4729,10 @@ ctrl_mem_stream_thread__entry_point(void *p)
               if(!u128_match(u128_zero(), hash))
               {
                 range_n->hash = hash;
-                range_n->mem_gen = mem_gen;
+              }
+              if(!u128_match(u128_zero(), hash))
+              {
+                range_n->mem_gen = post_read_mem_gen;
               }
               ins_atomic_u32_eval_assign(&range_n->is_taken, 0);
               goto commit__break_all;

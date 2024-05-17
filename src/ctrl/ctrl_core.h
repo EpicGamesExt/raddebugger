@@ -123,18 +123,28 @@ struct CTRL_UnwindStepResult
 typedef struct CTRL_UnwindFrame CTRL_UnwindFrame;
 struct CTRL_UnwindFrame
 {
-  CTRL_UnwindFrame *next;
-  CTRL_UnwindFrame *prev;
-  U64 rip;
   void *regs;
+};
+
+typedef struct CTRL_UnwindFrameNode CTRL_UnwindFrameNode;
+struct CTRL_UnwindFrameNode
+{
+  CTRL_UnwindFrameNode *next;
+  CTRL_UnwindFrameNode *prev;
+  CTRL_UnwindFrame v;
+};
+
+typedef struct CTRL_UnwindFrameArray CTRL_UnwindFrameArray;
+struct CTRL_UnwindFrameArray
+{
+  CTRL_UnwindFrame *v;
+  U64 count;
 };
 
 typedef struct CTRL_Unwind CTRL_Unwind;
 struct CTRL_Unwind
 {
-  CTRL_UnwindFrame *first;
-  CTRL_UnwindFrame *last;
-  U64 count;
+  CTRL_UnwindFrameArray frames;
   CTRL_UnwindFlags flags;
 };
 

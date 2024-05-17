@@ -54,12 +54,14 @@ set clang_out=     -o
 
 :: --- Per-Build Settings -----------------------------------------------------
 set link_dll=-DLL
-if "%msvc%"=="1"  set only_compile=/c
-if "%clang%"=="1" set only_compile=-c
-if "%msvc%"=="1"  set EHsc=/EHsc
-if "%clang%"=="1" set EHsc=
-if "%msvc%"=="1"  set rc=rc.exe
-if "%clang%"=="1" set rc=llvm-rc.exe
+if "%msvc%"=="1"    set only_compile=/c
+if "%clang%"=="1"   set only_compile=-c
+if "%msvc%"=="1"    set EHsc=/EHsc
+if "%clang%"=="1"   set EHsc=
+if "%msvc%"=="1"    set no_aslr=/DYNAMICBASE:NO
+if "%clang%"=="1"   set no_aslr=/DYNAMICBASE:NO
+if "%msvc%"=="1"    set rc=rc.exe
+if "%clang%"=="1"   set rc=llvm-rc.exe
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%
@@ -104,7 +106,7 @@ if "%raddbgi_breakpad_from_pdb%"=="1"  %compile%             ..\src\raddbgi_brea
 if "%ryan_scratch%"=="1"               %compile%             ..\src\scratch\ryan_scratch.c                                                %compile_link% %out%ryan_scratch.exe || exit /b 1
 if "%cpp_tests%"=="1"                  %compile%             ..\src\scratch\i_hate_c_plus_plus.cpp                                        %compile_link% %out%cpp_tests.exe || exit /b 1
 if "%look_at_raddbg%"=="1"             %compile%             ..\src\scratch\look_at_raddbg.c                                              %compile_link% %out%look_at_raddbg.exe || exit /b 1
-if "%mule_main%"=="1"                  del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %out%mule_main.exe || exit /b 1
+if "%mule_main%"=="1"                  del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
 if "%mule_module%"=="1"                %compile%             ..\src\mule\mule_module.cpp                                                  %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
 if "%mule_hotload%"=="1"               %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
 popd
