@@ -9547,6 +9547,13 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
   Temp scratch = scratch_begin(&arena, 1);
   DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
   String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
+  String8 process_thread_string = { thread_display_string.str, thread_display_string.size };
+  if (!df_entity_is_nil(thread))
+  {
+    DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+    String8 process_display_string = df_display_string_from_entity(scratch.arena, process);
+    process_thread_string = push_str8f(scratch.arena, "%S: %S", process_display_string, thread_display_string);
+  }
   switch(event->kind)
   {
     default:
@@ -9558,7 +9565,7 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
         {
           if(!df_entity_is_nil(thread))
           {
-            explanation = push_str8f(arena, "%S completed step", thread_display_string);
+            explanation = push_str8f(arena, "%S completed step", process_thread_string);
           }
           else
           {
@@ -9570,7 +9577,7 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
           if(!df_entity_is_nil(thread))
           {
             icon = DF_IconKind_CircleFilled;
-            explanation = push_str8f(arena, "%S hit a breakpoint", thread_display_string);
+            explanation = push_str8f(arena, "%S hit a breakpoint", process_thread_string);
           }
         }break;
         case CTRL_EventCause_InterruptedByException:
@@ -9583,30 +9590,30 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
               default:
               {
                 String8 exception_code_string = df_string_from_exception_code(event->exception_code);
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", thread_display_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", process_thread_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
               }break;
               case CTRL_ExceptionKind_CppThrow:
               {
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", thread_display_string, event->exception_code);
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", process_thread_string, event->exception_code);
               }break;
               case CTRL_ExceptionKind_MemoryRead:
               {
                 explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation reading 0x%I64x",
-                                         thread_display_string,
+                                         process_thread_string,
                                          event->exception_code,
                                          event->vaddr_rng.min);
               }break;
               case CTRL_ExceptionKind_MemoryWrite:
               {
                 explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation writing 0x%I64x",
-                                         thread_display_string,
+                                         process_thread_string,
                                          event->exception_code,
                                          event->vaddr_rng.min);
               }break;
               case CTRL_ExceptionKind_MemoryExecute:
               {
                 explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation executing 0x%I64x",
-                                         thread_display_string,
+                                         process_thread_string,
                                          event->exception_code,
                                          event->vaddr_rng.min);
               }break;
@@ -9621,7 +9628,7 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
         case CTRL_EventCause_InterruptedByTrap:
         {
           icon = DF_IconKind_WarningBig;
-          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", thread_display_string, event->exception_code);
+          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", process_thread_string, event->exception_code);
         }break;
         case CTRL_EventCause_InterruptedByHalt:
         {
