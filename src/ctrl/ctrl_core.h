@@ -510,6 +510,8 @@ struct CTRL_ModuleImageInfoCacheNode
   Arena *arena;
   PE_IntelPdata *pdatas;
   U64 pdatas_count;
+  U64 entry_point_voff;
+  Rng1U64 tls_vaddr_range;
 };
 
 typedef struct CTRL_ModuleImageInfoCacheSlot CTRL_ModuleImageInfoCacheSlot;
@@ -738,6 +740,8 @@ internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle t
 
 //- rjf: cache lookups
 internal PE_IntelPdata *ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_MachineID machine_id, DMN_Handle module_handle, U64 voff);
+internal U64 ctrl_entry_point_voff_from_module(CTRL_MachineID machine_id, DMN_Handle module_handle);
+internal Rng1U64 ctrl_tls_vaddr_range_from_module(CTRL_MachineID machine_id, DMN_Handle module_handle);
 
 ////////////////////////////////
 //~ rjf: Unwinding Functions

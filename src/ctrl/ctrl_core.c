@@ -1534,6 +1534,46 @@ ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_MachineID machine_id, DMN_H
   return first_pdata;
 }
 
+internal U64
+ctrl_entry_point_voff_from_module(CTRL_MachineID machine_id, DMN_Handle module_handle)
+{
+  U64 result = 0;
+  U64 hash = ctrl_hash_from_machine_id_handle(machine_id, module_handle);
+  U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+  U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+  CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+  CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(n->machine_id == machine_id && dmn_handle_match(n->module, module_handle))
+    {
+      result = n->entry_point_voff;
+      break;
+    }
+  }
+  return result;
+}
+
+internal Rng1U64
+ctrl_tls_vaddr_range_from_module(CTRL_MachineID machine_id, DMN_Handle module_handle)
+{
+  Rng1U64 result = {0};
+  U64 hash = ctrl_hash_from_machine_id_handle(machine_id, module_handle);
+  U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+  U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+  CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+  CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(n->machine_id == machine_id && dmn_handle_match(n->module, module_handle))
+    {
+      result = n->tls_vaddr_range;
+      break;
+    }
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Unwinding Functions
 
@@ -2892,6 +2932,8 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
   Arena *arena = arena_alloc();
   PE_IntelPdata *pdatas = 0;
   U64 pdatas_count = 0;
+  U64 entry_point_voff = 0;
+  Rng1U64 tls_vaddr_range = {0};
   ProfScope("unpack relevant PE info")
   {
     B32 is_valid = 1;
@@ -2991,6 +3033,40 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
         pdatas = push_array(arena, PE_IntelPdata, pdatas_count);
         dmn_process_read(process, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), pdatas);
       }
+      
+      // rjf: extract tls header
+      PE_TLSHeader64 tls_header = {0};
+      if(data_dir_count > PE_DataDirectoryIndex_TLS)
+      {
+        PE_DataDirectory dir = {0};
+        dmn_process_read_struct(process, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, &dir);
+        Rng1U64 tls_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
+        switch(coff_header.machine)
+        {
+          default:{}break;
+          case COFF_MachineType_X86:
+          {
+            PE_TLSHeader32 tls_header32 = {0};
+            dmn_process_read_struct(process, vaddr_range.min + tls_voff_range.min, &tls_header32);
+            tls_header.raw_data_start    = (U64)tls_header32.raw_data_start;
+            tls_header.raw_data_end      = (U64)tls_header32.raw_data_end;
+            tls_header.index_address     = (U64)tls_header32.index_address;
+            tls_header.callbacks_address = (U64)tls_header32.callbacks_address;
+            tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
+            tls_header.characteristics   = (U64)tls_header32.characteristics;
+          }break;
+          case COFF_MachineType_X64:
+          {
+            dmn_process_read_struct(process, vaddr_range.min + tls_voff_range.min, &tls_header);
+          }break;
+        }
+      }
+      
+      // rjf: grab entry point vaddr
+      entry_point_voff = entry_point;
+      
+      // rjf: calculate TLS vaddr range
+      tls_vaddr_range = r1u64(tls_header.index_address, tls_header.index_address+sizeof(U32));
     }
   }
   
@@ -3023,6 +3099,7 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
         node->arena = arena;
         node->pdatas = pdatas;
         node->pdatas_count = pdatas_count;
+        node->entry_point_voff = entry_point_voff;
       }
     }
   }
@@ -4076,7 +4153,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         //- rjf: add trap for PE header entry
         if(!entries_found)
         {
-          U64 voff = dbgi->pe.entry_point;
+          U64 voff = ctrl_entry_point_voff_from_module(CTRL_MachineID_Local, module->handle);
           if(voff != 0)
           {
             DMN_Trap trap = {process->handle, module_base_vaddr + voff};

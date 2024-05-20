@@ -52,15 +52,10 @@
 //     since that's not normally how Windows fonts work.
 
 ////////////////////////////////
-//~ rjf: Demon/Cleanup Pass Tasks
+//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
-// [ ] TLS eval -> in-process-memory EXE info
-// [ ] unwinding -> in-process-memory EXE info
 // [ ] "root" concept in hash store, which buckets keys & allows usage code to
 //     jettison a collection of keys in retained mode fashion
-
-////////////////////////////////
-//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
 // [ ] Jeff Notes
 //  [ ] highlighted text & ctrl+f -> auto-fill search query
@@ -379,6 +374,8 @@
 //      function was displayed in the window by default next to the thread.
 //  [x] ** It would be nice if thread listings displayed the name of the
 //      thread, instead of just the ID.
+// [x] TLS eval -> in-process-memory EXE info
+// [x] unwinding -> in-process-memory EXE info
 
 #ifndef RADDBG_H
 #define RADDBG_H

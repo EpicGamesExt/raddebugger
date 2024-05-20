@@ -3541,20 +3541,14 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
   DBGI_Scope *scope = dbgi_scope_open();
   if(!df_ctrl_targets_running())
   {
-    //- rjf: unpack thread info
+    //- rjf: unpack module info
     DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-    DF_Entity *binary = df_binary_file_from_module(module);
-    DBGI_Parse *dbgi = df_dbgi_parse_from_binary_file(scope, binary);
-    String8 bin_data = str8((U8 *)dbgi->exe_base, dbgi->exe_props.size);
-    PE_BinInfo *bin = &dbgi->pe;
-    B32 bin_is_pe = 1; // TODO(rjf): this path needs to change for ELF
-    U64 addr_size = bit_size_from_arch(bin->arch)/8;
-    
-    //- rjf: grab tls range
-    Rng1U64 tls_vaddr_range = pe_tls_rng_from_bin_base_vaddr(bin_data, bin, df_base_vaddr_from_module(module));
+    Rng1U64 tls_vaddr_range = ctrl_tls_vaddr_range_from_module(module->ctrl_machine_id, module->ctrl_handle);
+    U64 addr_size = bit_size_from_arch(process->arch)/8;
     
     //- rjf: read module's TLS index
     U64 tls_index = 0;
+    if(addr_size != 0)
     {
       CTRL_ProcessMemorySlice tls_index_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, tls_vaddr_range, 0);
       if(tls_index_slice.data.size >= addr_size)
@@ -3564,7 +3558,7 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
     }
     
     //- rjf: PE path
-    if(bin_is_pe)
+    if(addr_size != 0)
     {
       U64 thread_info_addr = root_vaddr;
       U64 tls_addr_off = tls_index*addr_size;
@@ -3584,10 +3578,10 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
     }
     
     //- rjf: non-PE path (not implemented)
+#if 0
     if(!bin_is_pe)
     {
       // TODO(rjf): not supported. old code from the prototype that Nick had sketched out:
-#if 0
       // TODO(nick): This code works only if the linked c runtime library is glibc.
       // Implement CRT detection here.
       
@@ -3614,8 +3608,8 @@ df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 
       {
         demon_read_memory(process->demon_handle, &result, dtv_addr + dtv_size*tls_index, addr_size);
       }
-#endif
     }
+#endif
   }
   dbgi_scope_close(scope);
   scratch_end(scratch);
