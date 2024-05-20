@@ -2374,7 +2374,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   //////////////////////////////
   //- rjf: no pdata, or didn't do machframe in xdata unwind -> unwind by reading stack pointer
   //
-  if(!first_pdata || !xdata_unwind_did_machframe) ProfScope("no pdata, or didn't do machframe in xdata unwind -> unwind by reading stack pointer")
+  if(!first_pdata || (!has_pdata_and_in_epilog && !xdata_unwind_did_machframe)) ProfScope("no pdata, or didn't do machframe in xdata unwind -> unwind by reading stack pointer")
   {
     // rjf: read rip from stack pointer
     U64 rsp = regs->rsp.u64;
