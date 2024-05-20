@@ -560,3 +560,49 @@ ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_data, U64 read_s
   }
   return read_size;
 }
+
+////////////////////////////////
+
+internal U64
+bsearch_nearest_u64(void *arr, U64 count, U64 val, U64 stride, U64 offset)
+{
+#define GetItem(i) *(U64*)((((U8*)arr) + stride * (i)) + offset)
+
+  U64 match = count;
+
+  if(count > 0 && GetItem(0) <= val && val < GetItem(count-1))
+  {
+    U64 min = 0;
+    U64 max = count;
+
+    for(;;)
+    {
+      U64 mid = (min + max) / 2;
+      U64 cur = GetItem(mid);
+      if(cur  < val)
+      {
+        min = mid;
+      }
+      else if(cur > val)
+      {
+        max = mid;
+      }
+      else
+      {
+        min = mid;
+        break;
+      }
+
+      U64 range = max - min;
+      if(range <= 1)
+      {
+        break;
+      }
+    }
+
+    match = min;
+  }
+
+  return match;
+#undef GetItem
+}

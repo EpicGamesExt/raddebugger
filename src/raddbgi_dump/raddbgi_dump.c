@@ -304,35 +304,7 @@ rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed,
   str8_list_pushf(arena, out, "%.*slanguage=%.*s\n",
                   indent_level, rdi_stringize_spaces, str8_varg(language_str));
   
-  // extract line info data
-  RDI_ParsedLineInfo line_info = {0};
-  rdi_line_info_from_unit(parsed, unit, &line_info);
-  
-  
-  // stringize line info
-  str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
-  
-  for (U32 i = 0; i < line_info.count; i += 1){
-    U64 first = line_info.voffs[i];
-    U64 opl   = line_info.voffs[i + 1];
-    RDI_Line *line = line_info.lines + i;
-    RDI_Column *col = 0;
-    if (i < line_info.col_count){
-      col = line_info.cols + i;
-    }
-    
-    if (col == 0){
-      str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u\n",
-                      indent_level, rdi_stringize_spaces,
-                      first, opl, line->file_idx, line->line_num);
-    }
-    else{
-      str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u; columns=[%u,%u)\n",
-                      indent_level, rdi_stringize_spaces,
-                      first, opl, line->file_idx, line->line_num,
-                      col->col_first, col->col_opl);
-    }
-  }
+  str8_list_pushf(arena, out, "%.*sline_info_idx=%u\n", indent_level, rdi_stringize_spaces, unit->line_info_idx);
 }
 
 internal void
@@ -596,6 +568,9 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed,
   
   str8_list_pushf(arena, out, "%.*s proc_idx=%u\n",
                   indent_level, rdi_stringize_spaces, scope->proc_idx);
+
+  str8_list_pushf(arena, out, "%.*s inline_site_idx=%u\n",
+                  indent_level, rdi_stringize_spaces, scope->inline_site_idx);
   
   // voff ranges
   {
@@ -772,3 +747,76 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed,
   str8_list_pushf(arena, out, "%.*s[/%u]\n",
                   indent_level, rdi_stringize_spaces, this_idx);
 }
+
+internal void
+rdi_stringize_inline_site(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_InlineSite *inline_site){
+  // find inline site name
+  String8 name = {0};
+  name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+
+  // extract line info data
+  RDI_ParsedLineInfo line_info = {0};
+  rdi_parse_line_info(rdi, inline_site->line_info_idx, &line_info);
+
+  // output
+  U64 indent_level = 1;
+  str8_list_pushf(arena, out, "%.*sname_string_idx=%u (%.*s)\n",  indent_level, rdi_stringize_spaces, inline_site->name_string_idx, str8_varg(name));
+  str8_list_pushf(arena, out, "%.*scall_src_file_idx=%u\n",       indent_level, rdi_stringize_spaces, inline_site->call_src_file_idx);
+  str8_list_pushf(arena, out, "%.*scall_line_num=%u\n",           indent_level, rdi_stringize_spaces, inline_site->call_line_num);
+  str8_list_pushf(arena, out, "%.*scall_col_num=%u\n",            indent_level, rdi_stringize_spaces, inline_site->call_col_num);
+  str8_list_pushf(arena, out, "%.*stype_idx=%u\n",                indent_level, rdi_stringize_spaces, inline_site->type_idx);
+  str8_list_pushf(arena, out, "%.*sowner_type_idx=%u%s\n",        indent_level, rdi_stringize_spaces, inline_site->owner_type_idx, inline_site->owner_type_idx == 0 ? " (Global)" : "");
+  str8_list_pushf(arena, out, "%.*sline_info_idx=%u\n",           indent_level, rdi_stringize_spaces, inline_site->line_info_idx);
+}
+
+internal void
+rdi_stringize_line_info(Arena *arena, String8List *out, RDI_Parsed *rdi, U64 line_info_idx, U32 indent_level){
+  RDI_LineInfo line_info = rdi->line_info[line_info_idx];
+
+  RDI_ParsedLineInfo parsed_line_info = {0};
+  rdi_parse_line_info(rdi, line_info_idx, &parsed_line_info);
+
+  str8_list_pushf(arena, out, "%.*sline_info[%u]\n",    indent_level, rdi_stringize_spaces, line_info_idx);
+  {
+    indent_level += 1;
+
+    str8_list_pushf(arena, out, "%.*sline_count=%u\n",    indent_level, rdi_stringize_spaces, line_info.line_count);
+    str8_list_pushf(arena, out, "%.*scol_count=%u\n",     indent_level, rdi_stringize_spaces, line_info.col_count);
+    str8_list_pushf(arena, out, "%.*svoff_data_idx=%u\n", indent_level, rdi_stringize_spaces, line_info.voff_data_idx);
+    str8_list_pushf(arena, out, "%.*sline_data_idx=%u\n", indent_level, rdi_stringize_spaces, line_info.line_data_idx);
+    str8_list_pushf(arena, out, "%.*scol_data_idx=%u\n",  indent_level, rdi_stringize_spaces, line_info.col_data_idx);
+
+    if (parsed_line_info.count > 0){
+      // stringize line info
+      str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
+      
+      indent_level += 1;
+      for (U32 i = 0; i < parsed_line_info.count; i += 1){
+        U64 first = parsed_line_info.voffs[i];
+        U64 opl   = parsed_line_info.voffs[i + 1];
+        RDI_Line *line = parsed_line_info.lines + i;
+        RDI_Column *col = 0;
+        if (i < parsed_line_info.col_count){
+          col = parsed_line_info.cols + i;
+        }
+        
+        if (col == 0){
+          str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u\n",
+                          indent_level, rdi_stringize_spaces,
+                          first, opl, line->file_idx, line->line_num);
+        }
+        else{
+          str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u; columns=[%u,%u)\n",
+                          indent_level, rdi_stringize_spaces,
+                          first, opl, line->file_idx, line->line_num,
+                          col->col_first, col->col_opl);
+        }
+      }
+      indent_level -= 1;
+    }
+
+    indent_level -= 1;
+  }
+}
+
+

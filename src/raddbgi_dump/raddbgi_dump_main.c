@@ -65,6 +65,8 @@ entry_point(CmdLine *cmd_line)
     DumpFlag_ScopeVMap          = (1<<14),
     DumpFlag_NameMaps           = (1<<15),
     DumpFlag_Strings            = (1<<16),
+    DumpFlag_InlineSites        = (1<<17),
+    DumpFlag_LineInfo           = (1<<18),
   };
   String8 input_name = {0};
   String8 input_data = {0};
@@ -101,6 +103,7 @@ entry_point(CmdLine *cmd_line)
           else if(str8_match(n->string, str8_lit("scopes"),                  StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Scopes; }
           else if(str8_match(n->string, str8_lit("scope_vmap"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_ScopeVMap; }
           else if(str8_match(n->string, str8_lit("name_maps"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_NameMaps; }
+          else if(str8_match(n->string, str8_lit("inline_sites"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_InlineSites; }
         }
       }
     }
@@ -357,6 +360,17 @@ entry_point(CmdLine *cmd_line)
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
+
+    if(dump_flags & DumpFlag_InlineSites)
+    {
+      str8_list_pushf(arena, &dump, "# INLINE SITES:\n");
+      for(U64 inline_site_idx = 0; inline_site_idx < raddbg->inline_site_count; inline_site_idx += 1)
+      {
+        str8_list_pushf(arena, &dump, "inline_site[%u]\n", inline_site_idx);
+        rdi_stringize_inline_site(arena, &dump, raddbg, &raddbg->inline_sites[inline_site_idx]);
+      }
+      str8_list_pushf(arena, &dump, "\n");
+    }
     
     //- rjf: NAME MAPS
     if(dump_flags & DumpFlag_NameMaps)
@@ -421,6 +435,15 @@ entry_point(CmdLine *cmd_line)
         str8_list_pushf(arena, &dump, " string[%I64u]: \"%S\"\n", string_idx, string);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
+    }
+
+    if(dump_flags & DumpFlag_LineInfo)
+    {
+      str8_list_pushf(arena, &dump, "# LINE INFO:\n");
+      for(U64 li_idx = 0; li_idx < raddbg->line_info_count; li_idx += 1)
+      {
+        rdi_stringize_line_info(arena, &dump, raddbg, li_idx, 1);
+      }
     }
   }
   

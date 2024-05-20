@@ -240,12 +240,14 @@ typedef struct
 typedef struct
 {
   String8 compiler_name;
-  RDI_Arch arch;
+  CV_Arch arch;
   CV_Language language;
   RDIM_SymbolChunkList procedures;
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_ScopeChunkList scopes;
+  RDIM_InlineSiteChunkList inline_sites;
+  RDIM_LineSequenceListChunkList inline_line_tables;
 } P2R_SymbolConvertResult;
 
 typedef struct
@@ -254,13 +256,15 @@ typedef struct
   PDB_CoffSectionArray *sections;
   PDB_TpiHashParsed *tpi_hash;
   CV_LeafParsed *tpi_leaf;
+  CV_LeafParsed *ipi_leaf;
   CV_TypeId *itype_fwd_map;
   RDIM_Type **itype_type_ptrs;
   P2R_LinkNameMap *link_name_map;
   U64 src_file_ht_cap;
   RDIM_SrcFile **src_file_ht_slots;
   CV_SymParsed sym_parsed;
-  RDIM_LineSequenceList *main_line_table;
+  String8 c13_data;
+  CV_C13Parsed c13_parsed;
 } P2R_UnitConvertIn;
 
 typedef struct
@@ -270,6 +274,8 @@ typedef struct
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_ScopeChunkList scopes;
+  RDIM_InlineSiteChunkList inline_sites;
+  RDIM_LineSequenceListChunkList lines;
 } P2R_UnitConvertOut;
 
 typedef struct
@@ -372,6 +378,24 @@ struct P2R_BakeScopesStringsIn
   RDIM_BakeStringMapLoose **maps;
   P2R_BakeScopesStringsInNode *first;
   P2R_BakeScopesStringsInNode *last;
+};
+
+typedef struct P2R_BakeInlineSiteStringsInNode P2R_BakeInlineSiteStringsInNode;
+struct P2R_BakeInlineSiteStringsInNode
+{
+  P2R_BakeInlineSiteStringsInNode *next;
+  RDIM_InlineSite *v;
+  RDI_U64 count;
+};
+
+typedef struct P2R_BakeInlineSiteStringsIn P2R_BakeInlineSiteStringsIn;
+struct P2R_BakeInlineSiteStringsIn
+{
+  RDIM_BakeStringMapTopology *top;
+  RDIM_BakeStringMapLoose **maps;
+  RDIM_InlineSiteChunkNode *chunk;
+  P2R_BakeInlineSiteStringsInNode *first;
+  P2R_BakeInlineSiteStringsInNode *last;
 };
 
 //- rjf: string map joining task types
@@ -495,6 +519,13 @@ struct P2R_BakeScopesIn
 typedef struct P2R_BakeScopeVMapIn P2R_BakeScopeVMapIn;
 struct P2R_BakeScopeVMapIn
 {
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeInlineSitesIn P2R_BakeInlineSitesIn;
+struct P2R_BakeInlineSitesIn
+{
+  RDIM_BakeStringMapTight *strings;
   RDIM_BakeParams *params;
 };
 

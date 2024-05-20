@@ -780,4 +780,8 @@ internal U64 ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_dat
 #define ring_write_struct(ring_base, ring_size, ring_pos, ptr) ring_write((ring_base), (ring_size), (ring_pos), (ptr), sizeof(*(ptr)))
 #define ring_read_struct(ring_base, ring_size, ring_pos, ptr) ring_read((ring_base), (ring_size), (ring_pos), (ptr), sizeof(*(ptr)))
 
+////////////////////////////////
+
+internal U64 bsearch_nearest_u64(void *arr, U64 count, U64 val, U64 stride, U64 offset);
+
 #endif // BASE_CORE_H

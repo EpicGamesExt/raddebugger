@@ -146,6 +146,8 @@ Case("source_path_name_map",NormalSourcePathNameMap)\
   return result;
 }
 
+////////////////////////////////
+
 internal String8
 p2r_normalize_file_path(Arena *arena, String8 file_path)
 {
@@ -239,6 +241,45 @@ p2r_src_file_hash_table_insert_or_update(RDIM_SrcFile **slots, U64 cap, U64 hash
 
   return is_inserted_or_updated;
 }
+
+internal RDIM_SrcFileLineMapFragment *
+p2r_convert_c13_lines(Arena                 *arena,
+                      String8                rewritten_file_chksms,
+                      U64                    src_file_ht_cap,
+                      RDIM_SrcFile         **src_file_ht_slots,
+                      RDIM_LineSequenceList *line_table,
+                      CV_C13LineArray        lines)
+{
+  RDIM_SrcFileLineMapFragment *fragment = 0;
+
+  U32           slot_idx = *(U32 *)str8_deserial_get_raw_ptr(rewritten_file_chksms, lines.file_off, sizeof(slot_idx));
+  RDIM_SrcFile *src_file = src_file_ht_slots[slot_idx];
+  if(src_file != 0)
+  {
+    // fill out sequence
+    RDIM_LineSequence* seq = rdim_line_sequence_list_push(arena, line_table);
+    seq->src_file   = src_file;
+    seq->voffs      = lines.voffs;
+    seq->line_nums  = lines.line_nums;
+    seq->col_nums   = lines.col_nums;
+    seq->line_count = lines.line_count;
+
+    fragment = rdim_push_array(arena, RDIM_SrcFileLineMapFragment, 1);
+    fragment->next = 0;
+    fragment->seq  = seq;
+
+    // atomic line fragment insert
+    RDIM_SrcFileLineMapFragment **next_fragment = (RDIM_SrcFileLineMapFragment **)ins_atomic_ptr_eval_assign(&src_file->next_fragment, &fragment->next);
+    *next_fragment = fragment;
+  }
+  else
+  {
+    Assert(!"error: invalid $$FILE_CHKSMS offset");
+  }
+
+  return fragment;
+}
+
 
 ////////////////////////////////
 //~ rjf: COFF <-> RADDBGI Canonical Conversions
@@ -785,7 +826,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_rewrite_file_chksms_task__entry_point)
 {
   P2R_C13ConvertIn *in = (P2R_C13ConvertIn *)p;
   String8 raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
-  ProfBeginDynamic("rewrite checksum [size %llu]", raw_checksums.size);
+  ProfBeginDynamic("rewrite checksums [size %llu]", raw_checksums.size);
 
   for(U64 cursor = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; )
   {
@@ -813,62 +854,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_rewrite_file_chksms_task__entry_point)
   return 0;
 }
 
-internal TS_TASK_FUNCTION_DEF(p2r_convert_main_line_table_task__entry_point)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  P2R_C13ConvertIn *in = (P2R_C13ConvertIn *)p;
-
-  String8                raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
-  RDIM_LineSequenceList *line_table    = push_array(arena, RDIM_LineSequenceList, 1);
-
-  for(CV_C13SubSectionNode *ss = in->c13_parsed.v[CV_C13_SubSectionIdxKind_Lines].first; ss != 0; ss = ss->next)
-  {
-    CV_C13LinesParsedList parsed_lines = cv_c13_lines_from_sub_sections(scratch.arena, in->c13_data, ss->range);
-    for(CV_C13LinesParsedNode *lines_n = parsed_lines.first; lines_n != 0; lines_n = lines_n->next)
-    {
-      U32           slot_idx = *(U32 *)str8_deserial_get_raw_ptr(raw_checksums, lines_n->v.file_off, sizeof(slot_idx));
-      RDIM_SrcFile *src_file = in->src_file_ht_slots[slot_idx];
-      if(src_file)
-      {
-        if(0 < lines_n->v.sec_idx && lines_n->v.sec_idx <= in->sections->count)
-        {
-          U64             sec_voff = in->sections->sections[lines_n->v.sec_idx - 1].voff;
-          CV_C13LineArray lines    = cv_c13_line_array_from_data(arena, in->c13_data, sec_voff, lines_n->v);
-
-          // fill out sequence
-          RDIM_LineSequence* seq = rdim_line_sequence_list_push(arena, line_table);
-          seq->src_file   = src_file;
-          seq->voffs      = lines.voffs;
-          seq->line_nums  = lines.line_nums;
-          seq->col_nums   = lines.col_nums;
-          seq->line_count = lines.line_count;
-
-          RDIM_SrcFileLineMapFragment *fragment = rdim_push_array(arena, RDIM_SrcFileLineMapFragment, 1);
-          fragment->next = 0;
-          fragment->seq  = seq;
-
-          // atomic line fragment insert
-          RDIM_SrcFileLineMapFragment **next_fragment = (RDIM_SrcFileLineMapFragment **)ins_atomic_ptr_eval_assign(&src_file->next_fragment, &fragment->next);
-          *next_fragment = fragment;
-        }
-        else
-        {
-          Assert(!"error: out of bounds section index"); 
-        }
-      }
-      else
-      {
-        Assert(!"error: invalid $$FILE_CHKSMS offset");
-      }
-    }
-  }
-
-  scratch_end(scratch);
-  ProfEnd();
-  return line_table;
-}
-
 internal P2R_SymbolConvertResult
 p2r_convert_symbols(Arena                     *arena,
                     U64                        src_file_ht_cap,
@@ -876,21 +861,27 @@ p2r_convert_symbols(Arena                     *arena,
                     PDB_CoffSectionArray      *sections,
                     PDB_TpiHashParsed         *tpi_hash,
                     CV_LeafParsed             *tpi_leaf,
+                    CV_LeafParsed             *ipi_leaf,
                     CV_TypeId                 *itype_fwd_map,
                     RDIM_Type                **itype_type_ptrs,
                     P2R_LinkNameMap           *link_name_map,
                     CV_SymParsed              *sym,
                     U64                        sym_ranges_first,
-                    U64                        sym_ranges_opl)
+                    U64                        sym_ranges_opl,
+                    String8                    rewritten_file_chksms,
+                    CV_C13InlineeLinesAccel   *inlinee_lines_accel,
+                    CV_C13LinesAccel          *lines_accel)
 {
 #define p2r_type_ptr_from_itype(itype) ((itype_type_ptrs && (itype) < tpi_leaf->itype_opl) ? (itype_type_ptrs[(itype_fwd_map[(itype)] ? itype_fwd_map[(itype)] : (itype))]) : 0)
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
 
-  U64 procedures_chunk_cap       = 1024;
-  U64 global_variables_chunk_cap = 1024;
-  U64 thread_variables_chunk_cap = 1024;
-  U64 scopes_chunk_cap           = 1024;
+  U64 procedures_chunk_cap         = 1024;
+  U64 global_variables_chunk_cap   = 1024;
+  U64 thread_variables_chunk_cap   = 1024;
+  U64 scopes_chunk_cap             = 1024;
+  U64 inline_sites_chunk_cap       = 1024;
+  U64 inline_line_tables_chunk_cap = 1024;
 
   P2R_SymbolConvertResult result = {0};
 
@@ -899,6 +890,8 @@ p2r_convert_symbols(Arena                     *arena,
   {
     P2R_ScopeNode *next;
     RDIM_Scope *scope;
+    U64 proc_voff;
+    CV_C13LinesAccel *inline_scope_lines_accel;
   };
 
   P2R_ScopeNode    *top_scope_node           = 0;
@@ -944,7 +937,7 @@ p2r_convert_symbols(Arena                     *arena,
 
         String8 ver_str = str8_cstring_capped((char*)(compile + 1), (char *)sym_data_opl);
 
-        result.arch          = p2r_rdi_arch_from_cv_arch((CV_Arch)compile->machine);
+        result.arch          = (CV_Arch)compile->machine;
         result.compiler_name = ver_str;
         result.language      = CV_CompileFlags_ExtractLanguage(compile->flags);
       }break;
@@ -959,7 +952,7 @@ p2r_convert_symbols(Arena                     *arena,
                                            compile->ver_minor,
                                            compile->ver_build);
 
-        result.arch          = p2r_rdi_arch_from_cv_arch((CV_Arch)compile->machine);
+        result.arch          = (CV_Arch)compile->machine;
         result.compiler_name = compiler_name;
         result.language      = CV_Compile2Flags_ExtractLanguage(compile->flags);
       }break;
@@ -974,7 +967,7 @@ p2r_convert_symbols(Arena                     *arena,
                                            compile->ver_minor,
                                            compile->ver_build);
 
-        result.arch          = p2r_rdi_arch_from_cv_arch(compile->machine);
+        result.arch          = compile->machine;
         result.compiler_name = compiler_name;
         result.language      = CV_Compile3Flags_ExtractLanguage(compile->flags);
       }break;
@@ -1031,6 +1024,227 @@ p2r_convert_symbols(Arena                     *arena,
           SLLStackPush(top_scope_node, node);
         }
       }break;
+
+      case CV_SymKind_INLINESITE:
+      {
+        CV_SymInlineSite *inline_site   = (CV_SymInlineSite*)sym_header_struct_base;
+        String8           binary_annots = str8((U8*)(inline_site + 1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*inline_site));
+
+        // extract symbol info
+        String8    name      = str8(0,0);
+        String8    link_name = str8(0,0); // TODO(nick): can we infer link name from inline site?
+        RDIM_Type *type      = 0;
+        RDIM_Type *owner     = 0;
+        if(ipi_leaf->itype_first <= inline_site->inlinee && inline_site->inlinee < ipi_leaf->itype_opl)
+        {
+          CV_RecRange rec_range = ipi_leaf->leaf_ranges.ranges[inline_site->inlinee - ipi_leaf->itype_first];
+          String8     rec_data  = str8_substr(ipi_leaf->data, rng_1u64(rec_range.off, rec_range.off + rec_range.hdr.size));
+          void       *raw_leaf  = rec_data.str + sizeof(U16);
+
+          // inlinee is method
+          if(rec_range.hdr.kind == CV_LeafIDKind_MFUNC_ID)
+          {
+            if(rec_range.hdr.size >= sizeof(CV_LeafMFuncId))
+            {
+              CV_LeafMFuncId *mfunc_id = (CV_LeafMFuncId*)raw_leaf;
+              name  = str8_cstring_capped(mfunc_id + 1, rec_data.str + rec_data.size);
+              type  = p2r_type_ptr_from_itype(mfunc_id->itype);
+              owner = mfunc_id->owner_itype != 0 ? p2r_type_ptr_from_itype(mfunc_id->owner_itype) : 0;
+            }
+            else
+            {
+              Assert(!"error: not enough bytes to read LF_MFUNC_ID");
+            }
+          }
+          // inlinee is function
+          else if(rec_range.hdr.kind == CV_LeafIDKind_FUNC_ID)
+          {
+            if(rec_range.hdr.size >= sizeof(CV_LeafFuncId))
+            {
+              CV_LeafFuncId *func_id = (CV_LeafFuncId*)raw_leaf;
+              name  = str8_cstring_capped(func_id + 1, rec_data.str + rec_data.size);
+              type  = p2r_type_ptr_from_itype(func_id->itype);
+              owner = func_id->scope_string_id != 0 ? p2r_type_ptr_from_itype(func_id->scope_string_id) : 0;
+            }
+            else
+            {
+              Assert(!"error: not enough bytes to read LF_FUNC_ID");
+            }
+          }
+          else
+          {
+            Assert(!"error: unexpected inlinee kind");
+          }
+        }
+        else
+        {
+          Assert(!"error: out of bounds inlinee itype");
+        }
+
+        if(top_scope_node != 0)
+        {
+          RDIM_Scope *top_scope = top_scope_node->scope;
+
+          // parse binary annotations
+          CV_InlineBinaryAnnotsParsed binary_annots_parse = {0};
+          {
+            CV_C13InlineeLinesParsed *inlinee_parsed = cv_c13_inlinee_lines_accel_find(inlinee_lines_accel, inline_site->inlinee);
+            if(inlinee_parsed != 0)
+            {
+              binary_annots_parse = cv_c13_parse_inline_binary_annots(arena, top_scope_node->proc_voff, inlinee_parsed, binary_annots);
+            }
+            else
+            {
+              Assert(!"error: unable to find S_INLINESITE inlinee in $$INLINEE_LINES");
+            }
+          }
+
+          // build line lookup accel
+          CV_C13LinesAccel *inline_scope_lines_accel = cv_c13_make_lines_accel(scratch.arena,
+                                                                               binary_annots_parse.lines_count,
+                                                                               binary_annots_parse.lines);
+
+          RDIM_SrcFile *call_src_file = 0;
+          U32           call_line_num = max_U32;
+          U16           call_col_num  = max_U16;
+          {
+            // default to units line table
+            CV_C13LinesAccel *parent_lines = lines_accel;
+
+            // when parent scope is inlinee pick its line table
+            if(top_scope_node->scope->inline_site != 0)
+            {
+              parent_lines = top_scope_node->inline_scope_lines_accel;
+            }
+
+            // virtual offset of inlinee first instruction is call site
+            U64 inlinee_first_inst_voff = 0;
+            if(inline_scope_lines_accel->map_count > 0)
+            {
+              inlinee_first_inst_voff = inline_scope_lines_accel->map[0].voff;
+            }
+            else
+            {
+              Assert(!"error: S_INLINESITE does not have a line table");
+            }
+
+            U64         line_map_count = 0;
+            CV_C13Line *line_maps      = cv_c13_line_from_voff(parent_lines, inlinee_first_inst_voff, &line_map_count);
+
+            if(line_map_count > 0)
+            {
+              //Assert(line_map_count == 1);
+              CV_C13Line best_voff_match = line_maps[0]; 
+
+              // offset -> file checksum
+              U32 slot_idx = 0;
+              str8_deserial_read_struct(rewritten_file_chksms, best_voff_match.file_off, &slot_idx);
+
+              Assert(slot_idx < src_file_ht_cap);
+              Assert(src_file_ht_slots[slot_idx] != 0);
+
+              // fill out inlinee call site info
+              call_src_file = src_file_ht_slots[slot_idx];
+              call_line_num = best_voff_match.line_num;
+              call_col_num  = best_voff_match.col_num;
+            }
+            else
+            {
+              // ispc produces incorrect inline site ranges which makes
+              // it impossible to establish call site; in UE we use
+              // ispc to vectorize math operations which triggers this assert
+              //
+              // issue can be tracked here: https://github.com/ispc/ispc/issues/2839
+              if(!str8_match(result.compiler_name,
+                             str8_lit("Intel(r) Implicit SPMD Program Compiler (Intel(r) ISPC)"),
+                             StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy))
+              {
+                // compiler generated code doesn't have source line info
+                if(!str8_match(top_scope->symbol->name, str8_lit("`dynamic atexit destructor for 'vtMissing''"), 0) &&
+                    !str8_match(name, str8_lit("{dtor}"), 0))
+                {
+                  Assert(!"error: unable to establish inlinee call line number");
+                }
+              }
+            }
+          }
+
+          RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &result.scopes, scopes_chunk_cap);
+
+          // convert voff ranges to RDIM list
+          RDIM_Rng1U64List voff_ranges = {0};
+          for(U64 code_range_idx = 0; code_range_idx < binary_annots_parse.code_range_count; code_range_idx += 1)
+          {
+            RDIM_Rng1U64 range;
+            range.min = binary_annots_parse.code_ranges[code_range_idx].min;
+            range.max = binary_annots_parse.code_ranges[code_range_idx].max;
+            rdim_scope_push_voff_range(arena, &result.scopes, scope, range);
+          }
+
+          // convert line info to RDIM
+          RDIM_LineSequenceList *line_info = rdim_line_sequence_list_chunk_list_push(arena, &result.inline_line_tables, inline_line_tables_chunk_cap);
+          for(U64 lines_idx = 0; lines_idx < binary_annots_parse.lines_count; lines_idx += 1)
+          {
+            p2r_convert_c13_lines(arena,
+                                  rewritten_file_chksms,
+                                  src_file_ht_cap,
+                                  src_file_ht_slots,
+                                  line_info,
+                                  binary_annots_parse.lines[lines_idx]);
+          }
+
+          RDIM_InlineSite *inline_site = rdim_inline_site_list_push(arena, &result.inline_sites, inline_sites_chunk_cap); 
+          inline_site->name          = name;
+          inline_site->call_src_file = call_src_file;
+          inline_site->call_line_num = call_line_num;
+          inline_site->call_col_num  = call_col_num;
+          inline_site->type          = type;
+          inline_site->owner         = owner;
+          inline_site->line_info     = line_info;
+
+          // fill out scope
+          scope->parent_scope = top_scope;
+          scope->symbol       = top_scope->symbol;
+          scope->inline_site  = inline_site;
+
+          // update scope sibling list
+          SLLQueuePush_N(top_scope->first_child, top_scope->last_child, scope, next_sibling);
+
+          // push scope to the stack
+          P2R_ScopeNode *scope_node;
+          if(free_scope_node == 0)
+          {
+            scope_node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1);
+          }
+          else
+          {
+            scope_node = free_scope_node;
+            SLLStackPop(free_scope_node);
+          }
+          scope_node->scope                    = scope;
+          scope_node->proc_voff                = top_scope_node->proc_voff;
+          scope_node->inline_scope_lines_accel = inline_scope_lines_accel;
+          SLLStackPush(top_scope_node, scope_node);
+        }
+        else
+        {
+          Assert(!"error: inline site must be scoped");
+        }
+      }break;
+
+        case CV_SymKind_INLINESITE_END:
+        {
+          P2R_ScopeNode *n = top_scope_node;
+          if(n != 0)
+          {
+            SLLStackPop(top_scope_node);
+            SLLStackPush(free_scope_node, n);
+          }
+          else
+          {
+            Assert(!"error: unbalanced S_INLINESITE and S_INLINESITE_END");
+          }
+        }break;
       
       //- rjf: LDATA32/GDATA32
       case CV_SymKind_LDATA32:
@@ -1169,6 +1383,7 @@ p2r_convert_symbols(Arena                     *arena,
           if(node != 0) { SLLStackPop(free_scope_node); }
           else { node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1); }
           node->scope = procedure_root_scope;
+          node->proc_voff = procedure_root_scope->voff_ranges.min;
           SLLStackPush(top_scope_node, node);
         }
 
@@ -1557,21 +1772,91 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
   Temp scratch = scratch_begin(&arena, 1);
   P2R_UnitConvertIn *in = (P2R_UnitConvertIn *)p;
 
+  // parse $$LINES
+  U64              c13_lines_count;
+  CV_C13LineArray *c13_lines;
+  {
+    CV_C13SubSectionList ss_lines = in->c13_parsed.v[CV_C13_SubSectionIdxKind_Lines];
+
+    c13_lines_count = 0;
+    CV_C13LinesParsedList *parsed_lines = push_array_no_zero(scratch.arena, CV_C13LinesParsedList, ss_lines.count);
+    {
+      U64 ss_idx = 0;
+      for(CV_C13SubSectionNode *ss_node = ss_lines.first; ss_node != 0; ss_node = ss_node->next, ss_idx += 1)
+      {
+        parsed_lines[ss_idx] = cv_c13_lines_from_sub_sections(scratch.arena, in->c13_data, ss_node->range);
+        c13_lines_count += parsed_lines[ss_idx].count;
+      }
+    }
+
+    c13_lines = push_array_no_zero(scratch.arena, CV_C13LineArray, c13_lines_count);
+    for(U64 ss_idx = 0, c13_lines_idx = 0; ss_idx < ss_lines.count; ss_idx += 1)
+    {
+      for(CV_C13LinesParsedNode *lines_n = parsed_lines[ss_idx].first; lines_n != 0; lines_n = lines_n->next)
+      {
+        if(0 < lines_n->v.sec_idx && lines_n->v.sec_idx <= in->sections->count)
+        {
+          Assert(c13_lines_idx < c13_lines_count);
+          U64 sec_voff = in->sections->sections[lines_n->v.sec_idx - 1].voff;
+          c13_lines[c13_lines_idx] = cv_c13_line_array_from_data(arena, in->c13_data, sec_voff, lines_n->v);
+          c13_lines_idx += 1;
+        }
+        else
+        {
+          Assert(!"error: out of bounds section index"); 
+        }
+      }
+    }
+  }
+
+  // find $$FILE_CHKSMS
+  String8 rewritten_file_chksms = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
+
+  // parse $$INLINEE_LINES 
+  CV_C13SubSectionList ss_inlinee_lines = in->c13_parsed.v[CV_C13_SubSectionIdxKind_InlineeLines];
+  CV_C13InlineeLinesParsedList inlinee_lines_parsed = cv_c13_inlinee_lines_from_sub_sections(scratch.arena, in->c13_data, ss_inlinee_lines);
+
+  // init accels
+  CV_C13LinesAccel        *lines_accel         = cv_c13_make_lines_accel(scratch.arena, c13_lines_count, c13_lines);
+  CV_C13InlineeLinesAccel *inlinee_lines_accel = cv_c13_make_inlinee_lines_accel(scratch.arena, inlinee_lines_parsed);
+
+  RDIM_LineSequenceListChunkList lines = {0};
+  RDIM_LineSequenceList *main_line_table = rdim_line_sequence_list_chunk_list_push(arena, &lines, 1);
+
+  // convert C13 lines
+  for(U64 lines_idx = 0; lines_idx < c13_lines_count; lines_idx += 1)
+  {
+    p2r_convert_c13_lines(arena,
+                          rewritten_file_chksms,
+                          in->src_file_ht_cap,
+                          in->src_file_ht_slots,
+                          main_line_table,
+                          c13_lines[lines_idx]);
+  }
+
+  // convert symbols
   P2R_SymbolConvertResult symbol_result = p2r_convert_symbols(arena,
                                                               in->src_file_ht_cap,
                                                               in->src_file_ht_slots,
                                                               in->sections,
                                                               in->tpi_hash,
                                                               in->tpi_leaf,
+                                                              in->ipi_leaf,
                                                               in->itype_fwd_map,
                                                               in->itype_type_ptrs,
                                                               in->link_name_map,
                                                               &in->sym_parsed,
                                                               0,
-                                                              in->sym_parsed.sym_ranges.count);
+                                                              in->sym_parsed.sym_ranges.count,
+                                                              rewritten_file_chksms,
+                                                              inlinee_lines_accel,
+                                                              lines_accel);
 
-  RDIM_Unit unit = {0};
+  // append inline site lines
+  rdim_line_sequence_list_chunk_list_concat_in_place(&lines, &symbol_result.inline_line_tables);
+
   ProfBegin("fill out unit header");
+  RDIM_Unit unit = {0};
   {
     // make unit name
     String8 unit_name = in->pdb_unit->obj_name;
@@ -1596,9 +1881,9 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
     unit.object_file     = obj_name;
     unit.archive_file    = in->pdb_unit->group_name;
     unit.build_path      = str8(0,0);
-    unit.arch            = symbol_result.arch;
+    unit.arch            = p2r_rdi_arch_from_cv_arch(symbol_result.arch);
     unit.language        = p2r_rdi_language_from_cv_language(symbol_result.language);
-    unit.main_line_table = in->main_line_table;
+    unit.main_line_table = main_line_table;
   }
   ProfEnd();
 
@@ -1609,6 +1894,8 @@ internal TS_TASK_FUNCTION_DEF(p2r_unit_convert__entry_point)
   out->global_variables = symbol_result.global_variables;
   out->thread_variables = symbol_result.thread_variables;
   out->scopes           = symbol_result.scopes;
+  out->inline_sites     = symbol_result.inline_sites;
+  out->lines            = lines;
 
   scratch_end(scratch);
   return out;
@@ -1619,16 +1906,21 @@ internal TS_TASK_FUNCTION_DEF(p2r_convert_gsi_block__task_entry_point)
   P2R_GsiBlockConvertIn *in = (P2R_GsiBlockConvertIn *)p;
   P2R_SymbolConvertResult *result = push_array_no_zero(arena, P2R_SymbolConvertResult, 1);
   *result = p2r_convert_symbols(arena,
-                                0, 0, // global stream doesn't have $$FILE_CHCKSMS
+                                0,
+                                0,
                                 in->sections,
                                 in->tpi_hash,
                                 in->tpi_leaf,
+                                0,
                                 in->itype_fwd_map,
                                 in->itype_type_ptrs,
                                 in->link_name_map,
                                 in->sym,
                                 in->sym_ranges_first,
-                                in->sym_ranges_opl);
+                                in->sym_ranges_opl,
+                                str8(0,0),
+                                0,
+                                0);
 
   return result;
 }
@@ -3583,6 +3875,14 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   RDIM_ScopeChunkList            all_scopes           = {0};
   RDIM_SrcFileChunkList          all_src_files        = {0};
   RDIM_LineSequenceListChunkList all_lines            = {0};
+  RDIM_InlineSiteChunkList       all_inline_sites     = {0};
+
+  // TODO: unit, procedure, global var, thread var, scope,
+  // push nulls
+  rdim_src_file_chunk_list_push(arena, &all_src_files, 1);
+  rdim_line_sequence_list_chunk_list_push(arena, &all_lines, 1);
+  rdim_inline_site_list_push(arena, &all_inline_sites, 1);
+
   ProfScope("produce units, symbols, lines, and source files")
   {
     P2R_C13ParseOut **c13_per_unit;
@@ -3722,28 +4022,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       ProfEnd();
     }
 
-    RDIM_LineSequenceList *lines_per_unit = push_array(scratch.arena, RDIM_LineSequenceList, comp_unit_count);
-    {
-      ProfBegin("convert main line tables");
-      P2R_C13ConvertIn *inputs  = push_array(scratch.arena, P2R_C13ConvertIn, comp_unit_count);
-      TS_Ticket        *tickets = push_array(scratch.arena, TS_Ticket,        comp_unit_count);
-      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
-      {
-        P2R_C13ConvertIn *in = inputs + comp_unit_idx;
-        in->c13_data          = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
-        in->c13_parsed        = c13_per_unit[comp_unit_idx]->c13_parsed;
-        in->src_file_ht_cap   = src_file_ht_cap;
-        in->src_file_ht_slots = src_file_ht_slots;
-        in->sections          = coff_sections;
-        tickets[comp_unit_idx] = ts_kickoff(p2r_convert_main_line_table_task__entry_point, 0, in);
-      }
-      for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
-      {
-        lines_per_unit[comp_unit_idx] = *ts_join_struct(tickets[comp_unit_idx], max_U64, RDIM_LineSequenceList);
-      }
-      ProfEnd();
-    }
-
     P2R_UnitConvertIn *unit_tasks_inputs  = push_array(scratch.arena, P2R_UnitConvertIn, comp_unit_count);
     TS_Ticket         *unit_tasks_tickets = push_array(scratch.arena, TS_Ticket,         comp_unit_count);
     ProfBegin("kick off comp unit conversion tasks");
@@ -3755,13 +4033,15 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       in->sections          = coff_sections;
       in->tpi_hash          = tpi_hash;
       in->tpi_leaf          = tpi_leaf;
+      in->ipi_leaf          = ipi_leaf;
       in->itype_fwd_map     = itype_fwd_map;
       in->itype_type_ptrs   = itype_type_ptrs;
       in->link_name_map     = link_name_map;
-      in->sym_parsed        = c13_per_unit[comp_unit_idx]->sym_parsed;
       in->src_file_ht_cap   = src_file_ht_cap;
       in->src_file_ht_slots = src_file_ht_slots;
-      in->main_line_table   = &lines_per_unit[comp_unit_idx];
+      in->sym_parsed        = c13_per_unit[comp_unit_idx]->sym_parsed;
+      in->c13_data          = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
+      in->c13_parsed        = c13_per_unit[comp_unit_idx]->c13_parsed;
       
       // start task
       unit_tasks_tickets[comp_unit_idx] = ts_kickoff(p2r_unit_convert__entry_point, 0, in);
@@ -3812,6 +4092,8 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       rdim_symbol_chunk_list_concat_in_place(&all_global_variables,  &out->global_variables);
       rdim_symbol_chunk_list_concat_in_place(&all_thread_variables,  &out->thread_variables);
       rdim_scope_chunk_list_concat_in_place(&all_scopes,             &out->scopes);
+      rdim_line_sequence_list_chunk_list_concat_in_place(&all_lines, &out->lines);
+      rdim_inline_site_chunk_list_concat_in_place(&all_inline_sites, &out->inline_sites);
     }
     ProfEnd();
 
@@ -3841,25 +4123,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       }
     }
     ProfEnd();
-
-    // TODO: move push null line sequence to raddbgi_make.c
-    rdim_line_sequence_list_chunk_list_push(arena, &all_lines, 1);
-    {
-      RDIM_LineSequenceListChunkNode *chunk = push_array(arena, RDIM_LineSequenceListChunkNode, 1);
-      chunk->v        = lines_per_unit;
-      chunk->count    = comp_unit_count;
-      chunk->cap      = comp_unit_count;
-      chunk->base_idx = all_lines.total_count;
-
-      for(U64 i = 0; i < chunk->count; i += 1)
-      {
-        chunk->v[i].chunk = chunk;
-      } 
-
-      SLLQueuePush(all_lines.first, all_lines.last, chunk);
-      all_lines.chunk_count += 1;
-      all_lines.total_count += comp_unit_count;
-    }
 
     // make chunk list wrapper for source files array
     {
@@ -3924,6 +4187,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     out->bake_params.procedures       = all_procedures;
     out->bake_params.scopes           = all_scopes;
     out->bake_params.lines            = all_lines;
+    out->bake_params.inline_sites     = all_inline_sites;
   }
   
   scratch_end(scratch);
@@ -4006,6 +4270,19 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point)
       rdim_bake_string_map_loose_push_scope_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
     }
   }
+  return 0;
+}
+
+internal TS_TASK_FUNCTION_DEF(p2r_bake_inline_site_strings_task__entry_point)
+{
+  P2R_BakeInlineSiteStringsIn *in = (P2R_BakeInlineSiteStringsIn *)p;
+  p2r_make_string_map_if_needed();
+  ProfBegin("bake inline site strings");
+  for(P2R_BakeInlineSiteStringsInNode *n = in->first; n != 0; n = n->next)
+  {
+    rdim_bake_string_map_loose_push_inline_site_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
+  }
+  ProfEnd();
   return 0;
 }
 
@@ -4163,6 +4440,14 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_scope_vmap_task__entry_point)
   P2R_BakeScopeVMapIn *in = (P2R_BakeScopeVMapIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
   ProfScope("bake scope vmap") *s = rdim_bake_scope_vmap_section_list_from_params(arena, in->params);
+  return s;
+}
+
+internal TS_TASK_FUNCTION_DEF(p2r_bake_inline_sites_task__entry_point)
+{
+  P2R_BakeInlineSitesIn *in = (P2R_BakeInlineSitesIn *)p;
+  RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
+  ProfScope("bake inline sites") *s = rdim_bake_inline_sites_section_list_from_params(arena, in->strings, in->params);
   return s;
 }
 
@@ -4359,6 +4644,27 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
         }
       }
     }
+
+    // inline site chunks
+    ProfScope("kick off inline site chunks string map build tasks");
+    {
+      for(RDIM_InlineSiteChunkNode *chunk = params->inline_sites.first; chunk != 0; chunk = chunk->next)
+      {
+        U64 items_per_task = Min(4096, chunk->count);
+        U64 tasks_per_this_chunk = CeilIntegerDiv(chunk->count, items_per_task);
+        for(U64 task_idx = 0; task_idx < tasks_per_this_chunk; task_idx += 1)
+        {
+          P2R_BakeInlineSiteStringsIn *in = push_array(scratch.arena, P2R_BakeInlineSiteStringsIn, 1);
+          in->top = &bake_string_map_topology;
+          in->maps = bake_string_maps__in_progress;
+          P2R_BakeInlineSiteStringsInNode *n = push_array(scratch.arena, P2R_BakeInlineSiteStringsInNode, 1);
+          SLLQueuePush(in->first, in->last, n);
+          n->v = chunk->v + task_idx * items_per_task;
+          n->count = Min(items_per_task, chunk->count - task_idx * items_per_task);
+          ts_ticket_list_push(scratch.arena, &bake_string_map_build_tickets, ts_kickoff(p2r_bake_inline_site_strings_task__entry_point, 0, in));
+        }
+      }
+    }
   }
   
   //- rjf: kick off name map building tasks
@@ -4478,6 +4784,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   TS_Ticket bake_scopes_ticket = ts_kickoff(p2r_bake_scopes_task__entry_point, 0, &bake_scopes_in);
   P2R_BakeScopeVMapIn bake_scope_vmap_in = {params};
   TS_Ticket bake_scope_vmap_ticket = ts_kickoff(p2r_bake_scope_vmap_task__entry_point, 0, &bake_scope_vmap_in);
+  P2R_BakeInlineSitesIn bake_inline_sites_in = {&bake_strings, params};
+  TS_Ticket bake_inline_sites_ticket = ts_kickoff(p2r_bake_inline_sites_task__entry_point, 0, &bake_inline_sites_in);
   P2R_BakeFilePathsIn bake_file_paths_in = {&bake_strings, path_tree};
   TS_Ticket bake_file_paths_ticket = ts_kickoff(p2r_bake_file_paths_task__entry_point, 0, &bake_file_paths_in);
   P2R_BakeStringsIn bake_strings_in = {&bake_strings};
@@ -4616,6 +4924,12 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     rdim_bake_section_list_concat_in_place(&sections, s);
   }
   
+  ProfScope("inline sites");
+  {
+    RDIM_BakeSectionList *s = ts_join_struct(bake_inline_sites_ticket, max_U64, RDIM_BakeSectionList);
+    rdim_bake_section_list_concat_in_place(&sections, s);
+  }
+
   //- rjf: join file paths
   ProfScope("file paths")
   {

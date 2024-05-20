@@ -282,6 +282,7 @@ X(LineInfo,            0x0019)\
 X(LineInfoVoffs,       0x001A)\
 X(LineInfoData,        0x001B)\
 X(LineInfoColumns,     0x001C)\
+X(InlineSites,         0x001D)\
 Y(PRIMARY_COUNT)\
 X(SKIP,                RDI_DataSectionTag_SECONDARY|0x0000)\
 X(LineMapNumbers,      RDI_DataSectionTag_SECONDARY|0x0001)\
@@ -671,9 +672,21 @@ typedef struct RDI_Scope{
   
   RDI_U32 static_local_idx_run_first;
   RDI_U32 static_local_count;
+
+  RDI_U32 inline_site_idx;
   
   // TODO(allen): attach less common scope-relevant info
 } RDI_Scope;
+
+typedef struct RDI_InlineSite{
+  RDI_U32 name_string_idx;
+  RDI_U32 call_src_file_idx;
+  RDI_U32 call_line_num;
+  RDI_U32 call_col_num;
+  RDI_U32 type_idx;
+  RDI_U32 owner_type_idx;
+  RDI_U32 line_info_idx;
+} RDI_InlineSite;
 
 typedef RDI_U32 RDI_LocalKind;
 typedef enum{

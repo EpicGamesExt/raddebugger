@@ -1761,7 +1761,7 @@ struct CV_SymBuildInfo
 
 //- (SymKind: INLINESITE)
 
-typedef U32 CV_InlineBinaryAnnotaiton;
+typedef U32 CV_InlineBinaryAnnotation;
 typedef enum CV_InlineBinaryAnnotationEnum
 {
   CV_InlineBinaryAnnotation_Null,
@@ -1769,15 +1769,15 @@ typedef enum CV_InlineBinaryAnnotationEnum
   CV_InlineBinaryAnnotation_ChangeCodeOffsetBase,
   CV_InlineBinaryAnnotation_ChangeCodeOffset,
   CV_InlineBinaryAnnotation_ChangeCodeLength,
-  CV_InlineBinaryAnnotation_ChnageFile,
+  CV_InlineBinaryAnnotation_ChangeFile,
   CV_InlineBinaryAnnotation_ChangeLineOffset,
-  CV_InlineBinaryAnnotation_ChnageLineEndDelta,
+  CV_InlineBinaryAnnotation_ChangeLineEndDelta,
   CV_InlineBinaryAnnotation_ChangeRangeKind,
   CV_InlineBinaryAnnotation_ChangeColumnStart,
   CV_InlineBinaryAnnotation_ChangeColumnEndDelta,
   CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset,
   CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset,
-  CV_InlineBinaryAnnotaiton_ChangeColumnEnd
+  CV_InlineBinaryAnnotation_ChangeColumnEnd
 } CV_InlineBinaryAnnotationEnum;
 
 typedef U32 CV_InlineRangeKind;
@@ -2889,11 +2889,19 @@ struct CV_LeafParsed
 typedef struct CV_C13LineArray CV_C13LineArray;
 struct CV_C13LineArray
 {
+  U32 file_off;
   U64 line_count;
   U64 col_count;
   U64 *voffs;     // [line_count + 1]
   U32 *line_nums; // [line_count]
   U16 *col_nums;  // [line_count * 2]
+};
+
+typedef struct CV_C13File CV_C13File;
+struct CV_C13File
+{
+  U32 file_off;
+  CV_C13LineArray lines;
 };
 
 typedef struct CV_C13LinesParsed CV_C13LinesParsed;
@@ -2973,7 +2981,24 @@ struct CV_C13Parsed
 };
 
 ////////////////////////////////
-//~ $$INLINEE_LINES Accel
+// Accels
+
+typedef struct CV_C13Line CV_C13Line;
+struct CV_C13Line
+{
+  U64 voff;
+  U32 file_off;
+  U32 line_num;
+  U16 col_num;
+};
+
+typedef struct CV_C13LinesAccel CV_C13LinesAccel;
+struct CV_C13LinesAccel
+{
+  U64 map_count;
+  CV_C13Line *map;
+};
+
 
 typedef struct CV_C13InlineeLinesAccel CV_C13InlineeLinesAccel;
 struct CV_C13InlineeLinesAccel
@@ -2981,6 +3006,15 @@ struct CV_C13InlineeLinesAccel
   U64 bucket_count;
   U64 bucket_max;
   CV_C13InlineeLinesParsed **buckets;
+};
+
+typedef struct CV_InlineBinaryAnnotsParsed CV_InlineBinaryAnnotsParsed;
+struct CV_InlineBinaryAnnotsParsed
+{
+  U64 lines_count;
+  CV_C13LineArray *lines;
+  U64 code_range_count;
+  Rng1U64 *code_ranges;
 };
 
 ////////////////////////////////
@@ -3006,12 +3040,6 @@ internal B32              cv_numeric_fits_in_f64(CV_NumericParsed *num);
 internal U64              cv_u64_from_numeric(CV_NumericParsed *num);
 internal S64              cv_s64_from_numeric(CV_NumericParsed *num);
 internal F64              cv_f64_from_numeric(CV_NumericParsed *num);
-
-////////////////////////////////
-//~ Inline Binary Annotation Helpers
-
-internal U64 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value);
-internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value);
 
 ////////////////////////////////
 //~ Sym/Leaf Parser Functions
@@ -3040,16 +3068,38 @@ internal CV_C13_SubSectionIdxKind cv_c13_sub_section_idx_from_kind(CV_C13_SubSec
 internal CV_C13SubSectionList         cv_c13_sub_section_list_from_data(Arena *arena, String8 data, U64 align);
 internal String8                      cv_c13_file_chksms_from_sub_sections(String8 c13_data, CV_C13Parsed *ss);
 internal CV_C13LinesParsedList        cv_c13_lines_from_sub_sections(Arena *arena, String8 c13_data, Rng1U64 ss_range);
-internal CV_C13InlineeLinesParsedList cv_c13_inlinee_lines_from_sub_sections(Arena *arena, String8 c13_data, U64 sub_sect_off, U64 sub_sect_size);
+internal CV_C13InlineeLinesParsedList cv_c13_inlinee_lines_from_sub_sections(Arena *arena, String8 c13_data, CV_C13SubSectionList ss_list);
 internal CV_C13Parsed                 cv_c13_parsed_from_list(CV_C13SubSectionList *list);
 
 internal CV_C13LineArray cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13LinesParsed parsed_lines);
 
-//- $$INLINEE_LINES Accel
+////////////////////////////////
+// $$LINES Accel
+
+internal void               cv_make_c13_files(Arena *arena, String8 c13_data, CV_C13SubSectionList lines, U64 *file_count_out, CV_C13File **files_out);
+internal CV_C13LinesAccel * cv_c13_make_lines_accel(Arena *arena, U64 lines_count, CV_C13LineArray *lines);
+internal CV_C13Line *       cv_c13_line_from_voff(CV_C13LinesAccel *accel, U64 voff, U64 *out_line_count);
+
+////////////////////////////////
+// $$INLINEE_LINES Accel
 
 internal U64                        cv_c13_inlinee_lines_accel_hash(void *buffer, U64 size);
 internal B32                        cv_c13_inlinee_lines_accel_push(CV_C13InlineeLinesAccel *accel, CV_C13InlineeLinesParsed *parsed);
 internal CV_C13InlineeLinesParsed * cv_c13_inlinee_lines_accel_find(CV_C13InlineeLinesAccel *accel, CV_ItemId inlinee);
-internal CV_C13InlineeLinesAccel *  cv_c13_make_inlinee_lines_accel(Arena *arena, String8 c13_data, CV_C13InlineeLinesParsedList sub_sects);
+internal CV_C13InlineeLinesAccel *  cv_c13_make_inlinee_lines_accel(Arena *arena, CV_C13InlineeLinesParsedList sub_sects);
+
+////////////////////////////////
+// Inline Binary Annots Parser
+
+internal S32 cv_inline_annot_convert_to_signed_operand(U32 value);
+internal U64 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value);
+internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value);
+
+internal CV_InlineBinaryAnnotsParsed cv_c13_parse_inline_binary_annots(Arena *arena, U64 parent_voff, CV_C13InlineeLinesParsed *inlinee_parsed, String8 binary_annots);
+
+////////////////////////////////
+// Enum -> String
+
+internal String8 cv_string_from_inline_range_kind(CV_InlineRangeKind kind);
 
 #endif // CODEVIEW_H

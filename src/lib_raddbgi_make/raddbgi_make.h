@@ -791,6 +791,41 @@ struct RDIM_SymbolChunkList
 };
 
 ////////////////////////////////
+//~ Inline Site Info
+
+typedef struct RDIM_InlineSite RDIM_InlineSite;
+struct RDIM_InlineSite
+{
+  struct RDIM_InlineSiteChunkNode *chunk;
+  RDIM_String8 name;
+  RDIM_SrcFile *call_src_file;
+  RDI_U32 call_line_num;
+  RDI_U32 call_col_num;
+  RDIM_Type *type;
+  RDIM_Type *owner;
+  RDIM_LineSequenceList *line_info;
+};
+
+typedef struct RDIM_InlineSiteChunkNode RDIM_InlineSiteChunkNode;
+struct RDIM_InlineSiteChunkNode
+{
+  RDIM_InlineSiteChunkNode *next;
+  RDIM_InlineSite *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_InlineSiteChunkList RDIM_InlineSiteChunkList;
+struct RDIM_InlineSiteChunkList
+{
+  RDIM_InlineSiteChunkNode *first;
+  RDIM_InlineSiteChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
+////////////////////////////////
 //~ rjf: Scope Info Types
 
 typedef struct RDIM_Local RDIM_Local;
@@ -816,6 +851,7 @@ struct RDIM_Scope
   RDIM_Local *first_local;
   RDIM_Local *last_local;
   RDI_U32 local_count;
+  RDIM_InlineSite *inline_site;
 };
 
 typedef struct RDIM_ScopeChunkNode RDIM_ScopeChunkNode;
@@ -859,6 +895,7 @@ struct RDIM_BakeParams
   RDIM_SymbolChunkList procedures;
   RDIM_ScopeChunkList scopes;
   RDIM_LineSequenceListChunkList lines;
+  RDIM_InlineSiteChunkList inline_sites;
 };
 
 //- rjf: data sections
@@ -1115,6 +1152,13 @@ RDI_PROC void rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileCh
 
 RDI_PROC int rdim_src_file_ptr_compar(const void *a, const void *b);
 RDI_PROC RDI_S32 rdim_src_file_match(RDIM_SrcFile *a, RDIM_SrcFile *b);
+
+////////////////////////////////
+// Inline Sites Building
+
+RDI_PROC RDIM_InlineSite * rdim_inline_site_list_push(Arena *arena, RDIM_InlineSiteChunkList *list, U64 cap);
+RDI_PROC void              rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_InlineSiteChunkList *to_push);
+RDI_PROC RDI_U64           rdim_idx_from_inline_site(RDIM_InlineSite *ptr);
 
 ////////////////////////////////
 //~ rjf: [Building] Unit Info Building

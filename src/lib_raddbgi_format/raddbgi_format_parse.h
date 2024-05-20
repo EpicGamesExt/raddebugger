@@ -61,6 +61,8 @@ typedef struct RDI_Parsed{
   RDI_U64             scope_voffs_count;
   RDI_VMapEntry*      scope_vmap;
   RDI_U64             scope_vmap_count;
+  RDI_InlineSite*     inline_sites;
+  RDI_U64             inline_site_count;
   RDI_Local*          locals;
   RDI_U64             locals_count;
   RDI_LocationBlock*  location_blocks;
@@ -69,6 +71,15 @@ typedef struct RDI_Parsed{
   RDI_U64             location_data_size;
   RDI_NameMap*        name_maps;
   RDI_U64             name_maps_count;
+  RDI_LineInfo       *line_info;
+  RDI_U64             line_info_count;
+  RDI_U64            *line_info_voffs;
+  RDI_U64             line_info_voff_count;
+  RDI_Line           *line_info_data;
+  RDI_U64             line_info_data_count;
+  RDI_Column         *line_info_cols;
+  RDI_U64             line_info_col_count;
+
   
   // other helpers
   
@@ -142,6 +153,7 @@ static RDI_GlobalVariable rdi_global_variable_nil = {0};
 static RDI_ThreadVariable rdi_thread_variable_nil = {0};
 static RDI_Procedure rdi_procedure_nil = {0};
 static RDI_Scope rdi_scope_nil = {0};
+static RDI_InlineSite rdi_inline_site_nil = {0};
 static RDI_U64 rdi_voff_nil = 0;
 static RDI_LocationBlock rdi_location_block_nil = {0};
 static RDI_Local rdi_local_nil = {0};

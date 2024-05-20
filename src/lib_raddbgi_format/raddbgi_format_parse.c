@@ -172,6 +172,9 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
     
     rdi_parse__extract_primary(out, out->scope_vmap, &out->scope_vmap_count,
                                RDI_DataSectionTag_ScopeVmap);
+
+    rdi_parse__extract_primary(out, out->inline_sites, &out->inline_site_count,
+                               RDI_DataSectionTag_InlineSites);
     
     rdi_parse__extract_primary(out, out->locals, &out->locals_count,
                                RDI_DataSectionTag_Locals);
@@ -194,6 +197,15 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
         }
       }
     }
+
+    rdi_parse__extract_primary(out, out->line_info, &out->line_info_count,
+                              RDI_DataSectionTag_LineInfo);
+    rdi_parse__extract_primary(out, out->line_info_voffs, &out->line_info_voff_count,
+                              RDI_DataSectionTag_LineInfoVoffs);
+    rdi_parse__extract_primary(out, out->line_info_data, &out->line_info_data_count,
+                              RDI_DataSectionTag_LineInfoData);
+    rdi_parse__extract_primary(out, out->line_info_cols, &out->line_info_col_count,
+                              RDI_DataSectionTag_LineInfoColumns);
   }
   
 #if !defined(RDI_DISABLE_NILS)
@@ -258,26 +270,18 @@ rdi_idx_run_from_first_count(RDI_Parsed *parsed,
 RDI_PROC void
 rdi_parse_line_info(RDI_Parsed *rdi, RDI_U64 line_info_idx, RDI_ParsedLineInfo *out)
 {
-  RDI_U64 line_info_count;
-  RDI_LineInfo *line_info_ptr = (RDI_LineInfo *)rdi_data_from_dsec(rdi, RDI_DataSectionTag_LineInfo, sizeof(RDI_LineInfo), RDI_DataSectionTag_LineInfo, &line_info_count);
-
-  if(line_info_idx < line_info_count)
+  if(line_info_idx < rdi->line_info_count)
   {
-    RDI_U64 voffs_max, lines_max, cols_max;
-    RDI_U64    *voffs = (RDI_U64    *)rdi_data_from_dsec(rdi, RDI_DataSectionTag_LineInfoVoffs,   sizeof(voffs[0]), RDI_DataSectionTag_LineInfoVoffs,   &voffs_max);
-    RDI_Line   *lines = (RDI_Line   *)rdi_data_from_dsec(rdi, RDI_DataSectionTag_LineInfoData,    sizeof(lines[0]), RDI_DataSectionTag_LineInfoData,    &lines_max);
-    RDI_Column *cols  = (RDI_Column *)rdi_data_from_dsec(rdi, RDI_DataSectionTag_LineInfoColumns, sizeof(cols[0]),  RDI_DataSectionTag_LineInfoColumns, &cols_max);
-
-    RDI_LineInfo line_info = line_info_ptr[line_info_idx];
-    if(line_info.voff_data_idx + line_info.line_count <= voffs_max &&
-       line_info.line_data_idx + line_info.line_count <= lines_max &&
-       line_info.col_data_idx  + line_info.col_count  <= cols_max)
+    RDI_LineInfo line_info = rdi->line_info[line_info_idx];
+    if(line_info.voff_data_idx + line_info.line_count <= rdi->line_info_voff_count &&
+       line_info.line_data_idx + line_info.line_count <= rdi->line_info_data_count &&
+       line_info.col_data_idx  + line_info.col_count  <= rdi->line_info_col_count)
     {
       out->count     = line_info.line_count;
       out->col_count = line_info.col_count;
-      out->voffs     = voffs + line_info.voff_data_idx;
-      out->lines     = lines + line_info.line_data_idx;
-      out->cols      = cols  + line_info.col_data_idx;
+      out->voffs     = rdi->line_info_voffs + line_info.voff_data_idx;
+      out->lines     = rdi->line_info_data  + line_info.line_data_idx;
+      out->cols      = rdi->line_info_cols  + line_info.col_data_idx;
     }
   }
 }

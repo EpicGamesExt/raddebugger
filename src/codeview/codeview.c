@@ -166,79 +166,6 @@ cv_f64_from_numeric(CV_NumericParsed *num){
 }
 
 ////////////////////////////////
-//~ Inline Binary Annotation Helpers
-
-internal U64
-cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value)
-{
-  U32 value = 0;
-
-  U64 cursor = offset;
-
-  U8 header = 0;
-  cursor += str8_deserial_read_struct(data, cursor, &header);
-
-  // 1 byte
-  if((header & 0x80) == 0)
-  {
-    value = header;
-  }
-  // 2 bytes
-  else if((header & 0xC0) == 0x80)
-  {
-    Assert(cursor + sizeof(U8) * 2 <= data.size);
-    U8 second_byte;
-    cursor += str8_deserial_read_struct(data, cursor, &second_byte);
-    value = ((header & 0x3F) << 8) | second_byte;
-  }
-  // 4 bytes
-  else if((header & 0xE0) == 0xC0)
-  {
-    Assert(cursor + sizeof(U8) * 3 <= data.size);
-    U8 second_byte, third_byte, fourth_byte;
-    cursor += str8_deserial_read_struct(data, cursor, &second_byte);
-    cursor += str8_deserial_read_struct(data, cursor, &third_byte);
-    cursor += str8_deserial_read_struct(data, cursor, &fourth_byte);
-    value = (((U32)header & 0x1F) << 24) | ((U32)second_byte << 16) | ((U32)third_byte << 8) | (U32)fourth_byte;
-  }
-  // bad encode
-  else if((header & 0xE0) == 0xE0)
-  {
-    value = max_U32;
-  }
-  else
-  {
-    InvalidPath;
-  }
-
-  *out_value = value;
-
-  U64 read_size = cursor - offset;
-  return read_size;
-}
-
-internal U64
-cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value)
-{
-  U32 value;
-
-  U64 read_size = cv_decode_inline_annot_u32(data, offset, &value);
-
-  if(value & 1)
-  {
-    value = -(value >> 1);
-  }
-  else
-  {
-    value = value >> 1;
-  }
-
-  *out_value = (S32)value;
-
-  return read_size;
-}
-
-////////////////////////////////
 //~ Sym Parser Functions
 
 //- the first pass parser
@@ -536,6 +463,7 @@ internal CV_C13LineArray
 cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13LinesParsed parsed_lines)
 {
   CV_C13LineArray result;
+  result.file_off   = parsed_lines.file_off;
   result.line_count = parsed_lines.line_count;
   result.col_count  = parsed_lines.col_count;
   result.voffs      = push_array_no_zero(arena, U64, parsed_lines.line_count + 1);
@@ -558,53 +486,54 @@ cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13
 }
 
 internal CV_C13InlineeLinesParsedList
-cv_c13_inlinee_lines_from_sub_sections(Arena   *arena,
-                                       String8  c13_data,
-                                       U64      sub_sect_off,
-                                       U64      sub_sect_size)
+cv_c13_inlinee_lines_from_sub_sections(Arena                *arena,
+                                       String8               c13_data,
+                                       CV_C13SubSectionList  ss_list)
 {
   ProfBeginFunction();
 
   CV_C13InlineeLinesParsedList inlinee_lines_list = {0};
 
-  Rng1U64 sub_sect_range = rng_1u64(sub_sect_off, sub_sect_off + sub_sect_size);
-  String8 sub_sect_data  = str8_substr(c13_data, sub_sect_range);
-  U64     cursor         = 0;
-
-  CV_C13_InlineeLinesSig sig = 0;
-  cursor += str8_deserial_read_struct(sub_sect_data, cursor, &sig);
-
-  for(; cursor + sizeof(CV_C13_InlineeSourceLineHeader) <= sub_sect_size; )
+  for(CV_C13SubSectionNode *ss_node = ss_list.first; ss_node != 0; ss_node = ss_node->next)
   {
-    CV_C13_InlineeSourceLineHeader *hdr = (CV_C13_InlineeSourceLineHeader *)(sub_sect_data.str + cursor);
-    cursor += sizeof(*hdr);
+    String8 sub_sect_data = str8_substr(c13_data, ss_node->range);
+    U64     cursor        = 0;
 
-    CV_C13InlineeLinesParsedNode *inlinee_parsed_node = push_array_no_zero(arena, CV_C13InlineeLinesParsedNode, 1);
-    inlinee_parsed_node->next = 0;
-    SLLQueuePush(inlinee_lines_list.first, inlinee_lines_list.last, inlinee_parsed_node);
-    inlinee_lines_list.count += 1;
+    CV_C13_InlineeLinesSig sig = 0;
+    cursor += str8_deserial_read_struct(sub_sect_data, cursor, &sig);
 
-    CV_C13InlineeLinesParsed *inlinee_parsed = &inlinee_parsed_node->v;
-    inlinee_parsed->inlinee          = hdr->inlinee;
-    inlinee_parsed->file_off         = hdr->file_off;
-    inlinee_parsed->first_source_ln  = hdr->first_source_ln;
-    inlinee_parsed->extra_file_count = 0;
-    inlinee_parsed->extra_files      = 0;
-
-    if(sig == CV_C13_InlineeLinesSig_EXTRA_FILES)
+    for(; cursor + sizeof(CV_C13_InlineeSourceLineHeader) <= sub_sect_data.size; )
     {
-      if(cursor + sizeof(U32) <= sub_sect_size)
+      CV_C13_InlineeSourceLineHeader *hdr = (CV_C13_InlineeSourceLineHeader *)(sub_sect_data.str + cursor);
+      cursor += sizeof(*hdr);
+
+      CV_C13InlineeLinesParsedNode *inlinee_parsed_node = push_array_no_zero(arena, CV_C13InlineeLinesParsedNode, 1);
+      inlinee_parsed_node->next = 0;
+      SLLQueuePush(inlinee_lines_list.first, inlinee_lines_list.last, inlinee_parsed_node);
+      inlinee_lines_list.count += 1;
+
+      CV_C13InlineeLinesParsed *inlinee_parsed = &inlinee_parsed_node->v;
+      inlinee_parsed->inlinee          = hdr->inlinee;
+      inlinee_parsed->file_off         = hdr->file_off;
+      inlinee_parsed->first_source_ln  = hdr->first_source_ln;
+      inlinee_parsed->extra_file_count = 0;
+      inlinee_parsed->extra_files      = 0;
+
+      if(sig == CV_C13_InlineeLinesSig_EXTRA_FILES)
       {
-        U32 *extra_file_count_ptr = (U32 *)(sub_sect_data.str + cursor);
-        cursor += sizeof(*extra_file_count_ptr);
+        if(cursor + sizeof(U32) <= sub_sect_data.size)
+        {
+          U32 *extra_file_count_ptr = (U32 *)(sub_sect_data.str + cursor);
+          cursor += sizeof(*extra_file_count_ptr);
 
-        U32 max_extra_file_count = (sub_sect_size - cursor) / sizeof(U32);
-        U32 extra_file_count     = Min(*extra_file_count_ptr, max_extra_file_count);
-        U32 *extra_files         = (U32 *)(sub_sect_data.str + cursor);
-        cursor += sizeof(*extra_files) * extra_file_count;
+          U32 max_extra_file_count = (sub_sect_data.size - cursor) / sizeof(U32);
+          U32 extra_file_count     = Min(*extra_file_count_ptr, max_extra_file_count);
+          U32 *extra_files         = (U32 *)(sub_sect_data.str + cursor);
+          cursor += sizeof(*extra_files) * extra_file_count;
 
-        inlinee_parsed->extra_file_count = extra_file_count;
-        inlinee_parsed->extra_files      = extra_files;
+          inlinee_parsed->extra_file_count = extra_file_count;
+          inlinee_parsed->extra_files      = extra_files;
+        }
       }
     }
   }
@@ -613,12 +542,117 @@ cv_c13_inlinee_lines_from_sub_sections(Arena   *arena,
   return inlinee_lines_list;
 }
 
-//- $$INLINEE_LINES Accel
+////////////////////////////////
+// $$LINES Accel
+
+int
+cv_c13_voff_map_compar(const void *a_, const void *b_)
+{
+  CV_C13Line *a = (CV_C13Line*)a_;
+  CV_C13Line *b = (CV_C13Line*)b_;
+  int cmp = a->voff < b->voff ? -1 :
+            a->voff > b->voff ? +1 :
+            0;
+  return cmp;
+}
+
+internal CV_C13LinesAccel *
+cv_c13_make_lines_accel(Arena *arena, U64 lines_count, CV_C13LineArray *lines)
+{
+  ProfBeginFunction();
+
+  U64 total_voff_count = 0;
+  for(U64 arr_idx = 0; arr_idx < lines_count; arr_idx += 1)
+  {
+    total_voff_count += lines[arr_idx].line_count + 1;
+  }
+
+  CV_C13Line *map      = push_array_no_zero(arena, CV_C13Line, total_voff_count);
+  U64         map_idx  = 0;
+
+  for(U64 line_idx = 0; line_idx < lines_count; line_idx += 1)
+  {
+    CV_C13LineArray *l = lines + line_idx;
+    if (l->line_count > 0)
+    {
+      for(U64 voff_idx = 0; voff_idx < l->line_count; voff_idx += 1)
+      {
+        map[map_idx].voff     = l->voffs[voff_idx];
+        map[map_idx].file_off = l->file_off;
+        map[map_idx].line_num = l->line_nums[voff_idx];
+        map[map_idx].col_num  = 0; // TODO: columns
+        map_idx += 1;
+      }
+
+      map[map_idx].voff     = l->voffs[l->line_count];
+      map[map_idx].file_off = l->file_off;
+      map[map_idx].line_num = 0;
+      map[map_idx].col_num  = 0;
+      map_idx += 1;
+    }
+  }
+  Assert(map_idx == total_voff_count);
+
+  qsort(map, total_voff_count, sizeof(map[0]), cv_c13_voff_map_compar);
+
+  CV_C13LinesAccel *accel = push_array(arena, CV_C13LinesAccel, 1);
+  accel->map_count = total_voff_count;
+  accel->map       = map;
+
+  ProfEnd();
+  return accel;
+}
+
+internal CV_C13Line *
+cv_c13_line_from_voff(CV_C13LinesAccel *accel, U64 voff, U64 *out_line_count)
+{
+  ProfBeginFunction();
+
+  U64         voff_line_count = 0;
+  CV_C13Line *lines           = 0;
+
+  U64 map_idx = bsearch_nearest_u64(accel->map, accel->map_count, voff, sizeof(accel->map[0]), OffsetOf(CV_C13Line, voff));
+  if(map_idx < accel->map_count)
+  {
+    U64 near_voff = accel->map[map_idx].voff;
+
+    for (; map_idx > 0; map_idx -= 1) {
+      if(accel->map[map_idx - 1].voff != near_voff)
+      {
+        break;
+      }
+    }
+
+    lines = accel->map + map_idx;
+
+    for(; map_idx < (accel->map_count-1); map_idx += 1)
+    {
+      if(accel->map[map_idx].voff != near_voff)
+      {
+        break;
+      }
+      voff_line_count += 1;
+    }
+  }
+
+  *out_line_count = voff_line_count;
+
+  ProfEnd();
+  return lines;
+}
+
+////////////////////////////////
+// $$INLINEE_LINES Accel
 
 internal U64
 cv_c13_inlinee_lines_accel_hash(void *buffer, U64 size)
 {
-  return rdi_hash((U8 *)buffer, size);
+  U64 result = 5381;
+  for(U64 i = 0; i < size; i += 1)
+  {
+    result = ((result << 5) + result) + ((U8*)buffer)[i];
+  }
+  return result;
 }
 
 internal B32
@@ -679,7 +713,7 @@ cv_c13_inlinee_lines_accel_find(CV_C13InlineeLinesAccel *accel, CV_ItemId inline
 }
 
 internal CV_C13InlineeLinesAccel *
-cv_c13_make_inlinee_lines_accel(Arena *arena, String8 c13_data, CV_C13InlineeLinesParsedList inlinee_lines)
+cv_c13_make_inlinee_lines_accel(Arena *arena, CV_C13InlineeLinesParsedList inlinee_lines)
 {
   ProfBeginFunction();
 
@@ -694,7 +728,7 @@ cv_c13_make_inlinee_lines_accel(Arena *arena, String8 c13_data, CV_C13InlineeLin
   {
     if(cv_c13_inlinee_lines_accel_find(accel, inlinee->v.inlinee))
     {
-      Assert(!"TODO: compiler/linker produced duplicate inlinees in $$INLINEE_LINES");
+      //Assert(!"TODO: compiler/linker produced duplicate inlinees in $$INLINEE_LINES");
     }
     else
     {
@@ -704,5 +738,424 @@ cv_c13_make_inlinee_lines_accel(Arena *arena, String8 c13_data, CV_C13InlineeLin
 
   ProfEnd();
   return accel;
+}
+
+////////////////////////////////
+// Inline Binary Annots Parser
+
+internal S32
+cv_inline_annot_convert_to_signed_operand(U32 value)
+{
+  if(value & 1)
+  {
+    value = -(value >> 1);
+  }
+  else
+  {
+    value = value >> 1;
+  }
+  S32 result = (S32)value;
+  return result;
+}
+
+internal U64
+cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value)
+{
+  U32 value = 0;
+
+  U64 cursor = offset;
+
+  U8 header = 0;
+  cursor += str8_deserial_read_struct(data, cursor, &header);
+
+  // 1 byte
+  if((header & 0x80) == 0)
+  {
+    value = header;
+  }
+  // 2 bytes
+  else if((header & 0xC0) == 0x80)
+  {
+    Assert(cursor + sizeof(U8) * 1 <= data.size);
+    U8 second_byte;
+    cursor += str8_deserial_read_struct(data, cursor, &second_byte);
+    value = ((header & 0x3F) << 8) | second_byte;
+  }
+  // 4 bytes
+  else if((header & 0xE0) == 0xC0)
+  {
+    Assert(cursor + sizeof(U8) * 3 <= data.size);
+    U8 second_byte, third_byte, fourth_byte;
+    cursor += str8_deserial_read_struct(data, cursor, &second_byte);
+    cursor += str8_deserial_read_struct(data, cursor, &third_byte);
+    cursor += str8_deserial_read_struct(data, cursor, &fourth_byte);
+    value = (((U32)header & 0x1F) << 24) | ((U32)second_byte << 16) | ((U32)third_byte << 8) | (U32)fourth_byte;
+  }
+  // bad encode
+  else if((header & 0xE0) == 0xE0)
+  {
+    value = max_U32;
+  }
+  else
+  {
+    InvalidPath;
+  }
+
+  *out_value = value;
+
+  U64 read_size = cursor - offset;
+  return read_size;
+}
+
+internal U64
+cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value)
+{
+  U32 value;
+
+  U64 read_size = cv_decode_inline_annot_u32(data, offset, &value);
+
+  if(value & 1)
+  {
+    value = -(value >> 1);
+  }
+  else
+  {
+    value = value >> 1;
+  }
+
+  *out_value = (S32)value;
+
+  return read_size;
+}
+
+
+internal CV_InlineBinaryAnnotsParsed
+cv_c13_parse_inline_binary_annots(Arena                    *arena,
+                                  U64                       parent_voff,
+                                  CV_C13InlineeLinesParsed *inlinee_parsed,
+                                  String8                   binary_annots)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  struct CodeRange
+  {
+    struct CodeRange *next;
+    Rng1U64 range;
+  };
+  struct SourceLine
+  {
+    struct SourceLine *next;
+    U64                voff;
+    U64                length;
+    U64                ln;
+    U64                cn;
+    CV_InlineRangeKind kind;
+  };
+  struct SourceFile
+  {
+    struct SourceFile *next;
+    struct SourceLine *line_first;
+    struct SourceLine *line_last;
+    U64                line_count;
+    U64                checksum_off;
+    Rng1U64            last_code_range;
+  };
+
+  struct CodeRange *code_range_first = 0;
+  struct CodeRange *code_range_last  = 0;
+  U64               code_range_count = 0;
+
+  struct SourceFile *file_first = 0;
+  struct SourceFile *file_last  = 0;
+  U64                file_count = 0;
+
+  CV_InlineRangeKind range_kind             = 0;
+  U32                code_length            = 0;
+  U32                code_offset            = 0;
+  U32                file_off               = inlinee_parsed->file_off;
+  S32                ln                     = (S32)inlinee_parsed->first_source_ln;
+  S32                cn                     = 1;
+  U64                code_offset_lo         = 0;
+  B32                code_offset_changed    = 0;
+  B32                code_offset_lo_changed = 0;
+  B32                code_length_changed    = 0;
+  B32                ln_changed             = 1;
+  B32                file_off_changed       = 0;
+
+  for(U64 cursor = 0, keep_running = 1; cursor < binary_annots.size && keep_running; )
+  {
+    U32 op = CV_InlineBinaryAnnotation_Null;
+    cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &op);
+
+    switch(op)
+    {
+    case CV_InlineBinaryAnnotation_Null:
+    {
+      keep_running = 0;
+      
+      // this is last run, append range with left over code bytes
+      code_length         = code_offset - code_offset_lo;
+      code_length_changed = 1;
+    }break;
+    case CV_InlineBinaryAnnotation_CodeOffset:
+    {
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_offset);
+      code_offset_changed = 1;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase:
+    {
+      AssertAlways(!"TODO: test case");
+      // U32 delta = 0;
+      // cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &delta);
+      // code_offset_base = code_offset;
+      // code_offset_end  = code_offset + delta;
+      // code_offset += delta;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeCodeOffset:
+    {
+      U32 delta = 0;
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &delta);
+
+      code_offset += delta;
+
+      if(!code_offset_lo_changed)
+      {
+        code_offset_lo = code_offset;
+        code_offset_lo_changed = 1;
+      }
+      code_offset_changed = 1;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeCodeLength:
+    {
+      code_length = 0;
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_length);
+      code_length_changed = 1;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeFile:
+    {
+      U32 new_file_off = file_off;
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &new_file_off);
+      file_off_changed = new_file_off != file_off;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeLineOffset:
+    {
+      S32 delta = 0;
+      cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &delta);
+
+      ln += delta;
+      ln_changed = 1;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeLineEndDelta:
+    {
+      AssertAlways(!"TODO: test case");
+      // S32 end_delta = 1;
+      // cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &end_delta);
+      // ln += end_delta;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeRangeKind:
+    {
+      AssertAlways(!"TODO: test case");
+      // cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &range_kind);
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeColumnStart:
+    {
+      AssertAlways(!"TODO: test case");
+      // S32 delta;
+      // cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &delta);
+      // cn += delta;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeColumnEndDelta:
+    {
+      AssertAlways(!"TODO: test case");
+      // S32 end_delta;
+      // cursor += cv_decode_inline_annot_s32(binary_annots, cursor, &end_delta);
+      // cn += end_delta;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset:
+    {
+      U32 code_offset_and_line_offset = 0;
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_offset_and_line_offset);
+
+      S32 line_delta = cv_inline_annot_convert_to_signed_operand(code_offset_and_line_offset >> 4);
+      U32 code_delta = (code_offset_and_line_offset & 0xf);
+
+      code_offset += code_delta;
+      ln          += line_delta;
+
+      if(!code_offset_lo_changed)
+      {
+        code_offset_lo = code_offset;
+        code_offset_lo_changed = 1;
+      }
+
+      code_offset_changed = 1;
+      ln_changed          = 1;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset:
+    {
+      U32 offset_delta = 0;
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_length);
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &offset_delta); 
+
+      code_offset += offset_delta;
+
+      if(!code_offset_lo_changed)
+      {
+        code_offset_lo = code_offset;
+        code_offset_lo_changed = 1;
+      }
+
+      code_offset_changed = 1;
+      code_length_changed = 1;
+    }break;
+    case CV_InlineBinaryAnnotation_ChangeColumnEnd:
+    {
+      AssertAlways(!"TODO: test case");
+      // U32 column_end = 0;
+      // cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &column_end);
+    }break;
+    }
+
+    if(file_off_changed || (file_first == 0))
+    {
+      // append file
+      struct SourceFile *file = push_array(scratch.arena, struct SourceFile, 1);
+      file->checksum_off = file_off;
+      SLLQueuePush(file_first, file_last, file);
+      ++file_count;
+
+      // update last code range in file
+      if(code_range_last)
+      {
+        file->last_code_range = code_range_last->range;
+      }
+
+      // reset state
+      file_off_changed = 0;
+    }
+
+    if(code_offset_changed && ln_changed)
+    {
+      if(file_last->line_last == 0 || file_last->line_last->ln != (U64)ln)
+      {
+        // append line
+        struct SourceLine *line = push_array(scratch.arena, struct SourceLine, 1);
+        line->voff = parent_voff + code_offset;
+        line->ln   = (U64)ln;
+        line->cn   = (U64)cn;
+        SLLQueuePush(file_last->line_first, file_last->line_last, line);
+        ++file_last->line_count;
+      }
+
+      // reset state
+      code_offset_changed = 0;
+      ln_changed          = 0;
+    }
+
+    if(code_length_changed)
+    {
+      // compute upper bound of the range
+      U64 code_offset_hi = code_offset + code_length;
+
+      // empty code range check
+      if(code_offset_lo < code_offset_hi)
+      {
+        // can last code range be extended to cover current sequence too?
+        if(code_range_last != 0 && code_range_last->range.max == parent_voff + code_offset_lo)
+        {
+          code_range_last->range.max = parent_voff + code_offset_hi;
+        }
+        else
+        {
+          // append range
+          struct CodeRange *code_range = push_array(scratch.arena, struct CodeRange, 1);
+          code_range->range = rng_1u64(parent_voff + code_offset_lo, parent_voff + code_offset_hi);
+          SLLQueuePush(code_range_first, code_range_last, code_range);
+          ++code_range_count;
+
+          // update last code range in file
+          if(file_last)
+          {
+            file_last->last_code_range = code_range->range;
+          }
+        }
+      }
+
+      // advance code offset
+      code_offset += code_length;
+
+      // update low offset for next range
+      code_offset_lo = code_offset_hi;
+
+      // reset state
+      code_length            = 0;
+      code_offset_lo_changed = 0;
+      code_length_changed    = 0;
+    }
+
+  }
+
+  Rng1U64 *code_ranges;
+  {
+    code_ranges = push_array_no_zero(arena, Rng1U64, code_range_count);
+    U64 code_range_idx = 0;
+    for(struct CodeRange *code_range = code_range_first; code_range != 0; code_range = code_range->next, ++code_range_idx)
+    {
+      code_ranges[code_range_idx] = code_range->range;
+    }
+  }
+
+  CV_C13LineArray *lines = push_array(arena, CV_C13LineArray, file_count);
+  {
+    U64 lines_idx = 0;
+    for(struct SourceFile *file = file_first; file != 0; file = file->next, lines_idx += 1)
+    {
+      CV_C13LineArray *l = lines + lines_idx;
+
+      l->file_off   = file->checksum_off;
+      l->line_count = file->line_count;
+      l->col_count  = 0;
+
+      if(file->line_count > 0)
+      {
+        l->voffs     = push_array_no_zero(arena, U64, file->line_count + 1);
+        l->line_nums = push_array_no_zero(arena, U32, file->line_count);
+        l->col_nums  = 0; // TODO: column info 
+
+        U64 line_idx = 0;
+        for(struct SourceLine *line = file->line_first; line != NULL; line = line->next, ++line_idx)
+        {
+          // emit line voff and line number
+          l->voffs[line_idx]     = line->voff;
+          l->line_nums[line_idx] = (U32)line->ln;
+        }
+        Assert(line_idx == file->line_count);
+        l->voffs[line_idx] = file->last_code_range.max;
+      }
+    }
+  }
+
+  // fill out result
+  CV_InlineBinaryAnnotsParsed result;
+  result.lines_count      = file_count;
+  result.lines            = lines;
+  result.code_range_count = code_range_count;
+  result.code_ranges      = code_ranges;
+
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+// Enum -> String
+
+internal String8
+cv_string_from_inline_range_kind(CV_InlineRangeKind kind)
+{
+  switch (kind) {
+  case CV_InlineRangeKind_Expr: return str8_lit("Expr");
+  case CV_InlineRangeKind_Stmt: return str8_lit("Stmt");
+  }
+  return str8(0,0);
 }
 
