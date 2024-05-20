@@ -71,5 +71,6 @@ internal void rdi_stringize_global_variable(Arena *arena, String8List *out, RDI_
 internal void rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_ThreadVariable *thread_var, U32 indent_level);
 internal void rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Procedure *proc, U32 indent_level);
 internal void rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level);
+internal void rdi_stringize_checksums(Arena *arena, String8List *out, RDI_Parsed *rdi, U32 indent_level);
 
 #endif // RADDBGI_DUMP_H

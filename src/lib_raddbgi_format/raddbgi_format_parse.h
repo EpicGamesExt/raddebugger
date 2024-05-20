@@ -79,6 +79,8 @@ typedef struct RDI_Parsed{
   RDI_U64             line_info_data_count;
   RDI_Column         *line_info_cols;
   RDI_U64             line_info_col_count;
+  RDI_U8             *checksums;
+  RDI_U64             checksums_size;
 
   
   // other helpers
@@ -96,6 +98,12 @@ typedef enum{
   RDI_ParseStatus_MissingStringTableSection = 5,
   RDI_ParseStatus_MissingIndexRunSection = 6,
 } RDI_ParseStatus;
+
+typedef struct RDI_ParsedChecksum{
+  RDI_ChecksumKind kind;
+  RDI_U8 size;
+  RDI_U8 *data;
+} RDI_ParsedChecksum;
 
 typedef struct RDI_ParsedLineInfo{
   // NOTE: Mapping VOFF -> LINE_INFO
@@ -192,7 +200,6 @@ rdi_line_map_from_source_file(RDI_Parsed *p, RDI_SourceFile *srcfile,
 RDI_PROC RDI_U64*
 rdi_line_voffs_from_num(RDI_ParsedLineMap *map, RDI_U32 linenum, RDI_U32 *n_out);
 
-
 //- vmaps
 RDI_PROC RDI_U64
 rdi_vmap_idx_from_voff(RDI_VMapEntry *vmap, RDI_U32 vmap_count, RDI_U64 voff);
@@ -212,11 +219,17 @@ rdi_name_map_lookup(RDI_Parsed *p, RDI_ParsedNameMap *map,
 RDI_PROC RDI_U32*
 rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node, RDI_U32 *n_out);
 
+//- checksums
+
+RDI_PROC RDI_U64
+rdi_checksum_from_offset(RDI_Parsed *p, RDI_U64 checksum_offset, RDI_ParsedChecksum *out);
+
+RDI_PROC RDI_U64
+rdi_time_stamp_from_parsed_checksum(RDI_ParsedChecksum checksum);
 
 //- common helpers
 RDI_PROC RDI_U64
 rdi_first_voff_from_proc(RDI_Parsed *p, RDI_U32 proc_id);
-
 
 
 ////////////////////////////////

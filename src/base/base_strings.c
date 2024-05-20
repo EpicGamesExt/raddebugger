@@ -13,8 +13,11 @@
 ////////////////////////////////
 //~ NOTE(allen): String <-> Integer Tables
 
-read_only global U8 integer_symbols[16] = {
+read_only global U8 integer_symbols_upper[16] = {
   '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F',
+};
+read_only global U8 integer_symbols_lower[16] = {
+  '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f',
 };
 
 // NOTE(allen): Includes reverses for uppercase and lowercase hex.
@@ -541,6 +544,27 @@ try_s64_from_str8_c_rules(String8 string, S64 *x){
   return(is_integer);
 }
 
+////////////////////////////////
+
+internal String8
+str8_to_hex(Arena *arena, String8 str, B32 use_upper_case)
+{
+  U64 buffer_size = str.size * 2;
+  U8 *buffer = push_array(arena, U8, buffer_size + 1);
+  U8 *integer_symbols = use_upper_case ? integer_symbols_upper : integer_symbols_lower;
+  for(U64 i = 0; i < str.size; i += 1)
+  {
+    U8 b = str.str[i];
+    U8 lo = integer_symbols[b & 0xF];
+    U8 hi = integer_symbols[b >> 4];
+    buffer[i*2 + 0] = hi;
+    buffer[i*2 + 1] = lo;
+  }
+  buffer[buffer_size] = '\0';
+  String8 hex = str8(buffer, buffer_size);
+  return hex;
+}
+
 //- rjf: integer -> string
 
 internal String8
@@ -630,7 +654,7 @@ str8_from_u64(Arena *arena, U64 u64, U32 radix, U8 min_digits, U8 digit_group_se
         }
         else
         {
-          result.str[result.size - idx - 1] = char_to_lower(integer_symbols[u64_reduce%radix]);
+          result.str[result.size - idx - 1] = integer_symbols_lower[u64_reduce%radix];
           u64_reduce /= radix;
         }
         digits_until_separator -= 1;

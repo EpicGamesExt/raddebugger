@@ -451,6 +451,33 @@ struct RDIM_BinarySectionList
 ////////////////////////////////
 //~ rjf: Source File Info Types
 
+typedef struct RDIM_Checksum RDIM_Checksum;
+struct RDIM_Checksum
+{
+  struct RDIM_ChecksumChunkNode *chunk;
+  RDI_ChecksumKind kind;
+  RDIM_String8 data;
+};
+
+typedef struct RDIM_ChecksumChunkNode RDIM_ChecksumChunkNode;
+struct RDIM_ChecksumChunkNode
+{
+  struct RDIM_ChecksumChunkNode *next;
+  RDIM_Checksum *v;
+  RDI_U64 count;
+  RDI_U64 cap;
+  RDI_U64 base_idx;
+};
+
+typedef struct RDIM_ChecksumChunkList RDIM_ChecksumChunkList;
+struct RDIM_ChecksumChunkList
+{
+  RDIM_ChecksumChunkNode *first;
+  RDIM_ChecksumChunkNode *last;
+  RDI_U64 chunk_count;
+  RDI_U64 total_count;
+};
+
 typedef struct RDIM_SrcFileLineMapFragment RDIM_SrcFileLineMapFragment;
 struct RDIM_SrcFileLineMapFragment
 {
@@ -465,6 +492,7 @@ struct RDIM_SrcFile
   RDIM_String8 normal_full_path;
   RDIM_SrcFileLineMapFragment *fragment_list;
   RDIM_SrcFileLineMapFragment **next_fragment;
+  RDIM_Checksum *checksum;
 };
 
 typedef struct RDIM_SrcFileChunkNode RDIM_SrcFileChunkNode;
@@ -896,6 +924,7 @@ struct RDIM_BakeParams
   RDIM_ScopeChunkList scopes;
   RDIM_LineSequenceListChunkList lines;
   RDIM_InlineSiteChunkList inline_sites;
+  RDIM_ChecksumChunkList checksums;
 };
 
 //- rjf: data sections
@@ -1143,15 +1172,17 @@ RDI_PROC void rdim_rng1u64_list_push(RDIM_Arena *arena, RDIM_Rng1U64List *list, 
 RDI_PROC RDIM_BinarySection *rdim_binary_section_list_push(RDIM_Arena *arena, RDIM_BinarySectionList *list);
 
 ////////////////////////////////
+// [Building] Checksum Info Building
+
+RDI_PROC RDI_U64 rdim_idx_from_checksum(RDIM_Checksum *checksum);
+
+////////////////////////////////
 //~ rjf: [Building] Source File Info Building
 
 RDI_PROC RDIM_SrcFile *rdim_src_file_chunk_list_push(RDIM_Arena *arena, RDIM_SrcFileChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_src_file(RDIM_SrcFile *src_file);
 RDI_PROC void rdim_src_file_chunk_list_concat_in_place(RDIM_SrcFileChunkList *dst, RDIM_SrcFileChunkList *to_push);
 RDI_PROC void rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_files, RDIM_SrcFile *src_file, RDIM_LineSequence *seq);
-
-RDI_PROC int rdim_src_file_ptr_compar(const void *a, const void *b);
-RDI_PROC RDI_S32 rdim_src_file_match(RDIM_SrcFile *a, RDIM_SrcFile *b);
 
 ////////////////////////////////
 // Inline Sites Building
@@ -1314,8 +1345,11 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_unit_top_level_section_list(RDIM_Arena *
 //- rjf: unit vmap
 RDI_PROC RDIM_BakeSectionList rdim_bake_unit_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
+//- checksums
+RDI_PROC RDIM_BakeSectionList rdim_bake_checksums_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params, RDI_U64 **out_checksum_offsets);
+
 //- rjf: source files
-RDI_PROC RDIM_BakeSectionList rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDI_U64 *checksum_offsets, RDIM_BakeParams *params);
 
 //- rjf: type nodes
 RDI_PROC RDIM_BakeSectionList rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params);

@@ -472,6 +472,20 @@ rdim_binary_section_list_push(RDIM_Arena *arena, RDIM_BinarySectionList *list)
 }
 
 ////////////////////////////////
+// [Building] Checksum Info Building
+
+RDI_PROC RDI_U64
+rdim_idx_from_checksum(RDIM_Checksum *checksum)
+{
+  RDI_U64 idx = 0;
+  if(checksum != 0 && checksum->chunk != 0)
+  {
+    idx = checksum->chunk->base_idx + (checksum - checksum->chunk->v) + 1;
+  }
+  return idx;
+}
+
+////////////////////////////////
 //~ rjf: [Building] Source File Info Building
 
 RDI_PROC RDIM_SrcFile *
@@ -536,26 +550,6 @@ rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_f
 
   *src_file->next_fragment = fragment;
   src_file->next_fragment  = &fragment->next;
-}
-
-RDI_PROC int
-rdim_src_file_ptr_compar(const void *a_, const void *b_)
-{
-  RDIM_SrcFile *a = **(RDIM_SrcFile ***)a_;
-  RDIM_SrcFile *b = **(RDIM_SrcFile ***)b_;
-  int a_idx = rdim_idx_from_src_file(a);
-  int b_idx = rdim_idx_from_src_file(b);
-  int cmp = a_idx < b_idx ? -1 :
-            a_idx > b_idx ? +1 :
-            0;
-  return cmp;
-}
-
-RDI_PROC RDI_S32
-rdim_src_file_match(RDIM_SrcFile *a, RDIM_SrcFile *b)
-{
-  RDI_S32 is_match = rdim_str8_match(a->normal_full_path, b->normal_full_path, 0);
-  return is_match;
 }
 
 ////////////////////////////////
@@ -2619,10 +2613,81 @@ rdim_bake_unit_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams 
   return sections;
 }
 
+//- checksums
+
+RDI_PROC RDIM_BakeSectionList
+rdim_bake_checksums_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params, RDI_U64 **out_checksum_offsets)
+{
+  U64 checksum_count = (params->checksums.total_count + 1);
+
+  *out_checksum_offsets = push_array_no_zero(arena, RDI_U64, checksum_count);
+
+  RDI_U64 raw_checksums_size = checksum_count * sizeof(RDI_Checksum);
+  for(RDIM_ChecksumChunkNode *chunk = params->checksums.first; chunk != 0; chunk = chunk->next)
+  {
+    for(U64 i = 0; i < chunk->count; i += 1)
+    {
+      raw_checksums_size += chunk->v[i].data.size;
+    }
+  }
+
+  U8      *raw_checksums = push_array_no_zero(arena, U8, raw_checksums_size);
+  RDI_U64  cursor        = 0;
+  RDI_U64  checksum_idx  = 0;
+
+  // write null item
+  {
+    RDI_Checksum *checksum = (RDI_Checksum *)(raw_checksums + cursor);
+    checksum->kind = RDI_Checksum_Null;
+    checksum->size = 0;
+
+    (*out_checksum_offsets)[checksum_idx] = cursor;
+    checksum_idx += 1;
+
+    cursor += sizeof(*checksum);
+  }
+
+  for(RDIM_ChecksumChunkNode *chunk = params->checksums.first; chunk != 0; chunk = chunk->next)
+  {
+    for(U64 i = 0; i < chunk->count; i += 1)
+    {
+      RDIM_Checksum *src = chunk->v + i;
+      RDI_Checksum  *dst = (RDI_Checksum *)(raw_checksums + cursor);
+
+      // checksum size must fit into U8
+      rdim_assert(src->data.size <= 0xff);
+
+      // copy checksum
+      dst->kind = src->kind;
+      dst->size = (RDI_U8)src->data.size;
+      MemoryCopy((U8 *)(dst + 1), src->data.str, src->data.size);
+
+      // store checksum buffer offset
+      (*out_checksum_offsets)[checksum_idx] = cursor;
+      checksum_idx += 1;
+
+      // advance cursor
+      cursor += sizeof(*dst) + dst->size;
+    }
+  }
+
+  rdim_assert(cursor == raw_checksums_size);
+  rdim_assert(checksum_idx == checksum_count);
+
+  // build section
+  RDIM_BakeSectionList sections = {0};
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, raw_checksums, raw_checksums_size, RDI_DataSectionTag_Checksums, 0);
+  return sections;
+}
+
 //- rjf: source files
 
 RDI_PROC RDIM_BakeSectionList
-rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
+rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena,
+                                            RDIM_BakeStringMapTight *strings,
+                                            RDIM_BakePathTree *path_tree,
+                                            RDI_U64 *checksum_offsets,
+                                            RDIM_BakeParams *params)
 {
   RDIM_BakeSectionList sections = {0};
   
@@ -2780,6 +2845,10 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
         src_file_voff_count  = voff_count;
         rdim_scratch_end(scratch);
       }
+
+      // assign checksum
+      RDI_U64 checksum_idx = rdim_idx_from_checksum(src_file->checksum);
+      dst_file->checksum_offset = checksum_offsets[checksum_idx];
       
       //////////////////////////
       //- rjf: produce data sections for this source file's line info tables

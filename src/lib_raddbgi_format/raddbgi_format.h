@@ -41,6 +41,12 @@ typedef int32_t  RDI_S32;
 typedef int64_t  RDI_S64;
 #endif
 
+////////////////////////////////
+
+typedef struct RDI_Hasher{
+  RDI_U64 v;
+} RDI_Hasher;
+
 ////////////////////////////////////////////////////////////////
 // Architecture Constants
 
@@ -283,6 +289,7 @@ X(LineInfoVoffs,       0x001A)\
 X(LineInfoData,        0x001B)\
 X(LineInfoColumns,     0x001C)\
 X(InlineSites,         0x001D)\
+X(Checksums,           0x001E)\
 Y(PRIMARY_COUNT)\
 X(SKIP,                RDI_DataSectionTag_SECONDARY|0x0000)\
 X(LineMapNumbers,      RDI_DataSectionTag_SECONDARY|0x0001)\
@@ -361,10 +368,27 @@ typedef struct RDI_FilePathNode{
   RDI_U32 source_file_idx;
 } RDI_FilePathNode;
 
+typedef RDI_U8 RDI_ChecksumKind;
+typedef enum RDI_ChecksumKindEnum{
+  RDI_Checksum_Null,
+  RDI_Checksum_MD5,
+  RDI_Checksum_SHA1,
+  RDI_Checksum_SHA256,
+  RDI_Checksum_TimeStamp,
+} RDI_ChecksumKindEnum;
+
+typedef struct RDI_Checksum{
+  RDI_ChecksumKind kind;
+  RDI_U8 size;
+  //RDI_U8 data[0];
+} RDI_Checksum;
+
 typedef struct RDI_SourceFile{
   RDI_U32 file_path_node_idx;
   
   RDI_U32 normal_full_path_string_idx;
+
+  RDI_U64 checksum_offset;
   
   // usage of line map to go from a line number to an array of voffs
   //  (line_map_nums * line_number) -> (nil | index)
@@ -931,9 +955,16 @@ static RDI_U8 rdi_eval_opcode_ctrlbits[] = {
 };
 
 ////////////////////////////////
+// Hasher
+
+RDI_PROC void    rdi_hasher_begin(RDI_Hasher *hasher, RDI_U64 seed);
+RDI_PROC void    rdi_hasher_update(RDI_Hasher *hasher, void *ptr, RDI_U64 size);
+RDI_PROC RDI_U64 rdi_hasher_end(RDI_Hasher *hasher);
+RDI_PROC RDI_U64 rdi_hash(void *ptr, RDI_U64 size);
+
+////////////////////////////////
 // Functions
 
-RDI_PROC RDI_U64 rdi_hash(RDI_U8 *ptr, RDI_U64 size);
 RDI_PROC RDI_U32 rdi_size_from_basic_type_kind(RDI_TypeKind kind);
 RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
 

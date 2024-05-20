@@ -146,18 +146,18 @@ struct P2R_LinkNameMap
 
 //- rjf: normalized file path -> source file map
 
-typedef struct P2R_SrcFileNode P2R_SrcFileNode;
-struct P2R_SrcFileNode
+typedef struct P2R_SrcFileSlot P2R_SrcFileSlot;
+union P2R_SrcFileSlot
 {
-  P2R_SrcFileNode *next;
-  RDIM_SrcFile *src_file;
-};
+  struct
+  {
+    U32 comp_unit_idx;
+    RDI_ChecksumKind checksum_kind;
+    String8 normal_full_path;
+    String8 checksum;
+  } dedup;
 
-typedef struct P2R_SrcFileMap P2R_SrcFileMap;
-struct P2R_SrcFileMap
-{
-  P2R_SrcFileNode **slots;
-  U64 slots_count;
+  RDIM_SrcFile *lookup;
 };
 
 //- rjf: link name map building tasks
@@ -229,11 +229,12 @@ typedef struct
 
 typedef struct
 {
+  U64 comp_unit_idx;
   String8 c13_data;
   CV_C13Parsed c13_parsed;
   PDB_Strtbl *strtbl;
   U64 src_file_ht_cap;
-  RDIM_SrcFile **src_file_ht_slots;
+  P2R_SrcFileSlot **src_file_ht_slots;
   PDB_CoffSectionArray *sections;
 } P2R_C13ConvertIn;
 
@@ -261,7 +262,7 @@ typedef struct
   RDIM_Type **itype_type_ptrs;
   P2R_LinkNameMap *link_name_map;
   U64 src_file_ht_cap;
-  RDIM_SrcFile **src_file_ht_slots;
+  P2R_SrcFileSlot **src_file_ht_slots;
   CV_SymParsed sym_parsed;
   String8 c13_data;
   CV_C13Parsed c13_parsed;
@@ -472,6 +473,7 @@ struct P2R_BakeSrcFilesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_BakePathTree *path_tree;
+  RDI_U64 *checksum_offsets;
   RDIM_BakeParams *params;
 };
 
@@ -585,6 +587,7 @@ internal RDI_BinarySectionFlags p2r_rdi_binary_section_flags_from_coff_section_f
 ////////////////////////////////
 //~ rjf: CodeView => RADDBGI Canonical Conversions
 
+internal RDI_ChecksumKind p2r_rdi_checksum_from_cv_c13_checksum(CV_C13_ChecksumKind checksum);
 internal RDI_Arch         p2r_rdi_arch_from_cv_arch(CV_Arch arch);
 internal RDI_RegisterCode p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
 internal RDI_Language     p2r_rdi_language_from_cv_language(CV_Language language);

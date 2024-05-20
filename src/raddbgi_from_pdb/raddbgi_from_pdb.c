@@ -158,21 +158,70 @@ p2r_normalize_file_path(Arena *arena, String8 file_path)
   return file_path_normal;
 }
 
+internal void
+p2r_init_src_file_slot(Arena *arena, P2R_SrcFileSlot *slot, String8 raw_checksums, PDB_Strtbl *strtbl, U32 comp_unit_idx, U64 offset)
+{
+  // parse checksum
+  CV_C13_Checksum *checksum      = (CV_C13_Checksum *)str8_deserial_get_raw_ptr(raw_checksums, offset, sizeof(*checksum));
+  U8              *checksum_data = (U8 *)(checksum + 1);
+
+  // normalize file name
+  String8 file_path_orig   = pdb_strtbl_string_from_off(strtbl, checksum->name_off);
+  String8 file_path_normal = p2r_normalize_file_path(arena, file_path_orig);
+
+  // fill out src file
+  slot->dedup.comp_unit_idx    = comp_unit_idx;
+  slot->dedup.normal_full_path = file_path_normal;
+  slot->dedup.checksum_kind    = p2r_rdi_checksum_from_cv_c13_checksum(checksum->kind);
+  slot->dedup.checksum         = rdim_str8(checksum_data, checksum->len);
+}
+
 internal U64
-p2r_src_file_hash_table_lookup_slot(RDIM_SrcFile **slots, U64 cap, U64 hash, String8 normal_file_path)
+p2r_hash_src_file_slot(P2R_SrcFileSlot *slot)
+{
+  RDI_Hasher hasher = {0};
+  rdi_hasher_begin(&hasher, 0);
+  rdi_hasher_update(&hasher, slot->dedup.normal_full_path.str, slot->dedup.normal_full_path.size);
+  rdi_hasher_update(&hasher, &slot->dedup.checksum_kind,       sizeof(slot->dedup.checksum_kind));
+  rdi_hasher_update(&hasher, slot->dedup.checksum.str,         slot->dedup.checksum.size);
+  U64 hash = rdi_hasher_end(&hasher);
+  return hash;
+}
+
+internal B32
+p2r_src_file_slot_match(P2R_SrcFileSlot *a, P2R_SrcFileSlot *b)
+{
+  B32 is_match = str8_match(a->dedup.normal_full_path, b->dedup.normal_full_path, 0) &&
+                 str8_match(a->dedup.checksum, b->dedup.checksum, 0) &&
+                 a->dedup.checksum_kind == b->dedup.checksum_kind;
+  return is_match;
+}
+
+int
+p2r_src_file_slot_ptr_compar(const void *a, const void *b)
+{
+  const P2R_SrcFileSlot *a_ = *(const P2R_SrcFileSlot **)a;
+  const P2R_SrcFileSlot *b_ = *(const P2R_SrcFileSlot **)b;
+  int cmp = a_->dedup.comp_unit_idx < b_->dedup.comp_unit_idx ? -1 :
+            a_->dedup.comp_unit_idx > b_->dedup.comp_unit_idx ? +1 : 0;
+  return cmp;
+}
+
+internal U64
+p2r_src_file_hash_table_lookup_slot(P2R_SrcFileSlot **slots, U64 cap, U64 hash, P2R_SrcFileSlot *slot)
 {
   U64 best = hash % cap;
   U64 idx  = best;
   do
   {
-    RDIM_SrcFile *src_file = slots[idx];
+    P2R_SrcFileSlot *curr_slot = slots[idx];
 
-    if(src_file == 0)
+    if(curr_slot == 0)
     {
       break;
     }
 
-    if(str8_match(src_file->normal_full_path, normal_file_path, 0)) 
+    if(p2r_src_file_slot_match(curr_slot, slot))
     {
       return idx;
     }
@@ -184,7 +233,10 @@ p2r_src_file_hash_table_lookup_slot(RDIM_SrcFile **slots, U64 cap, U64 hash, Str
 }
 
 internal B32
-p2r_src_file_hash_table_insert_or_update(RDIM_SrcFile **slots, U64 cap, U64 hash, RDIM_SrcFile *src_file)
+p2r_src_file_hash_table_insert_or_update(P2R_SrcFileSlot **slots,
+                                         U64               cap,
+                                         U64               hash,
+                                         P2R_SrcFileSlot  *new_slot)
 {
   B32 is_inserted_or_updated = 0;
 
@@ -194,13 +246,13 @@ p2r_src_file_hash_table_insert_or_update(RDIM_SrcFile **slots, U64 cap, U64 hash
   {
     retry:;
 
-    RDIM_SrcFile *curr_slot = slots[idx];
+    P2R_SrcFileSlot *curr_slot = slots[idx];
     if(curr_slot == 0)
     {
-      RDIM_SrcFile *now_slot = (RDIM_SrcFile *)ins_atomic_ptr_eval_cond_assign(&slots[idx], src_file, curr_slot);
+      P2R_SrcFileSlot *now_slot = (P2R_SrcFileSlot *)ins_atomic_ptr_eval_cond_assign(&slots[idx], new_slot, curr_slot);
       if(now_slot == curr_slot)
       {
-        // success, slot was inserted
+        // success, slot was updated
         is_inserted_or_updated = 1;
         break;
       }
@@ -208,31 +260,26 @@ p2r_src_file_hash_table_insert_or_update(RDIM_SrcFile **slots, U64 cap, U64 hash
       // another thread took the slot
       goto retry;
     }
-    else
+    else if(p2r_src_file_slot_match(curr_slot, new_slot))
     {
-      // TODO: compare file checksum
-      if(rdim_src_file_match(curr_slot, src_file))
+      if(new_slot->dedup.comp_unit_idx < curr_slot->dedup.comp_unit_idx)
       {
-        U64 curr_idx = rdim_idx_from_src_file(curr_slot);
-        U64 new_idx  = rdim_idx_from_src_file(src_file);
-        if(new_idx < curr_idx)
+        // try inserting src file into hash table
+        P2R_SrcFileSlot *now_slot = (P2R_SrcFileSlot *)ins_atomic_ptr_eval_cond_assign(&slots[idx], new_slot, curr_slot);
+        if(now_slot == curr_slot)
         {
-          // try inserting src file into hash table
-          RDIM_SrcFile *now_slot = (RDIM_SrcFile *)ins_atomic_ptr_eval_cond_assign(&slots[idx], src_file, curr_slot);
-          if(now_slot == curr_slot)
-          {
-            is_inserted_or_updated = 1;
-            break;
-          }
-        }
-        else
-        {
-          // there is a more recent version of src file in the slot
+          // success, slot was updated
+          is_inserted_or_updated = 1;
           break;
         }
 
         // another thread took the slot
         goto retry;
+      }
+      else
+      {
+        // slot has a more recent source file version
+        break;
       }
     }
 
@@ -246,14 +293,15 @@ internal RDIM_SrcFileLineMapFragment *
 p2r_convert_c13_lines(Arena                 *arena,
                       String8                rewritten_file_chksms,
                       U64                    src_file_ht_cap,
-                      RDIM_SrcFile         **src_file_ht_slots,
+                      P2R_SrcFileSlot      **src_file_ht_slots,
                       RDIM_LineSequenceList *line_table,
                       CV_C13LineArray        lines)
 {
   RDIM_SrcFileLineMapFragment *fragment = 0;
 
-  U32           slot_idx = *(U32 *)str8_deserial_get_raw_ptr(rewritten_file_chksms, lines.file_off, sizeof(slot_idx));
-  RDIM_SrcFile *src_file = src_file_ht_slots[slot_idx];
+  U32 slot_idx = *(U32 *)str8_deserial_get_raw_ptr(rewritten_file_chksms, lines.file_off, sizeof(slot_idx));
+  Assert(slot_idx < src_file_ht_cap);
+  RDIM_SrcFile *src_file = src_file_ht_slots[slot_idx]->lookup; // :src_file_lookup
   if(src_file != 0)
   {
     // fill out sequence
@@ -305,6 +353,20 @@ p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 
 ////////////////////////////////
 //~ rjf: CodeView <-> RADDBGI Canonical Conversions
+
+internal RDI_ChecksumKind
+p2r_rdi_checksum_from_cv_c13_checksum(CV_C13_ChecksumKind checksum)
+{
+  RDI_ChecksumKind result = RDI_Checksum_Null;
+  switch(checksum)
+  {
+  case CV_C13_ChecksumKind_Null:   result = RDI_Checksum_Null;   break;
+  case CV_C13_ChecksumKind_MD5:    result = RDI_Checksum_MD5;    break;
+  case CV_C13_ChecksumKind_SHA1:   result = RDI_Checksum_SHA1;   break;
+  case CV_C13_ChecksumKind_SHA256: result = RDI_Checksum_SHA256; break;
+  }
+  return result;
+}
 
 internal RDI_Arch
 p2r_rdi_arch_from_coff_machine(COFF_MachineType coff_machine)
@@ -782,40 +844,31 @@ internal TS_TASK_FUNCTION_DEF(p2r_c13_src_files_convert__entry_point)
 
   String8 raw_checksums = cv_c13_file_chksms_from_sub_sections(in->c13_data, &in->c13_parsed);
 
-  RDIM_SrcFile *src_file = 0;
   for(U64 cursor = 0, src_idx = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; src_idx += 1)
   {
-    // parse checksum
-    CV_C13_Checksum *checksum      = (CV_C13_Checksum *)(raw_checksums.str + cursor);
-    U8              *checksum_data = (U8 *)(checksum + 1);
+    Temp temp = temp_begin(arena);
 
-    // normalize file name
-    String8 file_path_orig   = pdb_strtbl_string_from_off(in->strtbl, checksum->name_off);
-    String8 file_path_normal = p2r_normalize_file_path(arena, file_path_orig);
+    // init source file slot
+    P2R_SrcFileSlot *slot = push_array(arena, P2R_SrcFileSlot, 1);
+    p2r_init_src_file_slot(arena, slot, raw_checksums, in->strtbl, in->comp_unit_idx, cursor);
 
-    if(src_file == 0)
+    // compute slot hash
+    U64 hash = p2r_hash_src_file_slot(slot);
+
+    // insert source file
+    B32 is_inserted = p2r_src_file_hash_table_insert_or_update(in->src_file_ht_slots, in->src_file_ht_cap, hash, slot);
+
+    // discard slot memory pushes
+    if(!is_inserted)
     {
-      src_file = push_array(arena, RDIM_SrcFile, 1);
-    }
-
-    // fill out src file
-    src_file->normal_full_path = file_path_normal;
-    src_file->fragment_list    = 0;
-    src_file->next_fragment    = 0;
-
-    // insert src file
-    U64 hash        = rdi_hash(file_path_normal.str, file_path_normal.size);
-    B32 is_inserted = p2r_src_file_hash_table_insert_or_update(in->src_file_ht_slots, in->src_file_ht_cap, hash, src_file);
-
-    if(is_inserted)
-    {
-      src_file = 0;
+      temp_end(temp);
     }
 
     // advance cursor
+    CV_C13_Checksum *checksum = str8_deserial_get_raw_ptr(raw_checksums, cursor, sizeof(*checksum));
     cursor += sizeof(*checksum);
     cursor += checksum->len;
-    cursor = AlignPow2(cursor, 4);
+    cursor  = AlignPow2(cursor, 4);
   }
 
   ProfEnd();
@@ -830,19 +883,21 @@ internal TS_TASK_FUNCTION_DEF(p2r_rewrite_file_chksms_task__entry_point)
 
   for(U64 cursor = 0; cursor + sizeof(CV_C13_Checksum) <= raw_checksums.size; )
   {
-    CV_C13_Checksum *checksum = (CV_C13_Checksum *)str8_deserial_get_raw_ptr(raw_checksums, cursor, sizeof(*checksum));
+    // init source file slot
+    P2R_SrcFileSlot slot = {0};
+    p2r_init_src_file_slot(arena, &slot, raw_checksums, in->strtbl, in->comp_unit_idx, cursor);
 
-    // normalize file name
-    String8 file_path_orig   = pdb_strtbl_string_from_off(in->strtbl, checksum->name_off);
-    String8 file_path_normal = p2r_normalize_file_path(arena, file_path_orig);
+    // compute slot hash
+    U64 hash = p2r_hash_src_file_slot(&slot);
 
     // find src file slot 
-    U64 hash = rdi_hash(file_path_normal.str, file_path_normal.size);
-    U64 slot = p2r_src_file_hash_table_lookup_slot(in->src_file_ht_slots, in->src_file_ht_cap, hash, file_path_normal);
+    U64 slot_idx = p2r_src_file_hash_table_lookup_slot(in->src_file_ht_slots, in->src_file_ht_cap, hash, &slot);
+
+    CV_C13_Checksum *checksum = (CV_C13_Checksum *)str8_deserial_get_raw_ptr(raw_checksums, cursor, sizeof(*checksum));
 
     // overwrite checksum with file slot  
-    AssertAlways(slot <= max_U32);
-    MemoryCopy(checksum, &slot, sizeof(U32));
+    U32 slot_idx32 = safe_cast_u32(slot_idx);
+    MemoryCopy(checksum, &slot_idx32, sizeof(slot_idx32));
 
     // advance
     cursor += sizeof(*checksum);
@@ -857,7 +912,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_rewrite_file_chksms_task__entry_point)
 internal P2R_SymbolConvertResult
 p2r_convert_symbols(Arena                     *arena,
                     U64                        src_file_ht_cap,
-                    RDIM_SrcFile             **src_file_ht_slots,
+                    P2R_SrcFileSlot          **src_file_ht_slots,
                     PDB_CoffSectionArray      *sections,
                     PDB_TpiHashParsed         *tpi_hash,
                     CV_LeafParsed             *tpi_leaf,
@@ -1144,7 +1199,7 @@ p2r_convert_symbols(Arena                     *arena,
               Assert(src_file_ht_slots[slot_idx] != 0);
 
               // fill out inlinee call site info
-              call_src_file = src_file_ht_slots[slot_idx];
+              call_src_file = src_file_ht_slots[slot_idx]->lookup;
               call_line_num = best_voff_match.line_num;
               call_col_num  = best_voff_match.col_num;
             }
@@ -3876,6 +3931,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   RDIM_SrcFileChunkList          all_src_files        = {0};
   RDIM_LineSequenceListChunkList all_lines            = {0};
   RDIM_InlineSiteChunkList       all_inline_sites     = {0};
+  RDIM_ChecksumChunkList         all_checksums        = {0};
 
   // TODO: unit, procedure, global var, thread var, scope,
   // push nulls
@@ -3905,9 +3961,9 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       ProfEnd();
     }
 
-    U64            src_file_ht_count;
-    U64            src_file_ht_cap;
-    RDIM_SrcFile **src_file_ht_slots;
+    U64               src_file_ht_count;
+    U64               src_file_ht_cap;
+    P2R_SrcFileSlot **src_file_ht_slots;
     {
       U64 total_src_file_count = 0;
       {
@@ -3930,7 +3986,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       }
 
       src_file_ht_cap   = (U64)((F64)total_src_file_count * 1.3);
-      src_file_ht_slots = push_array(scratch.arena, RDIM_SrcFile *, src_file_ht_cap);
+      src_file_ht_slots = push_array(scratch.arena, P2R_SrcFileSlot *, src_file_ht_cap);
       {
         ProfBegin("dedup src files");
         P2R_C13ConvertIn *inputs  = push_array(scratch.arena, P2R_C13ConvertIn, comp_unit_count);
@@ -3938,6 +3994,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
         {
           P2R_C13ConvertIn *in = inputs + comp_unit_idx;
+          in->comp_unit_idx     = comp_unit_idx;
           in->c13_data          = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
           in->c13_parsed        = c13_per_unit[comp_unit_idx]->c13_parsed;
           in->strtbl            = strtbl;
@@ -3965,42 +4022,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       ProfEnd();
     }
 
-    U64           src_file_count;
-    RDIM_SrcFile *src_files;
-    {
-      ProfBegin("copy out slots with src files from the hash table");
-      RDIM_SrcFile ***unique_src_file_ptrs = push_array_no_zero(scratch.arena, RDIM_SrcFile **, src_file_ht_count);
-      for(U64 slot = 0, unique_src_file_idx = 0; slot < src_file_ht_cap; slot += 1)
-      {
-        if(src_file_ht_slots[slot] != 0)
-        {
-          unique_src_file_ptrs[unique_src_file_idx] = &src_file_ht_slots[slot];
-          unique_src_file_idx += 1;
-        }
-      }
-      ProfEnd();
-
-      // make sure we get deterministic src file array in output
-      ProfBeginDynamic("sort unique src files [count %llu]", src_file_ht_count);
-      qsort(unique_src_file_ptrs, src_file_ht_count, sizeof(unique_src_file_ptrs[0]), rdim_src_file_ptr_compar);
-      ProfEnd();
-
-      ProfBegin("make final src file array");
-      src_file_count = src_file_ht_count;
-      src_files      = push_array_no_zero(arena, RDIM_SrcFile, src_file_count);
-      for(U64 src_file_idx = 0; src_file_idx < src_file_count; src_file_idx += 1)
-      {
-        // copy src file to unique array
-        src_files[src_file_idx] = **unique_src_file_ptrs[src_file_idx];
-        src_files[src_file_idx].fragment_list = 0;
-        src_files[src_file_idx].next_fragment = &src_files[src_file_idx].fragment_list;
-
-        // update src file pointer in the hash table, so we can skip on src file rehash
-        *unique_src_file_ptrs[src_file_idx] = src_files + src_file_idx;
-      }
-      ProfEnd();
-    }
-
     {
       ProfBegin("rewrite $$FILE_CHCKSMS");
       P2R_C13ConvertIn *inputs  = push_array(scratch.arena, P2R_C13ConvertIn, comp_unit_count);
@@ -4008,16 +4029,79 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
       {
         P2R_C13ConvertIn *in = inputs + comp_unit_idx;
+        in->comp_unit_idx     = comp_unit_idx;
         in->c13_data          = pdb_data_from_unit_range(msf, comp_units->units[comp_unit_idx], PDB_DbiCompUnitRange_C13);
         in->c13_parsed        = c13_per_unit[comp_unit_idx]->c13_parsed;
         in->strtbl            = strtbl;
         in->src_file_ht_cap   = src_file_ht_cap;
         in->src_file_ht_slots = src_file_ht_slots;
         tickets[comp_unit_idx] = ts_kickoff(p2r_rewrite_file_chksms_task__entry_point, 0, in);
+
       }
       for(U64 comp_unit_idx = 0; comp_unit_idx < comp_unit_count; comp_unit_idx += 1)
       {
         ts_join(tickets[comp_unit_idx], max_U64);
+      }
+      ProfEnd();
+    }
+
+    U64            checksum_count;
+    U64            src_file_count;
+    RDIM_SrcFile  *src_files;
+    RDIM_Checksum *checksums;
+    {
+      ProfBegin("copy out slots with src files from the hash table");
+      P2R_SrcFileSlot **slots_with_data = push_array_no_zero(scratch.arena, P2R_SrcFileSlot *, src_file_ht_count);
+      for(U64 slot_idx = 0, slot_with_data_idx = 0; slot_idx < src_file_ht_cap; slot_idx += 1)
+      {
+        if(src_file_ht_slots[slot_idx] != 0)
+        {
+          slots_with_data[slot_with_data_idx] = src_file_ht_slots[slot_idx];
+          slot_with_data_idx += 1;
+        }
+      }
+      ProfEnd();
+
+      // sort files based on comp unit idx so we get deterministic source file array in output RDI
+      ProfBeginDynamic("sort unique src files [count %llu]", src_file_ht_count);
+      qsort(slots_with_data, src_file_ht_count, sizeof(slots_with_data[0]), p2r_src_file_slot_ptr_compar);
+      ProfEnd();
+
+      ProfBegin("make final src file array");
+      src_file_count = src_file_ht_count;
+      checksum_count = src_file_ht_count;
+      src_files      = push_array_no_zero(arena, RDIM_SrcFile,  src_file_count);
+      checksums      = push_array_no_zero(arena, RDIM_Checksum, checksum_count);
+      for(U64 src_file_idx = 0; src_file_idx < src_file_count; src_file_idx += 1)
+      {
+        P2R_SrcFileSlot *slot = slots_with_data[src_file_idx];
+
+        // validate checksum size
+        switch(slot->dedup.checksum_kind)
+        {
+        case RDI_Checksum_Null: break;
+        case RDI_Checksum_MD5:       Assert(slot->dedup.checksum.size == 16); break;
+        case RDI_Checksum_SHA1:      Assert(slot->dedup.checksum.size == 20); break;
+        case RDI_Checksum_SHA256:    Assert(slot->dedup.checksum.size == 32); break;
+        case RDI_Checksum_TimeStamp: Assert(slot->dedup.checksum.size == 4 ||
+                                            slot->dedup.checksum.size == 8);  break;
+        }
+
+        // fill out checksum
+        RDIM_Checksum *checksum = checksums + src_file_idx;
+        checksum->kind = slot->dedup.checksum_kind;
+        checksum->data = slot->dedup.checksum;
+
+        // fill out source file
+        RDIM_SrcFile *src_file = src_files + src_file_idx;
+        src_file->chunk            = 0;
+        src_file->normal_full_path = slot->dedup.normal_full_path;
+        src_file->fragment_list    = 0;
+        src_file->next_fragment    = &src_file->fragment_list;
+        src_file->checksum         = checksum;
+
+        // :src_file_lookup
+        slot->lookup = src_file;
       }
       ProfEnd();
     }
@@ -4159,6 +4243,25 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       all_units.chunk_count += 1;
       all_units.total_count += comp_unit_count;
     }
+
+    // make chunk list wrapper for checksum array
+    {
+      RDIM_ChecksumChunkNode *chunk = push_array(arena, RDIM_ChecksumChunkNode, 1);
+      chunk->v        = checksums;
+      chunk->count    = checksum_count;
+      chunk->cap      = checksum_count;
+      chunk->base_idx = 0;
+
+      U64 checksum_data_size = 0;
+      for(U64 i = 0; i < chunk->count; i += 1)
+      {
+        chunk->v[i].chunk = chunk;
+      }
+
+      SLLQueuePush(all_checksums.first, all_checksums.last, chunk);
+      all_checksums.chunk_count += 1;
+      all_checksums.total_count += checksum_count;
+    }
   }
   
   //////////////////////////////////////////////////////////////
@@ -4188,6 +4291,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     out->bake_params.scopes           = all_scopes;
     out->bake_params.lines            = all_lines;
     out->bake_params.inline_sites     = all_inline_sites;
+    out->bake_params.checksums        = all_checksums;
   }
   
   scratch_end(scratch);
@@ -4383,7 +4487,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_task__entry_point)
 {
   P2R_BakeSrcFilesIn *in = (P2R_BakeSrcFilesIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake src files") *s = rdim_bake_src_file_section_list_from_params(arena, in->strings, in->path_tree, in->params);
+  ProfScope("bake src files") *s = rdim_bake_src_file_section_list_from_params(arena, in->strings, in->path_tree, in->checksum_offsets, in->params);
   return s;
 }
 
@@ -4762,13 +4866,21 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   ProfBegin("build finalized string map");
   RDIM_BakeStringMapTight bake_strings = rdim_bake_string_map_tight_from_loose(arena, &bake_string_map_topology, &bake_string_map_base_idxes, sorted_bake_string_map);
   ProfEnd();
+
+  ProfBegin("bake checksums");
+  RDI_U64 *checksum_offsets;
+  {
+    RDIM_BakeSectionList s = rdim_bake_checksums_list_from_params(arena, params, &checksum_offsets);
+    rdim_bake_section_list_concat_in_place(&sections, &s);
+  }
+  ProfEnd();
   
   //- rjf: kick off pass 2 tasks
   P2R_BakeUnitsTopLevelIn bake_units_top_level_in = {&bake_strings, path_tree, params};
   TS_Ticket bake_units_top_level_ticket = ts_kickoff(p2r_bake_units_top_level_task__entry_point, 0, &bake_units_top_level_in);
   P2R_BakeUnitVMapIn bake_unit_vmap_in = {params};
   TS_Ticket bake_unit_vmap_ticket = ts_kickoff(p2r_bake_unit_vmap_task__entry_point, 0, &bake_unit_vmap_in);
-  P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, params};
+  P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, checksum_offsets, params};
   TS_Ticket bake_src_files_ticket = ts_kickoff(p2r_bake_src_files_task__entry_point, 0, &bake_src_files_in);
   P2R_BakeUDTsIn bake_udts_in = {&bake_strings, params};
   TS_Ticket bake_udts_ticket = ts_kickoff(p2r_bake_udts_task__entry_point, 0, &bake_udts_in);

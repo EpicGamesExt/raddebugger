@@ -2,17 +2,42 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-// Functions
+// Hasher
+
+RDI_PROC void
+rdi_hasher_begin(RDI_Hasher *hasher, RDI_U64 seed){
+  if (seed == 0){
+    hasher->v = 5381;
+  } else{
+    hasher->v = seed;
+  }
+}
+
+RDI_PROC void
+rdi_hasher_update(RDI_Hasher *hasher, void *ptr, RDI_U64 size){
+  RDI_U8 *cur = (RDI_U8 *)ptr;
+  RDI_U8 *opl = (RDI_U8 *)ptr + size;
+  for (; cur < opl; cur += 1){
+    hasher->v = ((hasher->v << 5) + hasher->v) + *cur;
+  }
+}
 
 RDI_PROC RDI_U64
-rdi_hash(RDI_U8 *ptr, RDI_U64 size){
-  RDI_U64 result = 5381;
-  RDI_U8 *opl = ptr + size;
-  for (; ptr < opl; ptr += 1){
-    result = ((result << 5) + result) + *ptr;
-  }
-  return(result);
+rdi_hasher_end(RDI_Hasher *hasher){
+  return hasher->v;
 }
+
+RDI_PROC RDI_U64
+rdi_hash(void *ptr, RDI_U64 size){
+  RDI_Hasher hasher = {0};
+  rdi_hasher_begin(&hasher, 0);
+  rdi_hasher_update(&hasher, ptr, size);
+  RDI_U64 result = rdi_hasher_end(&hasher);
+  return result;
+}
+
+////////////////////////////////
+// Functions
 
 RDI_PROC RDI_U32
 rdi_size_from_basic_type_kind(RDI_TypeKind kind){

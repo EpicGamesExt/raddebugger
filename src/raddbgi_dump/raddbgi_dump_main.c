@@ -67,6 +67,7 @@ entry_point(CmdLine *cmd_line)
     DumpFlag_Strings            = (1<<16),
     DumpFlag_InlineSites        = (1<<17),
     DumpFlag_LineInfo           = (1<<18),
+    DumpFlag_Checksums          = (1<<19),
   };
   String8 input_name = {0};
   String8 input_data = {0};
@@ -87,23 +88,24 @@ entry_point(CmdLine *cmd_line)
         for(String8Node *n = dump_options.first; n != 0; n = n->next)
         {
           if(0){}
-          else if(str8_match(n->string, str8_lit("data_sections"),           StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_DataSections; }
-          else if(str8_match(n->string, str8_lit("top_level_info"),          StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_TopLevelInfo; }
-          else if(str8_match(n->string, str8_lit("binary_sections"),         StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_BinarySections; }
-          else if(str8_match(n->string, str8_lit("file_paths"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_FilePaths; }
-          else if(str8_match(n->string, str8_lit("source_files"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_SourceFiles; }
-          else if(str8_match(n->string, str8_lit("units"),                   StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Units; }
-          else if(str8_match(n->string, str8_lit("unit_vmap"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_UnitVMap; }
-          else if(str8_match(n->string, str8_lit("type_nodes"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_TypeNodes; }
-          else if(str8_match(n->string, str8_lit("udt_data"),                StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_UDTs; }
+          else if(str8_match(n->string, str8_lit("data_sections"),           StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_DataSections;    }
+          else if(str8_match(n->string, str8_lit("top_level_info"),          StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_TopLevelInfo;    }
+          else if(str8_match(n->string, str8_lit("binary_sections"),         StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_BinarySections;  }
+          else if(str8_match(n->string, str8_lit("file_paths"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_FilePaths;       }
+          else if(str8_match(n->string, str8_lit("source_files"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_SourceFiles;     }
+          else if(str8_match(n->string, str8_lit("units"),                   StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Units;           }
+          else if(str8_match(n->string, str8_lit("unit_vmap"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_UnitVMap;        }
+          else if(str8_match(n->string, str8_lit("type_nodes"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_TypeNodes;       }
+          else if(str8_match(n->string, str8_lit("udt_data"),                StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_UDTs;            }
           else if(str8_match(n->string, str8_lit("global_variables"),        StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_GlobalVariables; }
-          else if(str8_match(n->string, str8_lit("global_vmap"),             StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_GlobalVMap; }
+          else if(str8_match(n->string, str8_lit("global_vmap"),             StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_GlobalVMap;      }
           else if(str8_match(n->string, str8_lit("thread_variables"),        StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_ThreadVariables; }
-          else if(str8_match(n->string, str8_lit("procedures"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Procedures; }
-          else if(str8_match(n->string, str8_lit("scopes"),                  StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Scopes; }
-          else if(str8_match(n->string, str8_lit("scope_vmap"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_ScopeVMap; }
-          else if(str8_match(n->string, str8_lit("name_maps"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_NameMaps; }
-          else if(str8_match(n->string, str8_lit("inline_sites"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_InlineSites; }
+          else if(str8_match(n->string, str8_lit("procedures"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Procedures;      }
+          else if(str8_match(n->string, str8_lit("scopes"),                  StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Scopes;          }
+          else if(str8_match(n->string, str8_lit("scope_vmap"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_ScopeVMap;       }
+          else if(str8_match(n->string, str8_lit("name_maps"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_NameMaps;        }
+          else if(str8_match(n->string, str8_lit("inline_sites"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_InlineSites;     }
+          else if(str8_match(n->string, str8_lit("checksums"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Checksums;       }
         }
       }
     }
@@ -444,6 +446,14 @@ entry_point(CmdLine *cmd_line)
       {
         rdi_stringize_line_info(arena, &dump, raddbg, li_idx, 1);
       }
+      str8_list_pushf(arena, &dump, "\n");
+    }
+
+    if(dump_flags & DumpFlag_Checksums)
+    {
+      str8_list_pushf(arena, &dump, "# CHECKSUMS:\n");
+      rdi_stringize_checksums(arena, &dump, raddbg, 1);
+      str8_list_pushf(arena, &dump, "\n");
     }
   }
   

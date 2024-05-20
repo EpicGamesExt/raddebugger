@@ -78,6 +78,19 @@ rdi_string_from_local_kind(RDI_LocalKind local_kind){
   return(result);
 }
 
+internal String8
+rdi_string_from_checksum_kind(RDI_ChecksumKind kind)
+{
+  switch(kind){
+  case RDI_Checksum_Null:      return str8_lit("Null");      break;
+  case RDI_Checksum_MD5:       return str8_lit("MD5");       break;
+  case RDI_Checksum_SHA1:      return str8_lit("SHA1");      break;
+  case RDI_Checksum_SHA256:    return str8_lit("SHA256");    break;
+  case RDI_Checksum_TimeStamp: return str8_lit("TimeStamp"); break;
+  }
+  return str8_lit("");
+}
+
 ////////////////////////////////
 //~ rjf: RADDBGI Flags -> String Functions
 
@@ -137,6 +150,49 @@ rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkFlags flags){
   if (flags & RDI_LinkFlag_ProcScoped){
     str8_list_push(arena, out, str8_lit("ProcScoped "));
   }
+}
+
+////////////////////////////////
+
+internal String8
+rdi_stringize_checksum(Arena *arena, RDI_ParsedChecksum parsed)
+{
+  B32 use_upper_case = 0;
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 result = str8(0,0);
+  switch(parsed.kind)
+  {
+  case RDI_Checksum_Null:
+  {
+    result = str8_lit("Null");
+  }break;
+  case RDI_Checksum_MD5:
+  {
+    AssertAlways(parsed.size == 16);
+    String8 md5 = str8_to_hex(scratch.arena, str8(parsed.data, parsed.size), use_upper_case);
+    result = push_str8f(arena, "MD5: %S", md5);
+  }break;
+  case RDI_Checksum_SHA1:
+  {
+    AssertAlways(parsed.size == 20);
+    String8 sha1 = str8_to_hex(scratch.arena, str8(parsed.data, parsed.size), use_upper_case);
+    result = push_str8f(arena, "SHA1: %S", sha1);
+
+  }break;
+  case RDI_Checksum_SHA256:
+  {
+    AssertAlways(parsed.size == 32);
+    String8 sha256 = str8_to_hex(scratch.arena, str8(parsed.data, parsed.size), use_upper_case);
+    result = push_str8f(arena, "SHA256: %S", sha256);
+  }break;
+  case RDI_Checksum_TimeStamp:
+  {
+    U64 time_stamp = rdi_time_stamp_from_parsed_checksum(parsed);
+    result = push_str8f(arena, "Time Stamp: %llu", time_stamp);
+  }break;
+  }
+  scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////
@@ -239,6 +295,9 @@ rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
   // extract line map data
   RDI_ParsedLineMap line_map = {0};
   rdi_line_map_from_source_file(parsed, source_file, &line_map);
+
+  // stringize checksum
+  str8_list_pushf(arena, out, "%.*schecksum_offset=%llX\n", indent_level, rdi_stringize_spaces, source_file->checksum_offset);
   
   // stringize line map data
   str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
@@ -819,4 +878,16 @@ rdi_stringize_line_info(Arena *arena, String8List *out, RDI_Parsed *rdi, U64 lin
   }
 }
 
+internal void
+rdi_stringize_checksums(Arena *arena, String8List *out, RDI_Parsed *rdi, U32 indent_level)
+{
+  for(U64 cursor = 0; cursor + sizeof(RDI_Checksum) <= rdi->checksums_size; )
+  {
+    RDI_ParsedChecksum parsed = {0};
+    U64 parsed_size = rdi_checksum_from_offset(rdi, cursor, &parsed);
+    String8 checksum_str = rdi_stringize_checksum(arena, parsed);
+    str8_list_pushf(arena, out, "%.*schecksum[%llX]=%S\n", indent_level, rdi_stringize_spaces, cursor, checksum_str);
+    cursor += parsed_size;
+  }
+}
 

@@ -184,6 +184,18 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
     
     rdi_parse__extract_primary(out, out->location_data, &out->location_data_size,
                                RDI_DataSectionTag_LocationData);
+
+    rdi_parse__extract_primary(out, out->line_info, &out->line_info_count,
+                              RDI_DataSectionTag_LineInfo);
+    rdi_parse__extract_primary(out, out->line_info_voffs, &out->line_info_voff_count,
+                              RDI_DataSectionTag_LineInfoVoffs);
+    rdi_parse__extract_primary(out, out->line_info_data, &out->line_info_data_count,
+                              RDI_DataSectionTag_LineInfoData);
+    rdi_parse__extract_primary(out, out->line_info_cols, &out->line_info_col_count,
+                              RDI_DataSectionTag_LineInfoColumns);
+
+    rdi_parse__extract_primary(out, out->checksums, &out->checksums_size,
+                              RDI_DataSectionTag_Checksums);
     
     {
       rdi_parse__extract_primary(out, out->name_maps, &out->name_maps_count,
@@ -197,15 +209,6 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
         }
       }
     }
-
-    rdi_parse__extract_primary(out, out->line_info, &out->line_info_count,
-                              RDI_DataSectionTag_LineInfo);
-    rdi_parse__extract_primary(out, out->line_info_voffs, &out->line_info_voff_count,
-                              RDI_DataSectionTag_LineInfoVoffs);
-    rdi_parse__extract_primary(out, out->line_info_data, &out->line_info_data_count,
-                              RDI_DataSectionTag_LineInfoData);
-    rdi_parse__extract_primary(out, out->line_info_cols, &out->line_info_col_count,
-                              RDI_DataSectionTag_LineInfoColumns);
   }
   
 #if !defined(RDI_DISABLE_NILS)
@@ -516,6 +519,40 @@ rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node,
     }
   }
   return(result);
+}
+
+//- checksums
+
+RDI_PROC RDI_U64
+rdi_checksum_from_offset(RDI_Parsed *p, RDI_U64 checksum_offset, RDI_ParsedChecksum *out){
+  RDI_U64 size = 0;
+  if (checksum_offset + sizeof(RDI_Checksum) <= p->checksums_size) {
+    RDI_Checksum *header = (RDI_Checksum *)(p->checksums + checksum_offset);
+    if (checksum_offset + sizeof(RDI_Checksum) + header->size <= p->checksums_size){
+      out->kind = header->kind;
+      out->size = header->size;
+      out->data = (RDI_U8 *)(header + 1);
+      size = sizeof(*header) + header->size;
+    }
+  }
+  return size;
+}
+
+RDI_PROC RDI_U64
+rdi_time_stamp_from_parsed_checksum(RDI_ParsedChecksum parsed_checksum)
+{
+  RDI_U64 time_stamp = 0;
+  if(parsed_checksum.kind == RDI_Checksum_TimeStamp)
+  {
+    switch(parsed_checksum.size)
+    {
+    case 1: time_stamp = *(RDI_U8  *)parsed_checksum.data; break;
+    case 2: time_stamp = *(RDI_U16 *)parsed_checksum.data; break;
+    case 4: time_stamp = *(RDI_U32 *)parsed_checksum.data; break;
+    case 8: time_stamp = *(RDI_U64 *)parsed_checksum.data; break;
+    }
+  }
+  return time_stamp;
 }
 
 //- common helpers
