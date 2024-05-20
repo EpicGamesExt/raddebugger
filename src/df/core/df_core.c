@@ -6198,50 +6198,61 @@ df_push_active_target_list(Arena *arena)
 internal CTRL_Unwind
 df_query_cached_unwind_from_thread(DF_Entity *thread)
 {
+  Temp scratch = scratch_begin(0, 0);
   CTRL_Unwind result = {0};
-  DF_Handle handle = df_handle_from_entity(thread);
-  U64 hash = df_hash_from_string(str8_struct(&handle));
-  for(U64 cache_idx = 0; cache_idx < ArrayCount(df_state->unwind_caches); cache_idx += 1)
   {
-    DF_RunUnwindCache *cache = &df_state->unwind_caches[(df_state->unwind_cache_gen+cache_idx)%ArrayCount(df_state->unwind_caches)];
-    if(cache_idx == 0 && cache->slots_count == 0)
+    DF_Handle handle = df_handle_from_entity(thread);
+    U64 hash = df_hash_from_string(str8_struct(&handle));
+    for(U64 cache_idx = 0; cache_idx < ArrayCount(df_state->unwind_caches); cache_idx += 1)
     {
-      cache->slots_count = 1024;
-      cache->slots = push_array(cache->arena, DF_RunUnwindCacheSlot, cache->slots_count);
-    }
-    else if(cache->slots_count == 0)
-    {
-      break;
-    }
-    U64 slot_idx = hash%cache->slots_count;
-    DF_RunUnwindCacheSlot *slot = &cache->slots[slot_idx];
-    DF_RunUnwindCacheNode *node = 0;
-    for(DF_RunUnwindCacheNode *n = slot->first; n != 0; n = n->hash_next)
-    {
-      if(df_handle_match(n->thread, handle))
+      //- rjf: grab next recent cache
+      DF_RunUnwindCache *cache = &df_state->unwind_caches[(df_state->unwind_cache_gen+cache_idx)%ArrayCount(df_state->unwind_caches)];
+      if(cache_idx == 0 && cache->slots_count == 0)
       {
-        node = n;
+        cache->slots_count = 1024;
+        cache->slots = push_array(cache->arena, DF_RunUnwindCacheSlot, cache->slots_count);
+      }
+      else if(cache->slots_count == 0)
+      {
         break;
       }
-    }
-    if(node != 0)
-    {
-      result = node->unwind;
-      break;
-    }
-    else
-    {
-      result = ctrl_unwind_from_thread(cache->arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
-      if(!(result.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)))
+      
+      //- rjf: thread/hash -> node
+      U64 slot_idx = hash%cache->slots_count;
+      DF_RunUnwindCacheSlot *slot = &cache->slots[slot_idx];
+      DF_RunUnwindCacheNode *node = 0;
+      for(DF_RunUnwindCacheNode *n = slot->first; n != 0; n = n->hash_next)
       {
-        node = push_array(cache->arena, DF_RunUnwindCacheNode, 1);
-        SLLQueuePush_N(slot->first, slot->last, node, hash_next);
-        node->thread = handle;
-        node->unwind = result;
+        if(df_handle_match(n->thread, handle))
+        {
+          node = n;
+          break;
+        }
+      }
+      
+      //- rjf: no node? -> calculate unwind if needed - store if good & return
+      if(node == 0)
+      {
+        CTRL_Unwind current_unwind = ctrl_unwind_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, 0);
+        if(!(current_unwind.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)))
+        {
+          Architecture arch = df_architecture_from_entity(thread);
+          node = push_array(cache->arena, DF_RunUnwindCacheNode, 1);
+          SLLQueuePush_N(slot->first, slot->last, node, hash_next);
+          node->thread = handle;
+          node->unwind = ctrl_unwind_deep_copy(cache->arena, arch, &current_unwind);
+        }
+      }
+      
+      //- rjf: cached node -> grab result & return
+      if(node != 0)
+      {
+        result = node->unwind;
         break;
       }
     }
   }
+  scratch_end(scratch);
   return result;
 }
 

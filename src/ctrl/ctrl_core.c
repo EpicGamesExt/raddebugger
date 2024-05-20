@@ -920,6 +920,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
 {
   U128 result = {0};
   U64 size = dim_1u64(range);
+  U64 pre_mem_gen = dmn_mem_gen();
   if(size != 0) for(;;)
   {
     CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
@@ -932,7 +933,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     
     //- rjf: try to read from cache
     B32 is_good = 0;
-    B32 is_stale = 0;
+    B32 is_stale = 1;
     OS_MutexScopeR(process_stripe->rw_mutex)
     {
       for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
@@ -947,7 +948,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
             {
               result = range_n->hash;
               is_good = 1;
-              is_stale = (range_n->mem_gen != dmn_mem_gen());
+              is_stale = (range_n->mem_gen != pre_mem_gen);
               goto read_cache__break_all;
             }
           }
@@ -1064,6 +1065,11 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     {
       break;
     }
+  }
+  U64 post_mem_gen = dmn_mem_gen();
+  if(post_mem_gen != pre_mem_gen && out_is_stale)
+  {
+    out_is_stale[0] = 1;
   }
   return result;
 }
@@ -1449,6 +1455,27 @@ ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *
 
 ////////////////////////////////
 //~ rjf: Unwinding Functions
+
+//- rjf: unwind deep copier
+
+internal CTRL_Unwind
+ctrl_unwind_deep_copy(Arena *arena, Architecture arch, CTRL_Unwind *src)
+{
+  CTRL_Unwind dst = {0};
+  {
+    dst.flags = src->flags;
+    dst.frames.count = src->frames.count;
+    dst.frames.v = push_array(arena, CTRL_UnwindFrame, dst.frames.count);
+    MemoryCopy(dst.frames.v, src->frames.v, sizeof(dst.frames.v[0])*dst.frames.count);
+    U64 block_size = regs_block_size_from_architecture(arch);
+    for(U64 idx = 0; idx < dst.frames.count; idx += 1)
+    {
+      dst.frames.v[idx].regs = push_array_no_zero(arena, U8, block_size);
+      MemoryCopy(dst.frames.v[idx].regs, src->frames.v[idx].regs, block_size);
+    }
+  }
+  return dst;
+}
 
 //- rjf: [x64]
 
@@ -2480,7 +2507,6 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
-  DBGI_Scope *scope = dbgi_scope_open();
   CTRL_Unwind unwind = {0};
   unwind.flags |= CTRL_UnwindFlag_Error;
   
@@ -2492,13 +2518,13 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   
   //- rjf: grab initial register block
   void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, store, machine_id, thread);
-  B32 regs_block_good = (regs_block != 0);
+  B32 regs_block_good = (arch != Architecture_Null && regs_block != 0);
   
   //- rjf: loop & unwind
   CTRL_UnwindFrameNode *first_frame_node = 0;
   CTRL_UnwindFrameNode *last_frame_node = 0;
   U64 frame_node_count = 0;
-  if(arch != Architecture_Null && regs_block_good)
+  if(regs_block_good)
   {
     unwind.flags = 0;
     for(;;)
@@ -2552,7 +2578,6 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
     }
   }
   
-  dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
   return unwind;
