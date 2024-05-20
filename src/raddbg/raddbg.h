@@ -39,6 +39,7 @@
 //
 // [ ] robustify dbgi layer to renames (cache should not be based only on
 //     path - must invalidate naturally when new filetime occurs)
+// [ ] new fuzzy searching layer
 //
 // [ ] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!

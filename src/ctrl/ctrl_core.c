@@ -481,6 +481,8 @@ ctrl_entity_store_release(CTRL_EntityStore *cache)
   arena_release(cache->arena);
 }
 
+//- rjf: string allocation/deletion
+
 internal U64
 ctrl_name_bucket_idx_from_string_size(U64 size)
 {
@@ -2934,6 +2936,7 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
   U64 pdatas_count = 0;
   U64 entry_point_voff = 0;
   Rng1U64 tls_vaddr_range = {0};
+  String8 builtin_debug_info_path = {0};
   ProfScope("unpack relevant PE info")
   {
     B32 is_valid = 1;
@@ -3067,11 +3070,75 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
       
       // rjf: calculate TLS vaddr range
       tls_vaddr_range = r1u64(tls_header.index_address, tls_header.index_address+sizeof(U32));
+      
+      // rjf: grab data about debug info
+      U32 dbg_time = 0;
+      U32 dbg_age = 0;
+      OS_Guid dbg_guid = {0};
+      if(data_dir_count > PE_DataDirectoryIndex_DEBUG)
+      {
+        // rjf: read data dir
+        PE_DataDirectory dir = {0};
+        dmn_process_read_struct(process, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DEBUG, &dir);
+        
+        // rjf: read debug directory
+        PE_DebugDirectory dbg_data = {0};
+        dmn_process_read_struct(process, vaddr_range.min+(U64)dir.virt_off, &dbg_data);
+        
+        // rjf: extract external file info from codeview header
+        if(dbg_data.type == PE_DebugDirectoryType_CODEVIEW)
+        {
+          U64 dbg_path_off = 0;
+          U64 dbg_path_size = 0;
+          U64 cv_offset = dbg_data.voff;
+          U32 cv_magic = 0;
+          dmn_process_read_struct(process, vaddr_range.min+cv_offset, &cv_magic);
+          switch(cv_magic)
+          {
+            default:break;
+            case PE_CODEVIEW_PDB20_MAGIC:
+            {
+              PE_CvHeaderPDB20 cv = {0};
+              dmn_process_read_struct(process, vaddr_range.min+cv_offset, &cv);
+              dbg_time = cv.time;
+              dbg_age = cv.age;
+              dbg_path_off = cv_offset + sizeof(cv);
+            }break;
+            case PE_CODEVIEW_PDB70_MAGIC:
+            {
+              PE_CvHeaderPDB70 cv = {0};
+              dmn_process_read_struct(process, vaddr_range.min+cv_offset, &cv);
+              dbg_guid = cv.guid;
+              dbg_age = cv.age;
+              dbg_path_off = cv_offset + sizeof(cv);
+            }break;
+          }
+          if(dbg_path_off > 0)
+          {
+            Temp scratch = scratch_begin(0, 0);
+            String8List parts = {0};
+            for(U64 off = dbg_path_off;; off += 256)
+            {
+              U8 bytes[256] = {0};
+              dmn_process_read(process, r1u64(vaddr_range.min+off, vaddr_range.min+off+sizeof(bytes)), bytes);
+              U64 size = cstring8_length(&bytes[0]);
+              String8 part = str8(bytes, size);
+              str8_list_push(scratch.arena, &parts, part);
+              if(size < sizeof(bytes))
+              {
+                break;
+              }
+            }
+            builtin_debug_info_path = str8_list_join(arena, &parts, 0);
+            scratch_end(scratch);
+          }
+        }
+      }
     }
   }
   
   //////////////////////////////
-  //- rjf: insert into cache
+  //- rjf: insert info into cache
   //
   {
     U64 hash = ctrl_hash_from_machine_id_handle(machine_id, module);
@@ -3100,6 +3167,7 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
         node->pdatas = pdatas;
         node->pdatas_count = pdatas_count;
         node->entry_point_voff = entry_point_voff;
+        node->builtin_debug_info_path = builtin_debug_info_path;
       }
     }
   }

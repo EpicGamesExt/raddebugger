@@ -49,6 +49,7 @@ typedef enum CTRL_EntityKind
   CTRL_EntityKind_Thread,
   CTRL_EntityKind_Module,
   CTRL_EntityKind_EntryPoint,
+  CTRL_EntityKind_DebugInfoPath,
   CTRL_EntityKind_COUNT
 }
 CTRL_EntityKind;
@@ -512,6 +513,7 @@ struct CTRL_ModuleImageInfoCacheNode
   U64 pdatas_count;
   U64 entry_point_voff;
   Rng1U64 tls_vaddr_range;
+  String8 builtin_debug_info_path;
 };
 
 typedef struct CTRL_ModuleImageInfoCacheSlot CTRL_ModuleImageInfoCacheSlot;
@@ -679,6 +681,7 @@ internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
 internal void ctrl_entity_store_release(CTRL_EntityStore *store);
 
 //- rjf: string allocation/deletion
+internal U64 ctrl_name_bucket_idx_from_string_size(U64 size);
 internal String8 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string);
 internal void ctrl_entity_string_release(CTRL_EntityStore *store, String8 string);
 

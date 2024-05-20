@@ -39,6 +39,9 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DBGI_H)
   dbgi_init();
 #endif
+#if defined(DI_H)
+  di_init();
+#endif
 #if defined(TXTI_H)
   txti_init();
 #endif
