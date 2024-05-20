@@ -845,6 +845,15 @@ ctrl_init(void)
     ctrl_state->thread_reg_cache.stripes[idx].arena = arena_alloc();
     ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
+  ctrl_state->module_image_info_cache.slots_count = 1024;
+  ctrl_state->module_image_info_cache.slots = push_array(arena, CTRL_ModuleImageInfoCacheSlot, ctrl_state->module_image_info_cache.slots_count);
+  ctrl_state->module_image_info_cache.stripes_count = os_logical_core_count();
+  ctrl_state->module_image_info_cache.stripes = push_array(arena, CTRL_ModuleImageInfoCacheStripe, ctrl_state->module_image_info_cache.stripes_count);
+  for(U64 idx = 0; idx < ctrl_state->module_image_info_cache.stripes_count; idx += 1)
+  {
+    ctrl_state->module_image_info_cache.stripes[idx].arena = arena_alloc();
+    ctrl_state->module_image_info_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
+  }
   ctrl_state->u2c_ring_size = KB(64);
   ctrl_state->u2c_ring_base = push_array_no_zero(arena, U8, ctrl_state->u2c_ring_size);
   ctrl_state->u2c_ring_mutex = os_mutex_alloc();
@@ -1454,6 +1463,78 @@ ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *
 }
 
 ////////////////////////////////
+//~ rjf: Module Image Info Functions
+
+//- rjf: cache lookups
+
+internal PE_IntelPdata *
+ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_MachineID machine_id, DMN_Handle module_handle, U64 voff)
+{
+  PE_IntelPdata *first_pdata = 0;
+  {
+    U64 hash = ctrl_hash_from_machine_id_handle(machine_id, module_handle);
+    U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+    U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+    CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+    CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(n->machine_id == machine_id && dmn_handle_match(n->module, module_handle))
+      {
+        PE_IntelPdata *pdatas = n->pdatas;
+        U64 pdatas_count = n->pdatas_count;
+        if(n->pdatas_count != 0 && voff >= n->pdatas[0].voff_first)
+        {
+          // NOTE(rjf):
+          //
+          // binary search:
+          //  find max index s.t. pdata_array[index].voff_first <= voff
+          //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
+          U64 index = pdatas_count;
+          U64 min = 0;
+          U64 opl = pdatas_count;
+          for(;;)
+          {
+            U64 mid = (min + opl)/2;
+            PE_IntelPdata *pdata = pdatas + mid;
+            if(voff < pdata->voff_first)
+            {
+              opl = mid;
+            }
+            else if(pdata->voff_first < voff)
+            {
+              min = mid;
+            }
+            else
+            {
+              index = mid;
+              break;
+            }
+            if(min + 1 >= opl)
+            {
+              index = min;
+              break;
+            }
+          }
+          
+          // rjf: if we are in range fill result
+          {
+            PE_IntelPdata *pdata = pdatas + index;
+            if(pdata->voff_first <= voff && voff < pdata->voff_one_past_last)
+            {
+              first_pdata = push_array(arena, PE_IntelPdata, 1);
+              MemoryCopyStruct(first_pdata, pdata);
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+  return first_pdata;
+}
+
+////////////////////////////////
 //~ rjf: Unwinding Functions
 
 //- rjf: unwind deep copier
@@ -1521,169 +1602,9 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   U64 rip_voff = regs->rip.u64 - module->vaddr_range.min;
   
   //////////////////////////////
-  //- rjf: unpack relevant PE info
+  //- rjf: rip_voff -> first pdata
   //
-  PE_IntelPdata *pdatas = 0;
-  U64 pdatas_count = 0;
-  ProfScope("unpack relevant PE info") if(module != &ctrl_entity_nil)
-  {
-    B32 is_valid = 1;
-    
-    //- rjf: read DOS header
-    PE_DosHeader dos_header = {0};
-    if(is_valid)
-    {
-      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min, &is_stale, &dos_header, endt_us) ||
-         is_stale ||
-         dos_header.magic != PE_DOS_MAGIC)
-      {
-        is_valid = 0;
-        is_good = 0;
-      }
-    }
-    
-    //- rjf: read PE magic
-    U32 pe_magic = 0;
-    if(is_valid)
-    {
-      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + dos_header.coff_file_offset, &is_stale, &pe_magic, endt_us) ||
-         is_stale ||
-         pe_magic != PE_MAGIC)
-      {
-        is_valid = 0;
-        is_good = 0;
-      }
-    }
-    
-    //- rjf: read COFF header
-    U64 coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
-    COFF_Header coff_header = {0};
-    if(is_valid)
-    {
-      if(!ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + coff_header_off, &is_stale, &coff_header, endt_us) ||
-         is_stale)
-      {
-        is_valid = 0;
-        is_good = 0;
-      }
-    }
-    
-    //- rjf: unpack range of optional extension header
-    U32 opt_ext_size = coff_header.optional_header_size;
-    Rng1U64 opt_ext_off_range = r1u64(coff_header_off + sizeof(coff_header),
-                                      coff_header_off + sizeof(coff_header) + opt_ext_size);
-    
-    //- rjf: read optional header
-    U16 optional_magic = 0;
-    U64 image_base = 0;
-    U64 entry_point = 0;
-    U32 data_dir_count = 0;
-    U64 virt_section_align = 0;
-    U64 file_section_align = 0;
-    Rng1U64 *data_dir_franges = 0;
-    if(opt_ext_size > 0)
-    {
-      // rjf: read magic number
-      U16 opt_ext_magic = 0;
-      ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min, &is_stale, &opt_ext_magic, endt_us);
-      
-      // rjf: read info
-      U32 reported_data_dir_offset = 0;
-      U32 reported_data_dir_count = 0;
-      switch(opt_ext_magic)
-      {
-        case PE_PE32_MAGIC:
-        {
-          PE_OptionalHeader32 pe_optional = {0};
-          ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min, &is_stale, &pe_optional, endt_us);
-          image_base = pe_optional.image_base;
-          entry_point = pe_optional.entry_point_va;
-          virt_section_align = pe_optional.section_alignment;
-          file_section_align = pe_optional.file_alignment;
-          reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count = pe_optional.data_dir_count;
-        }break;
-        case PE_PE32PLUS_MAGIC:
-        {
-          PE_OptionalHeader32Plus pe_optional = {0};
-          ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min, &is_stale, &pe_optional, endt_us);
-          image_base = pe_optional.image_base;
-          entry_point = pe_optional.entry_point_va;
-          virt_section_align = pe_optional.section_alignment;
-          file_section_align = pe_optional.file_alignment;
-          reported_data_dir_offset = sizeof(pe_optional);
-          reported_data_dir_count = pe_optional.data_dir_count;
-        }break;
-      }
-      
-      // rjf: find number of data directories
-      U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
-      data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
-      
-      // rjf: grab pdatas from exceptions section
-      if(data_dir_count > PE_DataDirectoryIndex_EXCEPTIONS)
-      {
-        PE_DataDirectory dir = {0};
-        ctrl_read_cached_process_memory_struct(machine_id, process->handle, module->vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &is_stale, &dir, endt_us);
-        Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-        pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
-        pdatas = push_array(scratch.arena, PE_IntelPdata, pdatas_count);
-        ctrl_read_cached_process_memory(machine_id, process->handle, r1u64(module->vaddr_range.min + pdatas_voff_range.min, module->vaddr_range.min + pdatas_voff_range.max), &is_stale, pdatas, endt_us);
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: find current rip's pdata entry
-  //
-  PE_IntelPdata *first_pdata = 0;
-  if(pdatas_count != 0) ProfScope("find current RIP's pdata entry")
-  {
-    U64 first_pdata_voff = 0;
-    if(rip_voff >= pdatas[0].voff_first)
-    {
-      // NOTE(rjf):
-      //
-      // binary search:
-      //  find max index s.t. pdata_array[index].voff_first <= voff
-      //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
-      U64 index = pdatas_count;
-      U64 min = 0;
-      U64 opl = pdatas_count;
-      for(;;)
-      {
-        U64 mid = (min + opl)/2;
-        PE_IntelPdata *pdata = pdatas + mid;
-        if(rip_voff < pdata->voff_first)
-        {
-          opl = mid;
-        }
-        else if(pdata->voff_first < rip_voff)
-        {
-          min = mid;
-        }
-        else
-        {
-          index = mid;
-          break;
-        }
-        if(min + 1 >= opl)
-        {
-          index = min;
-          break;
-        }
-      }
-      
-      // rjf: if we are in range fill result
-      {
-        PE_IntelPdata *pdata = pdatas + index;
-        if(pdata->voff_first <= rip_voff && rip_voff < pdata->voff_one_past_last)
-        {
-          first_pdata = pdata;
-        }
-      }
-    }
-  }
+  PE_IntelPdata *first_pdata = ctrl_intel_pdata_from_module_voff(scratch.arena, machine_id, module_handle, rip_voff);
   
   //////////////////////////////
   //- rjf: pdata -> detect if in epilog
@@ -2955,6 +2876,195 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID 
   }
 }
 
+//- rjf: module lifetime open/close work
+
+internal void
+ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path)
+{
+  //////////////////////////////
+  //- rjf: open debug info
+  //
+  dbgi_binary_open(path);
+  
+  //////////////////////////////
+  //- rjf: parse module image info
+  //
+  Arena *arena = arena_alloc();
+  PE_IntelPdata *pdatas = 0;
+  U64 pdatas_count = 0;
+  ProfScope("unpack relevant PE info")
+  {
+    B32 is_valid = 1;
+    
+    //- rjf: read DOS header
+    PE_DosHeader dos_header = {0};
+    if(is_valid)
+    {
+      if(!dmn_process_read_struct(process, vaddr_range.min, &dos_header) ||
+         dos_header.magic != PE_DOS_MAGIC)
+      {
+        is_valid = 0;
+      }
+    }
+    
+    //- rjf: read PE magic
+    U32 pe_magic = 0;
+    if(is_valid)
+    {
+      if(!dmn_process_read_struct(process, vaddr_range.min + dos_header.coff_file_offset, &pe_magic) ||
+         pe_magic != PE_MAGIC)
+      {
+        is_valid = 0;
+      }
+    }
+    
+    //- rjf: read COFF header
+    U64 coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+    COFF_Header coff_header = {0};
+    if(is_valid)
+    {
+      if(!dmn_process_read_struct(process, vaddr_range.min + coff_header_off, &coff_header))
+      {
+        is_valid = 0;
+      }
+    }
+    
+    //- rjf: unpack range of optional extension header
+    U32 opt_ext_size = coff_header.optional_header_size;
+    Rng1U64 opt_ext_off_range = r1u64(coff_header_off + sizeof(coff_header),
+                                      coff_header_off + sizeof(coff_header) + opt_ext_size);
+    
+    //- rjf: read optional header
+    U16 optional_magic = 0;
+    U64 image_base = 0;
+    U64 entry_point = 0;
+    U32 data_dir_count = 0;
+    U64 virt_section_align = 0;
+    U64 file_section_align = 0;
+    Rng1U64 *data_dir_franges = 0;
+    if(opt_ext_size > 0)
+    {
+      // rjf: read magic number
+      U16 opt_ext_magic = 0;
+      dmn_process_read_struct(process, vaddr_range.min + opt_ext_off_range.min, &opt_ext_magic);
+      
+      // rjf: read info
+      U32 reported_data_dir_offset = 0;
+      U32 reported_data_dir_count = 0;
+      switch(opt_ext_magic)
+      {
+        case PE_PE32_MAGIC:
+        {
+          PE_OptionalHeader32 pe_optional = {0};
+          dmn_process_read_struct(process, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
+          image_base = pe_optional.image_base;
+          entry_point = pe_optional.entry_point_va;
+          virt_section_align = pe_optional.section_alignment;
+          file_section_align = pe_optional.file_alignment;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count = pe_optional.data_dir_count;
+        }break;
+        case PE_PE32PLUS_MAGIC:
+        {
+          PE_OptionalHeader32Plus pe_optional = {0};
+          dmn_process_read_struct(process, vaddr_range.min + opt_ext_off_range.min, &pe_optional);
+          image_base = pe_optional.image_base;
+          entry_point = pe_optional.entry_point_va;
+          virt_section_align = pe_optional.section_alignment;
+          file_section_align = pe_optional.file_alignment;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count = pe_optional.data_dir_count;
+        }break;
+      }
+      
+      // rjf: find number of data directories
+      U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
+      data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
+      
+      // rjf: grab pdatas from exceptions section
+      if(data_dir_count > PE_DataDirectoryIndex_EXCEPTIONS)
+      {
+        PE_DataDirectory dir = {0};
+        dmn_process_read_struct(process, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &dir);
+        Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
+        pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
+        pdatas = push_array(arena, PE_IntelPdata, pdatas_count);
+        dmn_process_read(process, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), pdatas);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: insert into cache
+  //
+  {
+    U64 hash = ctrl_hash_from_machine_id_handle(machine_id, module);
+    U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+    U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+    CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+    CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    OS_MutexScopeW(stripe->rw_mutex)
+    {
+      CTRL_ModuleImageInfoCacheNode *node = 0;
+      for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(n->machine_id == machine_id && dmn_handle_match(n->module, module))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(!node)
+      {
+        node = push_array(arena, CTRL_ModuleImageInfoCacheNode, 1);
+        DLLPushBack(slot->first, slot->last, node);
+        node->machine_id = machine_id;
+        node->module = module;
+        node->arena = arena;
+        node->pdatas = pdatas;
+        node->pdatas_count = pdatas_count;
+      }
+    }
+  }
+}
+
+internal void
+ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 path)
+{
+  //////////////////////////////
+  //- rjf: evict module image info from cache
+  //
+  {
+    U64 hash = ctrl_hash_from_machine_id_handle(machine_id, module);
+    U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+    U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+    CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+    CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    OS_MutexScopeW(stripe->rw_mutex)
+    {
+      CTRL_ModuleImageInfoCacheNode *node = 0;
+      for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(n->machine_id == machine_id && dmn_handle_match(n->module, module))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(node)
+      {
+        DLLRemove(slot->first, slot->last, node);
+        arena_release(node->arena);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: close debug info
+  //
+  dbgi_binary_close(path);
+}
+
 //- rjf: attached process running/event gathering
 
 internal DMN_Event *
@@ -3220,7 +3330,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       String8 module_path = event->string;
-      dbgi_binary_open(module_path);
+      ctrl_thread__module_open(CTRL_MachineID_Local, event->process, event->module, r1u64(event->address, event->address+event->size), module_path);
       out_evt->kind       = CTRL_EventKind_NewModule;
       out_evt->msg_id     = msg->msg_id;
       out_evt->machine_id = CTRL_MachineID_Local;
@@ -3255,7 +3365,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       String8 module_path = event->string;
-      dbgi_binary_close(module_path);
+      ctrl_thread__module_close(CTRL_MachineID_Local, event->module, module_path);
       out_evt->kind       = CTRL_EventKind_EndModule;
       out_evt->msg_id     = msg->msg_id;
       out_evt->machine_id = CTRL_MachineID_Local;

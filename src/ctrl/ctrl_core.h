@@ -498,6 +498,44 @@ struct CTRL_ThreadRegCache
 };
 
 ////////////////////////////////
+//~ rjf: Module Image Info Cache Types
+
+typedef struct CTRL_ModuleImageInfoCacheNode CTRL_ModuleImageInfoCacheNode;
+struct CTRL_ModuleImageInfoCacheNode
+{
+  CTRL_ModuleImageInfoCacheNode *next;
+  CTRL_ModuleImageInfoCacheNode *prev;
+  CTRL_MachineID machine_id;
+  DMN_Handle module;
+  Arena *arena;
+  PE_IntelPdata *pdatas;
+  U64 pdatas_count;
+};
+
+typedef struct CTRL_ModuleImageInfoCacheSlot CTRL_ModuleImageInfoCacheSlot;
+struct CTRL_ModuleImageInfoCacheSlot
+{
+  CTRL_ModuleImageInfoCacheNode *first;
+  CTRL_ModuleImageInfoCacheNode *last;
+};
+
+typedef struct CTRL_ModuleImageInfoCacheStripe CTRL_ModuleImageInfoCacheStripe;
+struct CTRL_ModuleImageInfoCacheStripe
+{
+  Arena *arena;
+  OS_Handle rw_mutex;
+};
+
+typedef struct CTRL_ModuleImageInfoCache CTRL_ModuleImageInfoCache;
+struct CTRL_ModuleImageInfoCache
+{
+  U64 slots_count;
+  CTRL_ModuleImageInfoCacheSlot *slots;
+  U64 stripes_count;
+  CTRL_ModuleImageInfoCacheStripe *stripes;
+};
+
+////////////////////////////////
 //~ rjf: Wakeup Hook Function Types
 
 #define CTRL_WAKEUP_FUNCTION_DEF(name) void name(void)
@@ -519,6 +557,7 @@ struct CTRL_State
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
   CTRL_ThreadRegCache thread_reg_cache;
+  CTRL_ModuleImageInfoCache module_image_info_cache;
   
   // rjf: user -> ctrl msg ring buffer
   U64 u2c_ring_size;
@@ -695,6 +734,12 @@ internal U64 ctrl_query_cached_rip_from_thread(CTRL_EntityStore *store, CTRL_Mac
 internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle thread, void *block);
 
 ////////////////////////////////
+//~ rjf: Module Image Info Functions
+
+//- rjf: cache lookups
+internal PE_IntelPdata *ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_MachineID machine_id, DMN_Handle module_handle, U64 voff);
+
+////////////////////////////////
 //~ rjf: Unwinding Functions
 
 //- rjf: unwind deep copier
@@ -744,6 +789,10 @@ internal void ctrl_thread__entry_point(void *p);
 //- rjf: breakpoint resolution
 internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
+
+//- rjf: module lifetime open/close work
+internal void ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path);
+internal void ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 path);
 
 //- rjf: attached process running/event gathering
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);

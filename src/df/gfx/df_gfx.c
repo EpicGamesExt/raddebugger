@@ -10059,13 +10059,12 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     ui_set_next_background_color(bg_color);
   }
   ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-  UI_Key key = ui_key_from_stringf(ui_top_parent()->key, "entity_ref_button_%p", entity);
-  UI_Box *box = ui_build_box_from_key(UI_BoxFlag_Clickable|
-                                      UI_BoxFlag_DrawBorder|
-                                      UI_BoxFlag_DrawBackground|
-                                      UI_BoxFlag_DrawHotEffects|
-                                      UI_BoxFlag_DrawActiveEffects,
-                                      key);
+  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                          UI_BoxFlag_DrawBorder|
+                                          UI_BoxFlag_DrawBackground|
+                                          UI_BoxFlag_DrawHotEffects|
+                                          UI_BoxFlag_DrawActiveEffects,
+                                          "entity_ref_button_%p", entity);
   
   //- rjf: build contents
   UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 0))
