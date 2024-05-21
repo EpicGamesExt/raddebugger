@@ -42,6 +42,9 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DI_H)
   di_init();
 #endif
+#if defined(FUZZY_SEARCH_H)
+  fzy_init();
+#endif
 #if defined(TXTI_H)
   txti_init();
 #endif

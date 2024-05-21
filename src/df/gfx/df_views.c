@@ -543,7 +543,7 @@ df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint p
 //- rjf: windowed watch tree visualization (both single-line and multi-line)
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_WatchViewState *ews)
+df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_WatchViewState *ews)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -551,7 +551,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ews);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   String8 filter = str8(view->query_buffer, view->query_string_size);
-  DBGI_FuzzySearchTarget dbgi_target = DBGI_FuzzySearchTarget_UDTs;
+  FZY_Target fzy_target = FZY_Target_UDTs;
   switch(ews->fill_kind)
   {
     ////////////////////////////
@@ -635,10 +635,10 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
     ////////////////////////////
     //- rjf: debug info table fill -> build split debug info table blocks
     //
-    case DF_WatchViewFillKind_Globals:      dbgi_target = DBGI_FuzzySearchTarget_GlobalVariables; goto dbgi_table;
-    case DF_WatchViewFillKind_ThreadLocals: dbgi_target = DBGI_FuzzySearchTarget_ThreadVariables; goto dbgi_table;
-    case DF_WatchViewFillKind_Types:        dbgi_target = DBGI_FuzzySearchTarget_UDTs;            goto dbgi_table;
-    case DF_WatchViewFillKind_Procedures:   dbgi_target = DBGI_FuzzySearchTarget_Procedures;      goto dbgi_table;
+    case DF_WatchViewFillKind_Globals:      fzy_target = FZY_Target_GlobalVariables; goto dbgi_table;
+    case DF_WatchViewFillKind_ThreadLocals: fzy_target = FZY_Target_ThreadVariables; goto dbgi_table;
+    case DF_WatchViewFillKind_Types:        fzy_target = FZY_Target_UDTs;            goto dbgi_table;
+    case DF_WatchViewFillKind_Procedures:   fzy_target = FZY_Target_Procedures;      goto dbgi_table;
     dbgi_table:;
     {
       //- rjf: unpack context
@@ -646,10 +646,8 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
       U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
       DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
-      DF_Entity *binary = df_binary_file_from_module(module);
-      String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
-      DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
-      RDI_Parsed *rdi = &dbgi->rdi;
+      DF_Entity *dbgi = df_dbgi_from_module(module);
+      RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
       
       //- rjf: calculate top-level keys, expand root-level, grab root expansion node
       DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
@@ -660,7 +658,8 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       //- rjf: query all filtered items from dbgi searching system
       U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
       B32 items_stale = 0;
-      DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, dbgi_target, os_now_microseconds()+100, &items_stale);
+      // TODO(rjf)
+      FZY_ItemArray items = {0}; // dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, filter, dbgi_target, os_now_microseconds()+100, &items_stale);
       if(items_stale)
       {
         df_gfx_request_frame();
@@ -691,7 +690,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         U64 idx = 0;
         for(DF_ExpandNode *child = root_node->first; child != 0; child = child->next)
         {
-          U64 item_num = dbgi_fuzzy_item_num_from_array_element_idx__linear_search(&items, child->key.child_num);
+          U64 item_num = fzy_item_num_from_array_element_idx__linear_search(&items, child->key.child_num);
           if(item_num != 0)
           {
             sub_expand_keys[idx] = child->key;
@@ -731,8 +730,8 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
       DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_DebugInfoTable, parent_key, root_key, 0);
       {
         last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, items.count);
-        last_vb->dbgi_target = dbgi_target;
-        last_vb->backing_search_items = items;
+        last_vb->fzy_target = fzy_target;
+        last_vb->fzy_backing_items = items;
       }
       for(U64 sub_expand_idx = 0; sub_expand_idx < sub_expand_keys_count; sub_expand_idx += 1)
       {
@@ -740,7 +739,8 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DBGI_Scope *scope, DF
         last_vb = df_eval_viz_block_split_and_continue(arena, &blocks, last_vb, sub_expand_item_idxs[sub_expand_idx]);
         
         // rjf: grab name for the expanded row
-        String8 name = dbgi_fuzzy_item_string_from_rdi_target_element_idx(&dbgi->rdi, dbgi_target, sub_expand_keys[sub_expand_idx].child_num);
+        // TODO(rjf)
+        String8 name = {0}; // dbgi_fuzzy_item_string_from_rdi_target_element_idx(&dbgi->rdi, dbgi_target, sub_expand_keys[sub_expand_idx].child_num);
         
         // rjf: recurse for sub-expansion
         {
@@ -817,7 +817,7 @@ internal void
 df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect)
 {
   ProfBeginFunction();
-  DBGI_Scope *scope = dbgi_scope_open();
+  DI_Scope *scope = di_scope_open();
   Temp scratch = scratch_begin(0, 0);
   
   //////////////////////////////
@@ -2035,7 +2035,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   }
   
   scratch_end(scratch);
-  dbgi_scope_close(scope);
+  di_scope_close(scope);
   ProfEnd();
 }
 
@@ -3228,15 +3228,15 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
+  DI_Scope *scope = di_scope_open();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
   DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_rip_vaddr);
-  DF_Entity *binary = df_binary_file_from_module(module);
-  String8 exe_path = df_full_path_from_entity(scratch.arena, binary);
+  DF_Entity *dbgi = df_dbgi_from_module(module);
+  RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
   String8 query = str8(view->query_buffer, view->query_string_size);
   TG_Graph *graph = tg_graph_begin(bit_size_from_arch(df_architecture_from_entity(thread))/8, 256);
   
@@ -3250,10 +3250,9 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   
   //- rjf: query -> raddbg, filtered items
   U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
-  DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, os_now_microseconds()+100);
-  RDI_Parsed *rdi = &dbgi->rdi;
   B32 items_stale = 0;
-  DBGI_FuzzySearchItemArray items = dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, query, DBGI_FuzzySearchTarget_Procedures, os_now_microseconds()+100, &items_stale);
+  // TODO(rjf)
+  FZY_ItemArray items = {0}; // dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, query, DBGI_FuzzySearchTarget_Procedures, os_now_microseconds()+100, &items_stale);
   if(items_stale)
   {
     df_gfx_request_frame();
@@ -3304,7 +3303,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         idx += 1)
       UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
-      DBGI_FuzzySearchItem *item = &items.v[idx];
+      FZY_Item *item = &items.v[idx];
       RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, item->idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
@@ -3339,8 +3338,8 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
-        U64 binary_voff = df_voff_from_binary_symbol_name(binary, name);
-        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_binary_voff(binary, binary_voff);
+        U64 binary_voff = df_voff_from_dbgi_symbol_name(dbgi, name);
+        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, binary_voff);
         String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
         S64 line_num = dasm2src_info.pt.line;
         df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
@@ -3360,7 +3359,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
     }
   }
   
-  dbgi_scope_close(scope);
+  di_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -4520,7 +4519,6 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
   String8 query = str8(view->query_buffer, view->query_string_size);
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   
@@ -4735,8 +4733,8 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
               U64 rip_vaddr = df_query_cached_rip_from_thread(entity);
               DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
               U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-              DF_Entity *binary = df_binary_file_from_module(module);
-              DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_binary_voff(binary, rip_voff);
+              DF_Entity *dbgi = df_dbgi_from_module(module);
+              DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, rip_voff);
               if(!df_entity_is_nil(line_info.file))
               {
                 UI_PrefWidth(ui_children_sum(0)) df_entity_src_loc_button(ws, line_info.file, line_info.pt);
@@ -4753,7 +4751,6 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   sv->selected_column = cursor.x;
   sv->selected_entity = (1 <= cursor.y && cursor.y <= items.count) ? df_handle_from_entity(items.v[cursor.y-1].entity) : df_handle_zero();
   
-  dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -5029,7 +5026,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Modules)
         {
           String8 exe_path = module->name;
           String8 dbg_path = pick_string;
-          dbgi_force_exe_path_dbg_path(exe_path, dbg_path);
+          // TODO(rjf)
         }
         scratch_end(scratch);
       }break;
@@ -5041,7 +5038,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
+  DI_Scope *scope = di_scope_open();
   String8 query = str8(view->query_buffer, view->query_string_size);
   
   //- rjf: get state
@@ -5208,16 +5205,17 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
               B32 brw_is_selected = (row_is_selected && cursor.x == 3);
               
               // rjf: unpack module info
-              DF_Entity *binary = df_binary_file_from_module(entity);
-              DBGI_Parse *dbgi = df_dbgi_parse_from_binary_file(scope, binary);
-              B32 dbgi_is_valid = (dbgi->dbg_props.modified != 0);
+              DF_Entity *dbgi = df_dbgi_from_module(entity);
+              String8 dbgi_path = df_full_path_from_entity(scratch.arena, dbgi);
+              RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+              B32 dbgi_is_valid = (rdi != &di_rdi_parsed_nil);
               
               // rjf: begin editing
               if(txt_is_selected && edit_begin)
               {
                 mv->txt_editing = 1;
-                mv->txt_size = Min(sizeof(mv->txt_buffer), dbgi->dbg_path.size);
-                MemoryCopy(mv->txt_buffer, dbgi->dbg_path.str, mv->txt_size);
+                mv->txt_size = Min(sizeof(mv->txt_buffer), dbgi_path.size);
+                MemoryCopy(mv->txt_buffer, dbgi_path.str, mv->txt_size);
                 mv->txt_cursor = txt_pt(1, 1+mv->txt_size);
                 mv->txt_mark = txt_pt(1, 1);
               }
@@ -5229,7 +5227,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
                 UI_WidthFill
               {
                 UI_TextColor(!dbgi_is_valid ? df_rgba_from_theme_color(DF_ThemeColor_FailureBackground) : ui_top_text_color())
-                  sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &mv->txt_cursor, &mv->txt_mark, mv->txt_buffer, sizeof(mv->txt_buffer), &mv->txt_size, 0, dbgi->dbg_path, "###dbg_path_%p", entity);
+                  sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &mv->txt_cursor, &mv->txt_mark, mv->txt_buffer, sizeof(mv->txt_buffer), &mv->txt_size, 0, dbgi_path, "###dbg_path_%p", entity);
                 edit_commit = (edit_commit || ui_committed(sig));
               }
               
@@ -5247,8 +5245,8 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
               {
                 ui_kill_action();
                 mv->txt_editing = 1;
-                mv->txt_size = Min(sizeof(mv->txt_buffer), dbgi->dbg_path.size);
-                MemoryCopy(mv->txt_buffer, dbgi->dbg_path.str, mv->txt_size);
+                mv->txt_size = Min(sizeof(mv->txt_buffer), dbgi_path.size);
+                MemoryCopy(mv->txt_buffer, dbgi_path.str, mv->txt_size);
                 mv->txt_cursor = txt_pt(1, 1+mv->txt_size);
                 mv->txt_mark = txt_pt(1, 1);
               }
@@ -5287,7 +5285,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
     {
       String8 exe_path = commit_module->name;
       String8 dbg_path = str8(mv->txt_buffer, mv->txt_size);
-      dbgi_force_exe_path_dbg_path(exe_path, dbg_path);
+      // TODO(rjf)
     }
     if(edit_submit)
     {
@@ -5305,7 +5303,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
   mv->selected_column = cursor.x;
   mv->selected_entity = (1 <= cursor.y && cursor.y <= items.count) ? df_handle_from_entity(items.v[cursor.y-1].entity) : df_handle_zero();
   
-  dbgi_scope_close(scope);
+  di_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -5539,8 +5537,8 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
           if(src2dasm_list->first != 0)
           {
             Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-            DF_Entity *binary = src2dasm_list->first->v.binary;
-            DF_EntityList possible_modules = df_modules_from_binary_file(scratch.arena, binary);
+            DF_Entity *dbgi = src2dasm_list->first->v.dbgi;
+            DF_EntityList possible_modules = df_modules_from_dbgi(scratch.arena, dbgi);
             DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
             U64 thread_dst_voff = voff_rng.min;
             if(!df_entity_is_nil(thread_dst_module) && thread_dst_voff != 0)
@@ -5665,7 +5663,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
-  DBGI_Scope *dbgi_scope = dbgi_scope_open();
+  DI_Scope *di_scope = di_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
   DF_CodeViewState *tv = df_view_user_state(view, DF_CodeViewState);
   
@@ -5692,7 +5690,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   U64 unwind_count = ctrl_ctx.unwind_count;
   U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(dbgi_scope, process, rip_vaddr);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, process, rip_vaddr);
   
   //////////////////////////////
   //- rjf: unpack file/text entity info
@@ -5842,8 +5840,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         DF_Entity *module = df_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
         U64 rip_voff = df_voff_from_vaddr(module, last_inst_on_unwound_rip_vaddr);
-        DF_Entity *binary = df_binary_file_from_module(module);
-        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_binary_voff(binary, rip_voff);
+        DF_Entity *dbgi = df_dbgi_from_module(module);
+        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, rip_voff);
         if(dasm2src_info.file == entity && visible_line_num_range.min <= dasm2src_info.pt.line && dasm2src_info.pt.line <= visible_line_num_range.max)
         {
           U64 slice_line_idx = dasm2src_info.pt.line-visible_line_num_range.min;
@@ -5874,7 +5872,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         MemoryCopy(code_slice_params.line_src2dasm, src2dasm.v, sizeof(DF_TextLineSrc2DasmInfoList)*src2dasm.count);
       }
-      code_slice_params.relevant_binaries = src2dasm.binaries;
+      code_slice_params.relevant_dbgis = src2dasm.dbgis;
     }
   }
   
@@ -6118,7 +6116,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       String8 expr = txt_string_from_info_data_txt_rng(&text_info, data, expr_rng);
       if(expr.size != 0)
       {
-        DF_Eval eval = df_eval_from_string(scratch.arena, dbgi_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
+        DF_Eval eval = df_eval_from_string(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
         if(eval.mode != EVAL_EvalMode_NULL)
         {
           df_set_hover_eval(ws, sig.mouse_expr_baseline_pos, ctrl_ctx, entity, sig.mouse_pt, 0, expr);
@@ -6190,8 +6188,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
           if(src2dasm_list->first != 0)
           {
             Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-            DF_Entity *binary = src2dasm_list->first->v.binary;
-            DF_EntityList possible_modules = df_modules_from_binary_file(scratch.arena, binary);
+            DF_Entity *dbgi = src2dasm_list->first->v.dbgi;
+            DF_EntityList possible_modules = df_modules_from_dbgi(scratch.arena, dbgi);
             DF_Entity *thread_dst_module = df_module_from_thread_candidates(dropped_entity, &possible_modules);
             U64 thread_dst_voff = voff_rng.min;
             if(!df_entity_is_nil(thread_dst_module) && thread_dst_voff != 0)
@@ -6247,8 +6245,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       if(src2dasm_list->first != 0)
       {
         Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-        DF_Entity *binary = src2dasm_list->first->v.binary;
-        DF_EntityList possible_modules = df_modules_from_binary_file(scratch.arena, binary);
+        DF_Entity *dbgi = src2dasm_list->first->v.dbgi;
+        DF_EntityList possible_modules = df_modules_from_dbgi(scratch.arena, dbgi);
         DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
         DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -6406,20 +6404,19 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: determine up-to-dateness of source file
   //
   B32 file_is_out_of_date = 0;
-  String8 out_of_date_binary_name = {0};
-  for(DF_EntityNode *n = code_slice_params.relevant_binaries.first; n != 0; n = n->next)
+  String8 out_of_date_dbgi_name = {0};
+  for(DF_EntityNode *n = code_slice_params.relevant_dbgis.first; n != 0; n = n->next)
   {
-    DF_Entity *binary = n->entity;
-    if(!df_entity_is_nil(binary))
+    DF_Entity *dbgi = n->entity;
+    if(!df_entity_is_nil(dbgi))
     {
       String8 full_path = df_full_path_from_entity(scratch.arena, entity);
       TXTI_Handle handle = txti_handle_from_path(full_path);
       TXTI_BufferInfo info = txti_buffer_info_from_handle(scratch.arena, handle);
-      DBGI_Parse *parse = df_dbgi_parse_from_binary_file(dbgi_scope, binary);
-      if(parse->exe_props.modified < info.timestamp)
+      if(dbgi->timestamp < info.timestamp)
       {
         file_is_out_of_date = 1;
-        out_of_date_binary_name = binary->name;
+        out_of_date_dbgi_name = dbgi->name;
         break;
       }
     }
@@ -6457,9 +6454,9 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         {
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
           {
-            ui_labelf("This file has changed since ", out_of_date_binary_name);
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_Highlight0)) ui_label(out_of_date_binary_name);
-            ui_labelf(" was built.");
+            ui_labelf("This file has changed since ", out_of_date_dbgi_name);
+            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_Highlight0)) ui_label(out_of_date_dbgi_name);
+            ui_labelf(" was produced.");
           }
         }
       }
@@ -6479,7 +6476,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   }
   
   txt_scope_close(txt_scope);
-  dbgi_scope_close(dbgi_scope);
+  di_scope_close(di_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
@@ -6521,8 +6518,8 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   DF_Entity *process = df_entity_from_handle(dv->process);
   Architecture arch = df_architecture_from_entity(process);
   U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
-  DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
-  DF_Entity *dasm_binary = df_binary_file_from_module(dasm_module);
+  DF_Entity *dasm_module = df_module_from_process_vaddr(process, dasm_base_vaddr);
+  DF_Entity *dasm_dbgi = df_dbgi_from_module(dasm_module);
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
@@ -6533,7 +6530,8 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
     dasm_params.style_flags = dv->style_flags;
     dasm_params.syntax = DASM_Syntax_Intel;
     dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
-    dasm_params.exe_path = df_full_path_from_entity(scratch.arena, dasm_binary);
+    dasm_params.dbg_path = df_full_path_from_entity(scratch.arena, dasm_dbgi);
+    dasm_params.dbg_timestamp = dasm_dbgi->timestamp;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   U128 dasm_text_hash = {0};
@@ -6732,7 +6730,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   HS_Scope *hs_scope = hs_scope_open();
   DASM_Scope *dasm_scope = dasm_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
-  DBGI_Scope *dbgi_scope = dbgi_scope_open();
+  DI_Scope *di_scope = di_scope_open();
   DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
   
   //////////////////////////////
@@ -6757,7 +6755,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   DF_Entity *selected_process = df_entity_ancestor_from_kind(selected_thread, DF_EntityKind_Process);
   U64 unwind_count = ctrl_ctx.unwind_count;
   U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(selected_thread, unwind_count);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(dbgi_scope, selected_process, rip_vaddr);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, selected_process, rip_vaddr);
   
   //////////////////////////////
   //- rjf: no disasm process open? -> snap to selected thread
@@ -6776,7 +6774,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   Architecture arch = df_architecture_from_entity(process);
   U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
   DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
-  DF_Entity *dasm_binary = df_binary_file_from_module(dasm_module);
+  DF_Entity *dasm_dbgi = df_dbgi_from_module(dasm_module);
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
@@ -6787,7 +6785,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     dasm_params.style_flags = dv->style_flags;
     dasm_params.syntax = DASM_Syntax_Intel;
     dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
-    dasm_params.exe_path = df_full_path_from_entity(scratch.arena, dasm_binary);
+    dasm_params.dbg_path = df_full_path_from_entity(scratch.arena, dasm_dbgi);
+    dasm_params.dbg_timestamp = dasm_dbgi->timestamp;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   U128 dasm_text_hash = {0};
@@ -6800,7 +6799,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //- rjf: unpack module info for this region
   //
   DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-  DF_Entity *binary = df_binary_file_from_module(module);
+  DF_Entity *dbgi = df_dbgi_from_module(module);
   
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
@@ -6889,7 +6888,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     {
       code_slice_params.margin_float_off_px = 0;
     }
-    df_entity_list_push(scratch.arena, &code_slice_params.relevant_binaries, binary);
+    df_entity_list_push(scratch.arena, &code_slice_params.relevant_dbgis, dbgi);
     
     // rjf: fill text info
     {
@@ -6971,7 +6970,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     // rjf: fill dasm -> src info
     {
       DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      DF_Entity *binary = df_binary_file_from_module(module);
+      DF_Entity *dbgi = df_dbgi_from_module(module);
       for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
       {
         U64 vaddr = dasm_vaddr_range.min + dasm_inst_array_code_off_from_idx(&dasm_info.insts, line_num-1);
@@ -6980,7 +6979,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         DF_TextLineDasm2SrcInfoNode *dasm2src_n = push_array(scratch.arena, DF_TextLineDasm2SrcInfoNode, 1);
         SLLQueuePush(code_slice_params.line_dasm2src[slice_idx].first, code_slice_params.line_dasm2src[slice_idx].last, dasm2src_n);
         code_slice_params.line_dasm2src[slice_idx].count += 1;
-        dasm2src_n->v = df_text_line_dasm2src_info_from_binary_voff(binary, voff);
+        dasm2src_n->v = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, voff);
       }
     }
   }
@@ -7050,7 +7049,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       String8 expr = str8_substr(code_slice_params.line_text[line_idx], r1u64(sig.mouse_expr_rng.min.column-1, sig.mouse_expr_rng.max.column-1));
       if(expr.size != 0)
       {
-        DF_Eval eval = df_eval_from_string(scratch.arena, dbgi_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
+        DF_Eval eval = df_eval_from_string(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
         if(eval.mode != EVAL_EvalMode_NULL)
         {
           U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.mouse_expr_rng.min.line-1);
@@ -7150,9 +7149,9 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     {
       U64 vaddr = dasm_vaddr_range.min+dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.goto_src_line_num-1);
       DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-      DF_Entity *binary = df_binary_file_from_module(module);
+      DF_Entity *dbgi = df_dbgi_from_module(module);
       U64 voff = df_voff_from_vaddr(module, vaddr);
-      DF_TextLineDasm2SrcInfo dasm2src = df_text_line_dasm2src_info_from_binary_voff(binary, voff);
+      DF_TextLineDasm2SrcInfo dasm2src = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, voff);
       String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src.file);
       DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.text_point = dasm2src.pt;
@@ -7326,7 +7325,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     }
   }
   
-  dbgi_scope_close(dbgi_scope);
+  di_scope_close(di_scope);
   txt_scope_close(txt_scope);
   dasm_scope_close(dasm_scope);
   hs_scope_close(hs_scope);
@@ -7598,7 +7597,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
+  DI_Scope *scope = di_scope_open();
   DF_CodeViewState *tv = df_view_user_state(view, DF_CodeViewState);
   
   //////////////////////////////
@@ -8119,7 +8118,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     }
   }
   
-  dbgi_scope_close(scope);
+  di_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -8492,9 +8491,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         {
           U64 f_rip = regs_rip_from_arch_block(thread->arch, f->regs);
           DF_Entity *module = df_module_from_process_vaddr(process, f_rip);
-          DF_Entity *binary = df_binary_file_from_module(module);
+          DF_Entity *dbgi = df_dbgi_from_module(module);
           U64 rip_voff = df_voff_from_vaddr(module, f_rip);
-          String8 symbol_name = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
+          String8 symbol_name = df_symbol_name_from_dbgi_voff(scratch.arena, dbgi, rip_voff);
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");
@@ -8544,7 +8543,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         df_rgba_from_theme_color(DF_ThemeColor_Thread6),
         df_rgba_from_theme_color(DF_ThemeColor_Thread7),
       };
-      DBGI_Scope *scope = dbgi_scope_open();
+      DI_Scope *scope = di_scope_open();
       U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
       EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_rip_vaddr);
       RDI_Parsed *rdi = parse_ctx.rdi;
@@ -8575,7 +8574,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
           }
         }
       }
-      dbgi_scope_close(scope);
+      di_scope_close(scope);
     }
   }
   

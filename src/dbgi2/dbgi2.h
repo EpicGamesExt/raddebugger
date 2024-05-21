@@ -5,6 +5,41 @@
 #define DI_H
 
 ////////////////////////////////
+//~ rjf: Event Types
+
+typedef enum DI_EventKind
+{
+  DI_EventKind_Null,
+  DI_EventKind_ConversionStarted,
+  DI_EventKind_ConversionEnded,
+  DI_EventKind_ConversionFailureUnsupportedFormat,
+  DI_EventKind_COUNT
+}
+DI_EventKind;
+
+typedef struct DI_Event DI_Event;
+struct DI_Event
+{
+  DI_EventKind kind;
+  String8 string;
+};
+
+typedef struct DI_EventNode DI_EventNode;
+struct DI_EventNode
+{
+  DI_EventNode *next;
+  DI_Event v;
+};
+
+typedef struct DI_EventList DI_EventList;
+struct DI_EventList
+{
+  DI_EventNode *first;
+  DI_EventNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Cache Types
 
 typedef struct DI_StringChunkNode DI_StringChunkNode;
@@ -108,6 +143,14 @@ struct DI_Shared
   U64 u2p_ring_write_pos;
   U64 u2p_ring_read_pos;
   
+  // rjf: parse -> user event ring
+  OS_Handle p2u_ring_mutex;
+  OS_Handle p2u_ring_cv;
+  U64 p2u_ring_size;
+  U8 *p2u_ring_base;
+  U64 p2u_ring_write_pos;
+  U64 p2u_ring_read_pos;
+  
   // rjf: threads
   U64 parse_thread_count;
   OS_Handle *parse_threads;
@@ -199,6 +242,9 @@ internal RDI_Parsed *di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 pat
 
 internal B32 di_u2p_enqueue_key(String8 path, U64 min_timestamp, U64 endt_us);
 internal void di_u2p_dequeue_key(Arena *arena, String8 *out_path, U64 *out_min_timestamp);
+
+internal void di_p2u_push_event(DI_Event *event);
+internal DI_EventList di_p2u_pop_events(Arena *arena, U64 endt_us);
 
 internal void di_parse_thread__entry_point(void *p);
 

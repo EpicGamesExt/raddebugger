@@ -2879,11 +2879,10 @@ internal void
 ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  DBGI_Scope *scope = dbgi_scope_open();
+  DI_Scope *di_scope = di_scope_open();
   CTRL_Entity *module_entity = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, machine_id, module);
-  String8 exe_path = module_entity->string;
-  DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
-  RDI_Parsed *rdi = &dbgi->rdi;
+  CTRL_Entity *debug_info_path_entity = ctrl_entity_child_from_kind(module_entity, CTRL_EntityKind_DebugInfoPath);
+  RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, debug_info_path_entity->string, debug_info_path_entity->timestamp, max_U64);
   U64 base_vaddr = module_entity->vaddr_range.min;
   for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
@@ -2972,7 +2971,7 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
       }break;
     }
   }
-  dbgi_scope_close(scope);
+  di_scope_close(di_scope);
   scratch_end(scratch);
 }
 
@@ -2995,11 +2994,6 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID 
 internal void
 ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path, U64 exe_timestamp)
 {
-  //////////////////////////////
-  //- rjf: open debug info
-  //
-  dbgi_binary_open(path);
-  
   //////////////////////////////
   //- rjf: parse module image info
   //
@@ -3238,11 +3232,6 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
   }
   
   //////////////////////////////
-  //- rjf: open debug info
-  //
-  di_open(initial_debug_info_path, exe_timestamp);
-  
-  //////////////////////////////
   //- rjf: insert info into cache
   //
   {
@@ -3315,14 +3304,12 @@ ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 
   {
     CTRL_Entity *module_ent = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, machine_id, module);
     CTRL_Entity *debug_info_path_ent = ctrl_entity_child_from_kind(module_ent, CTRL_EntityKind_DebugInfoPath);
-    String8 debug_info_path = debug_info_path_ent->string;
-    di_close(debug_info_path, debug_info_path_ent->timestamp);
+    if(debug_info_path_ent != &ctrl_entity_nil)
+    {
+      String8 debug_info_path = debug_info_path_ent->string;
+      di_close(debug_info_path, debug_info_path_ent->timestamp);
+    }
   }
-  
-  //////////////////////////////
-  //- rjf: close debug info
-  //
-  dbgi_binary_close(path);
 }
 
 //- rjf: attached process running/event gathering
@@ -3402,7 +3389,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
             if(!should_filter_event && ev->code == 0xc0000005 &&
                (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
             {
-              DBGI_Scope *scope = dbgi_scope_open();
+              DI_Scope *di_scope = di_scope_open();
               CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, ev->process);
               CTRL_Entity *module = &ctrl_entity_nil;
               for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
@@ -3418,9 +3405,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 // rjf: determine base address of asan shadow space
                 U64 asan_shadow_base_vaddr = 0;
                 B32 asan_shadow_variable_exists_but_is_zero = 0;
-                String8 module_path = module->string;
-                DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, module_path, max_U64);
-                RDI_Parsed *rdi = &dbgi->rdi;
+                CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+                RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, dbg_path->string, dbg_path->timestamp, max_U64);
                 RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_GlobalVariables);
                 if(rdi->global_variables != 0 && unparsed_map != 0)
                 {
@@ -3463,7 +3449,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 }
               }
               
-              dbgi_scope_close(scope);
+              di_scope_close(di_scope);
             }
           }break;
         }
@@ -3588,21 +3574,31 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     }break;
     case DMN_EventKind_LoadModule:
     {
-      CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
+      CTRL_Event *out_evt1 = ctrl_event_list_push(scratch.arena, &evts);
       String8 module_path = event->string;
       U64 timestamp = os_properties_from_file_path(module_path).modified;
       ctrl_thread__module_open(CTRL_MachineID_Local, event->process, event->module, r1u64(event->address, event->address+event->size), module_path, timestamp);
-      out_evt->kind       = CTRL_EventKind_NewModule;
-      out_evt->msg_id     = msg->msg_id;
-      out_evt->machine_id = CTRL_MachineID_Local;
-      out_evt->entity     = event->module;
-      out_evt->parent     = event->process;
-      out_evt->arch       = event->arch;
-      out_evt->entity_id  = event->code;
-      out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
-      out_evt->rip_vaddr  = event->address;
-      out_evt->timestamp  = timestamp;
-      out_evt->string     = module_path;
+      out_evt1->kind       = CTRL_EventKind_NewModule;
+      out_evt1->msg_id     = msg->msg_id;
+      out_evt1->machine_id = CTRL_MachineID_Local;
+      out_evt1->entity     = event->module;
+      out_evt1->parent     = event->process;
+      out_evt1->arch       = event->arch;
+      out_evt1->entity_id  = event->code;
+      out_evt1->vaddr_rng  = r1u64(event->address, event->address+event->size);
+      out_evt1->rip_vaddr  = event->address;
+      out_evt1->timestamp  = timestamp;
+      out_evt1->string     = module_path;
+      CTRL_Event *out_evt2 = ctrl_event_list_push(scratch.arena, &evts);
+      String8 initial_debug_info_path = ctrl_initial_debug_info_path_from_module(scratch.arena, CTRL_MachineID_Local, event->module);
+      out_evt2->kind       = CTRL_EventKind_ModuleDebugInfoPathChange;
+      out_evt2->msg_id     = msg->msg_id;
+      out_evt2->machine_id = CTRL_MachineID_Local;
+      out_evt2->entity     = event->module;
+      out_evt2->parent     = event->process;
+      out_evt2->timestamp  = timestamp;
+      out_evt2->string     = initial_debug_info_path;
+      di_open(initial_debug_info_path, timestamp);
     }break;
     case DMN_EventKind_ExitProcess:
     {
@@ -3748,7 +3744,6 @@ ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
   
   //- rjf: attach
   B32 attach_successful = dmn_ctrl_attach(ctrl_ctx, msg->entity_id);
@@ -3795,7 +3790,6 @@ ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
-  dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -3805,7 +3799,6 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
   DMN_Handle process = msg->entity;
   U32 exit_code = msg->exit_code;
   
@@ -3849,7 +3842,6 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
-  dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -3859,7 +3851,6 @@ ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
   DMN_Handle process = msg->entity;
   
   //- rjf: detach
@@ -3902,7 +3893,6 @@ ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
-  dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -3912,7 +3902,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
+  DI_Scope *di_scope = di_scope_open();
   DMN_Event *stop_event = 0;
   CTRL_EventCause stop_cause = CTRL_EventCause_Null;
   DMN_Handle target_thread = msg->entity;
@@ -4214,9 +4204,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           }
         }
         U64 module_base_vaddr = module->vaddr_range.min;
-        String8 exe_path = module->string;
-        DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
-        RDI_Parsed *rdi = &dbgi->rdi;
+        CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+        RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, dbg_path->string, dbg_path->timestamp, max_U64);
         RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Procedures);
         RDI_ParsedNameMap map = {0};
         rdi_name_map_parse(rdi, unparsed_map, &map);
@@ -4396,23 +4385,24 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       Architecture arch = thread->arch;
       U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
-      DMN_Handle module = {0};
-      String8 module_name = {0};
-      U64 module_base_vaddr = 0;
-      U64 thread_rip_voff = 0;
+      CTRL_Entity *module = &ctrl_entity_nil;
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
-        for(CTRL_Entity *module = process->first; module != &ctrl_entity_nil; module = module->next)
+        for(CTRL_Entity *m = process->first; m != &ctrl_entity_nil; m = m->next)
         {
-          if(module->kind == CTRL_EntityKind_Module && contains_1u64(module->vaddr_range, thread_rip_vaddr))
+          if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, thread_rip_vaddr))
           {
-            module_name = module->string;
-            module_base_vaddr = module->vaddr_range.min;
-            thread_rip_voff = thread_rip_vaddr - module->vaddr_range.min;
+            module = m;
             break;
           }
         }
       }
+      
+      //////////////////////////
+      //- rjf: extract module-dependent info
+      //
+      CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+      U64 thread_rip_voff = thread_rip_vaddr - module->vaddr_range.min;
       
       //////////////////////////
       //- rjf: stepping logic
@@ -4508,9 +4498,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           // rjf: evaluate hit stop conditions
           if(conditions.node_count != 0)
           {
-            String8 exe_path = module_name;
-            DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
-            RDI_Parsed *rdi = &dbgi->rdi;
+            RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, dbg_path->string, dbg_path->timestamp, max_U64);
             for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
             {
               String8 string = condition_n->string;
@@ -4548,7 +4536,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               EVAL_Result eval = {0};
               if(bytecode.size != 0)
               {
-                U64 module_base = module_base_vaddr;
+                U64 module_base = module->vaddr_range.min;
                 U64 tls_base = dmn_tls_root_vaddr_from_thread(event->thread);
                 EVAL_Machine machine = {0};
                 machine.u = &event->process;
@@ -4855,7 +4843,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
-  dbgi_scope_close(scope);
+  di_scope_close(di_scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -4865,7 +4853,6 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *scope = dbgi_scope_open();
   
   //- rjf: record start
   {
@@ -4918,7 +4905,6 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     ctrl_c2u_push_events(&evts);
   }
   
-  dbgi_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
