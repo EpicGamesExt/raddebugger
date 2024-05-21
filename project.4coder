@@ -56,7 +56,7 @@ commands =
   },
   .rjf_f2 =
   {
-    .win = "build raddbgi_from_pdb telemetry release",
+    .win = "build mule_peb_trample",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,

@@ -378,9 +378,10 @@ di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp,
       }
       
       //- rjf: parse not done, not working, asked a while ago -> ask for parse
+      B32 sent = 0;
       if(node != 0 && !node->parse_done && !node->is_working && ins_atomic_u64_eval(&node->last_time_requested_us)+1000000<os_now_microseconds())
       {
-        B32 sent = di_u2p_enqueue_key(path_normalized, min_timestamp, endt_us);
+        sent = di_u2p_enqueue_key(path_normalized, min_timestamp, endt_us);
         if(sent)
         {
           ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
@@ -394,7 +395,9 @@ di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp,
       }
       
       //- rjf: wait on this stripe
-      os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+      {
+        os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+      }
     }
     scratch_end(scratch);
   }
