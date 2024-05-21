@@ -419,6 +419,7 @@ ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event)
     str8_serial_push_struct(scratch.arena, &srl, &event->rip_vaddr);
     str8_serial_push_struct(scratch.arena, &srl, &event->stack_base);
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_root);
+    str8_serial_push_struct(scratch.arena, &srl, &event->timestamp);
     str8_serial_push_struct(scratch.arena, &srl, &event->exception_code);
     str8_serial_push_struct(scratch.arena, &srl, &event->string.size);
     str8_serial_push_data(scratch.arena, &srl, event->string.str, event->string.size);
@@ -448,6 +449,7 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
     read_off += str8_deserial_read_struct(string, read_off, &event.rip_vaddr);
     read_off += str8_deserial_read_struct(string, read_off, &event.stack_base);
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_root);
+    read_off += str8_deserial_read_struct(string, read_off, &event.timestamp);
     read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
     read_off += str8_deserial_read_struct(string, read_off, &event.string.size);
     event.string.str = push_array_no_zero(arena, U8, event.string.size);
@@ -734,6 +736,23 @@ ctrl_entity_from_machine_id_handle(CTRL_EntityStore *store, CTRL_MachineID machi
   return entity;
 }
 
+internal CTRL_Entity *
+ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind)
+{
+  CTRL_Entity *result = &ctrl_entity_nil;
+  for(CTRL_Entity *child = parent->first;
+      child != &ctrl_entity_nil;
+      child = child->next)
+  {
+    if(child->kind == kind)
+    {
+      result = child;
+      break;
+    }
+  }
+  return result;
+}
+
 //- rjf: applying events to entity caches
 
 internal void
@@ -789,15 +808,32 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       //- rjf: modules
       case CTRL_EventKind_NewModule:
       {
+        Temp scratch = scratch_begin(0, 0);
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
         CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->arch, event->machine_id, event->entity, event->vaddr_rng.min);
         ctrl_entity_equip_string(store, module, event->string);
+        module->timestamp = event->timestamp;
+        CTRL_Entity *debug_info_path = ctrl_entity_alloc(store, module, CTRL_EntityKind_DebugInfoPath, Architecture_Null, 0, dmn_handle_zero(), 0);
+        String8 initial_debug_info_path = ctrl_initial_debug_info_path_from_module(scratch.arena, event->machine_id, event->entity);
+        ctrl_entity_equip_string(store, debug_info_path, initial_debug_info_path);
         module->vaddr_range = event->vaddr_rng;
+        debug_info_path->timestamp = module->timestamp;
+        scratch_end(scratch);
       }break;
       case CTRL_EventKind_EndModule:
       {
         CTRL_Entity *module = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
         ctrl_entity_release(store, module);
+      }break;
+      case CTRL_EventKind_ModuleDebugInfoPathChange:
+      {
+        CTRL_Entity *module = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
+        CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+        if(debug_info_path == &ctrl_entity_nil)
+        {
+          debug_info_path = ctrl_entity_alloc(store, module, CTRL_EntityKind_DebugInfoPath, Architecture_Null, 0, dmn_handle_zero(), 0);
+        }
+        ctrl_entity_equip_string(store, debug_info_path, event->string);
       }break;
     }
   }
@@ -1570,6 +1606,26 @@ ctrl_tls_vaddr_range_from_module(CTRL_MachineID machine_id, DMN_Handle module_ha
     if(n->machine_id == machine_id && dmn_handle_match(n->module, module_handle))
     {
       result = n->tls_vaddr_range;
+      break;
+    }
+  }
+  return result;
+}
+
+internal String8
+ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_MachineID machine_id, DMN_Handle module_handle)
+{
+  String8 result = {0};
+  U64 hash = ctrl_hash_from_machine_id_handle(machine_id, module_handle);
+  U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+  U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+  CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+  CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(n->machine_id == machine_id && dmn_handle_match(n->module, module_handle))
+    {
+      result = push_str8_copy(arena, n->initial_debug_info_path);
       break;
     }
   }
@@ -2780,6 +2836,22 @@ ctrl_thread__entry_point(void *p)
               str8_list_push(ctrl_state->user_entry_point_arena, &ctrl_state->user_entry_points, n->string);
             }
           }break;
+          case CTRL_MsgKind_SetModuleDebugInfoPath:
+          {
+            String8 path = msg->path;
+            CTRL_Entity *module = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, msg->machine_id, msg->entity);
+            CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+            di_close(debug_info_path->string, module->timestamp);
+            ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path);
+            di_open(path, module->timestamp);
+            CTRL_EventList evts = {0};
+            CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
+            evt->kind       = CTRL_EventKind_ModuleDebugInfoPathChange;
+            evt->machine_id = msg->machine_id;
+            evt->entity     = msg->entity;
+            evt->string     = path;
+            ctrl_c2u_push_events(&evts);
+          }break;
         }
       }
     }
@@ -2921,7 +2993,7 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID 
 //- rjf: module lifetime open/close work
 
 internal void
-ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path)
+ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path, U64 exe_timestamp)
 {
   //////////////////////////////
   //- rjf: open debug info
@@ -3138,6 +3210,39 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
   }
   
   //////////////////////////////
+  //- rjf: pick default initial debug info path
+  //
+  String8 initial_debug_info_path = builtin_debug_info_path;
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 exe_folder = str8_chop_last_slash(path);
+    String8 builtin_debug_info_path__absolute = builtin_debug_info_path;
+    String8 builtin_debug_info_path__relative = push_str8f(scratch.arena, "%S/%S", exe_folder, builtin_debug_info_path);
+    String8 dbg_path_candidates[] =
+    {
+      /* inferred (treated as absolute): */ builtin_debug_info_path__absolute,
+      /* inferred (treated as relative): */ builtin_debug_info_path__relative,
+      /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(path)),
+      /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", path),
+    };
+    for(U64 idx = 0; idx < ArrayCount(dbg_path_candidates); idx += 1)
+    {
+      FileProperties props = os_properties_from_file_path(dbg_path_candidates[idx]);
+      if(props.modified != 0 && props.size != 0)
+      {
+        initial_debug_info_path = push_str8_copy(arena, dbg_path_candidates[idx]);
+        break;
+      }
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: open debug info
+  //
+  di_open(initial_debug_info_path, exe_timestamp);
+  
+  //////////////////////////////
   //- rjf: insert info into cache
   //
   {
@@ -3167,7 +3272,7 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
         node->pdatas = pdatas;
         node->pdatas_count = pdatas_count;
         node->entry_point_voff = entry_point_voff;
-        node->builtin_debug_info_path = builtin_debug_info_path;
+        node->initial_debug_info_path = initial_debug_info_path;
       }
     }
   }
@@ -3202,6 +3307,16 @@ ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 
         arena_release(node->arena);
       }
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: close debug info
+  //
+  {
+    CTRL_Entity *module_ent = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, machine_id, module);
+    CTRL_Entity *debug_info_path_ent = ctrl_entity_child_from_kind(module_ent, CTRL_EntityKind_DebugInfoPath);
+    String8 debug_info_path = debug_info_path_ent->string;
+    di_close(debug_info_path, debug_info_path_ent->timestamp);
   }
   
   //////////////////////////////
@@ -3475,7 +3590,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       String8 module_path = event->string;
-      ctrl_thread__module_open(CTRL_MachineID_Local, event->process, event->module, r1u64(event->address, event->address+event->size), module_path);
+      U64 timestamp = os_properties_from_file_path(module_path).modified;
+      ctrl_thread__module_open(CTRL_MachineID_Local, event->process, event->module, r1u64(event->address, event->address+event->size), module_path, timestamp);
       out_evt->kind       = CTRL_EventKind_NewModule;
       out_evt->msg_id     = msg->msg_id;
       out_evt->machine_id = CTRL_MachineID_Local;
@@ -3485,6 +3601,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->entity_id  = event->code;
       out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt->rip_vaddr  = event->address;
+      out_evt->timestamp  = timestamp;
       out_evt->string     = module_path;
     }break;
     case DMN_EventKind_ExitProcess:
@@ -3515,6 +3632,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->msg_id     = msg->msg_id;
       out_evt->machine_id = CTRL_MachineID_Local;
       out_evt->entity     = event->module;
+      out_evt->string     = module_path;
     }break;
     case DMN_EventKind_DebugString:
     {

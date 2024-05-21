@@ -68,6 +68,7 @@ struct CTRL_Entity
   DMN_Handle handle;
   U64 id;
   Rng1U64 vaddr_range;
+  U64 timestamp;
   String8 string;
 };
 
@@ -248,6 +249,7 @@ typedef enum CTRL_MsgKind
   CTRL_MsgKind_Run,
   CTRL_MsgKind_SingleStep,
   CTRL_MsgKind_SetUserEntryPoints,
+  CTRL_MsgKind_SetModuleDebugInfoPath,
   CTRL_MsgKind_COUNT,
 }
 CTRL_MsgKind;
@@ -316,6 +318,9 @@ typedef enum CTRL_EventKind
   CTRL_EventKind_EndThread,
   CTRL_EventKind_EndModule,
   
+  //- rjf: debug info changes
+  CTRL_EventKind_ModuleDebugInfoPathChange,
+  
   //- rjf: debug strings
   CTRL_EventKind_DebugString,
   CTRL_EventKind_ThreadName,
@@ -372,6 +377,7 @@ struct CTRL_Event
   U64 rip_vaddr;
   U64 stack_base;
   U64 tls_root;
+  U64 timestamp;
   U32 exception_code;
   String8 string;
 };
@@ -513,7 +519,7 @@ struct CTRL_ModuleImageInfoCacheNode
   U64 pdatas_count;
   U64 entry_point_voff;
   Rng1U64 tls_vaddr_range;
-  String8 builtin_debug_info_path;
+  String8 initial_debug_info_path;
 };
 
 typedef struct CTRL_ModuleImageInfoCacheSlot CTRL_ModuleImageInfoCacheSlot;
@@ -694,6 +700,7 @@ internal void ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *ent
 
 //- rjf: entity store lookups
 internal CTRL_Entity *ctrl_entity_from_machine_id_handle(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle handle);
+internal CTRL_Entity *ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind);
 
 //- rjf: applying events to entity caches
 internal void ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list);
@@ -745,6 +752,7 @@ internal B32 ctrl_thread_write_reg_block(CTRL_MachineID machine_id, DMN_Handle t
 internal PE_IntelPdata *ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_MachineID machine_id, DMN_Handle module_handle, U64 voff);
 internal U64 ctrl_entry_point_voff_from_module(CTRL_MachineID machine_id, DMN_Handle module_handle);
 internal Rng1U64 ctrl_tls_vaddr_range_from_module(CTRL_MachineID machine_id, DMN_Handle module_handle);
+internal String8 ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_MachineID machine_id, DMN_Handle module_handle);
 
 ////////////////////////////////
 //~ rjf: Unwinding Functions
@@ -798,7 +806,7 @@ internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CT
 internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 
 //- rjf: module lifetime open/close work
-internal void ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path);
+internal void ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path, U64 exe_timestamp);
 internal void ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 path);
 
 //- rjf: attached process running/event gathering
