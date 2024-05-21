@@ -32,22 +32,23 @@ HideModuleFromWindowsReload(HMODULE ModuleToFlush)
   }
 }
 
-__declspec(dllexport) void
+__declspec(dllexport) int
 loop_iteration(int it)
 {
-  printf("foobar iteration #%i\n", it);
+  return it*it;
 }
 
 int main(int argument_count, char **arguments)
 {
   char *exe_name = arguments[0];
   HANDLE last_module = GetModuleHandle(0);
-  void (*loop_iteration_function)(int it) = (void (*)(int))GetProcAddress(last_module, "loop_iteration");
+  int (*loop_iteration_function)(int it) = (int (*)(int))GetProcAddress(last_module, "loop_iteration");
   FILETIME last_filetime = {0};
   int should_exit = 0;
   for(int it = 0; !should_exit; it += 1)
   {
-    loop_iteration_function(it);
+    int result = loop_iteration_function(it);
+    printf("%i\n", result);
     Sleep(50);
     FILETIME current_filetime = {0};
     HANDLE current_exe_file = CreateFile(exe_name, 0, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
@@ -56,9 +57,8 @@ int main(int argument_count, char **arguments)
     if(it != 0 && CompareFileTime(&last_filetime, &current_filetime) < 0)
     {
       HideModuleFromWindowsReload(last_module);
-      //last_module = LoadLibrary(arguments[0]);
-      last_module = LoadLibrary("foobar.exe");
-      loop_iteration_function = (void (*)(int))GetProcAddress(last_module, "loop_iteration");
+      last_module = LoadLibrary(arguments[0]);
+      loop_iteration_function = (int (*)(int))GetProcAddress(last_module, "loop_iteration");
     }
     last_filetime = current_filetime;
   }

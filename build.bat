@@ -110,9 +110,9 @@ if "%mule_main%"=="1"                  del vc*.pdb mule*.pdb && %compile_release
 if "%mule_module%"=="1"                %compile%             ..\src\mule\mule_module.cpp                                                  %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
 if "%mule_hotload%"=="1"               %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
 if "%mule_peb_trample%"=="1" (
-  if exist mule_peb_trample_old.exe del mule_peb_trample_old.exe
-  if exist mule_peb_trample.exe move mule_peb_trample.exe mule_peb_trample_old.exe
-  %compile% ..\src\mule\mule_peb_trample.c %compile_link% %out%mule_peb_trample.exe || exit /b 1
+  if exist mule_peb_trample.exe move mule_peb_trample.exe mule_peb_trample_old_%random%.exe
+  %compile% ..\src\mule\mule_peb_trample.c %compile_link% %out%mule_peb_trample_new.exe || exit /b 1
+  move mule_peb_trample_new.exe mule_peb_trample.exe
 )
 popd
 
