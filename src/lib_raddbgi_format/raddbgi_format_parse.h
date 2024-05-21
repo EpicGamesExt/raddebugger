@@ -147,24 +147,28 @@ typedef struct RDI_ParsedNameMap{
 //~ Global Nils
 
 #if !defined(RDI_DISABLE_NILS)
-static RDI_TopLevelInfo rdi_top_level_info_nil = {0};
-static RDI_BinarySection rdi_binary_section_nil = {0};
-static RDI_FilePathNode rdi_file_path_node_nil = {0};
-static RDI_SourceFile rdi_source_file_nil = {0};
-static RDI_Unit rdi_unit_nil = {0};
-static RDI_VMapEntry rdi_vmap_entry_nil = {0};
-static RDI_TypeNode rdi_type_node_nil = {0};
-static RDI_UDT rdi_udt_nil = {0};
-static RDI_Member rdi_member_nil = {0};
-static RDI_EnumMember rdi_enum_member_nil = {0};
+static RDI_TopLevelInfo   rdi_top_level_info_nil  = {0};
+static RDI_BinarySection  rdi_binary_section_nil  = {0};
+static RDI_FilePathNode   rdi_file_path_node_nil  = {0};
+static RDI_SourceFile     rdi_source_file_nil     = {0};
+static RDI_Unit           rdi_unit_nil            = {0};
+static RDI_VMapEntry      rdi_vmap_entry_nil      = {0};
+static RDI_TypeNode       rdi_type_node_nil       = {0};
+static RDI_UDT            rdi_udt_nil             = {0};
+static RDI_Member         rdi_member_nil          = {0};
+static RDI_EnumMember     rdi_enum_member_nil     = {0};
 static RDI_GlobalVariable rdi_global_variable_nil = {0};
 static RDI_ThreadVariable rdi_thread_variable_nil = {0};
-static RDI_Procedure rdi_procedure_nil = {0};
-static RDI_Scope rdi_scope_nil = {0};
-static RDI_InlineSite rdi_inline_site_nil = {0};
-static RDI_U64 rdi_voff_nil = 0;
-static RDI_LocationBlock rdi_location_block_nil = {0};
-static RDI_Local rdi_local_nil = {0};
+static RDI_Procedure      rdi_procedure_nil       = {0};
+static RDI_Scope          rdi_scope_nil           = {0};
+static RDI_InlineSite     rdi_inline_site_nil     = {0};
+static RDI_U64            rdi_voff_nil            = 0;
+static RDI_LocationBlock  rdi_location_block_nil  = {0};
+static RDI_Local          rdi_local_nil           = {0};
+static RDI_LineInfo       rdi_line_info_nil       = {0};
+static RDI_Line           rdi_line_nil            = {0};
+static RDI_Column         rdi_column_nil          = {0};
+static RDI_Checksum       rdi_checksum_nil        = {0};
 #endif
 
 ////////////////////////////////

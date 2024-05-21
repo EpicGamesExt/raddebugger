@@ -146,7 +146,7 @@ struct P2R_LinkNameMap
 
 //- rjf: normalized file path -> source file map
 
-typedef struct P2R_SrcFileSlot P2R_SrcFileSlot;
+typedef union P2R_SrcFileSlot P2R_SrcFileSlot;
 union P2R_SrcFileSlot
 {
   struct

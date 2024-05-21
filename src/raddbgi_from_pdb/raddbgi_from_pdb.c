@@ -865,7 +865,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_c13_src_files_convert__entry_point)
     }
 
     // advance cursor
-    CV_C13_Checksum *checksum = str8_deserial_get_raw_ptr(raw_checksums, cursor, sizeof(*checksum));
+    CV_C13_Checksum *checksum = (CV_C13_Checksum *)str8_deserial_get_raw_ptr(raw_checksums, cursor, sizeof(*checksum));
     cursor += sizeof(*checksum);
     cursor += checksum->len;
     cursor  = AlignPow2(cursor, 4);
