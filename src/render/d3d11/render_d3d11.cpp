@@ -496,7 +496,7 @@ r_window_equip(OS_Handle handle)
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       os_exit_process(1);
     }
-
+    
     r_d3d11_state->dxgi_factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
     
     //- rjf: create framebuffer & view
@@ -846,13 +846,6 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
     {
       wnd->last_resolution = resolution;
       
-      // rjf: resize swapchain & main framebuffer
-      wnd->framebuffer_rtv->Release();
-      wnd->framebuffer->Release();
-      wnd->swapchain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
-      wnd->swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)(&wnd->framebuffer));
-      r_d3d11_state->device->CreateRenderTargetView(wnd->framebuffer, 0, &wnd->framebuffer_rtv);
-      
       // rjf: release screen-sized render target resources, if there
       if(wnd->stage_scratch_color_srv){wnd->stage_scratch_color_srv->Release();}
       if(wnd->stage_scratch_color_rtv){wnd->stage_scratch_color_rtv->Release();}
@@ -866,6 +859,13 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
       if(wnd->geo3d_depth_srv)        {wnd->geo3d_depth_srv->Release();}
       if(wnd->geo3d_depth_dsv)        {wnd->geo3d_depth_dsv->Release();}
       if(wnd->geo3d_depth)            {wnd->geo3d_depth->Release();}
+      
+      // rjf: resize swapchain & main framebuffer
+      wnd->framebuffer_rtv->Release();
+      wnd->framebuffer->Release();
+      wnd->swapchain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+      wnd->swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)(&wnd->framebuffer));
+      r_d3d11_state->device->CreateRenderTargetView(wnd->framebuffer, 0, &wnd->framebuffer_rtv);
       
       // rjf: create stage color targets
       {
@@ -946,6 +946,7 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
     Vec4F32 clear_color = {0, 0, 0, 0};
     d_ctx->ClearRenderTargetView(wnd->framebuffer_rtv, clear_color.v);
     d_ctx->ClearRenderTargetView(wnd->stage_color_rtv, clear_color.v);
+    d_ctx->Flush();
   }
   ProfEnd();
 }
