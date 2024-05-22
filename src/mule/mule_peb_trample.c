@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <winternl.h>
+#include "mule_peb_trample_reload.c"
 
 static void
 HideModuleFromWindowsReload(HMODULE ModuleToFlush)
@@ -30,12 +31,6 @@ HideModuleFromWindowsReload(HMODULE ModuleToFlush)
       break;
     }
   }
-}
-
-__declspec(dllexport) int
-loop_iteration(int it)
-{
-  return it*it;
 }
 
 int main(int argument_count, char **arguments)
