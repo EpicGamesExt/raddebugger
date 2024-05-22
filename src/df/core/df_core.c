@@ -2185,7 +2185,7 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
       // rjf: next parent -> follow it
       parent = next_parent;
     }
-    file_no_override = parent;
+    file_no_override = (parent != df_entity_root() ? parent : &df_g_nil_entity);
   }
   
   //- rjf: pass 2: follow overrides
@@ -2244,7 +2244,7 @@ df_entity_from_path(String8 path, DF_EntityFromPathFlags flags)
       // rjf: next parent -> follow it
       parent = next_parent;
     }
-    file_overrides_applied = parent;
+    file_overrides_applied = (parent != df_entity_root() ? parent : &df_g_nil_entity);;
   }
   
   //- rjf: pick & return result

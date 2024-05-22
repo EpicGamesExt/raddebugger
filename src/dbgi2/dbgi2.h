@@ -200,7 +200,7 @@ global RDI_Parsed di_rdi_parsed_nil =
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
-internal U64 di_hash_from_string(String8 string);
+internal U64 di_hash_from_string(String8 string, StringMatchFlags match_flags);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization

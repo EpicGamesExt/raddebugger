@@ -1459,9 +1459,23 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, C
       B32 need_stale = 1;
       if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(thread, result))
       {
-        need_stale = 0;
-        node->reg_gen = current_reg_gen;
-        MemoryCopy(node->block, result, reg_block_size);
+        OS_MutexScopeRWPromote(stripe->rw_mutex)
+        {
+          for(CTRL_ThreadRegCacheNode *n = slot->first; n != 0; n = n->next)
+          {
+            if(n->machine_id == machine_id && dmn_handle_match(n->thread, thread))
+            {
+              node = n;
+              break;
+            }
+          }
+          if(node != 0)
+          {
+            need_stale = 0;
+            node->reg_gen = current_reg_gen;
+            MemoryCopy(node->block, result, reg_block_size);
+          }
+        }
       }
       if(need_stale)
       {

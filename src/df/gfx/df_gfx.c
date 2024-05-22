@@ -2499,19 +2499,19 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
             DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-            DF_Entity *debug = df_dbgi_from_module(module);
+            DF_Entity *dbgi = df_dbgi_from_module(module);
             U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-            RDI_Parsed *rdi = df_rdi_from_dbgi(scope, debug);
-            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(debug, rip_voff);
+            RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, rip_voff);
             
             // rjf: snap to resolved line
             B32 missing_rip = (rip_vaddr == 0);
-            B32 binary_missing = (debug->flags & DF_EntityFlag_IsMissing);
-            B32 dbg_info_pending = !binary_missing && rdi == &di_rdi_parsed_nil;
+            B32 dbgi_missing = (dbgi->flags & DF_EntityFlag_IsMissing || df_entity_is_nil(dbgi));
+            B32 dbgi_pending = !dbgi_missing && rdi == &di_rdi_parsed_nil;
             B32 has_line_info = (line_info.voff_range.max != line_info.voff_range.min);
             B32 has_module = !df_entity_is_nil(module);
-            B32 has_dbg_info = has_module && !binary_missing;
-            if(!dbg_info_pending && (has_line_info || has_module))
+            B32 has_dbg_info = has_module && !dbgi_missing;
+            if(!dbgi_pending && (has_line_info || has_module))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               if(has_line_info)
@@ -2527,12 +2527,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               params.index = unwind_count;
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualOff);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Index);
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
             // rjf: retry on stopped, pending debug info
-            if(!df_ctrl_targets_running() && (dbg_info_pending || missing_rip))
+            if(!df_ctrl_targets_running() && (dbgi_pending || missing_rip))
             {
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindThread));
             }

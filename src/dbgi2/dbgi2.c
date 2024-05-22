@@ -5,12 +5,12 @@
 //~ rjf: Basic Helpers
 
 internal U64
-di_hash_from_string(String8 string)
+di_hash_from_string(String8 string, StringMatchFlags match_flags)
 {
   U64 result = 5381;
   for(U64 i = 0; i < string.size; i += 1)
   {
-    result = ((result << 5) + result) + string.str[i];
+    result = ((result << 5) + result) + ((match_flags & StringMatchFlag_CaseInsensitive) ? char_to_lower(string.str[i]) : string.str[i]);
   }
   return result;
 }
@@ -237,7 +237,7 @@ di_open(String8 path, U64 min_timestamp)
   if(path.size != 0)
   {
     String8 path_normalized = path_normalized_from_string(scratch.arena, path);
-    U64 hash = di_hash_from_string(path_normalized);
+    U64 hash = di_hash_from_string(path_normalized, StringMatchFlag_CaseInsensitive);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
@@ -294,7 +294,7 @@ di_close(String8 path, U64 min_timestamp)
   {
     String8 path_normalized = path_normalized_from_string(scratch.arena, path);
     StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-    U64 hash = di_hash_from_string(path_normalized);
+    U64 hash = di_hash_from_string(path_normalized, StringMatchFlag_CaseInsensitive);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
@@ -353,7 +353,7 @@ di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp,
     Temp scratch = scratch_begin(0, 0);
     String8 path_normalized = path_normalized_from_string(scratch.arena, path);
     StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-    U64 hash = di_hash_from_string(path_normalized);
+    U64 hash = di_hash_from_string(path_normalized, StringMatchFlag_CaseInsensitive);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
@@ -528,7 +528,7 @@ di_parse_thread__entry_point(void *p)
     ////////////////////////////
     //- rjf: unpack key
     //
-    U64 hash = di_hash_from_string(og_path);
+    U64 hash = di_hash_from_string(og_path, StringMatchFlag_CaseInsensitive);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
