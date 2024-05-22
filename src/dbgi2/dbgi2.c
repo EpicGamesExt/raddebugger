@@ -309,31 +309,40 @@ di_close(String8 path, U64 min_timestamp)
       if(node != 0)
       {
         node->ref_count -= 1;
-        if(node->ref_count == 0)
+        if(node->ref_count == 0) for(;;)
         {
           //- rjf: wait for touch count to go to 0
-          for(;ins_atomic_u64_eval(&node->touch_count) != 0;){}
+          if(ins_atomic_u64_eval(&node->touch_count) != 0)
+          {
+            os_rw_mutex_drop_w(stripe->rw_mutex);
+            for(U64 start_t = os_now_microseconds(); os_now_microseconds() <= start_t + 250;);
+            os_rw_mutex_take_w(stripe->rw_mutex);
+          }
           
           //- rjf: release
-          di_string_release__stripe_mutex_w_guarded(stripe, node->path);
-          if(node->file_base != 0)
+          if(node->ref_count == 0 && ins_atomic_u64_eval(&node->touch_count) == 0)
           {
-            os_file_map_view_close(node->file_map, node->file_base);
+            di_string_release__stripe_mutex_w_guarded(stripe, node->path);
+            if(node->file_base != 0)
+            {
+              os_file_map_view_close(node->file_map, node->file_base);
+            }
+            if(!os_handle_match(node->file_map, os_handle_zero()))
+            {
+              os_file_map_close(node->file_map);
+            }
+            if(!os_handle_match(node->file, os_handle_zero()))
+            {
+              os_file_close(node->file);
+            }
+            if(node->arena != 0)
+            {
+              arena_release(node->arena);
+            }
+            DLLRemove(slot->first, slot->last, node);
+            SLLStackPush(stripe->free_node, node);
+            break;
           }
-          if(!os_handle_match(node->file_map, os_handle_zero()))
-          {
-            os_file_map_close(node->file_map);
-          }
-          if(!os_handle_match(node->file, os_handle_zero()))
-          {
-            os_file_close(node->file);
-          }
-          if(node->arena != 0)
-          {
-            arena_release(node->arena);
-          }
-          DLLRemove(slot->first, slot->last, node);
-          SLLStackPush(stripe->free_node, node);
         }
       }
     }
