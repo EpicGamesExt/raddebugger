@@ -37,13 +37,9 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] robustify dbgi layer to renames (cache should not be based only on
-//     path - must invalidate naturally when new filetime occurs)
-//
 // [ ] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
-// [ ] raddbgi file regeneration too strict
 //
 // [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
@@ -377,6 +373,9 @@
 // [x] TLS eval -> in-process-memory EXE info
 // [x] unwinding -> in-process-memory EXE info
 // [x] new fuzzy searching layer
+// [x] robustify dbgi layer to renames (cache should not be based only on
+//     path - must invalidate naturally when new filetime occurs)
+// [x] raddbgi file regeneration too strict
 
 #ifndef RADDBG_H
 #define RADDBG_H
