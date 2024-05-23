@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_FROM_PDB_H
-#define RADDBGI_FROM_PDB_H
+#ifndef RDI_FROM_PDB_H
+#define RDI_FROM_PDB_H
 
 ////////////////////////////////
 //~ rjf: Export Artifact Flags
@@ -514,12 +514,12 @@ internal U64 p2r_hash_from_voff(U64 voff);
 internal P2R_User2Convert *p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline);
 
 ////////////////////////////////
-//~ rjf: COFF => RADDBGI Canonical Conversions
+//~ rjf: COFF => RDI Canonical Conversions
 
 internal RDI_BinarySectionFlags p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags);
 
 ////////////////////////////////
-//~ rjf: CodeView => RADDBGI Canonical Conversions
+//~ rjf: CodeView => RDI Canonical Conversions
 
 internal RDI_Arch         p2r_rdi_arch_from_cv_arch(CV_Arch arch);
 internal RDI_RegisterCode p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
@@ -626,4 +626,4 @@ internal P2R_Bake2Serialize *p2r_bake(Arena *arena, P2R_Convert2Bake *in);
 
 internal P2R_Bake2Serialize *p2r_compress(Arena *arena, P2R_Bake2Serialize *in);
 
-#endif // RADDBGI_FROM_PDB_H
+#endif // RDI_FROM_PDB_H

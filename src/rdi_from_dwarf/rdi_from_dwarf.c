@@ -1,27 +1,27 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#include "lib_raddbgi_format/raddbgi_format.h"
+#include "lib_rdi_format/rdi_format.h"
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "raddbgi_make_local/raddbgi_make_local.h"
+#include "rdi_make_local/rdi_make_local.h"
 
-#include "raddbgi_elf.h"
-#include "raddbgi_dwarf.h"
+#include "rdi_elf.h"
+#include "rdi_dwarf.h"
 
-#include "raddbgi_dwarf_stringize.h"
+#include "rdi_dwarf_stringize.h"
 
-#include "raddbgi_from_dwarf.h"
+#include "rdi_from_dwarf.h"
 
-#include "lib_raddbgi_format/raddbgi_format.c"
+#include "lib_rdi_format/rdi_format.c"
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "raddbgi_make_local/raddbgi_make_local.c"
+#include "rdi_make_local/rdi_make_local.c"
 
-#include "raddbgi_elf.c"
-#include "raddbgi_dwarf.c"
+#include "rdi_elf.c"
+#include "rdi_dwarf.c"
 
-#include "raddbgi_dwarf_stringize.c"
+#include "rdi_dwarf_stringize.c"
 
 // TODO(allen): 
 // [ ] need sample data for .debug_names

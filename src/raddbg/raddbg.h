@@ -375,7 +375,7 @@
 // [x] new fuzzy searching layer
 // [x] robustify dbgi layer to renames (cache should not be based only on
 //     path - must invalidate naturally when new filetime occurs)
-// [x] raddbgi file regeneration too strict
+// [x] rdi file regeneration too strict
 
 #ifndef RADDBG_H
 #define RADDBG_H

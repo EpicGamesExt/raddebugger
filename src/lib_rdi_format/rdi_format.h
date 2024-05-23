@@ -4,11 +4,11 @@
 ////////////////////////////////////////////////////////////////
 // RAD Debug Info, (R)AD(D)BG(I) Format Library
 //
-// Defines standard RADDBGI debug information format types and
+// Defines standard RDI debug information format types and
 // functions.
 
-#ifndef RADDBGI_FORMAT_H
-#define RADDBGI_FORMAT_H
+#ifndef RDI_FORMAT_H
+#define RDI_FORMAT_H
 
 ////////////////////////////////////////////////////////////////
 // Overridable procedure decoration
@@ -924,4 +924,4 @@ RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_rule(RDI_EvalTypeGroup in, R
 RDI_PROC RDI_U8* rdi_eval_conversion_message(RDI_EvalConversionKind conversion_kind, RDI_U64 *lennout);
 RDI_PROC RDI_S32 rdi_eval_opcode_type_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
 
-#endif // RADDBGI_FORMAT_H
+#endif // RDI_FORMAT_H

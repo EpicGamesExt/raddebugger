@@ -147,7 +147,7 @@ Case("source_path_name_map",NormalSourcePathNameMap)\
 }
 
 ////////////////////////////////
-//~ rjf: COFF <-> RADDBGI Canonical Conversions
+//~ rjf: COFF <-> RDI Canonical Conversions
 
 internal RDI_BinarySectionFlags
 p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
@@ -169,7 +169,7 @@ p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 }
 
 ////////////////////////////////
-//~ rjf: CodeView <-> RADDBGI Canonical Conversions
+//~ rjf: CodeView <-> RDI Canonical Conversions
 
 internal RDI_Arch
 p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
@@ -2935,7 +2935,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: types pass 2: produce per-itype itype chain
   //
   // this pass is to ensure that subsequent passes always produce types for
-  // dependent itypes first - guaranteeing raddbgi's "only reference backward"
+  // dependent itypes first - guaranteeing rdi's "only reference backward"
   // rule (which eliminates cycles). each itype slot gets a list of itypes,
   // starting with the deepest dependency - when types are produced per-itype,
   // this chain is walked, so that deeper dependencies are built first, and
@@ -2974,7 +2974,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: types pass 3: construct all types from TPI
   //
   // this doesn't gather struct/class/union/enum members, which is done by
-  // subsequent passes, to build RADDBGI "UDT" information, which is distinct
+  // subsequent passes, to build RDI "UDT" information, which is distinct
   // from regular type info.
   //
   RDIM_Type **itype_type_ptrs = 0;

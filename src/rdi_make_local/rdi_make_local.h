@@ -45,6 +45,6 @@
 #define RDIM_ProfBegin(...) ProfBeginDynamic(__VA_ARGS__)
 #define RDIM_ProfEnd(...) ProfEnd()
 
-#include "lib_raddbgi_make/raddbgi_make.h"
+#include "lib_rdi_make/rdi_make.h"
 
 #endif // RDI_CONS_LOCAL_H

@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_DWARF_H
-#define RADDBGI_DWARF_H
+#ifndef RDI_DWARF_H
+#define RDI_DWARF_H
 
 // https://dwarfstd.org/doc/DWARF4.pdf
 // https://dwarfstd.org/doc/DWARF5.pdf
@@ -1489,5 +1489,5 @@ static String8 dwarf_string_from_line_ext_op(DWARF_LineExtOp op);
 static String8 dwarf_string_from_line_entry_format(DWARF_LineEntryFormat format);
 static String8 dwarf_string_from_section_code(DWARF_SectionCode sec_code);
 
-#endif //RADDBGI_DWARF_H
+#endif //RDI_DWARF_H
 

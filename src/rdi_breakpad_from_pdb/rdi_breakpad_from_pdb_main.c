@@ -5,17 +5,17 @@
 #define BUILD_VERSION_MINOR 9
 #define BUILD_VERSION_PATCH 10
 #define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
-#define BUILD_TITLE "raddbgi_breakpad_from_pdb"
+#define BUILD_TITLE "rdi_breakpad_from_pdb"
 #define BUILD_CONSOLE_INTERFACE 1
 
 ////////////////////////////////
 //~ rjf: Includes
 
 //- rjf: [lib]
-#include "lib_raddbgi_format/raddbgi_format.h"
-#include "lib_raddbgi_format/raddbgi_format_parse.h"
-#include "lib_raddbgi_format/raddbgi_format.c"
-#include "lib_raddbgi_format/raddbgi_format_parse.c"
+#include "lib_rdi_format/rdi_format.h"
+#include "lib_rdi_format/rdi_format_parse.h"
+#include "lib_rdi_format/rdi_format.c"
+#include "lib_rdi_format/rdi_format_parse.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 
@@ -24,27 +24,27 @@
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "task_system/task_system.h"
-#include "raddbgi_make_local/raddbgi_make_local.h"
+#include "rdi_make_local/rdi_make_local.h"
 #include "coff/coff.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_stringize.h"
 #include "msf/msf.h"
 #include "pdb/pdb.h"
 #include "pdb/pdb_stringize.h"
-#include "raddbgi_from_pdb/raddbgi_from_pdb.h"
+#include "rdi_from_pdb/rdi_from_pdb.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
 #include "task_system/task_system.c"
-#include "raddbgi_make_local/raddbgi_make_local.c"
+#include "rdi_make_local/rdi_make_local.c"
 #include "coff/coff.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_stringize.c"
 #include "msf/msf.c"
 #include "pdb/pdb.c"
 #include "pdb/pdb_stringize.c"
-#include "raddbgi_from_pdb/raddbgi_from_pdb.c"
+#include "rdi_from_pdb/rdi_from_pdb.c"
 
 ////////////////////////////////
 //~ rjf: Baking Tasks
@@ -209,7 +209,7 @@ entry_point(CmdLine *cmdline)
   //- rjf: display help
   if(do_help || user2convert->errors.node_count != 0)
   {
-    fprintf(stderr, "--- raddbgi_breakpad_from_pdb -------------------------------------------------\n\n");
+    fprintf(stderr, "--- rdi_breakpad_from_pdb -----------------------------------------------------\n\n");
     
     fprintf(stderr, "This utility converts debug information from PDBs into the textual Breakpad\n");
     fprintf(stderr, "symbol information format, used for various external utilities, using the RAD\n");

@@ -8,27 +8,27 @@
 #define BUILD_VERSION_MINOR 9
 #define BUILD_VERSION_PATCH 10
 #define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
-#define BUILD_TITLE "raddbgi_dump"
+#define BUILD_TITLE "rdi_dump"
 #define BUILD_CONSOLE_INTERFACE 1
 
 ////////////////////////////////
 //~ rjf: Includes
 
 //- rjf: [lib]
-#include "lib_raddbgi_format/raddbgi_format.h"
-#include "lib_raddbgi_format/raddbgi_format_parse.h"
-#include "lib_raddbgi_format/raddbgi_format.c"
-#include "lib_raddbgi_format/raddbgi_format_parse.c"
+#include "lib_rdi_format/rdi_format.h"
+#include "lib_rdi_format/rdi_format_parse.h"
+#include "lib_rdi_format/rdi_format.c"
+#include "lib_rdi_format/rdi_format_parse.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "raddbgi_dump.h"
+#include "rdi_dump.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "raddbgi_dump.c"
+#include "rdi_dump.c"
 
 ////////////////////////////////
 //~ rjf: Entry Point
@@ -73,8 +73,8 @@ entry_point(CmdLine *cmd_line)
     // rjf: extract input file path & load data
     input_name = str8_list_first(&cmd_line->inputs);
     if(input_name.size > 0) { input_data = os_data_from_file_path(arena, input_name); }
-    else {str8_list_pushf(arena, &errors, "error (input): No input RADDBGI file specified.");}
-    if(input_name.size != 0 && input_data.size == 0) { str8_list_pushf(arena, &errors, "error (input): No input RADDBGI file successfully loaded; either the path or file contents are invalid."); }
+    else {str8_list_pushf(arena, &errors, "error (input): No input RDI file specified.");}
+    if(input_name.size != 0 && input_data.size == 0) { str8_list_pushf(arena, &errors, "error (input): No input RDI file successfully loaded; either the path or file contents are invalid."); }
     
     // rjf: extract dump options
     {
@@ -116,7 +116,7 @@ entry_point(CmdLine *cmd_line)
     parse_status = rdi_parse(input_data.str, input_data.size, &raddbg_);
     if(parse_status != RDI_ParseStatus_Good)
     {
-      str8_list_pushf(arena, &errors, "error (parse): RADDBGI file wasn't parsed successfully. (0x%x)", parse_status);
+      str8_list_pushf(arena, &errors, "error (parse): RDI file wasn't parsed successfully. (0x%x)", parse_status);
     }
   }
   

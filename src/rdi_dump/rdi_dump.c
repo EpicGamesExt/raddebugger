@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: RADDBGI Enum -> String Functions
+//~ rjf: RDI Enum -> String Functions
 
 internal String8
 rdi_string_from_data_section_tag(RDI_DataSectionTag tag){
@@ -79,7 +79,7 @@ rdi_string_from_local_kind(RDI_LocalKind local_kind){
 }
 
 ////////////////////////////////
-//~ rjf: RADDBGI Flags -> String Functions
+//~ rjf: RDI Flags -> String Functions
 
 internal void
 rdi_stringize_binary_section_flags(Arena *arena, String8List *out,

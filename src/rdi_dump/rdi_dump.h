@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef RADDBGI_DUMP_H
-#define RADDBGI_DUMP_H
+#ifndef RDI_DUMP_H
+#define RDI_DUMP_H
 
 ////////////////////////////////
 //~ rjf: RADDBG Stringize Helper Types
@@ -39,7 +39,7 @@ struct RDI_ScopeBundle
 };
 
 ////////////////////////////////
-//~ rjf: RADDBGI Enum -> String Functions
+//~ rjf: RDI Enum -> String Functions
 
 internal String8 rdi_string_from_data_section_tag(RDI_DataSectionTag tag);
 internal String8 rdi_string_from_arch(RDI_Arch arch);
@@ -49,7 +49,7 @@ internal String8 rdi_string_from_member_kind(RDI_MemberKind member_kind);
 internal String8 rdi_string_from_local_kind(RDI_LocalKind local_kind);
 
 ////////////////////////////////
-//~ rjf: RADDBGI Flags -> String Functions
+//~ rjf: RDI Flags -> String Functions
 
 internal void rdi_stringize_binary_section_flags(Arena *arena, String8List *out, RDI_BinarySectionFlags flags);
 internal void rdi_stringize_type_modifier_flags(Arena *arena, String8List *out, RDI_TypeModifierFlags flags);
@@ -57,7 +57,7 @@ internal void rdi_stringize_user_defined_type_flags(Arena *arena, String8List *o
 internal void rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkFlags flags);
 
 ////////////////////////////////
-//~ rjf: RADDBG Compound Stringize Functions
+//~ rjf: RDI Compound Stringize Functions
 
 internal void rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *parsed, U32 indent_level);
 internal void rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_TopLevelInfo *tli, U32 indent_level);
@@ -72,4 +72,4 @@ internal void rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_
 internal void rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Procedure *proc, U32 indent_level);
 internal void rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level);
 
-#endif // RADDBGI_DUMP_H
+#endif // RDI_DUMP_H

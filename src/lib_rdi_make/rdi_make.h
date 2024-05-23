@@ -5,14 +5,14 @@
 // RAD Debug Info Make, (R)AD(D)BG(I) (M)ake Library
 //
 // Library for building loose data structures which contain
-// RADDBGI debug information, and baking that down into the
-// proper flattened RADDBGI format.
+// RDI debug information, and baking that down into the
+// proper flattened RDI format.
 //
 // Requires prior inclusion of the RAD Debug Info, (R)AD(D)BG(I)
-// Format Library, in raddbgi_format.h.
+// Format Library, in rdi_format.h.
 
-#ifndef RADDBGI_MAKE_H
-#define RADDBGI_MAKE_H
+#ifndef RDI_MAKE_H
+#define RDI_MAKE_H
 
 ////////////////////////////////
 //~ rjf: Overrideable Memory Operations
@@ -1252,4 +1252,4 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_idx_run_section_list_from_idx_run_map(RD
 
 RDI_PROC RDIM_String8List rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeParams *params, RDIM_BakeSectionList *sections);
 
-#endif // RADDBGI_MAKE_H
+#endif // RDI_MAKE_H
