@@ -1039,7 +1039,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
   //////////////////////////////
   //- rjf: unpack context
   //
-  B32 window_is_focused = os_window_is_focused(ws->os);
+  B32 window_is_focused = os_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc;
   B32 confirm_open = df_gfx_state->confirm_active;
   B32 query_is_open = !df_view_is_nil(ws->query_view_stack_top);
   B32 hover_eval_is_open = (!confirm_open &&
@@ -1050,6 +1050,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
   {
     ws->menu_bar_key_held = 0;
   }
+  ws->window_temporarily_focused_ipc = 0;
   ui_select_state(ws->ui);
   
   //////////////////////////////

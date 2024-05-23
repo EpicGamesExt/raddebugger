@@ -6379,6 +6379,7 @@ internal void
 df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
 {
   // rjf: log
+  if(params->os_event == 0 || params->os_event->kind != OS_EventKind_MouseMove)
   {
     Temp scratch = scratch_begin(0, 0);
     DF_Entity *entity = df_entity_from_handle(params->entity);

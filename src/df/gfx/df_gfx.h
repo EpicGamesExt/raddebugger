@@ -513,6 +513,7 @@ struct DF_Window
   UI_State *ui;
   F32 code_font_size_delta;
   F32 main_font_size_delta;
+  B32 window_temporarily_focused_ipc;
   
   // rjf: view state delta history
   DF_StateDeltaHistory *view_state_hist;

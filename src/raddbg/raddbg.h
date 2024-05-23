@@ -401,12 +401,23 @@ struct IPCInfo
 ////////////////////////////////
 //~ rjf: Globals
 
-#define IPC_SHARED_MEMORY_BUFFER_SIZE MB(16)
+//- rjf: IPC resources
+#define IPC_SHARED_MEMORY_BUFFER_SIZE MB(4)
 StaticAssert(IPC_SHARED_MEMORY_BUFFER_SIZE > sizeof(IPCInfo), ipc_buffer_size_requirement);
-read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_shared_memory_");
-read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
+global OS_Handle ipc_signal_semaphore = {0};
+global OS_Handle ipc_lock_semaphore = {0};
+global U8 *ipc_shared_memory_base = 0;
+global U8  ipc_s2m_ring_buffer[MB(4)] = {0};
+global U64 ipc_s2m_ring_write_pos = 0;
+global U64 ipc_s2m_ring_read_pos = 0;
+global OS_Handle ipc_s2m_ring_mutex = {0};
+global OS_Handle ipc_s2m_ring_cv = {0};
+
+//- rjf: frame time history
 global U64 frame_time_us_history[64] = {0};
 global U64 frame_time_us_history_idx = 0;
+
+//- rjf: main thread log
 global Log *main_thread_log = 0;
 global String8 main_thread_log_path = {0};
 
