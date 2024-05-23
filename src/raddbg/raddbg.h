@@ -37,7 +37,6 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
 //
@@ -376,6 +375,7 @@
 // [x] robustify dbgi layer to renames (cache should not be based only on
 //     path - must invalidate naturally when new filetime occurs)
 // [x] rdi file regeneration too strict
+// [x] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
 
 #ifndef RADDBG_H
 #define RADDBG_H
