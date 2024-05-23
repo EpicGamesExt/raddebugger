@@ -1205,7 +1205,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
       IsWow64Process(process_info.hProcess, &is_wow);
       if(is_wow)
       {
-        MessageBox(0, "Sorry, The RAD Debugger only debugs 64-bit applications currently.", "Process error", MB_OK|MB_ICONSTOP);
+        log_user_errorf("Only 64-bit applications can be debugged currently.");
         DebugActiveProcessStop(process_info.dwProcessId);
         TerminateProcess(process_info.hProcess,0xffffffff);
       }
@@ -1242,6 +1242,23 @@ dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
   {
     result = 1;
     dmn_w32_shared->new_process_pending = 1;
+    
+#if 0
+    // TODO(rjf): JIT debugging info
+    {
+      typedef struct JIT_DEBUG_INFO JIT_DEBUG_INFO;
+      struct JIT_DEBUG_INFO
+      {
+        DWORD dwSize;
+        DWORD dwProcessorArchitecture;
+        DWORD dwThreadID;
+        DWORD dwReserved0;
+        ULONG64 lpExceptionAddress;
+        ULONG64 lpExceptionRecord;
+        ULONG64 lpContextRecord;
+      };
+    }
+#endif
   }
   return result;
 }
@@ -1732,6 +1749,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               switch(child->kind)
               {
+                default:{}break;
                 case DMN_W32_EntityKind_Thread:
                 {
                   DMN_Event *e = dmn_event_list_push(arena, &events);

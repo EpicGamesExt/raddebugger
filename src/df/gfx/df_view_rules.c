@@ -23,7 +23,7 @@ DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
           str8_list_push(scratch.arena, &array_size_expr_strs, child->string);
         }
         String8 array_size_expr = str8_list_join(scratch.arena, &array_size_expr_strs, 0);
-        DF_Eval array_size_eval = df_eval_from_string(arena, dbgi_scope, ctrl_ctx, parse_ctx, macro_map, array_size_expr);
+        DF_Eval array_size_eval = df_eval_from_string(arena, di_scope, ctrl_ctx, parse_ctx, macro_map, array_size_expr);
         DF_Eval array_size_eval_value = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, array_size_eval);
         eval_error_list_concat_in_place(&eval.errors, &array_size_eval.errors);
         array_size = array_size_eval_value.imm_u64;
@@ -468,7 +468,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
 //~ rjf: "text"
 
 internal DF_TxtTopologyInfo
-df_vr_txt_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
+df_vr_txt_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
 {
   Temp scratch = scratch_begin(0, 0);
   DF_TxtTopologyInfo result = zero_struct;
@@ -526,7 +526,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
   //
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  DF_TxtTopologyInfo top = df_vr_txt_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
+  DF_TxtTopologyInfo top = df_vr_txt_topology_info_from_cfg(di_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
   DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
   U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
   Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr + (top.size_cap ? top.size_cap : 2048));
@@ -609,7 +609,7 @@ DF_VIEW_UI_FUNCTION_DEF(text)
 //~ rjf: "disasm"
 
 internal DF_DisasmTopologyInfo
-df_vr_disasm_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
+df_vr_disasm_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
 {
   Temp scratch = scratch_begin(0, 0);
   DF_DisasmTopologyInfo result = zero_struct;
@@ -668,7 +668,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
   state->last_open_frame_idx = df_frame_index();
   {
     //- rjf: unpack params
-    DF_DisasmTopologyInfo top = df_vr_disasm_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
+    DF_DisasmTopologyInfo top = df_vr_disasm_topology_info_from_cfg(di_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
     
     //- rjf: resolve to address value & range
     DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
@@ -691,7 +691,6 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
       dasm_params.style_flags = DASM_StyleFlag_Addresses;
       dasm_params.syntax = DASM_Syntax_Intel;
       dasm_params.base_vaddr = 0;
-      dasm_params.exe_path = str8_zero();
     }
     DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &data_hash);
     String8 dasm_text_data = {0};
@@ -820,7 +819,7 @@ df_bitmap_view_state__canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 r
 }
 
 internal DF_BitmapTopologyInfo
-df_vr_bitmap_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
+df_vr_bitmap_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
 {
   Temp scratch = scratch_begin(0, 0);
   DF_BitmapTopologyInfo info = {0};
@@ -945,7 +944,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   //
   DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
   U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
-  DF_BitmapTopologyInfo topology_info = df_vr_bitmap_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
+  DF_BitmapTopologyInfo topology_info = df_vr_bitmap_topology_info_from_cfg(di_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
   U64 expected_size = topology_info.width*topology_info.height*r_tex2d_format_bytes_per_pixel_table[topology_info.fmt];
   Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr+expected_size);
   
@@ -1000,7 +999,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
 DF_VIEW_SETUP_FUNCTION_DEF(bitmap)
 {
   DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
-  DBGI_Scope *dbgi_scope = dbgi_scope_open();
+  DI_Scope *di_scope = di_scope_open();
   DF_CfgNode *view_center_cfg = df_cfg_node_child_from_string(cfg_root, str8_lit("view_center"), StringMatchFlag_CaseInsensitive);
   DF_CfgNode *zoom_cfg = df_cfg_node_child_from_string(cfg_root, str8_lit("zoom"), StringMatchFlag_CaseInsensitive);
   DF_CfgNode *bitmap_cfg = df_cfg_node_child_from_string(cfg_root, str8_lit("bitmap"), StringMatchFlag_CaseInsensitive);
@@ -1008,16 +1007,16 @@ DF_VIEW_SETUP_FUNCTION_DEF(bitmap)
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(dbgi_scope, process, thread_unwind_rip_vaddr);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, process, thread_unwind_rip_vaddr);
   bvs->view_center_pos.x = (F32)f64_from_str8(bitmap_cfg->first->string);
   bvs->view_center_pos.y = (F32)f64_from_str8(bitmap_cfg->first->next->string);
   bvs->zoom = (F32)f64_from_str8(zoom_cfg->first->string);
-  bvs->top = df_vr_bitmap_topology_info_from_cfg(dbgi_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, bitmap_cfg);
+  bvs->top = df_vr_bitmap_topology_info_from_cfg(di_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, bitmap_cfg);
   if(bvs->zoom == 0)
   {
     bvs->zoom = 1.f;
   }
-  dbgi_scope_close(dbgi_scope);
+  di_scope_close(di_scope);
 }
 
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(bitmap)
@@ -1068,7 +1067,7 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
 {
   DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
   Temp scratch = scratch_begin(0, 0);
-  DBGI_Scope *dbgi_scope = dbgi_scope_open();
+  DI_Scope *di_scope = di_scope_open();
   HS_Scope *hs_scope = hs_scope_open();
   TEX_Scope *tex_scope = tex_scope_open();
   
@@ -1079,13 +1078,13 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(dbgi_scope, process, thread_unwind_rip_vaddr);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, process, thread_unwind_rip_vaddr);
   
   //////////////////////////////
   //- rjf: evaluate expression
   //
   String8 expr = str8(view->query_buffer, view->query_string_size);
-  DF_Eval eval = df_eval_from_string(scratch.arena, dbgi_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
+  DF_Eval eval = df_eval_from_string(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
   DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx.type_graph, parse_ctx.rdi, &ctrl_ctx, eval);
   U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
   U64 expected_size = bvs->top.width*bvs->top.height*r_tex2d_format_bytes_per_pixel_table[bvs->top.fmt];
@@ -1163,7 +1162,7 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
   
   hs_scope_close(hs_scope);
   tex_scope_close(tex_scope);
-  dbgi_scope_close(dbgi_scope);
+  di_scope_close(di_scope);
   scratch_end(scratch);
 }
 
@@ -1171,7 +1170,7 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
 //~ rjf: "geo"
 
 internal DF_GeoTopologyInfo
-df_vr_geo_topology_info_from_cfg(DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
+df_vr_geo_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg)
 {
   Temp scratch = scratch_begin(0, 0);
   DF_GeoTopologyInfo result = {0};
@@ -1292,7 +1291,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
   U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
   
   //- rjf: extract extra geo topology info from view rule
-  DF_GeoTopologyInfo top = df_vr_geo_topology_info_from_cfg(dbgi_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
+  DF_GeoTopologyInfo top = df_vr_geo_topology_info_from_cfg(di_scope, ctrl_ctx, parse_ctx, macro_map, cfg);
   Rng1U64 index_buffer_vaddr_range = r1u64(base_vaddr, base_vaddr+top.index_count*sizeof(U32));
   Rng1U64 vertex_buffer_vaddr_range = top.vertices_vaddr_range;
   

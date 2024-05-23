@@ -20,26 +20,20 @@ You can download pre-built binaries for the debugger
 [here](https://github.com/EpicGames/raddebugger/releases).
 
 The RAD Debugger project aims to simplify the debugger by simplifying and
-unifying the underlying debug info format. In that pursuit we've built
-the RADDBGI debug info format, which is what the debugger parses and uses. To
-work with existing toolchains, we convert PDB (and eventually PE/ELF files
-with embedded DWARF) into the RADDBGI format on-demand. This conversion process
-is currently an unoptimized reference version. Nevertheless it's still quite
-fast for smaller PDB files (in many cases faster than many other programs
-simply deserialize the PDBs). It is much slower for much larger projects at the
-moment, but we expect this will vastly improve overtime.
+unifying the underlying debug info format. In that pursuit we've built the RAD
+Debug Info (RDI) format, which is what the debugger parses and uses. To work
+with existing toolchains, we convert PDB (and eventually PE/ELF files with
+embedded DWARF) into the RDI format on-demand.
 
-The RADDBGI format is currently specified in code, in the files within the
-`src/lib_raddbgi_format` folder. The other relevant folders for working with
-the format are:
+The RDI format is currently specified in code, in the files within the
+`src/lib_rdi_format` folder. The other relevant folders for working with the
+format are:
 
-- `lib_raddbgi_make`: The "RAD Debug Info Make" library, for making RADDBGI
-  debug info.
-- `raddbgi_from_pdb`: Our PDB-to-RADDBGI converter. Can be used as a helper
-  codebase layer, or built as an executable with a command line interface
-  frontend.
-- `raddbgi_from_dwarf`: Our in-progress DWARF-to-RADDBGI converter.
-- `raddbgi_dump`: Our RADDBGI textual dumping utility.
+- `lib_rdi_make`: The "RAD Debug Info Make" library, for making RDI debug info.
+- `rdi_from_pdb`: Our PDB-to-RDI converter. Can be used as a helper codebase
+  layer, or built as an executable with a command line interface frontend.
+- `rdi_from_dwarf`: Our in-progress DWARF-to-RDI converter.
+- `rdi_dump`: Our RDI textual dumping utility.
 
 ## Development Setup Instructions
 
@@ -126,18 +120,6 @@ there are still cases where the debugger has not been tested, and so there are
 still issues. So, we feel that the top priority is eliminating these issues,
 such that the debugging experience is rock solid.
 
-Additionally, the debug info conversion process is not fast (nor wide) enough
-to support extremely large projects. This is for two reasons: (a) the
-PDB-to-RADDBGI converter is an unoptimized reference implementation, and (b)
-the debugger learns of new modules (and thus which PDBs to load) in a
-serially-dependent way (this is necessarily the case for correct debugging
-results). We expect that the conversion process' performance can be massively
-improved, and also that some heuristics can be used to begin converting PDBs
-to RADDBGIs before the debugger knows those PDBs are needed, thus ensuring the
-associated RADDBGI files are ready instantaneously when the associated modules
-are finally loaded by the debugger. Improving this situation is a major part of
-this phase, as it will make the debugger much more usable for large projects.
-
 ### Local x64 Linux Debugging Phase
 
 The next priority for the project is to take the rock solid x64 Windows
@@ -152,11 +134,10 @@ The major parts of this phase are:
 
 - Porting the `src/demon` layer to implement the Demon local process control
 abstraction API.
-- Porting the `src/unwind` layer to support x64 ELF unwinding (currently, there
-is only an x64 PE unwinding implementation).
-- Creating a DWARF-to-RADDBGI converter (in the same way that we've built a
-PDB-to-RADDBGI converter). A partial implementation of this is in
-`src/raddbgi_from_dwarf`.
+- Implementing an x64 ELF Linux unwinder in the `src/ctrl` layer.
+- Creating a DWARF-to-RDI converter (in the same way that we've built a
+PDB-to-RDI converter). A partial implementation of this is in
+`src/rdi_from_dwarf`.
 - Porting the `src/render` layer to implement all of the rendering features the
 frontend needs on a Linux-compatible API (the backend used on Windows is D3D11).
 - Porting the `src/font_provider` layer to a Linux-compatible font
@@ -218,7 +199,7 @@ so in other words, layers are arranged into a directed acyclic graph.
 A few layers are built to be used completely independently from the rest of the
 codebase, as libraries in other codebases and projects. As such, these layers do
 not depend on any other layers in the codebase. The folders which contain these
-layers are prefixed with `lib_`, like `lib_raddbgi_format`.
+layers are prefixed with `lib_`, like `lib_rdi_format`.
 
 A list of the layers in the codebase and their associated namespaces is below:
 - `base` (no namespace): Universal, codebase-wide constructs. Strings, math,
@@ -235,11 +216,11 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `dasm` (`DASM_`): An asynchronous disassembly decoder and cache. Users ask for
   disassembly for a particular virtual address range in a process, and threads
   implemented in this layer decode and cache the disassembly for that range.
-- `dbgi` (`DBGI_`): An asynchronous debug info loader and cache. Loads debug
-  info stored in the RADDBGI format. Users ask for debug info for a particular
-  executable, and on separate threads, this layer loads the associated debug
-  info file. If necessary, it will launch a separate conversion process to
-  convert original debug info into the RADDBGI format.
+- `dbgi` (`DI_`): An asynchronous debug info loader and cache. Loads debug info
+  stored in the RDI format. Users ask for debug info for a particular path, and
+  on separate threads, this layer loads the associated debug info file. If
+  necessary, it will launch a separate conversion process to convert original
+  debug info into the RDI format.
 - `demon` (`DEMON_`): An abstraction layer for local-machine, low-level process
   control. The abstraction is used to provide a common interface for process
   control on target platforms. Used to implement part of `ctrl`.
@@ -274,13 +255,13 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `lib_raddbg_markup` (`RADDBG_`): Standalone library for marking up user
   programs to work with various features in the `raddbg` debugger. Does not
   depend on `base`, and can be independently relocated to other codebases.
-- `lib_raddbgi_make` (`RDIM_`): Standalone library for constructing RADDBGI
-  debug info data. Does not depend on `base`, and can be independently relocated
+- `lib_rdi_make` (`RDIM_`): Standalone library for constructing RDI debug info
+  data. Does not depend on `base`, and can be independently relocated
   to other codebases.
-- `lib_raddbgi_format` (`RDI_`): Standalone library which defines the core
-  RADDBGI types and helper functions for reading and writing the RADDBGI debug
-  info file format. Does not depend on `base`, and can be independently
-  relocated to other codebases.
+- `lib_rdi_format` (`RDI_`): Standalone library which defines the core RDI types
+  and helper functions for reading and writing the RDI debug info file format.
+  Does not depend on `base`, and can be independently relocated to other
+  codebases.
 - `metagen` (`MG_`): A metaprogram which is used to generate primarily code and
   data tables. Consumes Metadesk files, stored with the extension `.mdesk`, and
   generates C code which is then included by hand-written C code. Currently, it
@@ -315,11 +296,11 @@ A list of the layers in the codebase and their associated namespaces is below:
 - `raddbg` (no namespace): The layer which ties everything together for the main
   graphical debugger. Not much "meat", just drives `df`, implements command line
   options, and so on.
-- `raddbgi_from_pdb` (`P2R_`): Our implementation of PDB-to-RADDBGI conversion.
-- `raddbgi_from_dwarf` (`D2R_`): Our in-progress implementation of
-  DWARF-to-RADDBGI conversion.
-- `raddbgi_dump` (`RADDBGIDUMP_`): A dumper utility program for dumping
-  textualizations of RADDBGI debug info files.
+- `rdi_from_pdb` (`P2R_`): Our implementation of PDB-to-RDI conversion.
+- `rdi_from_dwarf` (`D2R_`): Our in-progress implementation of DWARF-to-RDI
+  conversion.
+- `rdi_dump` (no namespace): A dumper utility program for dumping
+  textualizations of RDI debug info files.
 - `regs` (`REGS_`): Types, helper functions, and metadata for registers on
   supported architectures. Used in reading/writing registers in `demon`, or in
   looking up register metadata.
@@ -338,11 +319,9 @@ A list of the layers in the codebase and their associated namespaces is below:
   Used by the debugger to visualize source code files. Users ask for text lines,
   tokens, and metadata, and it is prepared on background threads.
 - `type_graph` (`TG_`): Code for analyzing and navigating type structures from
-  RADDBGI debug info files, with the additional capability of constructing
+  RDI debug info files, with the additional capability of constructing
   synthetic types *not* found in debug info. Used in `eval` and for various
   visualization features.
 - `ui` (`UI_`): Machinery for building graphical user interfaces. Provides a
   core immediate mode hierarchical user interface data structure building
   API, and has helper layers for building some higher-level widgets.
-- `unwind` (`UNW_`): Code for generating unwind information from threads, for
-  supported operating systems and architectures.

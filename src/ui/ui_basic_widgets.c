@@ -193,32 +193,32 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   if(is_focus_active)
   {
     Temp scratch = scratch_begin(0, 0);
-    UI_NavActionList *nav_actions = ui_nav_actions();
-    for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       next = n->next;
       
       // rjf: do not consume anything that doesn't fit a single-line's operations
-      if(n->v.delta.y != 0)
+      if((n->v.kind != UI_EventKind_Edit && n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Text) || n->v.delta_2s32.y != 0)
       {
         continue;
       }
       
       // rjf: map this action to an op
-      UI_NavTxtOp op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, edit_string, *cursor, *mark);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
       
       // rjf: perform replace range
       if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
       {
-        String8 new_string = ui_nav_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
         new_string.size = Min(edit_buffer_size, new_string.size);
         MemoryCopy(edit_buffer, new_string.str, new_string.size);
         edit_string_size_out[0] = new_string.size;
       }
       
       // rjf: perform copy
-      if(op.flags & UI_NavTxtOpFlag_Copy)
+      if(op.flags & UI_TxtOpFlag_Copy)
       {
         os_set_clipboard_text(op.copy);
       }
@@ -229,7 +229,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       
       // rjf: consume event
       {
-        ui_nav_eat_action_node(nav_actions, n);
+        ui_eat_event(events, n);
         changes_made = 1;
       }
     }
@@ -1335,7 +1335,7 @@ thread_static Vec2F32 ui_scroll_list_dim_px = {0};
 thread_static Rng1S64 ui_scroll_list_scroll_idx_rng = {0};
 
 internal void
-ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S64 *cursor_out, Rng1S64 *visible_row_range_out, UI_ScrollListSignal *signal_out)
+ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S64 *cursor_out, Vec2S64 *mark_out, Rng1S64 *visible_row_range_out, UI_ScrollListSignal *signal_out)
 {
   //- rjf: unpack arguments
   Rng1S64 scroll_row_idx_range = r1s64(params->item_range.min, ClampBot(params->item_range.min, params->item_range.max-1));
@@ -1345,27 +1345,28 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   B32 moved = 0;
   if(params->flags & UI_ScrollListFlag_Nav && cursor_out != 0 && ui_is_focus_active())
   {
-    UI_NavActionList *nav_actions = ui_nav_actions();
+    UI_EventList *events = ui_events();
     Vec2S64 cursor = *cursor_out;
-    for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+    Vec2S64 mark = mark_out ? *mark_out : cursor;
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       next = n->next;
-      UI_NavAction *action = &n->v;
-      if((action->delta.x == 0 && action->delta.y == 0) ||
-         action->flags & (UI_NavActionFlag_KeepMark|UI_NavActionFlag_Delete))
+      UI_Event *evt = &n->v;
+      if((evt->delta_2s32.x == 0 && evt->delta_2s32.y == 0) ||
+         evt->flags & UI_EventFlag_Delete)
       {
         continue;
       }
-      ui_nav_eat_action_node(nav_actions, n);
+      ui_eat_event(events, n);
       moved = 1;
-      switch(action->delta_unit)
+      switch(evt->delta_unit)
       {
         default:{moved = 0;}break;
-        case UI_NavDeltaUnit_Element:
+        case UI_EventDeltaUnit_Char:
         {
           for(Axis2 axis = (Axis2)0; axis < Axis2_COUNT; axis = (Axis2)(axis+1))
           {
-            cursor.v[axis] += action->delta.v[axis];
+            cursor.v[axis] += evt->delta_2s32.v[axis];
             if(cursor.v[axis] < params->cursor_range.min.v[axis])
             {
               cursor.v[axis] = params->cursor_range.max.v[axis];
@@ -1377,25 +1378,34 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
             cursor.v[axis] = clamp_1s64(r1s64(params->cursor_range.min.v[axis], params->cursor_range.max.v[axis]), cursor.v[axis]);
           }
         }break;
-        case UI_NavDeltaUnit_Chunk:
-        case UI_NavDeltaUnit_Whole:
+        case UI_EventDeltaUnit_Word:
+        case UI_EventDeltaUnit_Line:
+        case UI_EventDeltaUnit_Page:
         {
-          cursor.x  = (action->delta.x>0 ? params->cursor_range.max.x : action->delta.x<0 ? params->cursor_range.min.x + !!params->cursor_min_is_empty_selection[Axis2_X] : cursor.x);
-          cursor.y += ((action->delta.y>0 ? +(num_possible_visible_rows-3) : action->delta.y<0 ? -(num_possible_visible_rows-3) : 0));
+          cursor.x  = (evt->delta_2s32.x>0 ? params->cursor_range.max.x : evt->delta_2s32.x<0 ? params->cursor_range.min.x + !!params->cursor_min_is_empty_selection[Axis2_X] : cursor.x);
+          cursor.y += ((evt->delta_2s32.y>0 ? +(num_possible_visible_rows-3) : evt->delta_2s32.y<0 ? -(num_possible_visible_rows-3) : 0));
           cursor.y = clamp_1s64(r1s64(params->cursor_range.min.y + !!params->cursor_min_is_empty_selection[Axis2_Y], params->cursor_range.max.y), cursor.y);
         }break;
-        case UI_NavDeltaUnit_EndPoint:
+        case UI_EventDeltaUnit_Whole:
         {
           for(Axis2 axis = (Axis2)0; axis < Axis2_COUNT; axis = (Axis2)(axis+1))
           {
-            cursor.v[axis] = (action->delta.v[axis]>0 ? params->cursor_range.max.v[axis] : action->delta.v[axis]<0 ? params->cursor_range.min.v[axis] + !!params->cursor_min_is_empty_selection[axis] : cursor.v[axis]);
+            cursor.v[axis] = (evt->delta_2s32.v[axis]>0 ? params->cursor_range.max.v[axis] : evt->delta_2s32.v[axis]<0 ? params->cursor_range.min.v[axis] + !!params->cursor_min_is_empty_selection[axis] : cursor.v[axis]);
           }
         }break;
+      }
+      if(!(evt->flags & UI_EventFlag_KeepMark))
+      {
+        mark = cursor;
       }
     }
     if(moved)
     {
       *cursor_out = cursor;
+      if(mark_out)
+      {
+        *mark_out = mark;
+      }
     }
   }
   

@@ -11,7 +11,9 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
+  //////////////////////////////
   //- rjf: begin logging
+  //
   if(main_thread_log == 0)
   {
     main_thread_log = log_alloc();
@@ -24,13 +26,17 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   log_select(main_thread_log);
   log_scope_begin();
   
+  //////////////////////////////
   //- rjf: tick cache layers
+  //
   txt_user_clock_tick();
   dasm_user_clock_tick();
   geo_user_clock_tick();
   tex_user_clock_tick();
   
+  //////////////////////////////
   //- rjf: pick target hz
+  //
   // TODO(rjf): maximize target, given all windows and their monitors
   F32 target_hz = os_default_refresh_rate();
   if(frame_time_us_history_idx > 32)
@@ -66,29 +72,41 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     target_hz = best_target_hz;
   }
   
+  //////////////////////////////
   //- rjf: target Hz -> delta time
+  //
   F32 dt = 1.f/target_hz;
   
+  //////////////////////////////
   //- rjf: last frame before sleep -> disable txti change detection
+  //
   if(df_gfx_state->num_frames_requested == 0)
   {
     txti_set_external_change_detection_enabled(0);
   }
   
+  //////////////////////////////
   //- rjf: get events from the OS
+  //
   OS_EventList events = {0};
   if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
     events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
   }
   
+  //////////////////////////////
   //- rjf: enable txti change detection
+  //
   txti_set_external_change_detection_enabled(1);
   
+  //////////////////////////////
   //- rjf: begin measuring actual per-frame work
+  //
   U64 begin_time_us = os_now_microseconds();
   
+  //////////////////////////////
   //- rjf: bind change
+  //
   if(!df_gfx_state->confirm_active && df_gfx_state->bind_change_active)
   {
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
@@ -113,6 +131,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
          event->key != OS_Key_Delete &&
          event->key != OS_Key_LeftMouseButton &&
          event->key != OS_Key_RightMouseButton &&
+         event->key != OS_Key_MiddleMouseButton &&
          event->key != OS_Key_Ctrl &&
          event->key != OS_Key_Alt &&
          event->key != OS_Key_Shift)
@@ -136,7 +155,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
-  //- rjf: take hotkeys
+  //////////////////////////////
+  //- rjf: consume events
+  //
+  B32 queue_drag_drop = 0;
   {
     for(OS_Event *event = events.first, *next = 0;
         event != 0;
@@ -145,7 +167,63 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       next = event->next;
       DF_Window *window = df_window_from_os_handle(event->window);
       DF_CmdParams params = window ? df_cmd_params_from_window(window) : df_cmd_params_from_gfx();
-      if(event->kind == OS_EventKind_Press)
+      B32 take = 0;
+      B32 skip = 0;
+      
+      //- rjf: try drag-drop
+      if(df_drag_is_active() && event->kind == OS_EventKind_Release && event->key == OS_Key_LeftMouseButton)
+      {
+        skip = 1;
+        queue_drag_drop = 1;
+      }
+      
+      //- rjf: try window close
+      if(!take && event->kind == OS_EventKind_WindowClose && window != 0)
+      {
+        take = 1;
+        DF_CmdParams params = df_cmd_params_from_window(window);
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseWindow));
+      }
+      
+      //- rjf: try menu bar operations
+      {
+        if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        {
+          take = 1;
+          df_gfx_request_frame();
+          window->menu_bar_focused_on_press = window->menu_bar_focused;
+          window->menu_bar_key_held = 1;
+          window->menu_bar_focus_press_started = 1;
+        }
+        if(!take && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        {
+          take = 1;
+          df_gfx_request_frame();
+          window->menu_bar_key_held = 0;
+        }
+        if(window->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        {
+          take = 1;
+          df_gfx_request_frame();
+          window->menu_bar_focused = 0;
+        }
+        else if(window->menu_bar_focus_press_started && !window->menu_bar_focused && event->kind == OS_EventKind_Release && event->flags == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
+        {
+          take = 1;
+          df_gfx_request_frame();
+          window->menu_bar_focused = !window->menu_bar_focused_on_press;
+          window->menu_bar_focus_press_started = 0;
+        }
+        else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && window->menu_bar_focused && !ui_any_ctx_menu_is_open())
+        {
+          take = 1;
+          df_gfx_request_frame();
+          window->menu_bar_focused = 0;
+        }
+      }
+      
+      //- rjf: try hotkey presses
+      if(!take && event->kind == OS_EventKind_Press)
       {
         DF_Binding binding = {event->key, event->flags};
         DF_CmdSpecList spec_candidates = df_cmd_spec_list_from_binding(scratch.arena, binding);
@@ -159,7 +237,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
             df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
           }
           U32 hit_char = os_codepoint_from_event_flags_and_key(event->flags, event->key);
-          os_eat_event(&events, event);
+          take = 1;
           df_push_cmd__root(&params, run_spec);
           if(event->flags & OS_EventFlag_Alt)
           {
@@ -172,7 +250,9 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         }
         df_gfx_request_frame();
       }
-      else if(event->kind == OS_EventKind_Text)
+      
+      //- rjf: try text events
+      if(!take && event->kind == OS_EventKind_Text)
       {
         String32 insertion32 = str32(&event->character, 1);
         String8 insertion8 = str8_from_32(scratch.arena, insertion32);
@@ -181,87 +261,51 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
         df_push_cmd__root(&params, spec);
         df_gfx_request_frame();
-        os_eat_event(&events, event);
+        take = 1;
         if(event->flags & OS_EventFlag_Alt)
         {
           window->menu_bar_focus_press_started = 0;
         }
       }
-    }
-  }
-  
-  //- rjf: menu bar focus
-  {
-    for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
-    {
-      next = event->next;
-      DF_Window *ws = df_window_from_os_handle(event->window);
-      if(ws == 0)
-      {
-        continue;
-      }
-      B32 take = 0;
-      if(event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+      
+      //- rjf: do fall-through
+      if(!take)
       {
         take = 1;
-        df_gfx_request_frame();
-        ws->menu_bar_focused_on_press = ws->menu_bar_focused;
-        ws->menu_bar_key_held = 1;
-        ws->menu_bar_focus_press_started = 1;
+        params.os_event = event;
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OSEvent));
       }
-      if(event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
-      {
-        take = 1;
-        df_gfx_request_frame();
-        ws->menu_bar_key_held = 0;
-      }
-      if(ws->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
-      {
-        take = 1;
-        df_gfx_request_frame();
-        ws->menu_bar_focused = 0;
-      }
-      else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == OS_EventKind_Release && event->flags == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
-      {
-        take = 1;
-        df_gfx_request_frame();
-        ws->menu_bar_focused = !ws->menu_bar_focused_on_press;
-        ws->menu_bar_focus_press_started = 0;
-      }
-      else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && ws->menu_bar_focused && !ui_any_ctx_menu_is_open())
-      {
-        take = 1;
-        df_gfx_request_frame();
-        ws->menu_bar_focused = 0;
-      }
-      if(take)
+      
+      //- rjf: take
+      if(take && !skip)
       {
         os_eat_event(&events, event);
       }
     }
   }
   
+  //////////////////////////////
   //- rjf: gather root-level commands
+  //
   DF_CmdList cmds = df_core_gather_root_cmds(scratch.arena);
   
+  //////////////////////////////
   //- rjf: begin frame
+  //
   df_core_begin_frame(scratch.arena, &cmds, dt);
   df_gfx_begin_frame(scratch.arena, &cmds);
   
+  //////////////////////////////
   //- rjf: queue drop for drag/drop
-  if(df_drag_is_active())
+  //
+  if(queue_drag_drop)
   {
-    for(OS_Event *event = events.first; event != 0; event = event->next)
-    {
-      if(event->kind == OS_EventKind_Release && event->key == OS_Key_LeftMouseButton)
-      {
-        df_queue_drag_drop();
-        break;
-      }
-    }
+    df_queue_drag_drop();
   }
   
+  //////////////////////////////
   //- rjf: auto-focus moused-over windows while dragging
+  //
   if(df_drag_is_active())
   {
     B32 over_focused_window = 0;
@@ -292,20 +336,26 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
+  //////////////////////////////
   //- rjf: update & render
+  //
   {
     d_begin_frame();
     for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
     {
-      df_window_update_and_render(scratch.arena, &events, w, &cmds);
+      df_window_update_and_render(scratch.arena, w, &cmds);
     }
   }
   
+  //////////////////////////////
   //- rjf: end frontend frame, send signals, etc.
+  //
   df_gfx_end_frame();
   df_core_end_frame();
   
+  //////////////////////////////
   //- rjf: submit rendering to all windows
+  //
   {
     r_begin_frame();
     for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
@@ -317,42 +367,33 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     r_end_frame();
   }
   
-  //- rjf: take window closing events
-  for(OS_Event *e = events.first, *next = 0; e; e = next)
-  {
-    next = e->next;
-    if(e->kind == OS_EventKind_WindowClose)
-    {
-      for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
-      {
-        if(os_handle_match(w->os, e->window))
-        {
-          DF_CmdParams params = df_cmd_params_from_window(w);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseWindow));
-          break;
-        }
-      }
-      os_eat_event(&events, e);
-    }
-  }
-  
+  //////////////////////////////
   //- rjf: determine frame time, record into history
+  //
   U64 end_time_us = os_now_microseconds();
   U64 frame_time_us = end_time_us-begin_time_us;
   frame_time_us_history[frame_time_us_history_idx%ArrayCount(frame_time_us_history)] = frame_time_us;
   frame_time_us_history_idx += 1;
   
+  //////////////////////////////
   //- rjf: end logging
+  //
   {
-    String8 log = log_scope_end(scratch.arena);
-    os_append_data_to_file_path(main_thread_log_path, log);
+    LogScopeResult log = log_scope_end(scratch.arena);
+    os_append_data_to_file_path(main_thread_log_path, log.strings[LogMsgKind_Info]);
+    if(log.strings[LogMsgKind_UserError].size != 0)
+    {
+      DF_CmdParams p = df_cmd_params_from_gfx();
+      p.string = log.strings[LogMsgKind_UserError];
+      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+    }
   }
   
   scratch_end(scratch);
   ProfEnd();
 }
 
-internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook)
+internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
 {
   os_send_wakeup_event();
 }

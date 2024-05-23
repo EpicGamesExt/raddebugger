@@ -13,7 +13,7 @@ internal U64
 regs_rip_from_arch_block(Architecture arch, void *block)
 {
   U64 result = 0;
-  switch(arch)
+  if(block != 0) switch(arch)
   {
     default:{}break;
     case Architecture_x64:{result = ((REGS_RegBlockX64 *)block)->rip.u64;}break;
@@ -26,7 +26,7 @@ internal U64
 regs_rsp_from_arch_block(Architecture arch, void *block)
 {
   U64 result = 0;
-  switch(arch)
+  if(block != 0) switch(arch)
   {
     default:{}break;
     case Architecture_x64:{result = ((REGS_RegBlockX64 *)block)->rsp.u64;}break;
@@ -38,7 +38,7 @@ regs_rsp_from_arch_block(Architecture arch, void *block)
 internal void
 regs_arch_block_write_rip(Architecture arch, void *block, U64 rip)
 {
-  switch(arch)
+  if(block != 0) switch(arch)
   {
     default:{}break;
     case Architecture_x64:{((REGS_RegBlockX64 *)block)->rip.u64 = rip;}break;
@@ -49,7 +49,7 @@ regs_arch_block_write_rip(Architecture arch, void *block, U64 rip)
 internal void
 regs_arch_block_write_rsp(Architecture arch, void *block, U64 rsp)
 {
-  switch(arch)
+  if(block != 0) switch(arch)
   {
     default:{}break;
     case Architecture_x64:{((REGS_RegBlockX64 *)block)->rsp.u64 = rsp;}break;

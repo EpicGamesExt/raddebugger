@@ -583,17 +583,18 @@ df_queue_drag_drop(void)
 }
 
 internal void
-df_set_hovered_line_info(DF_Entity *binary, U64 voff)
+df_set_hovered_line_info(DI_Key *dbgi_key, U64 voff)
 {
-  df_gfx_state->hover_line_binary = df_handle_from_entity(binary);
+  arena_clear(df_gfx_state->hover_line_arena);
+  df_gfx_state->hover_line_dbgi_key = di_key_copy(df_gfx_state->hover_line_arena, dbgi_key);
   df_gfx_state->hover_line_voff = voff;
   df_gfx_state->hover_line_set_this_frame = 1;
 }
 
-internal DF_Entity *
-df_get_hovered_line_info_binary(void)
+internal DI_Key
+df_get_hovered_line_info_dbgi_key(void)
 {
-  return df_entity_from_handle(df_gfx_state->hover_line_binary);
+  return df_gfx_state->hover_line_dbgi_key;
 }
 
 internal U64
@@ -968,6 +969,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   window->tab_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
   window->hover_eval_arena = arena_alloc();
+  window->autocomp_lister_params_arena = arena_alloc();
   window->free_panel = &df_g_nil_panel;
   window->root_panel = df_panel_alloc(window);
   window->focused_panel = window->root_panel;
@@ -1030,14 +1032,14 @@ df_window_from_os_handle(OS_Handle os)
 #endif
 
 internal void
-df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, DF_CmdList *cmds)
+df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
 {
   ProfBeginFunction();
   
   //////////////////////////////
   //- rjf: unpack context
   //
-  B32 window_is_focused = os_window_is_focused(ws->os);
+  B32 window_is_focused = os_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc;
   B32 confirm_open = df_gfx_state->confirm_active;
   B32 query_is_open = !df_view_is_nil(ws->query_view_stack_top);
   B32 hover_eval_is_open = (!confirm_open &&
@@ -1048,6 +1050,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   {
     ws->menu_bar_key_held = 0;
   }
+  ws->window_temporarily_focused_ipc = 0;
   ui_select_state(ws->ui);
   
   //////////////////////////////
@@ -1073,8 +1076,8 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   //////////////////////////////
   //- rjf: do core-layer commands & batch up commands to be dispatched to views
   //
+  UI_EventList events = {0};
   B32 panel_reset_done = 0;
-  UI_NavActionList nav_actions = {0};
   ProfScope("do commands")
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -1116,6 +1119,36 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             p.view_spec = view_spec;
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
             df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenTab));
+          }
+        }break;
+        
+        //- rjf: OS events
+        case DF_CoreCmdKind_OSEvent:
+        {
+          OS_Event *os_event = params.os_event;
+          if(os_event != 0 && os_handle_match(os_event->window, ws->os))
+          {
+            UI_Event ui_event = zero_struct;
+            UI_EventKind kind = UI_EventKind_Null;
+            {
+              switch(os_event->kind)
+              {
+                default:{}break;
+                case OS_EventKind_Press:     {kind = UI_EventKind_Press;}break;
+                case OS_EventKind_Release:   {kind = UI_EventKind_Release;}break;
+                case OS_EventKind_MouseMove: {kind = UI_EventKind_MouseMove;}break;
+                case OS_EventKind_Text:      {kind = UI_EventKind_Text;}break;
+                case OS_EventKind_Scroll:    {kind = UI_EventKind_Scroll;}break;
+              }
+            }
+            ui_event.kind         = kind;
+            ui_event.key          = os_event->key;
+            ui_event.modifiers    = os_event->flags;
+            ui_event.string       = os_event->character ? str8_from_32(ui_build_arena(), str32(&os_event->character, 1)) : str8_zero();
+            ui_event.pos          = os_event->pos;
+            ui_event.delta_2f32   = os_event->delta;
+            ui_event.timestamp_us = os_event->timestamp_us;
+            ui_event_list_push(ui_build_arena(), &events, &ui_event);
           }
         }break;
         
@@ -2083,6 +2116,29 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
         }break;
         
+        //- rjf: meta controls
+        case DF_CoreCmdKind_Edit:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Press;
+          evt.slot       = UI_EventActionSlot_Edit;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        case DF_CoreCmdKind_Accept:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Press;
+          evt.slot       = UI_EventActionSlot_Accept;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        case DF_CoreCmdKind_Cancel:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Press;
+          evt.slot       = UI_EventActionSlot_Cancel;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        
         //- rjf: directional movement & text controls
         //
         // NOTE(rjf): These all get funneled into a separate intermediate that
@@ -2091,191 +2147,345 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //
         case DF_CoreCmdKind_MoveLeft:
         {
-          UI_NavAction action = {UI_NavActionFlag_PickSelectSide|UI_NavActionFlag_ZeroDeltaOnSelect|UI_NavActionFlag_ExplicitDirectional, {-1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_PickSelectSide|UI_EventFlag_ZeroDeltaOnSelect|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveRight:
         {
-          UI_NavAction action = {UI_NavActionFlag_PickSelectSide|UI_NavActionFlag_ZeroDeltaOnSelect|UI_NavActionFlag_ExplicitDirectional, {+1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_PickSelectSide|UI_EventFlag_ZeroDeltaOnSelect|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUp:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, -1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDown:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, +1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveLeftSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {-1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveRightSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+1, +0}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, -1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, +1}};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveLeftChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {-1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveRightChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, -1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_ExplicitDirectional, {+0, +1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpPage:
         {
-          UI_NavAction action = {0, {+0, -1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownPage:
         {
-          UI_NavAction action = {0, {+0, +1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpWhole:
         {
-          UI_NavAction action = {0, {+0, -1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownWhole:
         {
-          UI_NavAction action = {0, {+0, +1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveLeftChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {-1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveRightChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, -1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownChunkSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, +1}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark|UI_EventFlag_ExplicitDirectional;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpPageSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, -1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownPageSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark|UI_NavActionFlag_ExplicitDirectional, {+0, +1}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Page;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveUpWholeSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {+0, -1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveDownWholeSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {+0, +1}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Whole;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        case DF_CoreCmdKind_MoveUpReorder:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_Reorder;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, -1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
+        }break;
+        case DF_CoreCmdKind_MoveDownReorder:
+        {
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_Reorder;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+0, +1);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveHome:
         {
-          UI_NavAction action = {0, {-1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveEnd:
         {
-          UI_NavAction action = {0, {+1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveHomeSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {-1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_MoveEndSelect:
         {
-          UI_NavAction action = {UI_NavActionFlag_KeepMark, {+1, +0}, UI_NavDeltaUnit_Whole};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Navigate;
+          evt.flags      = UI_EventFlag_KeepMark;
+          evt.delta_unit = UI_EventDeltaUnit_Line;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_SelectAll:
         {
-          UI_NavAction action1 = {0, {-1, +0}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action1);
-          UI_NavAction action2 = {UI_NavActionFlag_KeepMark, {+1, +0}, UI_NavDeltaUnit_EndPoint};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action2);
+          UI_Event evt1 = zero_struct;
+          evt1.kind       = UI_EventKind_Navigate;
+          evt1.delta_unit = UI_EventDeltaUnit_Whole;
+          evt1.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt1);
+          UI_Event evt2 = zero_struct;
+          evt2.kind       = UI_EventKind_Navigate;
+          evt2.flags      = UI_EventFlag_KeepMark;
+          evt2.delta_unit = UI_EventDeltaUnit_Whole;
+          evt2.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt2);
         }break;
         case DF_CoreCmdKind_DeleteSingle:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete, {+1, +0}, UI_NavDeltaUnit_Element};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_DeleteChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete, {+1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(+1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_BackspaceSingle:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete|UI_NavActionFlag_ZeroDeltaOnSelect, {-1, +0}, UI_NavDeltaUnit_Element};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete|UI_EventFlag_ZeroDeltaOnSelect;
+          evt.delta_unit = UI_EventDeltaUnit_Char;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_BackspaceChunk:
         {
-          UI_NavAction action = {UI_NavActionFlag_Delete|UI_NavActionFlag_ZeroDeltaOnSelect, {-1, +0}, UI_NavDeltaUnit_Chunk};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind       = UI_EventKind_Edit;
+          evt.flags      = UI_EventFlag_Delete;
+          evt.delta_unit = UI_EventDeltaUnit_Word;
+          evt.delta_2s32 = v2s32(-1, +0);
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_Copy:
         {
-          UI_NavAction action = {UI_NavActionFlag_Copy|UI_NavActionFlag_KeepMark};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind  = UI_EventKind_Edit;
+          evt.flags = UI_EventFlag_Copy|UI_EventFlag_KeepMark;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_Cut:
         {
-          UI_NavAction action = {UI_NavActionFlag_Copy|UI_NavActionFlag_Delete};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind  = UI_EventKind_Edit;
+          evt.flags = UI_EventFlag_Copy|UI_EventFlag_Delete;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_Paste:
         {
-          UI_NavAction action = {UI_NavActionFlag_Paste};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind   = UI_EventKind_Text;
+          evt.string = os_get_clipboard_text(ui_build_arena());
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         case DF_CoreCmdKind_InsertText:
         {
-          String8 insertion = params.string;
-          UI_NavAction action = {0, {0}, (UI_NavDeltaUnit)0, push_str8_copy(ui_build_arena(), insertion)};
-          ui_nav_action_list_push(ui_build_arena(), &nav_actions, action);
+          UI_Event evt = zero_struct;
+          evt.kind   = UI_EventKind_Text;
+          evt.string = params.string;
+          ui_event_list_push(ui_build_arena(), &events, &evt);
         }break;
         
         //- rjf: address finding
@@ -2287,7 +2497,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         //- rjf: thread finding
         case DF_CoreCmdKind_FindThread:
         {
-          DBGI_Scope *scope = dbgi_scope_open();
+          DI_Scope *scope = di_scope_open();
           DF_Entity *thread = df_entity_from_handle(params.entity);
           U64 unwind_count = params.index;
           if(thread->kind == DF_EntityKind_Thread)
@@ -2298,19 +2508,19 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
             DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-            DF_Entity *binary = df_binary_file_from_module(module);
+            DI_Key dbgi_key = df_dbgi_key_from_module(module);
+            RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
             U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-            DBGI_Parse *dbgi = df_dbgi_parse_from_binary_file(scope, binary);
-            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_binary_voff(binary, rip_voff);
+            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff);
             
             // rjf: snap to resolved line
             B32 missing_rip = (rip_vaddr == 0);
-            B32 binary_missing = (binary->flags & DF_EntityFlag_IsMissing);
-            B32 dbg_info_pending = !binary_missing && dbgi == &dbgi_parse_nil;
+            B32 dbgi_missing = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
+            B32 dbgi_pending = !dbgi_missing && rdi == &di_rdi_parsed_nil;
             B32 has_line_info = (line_info.voff_range.max != line_info.voff_range.min);
             B32 has_module = !df_entity_is_nil(module);
-            B32 has_dbg_info = has_module && !binary_missing;
-            if(!dbg_info_pending && (has_line_info || has_module))
+            B32 has_dbg_info = has_module && !dbgi_missing;
+            if(!dbgi_pending && (has_line_info || has_module))
             {
               DF_CmdParams params = df_cmd_params_from_window(ws);
               if(has_line_info)
@@ -2326,17 +2536,18 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               params.index = unwind_count;
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualOff);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Index);
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
             // rjf: retry on stopped, pending debug info
-            if(!df_ctrl_targets_running() && (dbg_info_pending || missing_rip))
+            if(!df_ctrl_targets_running() && (dbgi_pending || missing_rip))
             {
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindThread));
             }
           }
-          dbgi_scope_close(scope);
+          di_scope_close(scope);
         }break;
         case DF_CoreCmdKind_FindSelectedThread:
         {
@@ -2360,17 +2571,17 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             
             // rjf: try to resolve name as a symbol
             U64 voff = 0;
-            DF_Entity *voff_binary = &df_g_nil_entity;
+            DI_Key voff_dbgi_key = {0};
             if(name_resolved == 0)
             {
-              DF_EntityList binaries = df_push_active_binary_list(scratch.arena);
-              for(DF_EntityNode *n = binaries.first; n != 0; n = n->next)
+              DI_KeyList keys = df_push_active_dbgi_key_list(scratch.arena);
+              for(DI_KeyNode *n = keys.first; n != 0; n = n->next)
               {
-                U64 binary_voff = df_voff_from_binary_symbol_name(n->entity, name);
+                U64 binary_voff = df_voff_from_dbgi_key_symbol_name(&n->v, name);
                 if(binary_voff != 0)
                 {
                   voff = binary_voff;
-                  voff_binary = n->entity;
+                  voff_dbgi_key = n->v;
                   name_resolved = 1;
                   break;
                 }
@@ -2479,19 +2690,25 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             // rjf: name resolved to voff * dbg info
             if(name_resolved != 0 && voff != 0)
             {
-              DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_binary_voff(voff_binary, voff);
+              DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&voff_dbgi_key, voff);
               DF_CmdParams p = params;
               {
                 p.file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
                 p.text_point = dasm2src_info.pt;
                 df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
                 df_cmd_params_mark_slot(&p, DF_CmdParamSlot_TextPoint);
-                if(!df_entity_is_nil(voff_binary))
+                if(voff_dbgi_key.path.size != 0)
                 {
-                  p.entity = df_handle_from_entity(voff_binary);
-                  p.voff = dasm2src_info.voff_range.min;
-                  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-                  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_VirtualOff);
+                  DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &voff_dbgi_key);
+                  DF_Entity *module = df_first_entity_from_list(&modules);
+                  DF_Entity *process = df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
+                  if(!df_entity_is_nil(process))
+                  {
+                    p.entity = df_handle_from_entity(process);
+                    p.vaddr = module->vaddr_rng.min + dasm2src_info.voff_range.min;
+                    df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
+                    df_cmd_params_mark_slot(&p, DF_CmdParamSlot_VirtualAddr);
+                  }
                 }
               }
               df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
@@ -2710,7 +2927,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             {
               for(DF_TextLineSrc2DasmInfoNode *n = src2dasm.v[src2dasm_idx].first; n != 0; n = n->next)
               {
-                DF_EntityList modules = df_modules_from_binary_file(scratch.arena, n->v.binary);
+                DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
                 DF_Entity *module = df_module_from_thread_candidates(thread, &modules);
                 vaddr = df_vaddr_from_voff(module, n->v.voff_range.min);
                 goto end_lookup;
@@ -3080,7 +3297,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       }
       
       // rjf: begin & push initial stack values
-      ui_begin_build(events, ws->os, &nav_actions, &icon_info, df_dt(), df_dt());
+      ui_begin_build(ws->os, &events, &icon_info, df_dt(), df_dt());
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_pref_width(ui_em(20.f, 1));
@@ -3098,7 +3315,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     //
     Rng2F32 window_rect = os_client_rect_from_window(ws->os);
     Vec2F32 window_rect_dim = dim_2f32(window_rect);
-    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x, window_rect.y0+ui_top_pref_height().value);
+    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+ui_top_pref_height().value);
     Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - ui_top_pref_height().value, window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
     Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
     F32 window_edge_px = os_dpi_from_window(ws->os)*0.035f;
@@ -3210,26 +3427,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           
           case DF_EntityKind_Module:
           {
-            DF_Entity *bin_file = df_binary_file_from_module(entity);
-            if(ui_clicked(df_icon_buttonf(DF_IconKind_Module, 0, "Inspect Binary File Memory")))
-            {
-              DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
-              params.entity = df_handle_from_entity(bin_file);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-              df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PendingEntity));
-              ui_ctx_menu_close();
-            }
-            if(ui_clicked(df_icon_buttonf(DF_IconKind_Module, 0, "View Binary File Disassembly")))
-            {
-              DF_CmdParams params = df_cmd_params_from_panel(ws, panel);
-              params.entity = df_handle_from_entity(bin_file);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-              df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PendingEntity));
-              ui_ctx_menu_close();
-            }
           }break;
           case DF_EntityKind_Process:
           {
+#if 0
             if(ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Open Process Log")))
             {
               DF_Entity *log = df_log_from_entity(entity);
@@ -3239,9 +3440,11 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Code));
               ui_ctx_menu_close();
             }
+#endif
           }break;
           case DF_EntityKind_Thread:
           {
+#if 0
             if(ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Open Thread Log")))
             {
               DF_Entity *log = df_log_from_entity(entity);
@@ -3251,6 +3454,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Code));
               ui_ctx_menu_close();
             }
+#endif
           }break;
         }
       }
@@ -3723,13 +3927,13 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
                 CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
                 String8List lines = {0};
-                for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
+                for(U64 frame_idx = 0; frame_idx < unwind.frames.count; frame_idx += 1)
                 {
-                  U64 rip_vaddr = frame->rip;
+                  U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[frame_idx].regs);
                   DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-                  DF_Entity *binary = df_binary_file_from_module(module);
+                  DI_Key dbgi_key = df_dbgi_key_from_module(module);
                   U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-                  String8 symbol = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
+                  String8 symbol = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
                   if(symbol.size != 0)
                   {
                     str8_list_pushf(scratch.arena, &lines, "0x%I64x: %S", rip_vaddr, symbol);
@@ -4015,14 +4219,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
                 UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
                 UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
                 UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return)))
+                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmAccept));
               }
               UI_CornerRadius10(ui_top_font_size()*0.25f)
                 UI_CornerRadius11(ui_top_font_size()*0.25f)
-                if(ui_clicked(ui_buttonf("Cancel")) || os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+                if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
               {
                 DF_CmdParams p = df_cmd_params_zero();
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ConfirmCancel));
@@ -4054,14 +4258,15 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
         DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
         U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
-        DF_Entity *binary = df_binary_file_from_module(module);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
         
         //- rjf: gather lister items
         DF_AutoCompListerItemChunkList item_list = {0};
         {
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Locals)
+          //- rjf: gather locals
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Locals)
           {
-            EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_binary_voff(binary, thread_rip_voff);
+            EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
             for(EVAL_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
             {
               DF_AutoCompListerItem item = {0};
@@ -4076,7 +4281,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
             }
           }
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_Registers)
+          
+          //- rjf: gather registers
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Registers)
           {
             Architecture arch = df_architecture_from_entity(thread);
             U64 reg_names_count = regs_reg_code_count_from_architecture(arch);
@@ -4116,7 +4323,9 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
             }
           }
-          if(ws->autocomp_lister_flags & DF_AutoCompListerFlag_ViewRules)
+          
+          //- rjf: gather view rules
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_ViewRules)
           {
             for(U64 slot_idx = 0; slot_idx < df_state->view_rule_spec_table_size; slot_idx += 1)
             {
@@ -4135,6 +4344,79 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               }
             }
           }
+          
+          //- rjf: gather languages
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Languages)
+          {
+            for(EachNonZeroEnumVal(TXT_LangKind, lang))
+            {
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = txt_extension_from_lang_kind(lang);
+                item.kind_string = str8_lit("Language");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather architectures
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Architectures)
+          {
+            for(EachNonZeroEnumVal(Architecture, arch))
+            {
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = string_from_architecture(arch);
+                item.kind_string = str8_lit("Architecture");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather tex2dformats
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Tex2DFormats)
+          {
+            for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
+            {
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = lower_from_str8(scratch.arena, r_tex2d_format_display_string_table[fmt]);
+                item.kind_string = str8_lit("Format");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather view rule params
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_ViewRuleParams)
+          {
+            for(String8Node *n = ws->autocomp_lister_params.strings.first; n != 0; n = n->next)
+            {
+              String8 string = n->string;
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = string;
+                item.kind_string = str8_lit("Parameter");
+                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
         }
         
         //- rjf: lister item list -> sorted array
@@ -4146,7 +4428,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           // rjf: animate target # of rows
           {
             F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
-            F32 target = Min((F32)item_array.count, 8.f);
+            F32 target = Min((F32)item_array.count, 16.f);
             if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
             {
               df_gfx_request_frame();
@@ -4190,7 +4472,12 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             UI_Squish(0.25f-0.25f*ws->autocomp_open_t)
             UI_Transparency(1.f-ws->autocomp_open_t)
           {
-            autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_Clip|UI_BoxFlag_RoundChildrenByParent|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackground, "autocomp_box");
+            autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_Clickable|UI_BoxFlag_Clip|UI_BoxFlag_RoundChildrenByParent|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackground, "autocomp_box");
+            if(ws->autocomp_query_dirty)
+            {
+              ws->autocomp_query_dirty = 0;
+              autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
+            }
           }
           UI_Parent(autocomp_box) UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_HoverCursor(OS_Cursor_HandPoint)
             UI_Focus(UI_FocusKind_Null)
@@ -4198,10 +4485,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             for(U64 idx = 0; idx < item_array.count; idx += 1)
             {
               DF_AutoCompListerItem *item = &item_array.v[idx];
-              UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_Clickable, "autocomp_%I64x", idx);
+              UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_MouseClickable, "autocomp_%I64x", idx);
               UI_Parent(item_box)
               {
-                UI_WidthFill ui_label(item->string);
+                UI_WidthFill
+                {
+                  UI_Box *box = ui_label(item->string).box;
+                  ui_box_equip_fuzzy_match_ranges(box, &item->matches);
+                }
                 UI_Font(df_font_from_slot(DF_FontSlot_Main))
                   UI_PrefWidth(ui_text_dim(10, 1))
                   UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
@@ -4210,8 +4501,23 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               UI_Signal item_sig = ui_signal_from_box(item_box);
               if(ui_clicked(item_sig))
               {
-                UI_NavAction autocomp_action = {UI_NavActionFlag_ReplaceAndCommit, {0}, (UI_NavDeltaUnit)0, push_str8_copy(ui_build_arena(), item->string)};
-                ui_nav_action_list_push(ui_build_arena(), ui_nav_actions(), autocomp_action);
+                UI_Event move_back_evt = zero_struct;
+                move_back_evt.kind = UI_EventKind_Navigate;
+                move_back_evt.flags = UI_EventFlag_KeepMark;
+                move_back_evt.delta_2s32.x = -(S32)query.size;
+                ui_event_list_push(ui_build_arena(), &events, &move_back_evt);
+                UI_Event paste_evt = zero_struct;
+                paste_evt.kind = UI_EventKind_Text;
+                paste_evt.string = item->string;
+                ui_event_list_push(ui_build_arena(), &events, &paste_evt);
+                autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
+              }
+              else if(item_box->flags & UI_BoxFlag_FocusHot && !(item_box->flags & UI_BoxFlag_FocusHotDisabled))
+              {
+                UI_Event evt = zero_struct;
+                evt.kind   = UI_EventKind_AutocompleteHint;
+                evt.string = item->string;
+                ui_event_list_push(ui_build_arena(), &events, &evt);
               }
             }
           }
@@ -4551,28 +4857,28 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               U64 open_menu_idx_prime = open_menu_idx;
               if(menu_open && ws->menu_bar_focused && window_is_focused)
               {
-                UI_NavActionList *nav_actions = ui_nav_actions();
-                for(UI_NavActionNode *n = nav_actions->first, *next = 0;
+                UI_EventList *events = ui_events();
+                for(UI_EventNode *n = events->first, *next = 0;
                     n != 0;
                     n = next)
                 {
                   next = n->next;
-                  UI_NavAction *action = &n->v;
+                  UI_Event *evt = &n->v;
                   B32 taken = 0;
-                  if(action->delta.x > 0)
+                  if(evt->delta_2s32.x > 0)
                   {
                     taken = 1;
                     open_menu_idx_prime += 1;
                     open_menu_idx_prime = open_menu_idx_prime%ArrayCount(items);
                   }
-                  if(action->delta.x < 0)
+                  if(evt->delta_2s32.x < 0)
                   {
                     taken = 1;
                     open_menu_idx_prime = open_menu_idx_prime > 0 ? open_menu_idx_prime-1 : (ArrayCount(items)-1);
                   }
                   if(taken)
                   {
-                    ui_nav_eat_action_node(nav_actions, n);
+                    ui_eat_event(events, n);
                   }
                 }
               }
@@ -4582,7 +4888,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               {
                 ui_set_next_fastpath_codepoint(items[idx].codepoint);
                 B32 alt_fastpath_key = 0;
-                if(os_key_press(ui_events(), ui_window(), OS_EventFlag_Alt, items[idx].key))
+                if(ui_key_press(OS_EventFlag_Alt, items[idx].key))
                 {
                   alt_fastpath_key = 1;
                 }
@@ -5003,7 +5309,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
             }
             os_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
             os_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
-            os_window_push_custom_title_bar_client_area(ws->os, cls_sig.box->rect);
+            os_window_push_custom_title_bar_client_area(ws->os, pad_2f32(cls_sig.box->rect, 2.f));
           }
         }
       }
@@ -5317,14 +5623,14 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       
       //- rjf: query submission
       if((ui_is_focus_active() || (window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && !ws->query_view_selected)) &&
-         os_key_press(events, ws->os, 0, OS_Key_Esc))
+         ui_slot_press(UI_EventActionSlot_Cancel))
       {
         DF_CmdParams params = df_cmd_params_from_window(ws);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CancelQuery));
       }
       if(ui_is_focus_active())
       {
-        if(os_key_press(events, ws->os, 0, OS_Key_Return))
+        if(ui_slot_press(UI_EventActionSlot_Accept))
         {
           Temp scratch = scratch_begin(&arena, 1);
           DF_View *view = ws->query_view_stack_top;
@@ -5358,6 +5664,10 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
       {
         ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
       }
+    }
+    else
+    {
+      ws->query_view_selected = 0;
     }
     
     ////////////////////////////
@@ -5409,7 +5719,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
         UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
       {
         Temp scratch = scratch_begin(&arena, 1);
-        DBGI_Scope *scope = dbgi_scope_open();
+        DI_Scope *scope = di_scope_open();
         DF_CtrlCtx ctrl_ctx = ws->hover_eval_ctrl_ctx;
         DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -5676,7 +5986,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           }
         }
         
-        dbgi_scope_close(scope);
+        di_scope_close(scope);
         scratch_end(scratch);
       }
     }
@@ -6245,7 +6555,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           DF_View *view = df_view_from_handle(panel->selected_tab_view);
           UI_Focus(UI_FocusKind_On)
           {
-            if(view->is_filtering && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Return))
+            if(view->is_filtering && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
             {
               DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ApplyFilter));
@@ -6464,25 +6774,26 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
           if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-            for(UI_NavActionNode *n = ui_nav_actions()->first, *next = 0; n != 0; n = next)
+            UI_EventList *events = ui_events();
+            for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
             {
               next = n->next;
-              if(n->v.flags & UI_NavActionFlag_Paste)
+              if(n->v.flags & UI_EventFlag_Paste)
               {
-                ui_nav_eat_action_node(ui_nav_actions(), n);
+                ui_eat_event(events, n);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Paste));
               }
-              else if(n->v.insertion.size != 0)
+              else if(n->v.string.size != 0 && n->v.kind == UI_EventKind_Text)
               {
-                ui_nav_eat_action_node(ui_nav_actions(), n);
+                ui_eat_event(events, n);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
-                p.string = n->v.insertion;
+                p.string = n->v.string;
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_InsertText));
               }
             }
           }
-          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && os_key_press(ui_events(), ui_window(), 0, OS_Key_Esc))
+          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
@@ -6793,7 +7104,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               
               // rjf: space for next tab
               {
-                ui_spacer(ui_em(0.15f, 1.f));
+                ui_spacer(ui_em(0.3f, 1.f));
               }
               
               // rjf: store off drop-site
@@ -6892,7 +7203,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
               
               // rjf: drop
               DF_DragDropPayload payload = df_g_drag_drop_payload;
-              if(catchall_drop_site_hovered && (active_drop_site != 0 && df_drag_drop(&payload)) || (df_panel_from_handle(payload.panel) == panel && 0))
+              if(catchall_drop_site_hovered && (active_drop_site != 0 && df_drag_drop(&payload)))
               {
                 DF_View *view = df_view_from_handle(payload.view);
                 DF_Panel *src_panel = df_panel_from_handle(payload.panel);
@@ -7053,7 +7364,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     ////////////////////////////
     //- rjf: drag/drop cancelling
     //
-    if(df_drag_is_active() && os_key_press(events, ws->os, 0, OS_Key_Esc))
+    if(df_drag_is_active() && ui_slot_press(UI_EventActionSlot_Cancel))
     {
       df_drag_kill();
       ui_kill_action();
@@ -7062,17 +7373,19 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
     ////////////////////////////
     //- rjf: font size changing
     //
-    for(OS_Event *event = events->first; event != 0; event = event->next)
+    for(UI_EventNode *n = events.first, *next = 0; n != 0; n = next)
     {
-      if(os_handle_match(event->window, ws->os) && event->kind == OS_EventKind_Scroll && event->flags & OS_EventFlag_Ctrl)
+      next = n->next;
+      UI_Event *event = &n->v;
+      if(event->kind == UI_EventKind_Scroll && event->modifiers & OS_EventFlag_Ctrl)
       {
-        os_eat_event(ui_events(), event);
-        if(event->delta.y < 0)
+        ui_eat_event(&events, n);
+        if(event->delta_2f32.y < 0)
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncUIFontScale));
         }
-        else if(event->delta.y > 0)
+        else if(event->delta_2f32.y > 0)
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecUIFontScale));
@@ -7134,7 +7447,7 @@ df_window_update_and_render(Arena *arena, OS_EventList *events, DF_Window *ws, D
   //////////////////////////////
   //- rjf: hover eval cancelling
   //
-  if(ws->hover_eval_string.size != 0 && os_key_press(events, ws->os, 0, OS_Key_Esc))
+  if(ws->hover_eval_string.size != 0 && ui_slot_press(UI_EventActionSlot_Cancel))
   {
     MemoryZeroStruct(&ws->hover_eval_string);
     arena_clear(ws->hover_eval_arena);
@@ -8001,7 +8314,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
 }
 
 internal DF_EvalVizWindowedRowList
-df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks)
+df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -8387,12 +8700,12 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scop
       for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
       {
         // rjf: unpack info about this row
-        String8 name = dbgi_fuzzy_item_string_from_rdi_target_element_idx(parse_ctx->rdi, block->dbgi_target, block->backing_search_items.v[idx].idx);
+        String8 name = fzy_item_string_from_rdi_target_element_idx(parse_ctx->rdi, block->fzy_target, block->fzy_backing_items.v[idx].idx);
         
         // rjf: get keys for this row
         DF_ExpandKey parent_key = block->parent_key;
         DF_ExpandKey key = block->key;
-        key.child_num = block->backing_search_items.v[idx].idx;
+        key.child_num = block->fzy_backing_items.v[idx].idx;
         
         // rjf: get eval for this row
         DF_Eval eval = df_eval_from_string(arena, scope, ctrl_ctx, parse_ctx, macro_map, name);
@@ -8515,10 +8828,173 @@ df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItemArray *array)
   qsort(array->v, array->count, sizeof(array->v[0]), (int (*)(const void*, const void*))df_autocomp_lister_item_qsort_compare);
 }
 
-internal void
-df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerFlags flags, String8 query)
+internal String8
+df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
 {
+  U64 word_start_off = 0;
+  for(U64 off = 0; off < input.size && off < cursor_off; off += 1)
+  {
+    if(!char_is_alpha(input.str[off]) && !char_is_digit(input.str[off], 10) && input.str[off] != '_')
+    {
+      word_start_off = off+1;
+    }
+  }
+  String8 query = str8_skip(str8_prefix(input, cursor_off), word_start_off);
+  return query;
+}
+
+internal DF_AutoCompListerParams
+df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off)
+{
+  DF_AutoCompListerParams params = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    //- rjf: do partial parse of input
+    MD_TokenizeResult input_tokenize = md_tokenize_from_text(scratch.arena, string);
+    
+    //- rjf: find descension steps to cursor
+    typedef struct DescendStep DescendStep;
+    struct DescendStep
+    {
+      DescendStep *next;
+      DescendStep *prev;
+      String8 string;
+    };
+    DescendStep *first_step = 0;
+    DescendStep *last_step = 0;
+    DescendStep *free_step = 0;
+    S32 paren_nest = 0;
+    S32 colon_nest = 0;
+    String8 last_step_string = {0};
+    for(U64 idx = 0; idx < input_tokenize.tokens.count; idx += 1)
+    {
+      MD_Token *token = &input_tokenize.tokens.v[idx];
+      if(token->range.min >= cursor_off)
+      {
+        break;
+      }
+      String8 token_string = str8_substr(string, token->range);
+      if(token->flags & (MD_TokenFlag_Identifier|MD_TokenFlag_StringLiteral))
+      {
+        last_step_string = token_string;
+      }
+      if(str8_match(token_string, str8_lit("("), 0) || str8_match(token_string, str8_lit("["), 0) || str8_match(token_string, str8_lit("{"), 0))
+      {
+        paren_nest += 1;
+      }
+      if(str8_match(token_string, str8_lit(")"), 0) || str8_match(token_string, str8_lit("]"), 0) || str8_match(token_string, str8_lit("}"), 0))
+      {
+        paren_nest -= 1;
+        for(;colon_nest > paren_nest; colon_nest -= 1)
+        {
+          if(last_step != 0)
+          {
+            DescendStep *step = last_step;
+            DLLRemove(first_step, last_step, step);
+            SLLStackPush(free_step, step);
+          }
+        }
+        if(paren_nest == 0 && last_step != 0)
+        {
+          DescendStep *step = last_step;
+          DLLRemove(first_step, last_step, step);
+          SLLStackPush(free_step, step);
+        }
+      }
+      if(str8_match(token_string, str8_lit(":"), 0))
+      {
+        colon_nest += 1;
+        if(last_step_string.size != 0)
+        {
+          DescendStep *step = free_step;
+          if(step != 0)
+          {
+            SLLStackPop(free_step);
+            MemoryZeroStruct(step);
+          }
+          else
+          {
+            step = push_array(scratch.arena, DescendStep, 1);
+          }
+          step->string = last_step_string;
+          DLLPushBack(first_step, last_step, step);
+        }
+      }
+      if(str8_match(token_string, str8_lit(";"), 0) || str8_match(token_string, str8_lit(","), 0))
+      {
+        for(;colon_nest > paren_nest; colon_nest -= 1)
+        {
+          if(last_step != 0)
+          {
+            DescendStep *step = last_step;
+            DLLRemove(first_step, last_step, step);
+            SLLStackPush(free_step, step);
+          }
+        }
+      }
+    }
+    
+    //- rjf: map view rule root to spec
+    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(first_step ? first_step->string : str8_zero());
+    
+    //- rjf: do parse of schema
+    MD_TokenizeResult schema_tokenize = md_tokenize_from_text(scratch.arena, spec->info.schema);
+    MD_ParseResult schema_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), spec->info.schema, schema_tokenize.tokens);
+    MD_Node *schema_rule_root = md_child_from_string(schema_parse.root, str8_lit("x"), 0);
+    
+    //- rjf: follow schema according to descend steps, gather flags from schema node matching cursor descension steps
+    if(first_step != 0)
+    {
+      MD_Node *schema_node = schema_rule_root;
+      for(DescendStep *step = first_step->next;;)
+      {
+        if(step == 0)
+        {
+          for(MD_EachNode(child, schema_node->first))
+          {
+            if(0){}
+            else if(str8_match(child->string, str8_lit("expr"),           StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Locals;}
+            else if(str8_match(child->string, str8_lit("member"),         StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Members;}
+            else if(str8_match(child->string, str8_lit("lang"),           StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Languages;}
+            else if(str8_match(child->string, str8_lit("arch"),           StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Architectures;}
+            else if(str8_match(child->string, str8_lit("tex2dformat"),    StringMatchFlag_CaseInsensitive)) {params.flags |= DF_AutoCompListerFlag_Tex2DFormats;}
+            else if(child->flags & (MD_NodeFlag_StringSingleQuote|MD_NodeFlag_StringDoubleQuote|MD_NodeFlag_StringTick))
+            {
+              str8_list_push(arena, &params.strings, child->string);
+              params.flags |= DF_AutoCompListerFlag_ViewRuleParams;
+            }
+          }
+          break;
+        }
+        if(step != 0)
+        {
+          MD_Node *next_node = md_child_from_string(schema_node, step->string, StringMatchFlag_CaseInsensitive);
+          schema_node = next_node;
+          step = step->next;
+        }
+        else
+        {
+          schema_node = schema_node->first;
+        }
+      }
+    }
+    
+    scratch_end(scratch);
+  }
+  return params;
+}
+
+internal void
+df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerParams *params, String8 input, U64 cursor_off)
+{
+  String8 query = df_autocomp_query_word_from_input_string_off(input, cursor_off);
   String8 current_query = str8(ws->autocomp_lister_query_buffer, ws->autocomp_lister_query_size);
+  if(cursor_off != ws->autocomp_cursor_off)
+  {
+    ws->autocomp_query_dirty = 1;
+    ws->autocomp_cursor_off = cursor_off;
+  }
   if(!str8_match(query, current_query, 0))
   {
     ws->autocomp_force_closed = 0;
@@ -8537,7 +9013,9 @@ df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx
   }
   ws->autocomp_ctrl_ctx = ctrl_ctx;
   ws->autocomp_root_key = root_key;
-  ws->autocomp_lister_flags = flags;
+  arena_clear(ws->autocomp_lister_params_arena);
+  MemoryCopyStruct(&ws->autocomp_lister_params, params);
+  ws->autocomp_lister_params.strings = str8_list_copy(ws->autocomp_lister_params_arena, &ws->autocomp_lister_params.strings);
   ws->autocomp_lister_query_size = Min(query.size, sizeof(ws->autocomp_lister_query_buffer));
   MemoryCopy(ws->autocomp_lister_query_buffer, query.str, ws->autocomp_lister_query_size);
   ws->autocomp_last_frame_idx = df_frame_index();
@@ -9072,6 +9550,13 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
   Temp scratch = scratch_begin(&arena, 1);
   DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
   String8 thread_display_string = df_display_string_from_entity(scratch.arena, thread);
+  String8 process_thread_string = thread_display_string;
+  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  if(process->kind == DF_EntityKind_Process)
+  {
+    String8 process_display_string = df_display_string_from_entity(scratch.arena, process);
+    process_thread_string = push_str8f(scratch.arena, "%S: %S", process_display_string, thread_display_string);
+  }
   switch(event->kind)
   {
     default:
@@ -9083,7 +9568,7 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
         {
           if(!df_entity_is_nil(thread))
           {
-            explanation = push_str8f(arena, "%S completed step", thread_display_string);
+            explanation = push_str8f(arena, "%S completed step", process_thread_string);
           }
           else
           {
@@ -9095,7 +9580,7 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
           if(!df_entity_is_nil(thread))
           {
             icon = DF_IconKind_CircleFilled;
-            explanation = push_str8f(arena, "%S hit a breakpoint", thread_display_string);
+            explanation = push_str8f(arena, "%S hit a breakpoint", process_thread_string);
           }
         }break;
         case CTRL_EventCause_InterruptedByException:
@@ -9108,30 +9593,30 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
               default:
               {
                 String8 exception_code_string = df_string_from_exception_code(event->exception_code);
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", thread_display_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", process_thread_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
               }break;
               case CTRL_ExceptionKind_CppThrow:
               {
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", thread_display_string, event->exception_code);
+                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", process_thread_string, event->exception_code);
               }break;
               case CTRL_ExceptionKind_MemoryRead:
               {
                 explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation reading 0x%I64x",
-                                         thread_display_string,
+                                         process_thread_string,
                                          event->exception_code,
                                          event->vaddr_rng.min);
               }break;
               case CTRL_ExceptionKind_MemoryWrite:
               {
                 explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation writing 0x%I64x",
-                                         thread_display_string,
+                                         process_thread_string,
                                          event->exception_code,
                                          event->vaddr_rng.min);
               }break;
               case CTRL_ExceptionKind_MemoryExecute:
               {
                 explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation executing 0x%I64x",
-                                         thread_display_string,
+                                         process_thread_string,
                                          event->exception_code,
                                          event->vaddr_rng.min);
               }break;
@@ -9146,7 +9631,7 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
         case CTRL_EventCause_InterruptedByTrap:
         {
           icon = DF_IconKind_WarningBig;
-          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", thread_display_string, event->exception_code);
+          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", process_thread_string, event->exception_code);
         }break;
         case CTRL_EventCause_InterruptedByHalt:
         {
@@ -9463,13 +9948,13 @@ df_entity_tooltips(DF_Entity *entity)
       ui_spacer(ui_em(1.5f, 1.f));
       DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
       CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
-      for(CTRL_UnwindFrame *frame = unwind.first; frame != 0; frame = frame->next)
+      for(U64 idx = 0; idx < unwind.frames.count; idx += 1)
       {
-        U64 rip_vaddr = frame->rip;
+        U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[idx].regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-        DF_Entity *binary = df_binary_file_from_module(module);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
         U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-        String8 symbol = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
+        String8 symbol = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
         UI_PrefWidth(ui_children_sum(1)) UI_Row
         {
           UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_PrefWidth(ui_em(18.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("0x%I64x", rip_vaddr);
@@ -9584,13 +10069,12 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     ui_set_next_background_color(bg_color);
   }
   ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-  UI_Key key = ui_key_from_stringf(ui_top_parent()->key, "entity_ref_button_%p", entity);
-  UI_Box *box = ui_build_box_from_key(UI_BoxFlag_Clickable|
-                                      UI_BoxFlag_DrawBorder|
-                                      UI_BoxFlag_DrawBackground|
-                                      UI_BoxFlag_DrawHotEffects|
-                                      UI_BoxFlag_DrawActiveEffects,
-                                      key);
+  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                          UI_BoxFlag_DrawBorder|
+                                          UI_BoxFlag_DrawBackground|
+                                          UI_BoxFlag_DrawHotEffects|
+                                          UI_BoxFlag_DrawActiveEffects,
+                                          "entity_ref_button_%p", entity);
   
   //- rjf: build contents
   UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 0))
@@ -9658,13 +10142,14 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
       U64 idx = 0;
       U64 limit = 3;
       ui_spacer(ui_em(1.f, 1.f));
-      for(CTRL_UnwindFrame *f = unwind.last; f != 0 && idx < limit; f = f->prev)
+      for(U64 num = unwind.frames.count; num > 0; num -= 1)
       {
-        U64 rip_vaddr = f->rip;
+        CTRL_UnwindFrame *f = &unwind.frames.v[num-1];
+        U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-        DF_Entity *binary = df_binary_file_from_module(module);
-        String8 procedure_name = df_symbol_name_from_binary_voff(scratch.arena, binary, rip_voff);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
+        String8 procedure_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
         if(procedure_name.size != 0)
         {
           FuzzyMatchRangeList fuzzy_matches = {0};
@@ -10071,6 +10556,14 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   UI_Box *margin_container_box = &ui_g_nil_box;
   if(params->flags & DF_CodeSliceFlag_Margin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build margins")
   {
+    if(params->margin_float_off_px != 0)
+    {
+      ui_set_next_pref_width(ui_px(params->margin_width_px, 1));
+      ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+      ui_build_box_from_key(0, ui_key_zero());
+      ui_set_next_fixed_x(params->margin_float_off_px);
+      ui_set_next_flags(UI_BoxFlag_DrawBackground);
+    }
     ui_set_next_pref_width(ui_px(params->margin_width_px, 1));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_set_next_child_layout_axis(Axis2_Y);
@@ -10099,7 +10592,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
             DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
-            DF_Entity *binary = df_binary_file_from_module(module);
+            DI_Key dbgi_key = df_dbgi_key_from_module(module);
             U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
@@ -10166,7 +10659,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                     n != 0;
                     n = n->next)
                 {
-                  if(n->v.binary == binary)
+                  if(di_key_match(&n->v.dbgi_key, &dbgi_key))
                   {
                     line_info = &n->v;
                     break;
@@ -10481,7 +10974,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //
   UI_Focus(UI_FocusKind_Off)
   {
-    DBGI_Scope *scope = dbgi_scope_open();
+    DI_Scope *scope = di_scope_open();
     U64 line_idx = 0;
     for(S64 line_num = params->line_num_range.min;
         line_num < params->line_num_range.max;
@@ -10546,7 +11039,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         }
       }
     }
-    dbgi_scope_close(scope);
+    di_scope_close(scope);
   }
   
   //////////////////////////////
@@ -10680,17 +11173,20 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     //- rjf: hovering text container & ctrl+scroll -> change font size
     if(ui_hovering(text_container_sig))
     {
-      for(OS_Event *event = ui_events()->first; event != 0; event = event->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
       {
-        if(os_handle_match(event->window, ui_window()) && event->kind == OS_EventKind_Scroll && event->flags & OS_EventFlag_Ctrl)
+        next = n->next;
+        UI_Event *event = &n->v;
+        if(event->kind == UI_EventKind_Scroll && event->modifiers & OS_EventFlag_Ctrl)
         {
-          os_eat_event(ui_events(), event);
-          if(event->delta.y < 0)
+          ui_eat_event(events, n);
+          if(event->delta_2f32.y < 0)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncCodeFontScale));
           }
-          else if(event->delta.y > 0)
+          else if(event->delta_2f32.y > 0)
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecCodeFontScale));
@@ -10771,11 +11267,11 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     if(params->line_src2dasm[line_slice_idx].first != 0 &&
        params->line_src2dasm[line_slice_idx].first->v.remap_line == mouse_pt.line)
     {
-      df_set_hovered_line_info(params->line_src2dasm[line_slice_idx].first->v.binary, params->line_src2dasm[line_slice_idx].first->v.voff_range.min);
+      df_set_hovered_line_info(&params->line_src2dasm[line_slice_idx].first->v.dbgi_key, params->line_src2dasm[line_slice_idx].first->v.voff_range.min);
     }
     if(params->line_dasm2src[line_slice_idx].first != 0)
     {
-      df_set_hovered_line_info(params->line_dasm2src[line_slice_idx].first->v.binary, params->line_dasm2src[line_slice_idx].first->v.voff_range.min);
+      df_set_hovered_line_info(&params->line_dasm2src[line_slice_idx].first->v.dbgi_key, params->line_dasm2src[line_slice_idx].first->v.voff_range.min);
     }
   }
   
@@ -10858,9 +11354,20 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     TxtRng select_rng = txt_rng(*cursor, *mark);
     Vec4F32 inactive_color = df_rgba_from_theme_color(DF_ThemeColor_WeakText);
     Vec4F32 active_color = df_rgba_from_theme_color(DF_ThemeColor_PlainText);
+    if(params->margin_float_off_px != 0)
+    {
+      ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
+      ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+      ui_build_box_from_key(0, ui_key_zero());
+      ui_set_next_fixed_x(params->margin_float_off_px);
+      ui_set_next_flags(UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideLeft);
+    }
+    else
+    {
+      ui_set_next_flags(UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideLeft);
+    }
     ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
-    ui_set_next_flags(UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideLeft);
     UI_Column
       UI_PrefHeight(ui_px(params->line_height_px, 1.f))
       UI_Font(params->font)
@@ -10902,7 +11409,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             if(dasm2src_info != 0)
             {
-              DF_Entity *binary = dasm2src_info->binary;
               has_line_info = 1;
               line_info_line_num = dasm2src_info->pt.line;
               line_info_t = selected_thread_module->alive_t;
@@ -10929,7 +11435,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //
   UI_Parent(text_container_box) ProfScope("build line text") UI_Focus(UI_FocusKind_Off)
   {
-    DF_Entity *hovered_line_binary = df_get_hovered_line_info_binary();
+    DI_Key hovered_line_dbgi_key = df_get_hovered_line_info_dbgi_key();
     U64 hovered_line_voff = df_get_hovered_line_info_voff();
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     UI_WidthFill
@@ -11004,12 +11510,12 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                 if(token->kind == TXT_TokenKind_Identifier || token->kind == TXT_TokenKind_Keyword)
                 {
                   B32 mapped_special = 0;
-                  for(DF_EntityNode *n = params->relevant_binaries.first; n != 0; n = n->next)
+                  for(DI_KeyNode *n = params->relevant_dbgi_keys.first; n != 0; n = n->next)
                   {
-                    DF_Entity *binary = n->entity;
+                    DI_Key dbgi_key = n->v;
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
-                      U64 voff = df_voff_from_binary_symbol_name(binary, token_string);
+                      U64 voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
                       if(voff != 0)
                       {
                         mapped_special = 1;
@@ -11019,7 +11525,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                     }
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
-                      U64 type_num = df_type_num_from_binary_name(binary, token_string);
+                      U64 type_num = df_type_num_from_dbgi_key_name(&dbgi_key, token_string);
                       if(type_num != 0)
                       {
                         mapped_special = 1;
@@ -11211,7 +11717,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             for(DF_TextLineSrc2DasmInfoNode *n = src2dasm_list->first; n != 0; n = n->next)
             {
               if(n->v.remap_line == line_num &&
-                 n->v.binary == hovered_line_binary &&
+                 di_key_match(&n->v.dbgi_key, &hovered_line_dbgi_key) &&
                  n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
               {
                 matches = 1;
@@ -11224,8 +11730,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           // rjf: check dasm2src
           if(dasm2src_list->first != 0)
           {
-            DF_Entity *binary = dasm2src_list->first->v.binary;
-            if(binary == hovered_line_binary)
+            DI_Key dbgi_key = dasm2src_list->first->v.dbgi_key;
+            if(di_key_match(&dbgi_key, &dasm2src_list->first->v.dbgi_key))
             {
               for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
               {
@@ -11282,25 +11788,28 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;
-  UI_NavActionList *nav_actions = ui_nav_actions();
-  for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+  UI_EventList *events = ui_events();
+  for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
   {
     next = n->next;
+    if(n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Edit)
+    {
+      continue;
+    }
     B32 taken = 0;
-    
     String8 line = txt_string_from_info_data_line_num(info, data, cursor->line);
-    UI_NavTxtOp single_line_op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, line, *cursor, *mark);
+    UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, line, *cursor, *mark);
     
     //- rjf: invalid single-line op or endpoint units => try multiline
-    if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint || single_line_op.flags & UI_NavTxtOpFlag_Invalid)
+    if(n->v.delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
     {
       U64 line_count = info->lines_count;
       String8 prev_line = txt_string_from_info_data_line_num(info, data, cursor->line-1);
       String8 next_line = txt_string_from_info_data_line_num(info, data, cursor->line+1);
-      Vec2S32 delta = n->v.delta;
+      Vec2S32 delta = n->v.delta_2s32;
       
       //- rjf: wrap lines right
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = 1;
@@ -11310,7 +11819,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: wrap lines left
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = prev_line.size+1;
@@ -11320,7 +11829,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = Min(*preferred_column, next_line.size+1);
@@ -11329,7 +11838,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = Min(*preferred_column, prev_line.size+1);
@@ -11338,7 +11847,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
       {
         for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
         {
@@ -11361,7 +11870,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
       {
         for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
         {
@@ -11384,7 +11893,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y > 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
       {
         cursor->line += line_count_per_page;
         cursor->column = 1;
@@ -11394,7 +11903,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y < 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
       {
         cursor->line -= line_count_per_page;
         cursor->column = 1;
@@ -11404,7 +11913,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement to endpoint (+)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y > 0 || delta.x > 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
       {
         *cursor = txt_pt(line_count, info->lines_count ? dim_1u64(info->lines_ranges[info->lines_count-1])+1 : 1);
         change = 1;
@@ -11412,7 +11921,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement to endpoint (-)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y < 0 || delta.x < 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
       {
         *cursor = txt_pt(1, 1);
         change = 1;
@@ -11420,7 +11929,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-      if(!(n->v.flags & UI_NavActionFlag_KeepMark))
+      if(!(n->v.flags & UI_EventFlag_KeepMark))
       {
         *mark = *cursor;
       }
@@ -11437,16 +11946,17 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
     }
     
     //- rjf: copy
-    if(n->v.flags & UI_NavActionFlag_Copy)
+    if(n->v.flags & UI_EventFlag_Copy)
     {
       String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(*cursor, *mark));
       os_set_clipboard_text(text);
+      taken = 1;
     }
     
     //- rjf: consume
     if(taken)
     {
-      ui_nav_eat_action_node(nav_actions, n);
+      ui_eat_event(events, n);
     }
   }
   
@@ -11459,26 +11969,29 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;
-  UI_NavActionList *nav_actions = ui_nav_actions();
+  UI_EventList *events = ui_events();
   TXTI_BufferInfo buffer_info = txti_buffer_info_from_handle(scratch.arena, handle);
-  for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+  for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
   {
     next = n->next;
     B32 taken = 0;
-    
+    if(n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Edit)
+    {
+      continue;
+    }
     String8 line = txti_string_from_handle_line_num(scratch.arena, handle, cursor->line);
-    UI_NavTxtOp single_line_op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, line, *cursor, *mark);
+    UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, line, *cursor, *mark);
     
     //- rjf: invalid single-line op or endpoint units => try multiline
-    if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint || single_line_op.flags & UI_NavTxtOpFlag_Invalid)
+    if(n->v.delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
     {
       U64 line_count = buffer_info.total_line_count;
       String8 prev_line = txti_string_from_handle_line_num(scratch.arena, handle, cursor->line-1);
       String8 next_line = txti_string_from_handle_line_num(scratch.arena, handle, cursor->line+1);
-      Vec2S32 delta = n->v.delta;
+      Vec2S32 delta = n->v.delta_2s32;
       
       //- rjf: wrap lines right
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = 1;
@@ -11488,7 +12001,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: wrap lines left
-      if(n->v.delta_unit != UI_NavDeltaUnit_EndPoint && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = prev_line.size+1;
@@ -11498,7 +12011,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement down (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = Min(*preferred_column, next_line.size+1);
@@ -11507,7 +12020,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement up (plain)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Element && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = Min(*preferred_column, prev_line.size+1);
@@ -11516,7 +12029,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement down (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y > 0 && cursor->line+1 <= line_count)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
       {
         for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
         {
@@ -11539,7 +12052,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement up (chunk)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Chunk && delta.y < 0 && cursor->line-1 >= 1)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
       {
         for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
         {
@@ -11562,7 +12075,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement down (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y > 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
       {
         cursor->line += line_count_per_page;
         cursor->column = 1;
@@ -11572,7 +12085,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement up (page)
-      if(n->v.delta_unit == UI_NavDeltaUnit_Whole && delta.y < 0)
+      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
       {
         cursor->line -= line_count_per_page;
         cursor->column = 1;
@@ -11582,7 +12095,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement to endpoint (+)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y > 0 || delta.x > 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
       {
         *cursor = txt_pt(line_count, buffer_info.last_line_size);
         change = 1;
@@ -11590,7 +12103,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: movement to endpoint (-)
-      if(n->v.delta_unit == UI_NavDeltaUnit_EndPoint && (delta.y < 0 || delta.x < 0))
+      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
       {
         *cursor = txt_pt(1, 1);
         change = 1;
@@ -11598,7 +12111,7 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
       }
       
       //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-      if(!(n->v.flags & UI_NavActionFlag_KeepMark))
+      if(!(n->v.flags & UI_EventFlag_KeepMark))
       {
         *mark = *cursor;
       }
@@ -11615,16 +12128,17 @@ df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, 
     }
     
     //- rjf: copy
-    if(n->v.flags & UI_NavActionFlag_Copy)
+    if(n->v.flags & UI_EventFlag_Copy)
     {
       String8 text = txti_string_from_handle_txt_rng(scratch.arena, handle, txt_rng(*cursor, *mark));
       os_set_clipboard_text(text);
+      taken = 1;
     }
     
     //- rjf: consume
     if(taken)
     {
-      ui_nav_eat_action_node(nav_actions, n);
+      ui_eat_event(events, n);
     }
   }
   
@@ -11921,16 +12435,16 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   B32 commit = 0;
   if(!is_focus_active && is_focus_hot)
   {
-    UI_NavActionList *nav_actions = ui_nav_actions();
-    for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       next = n->next;
-      UI_NavAction *action = &n->v;
-      if(action->flags & UI_NavActionFlag_Copy)
+      UI_Event *evt = &n->v;
+      if(evt->flags & UI_EventFlag_Copy)
       {
         os_set_clipboard_text(pre_edit_value);
       }
-      if(action->flags & UI_NavActionFlag_Delete)
+      if(evt->flags & UI_EventFlag_Delete)
       {
         commit = 1;
         edit_string_size_out[0] = 0;
@@ -11953,17 +12467,17 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     B32 start_editing_via_typing = 0;
     if(is_focus_hot)
     {
-      UI_NavActionList *nav_actions = ui_nav_actions();
-      for(UI_NavActionNode *n = nav_actions->first; n != 0; n = n->next)
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first; n != 0; n = n->next)
       {
-        if(n->v.insertion.size != 0 || n->v.flags & UI_NavActionFlag_Paste)
+        if(n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste)
         {
           start_editing_via_typing = 1;
           break;
         }
       }
     }
-    if(is_focus_hot && os_key_press(ui_events(), ui_window(), 0, OS_Key_F2))
+    if(is_focus_hot && ui_slot_press(UI_EventActionSlot_Edit))
     {
       start_editing_via_typing = 1;
     }
@@ -11986,37 +12500,65 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     sig.f |= UI_SignalFlag_Commit;
   }
   
+  //- rjf: determine autocompletion string
+  String8 autocomplete_hint_string = {0};
+  {
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first; n != 0; n = n->next)
+    {
+      if(n->v.kind == UI_EventKind_AutocompleteHint)
+      {
+        autocomplete_hint_string = n->v.string;
+      }
+    }
+  }
+  
   //- rjf: take navigation actions for editing
   B32 changes_made = 0;
   if(!(flags & DF_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
   {
     Temp scratch = scratch_begin(0, 0);
-    UI_NavActionList *nav_actions = ui_nav_actions();
-    for(UI_NavActionNode *n = nav_actions->first, *next = 0; n != 0; n = next)
+    UI_EventList *events = ui_events();
+    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       next = n->next;
       
       // rjf: do not consume anything that doesn't fit a single-line's operations
-      if(n->v.delta.y != 0)
+      if((n->v.kind != UI_EventKind_Edit && n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Text) || n->v.delta_2s32.y != 0)
       {
         continue;
       }
       
       // rjf: map this action to an op
-      UI_NavTxtOp op = ui_nav_single_line_txt_op_from_action(scratch.arena, n->v, edit_string, *cursor, *mark);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
+      
+      // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
+      if(autocomplete_hint_string.size != 0)
+      {
+        String8 word_query = df_autocomp_query_word_from_input_string_off(edit_string, cursor->column-1);
+        U64 word_off = (U64)(word_query.str - edit_string.str);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
+        new_string.size = Min(edit_buffer_size, new_string.size);
+        MemoryCopy(edit_buffer, new_string.str, new_string.size);
+        edit_string_size_out[0] = new_string.size;
+        *cursor = *mark = txt_pt(1, word_off+1+autocomplete_hint_string.size);
+        edit_string = str8(edit_buffer, edit_string_size_out[0]);
+        op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
+        MemoryZeroStruct(&autocomplete_hint_string);
+      }
       
       // rjf: perform replace range
       if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
       {
-        String8 new_string = ui_nav_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
         new_string.size = Min(edit_buffer_size, new_string.size);
         MemoryCopy(edit_buffer, new_string.str, new_string.size);
         edit_string_size_out[0] = new_string.size;
       }
       
       // rjf: perform copy
-      if(op.flags & UI_NavTxtOpFlag_Copy)
+      if(op.flags & UI_TxtOpFlag_Copy)
       {
         os_set_clipboard_text(op.copy);
       }
@@ -12027,7 +12569,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       
       // rjf: consume event
       {
-        ui_nav_eat_action_node(nav_actions, n);
+        ui_eat_event(events, n);
         changes_made = 1;
       }
     }
@@ -12095,6 +12637,70 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       D_FancyStringList code_fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_text_color(), edit_string);
+      if(autocomplete_hint_string.size != 0)
+      {
+        String8 query_word = df_autocomp_query_word_from_input_string_off(edit_string, cursor->column-1);
+        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
+        U64 off = 0;
+        U64 cursor_off = cursor->column-1;
+        D_FancyStringNode *prev_n = 0;
+        for(D_FancyStringNode *n = code_fancy_strings.first; n != 0; n = n->next)
+        {
+          if(off <= cursor_off && cursor_off <= off+n->v.string.size)
+          {
+            prev_n = n;
+            break;
+          }
+          off += n->v.string.size;
+        }
+        {
+          D_FancyStringNode *autocomp_fstr_n = push_array(scratch.arena, D_FancyStringNode, 1);
+          D_FancyString *fstr = &autocomp_fstr_n->v;
+          fstr->font = ui_top_font();
+          fstr->string = autocomplete_append_string;
+          fstr->color = ui_top_text_color();
+          fstr->color.w *= 0.5f;
+          fstr->size = ui_top_font_size();
+          autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
+          if(prev_n != 0)
+          {
+            prev_n->next = autocomp_fstr_n;
+          }
+          if(prev_n == 0)
+          {
+            code_fancy_strings.first = code_fancy_strings.last = autocomp_fstr_n;
+          }
+          if(prev_n != 0 && prev_n->next == 0)
+          {
+            code_fancy_strings.last = autocomp_fstr_n;
+          }
+          code_fancy_strings.node_count += 1;
+          code_fancy_strings.total_size += autocomplete_hint_string.size;
+          if(prev_n != 0 && cursor_off - off < prev_n->v.string.size)
+          {
+            String8 full_string = prev_n->v.string;
+            U64 chop_amt = full_string.size - (cursor_off - off);
+            prev_n->v.string = str8_chop(full_string, chop_amt);
+            code_fancy_strings.total_size -= chop_amt;
+            if(chop_amt != 0)
+            {
+              String8 post_cursor = str8_skip(full_string, cursor_off - off);
+              D_FancyStringNode *post_fstr_n = push_array(scratch.arena, D_FancyStringNode, 1);
+              D_FancyString *post_fstr = &post_fstr_n->v;
+              MemoryCopyStruct(post_fstr, &prev_n->v);
+              post_fstr->string   = post_cursor;
+              if(autocomp_fstr_n->next == 0)
+              {
+                code_fancy_strings.last = post_fstr_n;
+              }
+              post_fstr_n->next = autocomp_fstr_n->next;
+              autocomp_fstr_n->next = post_fstr_n;
+              code_fancy_strings.node_count += 1;
+              code_fancy_strings.total_size += post_cursor.size;
+            }
+          }
+        }
+      }
       ui_box_equip_display_fancy_strings(editstr_box, &code_fancy_strings);
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
@@ -12223,6 +12829,7 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   df_gfx_state->repaint_hook = window_repaint_entry_point;
   df_gfx_state->cfg_main_font_path_arena = arena_alloc();
   df_gfx_state->cfg_code_font_path_arena = arena_alloc();
+  df_gfx_state->hover_line_arena = arena_alloc();
   df_clear_bindings();
   
   // rjf: register gfx layer views
@@ -12472,6 +13079,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               os_window_close(ws->os);
               arena_release(ws->query_cmd_arena);
               arena_release(ws->hover_eval_arena);
+              arena_release(ws->autocomp_lister_params_arena);
               arena_release(ws->arena);
               SLLStackPush(df_gfx_state->free_window, ws);
               ws->gen += 1;
@@ -13083,6 +13691,31 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               df_bind_spec(cmd_spec, pair->binding);
             }
           }
+          
+          //- rjf: always ensure that the meta controls have bindings
+          if(src == DF_CfgSrc_User)
+          {
+            struct
+            {
+              DF_CmdSpec *spec;
+              OS_Key fallback_key;
+            }
+            meta_ctrls[] =
+            {
+              { df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit), OS_Key_F2 },
+              { df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Accept), OS_Key_Return },
+              { df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Cancel), OS_Key_Esc },
+            };
+            for(U64 idx = 0; idx < ArrayCount(meta_ctrls); idx += 1)
+            {
+              DF_BindingList bindings = df_bindings_from_spec(scratch.arena, meta_ctrls[idx].spec);
+              if(bindings.count == 0)
+              {
+                DF_Binding binding = {meta_ctrls[idx].fallback_key, 0};
+                df_bind_spec(meta_ctrls[idx].spec, binding);
+              }
+            }
+          }
         }break;
         
         //- rjf: writing config changes
@@ -13206,7 +13839,7 @@ df_gfx_end_frame(void)
   //- rjf: clear hover line info
   if(df_gfx_state->hover_line_set_this_frame == 0)
   {
-    df_gfx_state->hover_line_binary = df_handle_zero();
+    MemoryZeroStruct(&df_gfx_state->hover_line_dbgi_key);
     df_gfx_state->hover_line_voff = 0;
   }
   
