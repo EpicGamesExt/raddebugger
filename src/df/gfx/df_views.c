@@ -3233,17 +3233,37 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DI_Scope *scope = di_scope_open();
+  DI_Scope *di_scope = di_scope_open();
+  FZY_Scope *fzy_scope = fzy_scope_open();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-  DF_Entity *module = df_module_from_process_vaddr(process, thread_unwind_rip_vaddr);
-  DF_Entity *dbgi = df_dbgi_from_module(module);
-  RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
   String8 query = str8(view->query_buffer, view->query_string_size);
-  TG_Graph *graph = tg_graph_begin(bit_size_from_arch(df_architecture_from_entity(thread))/8, 256);
+  DF_EntityList dbgis_list = df_push_active_dbgi_list(scratch.arena);
+  DF_EntityArray dbgis = df_entity_array_from_list(scratch.arena, &dbgis_list);
+  U64 endt_us = os_now_microseconds()+200;
+  
+  //- rjf: produce fuzzy search parameters
+  FZY_Params params = {FZY_Target_Procedures};
+  {
+    params.dbgi_keys.count = dbgis.count;
+    params.dbgi_keys.v = push_array(scratch.arena, FZY_DbgiKey, params.dbgi_keys.count);
+    for(U64 idx = 0; idx < params.dbgi_keys.count; idx += 1)
+    {
+      params.dbgi_keys.v[idx].path = df_full_path_from_entity(scratch.arena, dbgis.v[idx]);
+      params.dbgi_keys.v[idx].timestamp = dbgis.v[idx]->timestamp;
+    }
+  }
+  
+  //- rjf: grab rdis, make type graphs for each
+  U64 rdis_count = dbgis.count;
+  RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
+  TG_Graph **graphs = push_array(scratch.arena, TG_Graph *, rdis_count);
+  {
+    for(U64 idx = 0; idx < rdis_count; idx += 1)
+    {
+      rdis[idx] = di_rdi_from_path_min_timestamp(di_scope, params.dbgi_keys.v[idx].path, params.dbgi_keys.v[idx].timestamp, endt_us);
+      graphs[idx] = tg_graph_begin(rdi_addr_size_from_arch(rdis[idx]->top_level_info->architecture), 256);
+    }
+  }
   
   //- rjf: grab state
   typedef struct DF_SymbolListerViewState DF_SymbolListerViewState;
@@ -3256,8 +3276,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   //- rjf: query -> raddbg, filtered items
   U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
   B32 items_stale = 0;
-  // TODO(rjf): @fuzzy
-  FZY_ItemArray items = {0}; // dbgi_fuzzy_search_items_from_key_exe_query(scope, fuzzy_search_key, exe_path, query, DBGI_FuzzySearchTarget_Procedures, os_now_microseconds()+100, &items_stale);
+  FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &params, query, endt_us, &items_stale);
   if(items_stale)
   {
     df_gfx_request_frame();
@@ -3266,16 +3285,27 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   //- rjf: submit best match when hitting enter w/ no selection
   if(slv->cursor.y == 0 && items.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, items.v[0].idx);
-    U64 name_size = 0;
-    U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-    String8 name = str8(name_base, name_size);
-    if(name.size != 0)
+    FZY_Item *item = &items.v[0];
+    U64 base_idx = 0;
+    for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
     {
-      DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-      p.string = name;
-      df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
-      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
+      RDI_Parsed *rdi = rdis[rdi_idx];
+      if(base_idx <= item->idx && item->idx < base_idx + rdi->procedures_count)
+      {
+        RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, item->idx-base_idx);
+        U64 name_size = 0;
+        U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
+        String8 name = str8(name_base, name_size);
+        if(name.size != 0)
+        {
+          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+          p.string = name;
+          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
+        }
+        break;
+      }
+      base_idx += rdi->procedures_count;
     }
   }
   
@@ -3309,12 +3339,35 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
       FZY_Item *item = &items.v[idx];
-      RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, item->idx);
+      
+      //- rjf: determine dbgi/rdi to which this item belongs
+      DF_Entity *dbgi = &df_g_nil_entity;
+      RDI_Parsed *rdi = &di_rdi_parsed_nil;
+      TG_Graph *graph = 0;
+      U64 base_idx = 0;
+      {
+        for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
+        {
+          if(base_idx <= item->idx && item->idx < base_idx + rdis[rdi_idx]->procedures_count)
+          {
+            dbgi = dbgis.v[rdi_idx];
+            rdi = rdis[rdi_idx];
+            graph = graphs[rdi_idx];
+            break;
+          }
+          base_idx += rdis[rdi_idx]->procedures_count;
+        }
+      }
+      
+      //- rjf: unpack this item's info
+      RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, item->idx-base_idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
       RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, procedure->type_idx);
       TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
+      
+      //- rjf: build item button
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                               UI_BoxFlag_DrawBackground|
@@ -3327,12 +3380,14 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       {
         UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
         ui_box_equip_fuzzy_match_ranges(box, &item->match_ranges);
-        if(!tg_key_match(tg_key_zero(), type_key))
+        if(!tg_key_match(tg_key_zero(), type_key) && graph != 0)
         {
           String8 type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
           df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_WeakText), type_string);
         }
       }
+      
+      //- rjf: interact
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
@@ -3364,7 +3419,8 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
     }
   }
   
-  di_scope_close(scope);
+  fzy_scope_close(fzy_scope);
+  di_scope_close(di_scope);
   scratch_end(scratch);
   ProfEnd();
 }
