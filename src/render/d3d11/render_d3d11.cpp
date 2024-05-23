@@ -841,9 +841,11 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
     Vec2S32 resolution = {(S32)(client_rect.x1 - client_rect.x0), (S32)(client_rect.y1 - client_rect.y0)};
     
     //- rjf: resolution change
+    B32 resize_done = 0;
     if(wnd->last_resolution.x != resolution.x ||
        wnd->last_resolution.y != resolution.y)
     {
+      resize_done = 1;
       wnd->last_resolution = resolution;
       
       // rjf: release screen-sized render target resources, if there
@@ -946,7 +948,10 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
     Vec4F32 clear_color = {0, 0, 0, 0};
     d_ctx->ClearRenderTargetView(wnd->framebuffer_rtv, clear_color.v);
     d_ctx->ClearRenderTargetView(wnd->stage_color_rtv, clear_color.v);
-    d_ctx->Flush();
+    if(resize_done)
+    {
+      d_ctx->Flush();
+    }
   }
   ProfEnd();
 }
