@@ -2534,6 +2534,21 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
+            // rjf: snap to resolved address w/o line info
+            if(!missing_rip && !dbgi_pending && !has_line_info && !has_module)
+            {
+              DF_CmdParams params = df_cmd_params_from_window(ws);
+              params.entity = df_handle_from_entity(thread);
+              params.voff = rip_voff;
+              params.vaddr = rip_vaddr;
+              params.index = unwind_count;
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualOff);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Index);
+              df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+            }
+            
             // rjf: retry on stopped, pending debug info
             if(!df_ctrl_targets_running() && (dbgi_pending || missing_rip))
             {

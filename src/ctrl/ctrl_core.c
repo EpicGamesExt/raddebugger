@@ -1700,7 +1700,7 @@ ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX
 }
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle module_handle, REGS_RegBlockX64 *regs, U64 endt_us)
+ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle process_handle, DMN_Handle module_handle, REGS_RegBlockX64 *regs, U64 endt_us)
 {
   B32 is_stale = 0;
   B32 is_good = 1;
@@ -1710,7 +1710,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
   //- rjf: unpack parameters
   //
   CTRL_Entity *module = ctrl_entity_from_machine_id_handle(store, machine_id, module_handle);
-  CTRL_Entity *process = module->parent;
+  CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, machine_id, process_handle);
   U64 rip_voff = regs->rip.u64 - module->vaddr_range.min;
   
   //////////////////////////////
@@ -2519,7 +2519,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
 //- rjf: abstracted unwind step
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle module, Architecture arch, void *reg_block, U64 endt_us)
+ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Architecture arch, void *reg_block, U64 endt_us)
 {
   CTRL_UnwindStepResult result = {0};
   switch(arch)
@@ -2527,7 +2527,7 @@ ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle 
     default:{}break;
     case Architecture_x64:
     {
-      result = ctrl_unwind_step__pe_x64(store, machine_id, module, (REGS_RegBlockX64 *)reg_block, endt_us);
+      result = ctrl_unwind_step__pe_x64(store, machine_id, process, module, (REGS_RegBlockX64 *)reg_block, endt_us);
     }break;
   }
   return result;
@@ -2589,7 +2589,7 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       frame_node_count += 1;
       
       // rjf: unwind one step
-      CTRL_UnwindStepResult step = ctrl_unwind_step(store, machine_id, module, arch, regs_block, endt_us);
+      CTRL_UnwindStepResult step = ctrl_unwind_step(store, machine_id, process_entity->handle, module, arch, regs_block, endt_us);
       unwind.flags |= step.flags;
       if(step.flags & CTRL_UnwindFlag_Error ||
          regs_rsp_from_arch_block(arch, regs_block) == 0 ||
