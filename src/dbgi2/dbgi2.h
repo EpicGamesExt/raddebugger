@@ -174,7 +174,7 @@ global RDI_Parsed di_rdi_parsed_nil =
   0,
   0,
   0,
-  0,
+  &rdi_top_level_info_nil,
   &rdi_binary_section_nil, 1,
   &rdi_file_path_node_nil, 1,
   &rdi_source_file_nil, 1,
