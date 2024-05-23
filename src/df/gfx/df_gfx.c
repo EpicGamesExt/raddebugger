@@ -3494,7 +3494,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
           ui_labelf("Target Hz: %.2f", 1.f/df_dt());
-          ui_labelf("Unwind Cache Gen: %I64u", df_state->unwind_cache_gen);
           ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
           ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
           ui_labelf("Window %p", window);

@@ -946,29 +946,33 @@ struct DF_AutoViewRuleMapCache
   DF_AutoViewRuleSlot *slots;
 };
 
-//- rjf: per-run unwind cache
+//- rjf: per-thread unwind cache
 
-typedef struct DF_RunUnwindCacheNode DF_RunUnwindCacheNode;
-struct DF_RunUnwindCacheNode
+typedef struct DF_UnwindCacheNode DF_UnwindCacheNode;
+struct DF_UnwindCacheNode
 {
-  DF_RunUnwindCacheNode *hash_next;
+  DF_UnwindCacheNode *next;
+  DF_UnwindCacheNode *prev;
+  U64 reggen;
+  U64 memgen;
+  Arena *arena;
   DF_Handle thread;
   CTRL_Unwind unwind;
 };
 
-typedef struct DF_RunUnwindCacheSlot DF_RunUnwindCacheSlot;
-struct DF_RunUnwindCacheSlot
+typedef struct DF_UnwindCacheSlot DF_UnwindCacheSlot;
+struct DF_UnwindCacheSlot
 {
-  DF_RunUnwindCacheNode *first;
-  DF_RunUnwindCacheNode *last;
+  DF_UnwindCacheNode *first;
+  DF_UnwindCacheNode *last;
 };
 
-typedef struct DF_RunUnwindCache DF_RunUnwindCache;
-struct DF_RunUnwindCache
+typedef struct DF_UnwindCache DF_UnwindCache;
+struct DF_UnwindCache
 {
-  Arena *arena;
   U64 slots_count;
-  DF_RunUnwindCacheSlot *slots;
+  DF_UnwindCacheSlot *slots;
+  DF_UnwindCacheNode *free_node;
 };
 
 //- rjf: per-run tls-base-vaddr cache
@@ -1146,10 +1150,7 @@ struct DF_State
   DF_AutoViewRuleMapCache auto_view_rule_cache;
   
   // rjf: per-run caches
-  U64 unwind_cache_reggen_idx;
-  U64 unwind_cache_memgen_idx;
-  DF_RunUnwindCache unwind_caches[2];
-  U64 unwind_cache_gen;
+  DF_UnwindCache unwind_cache;
   U64 tls_base_cache_reggen_idx;
   U64 tls_base_cache_memgen_idx;
   DF_RunTLSBaseCache tls_base_caches[2];
