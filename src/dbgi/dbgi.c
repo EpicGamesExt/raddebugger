@@ -203,7 +203,7 @@ di_string_bucket_idx_from_string_size(U64 size)
     case 1<<8: {bucket_idx = 4;}break;
     case 1<<9: {bucket_idx = 5;}break;
     case 1<<10:{bucket_idx = 6;}break;
-    default:{bucket_idx = ArrayCount(((CTRL_EntityStore *)0)->free_string_chunks)-1;}break;
+    default:{bucket_idx = ArrayCount(((DI_Stripe *)0)->free_string_chunks)-1;}break;
   }
   return bucket_idx;
 }
@@ -658,7 +658,7 @@ di_parse_thread__entry_point(void *p)
       }
       if(!og_format_is_known)
       {
-        if(data.size >= 2 && *(U16 *)data.str == PE_DOS_MAGIC)
+        if(data.size >= 2 && *(U16 *)data.str == 0x5a4d)
         {
           og_format_is_known = 1;
           og_is_pe = 1;
