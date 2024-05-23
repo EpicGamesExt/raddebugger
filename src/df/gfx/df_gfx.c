@@ -8691,7 +8691,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
       for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
       {
         // rjf: unpack info about this row
-        String8 name = push_str8f(arena, "Item %I64u", idx); // TODO(rjf): dbgi_fuzzy_item_string_from_rdi_target_element_idx(parse_ctx->rdi, block->dbgi_target, block->fzy_backing_items.v[idx].idx);
+        String8 name = fzy_item_string_from_rdi_target_element_idx(parse_ctx->rdi, block->fzy_target, block->fzy_backing_items.v[idx].idx);
         
         // rjf: get keys for this row
         DF_ExpandKey parent_key = block->parent_key;

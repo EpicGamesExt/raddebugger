@@ -1148,7 +1148,7 @@ struct DF_State
   // rjf: per-run caches
   U64 unwind_cache_reggen_idx;
   U64 unwind_cache_memgen_idx;
-  DF_RunUnwindCache unwind_caches[2];
+  DF_RunUnwindCache unwind_caches[4];
   U64 unwind_cache_gen;
   U64 tls_base_cache_reggen_idx;
   U64 tls_base_cache_memgen_idx;

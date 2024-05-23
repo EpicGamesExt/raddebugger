@@ -5,28 +5,12 @@
 #define FUZZY_SEARCH_H
 
 ////////////////////////////////
-//~ rjf: Fuzzy Search Types
-
-typedef enum FZY_Target
-{
-  FZY_Target_Procedures,
-  FZY_Target_GlobalVariables,
-  FZY_Target_ThreadVariables,
-  FZY_Target_UDTs,
-  FZY_Target_COUNT
-}
-FZY_Target;
-
-typedef struct FZY_Params FZY_Params;
-struct FZY_Params
-{
-  FZY_Target target;
-};
+//~ rjf: Result Types
 
 typedef struct FZY_Item FZY_Item;
 struct FZY_Item
 {
-  U64 idx;
+  U64 idx; // indexes into whole space of parameter tables. [rdis[0] element count) [rdis[1] element count) ... [rdis[n] element count)
   U64 missed_size;
   FuzzyMatchRangeList match_ranges;
 };
@@ -56,12 +40,65 @@ struct FZY_ItemArray
   U64 count;
 };
 
+////////////////////////////////
+//~ rjf: Search Parameter Types
+
+typedef enum FZY_Target
+{
+  FZY_Target_Procedures,
+  FZY_Target_GlobalVariables,
+  FZY_Target_ThreadVariables,
+  FZY_Target_UDTs,
+  FZY_Target_COUNT
+}
+FZY_Target;
+
+typedef struct FZY_DbgiKey FZY_DbgiKey;
+struct FZY_DbgiKey
+{
+  String8 path;
+  U64 timestamp;
+};
+
+typedef struct FZY_DbgiKeyNode FZY_DbgiKeyNode;
+struct FZY_DbgiKeyNode
+{
+  FZY_DbgiKeyNode *next;
+  FZY_DbgiKey v;
+};
+
+typedef struct FZY_DbgiKeyList FZY_DbgiKeyList;
+struct FZY_DbgiKeyList
+{
+  FZY_DbgiKeyNode *first;
+  FZY_DbgiKeyNode *last;
+  U64 count;
+};
+
+typedef struct FZY_DbgiKeyArray FZY_DbgiKeyArray;
+struct FZY_DbgiKeyArray
+{
+  FZY_DbgiKey *v;
+  U64 count;
+};
+
+typedef struct FZY_Params FZY_Params;
+struct FZY_Params
+{
+  FZY_Target target;
+  FZY_DbgiKeyArray dbgi_keys;
+};
+
+////////////////////////////////
+//~ rjf: Cache Types
+
 typedef struct FZY_Bucket FZY_Bucket;
 struct FZY_Bucket
 {
   Arena *arena;
   String8 query;
-  FZY_Target target;
+  FZY_Params params;
+  U64 params_hash;
 };
 
 typedef struct FZY_Node FZY_Node;
@@ -69,7 +106,7 @@ struct FZY_Node
 {
   FZY_Node *next;
   U128 key;
-  U64 scope_touch_count;
+  U64 touch_count;
   U64 last_time_submitted_us;
   FZY_Bucket buckets[3];
   U64 gen;
@@ -90,18 +127,6 @@ struct FZY_Stripe
   Arena *arena;
   OS_Handle rw_mutex;
   OS_Handle cv;
-};
-
-typedef struct FZY_Thread FZY_Thread;
-struct FZY_Thread
-{
-  OS_Handle thread;
-  OS_Handle u2f_ring_mutex;
-  OS_Handle u2f_ring_cv;
-  U64 u2f_ring_size;
-  U8 *u2f_ring_base;
-  U64 u2f_ring_write_pos;
-  U64 u2f_ring_read_pos;
 };
 
 ////////////////////////////////
@@ -133,6 +158,18 @@ struct FZY_TCTX
 ////////////////////////////////
 //~ rjf: Shared State Types
 
+typedef struct FZY_Thread FZY_Thread;
+struct FZY_Thread
+{
+  OS_Handle thread;
+  OS_Handle u2f_ring_mutex;
+  OS_Handle u2f_ring_cv;
+  U64 u2f_ring_size;
+  U8 *u2f_ring_base;
+  U64 u2f_ring_write_pos;
+  U64 u2f_ring_read_pos;
+};
+
 typedef struct FZY_Shared FZY_Shared;
 struct FZY_Shared
 {
@@ -150,10 +187,21 @@ struct FZY_Shared
 };
 
 ////////////////////////////////
+//~ rjf: Globals
+
+global FZY_Shared *fzy_shared = 0;
+thread_static FZY_TCTX *fzy_tctx = 0;
+
+////////////////////////////////
 //~ rjf: Helpers
 
-internal U64 fzy_hash_from_string(String8 string, StringMatchFlags match_flags);
+internal U64 fzy_hash_from_string(U64 seed, String8 string);
+internal U64 fzy_hash_from_params(FZY_Params *params);
 internal U64 fzy_item_num_from_array_element_idx__linear_search(FZY_ItemArray *array, U64 element_idx);
+internal String8 fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, FZY_Target target, U64 element_idx);
+internal void fzy_dbgi_key_list_push(Arena *arena, FZY_DbgiKeyList *list, FZY_DbgiKey key);
+internal FZY_DbgiKeyArray fzy_dbgi_key_array_from_list(Arena *arena, FZY_DbgiKeyList *list);
+internal FZY_Params fzy_params_copy(Arena *arena, FZY_Params *src);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
