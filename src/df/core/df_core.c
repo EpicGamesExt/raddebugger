@@ -4493,6 +4493,12 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi,
   {
     default:{}break;
     
+    case TG_Kind_Handle:
+    {
+      U64 min_digits = (radix == 16) ? type_byte_size*2 : 0;
+      result = str8_from_s64(arena, eval.imm_s64, radix, 0, digit_group_separator);
+    }break;
+    
     case TG_Kind_Char8:
     case TG_Kind_Char16:
     case TG_Kind_Char32:
