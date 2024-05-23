@@ -771,12 +771,6 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
               result = HTCAPTION;
             }
             
-            // rjf: title bar client area
-            if(is_over_title_bar_client_area)
-            {
-              result = HTCLIENT;
-            }
-            
             // rjf: normal edges
             if(is_over_left)   { result = HTLEFT; }
             if(is_over_right)  { result = HTRIGHT; }
@@ -788,6 +782,12 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             if(is_over_left  && is_over_bottom) { result = HTBOTTOMLEFT; }
             if(is_over_right && is_over_top)    { result = HTTOPRIGHT; }
             if(is_over_right && is_over_bottom) { result = HTBOTTOMRIGHT; }
+            
+            // rjf: title bar client area
+            if(is_over_title_bar_client_area)
+            {
+              result = HTCLIENT;
+            }
           }
         }
       }break;
