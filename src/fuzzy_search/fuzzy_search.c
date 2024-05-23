@@ -109,7 +109,7 @@ fzy_dbgi_key_array_from_list(Arena *arena, FZY_DbgiKeyList *list)
 internal FZY_Params
 fzy_params_copy(Arena *arena, FZY_Params *src)
 {
-  FZY_Params dst = {0};
+  FZY_Params dst = zero_struct;
   MemoryCopyStruct(&dst, src);
   dst.dbgi_keys.v = push_array(arena, FZY_DbgiKey, dst.dbgi_keys.count);
   MemoryCopy(dst.dbgi_keys.v, src->dbgi_keys.v, sizeof(FZY_DbgiKey)*src->dbgi_keys.count);
