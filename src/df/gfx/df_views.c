@@ -1096,6 +1096,25 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             B32 is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
             df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !is_expanded);
           }
+          if(row->flags & DF_EvalVizRowFlag_Canvas)
+          {
+            DF_CfgNode *cfg = df_cfg_tree_copy(scratch.arena, row->expand_ui_rule_node);
+            DF_CfgNode *cfg_root = push_array(scratch.arena, DF_CfgNode, 1);
+            cfg_root->first = cfg_root->last = cfg;
+            cfg_root->next = cfg_root->parent = &df_g_nil_cfg_node;
+            if(cfg != &df_g_nil_cfg_node)
+            {
+              cfg->parent = cfg_root;
+            }
+            DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+            p.string = row->edit_expr;
+            p.view_spec = df_tab_view_spec_from_gfx_view_rule_spec(row->expand_ui_rule_spec);
+            p.cfg_node = cfg_root;
+            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
+            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CfgNode);
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenTab));
+          }
         }
       }
       
