@@ -17,6 +17,12 @@ txt_lang_kind_from_extension(String8 extension)
           str8_match(extension, str8_lit("cxx"), StringMatchFlag_CaseInsensitive) ||
           str8_match(extension, str8_lit("cc"), StringMatchFlag_CaseInsensitive) ||
           str8_match(extension, str8_lit("c++"), StringMatchFlag_CaseInsensitive) ||
+          str8_match(extension, str8_lit("ixx"), StringMatchFlag_CaseInsensitive) ||
+          str8_match(extension, str8_lit("cxxm"), StringMatchFlag_CaseInsensitive) ||
+          str8_match(extension, str8_lit("c++m"), StringMatchFlag_CaseInsensitive) ||
+          str8_match(extension, str8_lit("ccm"), StringMatchFlag_CaseInsensitive) ||
+          str8_match(extension, str8_lit("cppm"), StringMatchFlag_CaseInsensitive) ||
+          str8_match(extension, str8_lit("mpp"), StringMatchFlag_CaseInsensitive) ||
           str8_match(extension, str8_lit("C"), 0) ||
           str8_match(extension, str8_lit("hpp"), StringMatchFlag_CaseInsensitive) ||
           str8_match(extension, str8_lit("hxx"), StringMatchFlag_CaseInsensitive) ||

@@ -11,14 +11,21 @@
 #define BUILD_TITLE "The RAD Debugger"
 #define OS_FEATURE_GRAPHICAL 1
 
+#define R_INIT_MANUAL 1
+#define TEX_INIT_MANUAL 1
+#define GEO_INIT_MANUAL 1
+#define F_INIT_MANUAL 1
+#define DF_INIT_MANUAL 1
+#define DF_GFX_INIT_MANUAL 1
+
 ////////////////////////////////
 //~ rjf: Includes
 
 //- rjf: [lib]
-#include "lib_raddbgi_format/raddbgi_format.h"
-#include "lib_raddbgi_format/raddbgi_format.c"
-#include "lib_raddbgi_format/raddbgi_format_parse.h"
-#include "lib_raddbgi_format/raddbgi_format_parse.c"
+#include "lib_rdi_format/rdi_format.h"
+#include "lib_rdi_format/rdi_format.c"
+#include "lib_rdi_format/rdi_format_parse.h"
+#include "lib_rdi_format/rdi_format_parse.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 
@@ -27,12 +34,11 @@
 #include "os/os_inc.h"
 #include "task_system/task_system.h"
 #include "ico/ico.h"
-#include "raddbgi_make_local/raddbgi_make_local.h"
+#include "rdi_make_local/rdi_make_local.h"
 #include "mdesk/mdesk.h"
 #include "hash_store/hash_store.h"
 #include "file_stream/file_stream.h"
 #include "text_cache/text_cache.h"
-#include "dasm_cache/dasm_cache.h"
 #include "path/path.h"
 #include "txti/txti.h"
 #include "coff/coff.h"
@@ -42,14 +48,15 @@
 #include "msf/msf.h"
 #include "pdb/pdb.h"
 #include "pdb/pdb_stringize.h"
-#include "raddbgi_from_pdb/raddbgi_from_pdb.h"
+#include "rdi_from_pdb/rdi_from_pdb.h"
 #include "regs/regs.h"
-#include "regs/raddbgi/regs_raddbgi.h"
+#include "regs/rdi/regs_rdi.h"
 #include "type_graph/type_graph.h"
 #include "dbgi/dbgi.h"
+#include "dasm_cache/dasm_cache.h"
+#include "fuzzy_search/fuzzy_search.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
-#include "unwind/unwind.h"
 #include "ctrl/ctrl_inc.h"
 #include "font_provider/font_provider_inc.h"
 #include "render/render_inc.h"
@@ -66,12 +73,11 @@
 #include "os/os_inc.c"
 #include "task_system/task_system.c"
 #include "ico/ico.c"
-#include "raddbgi_make_local/raddbgi_make_local.c"
+#include "rdi_make_local/rdi_make_local.c"
 #include "mdesk/mdesk.c"
 #include "hash_store/hash_store.c"
 #include "file_stream/file_stream.c"
 #include "text_cache/text_cache.c"
-#include "dasm_cache/dasm_cache.c"
 #include "path/path.c"
 #include "txti/txti.c"
 #include "coff/coff.c"
@@ -81,14 +87,15 @@
 #include "msf/msf.c"
 #include "pdb/pdb.c"
 #include "pdb/pdb_stringize.c"
-#include "raddbgi_from_pdb/raddbgi_from_pdb.c"
+#include "rdi_from_pdb/rdi_from_pdb.c"
 #include "regs/regs.c"
-#include "regs/raddbgi/regs_raddbgi.c"
+#include "regs/rdi/regs_rdi.c"
 #include "type_graph/type_graph.c"
 #include "dbgi/dbgi.c"
+#include "dasm_cache/dasm_cache.c"
+#include "fuzzy_search/fuzzy_search.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"
-#include "unwind/unwind.c"
 #include "ctrl/ctrl_inc.c"
 #include "font_provider/font_provider_inc.c"
 #include "render/render_inc.c"
@@ -99,6 +106,42 @@
 #include "ui/ui_inc.c"
 #include "df/df_inc.c"
 #include "raddbg.c"
+
+////////////////////////////////
+//~ rjf: IPC Signaler Thread
+
+internal void
+ipc_signaler_thread__entry_point(void *p)
+{
+  for(;;)
+  {
+    if(os_semaphore_take(ipc_signal_semaphore, max_U64))
+    {
+      if(os_semaphore_take(ipc_lock_semaphore, max_U64))
+      {
+        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
+        String8 msg = str8((U8 *)(ipc_info+1), ipc_info->msg_size);
+        msg.size = Min(msg.size, IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo));
+        OS_MutexScope(ipc_s2m_ring_mutex) for(;;)
+        {
+          U64 unconsumed_size = ipc_s2m_ring_write_pos - ipc_s2m_ring_read_pos;
+          U64 available_size = (sizeof(ipc_s2m_ring_buffer) - unconsumed_size);
+          if(available_size >= sizeof(U64)+sizeof(msg.size))
+          {
+            ipc_s2m_ring_write_pos += ring_write_struct(ipc_s2m_ring_buffer, sizeof(ipc_s2m_ring_buffer), ipc_s2m_ring_write_pos, &msg.size);
+            ipc_s2m_ring_write_pos += ring_write(ipc_s2m_ring_buffer, sizeof(ipc_s2m_ring_buffer), ipc_s2m_ring_write_pos, msg.str, msg.size);
+            break;
+          }
+          os_condition_variable_wait(ipc_s2m_ring_cv, ipc_s2m_ring_mutex, max_U64);
+        }
+        os_condition_variable_broadcast(ipc_s2m_ring_cv);
+        os_send_wakeup_event();
+        ipc_info->msg_size = 0;
+        os_semaphore_drop(ipc_lock_semaphore);
+      }
+    }
+  }
+}
 
 ////////////////////////////////
 //~ rjf: Entry Point
@@ -178,7 +221,7 @@ entry_point(CmdLine *cmd_line)
   }
   
   //- rjf: set up layers
-  ctrl_set_wakeup_hook(wakeup_hook);
+  ctrl_set_wakeup_hook(wakeup_hook_ctrl);
   
   //- rjf: dispatch to top-level codepath based on execution mode
   switch(exec_mode)
@@ -187,12 +230,16 @@ entry_point(CmdLine *cmd_line)
     default:
     case ExecMode_Normal:
     {
-      //- rjf: set up shared memory for ipc
-      OS_Handle ipc_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_shared_memory_name);
-      void *ipc_shared_memory_base = os_shared_memory_view_open(ipc_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
-      OS_Handle ipc_semaphore = os_semaphore_alloc(1, 1, ipc_semaphore_name);
-      IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
-      ipc_info->msg_size = 0;
+      //- rjf: manual layer initialization
+      {
+        r_init(cmd_line);
+        tex_init();
+        geo_init();
+        f_init();
+        DF_StateDeltaHistory *hist = df_state_delta_history_alloc();
+        df_core_init(cmd_line, hist);
+        df_gfx_init(update_and_render, df_state_delta_history());
+      }
       
       //- rjf: setup initial target from command line args
       {
@@ -247,56 +294,97 @@ entry_point(CmdLine *cmd_line)
         }
       }
       
+      //- rjf: set up shared resources for ipc to this instance; launch IPC signaler thread
+      {
+        Temp scratch = scratch_begin(0, 0);
+        U32 instance_pid = os_get_pid();
+        String8 ipc_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_shared_memory_%i_", instance_pid);
+        String8 ipc_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_signal_semaphore_%i_", instance_pid);
+        String8 ipc_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_lock_semaphore_%i_", instance_pid);
+        OS_Handle ipc_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_shared_memory_name);
+        ipc_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
+        ipc_signal_semaphore = os_semaphore_alloc(0, 1, ipc_signal_semaphore_name);
+        ipc_lock_semaphore = os_semaphore_alloc(1, 1, ipc_lock_semaphore_name);
+        ipc_s2m_ring_mutex = os_mutex_alloc();
+        ipc_s2m_ring_cv = os_condition_variable_alloc();
+        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
+        MemoryZeroStruct(ipc_info);
+        os_launch_thread(ipc_signaler_thread__entry_point, 0, 0);
+        scratch_end(scratch);
+      }
+      
       //- rjf: main application loop
       {
         for(;;)
         {
-          //- rjf: get IPC messages & dispatch ui commands from them
+          //- rjf: consume IPC messages, dispatch UI commands
           {
-            if(os_semaphore_take(ipc_semaphore, max_U64))
+            Temp scratch = scratch_begin(0, 0);
+            B32 consumed = 0;
+            String8 msg = {0};
+            OS_MutexScope(ipc_s2m_ring_mutex)
             {
-              if(ipc_info->msg_size != 0)
+              U64 unconsumed_size = ipc_s2m_ring_write_pos - ipc_s2m_ring_read_pos;
+              if(unconsumed_size >= sizeof(U64))
               {
-                U8 *buffer = (U8 *)(ipc_info+1);
-                U64 msg_size = ipc_info->msg_size;
-                String8 cmd_string = str8(buffer, msg_size);
-                ipc_info->msg_size = 0;
-                DF_Window *dst_window = df_gfx_state->first_window;
-                for(DF_Window *window = dst_window; window != 0; window = window->next)
+                consumed = 1;
+                ipc_s2m_ring_read_pos += ring_read_struct(ipc_s2m_ring_buffer, sizeof(ipc_s2m_ring_buffer), ipc_s2m_ring_read_pos, &msg.size);
+                msg.size = Min(msg.size, unconsumed_size);
+                msg.str = push_array(scratch.arena, U8, msg.size);
+                ipc_s2m_ring_read_pos += ring_read(ipc_s2m_ring_buffer, sizeof(ipc_s2m_ring_buffer), ipc_s2m_ring_read_pos, msg.str, msg.size);
+              }
+            }
+            if(consumed)
+            {
+              os_condition_variable_broadcast(ipc_s2m_ring_cv);
+            }
+            if(msg.size != 0)
+            {
+              log_infof("IPC message received: \"%S\"", msg);
+              DF_Window *dst_window = df_gfx_state->first_window;
+              for(DF_Window *window = dst_window; window != 0; window = window->next)
+              {
+                if(os_window_is_focused(window->os))
                 {
-                  if(os_window_is_focused(window->os))
-                  {
-                    dst_window = window;
-                    break;
-                  }
-                }
-                if(dst_window != 0)
-                {
-                  Temp scratch = scratch_begin(0, 0);
-                  String8 cmd_spec_string = df_cmd_name_part_from_string(cmd_string);
-                  DF_CmdSpec *cmd_spec = df_cmd_spec_from_string(cmd_spec_string);
-                  if(!df_cmd_spec_is_nil(cmd_spec))
-                  {
-                    DF_CmdParams params = df_cmd_params_from_gfx();
-                    DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_window(dst_window);
-                    String8 error = df_cmd_params_apply_spec_query(scratch.arena, &ctrl_ctx, &params, cmd_spec, df_cmd_arg_part_from_string(cmd_string));
-                    if(error.size == 0)
-                    {
-                      df_push_cmd__root(&params, cmd_spec);
-                    }
-                    else
-                    {
-                      DF_CmdParams params = df_cmd_params_from_window(dst_window);
-                      params.string = error;
-                      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-                      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
-                    }
-                  }
-                  scratch_end(scratch);
+                  dst_window = window;
+                  break;
                 }
               }
-              os_semaphore_drop(ipc_semaphore);
+              if(dst_window != 0)
+              {
+                dst_window->window_temporarily_focused_ipc = 1;
+                String8 cmd_spec_string = df_cmd_name_part_from_string(msg);
+                DF_CmdSpec *cmd_spec = df_cmd_spec_from_string(cmd_spec_string);
+                if(!df_cmd_spec_is_nil(cmd_spec))
+                {
+                  DF_CmdParams params = df_cmd_params_from_window(dst_window);
+                  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_window(dst_window);
+                  String8 error = df_cmd_params_apply_spec_query(scratch.arena, &ctrl_ctx, &params, cmd_spec, df_cmd_arg_part_from_string(msg));
+                  if(error.size == 0)
+                  {
+                    df_push_cmd__root(&params, cmd_spec);
+                    df_gfx_request_frame();
+                  }
+                  else
+                  {
+                    DF_CmdParams params = df_cmd_params_from_window(dst_window);
+                    params.string = error;
+                    df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+                    df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+                    df_gfx_request_frame();
+                  }
+                }
+                else
+                {
+                  DF_CmdParams params = df_cmd_params_from_window(dst_window);
+                  params.string = push_str8f(scratch.arena, "\"%S\" is not a command.", cmd_spec_string);
+                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+                  df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+                  df_gfx_request_frame();
+                }
+              }
             }
+            scratch_end(scratch);
           }
           
           //- rjf: update & render frame
@@ -344,23 +432,59 @@ entry_point(CmdLine *cmd_line)
     {
       Temp scratch = scratch_begin(0, 0);
       
-      //- rjf: grab ipc shared memory
-      OS_Handle ipc_shared_memory = os_shared_memory_open(ipc_shared_memory_name);
-      void *ipc_shared_memory_base = os_shared_memory_view_open(ipc_shared_memory, r1u64(0, MB(16)));
-      if(ipc_shared_memory_base != 0)
+      //- rjf: grab explicit PID argument
+      U32 dst_pid = 0;
+      if(cmd_line_has_argument(cmd_line, str8_lit("pid")))
       {
-        OS_Handle ipc_semaphore = os_semaphore_open(ipc_semaphore_name);
-        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
-        if(os_semaphore_take(ipc_semaphore, os_now_microseconds() + Million(6)))
+        String8 dst_pid_string = cmd_line_string(cmd_line, str8_lit("pid"));
+        U64 dst_pid_u64 = 0;
+        if(dst_pid_string.size != 0 &&
+           try_u64_from_str8_c_rules(dst_pid_string, &dst_pid_u64))
         {
-          U8 *buffer = (U8 *)(ipc_info+1);
-          U64 buffer_max = IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo);
-          StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-          String8 msg = str8_list_join(scratch.arena, &cmd_line->inputs, &join);
-          ipc_info->msg_size = Min(buffer_max, msg.size);
-          MemoryCopy(buffer, msg.str, ipc_info->msg_size);
-          os_semaphore_drop(ipc_semaphore);
+          dst_pid = (U32)dst_pid_u64;
         }
+      }
+      
+      //- rjf: no explicit PID? -> find PID to send message to, by looking for other raddbg instances
+      if(dst_pid == 0)
+      {
+        U32 this_pid = os_get_pid();
+        DMN_ProcessIter it = {0};
+        dmn_process_iter_begin(&it);
+        for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &it, &info);)
+        {
+          if(str8_match(str8_skip_last_slash(str8_chop_last_dot(cmd_line->exe_name)), str8_skip_last_slash(str8_chop_last_dot(info.name)), StringMatchFlag_CaseInsensitive) &&
+             this_pid != info.pid)
+          {
+            dst_pid = info.pid;
+            break;
+          }
+        }
+        dmn_process_iter_end(&it);
+      }
+      
+      //- rjf: grab destination instance's shared memory resources
+      String8 ipc_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_shared_memory_%i_", dst_pid);
+      String8 ipc_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_signal_semaphore_%i_", dst_pid);
+      String8 ipc_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_lock_semaphore_%i_", dst_pid);
+      OS_Handle ipc_shared_memory = os_shared_memory_alloc(IPC_SHARED_MEMORY_BUFFER_SIZE, ipc_shared_memory_name);
+      ipc_shared_memory_base = (U8 *)os_shared_memory_view_open(ipc_shared_memory, r1u64(0, IPC_SHARED_MEMORY_BUFFER_SIZE));
+      ipc_signal_semaphore = os_semaphore_alloc(0, 1, ipc_signal_semaphore_name);
+      ipc_lock_semaphore = os_semaphore_alloc(1, 1, ipc_lock_semaphore_name);
+      
+      //- rjf: got resources -> write message
+      if(ipc_shared_memory_base != 0 &&
+         os_semaphore_take(ipc_lock_semaphore, max_U64))
+      {
+        IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
+        U8 *buffer = (U8 *)(ipc_info+1);
+        U64 buffer_max = IPC_SHARED_MEMORY_BUFFER_SIZE - sizeof(IPCInfo);
+        StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+        String8 msg = str8_list_join(scratch.arena, &cmd_line->inputs, &join);
+        ipc_info->msg_size = Min(buffer_max, msg.size);
+        MemoryCopy(buffer, msg.str, ipc_info->msg_size);
+        os_semaphore_drop(ipc_signal_semaphore);
+        os_semaphore_drop(ipc_lock_semaphore);
       }
       
       scratch_end(scratch);

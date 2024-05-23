@@ -39,4 +39,5 @@ dll_type_eval_tests(void)
   Basics basics2 = {4, 5, 6, 7};
   int x = 0;
   (void)x;
+  *(int *)0 = 0;
 }

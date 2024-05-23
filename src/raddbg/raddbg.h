@@ -37,13 +37,8 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] robustify dbgi layer to renames (cache should not be based only on
-//     path - must invalidate naturally when new filetime occurs)
-//
-// [ ] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
-// [ ] raddbgi file regeneration too strict
 //
 // [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
@@ -52,15 +47,10 @@
 //     since that's not normally how Windows fonts work.
 
 ////////////////////////////////
-//~ rjf: Demon/Cleanup Pass Tasks
+//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
-// [ ] TLS eval -> in-process-memory EXE info
-// [ ] unwinding -> in-process-memory EXE info
 // [ ] "root" concept in hash store, which buckets keys & allows usage code to
 //     jettison a collection of keys in retained mode fashion
-
-////////////////////////////////
-//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
 // [ ] Jeff Notes
 //  [ ] highlighted text & ctrl+f -> auto-fill search query
@@ -379,6 +369,13 @@
 //      function was displayed in the window by default next to the thread.
 //  [x] ** It would be nice if thread listings displayed the name of the
 //      thread, instead of just the ID.
+// [x] TLS eval -> in-process-memory EXE info
+// [x] unwinding -> in-process-memory EXE info
+// [x] new fuzzy searching layer
+// [x] robustify dbgi layer to renames (cache should not be based only on
+//     path - must invalidate naturally when new filetime occurs)
+// [x] rdi file regeneration too strict
+// [x] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
 
 #ifndef RADDBG_H
 #define RADDBG_H
@@ -404,12 +401,23 @@ struct IPCInfo
 ////////////////////////////////
 //~ rjf: Globals
 
-#define IPC_SHARED_MEMORY_BUFFER_SIZE MB(16)
+//- rjf: IPC resources
+#define IPC_SHARED_MEMORY_BUFFER_SIZE MB(4)
 StaticAssert(IPC_SHARED_MEMORY_BUFFER_SIZE > sizeof(IPCInfo), ipc_buffer_size_requirement);
-read_only global String8 ipc_shared_memory_name = str8_lit_comp("_raddbg_ipc_shared_memory_");
-read_only global String8 ipc_semaphore_name = str8_lit_comp("_raddbg_ipc_semaphore_");
+global OS_Handle ipc_signal_semaphore = {0};
+global OS_Handle ipc_lock_semaphore = {0};
+global U8 *ipc_shared_memory_base = 0;
+global U8  ipc_s2m_ring_buffer[MB(4)] = {0};
+global U64 ipc_s2m_ring_write_pos = 0;
+global U64 ipc_s2m_ring_read_pos = 0;
+global OS_Handle ipc_s2m_ring_mutex = {0};
+global OS_Handle ipc_s2m_ring_cv = {0};
+
+//- rjf: frame time history
 global U64 frame_time_us_history[64] = {0};
 global U64 frame_time_us_history_idx = 0;
+
+//- rjf: main thread log
 global Log *main_thread_log = 0;
 global String8 main_thread_log_path = {0};
 

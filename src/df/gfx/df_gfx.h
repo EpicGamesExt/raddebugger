@@ -300,11 +300,11 @@ enum
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_gfx_view_rule_line_stringize__##name
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(DF_ExpandKey key, DF_Eval eval, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg)
+#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(DF_ExpandKey key, DF_Eval eval, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg)
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, DF_Eval eval, String8 string, DBGI_Scope *dbgi_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg, Vec2F32 dim)
+#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, DF_Eval eval, String8 string, DI_Scope *di_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg, Vec2F32 dim)
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name) df_gfx_view_rule_block_ui__##name
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name))
 
@@ -405,7 +405,7 @@ struct DF_CodeSliceParams
   DF_EntityList *line_pins;
   DF_TextLineDasm2SrcInfoList *line_dasm2src;
   DF_TextLineSrc2DasmInfoList *line_src2dasm;
-  DF_EntityList relevant_binaries;
+  DI_KeyList relevant_dbgi_keys;
   
   // rjf: visual parameters
   F_Tag font;
@@ -513,6 +513,7 @@ struct DF_Window
   UI_State *ui;
   F32 code_font_size_delta;
   F32 main_font_size_delta;
+  B32 window_temporarily_focused_ipc;
   
   // rjf: view state delta history
   DF_StateDeltaHistory *view_state_hist;
@@ -714,7 +715,8 @@ struct DF_GfxState
   DF_DragDropState drag_drop_state;
   
   // rjf: hover line info correllation state
-  DF_Handle hover_line_binary;
+  Arena *hover_line_arena;
+  DI_Key hover_line_dbgi_key;
   U64 hover_line_voff;
   B32 hover_line_set_this_frame;
   
@@ -871,8 +873,8 @@ internal B32 df_drag_drop(DF_DragDropPayload *out_payload);
 internal void df_drag_kill(void);
 internal void df_queue_drag_drop(void);
 
-internal void df_set_hovered_line_info(DF_Entity *binary, U64 voff);
-internal DF_Entity *df_get_hovered_line_info_binary(void);
+internal void df_set_hovered_line_info(DI_Key *dbgi_key, U64 voff);
+internal DI_Key df_get_hovered_line_info_dbgi_key(void);
 internal U64 df_get_hovered_line_info_voff(void);
 
 ////////////////////////////////
@@ -930,7 +932,7 @@ internal void df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdLis
 
 internal String8 df_eval_escaped_from_raw_string(Arena *arena, String8 raw);
 internal String8List df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table);
-internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DBGI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks);
+internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks);
 
 ////////////////////////////////
 //~ rjf: Hover Eval

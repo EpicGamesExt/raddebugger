@@ -92,6 +92,7 @@ cmd_line_from_string_list(Arena *arena, String8List command_line)
   
   // NOTE(rjf): Parse command line.
   B32 after_passthrough_option = 0;
+  B32 first_passthrough = 1;
   for(String8Node *node = command_line.first->next, *next = 0; node != 0; node = next)
   {
     next = node->next;
@@ -175,10 +176,11 @@ cmd_line_from_string_list(Arena *arena, String8List command_line)
     
     // NOTE(rjf): Default path, treat as a passthrough config option to be
     // handled by tool-specific code.
-    else if(!str8_match(node->string, str8_lit("--"), 0))
+    else if(!str8_match(node->string, str8_lit("--"), 0) || !first_passthrough)
     {
       str8_list_push(arena, &parsed.inputs, node->string);
       after_passthrough_option = 1;
+      first_passthrough = 0;
     }
   }
   

@@ -2,90 +2,10 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Main Layer Initialization
-
-internal void
-dbgi_init(void)
-{
-  Arena *arena = arena_alloc();
-  dbgi_shared = push_array(arena, DBGI_Shared, 1);
-  dbgi_shared->arena = arena;
-  dbgi_shared->force_slots_count = 1024;
-  dbgi_shared->force_stripes_count = Min(dbgi_shared->force_slots_count, os_logical_core_count());
-  dbgi_shared->force_slots = push_array(arena, DBGI_ForceSlot, dbgi_shared->force_slots_count);
-  dbgi_shared->force_stripes = push_array(arena, DBGI_ForceStripe, dbgi_shared->force_stripes_count);
-  for(U64 idx = 0; idx < dbgi_shared->force_stripes_count; idx += 1)
-  {
-    dbgi_shared->force_stripes[idx].arena = arena_alloc();
-    dbgi_shared->force_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    dbgi_shared->force_stripes[idx].cv = os_condition_variable_alloc();
-  }
-  dbgi_shared->binary_slots_count = 1024;
-  dbgi_shared->binary_stripes_count = Min(dbgi_shared->binary_slots_count, os_logical_core_count());
-  dbgi_shared->binary_slots = push_array(arena, DBGI_BinarySlot, dbgi_shared->binary_slots_count);
-  dbgi_shared->binary_stripes = push_array(arena, DBGI_BinaryStripe, dbgi_shared->binary_stripes_count);
-  for(U64 idx = 0; idx < dbgi_shared->binary_stripes_count; idx += 1)
-  {
-    dbgi_shared->binary_stripes[idx].arena = arena_alloc();
-    dbgi_shared->binary_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    dbgi_shared->binary_stripes[idx].cv = os_condition_variable_alloc();
-  }
-  dbgi_shared->fuzzy_search_slots_count = 64;
-  dbgi_shared->fuzzy_search_stripes_count = Min(dbgi_shared->fuzzy_search_slots_count, os_logical_core_count());
-  dbgi_shared->fuzzy_search_slots = push_array(arena, DBGI_FuzzySearchSlot, dbgi_shared->fuzzy_search_slots_count);
-  dbgi_shared->fuzzy_search_stripes = push_array(arena, DBGI_FuzzySearchStripe, dbgi_shared->fuzzy_search_stripes_count);
-  for(U64 idx = 0; idx < dbgi_shared->fuzzy_search_stripes_count; idx += 1)
-  {
-    dbgi_shared->fuzzy_search_stripes[idx].arena = arena_alloc();
-    dbgi_shared->fuzzy_search_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    dbgi_shared->fuzzy_search_stripes[idx].cv = os_condition_variable_alloc();
-  }
-  dbgi_shared->u2p_ring_mutex = os_mutex_alloc();
-  dbgi_shared->u2p_ring_cv = os_condition_variable_alloc();
-  dbgi_shared->u2p_ring_size = KB(64);
-  dbgi_shared->u2p_ring_base = push_array_no_zero(arena, U8, dbgi_shared->u2p_ring_size);
-  dbgi_shared->p2u_ring_mutex = os_mutex_alloc();
-  dbgi_shared->p2u_ring_cv = os_condition_variable_alloc();
-  dbgi_shared->p2u_ring_size = KB(64);
-  dbgi_shared->p2u_ring_base = push_array_no_zero(arena, U8, dbgi_shared->p2u_ring_size);
-  dbgi_shared->parse_thread_count = Max(os_logical_core_count()-1, 1);
-  dbgi_shared->parse_threads = push_array(arena, OS_Handle, dbgi_shared->parse_thread_count);
-  for(U64 idx = 0; idx < dbgi_shared->parse_thread_count; idx += 1)
-  {
-    dbgi_shared->parse_threads[idx] = os_launch_thread(dbgi_parse_thread_entry_point, (void *)idx, 0);
-  }
-  dbgi_shared->fuzzy_thread_count = Clamp(1, os_logical_core_count()-1, 1);
-  dbgi_shared->fuzzy_threads = push_array(arena, DBGI_FuzzySearchThread, dbgi_shared->fuzzy_thread_count);
-  for(U64 idx = 0; idx < dbgi_shared->fuzzy_thread_count; idx += 1)
-  {
-    DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[idx];
-    thread->u2f_ring_mutex = os_mutex_alloc();
-    thread->u2f_ring_cv = os_condition_variable_alloc();
-    thread->u2f_ring_size = KB(64);
-    thread->u2f_ring_base = push_array_no_zero(dbgi_shared->arena, U8, thread->u2f_ring_size);
-    thread->thread = os_launch_thread(dbgi_fuzzy_thread__entry_point, (void *)idx, 0);
-  }
-}
-
-////////////////////////////////
-//~ rjf: Thread-Context Idempotent Initialization
-
-internal void
-dbgi_ensure_tctx_inited(void)
-{
-  if(dbgi_tctx == 0)
-  {
-    Arena *arena = arena_alloc();
-    dbgi_tctx = push_array(arena, DBGI_ThreadCtx, 1);
-    dbgi_tctx->arena = arena;
-  }
-}
-
-////////////////////////////////
-//~ rjf: Helpers
+//~ rjf: Basic Helpers
 
 internal U64
-dbgi_hash_from_string(String8 string, StringMatchFlags match_flags)
+di_hash_from_string(String8 string, StringMatchFlags match_flags)
 {
   U64 result = 5381;
   for(U64 i = 0; i < string.size; i += 1)
@@ -96,458 +16,471 @@ dbgi_hash_from_string(String8 string, StringMatchFlags match_flags)
 }
 
 internal U64
-dbgi_fuzzy_item_num_from_array_element_idx__linear_search(DBGI_FuzzySearchItemArray *array, U64 element_idx)
+di_hash_from_key(DI_Key *k)
 {
-  U64 fuzzy_item_num = 0;
-  for(U64 idx = 0; idx < array->count; idx += 1)
-  {
-    if(array->v[idx].idx == element_idx)
-    {
-      fuzzy_item_num = idx+1;
-      break;
-    }
-  }
-  return fuzzy_item_num;
+  U64 hash = di_hash_from_string(k->path, StringMatchFlag_CaseInsensitive);
+  return hash;
 }
 
-internal String8
-dbgi_fuzzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, DBGI_FuzzySearchTarget target, U64 element_idx)
+internal B32
+di_key_match(DI_Key *a, DI_Key *b)
 {
-  String8 result = {0};
-  switch(target)
+  return (str8_match(a->path, b->path, StringMatchFlag_CaseInsensitive) && a->min_timestamp == b->min_timestamp);
+}
+
+internal DI_Key
+di_key_copy(Arena *arena, DI_Key *src)
+{
+  DI_Key dst = {0};
+  MemoryCopyStruct(&dst, src);
+  dst.path = push_str8_copy(arena, src->path);
+  return dst;
+}
+
+internal DI_Key
+di_normalized_key_from_key(Arena *arena, DI_Key *src)
+{
+  DI_Key dst = {path_normalized_from_string(arena, src->path), src->min_timestamp};
+  return dst;
+}
+
+internal void
+di_key_list_push(Arena *arena, DI_KeyList *list, DI_Key *key)
+{
+  DI_KeyNode *n = push_array(arena, DI_KeyNode, 1);
+  MemoryCopyStruct(&n->v, key);
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal DI_KeyArray
+di_key_array_from_list(Arena *arena, DI_KeyList *list)
+{
+  DI_KeyArray array = {0};
+  array.count = list->count;
+  array.v = push_array_no_zero(arena, DI_Key, array.count);
+  U64 idx = 0;
+  for(DI_KeyNode *n = list->first; n != 0; n = n->next, idx += 1)
   {
-    // NOTE(rjf): no default - warn if we miss a case
-    case DBGI_FuzzySearchTarget_Procedures:
-    {
-      RDI_Procedure *proc = rdi_element_from_idx(rdi, procedures, element_idx);
-      U64 name_size = 0;
-      U8 *name_base = rdi_string_from_idx(rdi, proc->name_string_idx, &name_size);
-      result = str8(name_base, name_size);
-    }break;
-    case DBGI_FuzzySearchTarget_GlobalVariables:
-    {
-      RDI_GlobalVariable *gvar = rdi_element_from_idx(rdi, global_variables, element_idx);
-      U64 name_size = 0;
-      U8 *name_base = rdi_string_from_idx(rdi, gvar->name_string_idx, &name_size);
-      result = str8(name_base, name_size);
-    }break;
-    case DBGI_FuzzySearchTarget_ThreadVariables:
-    {
-      RDI_ThreadVariable *tvar = rdi_element_from_idx(rdi, thread_variables, element_idx);
-      U64 name_size = 0;
-      U8 *name_base = rdi_string_from_idx(rdi, tvar->name_string_idx, &name_size);
-      result = str8(name_base, name_size);
-    }break;
-    case DBGI_FuzzySearchTarget_UDTs:
-    {
-      RDI_UDT *udt = rdi_element_from_idx(rdi, udts, element_idx);
-      RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, udt->self_type_idx);
-      U64 name_size = 0;
-      U8 *name_base = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name_size);
-      result = str8(name_base, name_size);
-    }break;
-    case DBGI_FuzzySearchTarget_COUNT:{}break;
+    MemoryCopyStruct(&array.v[idx], &n->v);
   }
-  return result;
+  return array;
 }
 
 ////////////////////////////////
-//~ rjf: Forced Override Cache Functions
+//~ rjf: Main Layer Initialization
 
 internal void
-dbgi_force_exe_path_dbg_path(String8 exe_path, String8 dbg_path)
+di_init(void)
 {
-  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
-  U64 slot_idx = hash%dbgi_shared->force_slots_count;
-  U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
-  DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
-  DBGI_ForceStripe *stripe = &dbgi_shared->force_stripes[stripe_idx];
-  OS_MutexScopeW(stripe->rw_mutex)
+  Arena *arena = arena_alloc();
+  di_shared = push_array(arena, DI_Shared, 1);
+  di_shared->arena = arena;
+  di_shared->slots_count = 1024;
+  di_shared->slots = push_array(arena, DI_Slot, di_shared->slots_count);
+  di_shared->stripes_count = Min(di_shared->slots_count, os_logical_core_count());
+  di_shared->stripes = push_array(arena, DI_Stripe, di_shared->stripes_count);
+  for(U64 idx = 0; idx < di_shared->stripes_count; idx += 1)
   {
-    DBGI_ForceNode *node = 0;
-    for(DBGI_ForceNode *n = slot->first; n != 0; n = n->next)
-    {
-      if(str8_match(n->exe_path, exe_path, match_flags))
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node == 0)
-    {
-      node = push_array(stripe->arena, DBGI_ForceNode, 1);
-      SLLQueuePush(slot->first, slot->first, node);
-      node->exe_path = push_str8_copy(stripe->arena, exe_path);
-      node->dbg_path_cap = 1024;
-      node->dbg_path_base = push_array_no_zero(stripe->arena, U8, node->dbg_path_cap);
-    }
-    String8 dbg_path_clamped = dbg_path;
-    dbg_path_clamped.size = Min(dbg_path_clamped.size, node->dbg_path_cap);
-    MemoryCopy(node->dbg_path_base, dbg_path_clamped.str, dbg_path_clamped.size);
-    node->dbg_path_size = dbg_path_clamped.size;
+    di_shared->stripes[idx].arena = arena_alloc();
+    di_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    di_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
-}
-
-internal String8
-dbgi_forced_dbg_path_from_exe_path(Arena *arena, String8 exe_path)
-{
-  String8 result = {0};
-  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
-  U64 slot_idx = hash%dbgi_shared->force_slots_count;
-  U64 stripe_idx = slot_idx%dbgi_shared->force_stripes_count;
-  DBGI_ForceSlot *slot = &dbgi_shared->force_slots[slot_idx];
-  DBGI_ForceStripe *stripe = &dbgi_shared->force_stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
+  di_shared->u2p_ring_mutex = os_mutex_alloc();
+  di_shared->u2p_ring_cv = os_condition_variable_alloc();
+  di_shared->u2p_ring_size = KB(64);
+  di_shared->u2p_ring_base = push_array_no_zero(arena, U8, di_shared->u2p_ring_size);
+  di_shared->p2u_ring_mutex = os_mutex_alloc();
+  di_shared->p2u_ring_cv = os_condition_variable_alloc();
+  di_shared->p2u_ring_size = KB(64);
+  di_shared->p2u_ring_base = push_array_no_zero(arena, U8, di_shared->p2u_ring_size);
+  di_shared->parse_thread_count = Max(2, os_logical_core_count()/2);
+  di_shared->parse_threads = push_array(arena, OS_Handle, di_shared->parse_thread_count);
+  for(U64 idx = 0; idx < di_shared->parse_thread_count; idx += 1)
   {
-    DBGI_ForceNode *node = 0;
-    for(DBGI_ForceNode *n = slot->first; n != 0; n = n->next)
-    {
-      if(str8_match(exe_path, n->exe_path, match_flags))
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node != 0)
-    {
-      String8 dbg_path = str8(node->dbg_path_base, node->dbg_path_size);
-      result = push_str8_copy(arena, dbg_path);
-    }
+    di_shared->parse_threads[idx] = os_launch_thread(di_parse_thread__entry_point, (void *)idx, 0);
   }
-  return result;
 }
 
 ////////////////////////////////
 //~ rjf: Scope Functions
 
-internal DBGI_Scope *
-dbgi_scope_open(void)
+internal DI_Scope *
+di_scope_open(void)
 {
-  dbgi_ensure_tctx_inited();
-  DBGI_Scope *scope = dbgi_tctx->free_scope;
+  if(di_tctx == 0)
+  {
+    Arena *arena = arena_alloc();
+    di_tctx = push_array(arena, DI_TCTX, 1);
+    di_tctx->arena = arena;
+  }
+  DI_Scope *scope = di_tctx->free_scope;
   if(scope != 0)
   {
-    SLLStackPop(dbgi_tctx->free_scope);
-    MemoryZeroStruct(scope);
+    SLLStackPop(di_tctx->free_scope);
   }
   else
   {
-    scope = push_array(dbgi_tctx->arena, DBGI_Scope, 1);
+    scope = push_array_no_zero(di_tctx->arena, DI_Scope, 1);
   }
+  MemoryZeroStruct(scope);
   return scope;
 }
 
 internal void
-dbgi_scope_close(DBGI_Scope *scope)
+di_scope_close(DI_Scope *scope)
 {
-  for(DBGI_TouchedBinary *tb = scope->first_tb, *next = 0; tb != 0; tb = next)
+  for(DI_Touch *t = scope->first_touch, *next = 0; t != 0; t = next)
   {
-    next = tb->next;
-    ins_atomic_u64_dec_eval(&tb->binary->scope_touch_count);
-    SLLStackPush(dbgi_tctx->free_tb, tb);
+    next = t->next;
+    SLLStackPush(di_tctx->free_touch, t);
+    if(t->node != 0)
+    {
+      ins_atomic_u64_dec_eval(&t->node->touch_count);
+    }
   }
-  for(DBGI_TouchedFuzzySearch *tfs = scope->first_tfs, *next = 0; tfs != 0; tfs = next)
-  {
-    next = tfs->next;
-    ins_atomic_u64_dec_eval(&tfs->node->scope_touch_count);
-    SLLStackPush(dbgi_tctx->free_tfs, tfs);
-  }
-  SLLStackPush(dbgi_tctx->free_scope, scope);
+  SLLStackPush(di_tctx->free_scope, scope);
 }
 
 internal void
-dbgi_scope_touch_binary__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_Binary *binary)
+di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Node *node)
 {
-  DBGI_TouchedBinary *tb = dbgi_tctx->free_tb;
-  ins_atomic_u64_inc_eval(&binary->scope_touch_count);
-  if(tb != 0)
+  if(node != 0)
   {
-    SLLStackPop(dbgi_tctx->free_tb);
+    ins_atomic_u64_inc_eval(&node->touch_count);
+  }
+  DI_Touch *touch = di_tctx->free_touch;
+  if(touch != 0)
+  {
+    SLLStackPop(di_tctx->free_touch);
   }
   else
   {
-    tb = push_array(dbgi_tctx->arena, DBGI_TouchedBinary, 1);
+    touch = push_array_no_zero(di_tctx->arena, DI_Touch, 1);
   }
-  tb->binary = binary;
-  SLLQueuePush(scope->first_tb, scope->last_tb, tb);
-}
-
-internal void
-dbgi_scope_touch_fuzzy_search__stripe_mutex_r_guarded(DBGI_Scope *scope, DBGI_FuzzySearchNode *node)
-{
-  DBGI_TouchedFuzzySearch *tfs = dbgi_tctx->free_tfs;
-  ins_atomic_u64_inc_eval(&node->scope_touch_count);
-  if(tfs != 0)
-  {
-    SLLStackPop(dbgi_tctx->free_tfs);
-  }
-  else
-  {
-    tfs = push_array(dbgi_tctx->arena, DBGI_TouchedFuzzySearch, 1);
-  }
-  tfs->node = node;
-  SLLQueuePush(scope->first_tfs, scope->last_tfs, tfs);
+  MemoryZeroStruct(touch);
+  SLLQueuePush(scope->first_touch, scope->last_touch, touch);
+  touch->node = node;
 }
 
 ////////////////////////////////
-//~ rjf: Binary Cache Functions
+//~ rjf: Per-Slot Functions
 
-internal void
-dbgi_binary_open(String8 exe_path)
+internal DI_Node *
+di_node_from_key_slot__stripe_mutex_r_guarded(DI_Slot *slot, DI_Key *key)
 {
-  Temp scratch = scratch_begin(0, 0);
-  exe_path = path_normalized_from_string(scratch.arena, exe_path);
+  DI_Node *node = 0;
   StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
-  U64 slot_idx = hash%dbgi_shared->binary_slots_count;
-  U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
-  DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
-  DBGI_BinaryStripe *stripe = &dbgi_shared->binary_stripes[stripe_idx];
-  B32 is_new = 0;
-  OS_MutexScopeW(stripe->rw_mutex)
+  U64 most_recent_timestamp = max_U64;
+  for(DI_Node *n = slot->first; n != 0; n = n->next)
   {
-    DBGI_Binary *binary = 0;
-    for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
+    if(str8_match(n->key.path, key->path, match_flags) &&
+       key->min_timestamp <= n->key.min_timestamp &&
+       (n->key.min_timestamp - key->min_timestamp) <= most_recent_timestamp)
     {
-      if(str8_match(bin->exe_path, exe_path, match_flags))
-      {
-        binary = bin;
-        break;
-      }
-    }
-    if(binary == 0)
-    {
-      binary = push_array(stripe->arena, DBGI_Binary, 1);
-      SLLQueuePush(slot->first, slot->last, binary);
-      binary->exe_path = push_str8_copy(stripe->arena, exe_path);
-      binary->gen += 1;
-    }
-    binary->refcount += 1;
-    is_new = (binary->refcount == 1);
-  }
-  if(is_new)
-  {
-    dbgi_u2p_enqueue_exe_path(exe_path, 0);
-  }
-  scratch_end(scratch);
-}
-
-internal void
-dbgi_binary_close(String8 exe_path)
-{
-  Temp scratch = scratch_begin(0, 0);
-  exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-  U64 hash = dbgi_hash_from_string(exe_path, match_flags);
-  U64 slot_idx = hash%dbgi_shared->binary_slots_count;
-  U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
-  DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
-  DBGI_BinaryStripe *stripe = &dbgi_shared->binary_stripes[stripe_idx];
-  OS_MutexScopeW(stripe->rw_mutex)
-  {
-    DBGI_Binary *binary = 0;
-    for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-    {
-      if(str8_match(bin->exe_path, exe_path, match_flags))
-      {
-        binary = bin;
-        break;
-      }
-    }
-    B32 need_deletion = 0;
-    if(binary != 0 && binary->refcount>0)
-    {
-      binary->refcount -= 1;
-      need_deletion = (binary->refcount == 0);
-    }
-    if(need_deletion) for(;;)
-    {
-      os_rw_mutex_drop_w(stripe->rw_mutex);
-      for(U64 start_t = os_now_microseconds(); os_now_microseconds() <= start_t + 250;);
-      os_rw_mutex_take_w(stripe->rw_mutex);
-      if(binary->refcount == 0 && ins_atomic_u64_eval(&binary->scope_touch_count) == 0)
-      {
-        if(binary->parse.arena != 0) { arena_release(binary->parse.arena); }
-        if(binary->parse.exe_base != 0) { os_file_map_view_close(binary->exe_file_map, binary->parse.exe_base); }
-        if(!os_handle_match(os_handle_zero(), binary->exe_file_map)) { os_file_map_close(binary->exe_file_map); }
-        if(!os_handle_match(os_handle_zero(), binary->exe_file)) { os_file_close(binary->exe_file); }
-        if(binary->parse.dbg_base != 0) { os_file_map_view_close(binary->dbg_file_map, binary->parse.dbg_base); }
-        if(!os_handle_match(os_handle_zero(), binary->dbg_file_map)) { os_file_map_close(binary->dbg_file_map); }
-        if(!os_handle_match(os_handle_zero(), binary->dbg_file)) { os_file_close(binary->dbg_file); }
-        binary->exe_file_map = binary->exe_file = os_handle_zero();
-        binary->dbg_file_map = binary->dbg_file = os_handle_zero();
-        MemoryZeroStruct(&binary->parse);
-        binary->last_time_enqueued_for_parse_us = 0;
-        binary->gen = 1;
-        break;
-      }
+      node = n;
+      most_recent_timestamp = (n->key.min_timestamp - key->min_timestamp);
     }
   }
-  scratch_end(scratch);
-}
-
-internal DBGI_Parse *
-dbgi_parse_from_exe_path(DBGI_Scope *scope, String8 exe_path, U64 endt_us)
-{
-  Temp scratch = scratch_begin(0, 0);
-  exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  DBGI_Parse *parse = &dbgi_parse_nil;
-  if(exe_path.size != 0)
-  {
-    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-    U64 hash = dbgi_hash_from_string(exe_path, match_flags);
-    U64 slot_idx = hash%dbgi_shared->binary_slots_count;
-    U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
-    DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
-    DBGI_BinaryStripe *stripe = &dbgi_shared->binary_stripes[stripe_idx];
-    B32 sent = 0;
-    OS_MutexScopeR(stripe->rw_mutex) for(;;)
-    {
-      DBGI_Binary *binary = 0;
-      for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-      {
-        if(str8_match(bin->exe_path, exe_path, match_flags))
-        {
-          binary = bin;
-          break;
-        }
-      }
-      if(binary != 0 && !(binary->flags & DBGI_BinaryFlag_ParseInFlight))
-      {
-        if(binary->parse.gen == binary->gen)
-        {
-          dbgi_scope_touch_binary__stripe_mutex_r_guarded(scope, binary);
-          parse = &binary->parse;
-          break;
-        }
-        else if(!sent &&
-                ins_atomic_u64_eval(&binary->last_time_enqueued_for_parse_us) == 0 &&
-                dbgi_u2p_enqueue_exe_path(exe_path, endt_us))
-        {
-          sent = 1;
-          ins_atomic_u64_eval_assign(&binary->last_time_enqueued_for_parse_us, os_now_microseconds());
-        }
-      }
-      if(os_now_microseconds() >= endt_us)
-      {
-        break;
-      }
-      os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
-    }
-  }
-  scratch_end(scratch);
-  return parse;
+  return node;
 }
 
 ////////////////////////////////
-//~ rjf: Fuzzy Search Cache Functions
+//~ rjf: Per-Stripe Functions
 
-internal DBGI_FuzzySearchItemArray
-dbgi_fuzzy_search_items_from_key_exe_query(DBGI_Scope *scope, U128 key, String8 exe_path, String8 query, DBGI_FuzzySearchTarget target, U64 endt_us, B32 *stale_out)
+internal U64
+di_string_bucket_idx_from_string_size(U64 size)
 {
-  Temp scratch = scratch_begin(0, 0);
-  DBGI_FuzzySearchItemArray items = {0};
-  exe_path = path_normalized_from_string(scratch.arena, exe_path);
-  StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
+  U64 size_rounded = u64_up_to_pow2(size+1);
+  size_rounded = ClampBot((1<<4), size_rounded);
+  U64 bucket_idx = 0;
+  switch(size_rounded)
   {
-    //- rjf: unpack key
-    U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
-    U64 stripe_idx = slot_idx%dbgi_shared->fuzzy_search_stripes_count;
-    DBGI_FuzzySearchSlot *slot = &dbgi_shared->fuzzy_search_slots[slot_idx];
-    DBGI_FuzzySearchStripe *stripe = &dbgi_shared->fuzzy_search_stripes[stripe_idx];
-    
-    //- rjf: query and/or request
-    OS_MutexScopeR(stripe->rw_mutex) for(;;)
+    case 1<<4: {bucket_idx = 0;}break;
+    case 1<<5: {bucket_idx = 1;}break;
+    case 1<<6: {bucket_idx = 2;}break;
+    case 1<<7: {bucket_idx = 3;}break;
+    case 1<<8: {bucket_idx = 4;}break;
+    case 1<<9: {bucket_idx = 5;}break;
+    case 1<<10:{bucket_idx = 6;}break;
+    default:{bucket_idx = ArrayCount(((DI_Stripe *)0)->free_string_chunks)-1;}break;
+  }
+  return bucket_idx;
+}
+
+internal String8
+di_string_alloc__stripe_mutex_w_guarded(DI_Stripe *stripe, String8 string)
+{
+  if(string.size == 0) {return str8_zero();}
+  U64 bucket_idx = di_string_bucket_idx_from_string_size(string.size);
+  DI_StringChunkNode *node = stripe->free_string_chunks[bucket_idx];
+  
+  // rjf: pull from bucket free list
+  if(node != 0)
+  {
+    if(bucket_idx == ArrayCount(stripe->free_string_chunks)-1)
     {
-      // rjf: map key -> node
-      DBGI_FuzzySearchNode *node = 0;
-      for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
+      node = 0;
+      DI_StringChunkNode *prev = 0;
+      for(DI_StringChunkNode *n = stripe->free_string_chunks[bucket_idx];
+          n != 0;
+          prev = n, n = n->next)
       {
-        if(u128_match(n->key, key))
+        if(n->size >= string.size+1)
         {
+          if(prev == 0)
+          {
+            stripe->free_string_chunks[bucket_idx] = n->next;
+          }
+          else
+          {
+            prev->next = n->next;
+          }
           node = n;
           break;
         }
       }
+    }
+    else
+    {
+      SLLStackPop(stripe->free_string_chunks[bucket_idx]);
+    }
+  }
+  
+  // rjf: no found node -> allocate new
+  if(node == 0)
+  {
+    U64 chunk_size = 0;
+    if(bucket_idx < ArrayCount(stripe->free_string_chunks)-1)
+    {
+      chunk_size = 1<<(bucket_idx+4);
+    }
+    else
+    {
+      chunk_size = u64_up_to_pow2(string.size);
+    }
+    U8 *chunk_memory = push_array(stripe->arena, U8, chunk_size);
+    node = (DI_StringChunkNode *)chunk_memory;
+  }
+  
+  // rjf: fill string & return
+  String8 allocated_string = str8((U8 *)node, string.size);
+  MemoryCopy((U8 *)node, string.str, string.size);
+  return allocated_string;
+}
+
+internal void
+di_string_release__stripe_mutex_w_guarded(DI_Stripe *stripe, String8 string)
+{
+  if(string.size == 0) {return;}
+  U64 bucket_idx = di_string_bucket_idx_from_string_size(string.size);
+  DI_StringChunkNode *node = (DI_StringChunkNode *)string.str;
+  node->size = u64_up_to_pow2(string.size);
+  SLLStackPush(stripe->free_string_chunks[bucket_idx], node);
+}
+
+////////////////////////////////
+//~ rjf: Key Opening/Closing
+
+internal void
+di_open(DI_Key *key)
+{
+  Temp scratch = scratch_begin(0, 0);
+  if(key->path.size != 0)
+  {
+    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
+    U64 hash = di_hash_from_key(&key_normalized);
+    U64 slot_idx = hash%di_shared->slots_count;
+    U64 stripe_idx = slot_idx%di_shared->stripes_count;
+    DI_Slot *slot = &di_shared->slots[slot_idx];
+    DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
+    log_infof("opening debug info: %S [0x%I64x]\n", key_normalized.path, key_normalized.min_timestamp);
+    OS_MutexScopeW(stripe->rw_mutex)
+    {
+      //- rjf: find existing node
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
       
-      // rjf: no node? -> allocate
-      if(node == 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
+      //- rjf: allocate node if none exists; insert into slot
+      if(node == 0)
       {
-        node = push_array(stripe->arena, DBGI_FuzzySearchNode, 1);
-        SLLQueuePush(slot->first, slot->last, node);
-        node->key = key;
-        for(U64 idx = 0; idx < ArrayCount(node->buckets); idx += 1)
+        U64 current_timestamp = os_properties_from_file_path(key_normalized.path).modified;
+        if(current_timestamp == 0)
         {
-          node->buckets[idx].arena = arena_alloc();
+          current_timestamp = key_normalized.min_timestamp;
         }
+        node = stripe->free_node;
+        if(node != 0)
+        {
+          SLLStackPop(stripe->free_node);
+        }
+        else
+        {
+          node = push_array_no_zero(stripe->arena, DI_Node, 1);
+        }
+        MemoryZeroStruct(node);
+        DLLPushBack(slot->first, slot->last, node);
+        String8 path_stored = di_string_alloc__stripe_mutex_w_guarded(stripe, key_normalized.path);
+        node->key.path = path_stored;
+        node->key.min_timestamp = current_timestamp;
       }
       
-      // rjf: try to grab last valid results for this key/query; determine if stale
-      B32 stale = 1;
-      if(str8_match(exe_path, node->buckets[node->gen%ArrayCount(node->buckets)].exe_path, match_flags) &&
-         target == node->buckets[node->gen%ArrayCount(node->buckets)].target &&
-         node->gen != 0)
+      //- rjf: increment node reference count
+      if(node != 0)
       {
-        dbgi_scope_touch_fuzzy_search__stripe_mutex_r_guarded(scope, node);
-        items = node->gen_items;
-        stale = !str8_match(query, node->buckets[node->gen%ArrayCount(node->buckets)].query, 0);
-        *stale_out = stale;
-      }
-      
-      // rjf: if stale -> request again
-      if(stale) OS_MutexScopeRWPromote(stripe->rw_mutex)
-      {
-        if(node->gen <= node->submit_gen && node->submit_gen < node->gen + ArrayCount(node->buckets)-1)
+        node->ref_count += 1;
+        if(node->ref_count == 1)
         {
-          node->submit_gen += 1;
-          arena_clear(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena);
-          node->buckets[node->submit_gen%ArrayCount(node->buckets)].exe_path = push_str8_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, exe_path);
-          node->buckets[node->submit_gen%ArrayCount(node->buckets)].query = push_str8_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, query);
-          node->buckets[node->submit_gen%ArrayCount(node->buckets)].target = target;
-        }
-        if((node->submit_gen > node->gen+1 || os_now_microseconds() >= node->last_time_submitted_us+100000) &&
-           dbgi_u2f_enqueue_req(key, endt_us))
-        {
-          node->last_time_submitted_us = os_now_microseconds();
+          di_u2p_enqueue_key(&key_normalized, max_U64);
         }
       }
+    }
+  }
+  scratch_end(scratch);
+}
+
+internal void
+di_close(DI_Key *key)
+{
+  Temp scratch = scratch_begin(0, 0);
+  if(key->path.size != 0)
+  {
+    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
+    U64 hash = di_hash_from_key(&key_normalized);
+    U64 slot_idx = hash%di_shared->slots_count;
+    U64 stripe_idx = slot_idx%di_shared->stripes_count;
+    DI_Slot *slot = &di_shared->slots[slot_idx];
+    DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
+    log_infof("closing debug info: %S [0x%I64x]\n", key_normalized.path, key_normalized.min_timestamp);
+    OS_MutexScopeW(stripe->rw_mutex)
+    {
+      //- rjf: find existing node
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
       
-      // rjf: not stale, or timeout -> break
-      if(!stale || os_now_microseconds() >= endt_us)
+      //- rjf: node exists -> decrement reference count; release
+      if(node != 0)
+      {
+        node->ref_count -= 1;
+        if(node->ref_count == 0) for(;;)
+        {
+          //- rjf: wait for touch count to go to 0
+          if(ins_atomic_u64_eval(&node->touch_count) != 0)
+          {
+            os_rw_mutex_drop_w(stripe->rw_mutex);
+            for(U64 start_t = os_now_microseconds(); os_now_microseconds() <= start_t + 250;);
+            os_rw_mutex_take_w(stripe->rw_mutex);
+          }
+          
+          //- rjf: release
+          if(node->ref_count == 0 && ins_atomic_u64_eval(&node->touch_count) == 0)
+          {
+            di_string_release__stripe_mutex_w_guarded(stripe, node->key.path);
+            if(node->file_base != 0)
+            {
+              os_file_map_view_close(node->file_map, node->file_base);
+            }
+            if(!os_handle_match(node->file_map, os_handle_zero()))
+            {
+              os_file_map_close(node->file_map);
+            }
+            if(!os_handle_match(node->file, os_handle_zero()))
+            {
+              os_file_close(node->file);
+            }
+            if(node->arena != 0)
+            {
+              arena_release(node->arena);
+            }
+            DLLRemove(slot->first, slot->last, node);
+            SLLStackPush(stripe->free_node, node);
+            break;
+          }
+        }
+      }
+    }
+  }
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: Cache Lookups
+
+internal RDI_Parsed *
+di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
+{
+  RDI_Parsed *result = &di_rdi_parsed_nil;
+  if(key->path.size != 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
+    U64 hash = di_hash_from_key(&key_normalized);
+    U64 slot_idx = hash%di_shared->slots_count;
+    U64 stripe_idx = slot_idx%di_shared->stripes_count;
+    DI_Slot *slot = &di_shared->slots[slot_idx];
+    DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
+    OS_MutexScopeR(stripe->rw_mutex) for(;;)
+    {
+      //- rjf: find existing node
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
+      
+      //- rjf: no node? this path is not opened
+      if(node == 0)
       {
         break;
       }
       
-      // rjf: no results, but have time to wait -> wait
-      os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+      //- rjf: parse done -> touch, grab result
+      if(node != 0 && node->parse_done)
+      {
+        di_scope_touch_node__stripe_mutex_r_guarded(scope, node);
+        result = &node->rdi;
+        break;
+      }
+      
+      //- rjf: parse not done, not working, asked a while ago -> ask for parse
+      B32 sent = 0;
+      if(node != 0 && !node->parse_done && !node->is_working && ins_atomic_u64_eval(&node->last_time_requested_us)+1000000<os_now_microseconds())
+      {
+        sent = di_u2p_enqueue_key(&key_normalized, endt_us);
+        if(sent)
+        {
+          ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
+        }
+      }
+      
+      //- rjf: time expired -> break
+      if(os_now_microseconds() >= endt_us)
+      {
+        break;
+      }
+      
+      //- rjf: wait on this stripe
+      {
+        os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+      }
     }
+    scratch_end(scratch);
   }
-  scratch_end(scratch);
-  return items;
+  return result;
 }
 
 ////////////////////////////////
-//~ rjf: Analysis Threads
+//~ rjf: Parse Threads
 
 internal B32
-dbgi_u2p_enqueue_exe_path(String8 exe_path, U64 endt_us)
+di_u2p_enqueue_key(DI_Key *key, U64 endt_us)
 {
   B32 sent = 0;
-  OS_MutexScope(dbgi_shared->u2p_ring_mutex) for(;;)
+  OS_MutexScope(di_shared->u2p_ring_mutex) for(;;)
   {
-    U64 unconsumed_size = (dbgi_shared->u2p_ring_write_pos-dbgi_shared->u2p_ring_read_pos);
-    U64 available_size = dbgi_shared->u2p_ring_size-unconsumed_size;
-    U64 needed_size = sizeof(U64)+exe_path.size;
-    needed_size += 7;
-    needed_size -= needed_size%8;
-    if(available_size >= needed_size)
+    U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
+    U64 available_size = di_shared->u2p_ring_size - unconsumed_size;
+    if(available_size >= sizeof(key->path.size) + key->path.size + sizeof(key->min_timestamp))
     {
-      dbgi_shared->u2p_ring_write_pos += ring_write_struct(dbgi_shared->u2p_ring_base, dbgi_shared->u2p_ring_size, dbgi_shared->u2p_ring_write_pos, &exe_path.size);
-      dbgi_shared->u2p_ring_write_pos += ring_write(dbgi_shared->u2p_ring_base, dbgi_shared->u2p_ring_size, dbgi_shared->u2p_ring_write_pos, exe_path.str, exe_path.size);
-      dbgi_shared->u2p_ring_write_pos += 7;
-      dbgi_shared->u2p_ring_write_pos -= dbgi_shared->u2p_ring_write_pos%8;
+      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &key->path.size);
+      di_shared->u2p_ring_write_pos += ring_write(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, key->path.str, key->path.size);
+      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &key->min_timestamp);
+      di_shared->u2p_ring_write_pos += 7;
+      di_shared->u2p_ring_write_pos -= di_shared->u2p_ring_write_pos%8;
       sent = 1;
       break;
     }
@@ -555,210 +488,142 @@ dbgi_u2p_enqueue_exe_path(String8 exe_path, U64 endt_us)
     {
       break;
     }
-    os_condition_variable_wait(dbgi_shared->u2p_ring_cv, dbgi_shared->u2p_ring_mutex, endt_us);
+    os_condition_variable_wait(di_shared->u2p_ring_cv, di_shared->u2p_ring_mutex, endt_us);
   }
-  os_condition_variable_broadcast(dbgi_shared->u2p_ring_cv);
+  if(sent)
+  {
+    os_condition_variable_broadcast(di_shared->u2p_ring_cv);
+  }
   return sent;
 }
 
-internal String8
-dbgi_u2p_dequeue_exe_path(Arena *arena)
+internal void
+di_u2p_dequeue_key(Arena *arena, DI_Key *out_key)
 {
-  String8 result = {0};
-  OS_MutexScope(dbgi_shared->u2p_ring_mutex) for(;;)
+  OS_MutexScope(di_shared->u2p_ring_mutex) for(;;)
   {
-    U64 unconsumed_size = (dbgi_shared->u2p_ring_write_pos-dbgi_shared->u2p_ring_read_pos);
-    if(unconsumed_size != 0)
+    U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
+    if(unconsumed_size >= sizeof(out_key->path.size) + sizeof(out_key->min_timestamp))
     {
-      dbgi_shared->u2p_ring_read_pos += ring_read_struct(dbgi_shared->u2p_ring_base, dbgi_shared->u2p_ring_size, dbgi_shared->u2p_ring_read_pos, &result.size);
-      result.str = push_array_no_zero(arena, U8, result.size);
-      dbgi_shared->u2p_ring_read_pos += ring_read(dbgi_shared->u2p_ring_base, dbgi_shared->u2p_ring_size, dbgi_shared->u2p_ring_read_pos, result.str, result.size);
-      dbgi_shared->u2p_ring_read_pos += 7;
-      dbgi_shared->u2p_ring_read_pos -= dbgi_shared->u2p_ring_read_pos%8;
+      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_key->path.size);
+      out_key->path.str = push_array(arena, U8, out_key->path.size);
+      di_shared->u2p_ring_read_pos += ring_read(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, out_key->path.str, out_key->path.size);
+      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_key->min_timestamp);
+      di_shared->u2p_ring_read_pos += 7;
+      di_shared->u2p_ring_read_pos -= di_shared->u2p_ring_read_pos%8;
       break;
     }
-    os_condition_variable_wait(dbgi_shared->u2p_ring_cv, dbgi_shared->u2p_ring_mutex, max_U64);
+    os_condition_variable_wait(di_shared->u2p_ring_cv, di_shared->u2p_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(dbgi_shared->u2p_ring_cv);
-  return result;
+  os_condition_variable_broadcast(di_shared->u2p_ring_cv);
 }
 
 internal void
-dbgi_p2u_push_event(DBGI_Event *event)
+di_p2u_push_event(DI_Event *event)
 {
-  OS_MutexScope(dbgi_shared->p2u_ring_mutex) for(;;)
+  OS_MutexScope(di_shared->p2u_ring_mutex) for(;;)
   {
-    U64 unconsumed_size = (dbgi_shared->p2u_ring_write_pos-dbgi_shared->p2u_ring_read_pos);
-    U64 available_size = dbgi_shared->p2u_ring_size-unconsumed_size;
-    U64 needed_size = sizeof(DBGI_EventKind) + sizeof(U64) + event->string.size;
+    U64 unconsumed_size = (di_shared->p2u_ring_write_pos-di_shared->p2u_ring_read_pos);
+    U64 available_size = di_shared->p2u_ring_size-unconsumed_size;
+    U64 needed_size = sizeof(DI_EventKind) + sizeof(U64) + event->string.size;
     if(available_size >= needed_size)
     {
-      dbgi_shared->p2u_ring_write_pos += ring_write_struct(dbgi_shared->p2u_ring_base, dbgi_shared->p2u_ring_size, dbgi_shared->p2u_ring_write_pos, &event->kind);
-      dbgi_shared->p2u_ring_write_pos += ring_write_struct(dbgi_shared->p2u_ring_base, dbgi_shared->p2u_ring_size, dbgi_shared->p2u_ring_write_pos, &event->string.size);
-      dbgi_shared->p2u_ring_write_pos += ring_write(dbgi_shared->p2u_ring_base, dbgi_shared->p2u_ring_size, dbgi_shared->p2u_ring_write_pos, event->string.str, event->string.size);
-      dbgi_shared->p2u_ring_write_pos += 7;
-      dbgi_shared->p2u_ring_write_pos -= dbgi_shared->p2u_ring_write_pos%8;
+      di_shared->p2u_ring_write_pos += ring_write_struct(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_write_pos, &event->kind);
+      di_shared->p2u_ring_write_pos += ring_write_struct(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_write_pos, &event->string.size);
+      di_shared->p2u_ring_write_pos += ring_write(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_write_pos, event->string.str, event->string.size);
+      di_shared->p2u_ring_write_pos += 7;
+      di_shared->p2u_ring_write_pos -= di_shared->p2u_ring_write_pos%8;
       break;
     }
-    os_condition_variable_wait(dbgi_shared->p2u_ring_cv, dbgi_shared->p2u_ring_mutex, max_U64);
+    os_condition_variable_wait(di_shared->p2u_ring_cv, di_shared->p2u_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(dbgi_shared->p2u_ring_cv);
+  os_condition_variable_broadcast(di_shared->p2u_ring_cv);
 }
 
-internal DBGI_EventList
-dbgi_p2u_pop_events(Arena *arena, U64 endt_us)
+internal DI_EventList
+di_p2u_pop_events(Arena *arena, U64 endt_us)
 {
-  DBGI_EventList events = {0};
-  OS_MutexScope(dbgi_shared->p2u_ring_mutex) for(;;)
+  DI_EventList events = {0};
+  OS_MutexScope(di_shared->p2u_ring_mutex) for(;;)
   {
-    U64 unconsumed_size = (dbgi_shared->p2u_ring_write_pos-dbgi_shared->p2u_ring_read_pos);
-    if(unconsumed_size >= sizeof(DBGI_EventKind) + sizeof(U64))
+    U64 unconsumed_size = (di_shared->p2u_ring_write_pos-di_shared->p2u_ring_read_pos);
+    if(unconsumed_size >= sizeof(DI_EventKind) + sizeof(U64))
     {
-      DBGI_EventNode *n = push_array(arena, DBGI_EventNode, 1);
+      DI_EventNode *n = push_array(arena, DI_EventNode, 1);
       SLLQueuePush(events.first, events.last, n);
       events.count += 1;
-      dbgi_shared->p2u_ring_read_pos += ring_read_struct(dbgi_shared->p2u_ring_base, dbgi_shared->p2u_ring_size, dbgi_shared->p2u_ring_read_pos, &n->v.kind);
-      dbgi_shared->p2u_ring_read_pos += ring_read_struct(dbgi_shared->p2u_ring_base, dbgi_shared->p2u_ring_size, dbgi_shared->p2u_ring_read_pos, &n->v.string.size);
+      di_shared->p2u_ring_read_pos += ring_read_struct(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_read_pos, &n->v.kind);
+      di_shared->p2u_ring_read_pos += ring_read_struct(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_read_pos, &n->v.string.size);
       n->v.string.str = push_array_no_zero(arena, U8, n->v.string.size);
-      dbgi_shared->p2u_ring_read_pos += ring_read(dbgi_shared->p2u_ring_base, dbgi_shared->p2u_ring_size, dbgi_shared->p2u_ring_read_pos, n->v.string.str, n->v.string.size);
-      dbgi_shared->p2u_ring_read_pos += 7;
-      dbgi_shared->p2u_ring_read_pos -= dbgi_shared->p2u_ring_read_pos%8;
+      di_shared->p2u_ring_read_pos += ring_read(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_read_pos, n->v.string.str, n->v.string.size);
+      di_shared->p2u_ring_read_pos += 7;
+      di_shared->p2u_ring_read_pos -= di_shared->p2u_ring_read_pos%8;
     }
     else if(os_now_microseconds() >= endt_us)
     {
       break;
     }
-    os_condition_variable_wait(dbgi_shared->p2u_ring_cv, dbgi_shared->p2u_ring_mutex, endt_us);
+    os_condition_variable_wait(di_shared->p2u_ring_cv, di_shared->p2u_ring_mutex, endt_us);
   }
-  os_condition_variable_broadcast(dbgi_shared->p2u_ring_cv);
+  os_condition_variable_broadcast(di_shared->p2u_ring_cv);
   return events;
 }
 
 internal void
-dbgi_parse_thread_entry_point(void *p)
+di_parse_thread__entry_point(void *p)
 {
-  ThreadNameF("[dbgi] parse #%I64U", (U64)p);
+  ThreadNameF("[di] parse #%I64u", (U64)p);
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
     
-    //- rjf: grab next path & unpack
-    String8 exe_path = dbgi_u2p_dequeue_exe_path(scratch.arena);
-    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-    ProfBegin("begin task for \"%.*s\"", str8_varg(exe_path));
-    U64 hash = dbgi_hash_from_string(exe_path, path_match_flags_from_os(operating_system_from_context()));
-    U64 slot_idx = hash%dbgi_shared->binary_slots_count;
-    U64 stripe_idx = slot_idx%dbgi_shared->binary_stripes_count;
-    DBGI_BinarySlot *slot = &dbgi_shared->binary_slots[slot_idx];
-    DBGI_BinaryStripe *stripe = &dbgi_shared->binary_stripes[stripe_idx];
+    ////////////////////////////
+    //- rjf: grab next key
+    //
+    DI_Key key = {0};
+    di_u2p_dequeue_key(scratch.arena, &key);
+    String8 og_path = key.path;
+    U64 min_timestamp = key.min_timestamp;
     
-    //- rjf: determine if binary's analysis work is taken by another thread.
-    // if not, take it
-    B32 task_is_taken_by_other_thread = 0;
-    OS_MutexScopeW(stripe->rw_mutex)
+    ////////////////////////////
+    //- rjf: unpack key
+    //
+    U64 hash = di_hash_from_string(og_path, StringMatchFlag_CaseInsensitive);
+    U64 slot_idx = hash%di_shared->slots_count;
+    U64 stripe_idx = slot_idx%di_shared->stripes_count;
+    DI_Slot *slot = &di_shared->slots[slot_idx];
+    DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
+    
+    ////////////////////////////
+    //- rjf: take task
+    //
+    B32 got_task = 0;
+    OS_MutexScopeR(stripe->rw_mutex)
     {
-      DBGI_Binary *binary = 0;
-      for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
+      if(node != 0)
       {
-        if(str8_match(bin->exe_path, exe_path, match_flags))
-        {
-          binary = bin;
-          break;
-        }
-      }
-      if(binary == 0 || binary->flags&DBGI_BinaryFlag_ParseInFlight || binary->refcount == 0)
-      {
-        task_is_taken_by_other_thread = 1;
-      }
-      else if(binary != 0)
-      {
-        binary->flags |= DBGI_BinaryFlag_ParseInFlight;
+        got_task = !ins_atomic_u64_eval_cond_assign(&node->is_working, 1, 0);
       }
     }
     
-    //- rjf: is the work taken? -> abort
-    B32 do_task = 1;
-    if(task_is_taken_by_other_thread)
+    ////////////////////////////
+    //- rjf: got task -> open O.G. file (may or may not be RDI)
+    //
+    B32 og_format_is_known = 0;
+    B32 og_is_pe     = 0;
+    B32 og_is_pdb    = 0;
+    B32 og_is_elf    = 0;
+    B32 og_is_rdi    = 0;
+    FileProperties og_props = {0};
+    if(got_task) ProfScope("analyze %.*s", str8_varg(og_path))
     {
-      do_task = 0;
-    }
-    
-    //- rjf: open exe file & map into address space
-    OS_Handle exe_file = {0};
-    FileProperties exe_file_props = {0};
-    OS_Handle exe_file_map = {0};
-    void *exe_file_base = 0;
-    if(do_task)
-    {
-      exe_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, exe_path);
-      exe_file_props = os_properties_from_file(exe_file);
-      exe_file_map = os_file_map_open(OS_AccessFlag_Read, exe_file);
-      exe_file_base = os_file_map_view_open(exe_file_map, OS_AccessFlag_Read, r1u64(0, exe_file_props.size));
-    }
-    
-    //- rjf: parse exe file info
-    Arena *parse_arena = 0;
-    PE_BinInfo exe_pe_info = {0};
-    String8 exe_dbg_path_embedded_absolute = {0};
-    String8 exe_dbg_path_embedded_relative = {0};
-    if(do_task)
-    {
-      parse_arena = arena_alloc();
-      if(exe_file_props.size >= 2 && *(U16 *)exe_file_base == PE_DOS_MAGIC)
-      {
-        String8 exe_data = str8((U8 *)exe_file_base, exe_file_props.size);
-        exe_pe_info = pe_bin_info_from_data(parse_arena, exe_data);
-        exe_dbg_path_embedded_absolute = str8_cstring_capped((char *)exe_data.str+exe_pe_info.dbg_path_off, (char *)exe_data.str+exe_pe_info.dbg_path_off+Min(exe_data.size-exe_pe_info.dbg_path_off, 4096));
-        String8 exe_folder = str8_chop_last_slash(exe_path);
-        exe_dbg_path_embedded_relative = push_str8f(scratch.arena, "%S/%S", exe_folder, exe_dbg_path_embedded_absolute);
-      }
-    }
-    
-    //- rjf: determine O.G. (may or may not be RADDBG) dbg path
-    String8 og_dbg_path = {0};
-    if(do_task) ProfScope("determine O.G. dbg path")
-    {
-      String8 forced_og_dbg_path = dbgi_forced_dbg_path_from_exe_path(scratch.arena, exe_path);
-      if(forced_og_dbg_path.size != 0)
-      {
-        og_dbg_path = forced_og_dbg_path;
-      }
-      else
-      {
-        String8 possible_og_dbg_paths[] =
-        {
-          /* inferred (treated as absolute): */ exe_dbg_path_embedded_absolute,
-          /* inferred (treated as relative): */ exe_dbg_path_embedded_relative,
-          /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path)),
-          /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", exe_path),
-        };
-        for(U64 idx = 0; idx < ArrayCount(possible_og_dbg_paths); idx += 1)
-        {
-          FileProperties props = os_properties_from_file_path(possible_og_dbg_paths[idx]);
-          if(props.modified != 0 && props.size != 0)
-          {
-            og_dbg_path = possible_og_dbg_paths[idx];
-            break;
-          }
-        }
-      }
-    }
-    
-    //- rjf: analyze O.G. dbg file
-    B32 og_dbg_format_is_known = 0;
-    B32 og_dbg_is_pe     = 0;
-    B32 og_dbg_is_pdb    = 0;
-    B32 og_dbg_is_elf    = 0;
-    B32 og_dbg_is_raddbg = 0;
-    FileProperties og_dbg_props = {0};
-    if(do_task) ProfScope("analyze O.G. dbg file")
-    {
-      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, og_dbg_path);
+      OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, og_path);
       OS_Handle file_map = os_file_map_open(OS_AccessFlag_Read, file);
-      FileProperties props = og_dbg_props = os_properties_from_file(file);
+      FileProperties props = og_props = os_properties_from_file(file);
       void *base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, props.size));
       String8 data = str8((U8 *)base, props.size);
-      if(!og_dbg_format_is_known)
+      if(!og_format_is_known)
       {
         String8 msf20_magic = str8_lit("Microsoft C/C++ program database 2.00\r\n\x1aJG\0\0");
         String8 msf70_magic = str8_lit("Microsoft C/C++ MSF 7.00\r\n\032DS\0\0");
@@ -767,19 +632,19 @@ dbgi_parse_thread_entry_point(void *p)
            (data.size >= msf70_magic.size && str8_match(data, msf70_magic, StringMatchFlag_RightSideSloppy)) ||
            (data.size >= msfxx_magic.size && str8_match(data, msfxx_magic, StringMatchFlag_RightSideSloppy)))
         {
-          og_dbg_format_is_known = 1;
-          og_dbg_is_pdb = 1;
+          og_format_is_known = 1;
+          og_is_pdb = 1;
         }
       }
-      if(!og_dbg_format_is_known)
+      if(!og_format_is_known)
       {
         if(data.size >= 8 && *(U64 *)data.str == RDI_MAGIC_CONSTANT)
         {
-          og_dbg_format_is_known = 1;
-          og_dbg_is_raddbg = 1;
+          og_format_is_known = 1;
+          og_is_rdi = 1;
         }
       }
-      if(!og_dbg_format_is_known)
+      if(!og_format_is_known)
       {
         if(data.size >= 4 &&
            data.str[0] == 0x7f &&
@@ -787,16 +652,16 @@ dbgi_parse_thread_entry_point(void *p)
            data.str[2] == 'L' &&
            data.str[3] == 'F')
         {
-          og_dbg_format_is_known = 1;
-          og_dbg_is_elf = 1;
+          og_format_is_known = 1;
+          og_is_elf = 1;
         }
       }
-      if(!og_dbg_format_is_known)
+      if(!og_format_is_known)
       {
-        if(data.size >= 2 && *(U16 *)data.str == PE_DOS_MAGIC)
+        if(data.size >= 2 && *(U16 *)data.str == 0x5a4d)
         {
-          og_dbg_format_is_known = 1;
-          og_dbg_is_pe = 1;
+          og_format_is_known = 1;
+          og_is_pe = 1;
         }
       }
       os_file_map_view_close(file_map, base);
@@ -804,41 +669,47 @@ dbgi_parse_thread_entry_point(void *p)
       os_file_close(file);
     }
     
-    //- rjf: given O.G. path & analysis, determine RADDBG file path
-    String8 raddbgi_path = {0};
-    if(do_task)
+    ////////////////////////////
+    //- rjf: given O.G. path & analysis, determine RDI path
+    //
+    String8 rdi_path = {0};
+    if(got_task)
     {
-      if(og_dbg_is_raddbg)
+      if(og_is_rdi)
       {
-        raddbgi_path = og_dbg_path;
+        rdi_path = og_path;
       }
-      else if(og_dbg_format_is_known && og_dbg_is_pdb)
+      else if(og_format_is_known && og_is_pdb)
       {
-        raddbgi_path = push_str8f(scratch.arena, "%S.raddbgi", str8_chop_last_dot(og_dbg_path));
+        rdi_path = push_str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(og_path));
       }
     }
     
-    //- rjf: check if raddbg file is up-to-date
-    B32 raddbgi_file_is_up_to_date = 0;
-    if(do_task)
+    ////////////////////////////
+    //- rjf: check if rdi file is up-to-date
+    //
+    B32 rdi_file_is_up_to_date = 0;
+    if(got_task)
     {
-      if(raddbgi_path.size != 0)
+      if(rdi_path.size != 0) ProfScope("check %.*s is up-to-date", str8_varg(rdi_path))
       {
-        FileProperties props = os_properties_from_file_path(raddbgi_path);
-        raddbgi_file_is_up_to_date = (props.modified > og_dbg_props.modified);
+        FileProperties props = os_properties_from_file_path(rdi_path);
+        rdi_file_is_up_to_date = (props.modified > og_props.modified);
       }
     }
     
+    ////////////////////////////
     //- rjf: if raddbg file is up to date based on timestamp, check the
     // encoding generation number & size, to see if we need to regenerate it
     // regardless
-    if(do_task && raddbgi_file_is_up_to_date)
+    //
+    if(got_task && rdi_file_is_up_to_date) ProfScope("check %.*s version matches our's", str8_varg(rdi_path))
     {
       OS_Handle file = {0};
       OS_Handle file_map = {0};
       FileProperties file_props = {0};
       void *file_base = 0;
-      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, raddbgi_path);
+      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, rdi_path);
       file_map = os_file_map_open(OS_AccessFlag_Read, file);
       file_props = os_properties_from_file(file);
       file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
@@ -847,213 +718,140 @@ dbgi_parse_thread_entry_point(void *p)
         RDI_Header *header = (RDI_Header*)file_base;
         if(header->encoding_version != RDI_ENCODING_VERSION)
         {
-          raddbgi_file_is_up_to_date = 0;
+          rdi_file_is_up_to_date = 0;
         }
       }
       else
       {
-        raddbgi_file_is_up_to_date = 0;
+        rdi_file_is_up_to_date = 0;
       }
       os_file_map_view_close(file_map, file_base);
       os_file_map_close(file_map);
       os_file_close(file);
     }
     
+    ////////////////////////////
     //- rjf: heuristically choose compression settings
+    //
     B32 should_compress = 0;
+#if 0
     if(og_dbg_props.size > MB(64))
     {
       should_compress = 1;
     }
+#endif
     
-    //- rjf: raddbg file not up-to-date? we need to generate it
-    if(do_task)
+    ////////////////////////////
+    //- rjf: rdi file not up-to-date? we need to generate it
+    //
+    if(got_task && !rdi_file_is_up_to_date) ProfScope("generate %.*s", str8_varg(rdi_path))
     {
-      if(!raddbgi_file_is_up_to_date) ProfScope("generate raddbg file")
+      if(og_is_pdb)
       {
-        if(og_dbg_is_pdb)
+        //- rjf: push conversion task begin event
         {
-          // rjf: push conversion task begin event
+          DI_Event event = {DI_EventKind_ConversionStarted};
+          event.string = rdi_path;
+          di_p2u_push_event(&event);
+        }
+        
+        //- rjf: kick off process
+        OS_Handle process = {0};
+        {
+          OS_LaunchOptions opts = {0};
+          opts.path = os_string_from_system_path(scratch.arena, OS_SystemPath_Binary);
+          opts.inherit_env = 1;
+          opts.consoleless = 1;
+          str8_list_pushf(scratch.arena, &opts.cmd_line, "raddbg");
+          str8_list_pushf(scratch.arena, &opts.cmd_line, "--convert");
+          str8_list_pushf(scratch.arena, &opts.cmd_line, "--quiet");
+          if(should_compress)
           {
-            DBGI_Event event = {DBGI_EventKind_ConversionStarted};
-            event.string = raddbgi_path;
-            dbgi_p2u_push_event(&event);
+            str8_list_pushf(scratch.arena, &opts.cmd_line, "--compress");
           }
-          
-          // rjf: kick off process
-          OS_Handle process = {0};
+          //str8_list_pushf(scratch.arena, &opts.cmd_line, "--capture");
+          str8_list_pushf(scratch.arena, &opts.cmd_line, "--pdb:%S", og_path);
+          str8_list_pushf(scratch.arena, &opts.cmd_line, "--out:%S", rdi_path);
+          os_launch_process(&opts, &process);
+        }
+        
+        //- rjf: wait for process to complete
+        {
+          U64 start_wait_t = os_now_microseconds();
+          for(;;)
           {
-            OS_LaunchOptions opts = {0};
-            opts.path = os_string_from_system_path(scratch.arena, OS_SystemPath_Binary);
-            opts.inherit_env = 1;
-            opts.consoleless = 1;
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "raddbg");
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "--convert");
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "--quiet");
-            if(should_compress)
+            B32 wait_done = os_process_wait(process, os_now_microseconds()+1000);
+            if(wait_done)
             {
-              str8_list_pushf(scratch.arena, &opts.cmd_line, "--compress");
-            }
-            //str8_list_pushf(scratch.arena, &opts.cmd_line, "--capture");
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "--exe:%S", exe_path);
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "--pdb:%S", og_dbg_path);
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "--out:%S", raddbgi_path);
-            os_launch_process(&opts, &process);
-          }
-          
-          // rjf: wait for process to complete
-          {
-            U64 start_wait_t = os_now_microseconds();
-            for(;;)
-            {
-              B32 wait_done = os_process_wait(process, os_now_microseconds()+1000);
-              if(wait_done)
-              {
-                raddbgi_file_is_up_to_date = 1;
-                break;
-              }
-              if(os_now_microseconds()-start_wait_t > 10000000 && og_dbg_props.size < MB(64))
-              {
-                // os_graphical_message(1, str8_lit("RADDBG INTERNAL DEVELOPMENT MESSAGE"), str8_lit("this is taking a while... indicative of something that seemed like a bug that Jeff hit before. attach with debugger now & see where the callstack is?"));
-              }
+              rdi_file_is_up_to_date = 1;
+              break;
             }
           }
-          
-          // rjf: push conversion task end event
-          {
-            DBGI_Event event = {DBGI_EventKind_ConversionEnded};
-            event.string = raddbgi_path;
-            dbgi_p2u_push_event(&event);
-          }
         }
-        else
+        
+        //- rjf: push conversion task end event
         {
-          // NOTE(rjf): we cannot convert from this O.G. debug info format right now.
-          // rjf: push conversion task failure event
-          {
-            DBGI_Event event = {DBGI_EventKind_ConversionFailureUnsupportedFormat};
-            event.string = raddbgi_path;
-            dbgi_p2u_push_event(&event);
-          }
+          DI_Event event = {DI_EventKind_ConversionEnded};
+          event.string = rdi_path;
+          di_p2u_push_event(&event);
         }
       }
-    }
-    
-    //- rjf: open raddbg file & gather info
-    OS_Handle raddbgi_file = {0};
-    OS_Handle raddbgi_file_map = {0};
-    FileProperties raddbgi_file_props = {0};
-    void *raddbgi_file_base = 0;
-    if(do_task && raddbgi_file_is_up_to_date)
-    {
-      raddbgi_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, raddbgi_path);
-      raddbgi_file_map = os_file_map_open(OS_AccessFlag_Read, raddbgi_file);
-      raddbgi_file_props = os_properties_from_file(raddbgi_file);
-      raddbgi_file_base = os_file_map_view_open(raddbgi_file_map, OS_AccessFlag_Read, r1u64(0, raddbgi_file_props.size));
-    }
-    
-    //- rjf: cache write, step 0: busy-loop-wait for all scope touches to be done
-    if(do_task) ProfScope("cache write, step 0: busy-loop-wait for all scope touches to be done")
-    {
-      for(B32 done = 0; done == 0;)
+      else
       {
-        OS_MutexScopeR(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
+        // NOTE(rjf): we cannot convert from this O.G. debug info format right now.
+        //- rjf: push conversion task failure event
         {
-          if(str8_match(bin->exe_path, exe_path, match_flags) &&
-             bin->scope_touch_count == 0)
-          {
-            done = 1;
-            break;
-          }
+          DI_Event event = {DI_EventKind_ConversionFailureUnsupportedFormat};
+          event.string = rdi_path;
+          di_p2u_push_event(&event);
         }
       }
     }
     
-    //- rjf: cache write, step 1: check if refcount is still nonzero, &
-    // either EXE or raddbg file is new. if so, clear all old results &
-    // store new top-level info
-    B32 binary_refcount_is_zero = 0;
-    B32 raddbgi_or_exe_file_is_updated = 0;
-    if(do_task) ProfScope("cache write, step 1: check if raddbg is new & clear")
+    ////////////////////////////
+    //- rjf: got task -> open file
+    //
+    OS_Handle file = {0};
+    OS_Handle file_map = {0};
+    FileProperties file_props = {0};
+    void *file_base = 0;
+    if(got_task)
     {
-      OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-      {
-        if(str8_match(bin->exe_path, exe_path, match_flags))
-        {
-          if(bin->refcount == 0)
-          {
-            binary_refcount_is_zero = 1;
-            break;
-          }
-          if(bin->parse.dbg_props.modified != raddbgi_file_props.modified ||
-             bin->parse.exe_props.modified != exe_file_props.modified)
-          {
-            raddbgi_or_exe_file_is_updated = 1;
-            
-            // rjf: clean up old stuff
-            if(bin->parse.arena != 0) { arena_release(bin->parse.arena); }
-            if(bin->parse.exe_base != 0) {os_file_map_view_close(bin->exe_file_map, bin->parse.exe_base);}
-            if(!os_handle_match(os_handle_zero(), bin->exe_file_map)) {os_file_map_close(bin->exe_file_map);}
-            if(!os_handle_match(os_handle_zero(), bin->exe_file)) {os_file_close(bin->exe_file);}
-            if(bin->parse.dbg_base != 0) {os_file_map_view_close(bin->dbg_file_map, bin->parse.dbg_base);}
-            if(!os_handle_match(os_handle_zero(), bin->dbg_file_map)) {os_file_map_close(bin->dbg_file_map);}
-            if(!os_handle_match(os_handle_zero(), bin->dbg_file)) {os_file_close(bin->dbg_file);}
-            MemoryZeroStruct(&bin->parse);
-            bin->last_time_enqueued_for_parse_us = 0;
-            
-            // rjf: store new handles & props
-            bin->exe_file = exe_file;
-            bin->exe_file_map = exe_file_map;
-            bin->parse.exe_base = exe_file_base;
-            bin->parse.exe_props = exe_file_props;
-            bin->dbg_file = raddbgi_file;
-            bin->dbg_file_map = raddbgi_file_map;
-            bin->parse.dbg_base = raddbgi_file_base;
-            bin->parse.dbg_props = raddbgi_file_props;
-            bin->gen += 1;
-          }
-          break;
-        }
-      }
+      file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, rdi_path);
+      file_map = os_file_map_open(OS_AccessFlag_Read, file);
+      file_props = os_properties_from_file(file);
+      file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
     }
     
-    //- rjf: raddbg file or exe is not new? cache can stay unmodified, close
-    // handles & skip to end.
-    if(do_task) if((!raddbgi_or_exe_file_is_updated && raddbgi_file_is_up_to_date) || binary_refcount_is_zero)
+    ////////////////////////////
+    //- rjf: do initial parse of rdi
+    //
+    RDI_Parsed rdi_parsed_maybe_compressed = di_rdi_parsed_nil;
+    if(got_task)
     {
-      os_file_map_view_close(raddbgi_file_map, raddbgi_file_base);
-      os_file_map_close(raddbgi_file_map);
-      os_file_close(raddbgi_file);
-      os_file_map_view_close(exe_file_map, exe_file_base);
-      os_file_map_close(exe_file_map);
-      os_file_close(exe_file);
-      arena_release(parse_arena);
-      do_task = 0;
-    }
-    
-    //- rjf: initial parse of raddbg info
-    RDI_Parsed rdi_parsed_maybe_compressed = dbgi_parse_nil.rdi;
-    if(do_task)
-    {
-      RDI_ParseStatus parse_status = rdi_parse((U8 *)raddbgi_file_base, raddbgi_file_props.size, &rdi_parsed_maybe_compressed);
+      RDI_ParseStatus parse_status = rdi_parse((U8 *)file_base, file_props.size, &rdi_parsed_maybe_compressed);
       (void)parse_status;
     }
     
-    //- rjf: decompress, if necessary
+    ////////////////////////////
+    //- rjf: decompress & re-parse, if necessary
+    //
+    Arena *rdi_parsed_arena = 0;
     RDI_Parsed rdi_parsed = rdi_parsed_maybe_compressed;
-    if(do_task)
+    if(got_task)
     {
-      U64 decompressed_size = raddbgi_file_props.size;
+      U64 decompressed_size = file_props.size;
       for(U64 dsec_idx = 0; dsec_idx < rdi_parsed_maybe_compressed.dsec_count; dsec_idx += 1)
       {
         decompressed_size += (rdi_parsed_maybe_compressed.dsecs[dsec_idx].unpacked_size - rdi_parsed_maybe_compressed.dsecs[dsec_idx].encoded_size);
       }
-      if(decompressed_size > raddbgi_file_props.size)
+      if(decompressed_size > file_props.size)
       {
-        U8 *decompressed_data = push_array_no_zero(parse_arena, U8, decompressed_size);
+        rdi_parsed_arena = arena_alloc();
+        U8 *decompressed_data = push_array_no_zero(rdi_parsed_arena, U8, decompressed_size);
         
         // rjf: copy header
-        RDI_Header *src_header = (RDI_Header *)raddbgi_file_base;
+        RDI_Header *src_header = (RDI_Header *)file_base;
         RDI_Header *dst_header = (RDI_Header *)decompressed_data;
         {
           MemoryCopy(dst_header, src_header, sizeof(RDI_Header));
@@ -1063,7 +861,7 @@ dbgi_parse_thread_entry_point(void *p)
         if(rdi_parsed_maybe_compressed.dsec_count != 0)
         {
           RDI_DataSection *dsec_base = (RDI_DataSection *)(decompressed_data + dst_header->data_section_off);
-          MemoryCopy(dsec_base, (U8 *)raddbgi_file_base + src_header->data_section_off, sizeof(RDI_DataSection) * rdi_parsed_maybe_compressed.dsec_count);
+          MemoryCopy(dsec_base, (U8 *)file_base + src_header->data_section_off, sizeof(RDI_DataSection) * rdi_parsed_maybe_compressed.dsec_count);
           U64 off = dst_header->data_section_off + sizeof(RDI_DataSection) * rdi_parsed_maybe_compressed.dsec_count;
           off += 7;
           off -= off%8;
@@ -1089,8 +887,8 @@ dbgi_parse_thread_entry_point(void *p)
               src < src_opl && dst < dst_opl;
               src += 1, dst += 1)
           {
-            rr_lzb_simple_decode((U8*)raddbgi_file_base + src->off, src->encoded_size,
-                                 decompressed_data      + dst->off, dst->unpacked_size);
+            rr_lzb_simple_decode((U8*)file_base       + src->off, src->encoded_size,
+                                 decompressed_data    + dst->off, dst->unpacked_size);
           }
         }
         
@@ -1100,312 +898,26 @@ dbgi_parse_thread_entry_point(void *p)
       }
     }
     
-    //- rjf: cache write, step 2: store parse artifacts
-    B32 parse_store_good = 0;
-    if(do_task) ProfScope("cache write, step 2: store parse")
+    ////////////////////////////
+    //- rjf: commit parsed info to cache
+    //
+    if(got_task) OS_MutexScopeW(stripe->rw_mutex)
     {
-      OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
+      if(node != 0)
       {
-        if(str8_match(bin->exe_path, exe_path, match_flags))
-        {
-          String8 dbg_path = og_dbg_path;
-          if(dbg_path.size == 0)
-          {
-            dbg_path = exe_dbg_path_embedded_absolute;
-          }
-          if(dbg_path.size == 0)
-          {
-            dbg_path = exe_dbg_path_embedded_relative;
-          }
-          if(dbg_path.size == 0)
-          {
-            dbg_path = push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(exe_path));
-          }
-          parse_store_good = 1;
-          bin->parse.arena = parse_arena;
-          bin->parse.dbg_path = push_str8_copy(parse_arena, dbg_path);
-          MemoryCopyStruct(&bin->parse.pe, &exe_pe_info);
-          MemoryCopyStruct(&bin->parse.rdi, &rdi_parsed);
-          bin->parse.gen = bin->gen;
-          break;
-        }
+        node->is_working = 0;
+        node->file = file;
+        node->file_map = file_map;
+        node->file_base = file_base;
+        node->file_props = file_props;
+        node->arena = rdi_parsed_arena;
+        node->rdi = rdi_parsed;
+        node->parse_done = 1;
       }
     }
+    os_condition_variable_broadcast(stripe->cv);
     
-    //- rjf: bad parse store? abort
-    if(do_task && !parse_store_good)
-    {
-      arena_release(parse_arena);
-    }
-    
-    //- rjf: cache write, step 3: mark binary work as complete
-    if(!task_is_taken_by_other_thread) ProfScope("cache write, step 4: mark binary work as complete")
-    {
-      OS_MutexScopeW(stripe->rw_mutex) for(DBGI_Binary *bin = slot->first; bin != 0; bin = bin->next)
-      {
-        if(str8_match(bin->exe_path, exe_path, match_flags))
-        {
-          bin->flags &= ~DBGI_BinaryFlag_ParseInFlight;
-          break;
-        }
-      }
-      os_condition_variable_broadcast(stripe->cv);
-    }
-    
-    ProfEnd();
-    scratch_end(scratch);
-  }
-}
-
-////////////////////////////////
-//~ rjf: Fuzzy Searching Threads
-
-internal B32
-dbgi_u2f_enqueue_req(U128 key, U64 endt_us)
-{
-  B32 sent = 0;
-  DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[key.u64[1]%dbgi_shared->fuzzy_thread_count];
-  OS_MutexScope(thread->u2f_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = thread->u2f_ring_write_pos - thread->u2f_ring_read_pos;
-    U64 available_size = thread->u2f_ring_size - unconsumed_size;
-    if(available_size >= sizeof(U128))
-    {
-      sent = 1;
-      thread->u2f_ring_write_pos += ring_write_struct(thread->u2f_ring_base, thread->u2f_ring_size, thread->u2f_ring_write_pos, &key);
-      break;
-    }
-    os_condition_variable_wait(thread->u2f_ring_cv, thread->u2f_ring_mutex, endt_us);
-  }
-  if(sent)
-  {
-    os_condition_variable_broadcast(thread->u2f_ring_cv);
-  }
-  return sent;
-}
-
-internal void
-dbgi_u2f_dequeue_req(Arena *arena, DBGI_FuzzySearchThread *thread, U128 *key_out)
-{
-  OS_MutexScope(thread->u2f_ring_mutex) for(;;)
-  {
-    U64 unconsumed_size = thread->u2f_ring_write_pos - thread->u2f_ring_read_pos;
-    if(unconsumed_size >= sizeof(U128))
-    {
-      thread->u2f_ring_read_pos += ring_read_struct(thread->u2f_ring_base, thread->u2f_ring_size, thread->u2f_ring_read_pos, key_out);
-      break;
-    }
-    os_condition_variable_wait(thread->u2f_ring_cv, thread->u2f_ring_mutex, max_U64);
-  }
-  os_condition_variable_broadcast(thread->u2f_ring_cv);
-}
-
-internal int
-dbgi_qsort_compare_fuzzy_search_items(DBGI_FuzzySearchItem *a, DBGI_FuzzySearchItem *b)
-{
-  int result = 0;
-  if(a->match_ranges.count > b->match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->match_ranges.count < b->match_ranges.count)
-  {
-    result = +1;
-  }
-  else if(a->missed_size < b->missed_size)
-  {
-    result = -1;
-  }
-  else if(a->missed_size > b->missed_size)
-  {
-    result = +1;
-  }
-  return result;
-}
-
-internal void
-dbgi_fuzzy_thread__entry_point(void *p)
-{
-  ThreadNameF("[dbgi] fuzzy search #%I64U", (U64)p);
-  DBGI_FuzzySearchThread *thread = &dbgi_shared->fuzzy_threads[(U64)p];
-  for(;;)
-  {
-    Temp scratch = scratch_begin(0, 0);
-    DBGI_Scope *scope = dbgi_scope_open();
-    
-    //- rjf: dequeue next request
-    U128 key = {0};
-    dbgi_u2f_dequeue_req(scratch.arena, thread, &key);
-    U64 slot_idx = key.u64[1]%dbgi_shared->fuzzy_search_slots_count;
-    U64 stripe_idx = slot_idx%dbgi_shared->fuzzy_search_stripes_count;
-    DBGI_FuzzySearchSlot *slot = &dbgi_shared->fuzzy_search_slots[slot_idx];
-    DBGI_FuzzySearchStripe *stripe = &dbgi_shared->fuzzy_search_stripes[stripe_idx];
-    
-    //- rjf: grab next exe_path/query for this key
-    B32 task_is_good = 0;
-    Arena *task_arena = 0;
-    String8 exe_path = {0};
-    String8 query = {0};
-    DBGI_FuzzySearchTarget target = DBGI_FuzzySearchTarget_Procedures;
-    U64 initial_submit_gen = 0;
-    OS_MutexScopeW(stripe->rw_mutex)
-    {
-      for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(n->key, key))
-        {
-          task_is_good = 1;
-          initial_submit_gen = n->submit_gen;
-          task_arena = n->buckets[n->submit_gen%ArrayCount(n->buckets)].arena;
-          exe_path = n->buckets[n->submit_gen%ArrayCount(n->buckets)].exe_path;
-          query = n->buckets[n->submit_gen%ArrayCount(n->buckets)].query;
-          target = n->buckets[n->submit_gen%ArrayCount(n->buckets)].target;
-          break;
-        }
-      }
-    }
-    
-    //- rjf: exe_path -> dbgi_parse, raddbg
-    DBGI_Parse *dbgi = dbgi_parse_from_exe_path(scope, exe_path, max_U64);
-    RDI_Parsed *rdi = &dbgi->rdi;
-    
-    //- rjf: rdi * query -> item list
-    U64 table_ptr_off = 0;
-    U64 element_name_idx_off = 0;
-    U64 element_count = 0;
-    U64 element_size = 0;
-    switch(target)
-    {
-      // NOTE(rjf): no default!
-      case DBGI_FuzzySearchTarget_COUNT:{}break;
-      case DBGI_FuzzySearchTarget_Procedures:
-      {
-        table_ptr_off = OffsetOf(RDI_Parsed, procedures);
-        element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
-        element_count = rdi->procedures_count;
-        element_size = sizeof(RDI_Procedure);
-      }break;
-      case DBGI_FuzzySearchTarget_GlobalVariables:
-      {
-        table_ptr_off = OffsetOf(RDI_Parsed, global_variables);
-        element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
-        element_count = rdi->global_variables_count;
-        element_size = sizeof(RDI_GlobalVariable);
-      }break;
-      case DBGI_FuzzySearchTarget_ThreadVariables:
-      {
-        table_ptr_off = OffsetOf(RDI_Parsed, thread_variables);
-        element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
-        element_count = rdi->thread_variables_count;
-        element_size = sizeof(RDI_ThreadVariable);
-      }break;
-      case DBGI_FuzzySearchTarget_UDTs:
-      {
-        table_ptr_off = OffsetOf(RDI_Parsed, udts);
-        element_count = rdi->udts_count;
-        element_size = sizeof(RDI_UDT);
-      }break;
-    }
-    DBGI_FuzzySearchItemChunkList items_list = {0};
-    if(task_is_good)
-    {
-      void *table_base = (U8*)rdi + table_ptr_off;
-      for(U64 idx = 1; task_is_good && idx < element_count; idx += 1)
-      {
-        void *element = (U8 *)(*(void **)table_base) + element_size*idx;
-        U32 *name_idx_ptr = (U32 *)((U8 *)element + element_name_idx_off);
-        if(target == DBGI_FuzzySearchTarget_UDTs)
-        {
-          RDI_UDT *udt = (RDI_UDT *)element;
-          RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, udt->self_type_idx);
-          name_idx_ptr = &type_node->user_defined.name_string_idx;
-        }
-        U32 name_idx = *name_idx_ptr;
-        U64 name_size = 0;
-        U8 *name_base = rdi_string_from_idx(rdi, name_idx, &name_size);
-        String8 name = str8(name_base, name_size);
-        if(name.size == 0) { continue; }
-        FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query, name);
-        if(matches.count == matches.needle_part_count)
-        {
-          DBGI_FuzzySearchItemChunk *chunk = items_list.last;
-          if(chunk == 0 || chunk->count >= chunk->cap)
-          {
-            chunk = push_array(scratch.arena, DBGI_FuzzySearchItemChunk, 1);
-            chunk->cap = 512;
-            chunk->count = 0;
-            chunk->v = push_array_no_zero(scratch.arena, DBGI_FuzzySearchItem, chunk->cap);
-            SLLQueuePush(items_list.first, items_list.last, chunk);
-            items_list.chunk_count += 1;
-          }
-          chunk->v[chunk->count].idx = idx;
-          chunk->v[chunk->count].match_ranges = matches;
-          chunk->v[chunk->count].missed_size = (name_size > matches.total_dim) ? (name_size-matches.total_dim) : 0;
-          chunk->count += 1;
-          items_list.total_count += 1;
-        }
-        if(idx%100 == 99) OS_MutexScopeR(stripe->rw_mutex)
-        {
-          for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
-          {
-            if(u128_match(n->key, key) && n->submit_gen > initial_submit_gen)
-            {
-              task_is_good = 0;
-              break;
-            }
-          }
-        }
-      }
-    }
-    
-    //- rjf: item list -> item array
-    DBGI_FuzzySearchItemArray items = {0};
-    if(task_is_good)
-    {
-      items.count = items_list.total_count;
-      items.v = push_array_no_zero(task_arena, DBGI_FuzzySearchItem, items.count);
-      U64 idx = 0;
-      for(DBGI_FuzzySearchItemChunk *chunk = items_list.first; chunk != 0; chunk = chunk->next)
-      {
-        MemoryCopy(items.v+idx, chunk->v, sizeof(DBGI_FuzzySearchItem)*chunk->count);
-        idx += chunk->count;
-      }
-    }
-    
-    //- rjf: sort item array
-    if(items.count != 0 && query.size != 0)
-    {
-      qsort(items.v, items.count, sizeof(DBGI_FuzzySearchItem), (int (*)(const void *, const void *))dbgi_qsort_compare_fuzzy_search_items);
-    }
-    
-    //- rjf: commit to cache - busyloop on scope touches
-    if(task_is_good)
-    {
-      for(B32 done = 0; !done;)
-      {
-        B32 found = 0;
-        OS_MutexScopeW(stripe->rw_mutex) for(DBGI_FuzzySearchNode *n = slot->first; n != 0; n = n->next)
-        {
-          if(u128_match(n->key, key))
-          {
-            if(n->scope_touch_count == 0)
-            {
-              n->gen = initial_submit_gen;
-              n->gen_items = items;
-              done = 1;
-            }
-            found = 1;
-            break;
-          }
-        }
-        if(!found)
-        {
-          break;
-        }
-      }
-    }
-    
-    dbgi_scope_close(scope);
     scratch_end(scratch);
   }
 }

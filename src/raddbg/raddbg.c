@@ -393,7 +393,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   ProfEnd();
 }
 
-internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook)
+internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
 {
   os_send_wakeup_event();
 }

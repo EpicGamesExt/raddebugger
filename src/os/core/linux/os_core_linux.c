@@ -1607,7 +1607,7 @@ os_semaphore_close(OS_Handle semaphore)
 }
 
 internal B32
-os_semaphore_take(OS_Handle semaphore)
+os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 {
   NotImplemented;
   return 0;
