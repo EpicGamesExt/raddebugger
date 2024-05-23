@@ -583,17 +583,18 @@ df_queue_drag_drop(void)
 }
 
 internal void
-df_set_hovered_line_info(DF_Entity *dbgi, U64 voff)
+df_set_hovered_line_info(DI_Key *dbgi_key, U64 voff)
 {
-  df_gfx_state->hover_line_dbgi = df_handle_from_entity(dbgi);
+  arena_clear(df_gfx_state->hover_line_arena);
+  df_gfx_state->hover_line_dbgi_key = di_key_copy(df_gfx_state->hover_line_arena, dbgi_key);
   df_gfx_state->hover_line_voff = voff;
   df_gfx_state->hover_line_set_this_frame = 1;
 }
 
-internal DF_Entity *
-df_get_hovered_line_info_dbgi(void)
+internal DI_Key
+df_get_hovered_line_info_dbgi_key(void)
 {
-  return df_entity_from_handle(df_gfx_state->hover_line_dbgi);
+  return df_gfx_state->hover_line_dbgi_key;
 }
 
 internal U64
@@ -2499,14 +2500,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
             DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-            DF_Entity *dbgi = df_dbgi_from_module(module);
+            DI_Key dbgi_key = df_dbgi_key_from_module(module);
+            RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
             U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-            RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
-            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, rip_voff);
+            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff);
             
             // rjf: snap to resolved line
             B32 missing_rip = (rip_vaddr == 0);
-            B32 dbgi_missing = (dbgi->flags & DF_EntityFlag_IsMissing || df_entity_is_nil(dbgi));
+            B32 dbgi_missing = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
             B32 dbgi_pending = !dbgi_missing && rdi == &di_rdi_parsed_nil;
             B32 has_line_info = (line_info.voff_range.max != line_info.voff_range.min);
             B32 has_module = !df_entity_is_nil(module);
@@ -2562,17 +2563,17 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             
             // rjf: try to resolve name as a symbol
             U64 voff = 0;
-            DF_Entity *voff_dbgi = &df_g_nil_entity;
+            DI_Key voff_dbgi_key = {0};
             if(name_resolved == 0)
             {
-              DF_EntityList dbgis = df_push_active_dbgi_list(scratch.arena);
-              for(DF_EntityNode *n = dbgis.first; n != 0; n = n->next)
+              DI_KeyList keys = df_push_active_dbgi_key_list(scratch.arena);
+              for(DI_KeyNode *n = keys.first; n != 0; n = n->next)
               {
-                U64 binary_voff = df_voff_from_dbgi_symbol_name(n->entity, name);
+                U64 binary_voff = df_voff_from_dbgi_key_symbol_name(&n->v, name);
                 if(binary_voff != 0)
                 {
                   voff = binary_voff;
-                  voff_dbgi = n->entity;
+                  voff_dbgi_key = n->v;
                   name_resolved = 1;
                   break;
                 }
@@ -2681,16 +2682,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rjf: name resolved to voff * dbg info
             if(name_resolved != 0 && voff != 0)
             {
-              DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_voff(voff_dbgi, voff);
+              DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&voff_dbgi_key, voff);
               DF_CmdParams p = params;
               {
                 p.file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
                 p.text_point = dasm2src_info.pt;
                 df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
                 df_cmd_params_mark_slot(&p, DF_CmdParamSlot_TextPoint);
-                if(!df_entity_is_nil(voff_dbgi))
+                if(voff_dbgi_key.path.size != 0)
                 {
-                  DF_EntityList modules = df_modules_from_dbgi(scratch.arena, voff_dbgi);
+                  DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &voff_dbgi_key);
                   DF_Entity *module = df_first_entity_from_list(&modules);
                   DF_Entity *process = df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
                   if(!df_entity_is_nil(process))
@@ -2918,7 +2919,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               for(DF_TextLineSrc2DasmInfoNode *n = src2dasm.v[src2dasm_idx].first; n != 0; n = n->next)
               {
-                DF_EntityList modules = df_modules_from_dbgi(scratch.arena, n->v.dbgi);
+                DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
                 DF_Entity *module = df_module_from_thread_candidates(thread, &modules);
                 vaddr = df_vaddr_from_voff(module, n->v.voff_range.min);
                 goto end_lookup;
@@ -3493,6 +3494,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
           ui_labelf("Target Hz: %.2f", 1.f/df_dt());
+          ui_labelf("Unwind Cache Gen: %I64u", df_state->unwind_cache_gen);
           ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
           ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
           ui_labelf("Window %p", window);
@@ -3922,9 +3924,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 {
                   U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[frame_idx].regs);
                   DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-                  DF_Entity *dbgi = df_dbgi_from_module(module);
+                  DI_Key dbgi_key = df_dbgi_key_from_module(module);
                   U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-                  String8 symbol = df_symbol_name_from_dbgi_voff(scratch.arena, dbgi, rip_voff);
+                  String8 symbol = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
                   if(symbol.size != 0)
                   {
                     str8_list_pushf(scratch.arena, &lines, "0x%I64x: %S", rip_vaddr, symbol);
@@ -4249,7 +4251,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
         DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
         U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
-        DF_Entity *dbgi = df_dbgi_from_module(module);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
         
         //- rjf: gather lister items
         DF_AutoCompListerItemChunkList item_list = {0};
@@ -4257,7 +4259,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           //- rjf: gather locals
           if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Locals)
           {
-            EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_dbgi_voff(dbgi, thread_rip_voff);
+            EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
             for(EVAL_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
             {
               DF_AutoCompListerItem item = {0};
@@ -9936,9 +9938,9 @@ df_entity_tooltips(DF_Entity *entity)
       {
         U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[idx].regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-        DF_Entity *dbgi = df_dbgi_from_module(module);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
         U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-        String8 symbol = df_symbol_name_from_dbgi_voff(scratch.arena, dbgi, rip_voff);
+        String8 symbol = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
         UI_PrefWidth(ui_children_sum(1)) UI_Row
         {
           UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_PrefWidth(ui_em(18.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("0x%I64x", rip_vaddr);
@@ -10132,8 +10134,8 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
         U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-        DF_Entity *dbgi = df_dbgi_from_module(module);
-        String8 procedure_name = df_symbol_name_from_dbgi_voff(scratch.arena, dbgi, rip_voff);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
+        String8 procedure_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
         if(procedure_name.size != 0)
         {
           FuzzyMatchRangeList fuzzy_matches = {0};
@@ -10576,7 +10578,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
             DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
-            DF_Entity *dbgi = df_dbgi_from_module(module);
+            DI_Key dbgi_key = df_dbgi_key_from_module(module);
             U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
@@ -10643,7 +10645,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                     n != 0;
                     n = n->next)
                 {
-                  if(n->v.dbgi == dbgi)
+                  if(di_key_match(&n->v.dbgi_key, &dbgi_key))
                   {
                     line_info = &n->v;
                     break;
@@ -11251,11 +11253,11 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     if(params->line_src2dasm[line_slice_idx].first != 0 &&
        params->line_src2dasm[line_slice_idx].first->v.remap_line == mouse_pt.line)
     {
-      df_set_hovered_line_info(params->line_src2dasm[line_slice_idx].first->v.dbgi, params->line_src2dasm[line_slice_idx].first->v.voff_range.min);
+      df_set_hovered_line_info(&params->line_src2dasm[line_slice_idx].first->v.dbgi_key, params->line_src2dasm[line_slice_idx].first->v.voff_range.min);
     }
     if(params->line_dasm2src[line_slice_idx].first != 0)
     {
-      df_set_hovered_line_info(params->line_dasm2src[line_slice_idx].first->v.dbgi, params->line_dasm2src[line_slice_idx].first->v.voff_range.min);
+      df_set_hovered_line_info(&params->line_dasm2src[line_slice_idx].first->v.dbgi_key, params->line_dasm2src[line_slice_idx].first->v.voff_range.min);
     }
   }
   
@@ -11419,7 +11421,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //
   UI_Parent(text_container_box) ProfScope("build line text") UI_Focus(UI_FocusKind_Off)
   {
-    DF_Entity *hovered_line_dbgi = df_get_hovered_line_info_dbgi();
+    DI_Key hovered_line_dbgi_key = df_get_hovered_line_info_dbgi_key();
     U64 hovered_line_voff = df_get_hovered_line_info_voff();
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     UI_WidthFill
@@ -11494,12 +11496,12 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                 if(token->kind == TXT_TokenKind_Identifier || token->kind == TXT_TokenKind_Keyword)
                 {
                   B32 mapped_special = 0;
-                  for(DF_EntityNode *n = params->relevant_dbgis.first; n != 0; n = n->next)
+                  for(DI_KeyNode *n = params->relevant_dbgi_keys.first; n != 0; n = n->next)
                   {
-                    DF_Entity *dbgi = n->entity;
+                    DI_Key dbgi_key = n->v;
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
-                      U64 voff = df_voff_from_dbgi_symbol_name(dbgi, token_string);
+                      U64 voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
                       if(voff != 0)
                       {
                         mapped_special = 1;
@@ -11509,7 +11511,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                     }
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
-                      U64 type_num = df_type_num_from_dbgi_name(dbgi, token_string);
+                      U64 type_num = df_type_num_from_dbgi_key_name(&dbgi_key, token_string);
                       if(type_num != 0)
                       {
                         mapped_special = 1;
@@ -11701,7 +11703,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             for(DF_TextLineSrc2DasmInfoNode *n = src2dasm_list->first; n != 0; n = n->next)
             {
               if(n->v.remap_line == line_num &&
-                 n->v.dbgi == hovered_line_dbgi &&
+                 di_key_match(&n->v.dbgi_key, &hovered_line_dbgi_key) &&
                  n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
               {
                 matches = 1;
@@ -11714,8 +11716,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           // rjf: check dasm2src
           if(dasm2src_list->first != 0)
           {
-            DF_Entity *dbgi = dasm2src_list->first->v.dbgi;
-            if(dbgi == hovered_line_dbgi)
+            DI_Key dbgi_key = dasm2src_list->first->v.dbgi_key;
+            if(di_key_match(&dbgi_key, &dasm2src_list->first->v.dbgi_key))
             {
               for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
               {
@@ -12813,6 +12815,7 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   df_gfx_state->repaint_hook = window_repaint_entry_point;
   df_gfx_state->cfg_main_font_path_arena = arena_alloc();
   df_gfx_state->cfg_code_font_path_arena = arena_alloc();
+  df_gfx_state->hover_line_arena = arena_alloc();
   df_clear_bindings();
   
   // rjf: register gfx layer views
@@ -13822,7 +13825,7 @@ df_gfx_end_frame(void)
   //- rjf: clear hover line info
   if(df_gfx_state->hover_line_set_this_frame == 0)
   {
-    df_gfx_state->hover_line_dbgi = df_handle_zero();
+    MemoryZeroStruct(&df_gfx_state->hover_line_dbgi_key);
     df_gfx_state->hover_line_voff = 0;
   }
   

@@ -53,40 +53,11 @@ typedef enum FZY_Target
 }
 FZY_Target;
 
-typedef struct FZY_DbgiKey FZY_DbgiKey;
-struct FZY_DbgiKey
-{
-  String8 path;
-  U64 timestamp;
-};
-
-typedef struct FZY_DbgiKeyNode FZY_DbgiKeyNode;
-struct FZY_DbgiKeyNode
-{
-  FZY_DbgiKeyNode *next;
-  FZY_DbgiKey v;
-};
-
-typedef struct FZY_DbgiKeyList FZY_DbgiKeyList;
-struct FZY_DbgiKeyList
-{
-  FZY_DbgiKeyNode *first;
-  FZY_DbgiKeyNode *last;
-  U64 count;
-};
-
-typedef struct FZY_DbgiKeyArray FZY_DbgiKeyArray;
-struct FZY_DbgiKeyArray
-{
-  FZY_DbgiKey *v;
-  U64 count;
-};
-
 typedef struct FZY_Params FZY_Params;
 struct FZY_Params
 {
   FZY_Target target;
-  FZY_DbgiKeyArray dbgi_keys;
+  DI_KeyArray dbgi_keys;
 };
 
 ////////////////////////////////
@@ -199,8 +170,6 @@ internal U64 fzy_hash_from_string(U64 seed, String8 string);
 internal U64 fzy_hash_from_params(FZY_Params *params);
 internal U64 fzy_item_num_from_array_element_idx__linear_search(FZY_ItemArray *array, U64 element_idx);
 internal String8 fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, FZY_Target target, U64 element_idx);
-internal void fzy_dbgi_key_list_push(Arena *arena, FZY_DbgiKeyList *list, FZY_DbgiKey key);
-internal FZY_DbgiKeyArray fzy_dbgi_key_array_from_list(Arena *arena, FZY_DbgiKeyList *list);
 internal FZY_Params fzy_params_copy(Arena *arena, FZY_Params *src);
 
 ////////////////////////////////

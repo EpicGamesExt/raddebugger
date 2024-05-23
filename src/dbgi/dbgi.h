@@ -5,6 +5,38 @@
 #define DI_H
 
 ////////////////////////////////
+//~ rjf: Cache Key Type
+
+typedef struct DI_Key DI_Key;
+struct DI_Key
+{
+  String8 path;
+  U64 min_timestamp;
+};
+
+typedef struct DI_KeyNode DI_KeyNode;
+struct DI_KeyNode
+{
+  DI_KeyNode *next;
+  DI_Key v;
+};
+
+typedef struct DI_KeyList DI_KeyList;
+struct DI_KeyList
+{
+  DI_KeyNode *first;
+  DI_KeyNode *last;
+  U64 count;
+};
+
+typedef struct DI_KeyArray DI_KeyArray;
+struct DI_KeyArray
+{
+  DI_Key *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Event Types
 
 typedef enum DI_EventKind
@@ -63,8 +95,7 @@ struct DI_Node
   U64 last_time_requested_us;
   
   // rjf: key
-  String8 path;
-  U64 min_timestamp;
+  DI_Key key;
   
   // rjf: file handles
   OS_Handle file;
@@ -201,6 +232,12 @@ global RDI_Parsed di_rdi_parsed_nil =
 //~ rjf: Basic Helpers
 
 internal U64 di_hash_from_string(String8 string, StringMatchFlags match_flags);
+internal U64 di_hash_from_key(DI_Key *k);
+internal B32 di_key_match(DI_Key *a, DI_Key *b);
+internal DI_Key di_key_copy(Arena *arena, DI_Key *src);
+internal DI_Key di_normalized_key_from_key(Arena *arena, DI_Key *src);
+internal void di_key_list_push(Arena *arena, DI_KeyList *list, DI_Key *key);
+internal DI_KeyArray di_key_array_from_list(Arena *arena, DI_KeyList *list);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
@@ -217,7 +254,7 @@ internal void di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_No
 ////////////////////////////////
 //~ rjf: Per-Slot Functions
 
-internal DI_Node *di_node_from_path_min_timestamp_slot__stripe_mutex_r_guarded(DI_Slot *slot, String8 path, U64 min_timestamp);
+internal DI_Node *di_node_from_key_slot__stripe_mutex_r_guarded(DI_Slot *slot, DI_Key *key);
 
 ////////////////////////////////
 //~ rjf: Per-Stripe Functions
@@ -229,19 +266,19 @@ internal void di_string_release__stripe_mutex_w_guarded(DI_Stripe *stripe, Strin
 ////////////////////////////////
 //~ rjf: Key Opening/Closing
 
-internal void di_open(String8 path, U64 min_timestamp);
-internal void di_close(String8 path, U64 min_timestamp);
+internal void di_open(DI_Key *key);
+internal void di_close(DI_Key *key);
 
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal RDI_Parsed *di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp, U64 endt_us);
+internal RDI_Parsed *di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us);
 
 ////////////////////////////////
 //~ rjf: Parse Threads
 
-internal B32 di_u2p_enqueue_key(String8 path, U64 min_timestamp, U64 endt_us);
-internal void di_u2p_dequeue_key(Arena *arena, String8 *out_path, U64 *out_min_timestamp);
+internal B32 di_u2p_enqueue_key(DI_Key *key, U64 endt_us);
+internal void di_u2p_dequeue_key(Arena *arena, DI_Key *out_key);
 
 internal void di_p2u_push_event(DI_Event *event);
 internal DI_EventList di_p2u_pop_events(Arena *arena, U64 endt_us);

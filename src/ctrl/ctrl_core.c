@@ -2855,9 +2855,11 @@ ctrl_thread__entry_point(void *p)
             String8 path = msg->path;
             CTRL_Entity *module = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, msg->machine_id, msg->entity);
             CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-            di_close(debug_info_path->string, module->timestamp);
+            DI_Key old_dbgi_key = {debug_info_path->string, module->timestamp};
+            di_close(&old_dbgi_key);
             ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path);
-            di_open(path, module->timestamp);
+            DI_Key new_dbgi_key = {debug_info_path->string, module->timestamp};
+            di_open(&new_dbgi_key);
             CTRL_EventList evts = {0};
             CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
             evt->kind       = CTRL_EventKind_ModuleDebugInfoPathChange;
@@ -2896,7 +2898,8 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
   DI_Scope *di_scope = di_scope_open();
   CTRL_Entity *module_entity = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, machine_id, module);
   CTRL_Entity *debug_info_path_entity = ctrl_entity_child_from_kind(module_entity, CTRL_EntityKind_DebugInfoPath);
-  RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, debug_info_path_entity->string, debug_info_path_entity->timestamp, max_U64);
+  DI_Key dbgi_key = {debug_info_path_entity->string, debug_info_path_entity->timestamp};
+  RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
   U64 base_vaddr = module_entity->vaddr_range.min;
   for(CTRL_UserBreakpointNode *n = user_bps->first; n != 0; n = n->next)
   {
@@ -3320,8 +3323,8 @@ ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 
     CTRL_Entity *debug_info_path_ent = ctrl_entity_child_from_kind(module_ent, CTRL_EntityKind_DebugInfoPath);
     if(debug_info_path_ent != &ctrl_entity_nil)
     {
-      String8 debug_info_path = debug_info_path_ent->string;
-      di_close(debug_info_path, debug_info_path_ent->timestamp);
+      DI_Key dbgi_key = {debug_info_path_ent->string, debug_info_path_ent->timestamp};
+      di_close(&dbgi_key);
     }
   }
 }
@@ -3420,7 +3423,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 U64 asan_shadow_base_vaddr = 0;
                 B32 asan_shadow_variable_exists_but_is_zero = 0;
                 CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-                RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, dbg_path->string, dbg_path->timestamp, max_U64);
+                DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+                RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
                 RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_GlobalVariables);
                 if(rdi->global_variables != 0 && unparsed_map != 0)
                 {
@@ -3612,7 +3616,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt2->parent     = event->process;
       out_evt2->timestamp  = timestamp;
       out_evt2->string     = initial_debug_info_path;
-      di_open(initial_debug_info_path, timestamp);
+      DI_Key initial_dbgi_key = {initial_debug_info_path, timestamp};
+      di_open(&initial_dbgi_key);
     }break;
     case DMN_EventKind_ExitProcess:
     {
@@ -4219,7 +4224,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         }
         U64 module_base_vaddr = module->vaddr_range.min;
         CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-        RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, dbg_path->string, dbg_path->timestamp, max_U64);
+        DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
         RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Procedures);
         RDI_ParsedNameMap map = {0};
         rdi_name_map_parse(rdi, unparsed_map, &map);
@@ -4512,7 +4518,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           // rjf: evaluate hit stop conditions
           if(conditions.node_count != 0)
           {
-            RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(di_scope, dbg_path->string, dbg_path->timestamp, max_U64);
+            DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
             for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
             {
               String8 string = condition_n->string;

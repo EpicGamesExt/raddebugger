@@ -521,7 +521,7 @@ struct DF_TextLineSrc2DasmInfo
 {
   Rng1U64 voff_range;
   S64 remap_line;
-  DF_Entity *dbgi;
+  DI_Key dbgi_key;
 };
 
 typedef struct DF_TextLineSrc2DasmInfoNode DF_TextLineSrc2DasmInfoNode;
@@ -543,7 +543,7 @@ typedef struct DF_TextLineSrc2DasmInfoListArray DF_TextLineSrc2DasmInfoListArray
 struct DF_TextLineSrc2DasmInfoListArray
 {
   DF_TextLineSrc2DasmInfoList *v;
-  DF_EntityList dbgis;
+  DI_KeyList dbgi_keys;
   U64 count;
 };
 
@@ -552,7 +552,7 @@ struct DF_TextLineSrc2DasmInfoListArray
 typedef struct DF_TextLineDasm2SrcInfo DF_TextLineDasm2SrcInfo;
 struct DF_TextLineDasm2SrcInfo
 {
-  DF_Entity *dbgi;
+  DI_Key dbgi_key;
   DF_Entity *file;
   TxtPt pt;
   Rng1U64 voff_range;
@@ -1004,7 +1004,7 @@ typedef struct DF_RunLocalsCacheNode DF_RunLocalsCacheNode;
 struct DF_RunLocalsCacheNode
 {
   DF_RunLocalsCacheNode *hash_next;
-  DF_Handle dbgi;
+  DI_Key dbgi_key;
   U64 voff;
   EVAL_String2NumMap *locals_map;
 };
@@ -1518,9 +1518,9 @@ internal CTRL_TrapList df_trap_net_from_thread__step_into_line(Arena *arena, DF_
 ////////////////////////////////
 //~ rjf: Modules & Debug Info Mappings
 
-//- rjf: module <=> debug info file
-internal DF_Entity *df_dbgi_from_module(DF_Entity *module);
-internal DF_EntityList df_modules_from_dbgi(Arena *arena, DF_Entity *debug);
+//- rjf: module <=> debug info keys
+internal DI_Key df_dbgi_key_from_module(DF_Entity *module);
+internal DF_EntityList df_modules_from_dbgi_key(Arena *arena, DI_Key *dbgi_key);
 
 //- rjf: voff <=> vaddr
 internal U64 df_base_vaddr_from_module(DF_Entity *module);
@@ -1532,22 +1532,19 @@ internal Rng1U64 df_vaddr_range_from_voff_range(DF_Entity *module, Rng1U64 voff_
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
-//- rjf: debug file -> rdi
-internal RDI_Parsed *df_rdi_from_dbgi(DI_Scope *scope, DF_Entity *dbgi);
-
 //- rjf: voff|vaddr -> symbol lookups
-internal String8 df_symbol_name_from_dbgi_voff(Arena *arena, DF_Entity *dbgi, U64 voff);
+internal String8 df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff);
 internal String8 df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr);
 
 //- rjf: src -> voff lookups
 internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);
 
 //- rjf: voff -> src lookups
-internal DF_TextLineDasm2SrcInfo df_text_line_dasm2src_info_from_dbgi_voff(DF_Entity *dbgi, U64 voff);
+internal DF_TextLineDasm2SrcInfo df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 
 //- rjf: symbol -> voff lookups
-internal U64 df_voff_from_dbgi_symbol_name(DF_Entity *dbgi, String8 symbol_name);
-internal U64 df_type_num_from_dbgi_name(DF_Entity *dbgi, String8 name);
+internal U64 df_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
+internal U64 df_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name);
 
 ////////////////////////////////
 //~ rjf: Process/Thread/Module Info Lookups
@@ -1556,8 +1553,8 @@ internal DF_Entity *df_module_from_process_vaddr(DF_Entity *process, U64 vaddr);
 internal DF_Entity *df_module_from_thread(DF_Entity *thread);
 internal U64 df_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal Architecture df_architecture_from_entity(DF_Entity *entity);
-internal EVAL_String2NumMap *df_push_locals_map_from_dbgi_voff(Arena *arena, DI_Scope *scope, DF_Entity *dbgi, U64 voff);
-internal EVAL_String2NumMap *df_push_member_map_from_dbgi_voff(Arena *arena, DI_Scope *scope, DF_Entity *dbgi, U64 voff);
+internal EVAL_String2NumMap *df_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
+internal EVAL_String2NumMap *df_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal B32 df_set_thread_rip(DF_Entity *thread, U64 vaddr);
 internal DF_Entity *df_module_from_thread_candidates(DF_Entity *thread, DF_EntityList *candidates);
 
@@ -1679,7 +1676,9 @@ internal String8 df_info_summary_from_string(Architecture arch, String8 string);
 
 //- rjf: entity kind cache
 internal DF_EntityList df_query_cached_entity_list_with_kind(DF_EntityKind kind);
-internal DF_EntityList df_push_active_dbgi_list(Arena *arena);
+
+//- rjf: active entity based queries
+internal DI_KeyList df_push_active_dbgi_key_list(Arena *arena);
 internal DF_EntityList df_push_active_target_list(Arena *arena);
 
 //- rjf: per-run caches
@@ -1687,8 +1686,8 @@ internal CTRL_Unwind df_query_cached_unwind_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread(DF_Entity *thread);
 internal U64 df_query_cached_rip_from_thread_unwind(DF_Entity *thread, U64 unwind_count);
 internal U64 df_query_cached_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 root_vaddr, U64 rip_vaddr);
-internal EVAL_String2NumMap *df_query_cached_locals_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff);
-internal EVAL_String2NumMap *df_query_cached_member_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff);
+internal EVAL_String2NumMap *df_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
+internal EVAL_String2NumMap *df_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 
 //- rjf: top-level command dispatch
 internal void df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec);

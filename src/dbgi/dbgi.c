@@ -15,6 +15,58 @@ di_hash_from_string(String8 string, StringMatchFlags match_flags)
   return result;
 }
 
+internal U64
+di_hash_from_key(DI_Key *k)
+{
+  U64 hash = di_hash_from_string(k->path, StringMatchFlag_CaseInsensitive);
+  return hash;
+}
+
+internal B32
+di_key_match(DI_Key *a, DI_Key *b)
+{
+  return (str8_match(a->path, b->path, StringMatchFlag_CaseInsensitive) && a->min_timestamp == b->min_timestamp);
+}
+
+internal DI_Key
+di_key_copy(Arena *arena, DI_Key *src)
+{
+  DI_Key dst = {0};
+  MemoryCopyStruct(&dst, src);
+  dst.path = push_str8_copy(arena, src->path);
+  return dst;
+}
+
+internal DI_Key
+di_normalized_key_from_key(Arena *arena, DI_Key *src)
+{
+  DI_Key dst = {path_normalized_from_string(arena, src->path), src->min_timestamp};
+  return dst;
+}
+
+internal void
+di_key_list_push(Arena *arena, DI_KeyList *list, DI_Key *key)
+{
+  DI_KeyNode *n = push_array(arena, DI_KeyNode, 1);
+  MemoryCopyStruct(&n->v, key);
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal DI_KeyArray
+di_key_array_from_list(Arena *arena, DI_KeyList *list)
+{
+  DI_KeyArray array = {0};
+  array.count = list->count;
+  array.v = push_array_no_zero(arena, DI_Key, array.count);
+  U64 idx = 0;
+  for(DI_KeyNode *n = list->first; n != 0; n = n->next, idx += 1)
+  {
+    MemoryCopyStruct(&array.v[idx], &n->v);
+  }
+  return array;
+}
+
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
 
@@ -115,19 +167,19 @@ di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Node *node)
 //~ rjf: Per-Slot Functions
 
 internal DI_Node *
-di_node_from_path_min_timestamp_slot__stripe_mutex_r_guarded(DI_Slot *slot, String8 path, U64 min_timestamp)
+di_node_from_key_slot__stripe_mutex_r_guarded(DI_Slot *slot, DI_Key *key)
 {
   DI_Node *node = 0;
   StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
   U64 most_recent_timestamp = max_U64;
   for(DI_Node *n = slot->first; n != 0; n = n->next)
   {
-    if(str8_match(n->path, path, match_flags) &&
-       min_timestamp <= n->min_timestamp &&
-       (n->min_timestamp - min_timestamp) <= most_recent_timestamp)
+    if(str8_match(n->key.path, key->path, match_flags) &&
+       key->min_timestamp <= n->key.min_timestamp &&
+       (n->key.min_timestamp - key->min_timestamp) <= most_recent_timestamp)
     {
       node = n;
-      most_recent_timestamp = (n->min_timestamp - min_timestamp);
+      most_recent_timestamp = (n->key.min_timestamp - key->min_timestamp);
     }
   }
   return node;
@@ -231,30 +283,30 @@ di_string_release__stripe_mutex_w_guarded(DI_Stripe *stripe, String8 string)
 //~ rjf: Key Opening/Closing
 
 internal void
-di_open(String8 path, U64 min_timestamp)
+di_open(DI_Key *key)
 {
   Temp scratch = scratch_begin(0, 0);
-  if(path.size != 0)
+  if(key->path.size != 0)
   {
-    String8 path_normalized = path_normalized_from_string(scratch.arena, path);
-    U64 hash = di_hash_from_string(path_normalized, StringMatchFlag_CaseInsensitive);
+    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
+    U64 hash = di_hash_from_key(&key_normalized);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    log_infof("opening debug info: %S [0x%I64x]\n", path_normalized, min_timestamp);
+    log_infof("opening debug info: %S [0x%I64x]\n", key_normalized.path, key_normalized.min_timestamp);
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
-      DI_Node *node = di_node_from_path_min_timestamp_slot__stripe_mutex_r_guarded(slot, path_normalized, min_timestamp);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
       
       //- rjf: allocate node if none exists; insert into slot
       if(node == 0)
       {
-        U64 current_timestamp = os_properties_from_file_path(path).modified;
+        U64 current_timestamp = os_properties_from_file_path(key_normalized.path).modified;
         if(current_timestamp == 0)
         {
-          current_timestamp = min_timestamp;
+          current_timestamp = key_normalized.min_timestamp;
         }
         node = stripe->free_node;
         if(node != 0)
@@ -267,9 +319,9 @@ di_open(String8 path, U64 min_timestamp)
         }
         MemoryZeroStruct(node);
         DLLPushBack(slot->first, slot->last, node);
-        String8 path_stored = di_string_alloc__stripe_mutex_w_guarded(stripe, path_normalized);
-        node->path = path_stored;
-        node->min_timestamp = current_timestamp;
+        String8 path_stored = di_string_alloc__stripe_mutex_w_guarded(stripe, key_normalized.path);
+        node->key.path = path_stored;
+        node->key.min_timestamp = current_timestamp;
       }
       
       //- rjf: increment node reference count
@@ -278,7 +330,7 @@ di_open(String8 path, U64 min_timestamp)
         node->ref_count += 1;
         if(node->ref_count == 1)
         {
-          di_u2p_enqueue_key(path_normalized, node->min_timestamp, 0);
+          di_u2p_enqueue_key(&key_normalized, max_U64);
         }
       }
     }
@@ -287,23 +339,22 @@ di_open(String8 path, U64 min_timestamp)
 }
 
 internal void
-di_close(String8 path, U64 min_timestamp)
+di_close(DI_Key *key)
 {
   Temp scratch = scratch_begin(0, 0);
-  if(path.size != 0)
+  if(key->path.size != 0)
   {
-    String8 path_normalized = path_normalized_from_string(scratch.arena, path);
-    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-    U64 hash = di_hash_from_string(path_normalized, StringMatchFlag_CaseInsensitive);
+    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
+    U64 hash = di_hash_from_key(&key_normalized);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    log_infof("closing debug info: %S [0x%I64x]\n", path_normalized, min_timestamp);
+    log_infof("closing debug info: %S [0x%I64x]\n", key_normalized.path, key_normalized.min_timestamp);
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
-      DI_Node *node = di_node_from_path_min_timestamp_slot__stripe_mutex_r_guarded(slot, path_normalized, min_timestamp);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
       
       //- rjf: node exists -> decrement reference count; release
       if(node != 0)
@@ -322,7 +373,7 @@ di_close(String8 path, U64 min_timestamp)
           //- rjf: release
           if(node->ref_count == 0 && ins_atomic_u64_eval(&node->touch_count) == 0)
           {
-            di_string_release__stripe_mutex_w_guarded(stripe, node->path);
+            di_string_release__stripe_mutex_w_guarded(stripe, node->key.path);
             if(node->file_base != 0)
             {
               os_file_map_view_close(node->file_map, node->file_base);
@@ -354,15 +405,14 @@ di_close(String8 path, U64 min_timestamp)
 //~ rjf: Cache Lookups
 
 internal RDI_Parsed *
-di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp, U64 endt_us)
+di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
 {
   RDI_Parsed *result = &di_rdi_parsed_nil;
-  if(path.size != 0)
+  if(key->path.size != 0)
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 path_normalized = path_normalized_from_string(scratch.arena, path);
-    StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
-    U64 hash = di_hash_from_string(path_normalized, StringMatchFlag_CaseInsensitive);
+    DI_Key key_normalized = di_normalized_key_from_key(scratch.arena, key);
+    U64 hash = di_hash_from_key(&key_normalized);
     U64 slot_idx = hash%di_shared->slots_count;
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
@@ -370,7 +420,7 @@ di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp,
     OS_MutexScopeR(stripe->rw_mutex) for(;;)
     {
       //- rjf: find existing node
-      DI_Node *node = di_node_from_path_min_timestamp_slot__stripe_mutex_r_guarded(slot, path_normalized, min_timestamp);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
       
       //- rjf: no node? this path is not opened
       if(node == 0)
@@ -390,7 +440,7 @@ di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp,
       B32 sent = 0;
       if(node != 0 && !node->parse_done && !node->is_working && ins_atomic_u64_eval(&node->last_time_requested_us)+1000000<os_now_microseconds())
       {
-        sent = di_u2p_enqueue_key(path_normalized, min_timestamp, endt_us);
+        sent = di_u2p_enqueue_key(&key_normalized, endt_us);
         if(sent)
         {
           ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
@@ -417,18 +467,18 @@ di_rdi_from_path_min_timestamp(DI_Scope *scope, String8 path, U64 min_timestamp,
 //~ rjf: Parse Threads
 
 internal B32
-di_u2p_enqueue_key(String8 path, U64 min_timestamp, U64 endt_us)
+di_u2p_enqueue_key(DI_Key *key, U64 endt_us)
 {
   B32 sent = 0;
   OS_MutexScope(di_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
     U64 available_size = di_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(path.size) + path.size + sizeof(min_timestamp))
+    if(available_size >= sizeof(key->path.size) + key->path.size + sizeof(key->min_timestamp))
     {
-      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &path.size);
-      di_shared->u2p_ring_write_pos += ring_write(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, path.str, path.size);
-      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &min_timestamp);
+      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &key->path.size);
+      di_shared->u2p_ring_write_pos += ring_write(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, key->path.str, key->path.size);
+      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &key->min_timestamp);
       di_shared->u2p_ring_write_pos += 7;
       di_shared->u2p_ring_write_pos -= di_shared->u2p_ring_write_pos%8;
       sent = 1;
@@ -448,17 +498,17 @@ di_u2p_enqueue_key(String8 path, U64 min_timestamp, U64 endt_us)
 }
 
 internal void
-di_u2p_dequeue_key(Arena *arena, String8 *out_path, U64 *out_min_timestamp)
+di_u2p_dequeue_key(Arena *arena, DI_Key *out_key)
 {
   OS_MutexScope(di_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
-    if(unconsumed_size >= sizeof(out_path->size) + sizeof(out_min_timestamp[0]))
+    if(unconsumed_size >= sizeof(out_key->path.size) + sizeof(out_key->min_timestamp))
     {
-      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_path->size);
-      out_path->str = push_array(arena, U8, out_path->size);
-      di_shared->u2p_ring_read_pos += ring_read(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, out_path->str, out_path->size);
-      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, out_min_timestamp);
+      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_key->path.size);
+      out_key->path.str = push_array(arena, U8, out_key->path.size);
+      di_shared->u2p_ring_read_pos += ring_read(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, out_key->path.str, out_key->path.size);
+      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_key->min_timestamp);
       di_shared->u2p_ring_read_pos += 7;
       di_shared->u2p_ring_read_pos -= di_shared->u2p_ring_read_pos%8;
       break;
@@ -530,9 +580,10 @@ di_parse_thread__entry_point(void *p)
     ////////////////////////////
     //- rjf: grab next key
     //
-    String8 og_path = {0};
-    U64 min_timestamp = 0;
-    di_u2p_dequeue_key(scratch.arena, &og_path, &min_timestamp);
+    DI_Key key = {0};
+    di_u2p_dequeue_key(scratch.arena, &key);
+    String8 og_path = key.path;
+    U64 min_timestamp = key.min_timestamp;
     
     ////////////////////////////
     //- rjf: unpack key
@@ -549,7 +600,7 @@ di_parse_thread__entry_point(void *p)
     B32 got_task = 0;
     OS_MutexScopeR(stripe->rw_mutex)
     {
-      DI_Node *node = di_node_from_path_min_timestamp_slot__stripe_mutex_r_guarded(slot, og_path, min_timestamp);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
       if(node != 0)
       {
         got_task = !ins_atomic_u64_eval_cond_assign(&node->is_working, 1, 0);
@@ -852,7 +903,7 @@ di_parse_thread__entry_point(void *p)
     //
     if(got_task) OS_MutexScopeW(stripe->rw_mutex)
     {
-      DI_Node *node = di_node_from_path_min_timestamp_slot__stripe_mutex_r_guarded(slot, og_path, min_timestamp);
+      DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
       if(node != 0)
       {
         node->is_working = 0;

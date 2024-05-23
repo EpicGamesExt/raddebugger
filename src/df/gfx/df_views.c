@@ -646,7 +646,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
       DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
       U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
       DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
-      DF_Entity *dbgi = df_dbgi_from_module(module);
+      DI_Key dbgi_key = df_dbgi_key_from_module(module);
       
       //- rjf: calculate top-level keys, expand root-level, grab root expansion node
       DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
@@ -657,11 +657,10 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
       //- rjf: query all filtered items from dbgi searching system
       U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
       B32 items_stale = 0;
-      FZY_DbgiKey key = {df_full_path_from_entity(scratch.arena, dbgi), dbgi->timestamp};
       FZY_Params params = {fzy_target};
       {
         params.dbgi_keys.count = 1;
-        params.dbgi_keys.v = &key;
+        params.dbgi_keys.v = &dbgi_key;
       }
       FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &params, filter, os_now_microseconds()+100, &items_stale);
       if(items_stale)
@@ -3237,30 +3236,19 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   FZY_Scope *fzy_scope = fzy_scope_open();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   String8 query = str8(view->query_buffer, view->query_string_size);
-  DF_EntityList dbgis_list = df_push_active_dbgi_list(scratch.arena);
-  DF_EntityArray dbgis = df_entity_array_from_list(scratch.arena, &dbgis_list);
+  DI_KeyList dbgi_keys_list = df_push_active_dbgi_key_list(scratch.arena);
+  DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
+  FZY_Params params = {FZY_Target_Procedures, dbgi_keys};
   U64 endt_us = os_now_microseconds()+200;
   
-  //- rjf: produce fuzzy search parameters
-  FZY_Params params = {FZY_Target_Procedures};
-  {
-    params.dbgi_keys.count = dbgis.count;
-    params.dbgi_keys.v = push_array(scratch.arena, FZY_DbgiKey, params.dbgi_keys.count);
-    for(U64 idx = 0; idx < params.dbgi_keys.count; idx += 1)
-    {
-      params.dbgi_keys.v[idx].path = df_full_path_from_entity(scratch.arena, dbgis.v[idx]);
-      params.dbgi_keys.v[idx].timestamp = dbgis.v[idx]->timestamp;
-    }
-  }
-  
   //- rjf: grab rdis, make type graphs for each
-  U64 rdis_count = dbgis.count;
+  U64 rdis_count = dbgi_keys.count;
   RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
   TG_Graph **graphs = push_array(scratch.arena, TG_Graph *, rdis_count);
   {
     for(U64 idx = 0; idx < rdis_count; idx += 1)
     {
-      rdis[idx] = di_rdi_from_path_min_timestamp(di_scope, params.dbgi_keys.v[idx].path, params.dbgi_keys.v[idx].timestamp, endt_us);
+      rdis[idx] = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], endt_us);
       graphs[idx] = tg_graph_begin(rdi_addr_size_from_arch(rdis[idx]->top_level_info->architecture), 256);
     }
   }
@@ -3341,7 +3329,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       FZY_Item *item = &items.v[idx];
       
       //- rjf: determine dbgi/rdi to which this item belongs
-      DF_Entity *dbgi = &df_g_nil_entity;
+      DI_Key dbgi_key = {0};
       RDI_Parsed *rdi = &di_rdi_parsed_nil;
       TG_Graph *graph = 0;
       U64 base_idx = 0;
@@ -3350,7 +3338,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         {
           if(base_idx <= item->idx && item->idx < base_idx + rdis[rdi_idx]->procedures_count)
           {
-            dbgi = dbgis.v[rdi_idx];
+            dbgi_key = dbgi_keys.v[rdi_idx];
             rdi = rdis[rdi_idx];
             graph = graphs[rdi_idx];
             break;
@@ -3398,8 +3386,8 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
-        U64 binary_voff = df_voff_from_dbgi_symbol_name(dbgi, name);
-        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, binary_voff);
+        U64 binary_voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, name);
+        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, binary_voff);
         String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
         S64 line_num = dasm2src_info.pt.line;
         df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
@@ -4794,8 +4782,8 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
               U64 rip_vaddr = df_query_cached_rip_from_thread(entity);
               DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
               U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-              DF_Entity *dbgi = df_dbgi_from_module(module);
-              DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, rip_voff);
+              DI_Key dbgi_key = df_dbgi_key_from_module(module);
+              DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff);
               if(!df_entity_is_nil(line_info.file))
               {
                 UI_PrefWidth(ui_children_sum(0)) df_entity_src_loc_button(ws, line_info.file, line_info.pt);
@@ -5266,9 +5254,9 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
               B32 brw_is_selected = (row_is_selected && cursor.x == 3);
               
               // rjf: unpack module info
-              DF_Entity *dbgi = df_dbgi_from_module(entity);
-              String8 dbgi_path = df_full_path_from_entity(scratch.arena, dbgi);
-              RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+              DI_Key dbgi_key = df_dbgi_key_from_module(entity);
+              String8 dbgi_path = dbgi_key.path;
+              RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
               B32 dbgi_is_valid = (rdi != &di_rdi_parsed_nil);
               
               // rjf: begin editing
@@ -5598,8 +5586,8 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
           if(src2dasm_list->first != 0)
           {
             Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-            DF_Entity *dbgi = src2dasm_list->first->v.dbgi;
-            DF_EntityList possible_modules = df_modules_from_dbgi(scratch.arena, dbgi);
+            DI_Key dbgi_key = src2dasm_list->first->v.dbgi_key;
+            DF_EntityList possible_modules = df_modules_from_dbgi_key(scratch.arena, &dbgi_key);
             DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
             U64 thread_dst_voff = voff_rng.min;
             if(!df_entity_is_nil(thread_dst_module) && thread_dst_voff != 0)
@@ -5901,8 +5889,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         DF_Entity *module = df_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
         U64 rip_voff = df_voff_from_vaddr(module, last_inst_on_unwound_rip_vaddr);
-        DF_Entity *dbgi = df_dbgi_from_module(module);
-        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, rip_voff);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
+        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff);
         if(dasm2src_info.file == entity && visible_line_num_range.min <= dasm2src_info.pt.line && dasm2src_info.pt.line <= visible_line_num_range.max)
         {
           U64 slice_line_idx = dasm2src_info.pt.line-visible_line_num_range.min;
@@ -5933,7 +5921,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         MemoryCopy(code_slice_params.line_src2dasm, src2dasm.v, sizeof(DF_TextLineSrc2DasmInfoList)*src2dasm.count);
       }
-      code_slice_params.relevant_dbgis = src2dasm.dbgis;
+      code_slice_params.relevant_dbgi_keys = src2dasm.dbgi_keys;
     }
   }
   
@@ -6249,8 +6237,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
           if(src2dasm_list->first != 0)
           {
             Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-            DF_Entity *dbgi = src2dasm_list->first->v.dbgi;
-            DF_EntityList possible_modules = df_modules_from_dbgi(scratch.arena, dbgi);
+            DI_Key dbgi_key = src2dasm_list->first->v.dbgi_key;
+            DF_EntityList possible_modules = df_modules_from_dbgi_key(scratch.arena, &dbgi_key);
             DF_Entity *thread_dst_module = df_module_from_thread_candidates(dropped_entity, &possible_modules);
             U64 thread_dst_voff = voff_rng.min;
             if(!df_entity_is_nil(thread_dst_module) && thread_dst_voff != 0)
@@ -6306,8 +6294,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       if(src2dasm_list->first != 0)
       {
         Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-        DF_Entity *dbgi = src2dasm_list->first->v.dbgi;
-        DF_EntityList possible_modules = df_modules_from_dbgi(scratch.arena, dbgi);
+        DI_Key dbgi_key = src2dasm_list->first->v.dbgi_key;
+        DF_EntityList possible_modules = df_modules_from_dbgi_key(scratch.arena, &dbgi_key);
         DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
         DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -6466,18 +6454,18 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   B32 file_is_out_of_date = 0;
   String8 out_of_date_dbgi_name = {0};
-  for(DF_EntityNode *n = code_slice_params.relevant_dbgis.first; n != 0; n = n->next)
+  for(DI_KeyNode *n = code_slice_params.relevant_dbgi_keys.first; n != 0; n = n->next)
   {
-    DF_Entity *dbgi = n->entity;
-    if(!df_entity_is_nil(dbgi))
+    DI_Key key = n->v;
+    if(key.path.size != 0)
     {
       String8 full_path = df_full_path_from_entity(scratch.arena, entity);
       TXTI_Handle handle = txti_handle_from_path(full_path);
       TXTI_BufferInfo info = txti_buffer_info_from_handle(scratch.arena, handle);
-      if(dbgi->timestamp < info.timestamp)
+      if(key.min_timestamp < info.timestamp)
       {
         file_is_out_of_date = 1;
-        out_of_date_dbgi_name = dbgi->name;
+        out_of_date_dbgi_name = str8_skip_last_slash(key.path);
         break;
       }
     }
@@ -6580,7 +6568,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   Architecture arch = df_architecture_from_entity(process);
   U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
   DF_Entity *dasm_module = df_module_from_process_vaddr(process, dasm_base_vaddr);
-  DF_Entity *dasm_dbgi = df_dbgi_from_module(dasm_module);
+  DI_Key dasm_dbgi_key = df_dbgi_key_from_module(dasm_module);
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
@@ -6591,8 +6579,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
     dasm_params.style_flags = dv->style_flags;
     dasm_params.syntax = DASM_Syntax_Intel;
     dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
-    dasm_params.dbg_path = df_full_path_from_entity(scratch.arena, dasm_dbgi);
-    dasm_params.dbg_timestamp = dasm_dbgi->timestamp;
+    dasm_params.dbgi_key = dasm_dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   U128 dasm_text_hash = {0};
@@ -6835,7 +6822,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   Architecture arch = df_architecture_from_entity(process);
   U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(64));
   DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
-  DF_Entity *dasm_dbgi = df_dbgi_from_module(dasm_module);
+  DI_Key dasm_dbgi_key = df_dbgi_key_from_module(dasm_module);
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(64));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
   U128 dasm_data_hash = {0};
@@ -6846,8 +6833,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     dasm_params.style_flags = dv->style_flags;
     dasm_params.syntax = DASM_Syntax_Intel;
     dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
-    dasm_params.dbg_path = df_full_path_from_entity(scratch.arena, dasm_dbgi);
-    dasm_params.dbg_timestamp = dasm_dbgi->timestamp;
+    dasm_params.dbgi_key = dasm_dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   U128 dasm_text_hash = {0};
@@ -6860,7 +6846,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //- rjf: unpack module info for this region
   //
   DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-  DF_Entity *dbgi = df_dbgi_from_module(module);
+  DI_Key dbgi_key = df_dbgi_key_from_module(module);
   
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
@@ -6949,7 +6935,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     {
       code_slice_params.margin_float_off_px = 0;
     }
-    df_entity_list_push(scratch.arena, &code_slice_params.relevant_dbgis, dbgi);
+    di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, &dbgi_key);
     
     // rjf: fill text info
     {
@@ -7031,7 +7017,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     // rjf: fill dasm -> src info
     {
       DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      DF_Entity *dbgi = df_dbgi_from_module(module);
+      DI_Key dbgi_key = df_dbgi_key_from_module(module);
       for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
       {
         U64 vaddr = dasm_vaddr_range.min + dasm_inst_array_code_off_from_idx(&dasm_info.insts, line_num-1);
@@ -7040,7 +7026,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         DF_TextLineDasm2SrcInfoNode *dasm2src_n = push_array(scratch.arena, DF_TextLineDasm2SrcInfoNode, 1);
         SLLQueuePush(code_slice_params.line_dasm2src[slice_idx].first, code_slice_params.line_dasm2src[slice_idx].last, dasm2src_n);
         code_slice_params.line_dasm2src[slice_idx].count += 1;
-        dasm2src_n->v = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, voff);
+        dasm2src_n->v = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, voff);
       }
     }
   }
@@ -7210,9 +7196,9 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     {
       U64 vaddr = dasm_vaddr_range.min+dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.goto_src_line_num-1);
       DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-      DF_Entity *dbgi = df_dbgi_from_module(module);
+      DI_Key dbgi_key = df_dbgi_key_from_module(module);
       U64 voff = df_voff_from_vaddr(module, vaddr);
-      DF_TextLineDasm2SrcInfo dasm2src = df_text_line_dasm2src_info_from_dbgi_voff(dbgi, voff);
+      DF_TextLineDasm2SrcInfo dasm2src = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, voff);
       String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src.file);
       DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.text_point = dasm2src.pt;
@@ -8552,9 +8538,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         {
           U64 f_rip = regs_rip_from_arch_block(thread->arch, f->regs);
           DF_Entity *module = df_module_from_process_vaddr(process, f_rip);
-          DF_Entity *dbgi = df_dbgi_from_module(module);
+          DI_Key dbgi_key = df_dbgi_key_from_module(module);
           U64 rip_voff = df_voff_from_vaddr(module, f_rip);
-          String8 symbol_name = df_symbol_name_from_dbgi_voff(scratch.arena, dbgi, rip_voff);
+          String8 symbol_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");

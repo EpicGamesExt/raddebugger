@@ -22,9 +22,7 @@ DF_EntityKind_Root,
 DF_EntityKind_Machine,
 DF_EntityKind_File,
 DF_EntityKind_OverrideFileLink,
-DF_EntityKind_PendingFileChange,
 DF_EntityKind_AutoViewRule,
-DF_EntityKind_DiagLog,
 DF_EntityKind_FlashMarker,
 DF_EntityKind_WatchPin,
 DF_EntityKind_Breakpoint,
@@ -39,8 +37,8 @@ DF_EntityKind_Dest,
 DF_EntityKind_Process,
 DF_EntityKind_Thread,
 DF_EntityKind_Module,
-DF_EntityKind_DebugInfoOverride,
 DF_EntityKind_PendingThreadName,
+DF_EntityKind_DebugInfoPath,
 DF_EntityKind_ConversionTask,
 DF_EntityKind_ConversionFail,
 DF_EntityKind_EndedProcess,
@@ -1531,11 +1529,11 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 df_g_cmd_param_slot_range_table[22];
-extern DF_IconKind df_g_entity_kind_icon_kind_table[27];
-extern String8 df_g_entity_kind_display_string_table[27];
-extern String8 df_g_entity_kind_name_label_table[27];
-extern DF_EntityKindFlags df_g_entity_kind_flags_table[27];
-extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[27];
+extern DF_IconKind df_g_entity_kind_icon_kind_table[25];
+extern String8 df_g_entity_kind_display_string_table[25];
+extern String8 df_g_entity_kind_name_label_table[25];
+extern DF_EntityKindFlags df_g_entity_kind_flags_table[25];
+extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[25];
 extern String8 df_g_cfg_src_string_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[4];

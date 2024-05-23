@@ -405,7 +405,7 @@ struct DF_CodeSliceParams
   DF_EntityList *line_pins;
   DF_TextLineDasm2SrcInfoList *line_dasm2src;
   DF_TextLineSrc2DasmInfoList *line_src2dasm;
-  DF_EntityList relevant_dbgis;
+  DI_KeyList relevant_dbgi_keys;
   
   // rjf: visual parameters
   F_Tag font;
@@ -714,7 +714,8 @@ struct DF_GfxState
   DF_DragDropState drag_drop_state;
   
   // rjf: hover line info correllation state
-  DF_Handle hover_line_dbgi;
+  Arena *hover_line_arena;
+  DI_Key hover_line_dbgi_key;
   U64 hover_line_voff;
   B32 hover_line_set_this_frame;
   
@@ -871,8 +872,8 @@ internal B32 df_drag_drop(DF_DragDropPayload *out_payload);
 internal void df_drag_kill(void);
 internal void df_queue_drag_drop(void);
 
-internal void df_set_hovered_line_info(DF_Entity *dbgi, U64 voff);
-internal DF_Entity *df_get_hovered_line_info_dbgi(void);
+internal void df_set_hovered_line_info(DI_Key *dbgi_key, U64 voff);
+internal DI_Key df_get_hovered_line_info_dbgi_key(void);
 internal U64 df_get_hovered_line_info_voff(void);
 
 ////////////////////////////////

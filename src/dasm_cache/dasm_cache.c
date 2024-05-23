@@ -24,8 +24,8 @@ dasm_params_match(DASM_Params *a, DASM_Params *b)
                 a->style_flags == b->style_flags &&
                 a->syntax == b->syntax &&
                 a->base_vaddr == b->base_vaddr &&
-                str8_match(a->dbg_path, b->dbg_path, 0) &&
-                a->dbg_timestamp == b->dbg_timestamp);
+                str8_match(a->dbgi_key.path, b->dbgi_key.path, 0) &&
+                a->dbgi_key.min_timestamp == b->dbgi_key.min_timestamp);
   return result;
 }
 
@@ -190,7 +190,7 @@ dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_Node *node)
   ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, dasm_user_clock_idx());
   touch->hash = node->hash;
   MemoryCopyStruct(&touch->params, &node->params);
-  touch->params.dbg_path = push_str8_copy(dasm_tctx->arena, touch->params.dbg_path);
+  touch->params.dbgi_key = di_key_copy(dasm_tctx->arena, &touch->params.dbgi_key);
   SLLStackPush(scope->top_touch, touch);
 }
 
@@ -251,7 +251,7 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
           node->hash = hash;
           MemoryCopyStruct(&node->params, params);
           // TODO(rjf): need to make this releasable - currently all exe_paths just leak
-          node->params.dbg_path = push_str8_copy(stripe->arena, node->params.dbg_path);
+          node->params.dbgi_key = di_key_copy(stripe->arena, &node->params.dbgi_key);
           node_is_new = 1;
         }
       }
@@ -295,7 +295,7 @@ dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us)
   {
     U64 unconsumed_size = dasm_shared->u2p_ring_write_pos - dasm_shared->u2p_ring_read_pos;
     U64 available_size = dasm_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(hash)+sizeof(U64)+sizeof(Architecture)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+params->dbg_path.size+sizeof(U64))
+    if(available_size >= sizeof(hash)+sizeof(U64)+sizeof(Architecture)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+params->dbgi_key.path.size+sizeof(U64))
     {
       good = 1;
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &hash);
@@ -304,9 +304,9 @@ dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us)
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->style_flags);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->syntax);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->base_vaddr);
-      dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->dbg_path.size);
-      dasm_shared->u2p_ring_write_pos += ring_write(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, params->dbg_path.str, params->dbg_path.size);
-      dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->dbg_timestamp);
+      dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->dbgi_key.path.size);
+      dasm_shared->u2p_ring_write_pos += ring_write(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, params->dbgi_key.path.str, params->dbgi_key.path.size);
+      dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->dbgi_key.min_timestamp);
       dasm_shared->u2p_ring_write_pos += 7;
       dasm_shared->u2p_ring_write_pos -= dasm_shared->u2p_ring_write_pos%8;
       break;
@@ -338,10 +338,10 @@ dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out)
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->style_flags);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->syntax);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->base_vaddr);
-      dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->dbg_path.size);
-      params_out->dbg_path.str = push_array(arena, U8, params_out->dbg_path.size);
-      dasm_shared->u2p_ring_read_pos += ring_read(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, params_out->dbg_path.str, params_out->dbg_path.size);
-      dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->dbg_timestamp);
+      dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->dbgi_key.path.size);
+      params_out->dbgi_key.path.str = push_array(arena, U8, params_out->dbgi_key.path.size);
+      dasm_shared->u2p_ring_read_pos += ring_read(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, params_out->dbgi_key.path.str, params_out->dbgi_key.path.size);
+      dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->dbgi_key.min_timestamp);
       dasm_shared->u2p_ring_read_pos += 7;
       dasm_shared->u2p_ring_read_pos -= dasm_shared->u2p_ring_read_pos%8;
       break;
@@ -390,9 +390,9 @@ dasm_parse_thread__entry_point(void *p)
     
     //- rjf: get dbg info
     RDI_Parsed *rdi = &di_rdi_parsed_nil;
-    if(got_task && params.dbg_path.size != 0)
+    if(got_task && params.dbgi_key.path.size != 0)
     {
-      rdi = di_rdi_from_path_min_timestamp(di_scope, params.dbg_path, params.dbg_timestamp, max_U64);
+      rdi = di_rdi_from_key(di_scope, &params.dbgi_key, max_U64);
     }
     
     //- rjf: hash -> data

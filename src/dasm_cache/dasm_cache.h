@@ -36,8 +36,7 @@ struct DASM_Params
   DASM_StyleFlags style_flags;
   DASM_Syntax syntax;
   U64 base_vaddr;
-  String8 dbg_path;
-  U64 dbg_timestamp;
+  DI_Key dbgi_key;
 };
 
 ////////////////////////////////

@@ -1541,8 +1541,8 @@ df_search_tags_from_entity(Arena *arena, DF_Entity *entity)
       U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
       DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-      DF_Entity *debug = df_dbgi_from_module(module);
-      String8 procedure_name = df_symbol_name_from_dbgi_voff(scratch.arena, debug, rip_voff);
+      DI_Key dbgi_key = df_dbgi_key_from_module(module);
+      String8 procedure_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
       if(procedure_name.size != 0)
       {
         str8_list_push(scratch.arena, &strings, procedure_name);
@@ -2841,7 +2841,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   // rjf: thread => info
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   DF_Entity *module = df_module_from_thread(thread);
-  DF_Entity *debug = df_dbgi_from_module(module);
+  DI_Key dbgi_key = df_dbgi_key_from_module(module);
   Architecture arch = df_architecture_from_entity(thread);
   U64 ip_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   
@@ -2849,7 +2849,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = df_voff_from_vaddr(module, ip_vaddr);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(debug, ip_voff);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, ip_voff);
     Rng1U64 line_voff_rng = line_info.voff_range;
     if(line_voff_rng.max != 0)
     {
@@ -2863,7 +2863,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(debug, opl_line_voff_rng);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, opl_line_voff_rng);
     if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
     {
       line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
@@ -2966,7 +2966,7 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   // rjf: thread => info
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   DF_Entity *module = df_module_from_thread(thread);
-  DF_Entity *debug = df_dbgi_from_module(module);
+  DI_Key dbgi_key = df_dbgi_key_from_module(module);
   Architecture arch = df_architecture_from_entity(thread);
   U64 ip_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   
@@ -2974,7 +2974,7 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = df_voff_from_vaddr(module, ip_vaddr);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(debug, ip_voff);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, ip_voff);
     Rng1U64 line_voff_rng = line_info.voff_range;
     if(line_voff_rng.max != 0)
     {
@@ -2988,7 +2988,7 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_voff(debug, opl_line_voff_rng);
+    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, opl_line_voff_rng);
     if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
     {
       line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
@@ -3079,25 +3079,26 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
 ////////////////////////////////
 //~ rjf: Modules & Debug Info Mappings
 
-//- rjf: module <=> debug info file
+//- rjf: module <=> debug info keys
 
-internal DF_Entity *
-df_dbgi_from_module(DF_Entity *module)
+internal DI_Key
+df_dbgi_key_from_module(DF_Entity *module)
 {
-  DF_Entity *debug = df_entity_from_handle(module->entity_handle);
-  return debug;
+  DF_Entity *debug_info_path = df_entity_child_from_kind(module, DF_EntityKind_DebugInfoPath);
+  DI_Key key = {debug_info_path->name, debug_info_path->timestamp};
+  return key;
 }
 
 internal DF_EntityList
-df_modules_from_dbgi(Arena *arena, DF_Entity *debug)
+df_modules_from_dbgi_key(Arena *arena, DI_Key *dbgi_key)
 {
   DF_EntityList list = {0};
   DF_EntityList all_modules = df_query_cached_entity_list_with_kind(DF_EntityKind_Module);
   for(DF_EntityNode *n = all_modules.first; n != 0; n = n->next)
   {
     DF_Entity *module = n->entity;
-    DF_Entity *module_debug_info = df_dbgi_from_module(module);
-    if(module_debug_info == debug)
+    DI_Key module_dbgi_key = df_dbgi_key_from_module(module);
+    if(di_key_match(&module_dbgi_key, dbgi_key))
     {
       df_entity_list_push(arena, &list, module);
     }
@@ -3153,28 +3154,16 @@ df_vaddr_range_from_voff_range(DF_Entity *module, Rng1U64 voff_rng)
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
-//- rjf: debug file -> rdi
-
-internal RDI_Parsed *
-df_rdi_from_dbgi(DI_Scope *scope, DF_Entity *dbgi)
-{
-  Temp scratch = scratch_begin(0, 0);
-  String8 path = df_full_path_from_entity(scratch.arena, dbgi);
-  RDI_Parsed *rdi = di_rdi_from_path_min_timestamp(scope, path, dbgi->timestamp, 0);
-  scratch_end(scratch);
-  return rdi;
-}
-
 //- rjf: symbol lookups
 
 internal String8
-df_symbol_name_from_dbgi_voff(Arena *arena, DF_Entity *dbgi, U64 voff)
+df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
 {
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
     DI_Scope *scope = di_scope_open();
-    RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+    RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
     if(result.size == 0 && rdi->scope_vmap != 0)
     {
       U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, voff);
@@ -3205,9 +3194,9 @@ df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr)
   String8 result = {0};
   {
     DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-    DF_Entity *dbgi = df_dbgi_from_module(module);
+    DI_Key dbgi_key = df_dbgi_key_from_module(module);
     U64 voff = df_voff_from_vaddr(module, vaddr);
-    result = df_symbol_name_from_dbgi_voff(arena, dbgi, voff);
+    result = df_symbol_name_from_dbgi_key_voff(arena, &dbgi_key, voff);
   }
   return result;
 }
@@ -3224,7 +3213,7 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
   }
   Temp scratch = scratch_begin(&arena, 1);
   DI_Scope *scope = di_scope_open();
-  DF_EntityList dbgis = df_push_active_dbgi_list(scratch.arena);
+  DI_KeyList dbgi_keys = df_push_active_dbgi_key_list(scratch.arena);
   DF_EntityList overrides = df_possible_overrides_from_entity(scratch.arena, file);
   for(DF_EntityNode *override_n = overrides.first;
       override_n != 0;
@@ -3233,13 +3222,13 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
     DF_Entity *override = override_n->entity;
     String8 file_path = df_full_path_from_entity(scratch.arena, override);
     String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
-    for(DF_EntityNode *dbgi_n = dbgis.first;
-        dbgi_n != 0;
-        dbgi_n = dbgi_n->next)
+    for(DI_KeyNode *dbgi_key_n = dbgi_keys.first;
+        dbgi_key_n != 0;
+        dbgi_key_n = dbgi_key_n->next)
     {
       // rjf: binary -> rdi
-      DF_Entity *dbgi = dbgi_n->entity;
-      RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+      DI_Key key = dbgi_key_n->v;
+      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 0);
       
       // rjf: file_path_normalized * rdi -> src_id
       B32 good_src_id = 0;
@@ -3294,7 +3283,7 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
               DF_TextLineSrc2DasmInfoNode *src2dasm_n = push_array(arena, DF_TextLineSrc2DasmInfoNode, 1);
               src2dasm_n->v.voff_range = range;
               src2dasm_n->v.remap_line = (S64)actual_line;
-              src2dasm_n->v.dbgi = dbgi;
+              src2dasm_n->v.dbgi_key = key;
               SLLQueuePush(src2dasm_list->first, src2dasm_list->last, src2dasm_n);
               src2dasm_list->count += 1;
             }
@@ -3302,10 +3291,10 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
         }
       }
       
-      // rjf: good src id -> push to relevant binaries
+      // rjf: good src id -> push to relevant dbgi keys
       if(good_src_id)
       {
-        df_entity_list_push(arena, &src2dasm_array.dbgis, dbgi);
+        di_key_list_push(arena, &src2dasm_array.dbgi_keys, &key);
       }
     }
   }
@@ -3317,13 +3306,13 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
 //- rjf: voff -> src lookups
 
 internal DF_TextLineDasm2SrcInfo
-df_text_line_dasm2src_info_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
+df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 {
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *scope = di_scope_open();
-  RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
   DF_TextLineDasm2SrcInfo result = {0};
-  result.file = result.dbgi = &df_g_nil_entity;
+  result.file = &df_g_nil_entity;
   if(rdi->unit_vmap != 0 && rdi->units != 0 && rdi->source_files != 0)
   {
     U64 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, voff);
@@ -3338,7 +3327,7 @@ df_text_line_dasm2src_info_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
       RDI_SourceFile *file = &rdi->source_files[line->file_idx];
       String8 file_normalized_full_path = {0};
       file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
-      result.dbgi = dbgi;
+      MemoryCopyStruct(&result.dbgi_key, dbgi_key);
       if(line->file_idx != 0 && file_normalized_full_path.size != 0)
       {
         result.file = df_entity_from_path(file_normalized_full_path, DF_EntityFromPathFlag_All);
@@ -3355,14 +3344,14 @@ df_text_line_dasm2src_info_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
 //- rjf: symbol -> voff lookups
 
 internal U64
-df_voff_from_dbgi_symbol_name(DF_Entity *dbgi, String8 symbol_name)
+df_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *scope = di_scope_open();
   U64 result = 0;
   {
-    RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+    RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
     RDI_NameMapKind name_map_kinds[] =
     {
       RDI_NameMapKind_GlobalVariables,
@@ -3436,13 +3425,13 @@ df_voff_from_dbgi_symbol_name(DF_Entity *dbgi, String8 symbol_name)
 }
 
 internal U64
-df_type_num_from_dbgi_name(DF_Entity *dbgi, String8 name)
+df_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name)
 {
   ProfBeginFunction();
   DI_Scope *scope = di_scope_open();
   U64 result = 0;
   {
-    RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+    RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
     RDI_NameMap *name_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Types);
     RDI_ParsedNameMap parsed_name_map = {0};
     rdi_name_map_parse(rdi, name_map, &parsed_name_map);
@@ -3592,17 +3581,17 @@ df_architecture_from_entity(DF_Entity *entity)
 }
 
 internal EVAL_String2NumMap *
-df_push_locals_map_from_dbgi_voff(Arena *arena, DI_Scope *scope, DF_Entity *dbgi, U64 voff)
+df_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff)
 {
-  RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
   EVAL_String2NumMap *result = eval_push_locals_map_from_rdi_voff(arena, rdi, voff);
   return result;
 }
 
 internal EVAL_String2NumMap *
-df_push_member_map_from_dbgi_voff(Arena *arena, DI_Scope *scope, DF_Entity *dbgi, U64 voff)
+df_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff)
 {
-  RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
   EVAL_String2NumMap *result = eval_push_member_map_from_rdi_voff(arena, rdi, voff);
   return result;
 }
@@ -3879,13 +3868,13 @@ df_eval_parse_ctx_from_process_vaddr(DI_Scope *scope, DF_Entity *process, U64 va
   //- rjf: extract info
   DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
   U64 voff = df_voff_from_vaddr(module, vaddr);
-  DF_Entity *debug = df_dbgi_from_module(module);
-  RDI_Parsed *rdi = df_rdi_from_dbgi(scope, debug);
+  DI_Key dbgi_key = df_dbgi_key_from_module(module);
+  RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
   Architecture arch = df_architecture_from_entity(process);
   EVAL_String2NumMap *reg_map = ctrl_string2reg_from_arch(arch);
   EVAL_String2NumMap *reg_alias_map = ctrl_string2alias_from_arch(arch);
-  EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_dbgi_voff(debug, voff);
-  EVAL_String2NumMap *member_map = df_query_cached_member_map_from_dbgi_voff(debug, voff);
+  EVAL_String2NumMap *locals_map = df_query_cached_locals_map_from_dbgi_key_voff(&dbgi_key, voff);
+  EVAL_String2NumMap *member_map = df_query_cached_member_map_from_dbgi_key_voff(&dbgi_key, voff);
   
   //- rjf: build ctx
   EVAL_ParseCtx ctx = zero_struct;
@@ -3908,7 +3897,7 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
 {
   Temp scratch = scratch_begin(0, 0);
   EVAL_ParseCtx ctx = zero_struct;
-  DF_EntityList dbgis = df_push_active_dbgi_list(scratch.arena);
+  DI_KeyList dbgi_keys = df_push_active_dbgi_key_list(scratch.arena);
   DF_TextLineSrc2DasmInfoList src2dasm_list = {0};
   
   //- rjf: search for line info in all binaries for this file:pt
@@ -3920,13 +3909,13 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
     DF_Entity *override = override_n->entity;
     String8 file_path = df_full_path_from_entity(scratch.arena, override);
     String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
-    for(DF_EntityNode *dbgi_n = dbgis.first;
-        dbgi_n != 0;
-        dbgi_n = dbgi_n->next)
+    for(DI_KeyNode *dbgi_key_n = dbgi_keys.first;
+        dbgi_key_n != 0;
+        dbgi_key_n = dbgi_key_n->next)
     {
-      // rjf: debug file -> rdi
-      DF_Entity *dbgi = dbgi_n->entity;
-      RDI_Parsed *rdi = df_rdi_from_dbgi(scope, dbgi);
+      // rjf: key -> rdi
+      DI_Key key = dbgi_key_n->v;
+      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 0);
       
       // rjf: file_path_normalized * rdi -> src_id
       B32 good_src_id = 0;
@@ -3972,7 +3961,7 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
           DF_TextLineSrc2DasmInfoNode *src2dasm_n = push_array(scratch.arena, DF_TextLineSrc2DasmInfoNode, 1);
           src2dasm_n->v.voff_range = range;
           src2dasm_n->v.remap_line = (S64)actual_line;
-          src2dasm_n->v.dbgi = dbgi;
+          src2dasm_n->v.dbgi_key = key;
           SLLQueuePush(src2dasm_list.first, src2dasm_list.last, src2dasm_n);
           src2dasm_list.count += 1;
         }
@@ -3987,7 +3976,7 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
     for(DF_TextLineSrc2DasmInfoNode *n = src2dasm_list.first; n != 0; n = n->next)
     {
       DF_TextLineSrc2DasmInfo *src2dasm = &n->v;
-      DF_EntityList modules = df_modules_from_dbgi(scratch.arena, src2dasm->dbgi);
+      DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &src2dasm->dbgi_key);
       if(modules.count != 0)
       {
         DF_Entity *module = modules.first->entity;
@@ -4133,9 +4122,9 @@ df_eval_from_string(Arena *arena, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_Pa
   {
     U64 vaddr = result.imm_u64;
     DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-    DF_Entity *dbgi = df_dbgi_from_module(module);
+    DI_Key dbgi_key = df_dbgi_key_from_module(module);
     U64 voff = df_voff_from_vaddr(module, vaddr);
-    String8 symbol_name = df_symbol_name_from_dbgi_voff(scratch.arena, dbgi, voff);
+    String8 symbol_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
     if(symbol_name.size != 0)
     {
       result.type_key = tg_cons_type_make(parse_ctx->type_graph, TG_Kind_Ptr, tg_key_basic(TG_Kind_Void), 0);
@@ -6112,16 +6101,18 @@ df_query_cached_entity_list_with_kind(DF_EntityKind kind)
   return result;
 }
 
-internal DF_EntityList
-df_push_active_dbgi_list(Arena *arena)
+//- rjf: active entity based queries
+
+internal DI_KeyList
+df_push_active_dbgi_key_list(Arena *arena)
 {
-  DF_EntityList dbgis = {0};
+  DI_KeyList dbgis = {0};
   DF_EntityList modules = df_query_cached_entity_list_with_kind(DF_EntityKind_Module);
   for(DF_EntityNode *n = modules.first; n != 0; n = n->next)
   {
     DF_Entity *module = n->entity;
-    DF_Entity *dbgi = df_dbgi_from_module(module);
-    df_entity_list_push(arena, &dbgis, dbgi);
+    DI_Key key = df_dbgi_key_from_module(module);
+    di_key_list_push(arena, &dbgis, &key);
   }
   return dbgis;
 }
@@ -6282,7 +6273,7 @@ df_query_cached_tls_base_vaddr_from_process_root_rip(DF_Entity *process, U64 roo
 }
 
 internal EVAL_String2NumMap *
-df_query_cached_locals_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
+df_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   EVAL_String2NumMap *map = &eval_string2num_map_nil;
@@ -6298,14 +6289,13 @@ df_query_cached_locals_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
     {
       break;
     }
-    DF_Handle handle = df_handle_from_entity(dbgi);
-    U64 hash = df_hash_from_string(str8_struct(&handle));
+    U64 hash = di_hash_from_key(dbgi_key);
     U64 slot_idx = hash % cache->table_size;
     DF_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
     DF_RunLocalsCacheNode *node = 0;
     for(DF_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      if(df_handle_match(n->dbgi, handle) && n->voff == voff)
+      if(di_key_match(&n->dbgi_key, dbgi_key) && n->voff == voff)
       {
         node = n;
         break;
@@ -6314,11 +6304,11 @@ df_query_cached_locals_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
     if(node == 0)
     {
       DI_Scope *scope = di_scope_open();
-      EVAL_String2NumMap *map = df_push_locals_map_from_dbgi_voff(cache->arena, scope, dbgi, voff);
+      EVAL_String2NumMap *map = df_push_locals_map_from_dbgi_key_voff(cache->arena, scope, dbgi_key, voff);
       if(map->slots_count != 0)
       {
         node = push_array(cache->arena, DF_RunLocalsCacheNode, 1);
-        node->dbgi = handle;
+        node->dbgi_key = di_key_copy(cache->arena, dbgi_key);
         node->voff = voff;
         node->locals_map = map;
         SLLQueuePush_N(slot->first, slot->last, node, hash_next);
@@ -6336,7 +6326,7 @@ df_query_cached_locals_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
 }
 
 internal EVAL_String2NumMap *
-df_query_cached_member_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
+df_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   EVAL_String2NumMap *map = &eval_string2num_map_nil;
@@ -6352,14 +6342,13 @@ df_query_cached_member_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
     {
       break;
     }
-    DF_Handle handle = df_handle_from_entity(dbgi);
-    U64 hash = df_hash_from_string(str8_struct(&handle));
+    U64 hash = di_hash_from_key(dbgi_key);
     U64 slot_idx = hash % cache->table_size;
     DF_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
     DF_RunLocalsCacheNode *node = 0;
     for(DF_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
     {
-      if(df_handle_match(n->dbgi, handle) && n->voff == voff)
+      if(di_key_match(&n->dbgi_key, dbgi_key) && n->voff == voff)
       {
         node = n;
         break;
@@ -6368,11 +6357,11 @@ df_query_cached_member_map_from_dbgi_voff(DF_Entity *dbgi, U64 voff)
     if(node == 0)
     {
       DI_Scope *scope = di_scope_open();
-      EVAL_String2NumMap *map = df_push_member_map_from_dbgi_voff(cache->arena, scope, dbgi, voff);
+      EVAL_String2NumMap *map = df_push_member_map_from_dbgi_key_voff(cache->arena, scope, dbgi_key, voff);
       if(map->slots_count != 0)
       {
         node = push_array(cache->arena, DF_RunLocalsCacheNode, 1);
-        node->dbgi = handle;
+        node->dbgi_key = di_key_copy(cache->arena, dbgi_key);
         node->voff = voff;
         node->locals_map = map;
         SLLQueuePush_N(slot->first, slot->last, node, hash_next);
@@ -6699,9 +6688,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             U64 stop_thread_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, stop_thread->ctrl_machine_id, stop_thread->ctrl_handle);
             DF_Entity *process = df_entity_ancestor_from_kind(stop_thread, DF_EntityKind_Process);
             DF_Entity *module = df_module_from_process_vaddr(process, stop_thread_vaddr);
-            DF_Entity *debug = df_dbgi_from_module(module);
+            DI_Key dbgi_key = df_dbgi_key_from_module(module);
             U64 stop_thread_voff = df_voff_from_vaddr(module, stop_thread_vaddr);
-            DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_voff(debug, stop_thread_voff);
+            DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, stop_thread_voff);
             DF_EntityList user_bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
             for(DF_EntityNode *n = user_bps.first; n != 0; n = n->next)
             {
@@ -6882,12 +6871,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           df_entity_equip_vaddr(module, event->rip_vaddr);
           df_entity_equip_timestamp(module, event->timestamp);
           
-          // rjf: create & attach debug info path
-          CTRL_Entity *ctrl_module = ctrl_entity_from_machine_id_handle(df_state->ctrl_entity_store, event->machine_id, event->entity);
-          CTRL_Entity *ctrl_debug_info = ctrl_entity_child_from_kind(ctrl_module, CTRL_EntityKind_DebugInfoPath);
-          DF_Entity *debug_info = df_entity_from_path(ctrl_debug_info->string, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-          df_entity_equip_entity_handle(module, df_handle_from_entity(debug_info));
-          
           // rjf: is first -> find target, equip process & module & first thread with target color
           if(is_first)
           {
@@ -6938,8 +6921,13 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case CTRL_EventKind_ModuleDebugInfoPathChange:
         {
           DF_Entity *module = df_entity_from_ctrl_handle(event->machine_id, event->entity);
-          DF_Entity *debug_info = df_entity_from_path(event->string, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-          df_entity_equip_entity_handle(module, df_handle_from_entity(debug_info));
+          DF_Entity *debug_info = df_entity_child_from_kind(module, DF_EntityKind_DebugInfoPath);
+          if(df_entity_is_nil(debug_info))
+          {
+            debug_info = df_entity_alloc(0, module, DF_EntityKind_DebugInfoPath);
+          }
+          df_entity_equip_name(0, debug_info, event->string);
+          df_entity_equip_timestamp(debug_info, event->timestamp);
         }break;
         
         //- rjf: debug strings

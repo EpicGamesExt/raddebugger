@@ -22,7 +22,7 @@ fzy_hash_from_params(FZY_Params *params)
   hash = fzy_hash_from_string(hash, str8_struct(&params->target));
   for(U64 idx = 0; idx < params->dbgi_keys.count; idx += 1)
   {
-    hash = fzy_hash_from_string(hash, str8_struct(&params->dbgi_keys.v[idx].timestamp));
+    hash = fzy_hash_from_string(hash, str8_struct(&params->dbgi_keys.v[idx].min_timestamp));
     hash = fzy_hash_from_string(hash, params->dbgi_keys.v[idx].path);
   }
   return hash;
@@ -84,35 +84,13 @@ fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, FZY_Target target, 
   return result;
 }
 
-internal void
-fzy_dbgi_key_list_push(Arena *arena, FZY_DbgiKeyList *list, FZY_DbgiKey key)
-{
-  FZY_DbgiKeyNode *n = push_array(arena, FZY_DbgiKeyNode, 1);
-  n->v = key;
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-}
-
-internal FZY_DbgiKeyArray
-fzy_dbgi_key_array_from_list(Arena *arena, FZY_DbgiKeyList *list)
-{
-  FZY_DbgiKeyArray array = {0};
-  array.v = push_array(arena, FZY_DbgiKey, list->count);
-  U64 idx = 0;
-  for(FZY_DbgiKeyNode *n = list->first; n != 0; n = n->next, idx += 1)
-  {
-    array.v[idx] = n->v;
-  }
-  return array;
-}
-
 internal FZY_Params
 fzy_params_copy(Arena *arena, FZY_Params *src)
 {
   FZY_Params dst = zero_struct;
   MemoryCopyStruct(&dst, src);
-  dst.dbgi_keys.v = push_array(arena, FZY_DbgiKey, dst.dbgi_keys.count);
-  MemoryCopy(dst.dbgi_keys.v, src->dbgi_keys.v, sizeof(FZY_DbgiKey)*src->dbgi_keys.count);
+  dst.dbgi_keys.v = push_array(arena, DI_Key, dst.dbgi_keys.count);
+  MemoryCopy(dst.dbgi_keys.v, src->dbgi_keys.v, sizeof(DI_Key)*src->dbgi_keys.count);
   for(U64 idx = 0; idx < dst.dbgi_keys.count; idx += 1)
   {
     dst.dbgi_keys.v[idx].path = push_str8_copy(arena, dst.dbgi_keys.v[idx].path);
@@ -422,7 +400,7 @@ fzy_search_thread__entry_point(void *p)
     {
       for(U64 idx = 0; idx < rdis_count; idx += 1)
       {
-        rdis[idx] = di_rdi_from_path_min_timestamp(di_scope, params.dbgi_keys.v[idx].path, params.dbgi_keys.v[idx].timestamp, max_U64);
+        rdis[idx] = di_rdi_from_key(di_scope, &params.dbgi_keys.v[idx], max_U64);
       }
     }
     
