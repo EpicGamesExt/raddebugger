@@ -118,9 +118,6 @@ struct DMN_W32_Entity
       U64 thread_local_base;
       U64 last_name_hash;
       U64 name_gather_time_us;
-      B32 last_run_reported_trap;
-      U64 last_run_reported_trap_pre_rip;
-      U64 last_run_reported_trap_post_rip;
     }
     thread;
     struct

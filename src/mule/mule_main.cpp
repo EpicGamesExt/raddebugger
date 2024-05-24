@@ -2280,6 +2280,10 @@ debug_string_tests(void)
 static void
 interrupt_stepping_tests(void)
 {
+  __debugbreak();
+  __debugbreak();
+  __debugbreak();
+  __debugbreak();
   for(int i = 0; i < 1000; i += 1)
   {
     if(i == 999)
@@ -2295,6 +2299,19 @@ interrupt_stepping_tests(void)
     }
   }
   int x = 0;
+}
+
+////////////////////////////////
+//~ rjf: JIT Stepping Tests
+
+static void
+jit_stepping_tests(void)
+{
+  OutputDebugString("A\n");
+  VOID *code = VirtualAlloc(0, 0x1000, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+  *((uint32_t*)code) = 0xC39090CC;
+  ((void (__fastcall *)()) code)();
+  OutputDebugString("B\n");
 }
 
 ////////////////////////////////
@@ -2591,6 +2608,8 @@ mule_main(int argc, char** argv){
   recursion_stepping_tests();
   
   debug_string_tests();
+  
+  jit_stepping_tests();
   
   interrupt_stepping_tests();
   
