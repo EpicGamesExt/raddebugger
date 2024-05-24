@@ -642,8 +642,8 @@ DF_StringBindingPair df_g_default_binding_table[104] =
 {str8_lit_comp("reload_active"), {OS_Key_R, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift }},
 {str8_lit_comp("switch"), {OS_Key_I, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("switch_to_partner_file"), {OS_Key_O, 0   |OS_EventFlag_Alt}},
-{str8_lit_comp("load_user"), {OS_Key_O, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift |OS_EventFlag_Alt}},
-{str8_lit_comp("load_profile"), {OS_Key_O, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
+{str8_lit_comp("open_user"), {OS_Key_O, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift |OS_EventFlag_Alt}},
+{str8_lit_comp("open_project"), {OS_Key_O, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
 {str8_lit_comp("edit"), {OS_Key_F2, 0   }},
 {str8_lit_comp("accept"), {OS_Key_Return, 0   }},
 {str8_lit_comp("cancel"), {OS_Key_Esc, 0   }},
@@ -706,18 +706,22 @@ DF_StringBindingPair df_g_default_binding_table[104] =
 {str8_lit_comp("run_command"), {OS_Key_F1, 0   }},
 };
 
-String8 df_g_binding_version_remap_old_name_table[3] =
+String8 df_g_binding_version_remap_old_name_table[5] =
 {
 str8_lit_comp("commands"),
 str8_lit_comp("load_user"),
 str8_lit_comp("load_profile"),
+str8_lit_comp("load_project"),
+str8_lit_comp("open_profile"),
 };
 
-String8 df_g_binding_version_remap_new_name_table[3] =
+String8 df_g_binding_version_remap_new_name_table[5] =
 {
 str8_lit_comp("run_command"),
 str8_lit_comp("open_user"),
 str8_lit_comp("open_profile"),
+str8_lit_comp("open_project"),
+str8_lit_comp("open_project"),
 };
 
 DF_GfxViewRuleSpecInfo df_g_gfx_view_rule_spec_info_table[14] =

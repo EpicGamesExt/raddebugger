@@ -3731,9 +3731,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }
         
         // rjf: is command line only? -> make permanent
-        if(entity->cfg_src == DF_CfgSrc_CommandLine && ui_clicked(df_icon_buttonf(DF_IconKind_Save, 0, "Save To Profile")))
+        if(entity->cfg_src == DF_CfgSrc_CommandLine && ui_clicked(df_icon_buttonf(DF_IconKind_Save, 0, "Save To Project")))
         {
-          df_entity_equip_cfg_src(entity, DF_CfgSrc_Profile);
+          df_entity_equip_cfg_src(entity, DF_CfgSrc_Project);
         }
         
         // rjf: duplicate
@@ -4578,7 +4578,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 DF_CoreCmdKind_Open,
                 DF_CoreCmdKind_OpenUser,
-                DF_CoreCmdKind_OpenProfile,
+                DF_CoreCmdKind_OpenProject,
                 DF_CoreCmdKind_Exit,
               };
               U32 codepoints[] =
@@ -5249,7 +5249,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             ui_spacer(ui_em(0.75f, 0));
           }
           
-          // rjf: loaded profile viz
+          // rjf: loaded project viz
           if(do_user_prof)
           {
             ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
@@ -5261,11 +5261,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                                                          UI_BoxFlag_DrawBackground|
                                                          UI_BoxFlag_DrawHotEffects|
                                                          UI_BoxFlag_DrawActiveEffects,
-                                                         "###loaded_profile_button");
+                                                         "###loaded_project_button");
             os_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
             UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 prof_path = df_cfg_path_from_src(DF_CfgSrc_Profile);
+              String8 prof_path = df_cfg_path_from_src(DF_CfgSrc_Project);
               prof_path = str8_chop_last_dot(prof_path);
               UI_Font(ui_icon_font()) ui_label(df_g_icon_kind_text_table[DF_IconKind_Briefcase]);
               ui_label(str8_skip_last_slash(prof_path));
@@ -5274,7 +5274,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             if(ui_clicked(prof_sig))
             {
               DF_CmdParams p = df_cmd_params_from_window(ws);
-              p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProfile);
+              p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProject);
               df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CmdSpec);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
             }
@@ -9366,9 +9366,9 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
               {
                 if(view_entity->kind == DF_EntityKind_File)
                 {
-                  String8 profile_path = root_path;
+                  String8 project_path = root_path;
                   String8 entity_path = df_full_path_from_entity(arena, view_entity);
-                  String8 entity_path_rel = path_relative_dst_from_absolute_dst_src(arena, entity_path, profile_path);
+                  String8 entity_path_rel = path_relative_dst_from_absolute_dst_src(arena, entity_path, project_path);
                   str8_list_pushf(arena, &strs, "\"%S\"", entity_path_rel);
                 }
               }
@@ -10120,7 +10120,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
         UI_Signal info_sig = ui_signal_from_box(info_box);
         if(ui_hovering(info_sig)) UI_Tooltip
         {
-          ui_labelf("Specified via command line; not saved in profile.");
+          ui_labelf("Specified via command line; not saved in project.");
         }
       }
     }
@@ -12994,7 +12994,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           {
             DF_CmdParams params = df_cmd_params_zero();
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteUserData));
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProjectData));
             df_gfx_state->last_window_queued_save = 1;
           }
           
@@ -13064,7 +13064,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               {
                 DF_CmdParams params = df_cmd_params_zero();
                 df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteUserData));
-                df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
+                df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProjectData));
               }
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseWindow));
             }
@@ -13155,7 +13155,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
         
         //- rjf: loading/applying stateful config changes
         case DF_CoreCmdKind_ApplyUserData:
-        case DF_CoreCmdKind_ApplyProfileData:
+        case DF_CoreCmdKind_ApplyProjectData:
         {
           DF_CfgTable *table = df_cfg_table();
           OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
@@ -13728,7 +13728,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
         
         //- rjf: writing config changes
         case DF_CoreCmdKind_WriteUserData:
-        case DF_CoreCmdKind_WriteProfileData:
+        case DF_CoreCmdKind_WriteProjectData:
         {
           DF_CfgSrc src = DF_CfgSrc_User;
           for(DF_CfgSrc s = (DF_CfgSrc)0; s < DF_CfgSrc_COUNT; s = (DF_CfgSrc)(s+1))

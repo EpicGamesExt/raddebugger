@@ -65,7 +65,7 @@ commands =
   },
   .rjf_f3 =
   {
-    .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --profile:local_dev.raddbg_profile && popd",
+    .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --project:local_dev.raddbg_project && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,

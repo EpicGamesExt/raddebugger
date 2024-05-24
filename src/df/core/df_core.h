@@ -87,8 +87,8 @@ enum
 {
   DF_EntityKindFlag_LeafMutationUserConfig   = (1<<0),
   DF_EntityKindFlag_TreeMutationUserConfig   = (1<<1),
-  DF_EntityKindFlag_LeafMutationProfileConfig= (1<<2),
-  DF_EntityKindFlag_TreeMutationProfileConfig= (1<<3),
+  DF_EntityKindFlag_LeafMutationProjectConfig= (1<<2),
+  DF_EntityKindFlag_TreeMutationProjectConfig= (1<<3),
   DF_EntityKindFlag_LeafMutationSoftHalt     = (1<<4),
   DF_EntityKindFlag_TreeMutationSoftHalt     = (1<<5),
   DF_EntityKindFlag_LeafMutationDebugInfoMap = (1<<6),

@@ -87,8 +87,8 @@ DF_DefaultBindingTable:
   { "switch_to_partner_file"      O         0        0         alt        }
   
   //- rjf: setting config paths
-  { "load_user"                   O         ctrl     shift     alt        }
-  { "load_profile"                O         ctrl     0         alt        }
+  { "open_user"                   O         ctrl     shift     alt        }
+  { "open_project"                O         ctrl     0         alt        }
   
   //- rjf: meta controls
   { "edit"                        F2        0        0         0          }
@@ -182,6 +182,8 @@ DF_BindingVersionRemapTable:
   {"commands"     "run_command"}
   {"load_user"    "open_user"}
   {"load_profile" "open_profile"}
+  {"load_project" "open_project"}
+  {"open_profile" "open_project"}
 }
 
 ////////////////////////////////
@@ -654,7 +656,7 @@ raddbg_readme:
   {
     @p "`--help` Displays a help menu which documents the possible command line options.";
     @p "`--user:<path>` Specifies a path to the user file which the debugger should use instead of the default. The default user file is stored at `%appdata%/raddbg/default.raddbg_user`. For more information on user files, read the 'User & Profile Files' section.";
-    @p "`--profile:<path>` Specifies a path to the profile file which the debugger should use instead of the default. The default profile file is stored at `%appdata%/raddbg/default.raddbg_profile`. For more information on profile files, read the 'User & Profile Files' section.";
+    @p "`--project:<path>` Specifies a path to the project file which the debugger should use instead of the default. The default project file is stored at `%appdata%/raddbg/default.raddbg_project`. For more information on project files, read the 'User & Project Files' section.";
     @p "`--auto_run` Specifies that the debugger should immediately run its selected targets upon launching.";
     @p "`--auto_step` Specifies that the debugger should immediately step into its selected targets upon launching.";
     //@p "`--ipc` Specifies that the launched debugger instance is for communicating a command to another instance of the debugger. In this mode, any non-argument command line contents will be used to express a command. For more information on commands, read the 'Commands' section. For more information on driving another debugger instance with this argument, read the 'Driving Another Debugger Instance' section."
@@ -693,7 +695,7 @@ raddbg_readme:
   @subtitle "Targets";
   @p "A *target* is one executable and configuration for launching that executable, including command line arguments and working directory (the directory from which the executable is launched). Each target may also have a custom label (replaces the executable path when visualizing the target), and the name of a custom entry point function (when the default entry points - `main`, `WinMain`, etc. - are not desired when stepping into the program upon launch). The debugger can have several targets at once. Each target can also be enabled or disabled. Some operations work on all enabled targets - for instance, the `Run` or `Kill All` commands (standardly bound as F5 or Shift + F5). Enabling and disabling targets allows one to filter which targets are currently being worked with.";
   @p "To add a target, you can run the `Add Target` command. A target is also created automatically from command line arguments - the rules for how this happens can be found in the `Command-Line Usage` section.";
-  @p "Targets created through command line usage are temporary, meaning they are not persistently saved across runs of the debugger. To change this, you can right click the command-line-created target in the `Targets` view, and click `Save To Profile`. After doing so, the target will be restored across runs, and will no longer need to be specified on the command-line.";
+  @p "Targets created through command line usage are temporary, meaning they are not persistently saved across runs of the debugger. To change this, you can right click the command-line-created target in the `Targets` view, and click `Save To Project`. After doing so, the target will be restored across runs, and will no longer need to be specified on the command-line.";
   
   @subtitle "View Rules";
   @p "*View Rules* are used to transform the way that evaluations in the debugger are visualized. An evaluation is produced by taking an expression string - for instance, the name of a variable - and using debug info and information from an attached process' live runtime (memory, registers, and so on) to interpret it.";
@@ -712,11 +714,11 @@ raddbg_readme:
   @p "Each breakpoint has a hit count. Every time a breakpoint causes execution to stop, this counter is increased.";
   @p "Processor breakpoints are not currently supported, but planned to be in the future.";
   
-  @subtitle "User & Profile Files";
-  @p "Applicable state controlling the debugger's appearance, behavior, targets, breakpoints, and other configurations is saved and reloaded across runs of the debugger through both *user files* and *profile files*. These files are auto-saved. These files are written in a textual format which can be hand-edited as necessary, but they're also continuously re-read and re-written by the debugger. By default, the debugger uses `%appdata%/raddbg/default.raddbg_user` for its user file path, and `%appdata%/raddbg/default.raddbg_profile` for its profile file path. These paths can be overridden on the command line (see the 'Command-Line Usage' section).";
+  @subtitle "User & Project Files";
+  @p "Applicable state controlling the debugger's appearance, behavior, targets, breakpoints, and other configurations is saved and reloaded across runs of the debugger through both *user files* and *project files*. These files are auto-saved. These files are written in a textual format which can be hand-edited as necessary, but they're also continuously re-read and re-written by the debugger. By default, the debugger uses `%appdata%/raddbg/default.raddbg_user` for its user file path, and `%appdata%/raddbg/default.raddbg_project` for its project file path. These paths can be overridden on the command line (see the 'Command-Line Usage' section).";
   @p "The *user file* defaultly stores file path maps, windows (including their preferred monitor, placement, and size), each window's panel layout and tabs, keybindings, theme colors, and fonts.";
-  @p "The *profile file* defaultly stores targets, breakpoints, watch pins, and exception code filters.";
-  @p "Because both can be hand-edited, however, if you want to store something normally stored in a user file in a profile file, or vice versa, this can be done by hand transferring the textual data from one file to another. There is no path in the debugger's UI to support this transfer, currently, although this is planned.";
+  @p "The *project file* defaultly stores targets, breakpoints, watch pins, and exception code filters.";
+  @p "Because both can be hand-edited, however, if you want to store something normally stored in a user file in a project file, or vice versa, this can be done by hand transferring the textual data from one file to another. There is no path in the debugger's UI to support this transfer, currently, although this is planned.";
   
   //@subtitle "Driving Another Debugger Instance";
   //@p "When the debugger is launched with the `--ipc` command-line argument, it does not launch another instance of the graphical debugger. Instead, it launches, sends a string encoding a command to a running instance of the graphical debugger, and then terminates. The set of commands which can be sent are identical to those which can be run from the debugger's UI itself, but these commands must be encoded textually (through the other command-line arguments). These commands are described in the 'Commands' section.";
