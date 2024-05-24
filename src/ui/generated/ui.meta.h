@@ -29,6 +29,7 @@ typedef struct UI_SquishNode UI_SquishNode; struct UI_SquishNode{UI_SquishNode *
 typedef struct UI_HoverCursorNode UI_HoverCursorNode; struct UI_HoverCursorNode{UI_HoverCursorNode *next; OS_Cursor v;};
 typedef struct UI_FontNode UI_FontNode; struct UI_FontNode{UI_FontNode *next; F_Tag v;};
 typedef struct UI_FontSizeNode UI_FontSizeNode; struct UI_FontSizeNode{UI_FontSizeNode *next; F32 v;};
+typedef struct UI_TabSizeNode UI_TabSizeNode; struct UI_TabSizeNode{UI_TabSizeNode *next; F32 v;};
 typedef struct UI_CornerRadius00Node UI_CornerRadius00Node; struct UI_CornerRadius00Node{UI_CornerRadius00Node *next; F32 v;};
 typedef struct UI_CornerRadius01Node UI_CornerRadius01Node; struct UI_CornerRadius01Node{UI_CornerRadius01Node *next; F32 v;};
 typedef struct UI_CornerRadius10Node UI_CornerRadius10Node; struct UI_CornerRadius10Node{UI_CornerRadius10Node *next; F32 v;};
@@ -62,6 +63,7 @@ UI_SquishNode squish_nil_stack_top;\
 UI_HoverCursorNode hover_cursor_nil_stack_top;\
 UI_FontNode font_nil_stack_top;\
 UI_FontSizeNode font_size_nil_stack_top;\
+UI_TabSizeNode tab_size_nil_stack_top;\
 UI_CornerRadius00Node corner_radius_00_nil_stack_top;\
 UI_CornerRadius01Node corner_radius_01_nil_stack_top;\
 UI_CornerRadius10Node corner_radius_10_nil_stack_top;\
@@ -94,6 +96,7 @@ state->squish_nil_stack_top.v = 0;\
 state->hover_cursor_nil_stack_top.v = OS_Cursor_Pointer;\
 state->font_nil_stack_top.v = f_tag_zero();\
 state->font_size_nil_stack_top.v = 24.f;\
+state->tab_size_nil_stack_top.v = 24.f*4.f;\
 state->corner_radius_00_nil_stack_top.v = 0;\
 state->corner_radius_01_nil_stack_top.v = 0;\
 state->corner_radius_10_nil_stack_top.v = 0;\
@@ -128,6 +131,7 @@ struct { UI_SquishNode *top; F32 bottom_val; UI_SquishNode *free; B32 auto_pop; 
 struct { UI_HoverCursorNode *top; OS_Cursor bottom_val; UI_HoverCursorNode *free; B32 auto_pop; } hover_cursor_stack;\
 struct { UI_FontNode *top; F_Tag bottom_val; UI_FontNode *free; B32 auto_pop; } font_stack;\
 struct { UI_FontSizeNode *top; F32 bottom_val; UI_FontSizeNode *free; B32 auto_pop; } font_size_stack;\
+struct { UI_TabSizeNode *top; F32 bottom_val; UI_TabSizeNode *free; B32 auto_pop; } tab_size_stack;\
 struct { UI_CornerRadius00Node *top; F32 bottom_val; UI_CornerRadius00Node *free; B32 auto_pop; } corner_radius_00_stack;\
 struct { UI_CornerRadius01Node *top; F32 bottom_val; UI_CornerRadius01Node *free; B32 auto_pop; } corner_radius_01_stack;\
 struct { UI_CornerRadius10Node *top; F32 bottom_val; UI_CornerRadius10Node *free; B32 auto_pop; } corner_radius_10_stack;\
@@ -160,6 +164,7 @@ state->squish_stack.top = &state->squish_nil_stack_top; state->squish_stack.bott
 state->hover_cursor_stack.top = &state->hover_cursor_nil_stack_top; state->hover_cursor_stack.bottom_val = OS_Cursor_Pointer; state->hover_cursor_stack.free = 0; state->hover_cursor_stack.auto_pop = 0;\
 state->font_stack.top = &state->font_nil_stack_top; state->font_stack.bottom_val = f_tag_zero(); state->font_stack.free = 0; state->font_stack.auto_pop = 0;\
 state->font_size_stack.top = &state->font_size_nil_stack_top; state->font_size_stack.bottom_val = 24.f; state->font_size_stack.free = 0; state->font_size_stack.auto_pop = 0;\
+state->tab_size_stack.top = &state->tab_size_nil_stack_top; state->tab_size_stack.bottom_val = 24.f*4.f; state->tab_size_stack.free = 0; state->tab_size_stack.auto_pop = 0;\
 state->corner_radius_00_stack.top = &state->corner_radius_00_nil_stack_top; state->corner_radius_00_stack.bottom_val = 0; state->corner_radius_00_stack.free = 0; state->corner_radius_00_stack.auto_pop = 0;\
 state->corner_radius_01_stack.top = &state->corner_radius_01_nil_stack_top; state->corner_radius_01_stack.bottom_val = 0; state->corner_radius_01_stack.free = 0; state->corner_radius_01_stack.auto_pop = 0;\
 state->corner_radius_10_stack.top = &state->corner_radius_10_nil_stack_top; state->corner_radius_10_stack.bottom_val = 0; state->corner_radius_10_stack.free = 0; state->corner_radius_10_stack.auto_pop = 0;\
@@ -192,6 +197,7 @@ if(state->squish_stack.auto_pop) { ui_pop_squish(); state->squish_stack.auto_pop
 if(state->hover_cursor_stack.auto_pop) { ui_pop_hover_cursor(); state->hover_cursor_stack.auto_pop = 0; }\
 if(state->font_stack.auto_pop) { ui_pop_font(); state->font_stack.auto_pop = 0; }\
 if(state->font_size_stack.auto_pop) { ui_pop_font_size(); state->font_size_stack.auto_pop = 0; }\
+if(state->tab_size_stack.auto_pop) { ui_pop_tab_size(); state->tab_size_stack.auto_pop = 0; }\
 if(state->corner_radius_00_stack.auto_pop) { ui_pop_corner_radius_00(); state->corner_radius_00_stack.auto_pop = 0; }\
 if(state->corner_radius_01_stack.auto_pop) { ui_pop_corner_radius_01(); state->corner_radius_01_stack.auto_pop = 0; }\
 if(state->corner_radius_10_stack.auto_pop) { ui_pop_corner_radius_10(); state->corner_radius_10_stack.auto_pop = 0; }\
@@ -223,6 +229,7 @@ internal F32                        ui_top_squish(void);
 internal OS_Cursor                  ui_top_hover_cursor(void);
 internal F_Tag                      ui_top_font(void);
 internal F32                        ui_top_font_size(void);
+internal F32                        ui_top_tab_size(void);
 internal F32                        ui_top_corner_radius_00(void);
 internal F32                        ui_top_corner_radius_01(void);
 internal F32                        ui_top_corner_radius_10(void);
@@ -253,6 +260,7 @@ internal F32                        ui_bottom_squish(void);
 internal OS_Cursor                  ui_bottom_hover_cursor(void);
 internal F_Tag                      ui_bottom_font(void);
 internal F32                        ui_bottom_font_size(void);
+internal F32                        ui_bottom_tab_size(void);
 internal F32                        ui_bottom_corner_radius_00(void);
 internal F32                        ui_bottom_corner_radius_01(void);
 internal F32                        ui_bottom_corner_radius_10(void);
@@ -283,6 +291,7 @@ internal F32                        ui_push_squish(F32 v);
 internal OS_Cursor                  ui_push_hover_cursor(OS_Cursor v);
 internal F_Tag                      ui_push_font(F_Tag v);
 internal F32                        ui_push_font_size(F32 v);
+internal F32                        ui_push_tab_size(F32 v);
 internal F32                        ui_push_corner_radius_00(F32 v);
 internal F32                        ui_push_corner_radius_01(F32 v);
 internal F32                        ui_push_corner_radius_10(F32 v);
@@ -313,6 +322,7 @@ internal F32                        ui_pop_squish(void);
 internal OS_Cursor                  ui_pop_hover_cursor(void);
 internal F_Tag                      ui_pop_font(void);
 internal F32                        ui_pop_font_size(void);
+internal F32                        ui_pop_tab_size(void);
 internal F32                        ui_pop_corner_radius_00(void);
 internal F32                        ui_pop_corner_radius_01(void);
 internal F32                        ui_pop_corner_radius_10(void);
@@ -343,6 +353,7 @@ internal F32                        ui_set_next_squish(F32 v);
 internal OS_Cursor                  ui_set_next_hover_cursor(OS_Cursor v);
 internal F_Tag                      ui_set_next_font(F_Tag v);
 internal F32                        ui_set_next_font_size(F32 v);
+internal F32                        ui_set_next_tab_size(F32 v);
 internal F32                        ui_set_next_corner_radius_00(F32 v);
 internal F32                        ui_set_next_corner_radius_01(F32 v);
 internal F32                        ui_set_next_corner_radius_10(F32 v);
