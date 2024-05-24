@@ -125,26 +125,25 @@ r_d3d11_instance_buffer_from_size(U64 size)
   return buffer;
 }
 
-internal
-void r_res_kind_to_usage(R_ResourceKind kind, D3D11_USAGE* d3d11_usage, UINT* cpu_access_flags)
+internal void
+r_usage_access_flags_from_resource_kind(R_ResourceKind kind, D3D11_USAGE *out_d3d11_usage, UINT *out_cpu_access_flags)
 {
-  //- rjf: kind -> usage * cpu access flags
   switch(kind)
   {
     case R_ResourceKind_Static:
     {
-      *d3d11_usage = D3D11_USAGE_IMMUTABLE;
-      *cpu_access_flags = 0;
+      *out_d3d11_usage = D3D11_USAGE_IMMUTABLE;
+      *out_cpu_access_flags = 0;
     }break;
     case R_ResourceKind_Dynamic:
     {
-      *d3d11_usage = D3D11_USAGE_DEFAULT;
-      *cpu_access_flags = 0;
+      *out_d3d11_usage = D3D11_USAGE_DEFAULT;
+      *out_cpu_access_flags = 0;
     }break;
     case R_ResourceKind_Stream:
     {
-      *d3d11_usage = D3D11_USAGE_DYNAMIC;
-      *cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
+      *out_d3d11_usage = D3D11_USAGE_DYNAMIC;
+      *out_cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
     }break;
     default:
     {
@@ -587,7 +586,7 @@ r_tex2d_alloc(R_ResourceKind kind, Vec2S32 size, R_Tex2DFormat format, void *dat
   
   D3D11_USAGE d3d11_usage = D3D11_USAGE_DEFAULT;
   UINT cpu_access_flags = 0;
-  r_res_kind_to_usage(kind, &d3d11_usage, &cpu_access_flags);
+  r_usage_access_flags_from_resource_kind(kind, &d3d11_usage, &cpu_access_flags);
   if (kind == R_ResourceKind_Static)
   {
     Assert(data != 0 && "static texture must have initial data provided");
@@ -732,7 +731,7 @@ r_buffer_alloc(R_ResourceKind kind, U64 size, void *data)
   
   D3D11_USAGE d3d11_usage = D3D11_USAGE_DEFAULT;
   UINT cpu_access_flags = 0;
-  r_res_kind_to_usage(kind, &d3d11_usage, &cpu_access_flags);
+  r_usage_access_flags_from_resource_kind(kind, &d3d11_usage, &cpu_access_flags);
   if (kind == R_ResourceKind_Static)
   {
     Assert(data != 0 && "static buffer must have initial data provided");

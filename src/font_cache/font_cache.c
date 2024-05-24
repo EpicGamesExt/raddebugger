@@ -568,6 +568,7 @@ internal F_Run
 f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, String8 string)
 {
   ProfBeginFunction();
+  F32 base_column = 0.f;
   
   //- rjf: map tag/size to style node
   F_Hash2StyleRasterCacheNode *hash2style_node = f_hash2style_from_tag_size(tag, size);
@@ -788,6 +789,14 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
         }
       }
       
+      // rjf: on tabs -> expand advance
+      F32 advance = info->advance;
+      if(is_tab)
+      {
+        F32 tab_width = 4.f;
+        advance *= tab_width - mod_f32(base_column, tab_width);
+      }
+      
       // rjf: push piece
       {
         F_Piece *piece = f_piece_chunk_list_push_new(arena, &piece_chunks, string.size);
@@ -797,7 +806,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
                                   info->subrect.y0,
                                   info->subrect.x0 + info->raster_dim.x,
                                   info->subrect.y0 + info->raster_dim.y);
-          piece->advance = info->advance;
+          piece->advance = advance;
           piece->decode_size = piece_substring.size;
           piece->offset = v2s16(0, -hash2style_node->ascent - 4);
         }
