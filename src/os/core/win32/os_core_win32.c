@@ -197,6 +197,8 @@ os_init(void)
     if (module != 0){
       w32_VirtualAlloc2_func = (W32_VirtualAlloc2_Type*)GetProcAddress(module, "VirtualAlloc2");
       w32_MapViewOfFile3_func = (W32_MapViewOfFile3_Type*)GetProcAddress(module, "MapViewOfFile3");
+      w32_SetThreadDescription_func = (W32_SetThreadDescription_Type*)GetProcAddress(module, "SetThreadDescription");
+            
       FreeLibrary(module);
     }
   }
