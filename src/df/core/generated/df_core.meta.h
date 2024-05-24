@@ -32,6 +32,7 @@ DF_EntityKind_Executable,
 DF_EntityKind_Arguments,
 DF_EntityKind_ExecutionPath,
 DF_EntityKind_EntryPointName,
+DF_EntityKind_RecentProject,
 DF_EntityKind_Source,
 DF_EntityKind_Dest,
 DF_EntityKind_Process,
@@ -141,6 +142,7 @@ DF_CoreCmdKind_SetAutoViewRuleType,
 DF_CoreCmdKind_SetAutoViewRuleViewRule,
 DF_CoreCmdKind_OpenUser,
 DF_CoreCmdKind_OpenProject,
+DF_CoreCmdKind_OpenRecentProject,
 DF_CoreCmdKind_ApplyUserData,
 DF_CoreCmdKind_ApplyProjectData,
 DF_CoreCmdKind_WriteUserData,
@@ -1529,11 +1531,11 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 df_g_cmd_param_slot_range_table[22];
-extern DF_IconKind df_g_entity_kind_icon_kind_table[25];
-extern String8 df_g_entity_kind_display_string_table[25];
-extern String8 df_g_entity_kind_name_label_table[25];
-extern DF_EntityKindFlags df_g_entity_kind_flags_table[25];
-extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[25];
+extern DF_IconKind df_g_entity_kind_icon_kind_table[26];
+extern String8 df_g_entity_kind_display_string_table[26];
+extern String8 df_g_entity_kind_name_label_table[26];
+extern DF_EntityKindFlags df_g_entity_kind_flags_table[26];
+extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[26];
 extern String8 df_g_cfg_src_string_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[4];

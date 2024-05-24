@@ -5729,6 +5729,34 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
   ProfBeginFunction();
   String8List strs = {0};
   
+  //- rjf: write recent projects
+  {
+    B32 first = 1;
+    DF_EntityList recent_projects = df_query_cached_entity_list_with_kind(DF_EntityKind_RecentProject);
+    for(DF_EntityNode *n = recent_projects.first; n != 0; n = n->next)
+    {
+      DF_Entity *rp = n->entity;
+      if(rp->cfg_src == source)
+      {
+        if(first)
+        {
+          first = 0;
+          str8_list_push(arena, &strs, str8_lit("/// recent projects ///////////////////////////////////////////////////////////\n"));
+          str8_list_push(arena, &strs, str8_lit("\n"));
+        }
+        Temp scratch = scratch_begin(&arena, 1);
+        String8 path_absolute = path_normalized_from_string(scratch.arena, rp->name);
+        String8 path_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, path_absolute, root_path);
+        str8_list_pushf(arena, &strs,  "recent_project: {\"%S\"}\n", path_relative);
+        scratch_end(scratch);
+      }
+    }
+    if(!first)
+    {
+      str8_list_push(arena, &strs, str8_lit("\n"));
+    }
+  }
+  
   //- rjf: write targets
   {
     B32 first = 1;
@@ -7633,6 +7661,16 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: config path saving/loading/applying
+        case DF_CoreCmdKind_OpenRecentProject:
+        {
+          DF_Entity *entity = df_entity_from_handle(params.entity);
+          if(entity->kind == DF_EntityKind_RecentProject)
+          {
+            DF_CmdParams p = df_cmd_params_zero();
+            p.file_path = entity->name;
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProject));
+          }
+        }break;
         case DF_CoreCmdKind_OpenUser:
         case DF_CoreCmdKind_OpenProject:
         {
@@ -7804,8 +7842,28 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           String8 cfg_path   = df_cfg_path_from_src(src);
           String8 cfg_folder = str8_chop_last_slash(cfg_path);
           
+          //- rjf: keep track of recent projects
+          if(src == DF_CfgSrc_Project)
+          {
+            DF_Entity *recent_project = df_entity_from_name_and_kind(cfg_path, DF_EntityKind_RecentProject);
+            if(df_entity_is_nil(recent_project))
+            {
+              recent_project = df_entity_alloc(0, df_entity_root(), DF_EntityKind_RecentProject);
+              df_entity_equip_name(0, recent_project, cfg_path);
+              df_entity_equip_cfg_src(recent_project, DF_CfgSrc_User);
+            }
+          }
+          
           //- rjf: eliminate all existing entities
           {
+            DF_EntityList rps = df_query_cached_entity_list_with_kind(DF_EntityKind_RecentProject);
+            for(DF_EntityNode *n = rps.first; n != 0; n = n->next)
+            {
+              if(n->entity->cfg_src == src)
+              {
+                df_entity_mark_for_deletion(n->entity);
+              }
+            }
             DF_EntityList targets = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
             for(DF_EntityNode *n = targets.first; n != 0; n = n->next)
             {
@@ -7836,6 +7894,26 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               if(n->entity->cfg_src == src)
               {
                 df_entity_mark_for_deletion(n->entity);
+              }
+            }
+          }
+          
+          //- rjf: apply recent projects
+          DF_CfgVal *recent_projects = df_cfg_val_from_string(table, str8_lit("recent_project"));
+          for(DF_CfgNode *rp = recent_projects->first;
+              rp != &df_g_nil_cfg_node;
+              rp = rp->next)
+          {
+            if(rp->source == src)
+            {
+              String8 path_saved = rp->first->string;
+              String8 path_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, path_saved, cfg_folder);
+              DF_Entity *existing = df_entity_from_name_and_kind(path_absolute, DF_EntityKind_RecentProject);
+              if(df_entity_is_nil(existing))
+              {
+                DF_Entity *rp_ent = df_entity_alloc(0, df_entity_root(), DF_EntityKind_RecentProject);
+                df_entity_equip_cfg_src(rp_ent, src);
+                df_entity_equip_name(0, rp_ent, path_absolute);
               }
             }
           }

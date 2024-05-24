@@ -1976,7 +1976,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_View *next_view = view;
           for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->next) ? panel->first_tab_view : v->next)
           {
-            if(!df_view_is_project_filtered(v))
+            if(!df_view_is_project_filtered(v) && v != view)
             {
               next_view = v;
               break;
@@ -1992,7 +1992,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_View *next_view = view;
           for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->prev) ? panel->last_tab_view : v->prev)
           {
-            if(!df_view_is_project_filtered(v))
+            if(!df_view_is_project_filtered(v) && v != view)
             {
               next_view = v;
               break;
@@ -4724,6 +4724,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 DF_CoreCmdKind_Open,
                 DF_CoreCmdKind_OpenUser,
                 DF_CoreCmdKind_OpenProject,
+                DF_CoreCmdKind_OpenRecentProject,
                 DF_CoreCmdKind_Exit,
               };
               U32 codepoints[] =
@@ -4731,6 +4732,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 'o',
                 'u',
                 'p',
+                'r',
                 'x',
               };
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));

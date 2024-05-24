@@ -30,7 +30,7 @@ Rng1U64 df_g_cmd_param_slot_range_table[22] =
 {OffsetOf(DF_CmdParams, dir2), OffsetOf(DF_CmdParams, dir2) + sizeof(Dir2)},
 };
 
-DF_IconKind df_g_entity_kind_icon_kind_table[25] =
+DF_IconKind df_g_entity_kind_icon_kind_table[26] =
 {
 DF_IconKind_Null,
 DF_IconKind_Null,
@@ -47,6 +47,7 @@ DF_IconKind_Null,
 DF_IconKind_Null,
 DF_IconKind_Null,
 DF_IconKind_Null,
+DF_IconKind_Briefcase,
 DF_IconKind_Null,
 DF_IconKind_Null,
 DF_IconKind_Threads,
@@ -59,7 +60,7 @@ DF_IconKind_Null,
 DF_IconKind_Null,
 };
 
-String8 df_g_entity_kind_display_string_table[25] =
+String8 df_g_entity_kind_display_string_table[26] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
@@ -76,6 +77,7 @@ str8_lit_comp("Executable"),
 str8_lit_comp("Arguments"),
 str8_lit_comp("Execution Path"),
 str8_lit_comp("Entry Point Name"),
+str8_lit_comp("Recent Project"),
 str8_lit_comp("Source"),
 str8_lit_comp("Destination"),
 str8_lit_comp("Process"),
@@ -88,7 +90,7 @@ str8_lit_comp("Conversion Failure"),
 str8_lit_comp("EndedProcess"),
 };
 
-String8 df_g_entity_kind_name_label_table[25] =
+String8 df_g_entity_kind_name_label_table[26] =
 {
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -107,6 +109,7 @@ str8_lit_comp("Execution Path"),
 str8_lit_comp("Symbol Name"),
 str8_lit_comp("Path"),
 str8_lit_comp("Path"),
+str8_lit_comp("Path"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -117,7 +120,7 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 };
 
-DF_EntityKindFlags df_g_entity_kind_flags_table[25] =
+DF_EntityKindFlags df_g_entity_kind_flags_table[26] =
 {
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
@@ -134,6 +137,7 @@ DF_EntityKindFlags df_g_entity_kind_flags_table[25] =
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 1*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 1*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 1*DF_EntityKindFlag_LeafMutationProjectConfig | 1*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
+(1*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 1*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
@@ -146,7 +150,7 @@ DF_EntityKindFlags df_g_entity_kind_flags_table[25] =
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 };
 
-DF_EntityOpFlags df_g_entity_kind_op_flags_table[25] =
+DF_EntityOpFlags df_g_entity_kind_op_flags_table[26] =
 {
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
@@ -159,6 +163,7 @@ DF_EntityOpFlags df_g_entity_kind_op_flags_table[25] =
 (1*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (1*DF_EntityOpFlag_Rename) | (1*DF_EntityOpFlag_Enable) | (1*DF_EntityOpFlag_Condition) | (1*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (1*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (1*DF_EntityOpFlag_Edit) | (1*DF_EntityOpFlag_Rename) | (1*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (1*DF_EntityOpFlag_Duplicate),
+(0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
@@ -207,7 +212,7 @@ DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 
-DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[220] =
+DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[221] =
 {
 { str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp("Exit"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_X},
@@ -303,6 +308,7 @@ DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[220] =
 { str8_lit_comp("set_auto_view_rule_view_rule"), str8_lit_comp("Sets the view rule string for an auto view rule."), str8_lit_comp(""), str8_lit_comp("Set Auto View Rule View Rule"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("open_user"), str8_lit_comp("Opens a user file path, immediately loading it, and begins autosaving to it."), str8_lit_comp("load,user,project,layout"), str8_lit_comp("Open User"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_FilePath, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*1)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Person},
 { str8_lit_comp("open_project"), str8_lit_comp("Opens a project file path, immediately loading it, and begins autosaving to it."), str8_lit_comp("project,project,session"), str8_lit_comp("Open Project"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_FilePath, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*1)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Briefcase},
+{ str8_lit_comp("open_recent_project"), str8_lit_comp("Opens a recently used project file."), str8_lit_comp("project,project,session"), str8_lit_comp("Open Recent Project"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Entity, DF_EntityKind_RecentProject, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Briefcase},
 { str8_lit_comp("apply_user_data"), str8_lit_comp("Applies user data from the active user file."), str8_lit_comp(""), str8_lit_comp("Apply User Data"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("apply_project_data"), str8_lit_comp("Applies project data from the active project file."), str8_lit_comp(""), str8_lit_comp("Apply Project Data"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("write_user_data"), str8_lit_comp("Writes user data to the active user file."), str8_lit_comp(""), str8_lit_comp("Write User Data"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
