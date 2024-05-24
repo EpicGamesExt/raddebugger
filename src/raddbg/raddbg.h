@@ -4,6 +4,9 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] display threads at their last exception address, rather than current
+// rip, if applicable
+//
 // [ ] editing multiple bindings for commands
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
