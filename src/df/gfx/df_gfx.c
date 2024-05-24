@@ -796,6 +796,14 @@ df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, DF_Entit
     MemoryZeroStruct(&view->scroll_pos);
     view->spec = spec;
     view->entity = df_handle_from_entity(entity);
+    if(spec->info.flags & DF_ViewSpecFlag_ProjectSpecific)
+    {
+      view->project = df_handle_from_entity(df_entity_from_path(df_cfg_path_from_src(DF_CfgSrc_Project), DF_EntityFromPathFlag_OpenMissing|DF_EntityFromPathFlag_OpenAsNeeded));
+    }
+    else
+    {
+      MemoryZeroStruct(&view->project);
+    }
     view->is_filtering = 0;
     view->is_filtering_t = 0;
     view_setup(window, view, cfg_root);
@@ -9354,6 +9362,17 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
               {
                 str8_list_push(arena, &strs, str8_lit("selected "));
               }
+              {
+                DF_Entity *project = df_entity_from_handle(view->project);
+                if(!df_entity_is_nil(project))
+                {
+                  Temp scratch = scratch_begin(&arena, 1);
+                  String8 project_path_absolute = df_full_path_from_entity(scratch.arena, project);
+                  String8 project_path_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, project_path_absolute, root_path);
+                  str8_list_pushf(arena, &strs, "project:{\"%S\"} ", project_path_relative);
+                  scratch_end(scratch);
+                }
+              }
               if(view->query_string_size != 0 && view->spec->info.flags & DF_ViewSpecFlag_CanSerializeQuery)
               {
                 Temp scratch = scratch_begin(&arena, 1);
@@ -13397,6 +13416,16 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     // rjf: check if this view is selected
                     view_is_selected = df_cfg_node_child_from_string(op, str8_lit("selected"), StringMatchFlag_CaseInsensitive) != &df_g_nil_cfg_node;
                     
+                    // rjf: read project path
+                    String8 project_path = str8_lit("");
+                    {
+                      DF_CfgNode *project_cfg_node = df_cfg_node_child_from_string(op, str8_lit("project"), StringMatchFlag_CaseInsensitive);
+                      if(project_cfg_node != &df_g_nil_cfg_node)
+                      {
+                        project_path = project_cfg_node->first->string;
+                      }
+                    }
+                    
                     // rjf: read view query string
                     String8 view_query = str8_lit("");
                     if(view_spec_flags & DF_ViewSpecFlag_CanSerializeQuery)
@@ -13416,6 +13445,10 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     
                     // rjf: set up view
                     df_view_equip_spec(ws, view, view_spec, entity, view_query, op);
+                    if(project_path.size != 0)
+                    {
+                      view->project = df_handle_from_entity(df_entity_from_path(project_path, DF_EntityFromPathFlag_OpenMissing|DF_EntityFromPathFlag_OpenAsNeeded));
+                    }
                   }
                   
                   // rjf: insert
