@@ -2170,6 +2170,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->overlay_color = ui_state->overlay_color_stack.top->v;
     box->font = ui_state->font_stack.top->v;
     box->font_size = ui_state->font_size_stack.top->v;
+    box->tab_size = ui_state->tab_size_stack.top->v;
     box->corner_radii[Corner_00] = ui_state->corner_radius_00_stack.top->v;
     box->corner_radii[Corner_01] = ui_state->corner_radius_01_stack.top->v;
     box->corner_radii[Corner_10] = ui_state->corner_radius_10_stack.top->v;
@@ -2258,7 +2259,7 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     String8 display_string = ui_box_display_string(box);
     D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->text_color, box->font_size, 0, 0}};
     D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), &fancy_strings);
+    box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2273,13 +2274,13 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
       D_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->text_color, box->font_size, 4.f, 0}};
       D_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->text_color, box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), &fancy_strings);
+      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
     }
     else
     {
       D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->text_color, box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), &fancy_strings);
+      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
     }
     scratch_end(scratch);
   }
@@ -2287,11 +2288,11 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
 }
 
 internal void
-ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings)
+ui_box_equip_display_fancy_strings(UI_Box *box, F32 tab_size, D_FancyStringList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
   box->string = d_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), strings);
+  box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), tab_size, strings);
 }
 
 internal inline void
@@ -2381,7 +2382,7 @@ ui_box_char_pos_from_xy(UI_Box *box, Vec2F32 xy)
   F_Tag font = box->font;
   F32 font_size = box->font_size;
   String8 line = ui_box_display_string(box);
-  U64 result = f_char_pos_from_tag_size_string_p(font, font_size, line, xy.x - ui_box_text_position(box).x);
+  U64 result = f_char_pos_from_tag_size_string_p(font, font_size, 0, box->tab_size, line, xy.x - ui_box_text_position(box).x);
   return result;
 }
 

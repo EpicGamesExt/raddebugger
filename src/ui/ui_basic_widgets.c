@@ -43,7 +43,7 @@ ui_label_multiline(F32 max, String8 string)
   ui_set_next_child_layout_axis(Axis2_Y);
   ui_set_next_pref_height(ui_children_sum(1));
   UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
-  String8List lines = f_wrapped_string_lines_from_font_size_string_max(scratch.arena, ui_top_font(), ui_top_font_size(), string, max);
+  String8List lines = f_wrapped_string_lines_from_font_size_string_max(scratch.arena, ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), string, max);
   for(String8Node *n = lines.first; n != 0; n = n->next)
   {
     ui_label(n->string);
@@ -131,6 +131,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   UI_LineEditDrawData *draw_data = (UI_LineEditDrawData *)user_data;
   F_Tag font = box->font;
   F32 font_size = box->font_size;
+  F32 tab_size = box->tab_size;
   Vec4F32 cursor_color = draw_data->cursor_color;
   cursor_color.w *= box->parent->parent->focus_active_t;
   Vec4F32 select_color = draw_data->select_color;
@@ -139,8 +140,8 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   String8 edited_string = draw_data->edited_string;
   TxtPt cursor = draw_data->cursor;
   TxtPt mark = draw_data->mark;
-  F32 cursor_pixel_off = f_dim_from_tag_size_string(font, font_size, str8_prefix(edited_string, cursor.column-1)).x + font_size/8.f;
-  F32 mark_pixel_off   = f_dim_from_tag_size_string(font, font_size, str8_prefix(edited_string, mark.column-1)).x + font_size/8.f;
+  F32 cursor_pixel_off = f_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor.column-1)).x + font_size/8.f;
+  F32 mark_pixel_off   = f_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark.column-1)).x + font_size/8.f;
   F32 cursor_thickness = ClampBot(4.f, font_size/6.f);
   Rng2F32 cursor_rect =
   {
@@ -253,7 +254,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
     }
     else
     {
-      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), edit_string).x;
+      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
       ui_set_next_pref_width(ui_px(total_text_width+ui_top_font_size()*5, 1.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
@@ -265,7 +266,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
     }
   }
   

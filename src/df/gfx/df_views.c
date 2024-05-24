@@ -5744,9 +5744,10 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
-  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_lit("H")).x;
+  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
   Vec2F32 panel_box_dim = dim_2f32(rect);
   Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_em(1.8f, 0).value};
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
@@ -5858,6 +5859,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
+    code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
     code_slice_params.margin_width_px           = margin_width_px;
@@ -6357,7 +6359,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     {
       tv->center_cursor = 0;
       String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
-      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
+      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
       
       // rjf: scroll x
       {
@@ -6380,7 +6382,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(snap[Axis2_X])
     {
       String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -6534,7 +6536,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         ui_label(full_path);
         ui_spacer(ui_em(1.5f, 1));
-        ui_labelf("Line: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
+        ui_labelf("Line: %I64d, Column: %I64d", tv->cursor.line, tv->cursor.column);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
         ui_labelf("%s",
@@ -6808,9 +6810,10 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
-  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_lit("H")).x;
+  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
   Vec2F32 panel_box_dim = dim_2f32(rect);
   Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_top_font_size()*1.8f};
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
@@ -6945,6 +6948,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
+    code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
     code_slice_params.margin_width_px           = margin_width_px;
@@ -7386,7 +7390,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       U64 cursor_vaddr = (1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count) ? (dasm_vaddr_range.min+dasm_info.insts.v[dv->cursor.line-1].code_off) : 0;
       ui_labelf("%S", path_normalized_from_string(scratch.arena, module->name));
       ui_spacer(ui_em(1.5f, 1));
-      ui_labelf("Address: 0x%I64x, Line: %I64d, Col: %I64d", cursor_vaddr, dv->cursor.line, dv->cursor.column);
+      ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, dv->cursor.line, dv->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
       ui_labelf("bin");
@@ -7675,9 +7679,10 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
-  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_lit("H")).x;
+  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
   Vec2F32 panel_box_dim = dim_2f32(rect);
   Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_top_font_size()*1.8f};
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
@@ -7785,6 +7790,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, slice.line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
+    code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
     code_slice_params.margin_width_px           = margin_width_px;
@@ -8050,7 +8056,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     {
       tv->center_cursor = 0;
       String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
+      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
       
       // rjf: scroll x
       {
@@ -8073,7 +8079,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     if(snap[Axis2_X])
     {
       String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -8180,7 +8186,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
       UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
       UI_Font(code_font)
     {
-      ui_labelf("Line: %I64d, Col: %I64d", tv->cursor.line, tv->cursor.column);
+      ui_labelf("Line: %I64d, Column: %I64d", tv->cursor.line, tv->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
     }
@@ -8282,7 +8288,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //
   F_Tag font = df_font_from_slot(DF_FontSlot_Code);
   F32 font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
-  F32 big_glyph_advance = f_dim_from_tag_size_string(font, font_size, str8_lit("H")).x;
+  F32 big_glyph_advance = f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
   F32 row_height_px = floor_f32(font_size*2.f);
   F32 cell_width_px = floor_f32(font_size*2.f * mv->bytes_per_cell);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
@@ -8899,7 +8905,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
               ui_set_next_background_color(cell_bg_rgba);
             }
             UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
-            ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
+            ui_box_equip_display_fancy_strings(cell_box, 0, &byte_fancy_strings[byte_value]);
             {
               F32 off = 0;
               for(Annotation *a = annotation; a != 0; a = a->next)
@@ -8964,9 +8970,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             D_BucketScope(bucket)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
-              d_rect(r2f32p(text_pos.x + f_dim_from_tag_size_string(font, font_size, str8_prefix(ascii_text, selection_in_row.min+0-row_range_bytes.min)).x - font_size/8.f,
+              d_rect(r2f32p(text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.min+0-row_range_bytes.min)).x - font_size/8.f,
                             ascii_box->rect.y0,
-                            text_pos.x + f_dim_from_tag_size_string(font, font_size, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
+                            text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
                             ascii_box->rect.y1),
                      df_rgba_from_theme_color(DF_ThemeColor_TextSelection),
                      0, 0, 1.f);
@@ -8980,9 +8986,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
               Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-              d_rect(r2f32p(text_pos.x + f_dim_from_tag_size_string(font, font_size, str8_prefix(ascii_text, mouse_hover_byte_num-1-row_range_bytes.min)).x - font_size/8.f,
+              d_rect(r2f32p(text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num-1-row_range_bytes.min)).x - font_size/8.f,
                             ascii_box->rect.y0,
-                            text_pos.x + f_dim_from_tag_size_string(font, font_size, str8_prefix(ascii_text, mouse_hover_byte_num+0-row_range_bytes.min)).x + font_size/4.f,
+                            text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num+0-row_range_bytes.min)).x + font_size/4.f,
                             ascii_box->rect.y1),
                      color,
                      1.f, 3.f, 1.f);
