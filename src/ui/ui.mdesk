@@ -46,6 +46,7 @@ UI_StackTable:
   //- rjf: font
   { Font                               font                          F_Tag          `f_tag_zero()`     }
   { FontSize                           font_size                     F32            24.f               }
+  { TabSize                            tab_size                      F32            `24.f*4.f`         }
   
   //- rjf: corner radii
   { CornerRadius00                     corner_radius_00              F32            0                  }

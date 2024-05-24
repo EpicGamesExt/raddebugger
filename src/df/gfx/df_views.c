@@ -5744,6 +5744,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
@@ -5858,6 +5859,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
+    code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
     code_slice_params.margin_width_px           = margin_width_px;
@@ -6357,7 +6359,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     {
       tv->center_cursor = 0;
       String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
-      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(cursor_line, tv->cursor.column-1)).x;
+      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
       
       // rjf: scroll x
       {
@@ -6380,7 +6382,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(snap[Axis2_X])
     {
       String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -6808,6 +6810,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
@@ -6945,6 +6948,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
+    code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
     code_slice_params.margin_width_px           = margin_width_px;
@@ -7675,6 +7679,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
@@ -7785,6 +7790,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, slice.line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
+    code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
     code_slice_params.margin_width_px           = margin_width_px;
@@ -8050,7 +8056,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     {
       tv->center_cursor = 0;
       String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(cursor_line, tv->cursor.column-1)).x;
+      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
       
       // rjf: scroll x
       {
@@ -8073,7 +8079,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     if(snap[Axis2_X])
     {
       String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -8899,7 +8905,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
               ui_set_next_background_color(cell_bg_rgba);
             }
             UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
-            ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
+            ui_box_equip_display_fancy_strings(cell_box, 0, &byte_fancy_strings[byte_value]);
             {
               F32 off = 0;
               for(Annotation *a = annotation; a != 0; a = a->next)

@@ -357,7 +357,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
       d_fancy_string_list_push(scratch.arena, &fancy_strings, &a_fstr);
       d_fancy_string_list_push(scratch.arena, &fancy_strings, &clse_paren);
     }
-    ui_box_equip_display_fancy_strings(text_box, &fancy_strings);
+    ui_box_equip_display_fancy_strings(text_box, 0, &fancy_strings);
   }
   
   //- rjf: build color box
@@ -568,6 +568,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     }
     code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
     code_slice_params.font_size = ui_top_font_size();
+    code_slice_params.tab_size = f_column_size_from_tag_size(code_slice_params.font, code_slice_params.font_size)*4.f;
     code_slice_params.line_height_px = ui_top_font_size()*1.5f;
     code_slice_params.margin_width_px = 0;
     code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
@@ -728,6 +729,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
       }
       code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
       code_slice_params.font_size = ui_top_font_size();
+      code_slice_params.tab_size = f_column_size_from_tag_size(code_slice_params.font, code_slice_params.font_size)*4.f;
       code_slice_params.line_height_px = ui_top_font_size()*1.5f;
       code_slice_params.margin_width_px = 0;
       code_slice_params.line_num_width_px = ui_top_font_size()*5.f;

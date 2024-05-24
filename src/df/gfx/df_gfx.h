@@ -412,6 +412,7 @@ struct DF_CodeSliceParams
   // rjf: visual parameters
   F_Tag font;
   F32 font_size;
+  F32 tab_size;
   String8 search_query;
   F32 line_height_px;
   F32 margin_width_px;

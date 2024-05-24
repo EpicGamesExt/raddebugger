@@ -5992,7 +5992,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               //- rjf: calculate width of exp row
               if(row == viz_rows.first)
               {
-                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, UI_TEMP_TAB_WIDTH, row->display_expr).x + ui_top_font_size()*0.5f;
+                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), row->display_expr).x + ui_top_font_size()*0.5f;
                 expr_column_width_px = Max(expr_column_width_px, ui_top_font_size()*10.f);
               }
               
@@ -7153,7 +7153,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                           d_fancy_string_list_push(scratch.arena, &fstrs, &query);
                         }
                         UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                        ui_box_equip_display_fancy_strings(box, &fstrs);
+                        ui_box_equip_display_fancy_strings(box, ui_top_tab_size(), &fstrs);
                         scratch_end(scratch);
                       }
                     }
@@ -7771,7 +7771,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         if(!(box->flags & UI_BoxFlag_DisableTextTrunc))
         {
           max_x = (box->rect.x1-text_position.x);
-          ellipses_run = f_push_run_from_string(scratch.arena, box->font, box->font_size, 0, UI_TEMP_TAB_WIDTH, 0, str8_lit("..."));
+          ellipses_run = f_push_run_from_string(scratch.arena, box->font, box->font_size, 0, box->tab_size, 0, str8_lit("..."));
         }
         d_truncated_fancy_run_list(text_position, &box->display_string_runs, max_x, ellipses_run);
         if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges)
@@ -8040,8 +8040,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       d_fancy_string_list_push(scratch.arena, &strs, &str2);
       D_FancyString str3 = {df_font_from_slot(DF_FontSlot_Code), str8_lit("very fancy text!"), v4f32(1, 0.8f, 0.4f, 1), 18.f, 4.f, 4.f};
       d_fancy_string_list_push(scratch.arena, &strs, &str3);
-      D_FancyRunList runs = d_fancy_run_list_from_fancy_string_list(scratch.arena, UI_TEMP_TAB_WIDTH, &strs);
-      F_Run trailer_run = f_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, UI_TEMP_TAB_WIDTH, 0, str8_lit("..."));
+      D_FancyRunList runs = d_fancy_run_list_from_fancy_string_list(scratch.arena, 0, &strs);
+      F_Run trailer_run = f_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, 0, 0, str8_lit("..."));
       F32 limit = 500.f + sin_f32(df_time_in_seconds()/10.f)*200.f;
       d_truncated_fancy_run_list(p, &runs, limit, trailer_run);
       d_rect(r2f32p(p.x+limit, 0, p.x+limit+2.f, 1000), v4f32(1, 0, 0, 1), 0, 0, 0);
@@ -11030,7 +11030,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         line_num += 1, line_idx += 1)
     {
       String8 line_text = params->line_text[line_idx];
-      F32 line_text_dim = f_dim_from_tag_size_string(params->font, params->font_size, 0, UI_TEMP_TAB_WIDTH, line_text).x + params->line_num_width_px;
+      F32 line_text_dim = f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, line_text).x + params->line_num_width_px;
       line_extras_off[line_idx] = Max(line_text_dim, params->font_size*50);
     }
   }
@@ -11184,7 +11184,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     String8 line_string = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_text[mouse_y_line_idx]) : str8_zero();
     
     // rjf: mouse x * string => column
-    S64 column = f_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, UI_TEMP_TAB_WIDTH, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px)+1;
+    S64 column = f_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px)+1;
     
     // rjf: bundle
     mouse_pt = txt_pt(line_num, column);
@@ -11361,7 +11361,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     {
       U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
       String8 line_text = params->line_text[line_slice_idx];
-      F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_text, selected_rng.min.column-1)).x;
+      F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, selected_rng.min.column-1)).x;
       result.mouse_expr_rng = selected_rng;
       result.mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                              text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
@@ -11376,7 +11376,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       Rng1U64 expr_off_rng = txti_expr_range_from_line_off_range_string_tokens(mouse_pt_off, line_range, line_text, &line_tokens);
       if(expr_off_rng.max != expr_off_rng.min)
       {
-        F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
+        F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
         result.mouse_expr_rng = txt_rng(txt_pt(mouse_pt.line, 1+(expr_off_rng.min-line_range.min)), txt_pt(mouse_pt.line, 1+(expr_off_rng.max-line_range.min)));
         result.mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                                text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
@@ -11718,7 +11718,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         }
         
         // rjf: equip fancy strings to line box
-        ui_box_equip_display_fancy_strings(line_box, &line_fancy_strings);
+        ui_box_equip_display_fancy_strings(line_box, params->tab_size, &line_fancy_strings);
         
         // rjf: extra rendering for strings that are currently being searched for
         if(params->search_query.size != 0)
@@ -11731,8 +11731,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               Rng1U64 match_range = r1u64(needle_pos, needle_pos+params->search_query.size);
               Rng1F32 match_column_pixel_off_range =
               {
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, match_range.min)).x,
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, match_range.max)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, match_range.min)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, match_range.max)).x,
               };
               Rng2F32 match_rect =
               {
@@ -11787,8 +11787,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               };
               Rng1F32 select_column_pixel_off_range =
               {
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, select_column_range_in_line.min-1)).x,
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, select_column_range_in_line.max-1)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.min-1)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.max-1)).x,
               };
               Rng2F32 select_rect =
               {
@@ -11816,7 +11816,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         if(cursor->line == line_num)
         {
           S64 column = cursor->column;
-          Vec2F32 advance = f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, column-1));
+          Vec2F32 advance = f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, column-1));
           F32 cursor_off_pixels = advance.x;
           F32 cursor_thickness = ClampBot(4.f, line_box->font_size/6.f);
           Rng2F32 cursor_rect =
@@ -12472,7 +12472,7 @@ df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String
   Temp scratch = scratch_begin(0, 0);
   D_FancyStringList fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, alpha, indirection_size_change, base_color, string);
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-  ui_box_equip_display_fancy_strings(box, &fancy_strings);
+  ui_box_equip_display_fancy_strings(box, ui_top_tab_size(), &fancy_strings);
   scratch_end(scratch);
   return box;
 }
@@ -12758,7 +12758,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       Temp scratch = scratch_begin(0, 0);
-      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, UI_TEMP_TAB_WIDTH, edit_string).x;
+      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
@@ -12827,7 +12827,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
           }
         }
       }
-      ui_box_equip_display_fancy_strings(editstr_box, &code_fancy_strings);
+      ui_box_equip_display_fancy_strings(editstr_box, ui_top_tab_size(), &code_fancy_strings);
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = *cursor;
@@ -12836,13 +12836,13 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       draw_data->select_color = ui_top_text_select_color();
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
       scratch_end(scratch);
     }
     else if((is_focus_active || is_focus_active_disabled) && !(flags & DF_LineEditFlag_CodeContents))
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
-      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, UI_TEMP_TAB_WIDTH, edit_string).x;
+      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
@@ -12855,7 +12855,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
     }
   }
   
