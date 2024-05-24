@@ -153,6 +153,9 @@ struct R_D3D11_State
   Arena *buffer_flush_arena;
   R_D3D11_FlushBuffer *first_buffer_to_flush;
   R_D3D11_FlushBuffer *last_buffer_to_flush;
+
+  // amason: support
+  D3D11_FEATURE_DATA_D3D11_OPTIONS2 feature_support;
 };
 
 ////////////////////////////////

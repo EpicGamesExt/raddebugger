@@ -204,6 +204,9 @@ r_init(CmdLine *cmdln)
   error = r_d3d11_state->device->QueryInterface(__uuidof(IDXGIDevice1), (void **)(&r_d3d11_state->dxgi_device));
   error = r_d3d11_state->dxgi_device->GetAdapter(&r_d3d11_state->dxgi_adapter);
   error = r_d3d11_state->dxgi_adapter->GetParent(__uuidof(IDXGIFactory2), (void **)(&r_d3d11_state->dxgi_factory));
+
+  //- amason: get feature support
+  error = r_d3d11_state->device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &r_d3d11_state->feature_support, sizeof(D3D11_FEATURE_DATA_D3D11_OPTIONS2));
   
   //- rjf: create main rasterizer
   {
@@ -579,7 +582,15 @@ r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
       }break;
     }
   }
+
+  //- amason: MapOnDefaultTextures required for default usage + cpu access
+  if (!r_d3d11_state->feature_support.MapOnDefaultTextures &&
+      d3d11_usage == D3D11_USAGE_DEFAULT && cpu_access_flags)
+  {
+    d3d11_usage = D3D11_USAGE_DYNAMIC;
+  }
   
+
   //- rjf: format -> dxgi format
   DXGI_FORMAT dxgi_format = DXGI_FORMAT_R8G8B8A8_UNORM;
   {
@@ -685,7 +696,26 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
       (UINT)subrect.x0, (UINT)subrect.y0, 0,
       (UINT)subrect.x1, (UINT)subrect.y1, 1,
     };
-    r_d3d11_state->device_ctx->UpdateSubresource(texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
+    //- amason: MapOnDefaultTextures required for default usage + cpu access
+    if (r_d3d11_state->feature_support.MapOnDefaultTextures)
+    {
+      r_d3d11_state->device_ctx->UpdateSubresource(texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
+    }
+    else
+    {
+      D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};
+      r_d3d11_state->device_ctx->Map(texture->texture, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
+      U8 *dst_ptr = (U8 *)sub_rsrc.pData;
+      S32 dst_pitch = texture->size.x * bytes_per_pixel;
+      S32 src_pitch = dim.x * bytes_per_pixel;
+      for(S32 y = 0; y < dim.y; ++y)
+      {
+        U64 src_offset = y * src_pitch;
+        U64 dst_offset = (((subrect.y0 + y) * texture->size.x) + subrect.x0) * bytes_per_pixel;
+        MemoryCopy(dst_ptr + dst_offset, (U8*)data + src_offset, src_pitch);
+      }
+      r_d3d11_state->device_ctx->Unmap(texture->texture, 0);
+    }
   }
   ProfEnd();
 }
