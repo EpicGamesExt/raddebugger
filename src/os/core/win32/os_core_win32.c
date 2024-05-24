@@ -41,9 +41,13 @@ typedef PVOID W32_MapViewOfFile3_Type(HANDLE  FileMapping,
                                       ULONG   PageProtection,
                                       void*   ExtendedParameters,
                                       ULONG   ParameterCount);
+typedef HRESULT W32_SetThreadDescription_Type(HANDLE hThread,
+                                              PCWSTR lpThreadDescription);
 
 global W32_VirtualAlloc2_Type  *w32_VirtualAlloc2_func  = 0;
 global W32_MapViewOfFile3_Type *w32_MapViewOfFile3_func = 0;
+
+global W32_SetThreadDescription_Type *w32_SetThreadDescription_func = 0;
 
 ////////////////////////////////
 //~ rjf: Globals
@@ -597,9 +601,10 @@ os_set_thread_name(String8 name)
   Temp scratch = scratch_begin(0, 0);
   
   // rjf: windows 10 style
+  if(w32_SetThreadDescription_func)
   {
     String16 name16 = str16_from_8(scratch.arena, name);
-    HRESULT hr = SetThreadDescription(GetCurrentThread(), (WCHAR*)name16.str);
+    HRESULT hr = w32_SetThreadDescription_func(GetCurrentThread(), (WCHAR*)name16.str);
   }
   
   // rjf: raise-exception style
