@@ -704,7 +704,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
               atlas->root->max_free_size[Corner_01] =
               atlas->root->max_free_size[Corner_10] =
               atlas->root->max_free_size[Corner_11] = v2s16(atlas->root_dim.x/2, atlas->root_dim.y/2);
-            atlas->texture = r_tex2d_alloc(R_Tex2DKind_Dynamic, v2s32((S32)atlas->root_dim.x, (S32)atlas->root_dim.y), R_Tex2DFormat_RGBA8, 0);
+            atlas->texture = r_tex2d_alloc(R_ResourceKind_Dynamic, v2s32((S32)atlas->root_dim.x, (S32)atlas->root_dim.y), R_Tex2DFormat_RGBA8, 0);
           }
           
           // rjf: allocate from atlas

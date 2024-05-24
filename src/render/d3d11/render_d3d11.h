@@ -63,7 +63,7 @@ struct R_D3D11_Tex2D
   U64 generation;
   ID3D11Texture2D *texture;
   ID3D11ShaderResourceView *view;
-  R_Tex2DKind kind;
+  R_ResourceKind kind;
   Vec2S32 size;
   R_Tex2DFormat format;
 };
@@ -73,7 +73,7 @@ struct R_D3D11_Buffer
   R_D3D11_Buffer *next;
   U64 generation;
   ID3D11Buffer *buffer;
-  R_BufferKind kind;
+  R_ResourceKind kind;
   U64 size;
 };
 
@@ -173,5 +173,6 @@ internal R_Handle r_d3d11_handle_from_tex2d(R_D3D11_Tex2D *texture);
 internal R_D3D11_Buffer *r_d3d11_buffer_from_handle(R_Handle handle);
 internal R_Handle r_d3d11_handle_from_buffer(R_D3D11_Buffer *buffer);
 internal ID3D11Buffer *r_d3d11_instance_buffer_from_size(U64 size);
+internal void r_res_kind_to_usage(R_ResourceKind kind, D3D11_USAGE* d3d11_usage, UINT* cpu_access_flags);
 
 #endif // RENDER_D3D11_H

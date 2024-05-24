@@ -125,6 +125,34 @@ r_d3d11_instance_buffer_from_size(U64 size)
   return buffer;
 }
 
+internal
+void r_res_kind_to_usage(R_ResourceKind kind, D3D11_USAGE* d3d11_usage, UINT* cpu_access_flags)
+{
+  //- rjf: kind -> usage * cpu access flags
+  switch(kind)
+  {
+    case R_ResourceKind_Static:
+    {
+      *d3d11_usage = D3D11_USAGE_IMMUTABLE;
+      *cpu_access_flags = 0;
+    }break;
+    case R_ResourceKind_Dynamic:
+    {
+      *d3d11_usage = D3D11_USAGE_DEFAULT;
+      *cpu_access_flags = 0;
+    }break;
+    case R_ResourceKind_Stream:
+    {
+      *d3d11_usage = D3D11_USAGE_DYNAMIC;
+      *cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
+    }break;
+    default:
+    {
+      InvalidPath;
+    }
+  }
+}
+
 ////////////////////////////////
 //~ rjf: Backend Hook Implementations
 
@@ -428,7 +456,7 @@ r_init(CmdLine *cmdln)
       0xff00ffff, 0x330033ff,
       0x330033ff, 0xff00ffff,
     };
-    r_d3d11_state->backup_texture = r_tex2d_alloc(R_Tex2DKind_Static, v2s32(2, 2), R_Tex2DFormat_RGBA8, backup_texture_data);
+    r_d3d11_state->backup_texture = r_tex2d_alloc(R_ResourceKind_Static, v2s32(2, 2), R_Tex2DFormat_RGBA8, backup_texture_data);
   }
   
   //- rjf: initialize buffer flush state
@@ -534,7 +562,7 @@ r_window_unequip(OS_Handle handle, R_Handle equip_handle)
 //- rjf: textures
 
 r_hook R_Handle
-r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
+r_tex2d_alloc(R_ResourceKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
 {
   ProfBeginFunction();
   
@@ -557,27 +585,12 @@ r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data)
     texture->generation += 1;
   }
   
-  //- rjf: kind * initial_data -> usage * cpu access flags
-  D3D11_USAGE d3d11_usage = D3D11_USAGE_IMMUTABLE;
+  D3D11_USAGE d3d11_usage = D3D11_USAGE_DEFAULT;
   UINT cpu_access_flags = 0;
+  r_res_kind_to_usage(kind, &d3d11_usage, &cpu_access_flags);
+  if (kind == R_ResourceKind_Static)
   {
-    switch(kind)
-    {
-      default:
-      case R_Tex2DKind_Static:
-      {
-        if(data == 0)
-        {
-          d3d11_usage = D3D11_USAGE_DYNAMIC;
-          cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
-        }
-      }break;
-      case R_Tex2DKind_Dynamic:
-      {
-        d3d11_usage = D3D11_USAGE_DEFAULT;
-        cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
-      }break;
-    }
+    Assert(data != 0 && "static texture must have initial data provided");
   }
   
   //- rjf: format -> dxgi format
@@ -650,7 +663,7 @@ r_tex2d_release(R_Handle handle)
   ProfEnd();
 }
 
-r_hook R_Tex2DKind
+r_hook R_ResourceKind
 r_kind_from_tex2d(R_Handle handle)
 {
   R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
@@ -678,6 +691,7 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
   OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(handle);
+    Assert(texture->kind == R_ResourceKind_Dynamic && "only dynamic texture can update region");
     U64 bytes_per_pixel = r_tex2d_format_bytes_per_pixel_table[texture->format];
     Vec2S32 dim = v2s32(subrect.x1 - subrect.x0, subrect.y1 - subrect.y0);
     D3D11_BOX dst_box =
@@ -693,7 +707,7 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
 //- rjf: buffers
 
 r_hook R_Handle
-r_buffer_alloc(R_BufferKind kind, U64 size, void *data)
+r_buffer_alloc(R_ResourceKind kind, U64 size, void *data)
 {
   ProfBeginFunction();
   
@@ -716,27 +730,12 @@ r_buffer_alloc(R_BufferKind kind, U64 size, void *data)
     buffer->generation += 1;
   }
   
-  //- rjf: kind * initial_data -> usage * cpu access flags
-  D3D11_USAGE d3d11_usage = D3D11_USAGE_IMMUTABLE;
+  D3D11_USAGE d3d11_usage = D3D11_USAGE_DEFAULT;
   UINT cpu_access_flags = 0;
+  r_res_kind_to_usage(kind, &d3d11_usage, &cpu_access_flags);
+  if (kind == R_ResourceKind_Static)
   {
-    switch(kind)
-    {
-      default:
-      case R_BufferKind_Static:
-      {
-        if(data == 0)
-        {
-          d3d11_usage = D3D11_USAGE_DYNAMIC;
-          cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
-        }
-      }break;
-      case R_BufferKind_Dynamic:
-      {
-        d3d11_usage = D3D11_USAGE_DEFAULT;
-        cpu_access_flags = D3D11_CPU_ACCESS_WRITE;
-      }break;
-    }
+    Assert(data != 0 && "static buffer must have initial data provided");
   }
   
   //- rjf: prep initial data, if passed
