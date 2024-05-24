@@ -1687,10 +1687,10 @@ df_entity_notify_mutation(DF_Entity *entity)
   for(DF_Entity *e = entity; !df_entity_is_nil(e); e = e->parent)
   {
     DF_EntityKindFlags flags = df_g_entity_kind_flags_table[entity->kind];
-    if(e == entity && flags & DF_EntityKindFlag_LeafMutationProfileConfig)
+    if(e == entity && flags & DF_EntityKindFlag_LeafMutationProjectConfig)
     {
       DF_CmdParams p = {0};
-      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
+      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProjectData));
     }
     if(e == entity && flags & DF_EntityKindFlag_LeafMutationSoftHalt && df_ctrl_targets_running())
     {
@@ -5729,6 +5729,34 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
   ProfBeginFunction();
   String8List strs = {0};
   
+  //- rjf: write recent projects
+  {
+    B32 first = 1;
+    DF_EntityList recent_projects = df_query_cached_entity_list_with_kind(DF_EntityKind_RecentProject);
+    for(DF_EntityNode *n = recent_projects.first; n != 0; n = n->next)
+    {
+      DF_Entity *rp = n->entity;
+      if(rp->cfg_src == source)
+      {
+        if(first)
+        {
+          first = 0;
+          str8_list_push(arena, &strs, str8_lit("/// recent projects ///////////////////////////////////////////////////////////\n"));
+          str8_list_push(arena, &strs, str8_lit("\n"));
+        }
+        Temp scratch = scratch_begin(&arena, 1);
+        String8 path_absolute = path_normalized_from_string(scratch.arena, rp->name);
+        String8 path_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, path_absolute, root_path);
+        str8_list_pushf(arena, &strs,  "recent_project: {\"%S\"}\n", path_relative);
+        scratch_end(scratch);
+      }
+    }
+    if(!first)
+    {
+      str8_list_push(arena, &strs, str8_lit("\n"));
+    }
+  }
+  
   //- rjf: write targets
   {
     B32 first = 1;
@@ -5937,11 +5965,11 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         DF_Entity *file = df_entity_ancestor_from_kind(pin, DF_EntityKind_File);
         if(pin->flags & DF_EntityFlag_HasTextPoint && !df_entity_is_nil(file))
         {
-          String8 profile_path = root_path;
+          String8 project_path = root_path;
           String8 pin_file_path = df_full_path_from_entity(arena, file);
-          profile_path = path_normalized_from_string(arena, profile_path);
+          project_path = path_normalized_from_string(arena, project_path);
           pin_file_path = path_normalized_from_string(arena, pin_file_path);
-          String8 srlized_pin_file_path = path_relative_dst_from_absolute_dst_src(arena, pin_file_path, profile_path);
+          String8 srlized_pin_file_path = path_relative_dst_from_absolute_dst_src(arena, pin_file_path, project_path);
           str8_list_pushf(arena, &strs, "  line: (\"%S\":%I64d)\n", srlized_pin_file_path, pin->text_point.line);
         }
         else if(pin->flags & DF_EntityFlag_HasVAddr)
@@ -5959,7 +5987,7 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
   }
   
   //- rjf: write exception code filters
-  if(source == DF_CfgSrc_Profile)
+  if(source == DF_CfgSrc_Project)
   {
     str8_list_push(arena, &strs, str8_lit("/// exception code filters ////////////////////////////////////////////////////\n"));
     str8_list_push(arena, &strs, str8_lit("\n"));
@@ -5977,7 +6005,7 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
   }
   
   //- rjf: write control settings
-  if(source == DF_CfgSrc_Profile)
+  if(source == DF_CfgSrc_Project)
   {
     str8_list_push(arena, &strs, str8_lit("/// control settings //////////////////////////////////////////////////////////\n"));
     str8_list_push(arena, &strs, str8_lit("\n"));
@@ -5987,7 +6015,7 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
   
   //- rjf: write eval view cache
 #if 0
-  if(source == DF_CfgSrc_Profile)
+  if(source == DF_CfgSrc_Project)
   {
     B32 first = 1;
     for(U64 eval_view_slot_idx = 0;
@@ -6183,7 +6211,7 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
        node->memgen != mem_gen)
     {
       CTRL_Unwind new_unwind = ctrl_unwind_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+100);
-      if(!(new_unwind.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)))
+      if(!(new_unwind.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)) && new_unwind.frames.count != 0)
       {
         node->unwind = ctrl_unwind_deep_copy(node->arena, thread->arch, &new_unwind);
         node->reggen = reg_gen;
@@ -6529,7 +6557,11 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
     
     // rjf: unpack command line arguments
     String8 user_cfg_path = cmd_line_string(cmdln, str8_lit("user"));
-    String8 profile_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
+    String8 project_cfg_path = cmd_line_string(cmdln, str8_lit("project"));
+    if(project_cfg_path.size == 0)
+    {
+      project_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
+    }
     {
       String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
       String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
@@ -6538,14 +6570,14 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
       {
         user_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
       }
-      if(profile_cfg_path.size == 0)
+      if(project_cfg_path.size == 0)
       {
-        profile_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_profile", user_data_folder);
+        project_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
       }
     }
     
     // rjf: set up config path state
-    String8 cfg_src_paths[DF_CfgSrc_COUNT] = {user_cfg_path, profile_cfg_path};
+    String8 cfg_src_paths[DF_CfgSrc_COUNT] = {user_cfg_path, project_cfg_path};
     for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
     {
       df_state->cfg_path_arenas[src] = arena_alloc();
@@ -7089,7 +7121,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     {
       DF_CmdParams params = df_cmd_params_zero();
       df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteUserData));
-      df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
+      df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProjectData));
       df_state->seconds_til_autosave = 5.f;
     }
   }
@@ -7629,8 +7661,18 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: config path saving/loading/applying
+        case DF_CoreCmdKind_OpenRecentProject:
+        {
+          DF_Entity *entity = df_entity_from_handle(params.entity);
+          if(entity->kind == DF_EntityKind_RecentProject)
+          {
+            DF_CmdParams p = df_cmd_params_zero();
+            p.file_path = entity->name;
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProject));
+          }
+        }break;
         case DF_CoreCmdKind_OpenUser:
-        case DF_CoreCmdKind_OpenProfile:
+        case DF_CoreCmdKind_OpenProject:
         {
           B32 load_cfg[DF_CfgSrc_COUNT] = {0};
           for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
@@ -7781,7 +7823,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         //- rjf: loading/applying stateful config changes
         case DF_CoreCmdKind_ApplyUserData:
-        case DF_CoreCmdKind_ApplyProfileData:
+        case DF_CoreCmdKind_ApplyProjectData:
         {
           DF_CfgTable *table = df_cfg_table();
           
@@ -7800,8 +7842,28 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           String8 cfg_path   = df_cfg_path_from_src(src);
           String8 cfg_folder = str8_chop_last_slash(cfg_path);
           
+          //- rjf: keep track of recent projects
+          if(src == DF_CfgSrc_Project)
+          {
+            DF_Entity *recent_project = df_entity_from_name_and_kind(cfg_path, DF_EntityKind_RecentProject);
+            if(df_entity_is_nil(recent_project))
+            {
+              recent_project = df_entity_alloc(0, df_entity_root(), DF_EntityKind_RecentProject);
+              df_entity_equip_name(0, recent_project, cfg_path);
+              df_entity_equip_cfg_src(recent_project, DF_CfgSrc_User);
+            }
+          }
+          
           //- rjf: eliminate all existing entities
           {
+            DF_EntityList rps = df_query_cached_entity_list_with_kind(DF_EntityKind_RecentProject);
+            for(DF_EntityNode *n = rps.first; n != 0; n = n->next)
+            {
+              if(n->entity->cfg_src == src)
+              {
+                df_entity_mark_for_deletion(n->entity);
+              }
+            }
             DF_EntityList targets = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
             for(DF_EntityNode *n = targets.first; n != 0; n = n->next)
             {
@@ -7832,6 +7894,26 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               if(n->entity->cfg_src == src)
               {
                 df_entity_mark_for_deletion(n->entity);
+              }
+            }
+          }
+          
+          //- rjf: apply recent projects
+          DF_CfgVal *recent_projects = df_cfg_val_from_string(table, str8_lit("recent_project"));
+          for(DF_CfgNode *rp = recent_projects->first;
+              rp != &df_g_nil_cfg_node;
+              rp = rp->next)
+          {
+            if(rp->source == src)
+            {
+              String8 path_saved = rp->first->string;
+              String8 path_absolute = path_absolute_dst_from_relative_dst_src(scratch.arena, path_saved, cfg_folder);
+              DF_Entity *existing = df_entity_from_name_and_kind(path_absolute, DF_EntityKind_RecentProject);
+              if(df_entity_is_nil(existing))
+              {
+                DF_Entity *rp_ent = df_entity_alloc(0, df_entity_root(), DF_EntityKind_RecentProject);
+                df_entity_equip_cfg_src(rp_ent, src);
+                df_entity_equip_name(0, rp_ent, path_absolute);
               }
             }
           }
@@ -8162,7 +8244,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         //- rjf: writing config changes
         case DF_CoreCmdKind_WriteUserData:
-        case DF_CoreCmdKind_WriteProfileData:
+        case DF_CoreCmdKind_WriteProjectData:
         {
           DF_CfgSrc src = DF_CfgSrc_User;
           for(DF_CfgSrc s = (DF_CfgSrc)0; s < DF_CfgSrc_COUNT; s = (DF_CfgSrc)(s+1))
@@ -8290,7 +8372,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           if(df_entity_is_nil(map))
           {
             map = df_entity_alloc(df_state_delta_history(), df_entity_root(), DF_EntityKind_AutoViewRule);
-            df_entity_equip_cfg_src(map, DF_CfgSrc_Profile);
+            df_entity_equip_cfg_src(map, DF_CfgSrc_Project);
           }
           DF_Entity *src = df_entity_child_from_kind(map, DF_EntityKind_Source);
           if(df_entity_is_nil(src))
@@ -8455,7 +8537,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               DF_Entity *bp = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_Breakpoint);
               df_entity_equip_txt_pt(bp, params.text_point);
               df_entity_equip_b32(bp, 1);
-              df_entity_equip_cfg_src(bp, DF_CfgSrc_Profile);
+              df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
             }
           }
         }break;
@@ -8480,7 +8562,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               bp = df_entity_alloc(df_state_delta_history(), df_entity_root(), DF_EntityKind_Breakpoint);
               df_entity_equip_vaddr(bp, vaddr);
               df_entity_equip_b32(bp, 1);
-              df_entity_equip_cfg_src(bp, DF_CfgSrc_Profile);
+              df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
             }
             else
             {
@@ -8502,7 +8584,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               DF_Entity *symbol_name_entity = df_entity_alloc(df_state_delta_history(), bp, DF_EntityKind_EntryPointName);
               df_entity_equip_name(df_state_delta_history(), symbol_name_entity, function_name);
               df_entity_equip_b32(bp, 1);
-              df_entity_equip_cfg_src(bp, DF_CfgSrc_Profile);
+              df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
             }
             else
             {
@@ -8536,7 +8618,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               DF_Entity *watch = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_WatchPin);
               df_entity_equip_txt_pt(watch, params.text_point);
               df_entity_equip_name(df_state_delta_history(), watch, params.string);
-              df_entity_equip_cfg_src(watch, DF_CfgSrc_Profile);
+              df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
             }
           }
           else if(params.vaddr != 0)
@@ -8558,7 +8640,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               DF_Entity *pin = df_entity_alloc(df_state_delta_history(), df_entity_root(), DF_EntityKind_WatchPin);
               df_entity_equip_vaddr(pin, params.vaddr);
               df_entity_equip_name(df_state_delta_history(), pin, params.string);
-              df_entity_equip_cfg_src(pin, DF_CfgSrc_Profile);
+              df_entity_equip_cfg_src(pin, DF_CfgSrc_Project);
             }
           }
         }break;
@@ -8569,7 +8651,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           // rjf: build target
           df_state_delta_history_push_batch(df_state_delta_history(), 0);
           DF_Entity *entity = df_entity_alloc(df_state_delta_history(), df_entity_root(), DF_EntityKind_Target);
-          df_entity_equip_cfg_src(entity, DF_CfgSrc_Profile);
+          df_entity_equip_cfg_src(entity, DF_CfgSrc_Project);
           DF_Entity *exe = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_Executable);
           df_entity_equip_name(df_state_delta_history(), exe, params.file_path);
           String8 working_dir = str8_chop_last_slash(params.file_path);

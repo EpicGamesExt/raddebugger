@@ -319,7 +319,7 @@ tex_xfer_thread__entry_point(void *p)
     R_Handle texture = {0};
     if(got_task && top.dim.x > 0 && top.dim.y > 0 && data.size >= (U64)top.dim.x*(U64)top.dim.y*(U64)r_tex2d_format_bytes_per_pixel_table[top.fmt])
     {
-      texture = r_tex2d_alloc(R_Tex2DKind_Static, v2s32(top.dim.x, top.dim.y), top.fmt, data.str);
+      texture = r_tex2d_alloc(R_ResourceKind_Static, v2s32(top.dim.x, top.dim.y), top.fmt, data.str);
     }
     
     //- rjf: commit results to cache

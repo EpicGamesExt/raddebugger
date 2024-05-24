@@ -4,6 +4,9 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] display threads at their last exception address, rather than current
+// rip, if applicable
+//
 // [ ] editing multiple bindings for commands
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
@@ -155,7 +158,7 @@
 //      opens the context window. It seems like maybe menus should be right,
 //      and left should do the default action, more consistently?
 //
-//  [ ] It wasn't clear to me how you save a user or profile file. I can see
+//  [ ] It wasn't clear to me how you save a user or project file. I can see
 //      how to load them, but not how you save them. Obviously I can just copy
 //      the files myself in the shell, but it seemed weird that there was no
 //      "save" option in the menus.

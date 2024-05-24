@@ -2684,6 +2684,8 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
     else
     {
       DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+      params.file_path = query;
+      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
     }
   }

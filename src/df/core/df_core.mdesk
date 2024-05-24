@@ -8,7 +8,7 @@
 DF_CfgSrcTable:
 {
   {"user"            User             OpenUser       WriteUserData       ApplyUserData    }
-  {"profile"         Profile          OpenProfile    WriteProfileData    ApplyProfileData }
+  {"project"         Project          OpenProject    WriteProjectData    ApplyProjectData }
   {"command_line"    CommandLine      Null           Null                Null             }
   {"transient"       Transient        Null           Null                Null             }
 }
@@ -46,6 +46,9 @@ DF_EntityKindTable:
   {Arguments          arguments             0             0               0            0            0               0             0            0                   0                    1                  0                   0             0            0             0            0              1                        "Arguments"         Null                   "Arguments"                  }
   {ExecutionPath      execution_path        0             0               0            0            0               0             0            0                   0                    1                  0                   0             0            0             0            0              1                        "Execution Path"    Null                   "Execution Path"             }
   {EntryPointName     entry_point_name      0             0               0            0            0               0             0            0                   0                    1                  0                   1             0            0             0            0              1                        "Symbol Name"       Null                   "Entry Point Name"           }
+  
+  //- rjf: recent projects
+  {RecentProject      recent_project        0             0               0            0            0               0             0            1                   1                    0                  0                   0             0            0             0            0              0                        "Path"              Briefcase              "Recent Project"             }
   
   //- rjf: src -> dst mapping
   {Source             source                0             0               0            0            0               0             0            0                   0                    0                  0                   0             0            0             0            0              0                        "Path"              Null                   "Source"                     }
@@ -240,16 +243,17 @@ DF_CoreCmdTable://               |            |                  |              
   {SetAutoViewRuleViewRule        1            Null               Nil                0  0  0  0  0  0                                                           Null                  "set_auto_view_rule_view_rule""Set Auto View Rule View Rule"                "Sets the view rule string for an auto view rule."                                                                 ""                               }
   
   //- rjf: setting config paths
-  {OpenUser                       0            FilePath           Nil                1  0  0  0  0  1                                                           Person                "open_user"                   "Open User"                                   "Opens a user file path, immediately loading it, and begins autosaving to it."                                     "load,user,profile,layout"       }
-  {OpenProfile                    0            FilePath           Nil                1  0  0  0  0  1                                                           Briefcase             "open_profile"                "Open Profile"                                "Opens a profile file path, immediately loading it, and begins autosaving to it."                                  "profile,project,session"        }
+  {OpenUser                       0            FilePath           Nil                1  0  0  0  0  1                                                           Person                "open_user"                   "Open User"                                   "Opens a user file path, immediately loading it, and begins autosaving to it."                                     "load,user,project,layout"       }
+  {OpenProject                    0            FilePath           Nil                1  0  0  0  0  1                                                           Briefcase             "open_project"                "Open Project"                                "Opens a project file path, immediately loading it, and begins autosaving to it."                                  "project,project,session"        }
+  {OpenRecentProject              0            Entity             RecentProject      0  0  0  0  0  1                                                           Briefcase             "open_recent_project"         "Open Recent Project"                         "Opens a recently used project file."                                                                              "project,project,session"        }
   
   //- rjf: loading/applying stateful config changes
   {ApplyUserData                  1            Null               Nil                0  0  0  0  0  0                                                           Null                  "apply_user_data"             "Apply User Data"                             "Applies user data from the active user file."                                                                     ""                               }
-  {ApplyProfileData               1            Null               Nil                0  0  0  0  0  0                                                           Null                  "apply_profile_data"          "Apply Profile Data"                          "Applies profile data from the active profile file."                                                               ""                               }
+  {ApplyProjectData               1            Null               Nil                0  0  0  0  0  0                                                           Null                  "apply_project_data"          "Apply Project Data"                          "Applies project data from the active project file."                                                               ""                               }
   
   //- rjf: writing config changes
   {WriteUserData                  1            Null               Nil                0  0  0  0  0  0                                                           Null                  "write_user_data"             "Write User Data"                             "Writes user data to the active user file."                                                                        ""                               }
-  {WriteProfileData               1            Null               Nil                0  0  0  0  0  0                                                           Null                  "write_profile_data"          "Write Profile Data"                          "Writes profile data to the active profile file."                                                                  ""                               }
+  {WriteProjectData               1            Null               Nil                0  0  0  0  0  0                                                           Null                  "write_project_data"          "Write Project Data"                          "Writes project data to the active project file."                                                                  ""                               }
   
   //- rjf: meta controls
   {Edit                           0            Null               Nil                0  0  0  0  0  0                                                           Pencil                "edit"                        "Edit"                                        "Edits the current selection."                                                                                     ""                               }
@@ -1781,7 +1785,7 @@ DF_DevToggleTable:
 
 @data(DF_EntityKindFlags) df_g_entity_kind_flags_table:
 {
-  @expand(DF_EntityKindTable a) `($(a.lf_mut_user_cfg)*DF_EntityKindFlag_LeafMutationUserConfig | $(a.lf_mut_prof_cfg)*DF_EntityKindFlag_LeafMutationProfileConfig | $(a.lf_mut_halt)*DF_EntityKindFlag_LeafMutationSoftHalt | $(a.lf_mut_dbg)*DF_EntityKindFlag_LeafMutationDebugInfoMap | $(a.tr_mut_user_cfg)*DF_EntityKindFlag_TreeMutationUserConfig | $(a.tr_mut_prof_cfg)*DF_EntityKindFlag_TreeMutationProfileConfig | $(a.tr_mut_halt)*DF_EntityKindFlag_TreeMutationSoftHalt | $(a.tr_mut_dbg)*DF_EntityKindFlag_TreeMutationDebugInfoMap | $(a.name_is_code)*DF_EntityKindFlag_NameIsCode | $(a.user_lifetime)*DF_EntityKindFlag_UserDefinedLifetime)`,
+  @expand(DF_EntityKindTable a) `($(a.lf_mut_user_cfg)*DF_EntityKindFlag_LeafMutationUserConfig | $(a.lf_mut_prof_cfg)*DF_EntityKindFlag_LeafMutationProjectConfig | $(a.lf_mut_halt)*DF_EntityKindFlag_LeafMutationSoftHalt | $(a.lf_mut_dbg)*DF_EntityKindFlag_LeafMutationDebugInfoMap | $(a.tr_mut_user_cfg)*DF_EntityKindFlag_TreeMutationUserConfig | $(a.tr_mut_prof_cfg)*DF_EntityKindFlag_TreeMutationProjectConfig | $(a.tr_mut_halt)*DF_EntityKindFlag_TreeMutationSoftHalt | $(a.tr_mut_dbg)*DF_EntityKindFlag_TreeMutationDebugInfoMap | $(a.name_is_code)*DF_EntityKindFlag_NameIsCode | $(a.user_lifetime)*DF_EntityKindFlag_UserDefinedLifetime)`,
 }
 
 @data(DF_EntityOpFlags) df_g_entity_kind_op_flags_table:

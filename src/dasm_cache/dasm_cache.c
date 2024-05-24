@@ -355,7 +355,7 @@ dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out)
     }
     os_condition_variable_wait(dasm_shared->u2p_ring_cv, dasm_shared->u2p_ring_mutex, max_U64);
   }
-  os_condition_variable_broadcast(dasm_shared->u2p_ring_mutex);
+  os_condition_variable_broadcast(dasm_shared->u2p_ring_cv);
 }
 
 internal void

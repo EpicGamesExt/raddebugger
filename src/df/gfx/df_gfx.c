@@ -74,6 +74,22 @@ df_view_is_nil(DF_View *view)
   return (view == 0 || view == &df_g_nil_view);
 }
 
+internal B32
+df_view_is_project_filtered(DF_View *view)
+{
+  B32 result = 0;
+  DF_Entity *view_project = df_entity_from_handle(view->project);
+  if(!df_entity_is_nil(view_project))
+  {
+    DF_Entity *current_project = df_entity_from_path(df_cfg_path_from_src(DF_CfgSrc_Project), 0);
+    if(current_project != view_project)
+    {
+      result = 1;
+    }
+  }
+  return result;
+}
+
 internal DF_Handle
 df_handle_from_view(DF_View *view)
 {
@@ -294,18 +310,54 @@ df_panel_insert_tab_view(DF_Panel *panel, DF_View *prev_view, DF_View *view)
 {
   DLLInsert_NPZ(&df_g_nil_view, panel->first_tab_view, panel->last_tab_view, prev_view, view, next, prev);
   panel->tab_view_count += 1;
-  panel->selected_tab_view = df_handle_from_view(view);
+  if(!df_view_is_project_filtered(view))
+  {
+    panel->selected_tab_view = df_handle_from_view(view);
+  }
 }
 
 internal void
 df_panel_remove_tab_view(DF_Panel *panel, DF_View *view)
 {
-  DLLRemove_NPZ(&df_g_nil_view, panel->first_tab_view, panel->last_tab_view, view, next, prev);
   if(df_view_from_handle(panel->selected_tab_view) == view)
   {
-    panel->selected_tab_view = df_handle_from_view(!df_view_is_nil(view->prev) ? view->prev : view->next);
+    panel->selected_tab_view = df_handle_zero();
+    if(df_handle_match(df_handle_zero(), panel->selected_tab_view))
+    {
+      for(DF_View *v = view->next; !df_view_is_nil(v); v = v->next)
+      {
+        if(!df_view_is_project_filtered(v))
+        {
+          panel->selected_tab_view = df_handle_from_view(v);
+          break;
+        }
+      }
+    }
+    if(df_handle_match(df_handle_zero(), panel->selected_tab_view))
+    {
+      for(DF_View *v = view->prev; !df_view_is_nil(v); v = v->prev)
+      {
+        if(!df_view_is_project_filtered(v))
+        {
+          panel->selected_tab_view = df_handle_from_view(v);
+          break;
+        }
+      }
+    }
   }
+  DLLRemove_NPZ(&df_g_nil_view, panel->first_tab_view, panel->last_tab_view, view, next, prev);
   panel->tab_view_count -= 1;
+}
+
+internal DF_View *
+df_selected_tab_from_panel(DF_Panel *panel)
+{
+  DF_View *view = df_view_from_handle(panel->selected_tab_view);
+  if(df_view_is_project_filtered(view))
+  {
+    view = &df_g_nil_view;
+  }
+  return view;
 }
 
 //- rjf: icons & display strings
@@ -417,7 +469,7 @@ df_cmd_params_from_gfx(void)
   {
     p.window = df_handle_from_window(window);
     p.panel  = df_handle_from_panel(window->focused_panel);
-    p.view   = window->focused_panel->selected_tab_view;
+    p.view   = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
   }
   return p;
 }
@@ -426,7 +478,7 @@ internal B32
 df_prefer_dasm_from_window(DF_Window *window)
 {
   DF_Panel *panel = window->focused_panel;
-  DF_View *view = df_view_from_handle(panel->selected_tab_view);
+  DF_View *view = df_selected_tab_from_panel(panel);
   DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
   B32 result = 0;
   if(view_kind == DF_GfxViewKind_Disassembly)
@@ -443,7 +495,7 @@ df_prefer_dasm_from_window(DF_Window *window)
     B32 has_dasm = 0;
     for(DF_Panel *p = window->root_panel; !df_panel_is_nil(p); p = df_panel_rec_df_pre(p).next)
     {
-      DF_View *p_view = df_view_from_handle(p->selected_tab_view);
+      DF_View *p_view = df_selected_tab_from_panel(p);
       DF_GfxViewKind p_view_kind = df_gfx_view_kind_from_string(p_view->spec->info.name);
       if(p_view_kind == DF_GfxViewKind_Code)
       {
@@ -464,7 +516,7 @@ internal DF_CmdParams
 df_cmd_params_from_window(DF_Window *window)
 {
   DF_CmdParams p = df_cmd_params_zero();
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(window, df_view_from_handle(window->focused_panel->selected_tab_view));
+  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(window, df_selected_tab_from_panel(window->focused_panel));
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Window);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Panel);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
@@ -473,7 +525,7 @@ df_cmd_params_from_window(DF_Window *window)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Index);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(window->focused_panel);
-  p.view   = window->focused_panel->selected_tab_view;
+  p.view   = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
   p.index  = ctrl_ctx.unwind_count;
@@ -484,7 +536,7 @@ internal DF_CmdParams
 df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel)
 {
   DF_CmdParams p = df_cmd_params_zero();
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(window, df_view_from_handle(panel->selected_tab_view));
+  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(window, df_selected_tab_from_panel(panel));
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Window);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Panel);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
@@ -493,7 +545,7 @@ df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Index);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(panel);
-  p.view   = panel->selected_tab_view;
+  p.view   = df_handle_from_view(df_selected_tab_from_panel(panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
   p.index  = ctrl_ctx.unwind_count;
@@ -796,6 +848,14 @@ df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, DF_Entit
     MemoryZeroStruct(&view->scroll_pos);
     view->spec = spec;
     view->entity = df_handle_from_entity(entity);
+    if(spec->info.flags & DF_ViewSpecFlag_ProjectSpecific)
+    {
+      view->project = df_handle_from_entity(df_entity_from_path(df_cfg_path_from_src(DF_CfgSrc_Project), DF_EntityFromPathFlag_OpenMissing|DF_EntityFromPathFlag_OpenAsNeeded));
+    }
+    else
+    {
+      MemoryZeroStruct(&view->project);
+    }
     view->is_filtering = 0;
     view->is_filtering_t = 0;
     view_setup(window, view, cfg_root);
@@ -935,6 +995,7 @@ df_panel_release_all_views(DF_Panel *panel)
   }
   panel->first_tab_view = panel->last_tab_view = &df_g_nil_view;
   panel->selected_tab_view = df_handle_zero();
+  panel->tab_view_count = 0;
 }
 
 ////////////////////////////////
@@ -1196,7 +1257,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_View *view = df_view_from_handle(params.view);
           if(df_view_is_nil(view) && !df_panel_is_nil(panel))
           {
-            view = df_view_from_handle(panel->selected_tab_view);
+            view = df_selected_tab_from_panel(panel);
           }
           if(!df_view_is_nil(view))
           {
@@ -1314,7 +1375,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             df_panel_remove_tab_view(move_tab_panel, move_tab);
             df_panel_insert_tab_view(new_panel, new_panel->last_tab_view, move_tab);
             new_panel->selected_tab_view = df_handle_from_view(move_tab);
-            if(df_view_is_nil(move_tab_panel->first_tab_view) && move_tab_panel != ws->root_panel &&
+            B32 move_tab_panel_is_empty = 1;
+            for(DF_View *v = move_tab_panel->first_tab_view; !df_view_is_nil(v); v = v->next)
+            {
+              if(!df_view_is_project_filtered(v))
+              {
+                move_tab_panel_is_empty = 0;
+                break;
+              }
+            }
+            if(move_tab_panel_is_empty && move_tab_panel != ws->root_panel &&
                move_tab_panel != new_panel->prev && move_tab_panel != new_panel->next)
             {
               DF_CmdParams p = df_cmd_params_from_panel(ws, move_tab_panel);
@@ -1902,30 +1972,40 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         case DF_CoreCmdKind_NextTab:
         {
           DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
-          view = view->next;
-          if(df_view_is_nil(view))
+          DF_View *view = df_selected_tab_from_panel(panel);
+          DF_View *next_view = view;
+          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->next) ? panel->first_tab_view : v->next)
           {
-            view = panel->first_tab_view;
+            if(!df_view_is_project_filtered(v) && v != view)
+            {
+              next_view = v;
+              break;
+            }
           }
+          view = next_view;
           panel->selected_tab_view = df_handle_from_view(view);
         }break;
         case DF_CoreCmdKind_PrevTab:
         {
           DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
-          view = view->prev;
-          if(df_view_is_nil(view))
+          DF_View *view = df_selected_tab_from_panel(panel);
+          DF_View *next_view = view;
+          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->prev) ? panel->last_tab_view : v->prev)
           {
-            view = panel->last_tab_view;
+            if(!df_view_is_project_filtered(v) && v != view)
+            {
+              next_view = v;
+              break;
+            }
           }
+          view = next_view;
           panel->selected_tab_view = df_handle_from_view(view);
         }break;
         case DF_CoreCmdKind_MoveTabRight:
         case DF_CoreCmdKind_MoveTabLeft:
         {
           DF_Panel *panel = ws->focused_panel;
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           DF_View *prev_view = core_cmd_kind == DF_CoreCmdKind_MoveTabRight ? view->next : view->prev->prev;
           if(!df_view_is_nil(prev_view) || core_cmd_kind == DF_CoreCmdKind_MoveTabLeft)
           {
@@ -2045,7 +2125,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             df_panel_remove_tab_view(src_panel, view);
             df_panel_insert_tab_view(dst_panel, prev_view, view);
             ws->focused_panel = dst_panel;
-            if(df_view_is_nil(src_panel->first_tab_view) && src_panel != ws->root_panel)
+            B32 src_panel_is_empty = 1;
+            for(DF_View *v = src_panel->first_tab_view; !df_view_is_nil(v); v = v->next)
+            {
+              if(!df_view_is_project_filtered(v))
+              {
+                src_panel_is_empty = 0;
+                break;
+              }
+            }
+            if(src_panel_is_empty && src_panel != ws->root_panel)
             {
               DF_CmdParams p = df_cmd_params_from_panel(ws, src_panel);
               df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClosePanel));
@@ -2087,7 +2176,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_Entity *file = df_entity_from_handle(params.entity);
           for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
           {
-            DF_View *view = df_view_from_handle(panel->selected_tab_view);
+            DF_View *view = df_selected_tab_from_panel(panel);
             DF_Entity *view_entity = df_entity_from_handle(view->entity);
             if(view_entity == file)
             {
@@ -2098,7 +2187,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         case DF_CoreCmdKind_ReloadActive:
         {
           DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           DF_Entity *entity = df_entity_from_handle(view->entity);
           if(entity->kind == DF_EntityKind_File)
           {
@@ -2114,6 +2203,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_Panel *panel = df_panel_from_handle(params.panel);
           for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->next)
           {
+            if(df_view_is_project_filtered(v)) { continue; }
             DF_Entity *v_param_entity = df_entity_from_handle(v->entity);
             if(v_param_entity == df_entity_from_handle(params.entity))
             {
@@ -2137,7 +2227,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         case DF_CoreCmdKind_SwitchToPartnerFile:
         {
           DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           DF_Entity *entity = df_entity_from_handle(view->entity);
           DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
           if(view_kind == DF_GfxViewKind_Code && entity->kind == DF_EntityKind_File)
@@ -3022,13 +3112,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             }
             for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
             {
+              if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
               DF_Entity *viewed_entity = df_entity_from_handle(view->entity);
               if((view_kind == DF_GfxViewKind_Code || view_kind == DF_GfxViewKind_PendingEntity) && viewed_entity == src_code)
               {
                 panel_w_this_src_code = panel;
                 view_w_this_src_code = view;
-                if(view == df_view_from_handle(panel->selected_tab_view))
+                if(view == df_selected_tab_from_panel(panel))
                 {
                   break;
                 }
@@ -3046,6 +3137,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             }
             for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
             {
+              if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
               if(view_kind == DF_GfxViewKind_Code)
               {
@@ -3066,13 +3158,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             }
             for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
             {
+              if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
               DF_Entity *viewed_entity = df_entity_from_handle(view->entity);
               if(view_kind == DF_GfxViewKind_Disassembly)
               {
                 panel_w_disasm = panel;
                 view_w_disasm = view;
-                if(view == df_view_from_handle(panel->selected_tab_view))
+                if(view == df_selected_tab_from_panel(panel))
                 {
                   break;
                 }
@@ -3116,7 +3209,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               Rng2F32 panel_rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
               Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
               F32 area = panel_rect_dim.x * panel_rect_dim.y;
-              if(df_view_is_nil(panel->first_tab_view) && (best_panel_area == 0 || area > best_panel_area))
+              B32 panel_is_empty = 1;
+              for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->next)
+              {
+                if(!df_view_is_project_filtered(v))
+                {
+                  panel_is_empty = 0;
+                  break;
+                }
+              }
+              if(panel_is_empty && (best_panel_area == 0 || area > best_panel_area))
               {
                 best_panel_area = area;
                 biggest_empty_panel = panel;
@@ -3150,7 +3252,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             
             // rjf: determine if we need a contain or center
             DF_CoreCmdKind cursor_snap_kind = DF_CoreCmdKind_CenterCursor;
-            if(!df_panel_is_nil(dst_panel) && dst_view == view_w_this_src_code && df_view_from_handle(dst_panel->selected_tab_view) == dst_view)
+            if(!df_panel_is_nil(dst_panel) && dst_view == view_w_this_src_code && df_selected_tab_from_panel(dst_panel) == dst_view)
             {
               cursor_snap_kind = DF_CoreCmdKind_ContainCursor;
             }
@@ -3158,7 +3260,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rjf: move cursor & snap-to-cursor
             if(!df_panel_is_nil(dst_panel))
             {
-              disasm_view_prioritized = (df_view_from_handle(dst_panel->selected_tab_view) == view_w_disasm);
+              disasm_view_prioritized = (df_selected_tab_from_panel(dst_panel) == view_w_disasm);
               dst_panel->selected_tab_view = df_handle_from_view(dst_view);
               DF_CmdParams params = df_cmd_params_from_view(ws, dst_panel, dst_view);
               params.text_point = point;
@@ -3198,7 +3300,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             
             // rjf: determine if we need a contain or center
             DF_CoreCmdKind cursor_snap_kind = DF_CoreCmdKind_CenterCursor;
-            if(dst_view == view_w_disasm && df_view_from_handle(dst_panel->selected_tab_view) == dst_view)
+            if(dst_view == view_w_disasm && df_selected_tab_from_panel(dst_panel) == dst_view)
             {
               cursor_snap_kind = DF_CoreCmdKind_ContainCursor;
             }
@@ -3226,6 +3328,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           B32 view_is_tab = 0;
           for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->next)
           {
+            if(df_view_is_project_filtered(tab)) { continue; }
             if(tab == view)
             {
               view_is_tab = 1;
@@ -3318,6 +3421,48 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
   }
   
   //////////////////////////////
+  //- rjf: panels with no selected tabs? -> select.
+  // panels with selected tabs? -> ensure they have active tabs.
+  //
+  for(DF_Panel *panel = ws->root_panel;
+      !df_panel_is_nil(panel);
+      panel = df_panel_rec_df_pre(panel).next)
+  {
+    if(!df_panel_is_nil(panel->first))
+    {
+      continue;
+    }
+    DF_View *view = df_selected_tab_from_panel(panel);
+    if(df_view_is_nil(view))
+    {
+      for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->next)
+      {
+        if(!df_view_is_project_filtered(tab))
+        {
+          panel->selected_tab_view = df_handle_from_view(tab);
+          break;
+        }
+      }
+    }
+    if(!df_view_is_nil(view))
+    {
+      B32 found = 0;
+      for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->next)
+      {
+        if(df_view_is_project_filtered(tab)) {continue;}
+        if(tab == view)
+        {
+          found = 1;
+        }
+      }
+      if(!found)
+      {
+        panel->selected_tab_view = df_handle_zero();
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: process view-level commands on leaf panels
   //
   ProfScope("dispatch view-level commands")
@@ -3330,7 +3475,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         continue;
       }
-      DF_View *view = df_view_from_handle(panel->selected_tab_view);
+      DF_View *view = df_selected_tab_from_panel(panel);
       if(!df_view_is_nil(view))
       {
         DF_ViewCmdFunctionType *do_view_cmds_function = view->spec->info.cmd_hook;
@@ -3798,9 +3943,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }
         
         // rjf: is command line only? -> make permanent
-        if(entity->cfg_src == DF_CfgSrc_CommandLine && ui_clicked(df_icon_buttonf(DF_IconKind_Save, 0, "Save To Profile")))
+        if(entity->cfg_src == DF_CfgSrc_CommandLine && ui_clicked(df_icon_buttonf(DF_IconKind_Save, 0, "Save To Project")))
         {
-          df_entity_equip_cfg_src(entity, DF_CfgSrc_Profile);
+          df_entity_equip_cfg_src(entity, DF_CfgSrc_Project);
         }
         
         // rjf: duplicate
@@ -4692,7 +4837,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 DF_CoreCmdKind_Open,
                 DF_CoreCmdKind_OpenUser,
-                DF_CoreCmdKind_OpenProfile,
+                DF_CoreCmdKind_OpenProject,
+                DF_CoreCmdKind_OpenRecentProject,
                 DF_CoreCmdKind_Exit,
               };
               U32 codepoints[] =
@@ -4700,6 +4846,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 'o',
                 'u',
                 'p',
+                'r',
                 'x',
               };
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));
@@ -5363,7 +5510,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             ui_spacer(ui_em(0.75f, 0));
           }
           
-          // rjf: loaded profile viz
+          // rjf: loaded project viz
           if(do_user_prof)
           {
             ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
@@ -5375,11 +5522,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                                                          UI_BoxFlag_DrawBackground|
                                                          UI_BoxFlag_DrawHotEffects|
                                                          UI_BoxFlag_DrawActiveEffects,
-                                                         "###loaded_profile_button");
+                                                         "###loaded_project_button");
             os_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
             UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 prof_path = df_cfg_path_from_src(DF_CfgSrc_Profile);
+              String8 prof_path = df_cfg_path_from_src(DF_CfgSrc_Project);
               prof_path = str8_chop_last_dot(prof_path);
               UI_Font(ui_icon_font()) ui_label(df_g_icon_kind_text_table[DF_IconKind_Briefcase]);
               ui_label(str8_skip_last_slash(prof_path));
@@ -5388,7 +5535,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             if(ui_clicked(prof_sig))
             {
               DF_CmdParams p = df_cmd_params_from_window(ws);
-              p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProfile);
+              p.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenProject);
               df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CmdSpec);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
             }
@@ -5808,7 +5955,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         {
           if(!df_panel_is_nil(panel->first)) { continue; }
           Rng2F32 panel_rect = df_target_rect_from_panel(content_rect, ws->root_panel, panel);
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           if(!df_view_is_nil(view) &&
              contains_2f32(panel_rect, ui_mouse()) &&
              (abs_f32(view->scroll_pos.x.off) > 0.01f ||
@@ -6475,7 +6622,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           content_rect.y1 = panel_rect.y1 - tab_bar_vheight;
         }
         {
-          DF_View *tab = df_view_from_handle(panel->selected_tab_view);
+          DF_View *tab = df_selected_tab_from_panel(panel);
           if(tab->is_filtering_t > 0.01f)
           {
             filter_rect.x0 = content_rect.x0;
@@ -6674,7 +6821,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         //- rjf: build filtering box
         //
         {
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           UI_Focus(UI_FocusKind_On)
           {
             if(view->is_filtering && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
@@ -6749,7 +6896,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         //
         UI_Parent(panel_box)
         {
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           if(view->flash_t >= 0.001f)
           {
             UI_Box *panel_box = ui_top_parent();
@@ -6772,7 +6919,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         //
         UI_Parent(panel_box)
         {
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           if(view->loading_t >= 0.001f)
           {
             // rjf: set up dimensions
@@ -6873,15 +7020,15 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           //- rjf: build empty view
-          UI_Parent(view_container_box) if(df_view_is_nil(df_view_from_handle(panel->selected_tab_view)))
+          UI_Parent(view_container_box) if(df_view_is_nil(df_selected_tab_from_panel(panel)))
           {
             DF_VIEW_UI_FUNCTION_NAME(Empty)(ws, panel, &df_g_nil_view, content_rect);
           }
           
           //- rjf: build tab view
-          UI_Parent(view_container_box) if(!df_view_is_nil(df_view_from_handle(panel->selected_tab_view)))
+          UI_Parent(view_container_box) if(!df_view_is_nil(df_selected_tab_from_panel(panel)))
           {
-            DF_View *view = df_view_from_handle(panel->selected_tab_view);
+            DF_View *view = df_selected_tab_from_panel(panel);
             DF_ViewUIFunctionType *build_view_ui_function = view->spec->info.ui_hook;
             build_view_ui_function(ws, panel, view, content_rect);
           }
@@ -6892,7 +7039,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         //
         UI_Focus(UI_FocusKind_On)
         {
-          DF_View *view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *view = df_selected_tab_from_panel(panel);
           if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
@@ -6948,7 +7095,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           };
           
           // rjf: prep output data
-          DF_View *next_selected_tab_view = df_view_from_handle(panel->selected_tab_view);
+          DF_View *next_selected_tab_view = df_selected_tab_from_panel(panel);
           UI_Box *tab_bar_box = &ui_g_nil_box;
           U64 drop_site_count = panel->tab_view_count+1;
           DropSite *drop_sites = push_array(scratch.arena, DropSite, drop_site_count);
@@ -6980,7 +7127,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
               {
-                B32 view_is_selected = (view == df_view_from_handle(panel->selected_tab_view));
+                if(df_view_is_project_filtered(view)) { continue; }
+                B32 view_is_selected = (view == df_selected_tab_from_panel(panel));
                 DF_IconKind icon_kind = df_icon_kind_from_view(view);
                 DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
                 String8 label = df_display_string_from_view(scratch.arena, ctrl_ctx, view);
@@ -7041,6 +7189,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               for(DF_View *view = panel->first_tab_view;; view = view->next, view_idx += 1)
             {
               temp_end(scratch);
+              if(df_view_is_project_filtered(view)) { continue; }
               
               // rjf: if before this tab is the prev-view of the current tab drag,
               // draw empty space
@@ -7073,7 +7222,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               }
               
               // rjf: gather info for this tab
-              B32 view_is_selected = (view == df_view_from_handle(panel->selected_tab_view));
+              B32 view_is_selected = (view == df_selected_tab_from_panel(panel));
               DF_IconKind icon_kind = df_icon_kind_from_view(view);
               DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
               String8 label = df_display_string_from_view(scratch.arena, ctrl_ctx, view);
@@ -7366,6 +7515,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           B32 view_is_in_panel = 0;
           for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
           {
+            if(df_view_is_project_filtered(view)) { continue; }
             if(view == dragged_view)
             {
               view_is_in_panel = 1;
@@ -7453,7 +7603,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               df_gfx_request_frame();
             }
-            if(view->loading_t_target != 0 && view == df_view_from_handle(panel->selected_tab_view))
+            if(view->loading_t_target != 0 && view == df_selected_tab_from_panel(panel))
             {
               df_gfx_request_frame();
             }
@@ -7474,7 +7624,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               view->is_filtering_t = (F32)!!view->is_filtering;
             }
-            if(view == df_view_from_handle(panel->selected_tab_view))
+            if(view == df_selected_tab_from_panel(panel))
             {
               view->loading_t_target = 0;
             }
@@ -9464,9 +9614,20 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
               
               // rjf: serialize view parameterizations
               str8_list_push(arena, &strs, str8_lit(": {"));
-              if(view == df_view_from_handle(p->selected_tab_view))
+              if(view == df_selected_tab_from_panel(p))
               {
                 str8_list_push(arena, &strs, str8_lit("selected "));
+              }
+              {
+                DF_Entity *project = df_entity_from_handle(view->project);
+                if(!df_entity_is_nil(project))
+                {
+                  Temp scratch = scratch_begin(&arena, 1);
+                  String8 project_path_absolute = df_full_path_from_entity(scratch.arena, project);
+                  String8 project_path_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, project_path_absolute, root_path);
+                  str8_list_pushf(arena, &strs, "project:{\"%S\"} ", project_path_relative);
+                  scratch_end(scratch);
+                }
               }
               if(view->query_string_size != 0 && view->spec->info.flags & DF_ViewSpecFlag_CanSerializeQuery)
               {
@@ -9480,9 +9641,9 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
               {
                 if(view_entity->kind == DF_EntityKind_File)
                 {
-                  String8 profile_path = root_path;
+                  String8 project_path = root_path;
                   String8 entity_path = df_full_path_from_entity(arena, view_entity);
-                  String8 entity_path_rel = path_relative_dst_from_absolute_dst_src(arena, entity_path, profile_path);
+                  String8 entity_path_rel = path_relative_dst_from_absolute_dst_src(arena, entity_path, project_path);
                   str8_list_pushf(arena, &strs, "\"%S\"", entity_path_rel);
                 }
               }
@@ -10234,7 +10395,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
         UI_Signal info_sig = ui_signal_from_box(info_box);
         if(ui_hovering(info_sig)) UI_Tooltip
         {
-          ui_labelf("Specified via command line; not saved in profile.");
+          ui_labelf("Specified via command line; not saved in project.");
         }
       }
     }
@@ -13044,7 +13205,7 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
     }
     
     // rjf: upload to gpu texture
-    df_gfx_state->icon_texture = r_tex2d_alloc(R_Tex2DKind_Static, image_dim, R_Tex2DFormat_RGBA8, image_data);
+    df_gfx_state->icon_texture = r_tex2d_alloc(R_ResourceKind_Static, image_dim, R_Tex2DFormat_RGBA8, image_data);
     
     // rjf: release
     stbi_image_free(image_data);
@@ -13108,7 +13269,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           {
             DF_CmdParams params = df_cmd_params_zero();
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteUserData));
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProjectData));
             df_gfx_state->last_window_queued_save = 1;
           }
           
@@ -13178,7 +13339,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               {
                 DF_CmdParams params = df_cmd_params_zero();
                 df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteUserData));
-                df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProfileData));
+                df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_WriteProjectData));
               }
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseWindow));
             }
@@ -13258,7 +13419,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               DF_CmdParams p = params;
               p.window = df_handle_from_window(window);
               p.panel = df_handle_from_panel(window->focused_panel);
-              p.view = df_handle_from_view(df_view_from_handle(window->focused_panel->selected_tab_view));
+              p.view = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
               df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Window);
               df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Panel);
               df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
@@ -13269,7 +13430,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
         
         //- rjf: loading/applying stateful config changes
         case DF_CoreCmdKind_ApplyUserData:
-        case DF_CoreCmdKind_ApplyProfileData:
+        case DF_CoreCmdKind_ApplyProjectData:
         {
           DF_CfgTable *table = df_cfg_table();
           OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
@@ -13511,6 +13672,16 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     // rjf: check if this view is selected
                     view_is_selected = df_cfg_node_child_from_string(op, str8_lit("selected"), StringMatchFlag_CaseInsensitive) != &df_g_nil_cfg_node;
                     
+                    // rjf: read project path
+                    String8 project_path = str8_lit("");
+                    {
+                      DF_CfgNode *project_cfg_node = df_cfg_node_child_from_string(op, str8_lit("project"), StringMatchFlag_CaseInsensitive);
+                      if(project_cfg_node != &df_g_nil_cfg_node)
+                      {
+                        project_path = project_cfg_node->first->string;
+                      }
+                    }
+                    
                     // rjf: read view query string
                     String8 view_query = str8_lit("");
                     if(view_spec_flags & DF_ViewSpecFlag_CanSerializeQuery)
@@ -13530,11 +13701,17 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     
                     // rjf: set up view
                     df_view_equip_spec(ws, view, view_spec, entity, view_query, op);
+                    if(project_path.size != 0)
+                    {
+                      view->project = df_handle_from_entity(df_entity_from_path(project_path, DF_EntityFromPathFlag_OpenMissing|DF_EntityFromPathFlag_OpenAsNeeded));
+                    }
                   }
                   
                   // rjf: insert
                   if(!df_view_is_nil(view))
                   {
+                    DF_Entity *current_project = df_entity_from_path(df_cfg_path_from_src(DF_CfgSrc_Project), DF_EntityFromPathFlag_OpenMissing|DF_EntityFromPathFlag_OpenAsNeeded);
+                    DF_Entity *view_project = df_entity_from_handle(view->project);
                     df_panel_insert_tab_view(panel, panel->last_tab_view, view);
                     if(view_is_selected)
                     {
@@ -13842,7 +14019,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
         
         //- rjf: writing config changes
         case DF_CoreCmdKind_WriteUserData:
-        case DF_CoreCmdKind_WriteProfileData:
+        case DF_CoreCmdKind_WriteProjectData:
         {
           DF_CfgSrc src = DF_CfgSrc_User;
           for(DF_CfgSrc s = (DF_CfgSrc)0; s < DF_CfgSrc_COUNT; s = (DF_CfgSrc)(s+1))

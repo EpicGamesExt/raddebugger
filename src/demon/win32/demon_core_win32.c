@@ -1545,32 +1545,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //////////////////////////
-      //- rjf: if run threads are marked as having reported an explicit trap
-      // on their last run, shift their RIPs past that trap instruction, so
-      // that they may continue
-      //
-      for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
-      {
-        DMN_W32_Entity *thread = n->v;
-        if(thread->thread.last_run_reported_trap)
-        {
-          Temp temp = temp_begin(scratch.arena);
-          U64 regs_block_size = regs_block_size_from_architecture(thread->arch);
-          void *regs_block = push_array(temp.arena, U8, regs_block_size);
-          B32 good = dmn_w32_thread_read_reg_block(thread->arch, thread->handle, regs_block);
-          U64 pre_rip = regs_rip_from_arch_block(thread->arch, regs_block);
-          if(good && pre_rip == thread->thread.last_run_reported_trap_pre_rip)
-          {
-            regs_arch_block_write_rip(thread->arch, regs_block, thread->thread.last_run_reported_trap_post_rip);
-            dmn_w32_thread_write_reg_block(thread->arch, thread->handle, regs_block);
-          }
-          temp_end(temp);
-          thread->thread.last_run_reported_trap = 0;
-          thread->thread.last_run_reported_trap_post_rip = 0;
-        }
-      }
-      
-      //////////////////////////
       //- rjf: choose win32 resume code
       //
       DWORD resume_code = DBG_CONTINUE;
@@ -2007,7 +1981,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }
             
             //- rjf: determine whether to roll back instruction pointer
-            B32 should_do_rollback = (is_trap);
+            B32 should_do_rollback = (hit_user_trap);
             
             //- rjf: roll back thread's instruction pointer
             U64 post_trap_rip = 0;
@@ -2043,14 +2017,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               e->code    = exception->ExceptionCode;
               e->flags   = exception->ExceptionFlags;
               e->instruction_pointer = (U64)exception->ExceptionAddress;
-              
-              // rjf: explicit trap -> mark this thread as having reported this trap
-              if(hit_explicit_trap)
-              {
-                thread->thread.last_run_reported_trap = 1;
-                thread->thread.last_run_reported_trap_pre_rip = instruction_pointer;
-                thread->thread.last_run_reported_trap_post_rip = post_trap_rip;
-              }
               
               //- rjf: fill according to exception code
               switch(exception->ExceptionCode)

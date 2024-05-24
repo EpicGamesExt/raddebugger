@@ -30,10 +30,9 @@ U8 r_tex2d_format_bytes_per_pixel_table[9] =
 16,
 };
 
-String8 r_tex2d_kind_display_string_table[2] =
+String8 r_tex2d_kind_display_string_table[1] =
 {
-str8_lit_comp("Static"),
-str8_lit_comp("Dynamic"),
+str8_lit_comp("$(a.display_string)"),
 };
 
 String8 r_tex2d_sample_kind_display_string_table[2] =

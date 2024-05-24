@@ -20,12 +20,13 @@ R_Tex2DFormat_RGBA32,
 R_Tex2DFormat_COUNT,
 } R_Tex2DFormat;
 
-typedef enum R_Tex2DKind
+typedef enum R_ResourceKind
 {
-R_Tex2DKind_Static,
-R_Tex2DKind_Dynamic,
-R_Tex2DKind_COUNT,
-} R_Tex2DKind;
+R_ResourceKind_Static,
+R_ResourceKind_Dynamic,
+R_ResourceKind_Stream,
+R_ResourceKind_COUNT,
+} R_ResourceKind;
 
 typedef enum R_Tex2DSampleKind
 {
@@ -43,13 +44,6 @@ R_GeoTopologyKind_TriangleStrip,
 R_GeoTopologyKind_COUNT,
 } R_GeoTopologyKind;
 
-typedef enum R_BufferKind
-{
-R_BufferKind_Static,
-R_BufferKind_Dynamic,
-R_BufferKind_COUNT,
-} R_BufferKind;
-
 typedef enum R_PassKind
 {
 R_PassKind_UI,
@@ -61,7 +55,7 @@ R_PassKind_COUNT,
 C_LINKAGE_BEGIN
 extern String8 r_tex2d_format_display_string_table[9];
 extern U8 r_tex2d_format_bytes_per_pixel_table[9];
-extern String8 r_tex2d_kind_display_string_table[2];
+extern String8 r_tex2d_kind_display_string_table[1];
 extern String8 r_tex2d_sample_kind_display_string_table[2];
 extern String8 r_pass_kind_display_string_table[3];
 extern U8 r_pass_kind_batch_table[3];
