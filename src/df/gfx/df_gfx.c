@@ -7023,65 +7023,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             F32 corner_radius = ui_em(0.6f, 1.f).value;
             ui_spacer(ui_px(1.f, 1.f));
             
-            // rjf: build tab list ctx menu
-            UI_Key tab_list_ctx_menu_key = ui_key_from_stringf(ui_key_zero(), "###tab_list_ctx_menu_%p", panel);
-            UI_CtxMenu(tab_list_ctx_menu_key) UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(2.25f, 1.f))
-            {
-              for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
-              {
-                if(df_view_is_project_filtered(view)) { continue; }
-                B32 view_is_selected = (view == df_selected_tab_from_panel(panel));
-                DF_IconKind icon_kind = df_icon_kind_from_view(view);
-                DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-                String8 label = df_display_string_from_view(scratch.arena, ctrl_ctx, view);
-                if(view_is_selected)
-                {
-                  ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_TabActive));
-                }
-                ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-                UI_Box *tab_list_item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawHotEffects|
-                                                                      UI_BoxFlag_DrawActiveEffects|
-                                                                      UI_BoxFlag_DrawBorder|
-                                                                      UI_BoxFlag_DrawBackground|
-                                                                      UI_BoxFlag_Clickable,
-                                                                      "###tab_list_item_box_%p", view);
-                UI_Parent(tab_list_item_box)
-                {
-                  UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-                    UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-                    UI_PrefWidth(ui_em(3.f, 1.f))
-                    UI_TextAlignment(UI_TextAlign_Center)
-                    ui_label(df_g_icon_kind_text_table[icon_kind]);
-                  UI_PrefWidth(ui_text_dim(10.f, 1.f))
-                    ui_label(label);
-                }
-                UI_Signal sig = ui_signal_from_box(tab_list_item_box);
-                if(ui_clicked(sig))
-                {
-                  next_selected_tab_view = view;
-                  DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
-                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
-                }
-              }
-            }
-            
-            // rjf: build tab list button
-            if(panel->tab_view_count > 5) UI_PrefWidth(ui_em(2.25f, 1.f)) UI_PrefHeight(ui_px(tab_bar_vheight, 1))
-            {
-              UI_Signal sig = df_icon_buttonf(DF_IconKind_List, 0, "###tab_list_%p", panel);
-              if(ui_clicked(sig))
-              {
-                if(ui_ctx_menu_is_open(tab_list_ctx_menu_key))
-                {
-                  ui_ctx_menu_close();
-                }
-                else
-                {
-                  ui_ctx_menu_open(tab_list_ctx_menu_key, sig.box->key, v2f32(0, dim_2f32(sig.box->rect).y));
-                }
-              }
-            }
-            
             // rjf: build tabs
             UI_PrefWidth(ui_em(18.f, 0.5f))
               UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
