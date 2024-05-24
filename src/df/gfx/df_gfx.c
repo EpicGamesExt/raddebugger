@@ -12930,7 +12930,7 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
     }
     
     // rjf: upload to gpu texture
-    df_gfx_state->icon_texture = r_tex2d_alloc(R_Tex2DKind_Static, image_dim, R_Tex2DFormat_RGBA8, image_data);
+    df_gfx_state->icon_texture = r_tex2d_alloc(R_ResourceKind_Static, image_dim, R_Tex2DFormat_RGBA8, image_data);
     
     // rjf: release
     stbi_image_free(image_data);

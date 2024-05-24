@@ -301,7 +301,7 @@ geo_xfer_thread__entry_point(void *p)
     R_Handle buffer = {0};
     if(got_task && data.size != 0)
     {
-      buffer = r_buffer_alloc(R_BufferKind_Static, data.size, data.str);
+      buffer = r_buffer_alloc(R_ResourceKind_Static, data.size, data.str);
     }
     
     //- rjf: commit results to cache
