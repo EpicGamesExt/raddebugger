@@ -6530,6 +6530,10 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
     // rjf: unpack command line arguments
     String8 user_cfg_path = cmd_line_string(cmdln, str8_lit("user"));
     String8 project_cfg_path = cmd_line_string(cmdln, str8_lit("project"));
+    if(project_cfg_path.size == 0)
+    {
+      project_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
+    }
     {
       String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
       String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));

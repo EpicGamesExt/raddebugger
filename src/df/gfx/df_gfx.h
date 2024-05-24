@@ -245,7 +245,7 @@ struct DF_Panel
   // rjf: tab params
   Side tab_side;
   
-  // rjf: stable view stacks (tabs)
+  // rjf: stable views (tabs)
   DF_View *first_tab_view;
   DF_View *last_tab_view;
   U64 tab_view_count;
@@ -803,6 +803,7 @@ internal DF_PathQuery df_path_query_from_string(String8 string);
 //~ rjf: View Type Functions
 
 internal B32 df_view_is_nil(DF_View *view);
+internal B32 df_view_is_project_filtered(DF_View *view);
 internal DF_Handle df_handle_from_view(DF_View *view);
 internal DF_View *df_view_from_handle(DF_Handle handle);
 
@@ -839,6 +840,7 @@ internal Rng2F32 df_target_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF
 //- rjf: view ownership insertion/removal
 internal void df_panel_insert_tab_view(DF_Panel *panel, DF_View *prev_view, DF_View *view);
 internal void df_panel_remove_tab_view(DF_Panel *panel, DF_View *view);
+internal DF_View *df_selected_tab_from_panel(DF_Panel *panel);
 
 //- rjf: icons & display strings
 internal String8 df_display_string_from_view(Arena *arena, DF_CtrlCtx ctrl_ctx, DF_View *view);
