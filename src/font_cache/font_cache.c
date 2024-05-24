@@ -565,10 +565,9 @@ f_hash2style_from_tag_size(F_Tag tag, F32 size)
 }
 
 internal F_Run
-f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, String8 string)
+f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_column, F32 tab_width, F_RunFlags flags, String8 string)
 {
   ProfBeginFunction();
-  F32 base_column = 0.f;
   
   //- rjf: map tag/size to style node
   F_Hash2StyleRasterCacheNode *hash2style_node = f_hash2style_from_tag_size(tag, size);
@@ -793,7 +792,6 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
       F32 advance = info->advance;
       if(is_tab)
       {
-        F32 tab_width = 4.f;
         advance *= tab_width - mod_f32(base_column, tab_width);
       }
       
@@ -838,12 +836,12 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, Stri
 }
 
 internal String8List
-f_wrapped_string_lines_from_font_size_string_max(Arena *arena, F_Tag font, F32 size, String8 string, F32 max)
+f_wrapped_string_lines_from_font_size_string_max(Arena *arena, F_Tag font, F32 size, F32 base_column, F32 tab_width, String8 string, F32 max)
 {
   String8List list = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    F_Run run = f_push_run_from_string(scratch.arena, font, size, 0, string);
+    F_Run run = f_push_run_from_string(scratch.arena, font, size, base_column, tab_width, 0, string);
     F32 off_px = 0;
     U64 off_bytes = 0;
     U64 line_start_off_bytes = 0;
@@ -951,12 +949,12 @@ f_wrapped_string_lines_from_font_size_string_max(Arena *arena, F_Tag font, F32 s
 }
 
 internal Vec2F32
-f_dim_from_tag_size_string(F_Tag tag, F32 size, String8 string)
+f_dim_from_tag_size_string(F_Tag tag, F32 size, F32 base_column, F32 tab_width, String8 string)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   Vec2F32 result = {0};
-  F_Run run = f_push_run_from_string(scratch.arena, tag, size, 0, string);
+  F_Run run = f_push_run_from_string(scratch.arena, tag, size, base_column, tab_width, 0, string);
   result = run.dim;
   scratch_end(scratch);
   ProfEnd();
@@ -964,13 +962,13 @@ f_dim_from_tag_size_string(F_Tag tag, F32 size, String8 string)
 }
 
 internal Vec2F32
-f_dim_from_tag_size_string_list(F_Tag tag, F32 size, String8List list)
+f_dim_from_tag_size_string_list(F_Tag tag, F32 size, F32 base_column, F32 tab_width, String8List list)
 {
   ProfBeginFunction();
   Vec2F32 sum = {0};
   for(String8Node *n = list.first; n != 0; n = n->next)
   {
-    Vec2F32 str_dim = f_dim_from_tag_size_string(tag, size, n->string);
+    Vec2F32 str_dim = f_dim_from_tag_size_string(tag, size, base_column, tab_width, n->string);
     sum.x += str_dim.x;
     sum.y = Max(sum.y, str_dim.y);
   }
@@ -979,7 +977,7 @@ f_dim_from_tag_size_string_list(F_Tag tag, F32 size, String8List list)
 }
 
 internal U64
-f_char_pos_from_tag_size_string_p(F_Tag tag, F32 size, String8 string, F32 p)
+f_char_pos_from_tag_size_string_p(F_Tag tag, F32 size, F32 base_column, F32 tab_width, String8 string, F32 p)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -997,7 +995,7 @@ f_char_pos_from_tag_size_string_p(F_Tag tag, F32 size, String8 string, F32 p)
     }
     if(char_idx < string.size)
     {
-      x += f_dim_from_tag_size_string(tag, size, str8_substr(string, r1u64(char_idx, char_idx+1))).x;
+      x += f_dim_from_tag_size_string(tag, size, base_column, tab_width, str8_substr(string, r1u64(char_idx, char_idx+1))).x;
     }
   }
   result = best_offset;

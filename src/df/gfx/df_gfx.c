@@ -1045,11 +1045,17 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
     {
       Temp scratch = scratch_begin(0, 0);
       DF_FontSlot slot = english_font_slots[idx];
+      String8 sample_text = str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?");
       f_push_run_from_string(scratch.arena,
                              df_font_from_slot(slot),
-                             df_font_size_from_slot(window, slot),
-                             0,
-                             str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?"));
+                             df_font_size_from_slot(window, DF_FontSlot_Code),
+                             0, 0, 0,
+                             sample_text);
+      f_push_run_from_string(scratch.arena,
+                             df_font_from_slot(slot),
+                             df_font_size_from_slot(window, DF_FontSlot_Main),
+                             0, 0, 0,
+                             sample_text);
       scratch_end(scratch);
     }
     for(DF_IconKind icon_kind = DF_IconKind_Null; icon_kind < DF_IconKind_COUNT; icon_kind = (DF_IconKind)(icon_kind+1))
@@ -1058,7 +1064,17 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
       f_push_run_from_string(scratch.arena,
                              df_font_from_slot(icon_font_slot),
                              df_font_size_from_slot(window, icon_font_slot),
-                             0,
+                             0, 0, 0,
+                             df_g_icon_kind_text_table[icon_kind]);
+      f_push_run_from_string(scratch.arena,
+                             df_font_from_slot(icon_font_slot),
+                             df_font_size_from_slot(window, DF_FontSlot_Main),
+                             0, 0, 0,
+                             df_g_icon_kind_text_table[icon_kind]);
+      f_push_run_from_string(scratch.arena,
+                             df_font_from_slot(icon_font_slot),
+                             df_font_size_from_slot(window, DF_FontSlot_Code),
+                             0, 0, 0,
                              df_g_icon_kind_text_table[icon_kind]);
       scratch_end(scratch);
     }
@@ -5976,7 +5992,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               //- rjf: calculate width of exp row
               if(row == viz_rows.first)
               {
-                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), row->display_expr).x + ui_top_font_size()*0.5f;
+                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, UI_TEMP_TAB_WIDTH, row->display_expr).x + ui_top_font_size()*0.5f;
                 expr_column_width_px = Max(expr_column_width_px, ui_top_font_size()*10.f);
               }
               
@@ -7814,7 +7830,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         if(!(box->flags & UI_BoxFlag_DisableTextTrunc))
         {
           max_x = (box->rect.x1-text_position.x);
-          ellipses_run = f_push_run_from_string(scratch.arena, box->font, box->font_size, 0, str8_lit("..."));
+          ellipses_run = f_push_run_from_string(scratch.arena, box->font, box->font_size, 0, UI_TEMP_TAB_WIDTH, 0, str8_lit("..."));
         }
         d_truncated_fancy_run_list(text_position, &box->display_string_runs, max_x, ellipses_run);
         if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges)
@@ -8083,8 +8099,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       d_fancy_string_list_push(scratch.arena, &strs, &str2);
       D_FancyString str3 = {df_font_from_slot(DF_FontSlot_Code), str8_lit("very fancy text!"), v4f32(1, 0.8f, 0.4f, 1), 18.f, 4.f, 4.f};
       d_fancy_string_list_push(scratch.arena, &strs, &str3);
-      D_FancyRunList runs = d_fancy_run_list_from_fancy_string_list(scratch.arena, &strs);
-      F_Run trailer_run = f_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, str8_lit("..."));
+      D_FancyRunList runs = d_fancy_run_list_from_fancy_string_list(scratch.arena, UI_TEMP_TAB_WIDTH, &strs);
+      F_Run trailer_run = f_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, UI_TEMP_TAB_WIDTH, 0, str8_lit("..."));
       F32 limit = 500.f + sin_f32(df_time_in_seconds()/10.f)*200.f;
       d_truncated_fancy_run_list(p, &runs, limit, trailer_run);
       d_rect(r2f32p(p.x+limit, 0, p.x+limit+2.f, 1000), v4f32(1, 0, 0, 1), 0, 0, 0);
@@ -8202,7 +8218,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
       {
         DF_Eval value_eval = df_value_mode_eval_from_eval(graph, rdi, ctrl_ctx, eval);
         String8 string = df_string_from_simple_typed_eval(arena, graph, rdi, flags, radix, value_eval);
-        space_taken += f_dim_from_tag_size_string(font, font_size, string).x;
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
         str8_list_push(arena, &list, string);
       }break;
       
@@ -8242,7 +8258,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           did_ptr_value = 1;
           String8 string = df_string_from_simple_typed_eval(arena, graph, rdi, flags, radix, value_eval);
-          space_taken += f_dim_from_tag_size_string(font, font_size, string).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
           str8_list_push(arena, &list, string);
         }
         
@@ -8251,7 +8267,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           String8 arrow = str8_lit(" -> ");
           str8_list_push(arena, &list, arrow);
-          space_taken += f_dim_from_tag_size_string(font, font_size, arrow).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
         }
         
         // rjf: special-case: strings
@@ -8268,8 +8284,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_slice.data.str, text_slice.data.size/sizeof(U32)));}break;
           }
           String8 text = df_eval_escaped_from_raw_string(arena, raw_text);
-          space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
-          space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, text).x;
+          space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));
           str8_list_push(arena, &list, text);
           str8_list_push(arena, &list, str8_lit("\""));
@@ -8282,7 +8298,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
                  direct_type_kind == TG_Kind_Void))
         {
           str8_list_push(arena, &list, symbol_name);
-          space_taken += f_dim_from_tag_size_string(font, font_size, symbol_name).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
         }
         
         // rjf: descend to pointed-at thing
@@ -8299,11 +8315,11 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             {
               String8 unknown = str8_lit("???");
               str8_list_push(arena, &list, unknown);
-              space_taken += f_dim_from_tag_size_string(font, font_size, unknown).x;
+              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, unknown).x;
             }
             else
             {
-              space_taken += f_dim_from_tag_size_string_list(font, font_size, pted_strs).x;
+              space_taken += f_dim_from_tag_size_string_list(font, font_size, 0, 0, pted_strs).x;
               str8_list_concat_in_place(&list, &pted_strs);
             }
           }
@@ -8311,7 +8327,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           {
             String8 ellipses = str8_lit("...");
             str8_list_push(arena, &list, ellipses);
-            space_taken += f_dim_from_tag_size_string(font, font_size, ellipses).x;
+            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
           }
         }
       }break;
@@ -8352,8 +8368,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_slice.data.str, text_slice.data.size/sizeof(U32)));}break;
           }
           String8 text = df_eval_escaped_from_raw_string(arena, raw_text);
-          space_taken += f_dim_from_tag_size_string(font, font_size, text).x;
-          space_taken += 2*f_dim_from_tag_size_string(font, font_size, str8_lit("\"")).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, text).x;
+          space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
           str8_list_push(arena, &list, str8_lit("\""));
           str8_list_push(arena, &list, text);
           str8_list_push(arena, &list, str8_lit("\""));
@@ -8364,7 +8380,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           String8 brace = str8_lit("[");
           str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, brace).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
         }
         
         // rjf: content
@@ -8381,12 +8397,12 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
               element_eval.offset   = eval.offset + direct_type_byte_size*idx;
               MemoryCopyArray(element_eval.imm_u128, eval.imm_u128);
               String8List element_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdi, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, element_eval, opt_member, cfg_table);
-              space_taken += f_dim_from_tag_size_string_list(font, font_size, element_strs).x;
+              space_taken += f_dim_from_tag_size_string_list(font, font_size, 0, 0, element_strs).x;
               str8_list_concat_in_place(&list, &element_strs);
               if(idx+1 < array_count)
               {
                 String8 comma = str8_lit(", ");
-                space_taken += f_dim_from_tag_size_string(font, font_size, comma).x;
+                space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
                 str8_list_push(arena, &list, comma);
               }
             }
@@ -8395,7 +8411,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           {
             String8 ellipses = str8_lit("...");
             str8_list_push(arena, &list, ellipses);
-            space_taken += f_dim_from_tag_size_string(font, font_size, ellipses).x;
+            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
           }
         }
         
@@ -8404,7 +8420,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           String8 brace = str8_lit("]");
           str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, brace).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
         }
         scratch_end(scratch);
       }break;
@@ -8421,7 +8437,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           String8 brace = str8_lit("{");
           str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, brace).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
         }
         
         // rjf: content
@@ -8439,12 +8455,12 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             member_eval.offset = eval.offset + mem->off;
             MemoryCopyArray(member_eval.imm_u128, eval.imm_u128);
             String8List member_strs = df_single_line_eval_value_strings_from_eval(arena, flags, graph, rdi, ctrl_ctx, default_radix, font, font_size, max_size-space_taken, depth+1, member_eval, opt_member, cfg_table);
-            space_taken += f_dim_from_tag_size_string_list(font, font_size, member_strs).x;
+            space_taken += f_dim_from_tag_size_string_list(font, font_size, 0, 0, member_strs).x;
             str8_list_concat_in_place(&list, &member_strs);
             if(member_idx+1 < filtered_data_members.count)
             {
               String8 comma = str8_lit(", ");
-              space_taken += f_dim_from_tag_size_string(font, font_size, comma).x;
+              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
               str8_list_push(arena, &list, comma);
             }
           }
@@ -8454,14 +8470,14 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         {
           String8 ellipses = str8_lit("...");
           str8_list_push(arena, &list, ellipses);
-          space_taken += f_dim_from_tag_size_string(font, font_size, ellipses).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
         }
         
         // rjf: close brace
         {
           String8 brace = str8_lit("}");
           str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, brace).x;
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
         }
         
       }break;
@@ -10512,7 +10528,7 @@ internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions)
     lock_icon_color.y += (1 - lock_icon_color.y) * 0.3f;
     lock_icon_color.z += (1 - lock_icon_color.z) * 0.3f;
     d_text(ui_icon_font(),
-           box->font_size,
+           box->font_size, 0, 0,
            v2f32((box->rect.x0 + box->rect.x1)/2 + lock_icon_off/2,
                  box->rect.y0 + lock_icon_off/2),
            lock_icon_color,
@@ -10560,7 +10576,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
   if(u->remap_px_delta != 0)
   {
     F32 remap_px_delta = u->remap_px_delta;
-    F32 circle_advance = f_dim_from_tag_size_string(box->font, box->font_size, df_g_icon_kind_text_table[DF_IconKind_CircleFilled]).x;
+    F32 circle_advance = f_dim_from_tag_size_string(box->font, box->font_size, 0, 0, df_g_icon_kind_text_table[DF_IconKind_CircleFilled]).x;
     Vec2F32 bp_text_pos = ui_box_text_position(box);
     Vec2F32 bp_center = v2f32(bp_text_pos.x + circle_advance/2 + circle_advance/8.f, bp_text_pos.y);
     F_Metrics icon_font_metrics = f_metrics_from_tag_size(box->font, box->font_size);
@@ -10573,7 +10589,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
                                        bp_center.x + remap_bar_thickness,
                                        bp_center.y + ClampBot(remap_px_delta, 0) + remap_bar_thickness),
                                 remap_color, 2.f, 0, 1.f);
-    d_text(box->font, box->font_size,
+    d_text(box->font, box->font_size, 0, 0,
            v2f32(bp_text_pos.x,
                  bp_center.y + remap_px_delta),
            remap_color,
@@ -11073,7 +11089,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         line_num += 1, line_idx += 1)
     {
       String8 line_text = params->line_text[line_idx];
-      F32 line_text_dim = f_dim_from_tag_size_string(params->font, params->font_size, line_text).x + params->line_num_width_px;
+      F32 line_text_dim = f_dim_from_tag_size_string(params->font, params->font_size, 0, UI_TEMP_TAB_WIDTH, line_text).x + params->line_num_width_px;
       line_extras_off[line_idx] = Max(line_text_dim, params->font_size*50);
     }
   }
@@ -11227,7 +11243,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     String8 line_string = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_text[mouse_y_line_idx]) : str8_zero();
     
     // rjf: mouse x * string => column
-    S64 column = f_char_pos_from_tag_size_string_p(params->font, params->font_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px)+1;
+    S64 column = f_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, UI_TEMP_TAB_WIDTH, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px)+1;
     
     // rjf: bundle
     mouse_pt = txt_pt(line_num, column);
@@ -11404,7 +11420,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     {
       U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
       String8 line_text = params->line_text[line_slice_idx];
-      F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, str8_prefix(line_text, selected_rng.min.column-1)).x;
+      F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_text, selected_rng.min.column-1)).x;
       result.mouse_expr_rng = selected_rng;
       result.mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                              text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
@@ -11419,7 +11435,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       Rng1U64 expr_off_rng = txti_expr_range_from_line_off_range_string_tokens(mouse_pt_off, line_range, line_text, &line_tokens);
       if(expr_off_rng.max != expr_off_rng.min)
       {
-        F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
+        F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
         result.mouse_expr_rng = txt_rng(txt_pt(mouse_pt.line, 1+(expr_off_rng.min-line_range.min)), txt_pt(mouse_pt.line, 1+(expr_off_rng.max-line_range.min)));
         result.mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                                text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
@@ -11774,8 +11790,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               Rng1U64 match_range = r1u64(needle_pos, needle_pos+params->search_query.size);
               Rng1F32 match_column_pixel_off_range =
               {
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, str8_prefix(line_string, match_range.min)).x,
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, str8_prefix(line_string, match_range.max)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, match_range.min)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, match_range.max)).x,
               };
               Rng2F32 match_rect =
               {
@@ -11830,8 +11846,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               };
               Rng1F32 select_column_pixel_off_range =
               {
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, str8_prefix(line_string, select_column_range_in_line.min-1)).x,
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, str8_prefix(line_string, select_column_range_in_line.max-1)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, select_column_range_in_line.min-1)).x,
+                f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, select_column_range_in_line.max-1)).x,
               };
               Rng2F32 select_rect =
               {
@@ -11859,7 +11875,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         if(cursor->line == line_num)
         {
           S64 column = cursor->column;
-          Vec2F32 advance = f_dim_from_tag_size_string(line_box->font, line_box->font_size, str8_prefix(line_string, column-1));
+          Vec2F32 advance = f_dim_from_tag_size_string(line_box->font, line_box->font_size, UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(line_string, column-1));
           F32 cursor_off_pixels = advance.x;
           F32 cursor_thickness = ClampBot(4.f, line_box->font_size/6.f);
           Rng2F32 cursor_rect =
@@ -12801,7 +12817,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       Temp scratch = scratch_begin(0, 0);
-      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), edit_string).x;
+      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, UI_TEMP_TAB_WIDTH, edit_string).x;
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
@@ -12879,13 +12895,13 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       draw_data->select_color = ui_top_text_select_color();
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(edit_string, cursor->column-1)).x;
       scratch_end(scratch);
     }
     else if((is_focus_active || is_focus_active_disabled) && !(flags & DF_LineEditFlag_CodeContents))
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
-      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), edit_string).x;
+      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, UI_TEMP_TAB_WIDTH, edit_string).x;
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
@@ -12898,7 +12914,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), UI_TEMP_BASE_COLUMN_TODO, UI_TEMP_TAB_WIDTH, str8_prefix(edit_string, cursor->column-1)).x;
     }
   }
   

@@ -4,6 +4,10 @@
 #ifndef UI_H
 #define UI_H
 
+// TODO(rjf): @tab_layout
+#define UI_TEMP_TAB_WIDTH 4.f
+#define UI_TEMP_BASE_COLUMN_TODO 0.f
+
 ////////////////////////////////
 //~ rjf: Icon Info
 
