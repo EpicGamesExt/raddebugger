@@ -156,7 +156,7 @@ entry_point(CmdLine *cmd_line)
   //- rjf: build dump strings
   //
   String8List dump = {0};
-  if(errors.node_count != 0)
+  if(errors.node_count == 0)
   {
     //- rjf: DATA SECTIONS
     if(dump_flags & DumpFlag_DataSections)
