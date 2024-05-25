@@ -153,6 +153,9 @@ static RDI_Local rdi_local_nil = {0};
 RDI_PROC RDI_ParseStatus
 rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out);
 
+RDI_PROC RDI_U64
+rdi_decompressed_size_from_parsed(RDI_Parsed *rdi);
+
 RDI_PROC RDI_U8*
 rdi_string_from_idx(RDI_Parsed *parsed, RDI_U32 idx, RDI_U64 *len_out);
 

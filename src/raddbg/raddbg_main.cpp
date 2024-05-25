@@ -22,10 +22,6 @@
 //~ rjf: Includes
 
 //- rjf: [lib]
-#include "lib_rdi_format/rdi_format.h"
-#include "lib_rdi_format/rdi_format.c"
-#include "lib_rdi_format/rdi_format_parse.h"
-#include "lib_rdi_format/rdi_format_parse.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 
@@ -34,6 +30,7 @@
 #include "os/os_inc.h"
 #include "task_system/task_system.h"
 #include "ico/ico.h"
+#include "rdi_format_local/rdi_format_local.h"
 #include "rdi_make_local/rdi_make_local.h"
 #include "mdesk/mdesk.h"
 #include "hash_store/hash_store.h"
@@ -73,6 +70,7 @@
 #include "os/os_inc.c"
 #include "task_system/task_system.c"
 #include "ico/ico.c"
+#include "rdi_format_local/rdi_format_local.c"
 #include "rdi_make_local/rdi_make_local.c"
 #include "mdesk/mdesk.c"
 #include "hash_store/hash_store.c"

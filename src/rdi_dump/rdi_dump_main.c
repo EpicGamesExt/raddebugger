@@ -15,25 +15,19 @@
 //~ rjf: Includes
 
 //- rjf: [lib]
-#include "lib_rdi_format/rdi_format.h"
-#include "lib_rdi_format/rdi_format_parse.h"
-#include "lib_rdi_format/rdi_format.c"
-#include "lib_rdi_format/rdi_format_parse.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "path/path.h"
-#include "dbgi/dbgi.h"
+#include "rdi_format_local/rdi_format_local.h"
 #include "rdi_dump.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "path/path.c"
-#include "dbgi/dbgi.c"
+#include "rdi_format_local/rdi_format_local.c"
 #include "rdi_dump.c"
 
 ////////////////////////////////
@@ -46,7 +40,6 @@ entry_point(CmdLine *cmd_line)
   //- rjf: set up
   //
   Arena *arena = arena_alloc();
-  DI_Scope *di_scope = di_scope_open();
   String8List errors = {0};
   
   //////////////////////////////
@@ -74,7 +67,6 @@ entry_point(CmdLine *cmd_line)
     DumpFlag_Strings            = (1<<16),
   };
   String8 input_name = {0};
-  String8 input_data = {0};
   DumpFlags dump_flags = (U32)0xffffffff;
   {
     // rjf: extract input file path
@@ -111,22 +103,44 @@ entry_point(CmdLine *cmd_line)
   }
   
   //////////////////////////////
-  //- rjf: obtain rdi parse
+  //- rjf: load file
   //
-  RDI_Parsed *rdi = &di_rdi_parsed_nil;
+  String8 input_data = os_data_from_file_path(arena, input_name);
   if(input_name.size == 0)
   {
     str8_list_pushf(arena, &errors, "error (input): No input RDI file specified.");
   }
-  else
-  {
-    DI_Key key = {input_name};
-    di_open(&key);
-    rdi = di_rdi_from_key(di_scope, &key, max_U64);
-  }
-  if(rdi == &di_rdi_parsed_nil)
+  else if(input_data.size == 0)
   {
     str8_list_pushf(arena, &errors, "error (input): No input RDI file successfully loaded; either the path or file contents are invalid.");
+  }
+  
+  //////////////////////////////
+  //- rjf: obtain initial rdi parse
+  //
+  RDI_Parsed rdi_ = {0};
+  RDI_Parsed *rdi = &rdi_;
+  RDI_ParseStatus status = rdi_parse(input_data.str, input_data.size, rdi);
+  
+  //////////////////////////////
+  //- rjf: decompress rdi if necessary
+  //
+  {
+    U64 decompressed_size = rdi_decompressed_size_from_parsed(rdi);
+    if(decompressed_size > input_data.size)
+    {
+      U8 *decompressed_data = push_array_no_zero(arena, U8, decompressed_size);
+      rdi_decompress_parsed(decompressed_data, decompressed_size, rdi);
+      status = rdi_parse(decompressed_data, decompressed_size, rdi);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: error on bad parse status
+  //
+  if(status != RDI_ParseStatus_Good)
+  {
+    str8_list_pushf(arena, &errors, "error (input): RDI file could not be successfully decoded.");
   }
   
   //////////////////////////////
@@ -142,7 +156,7 @@ entry_point(CmdLine *cmd_line)
   //- rjf: build dump strings
   //
   String8List dump = {0};
-  if(rdi != &di_rdi_parsed_nil)
+  if(errors.node_count != 0)
   {
     //- rjf: DATA SECTIONS
     if(dump_flags & DumpFlag_DataSections)
@@ -437,6 +451,4 @@ entry_point(CmdLine *cmd_line)
   {
     fwrite(n->string.str, 1, n->string.size, stdout);
   }
-  
-  di_scope_close(di_scope);
 }
