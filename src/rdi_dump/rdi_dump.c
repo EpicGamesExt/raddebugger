@@ -240,6 +240,11 @@ rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
   RDI_ParsedLineMap line_map = {0};
   rdi_line_map_from_source_file(parsed, source_file, &line_map);
   
+  // normal source path
+  String8 path = {0};
+  path.str = rdi_string_from_idx(parsed, source_file->normal_full_path_string_idx, &path.size);
+  str8_list_pushf(arena, out, "%.*spath: \"%S\"\n", indent_level, rdi_stringize_spaces, path);
+  
   // stringize line map data
   str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
   
