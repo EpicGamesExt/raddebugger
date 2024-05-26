@@ -806,7 +806,7 @@ internal void ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CT
 internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID machine_id, DMN_Handle process, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 
 //- rjf: module lifetime open/close work
-internal void ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path, U64 exe_timestamp);
+internal void ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path);
 internal void ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 path);
 
 //- rjf: attached process running/event gathering
