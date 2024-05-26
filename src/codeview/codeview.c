@@ -171,44 +171,51 @@ cv_f64_from_numeric(CV_NumericParsed *num){
 internal U64
 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value)
 {
-  U32 value;
-
   U64 cursor = offset;
-
+  
+  // rjf: read header
   U8 header = 0;
   cursor += str8_deserial_read_struct(data, cursor, &header);
-
-  // 1 byte
-  if((header & 0x80) == 0)
+  
+  // rjf: decode value
+  U32 value = 0;
   {
-    value = header;
+    // 1 byte
+    if((header & 0x80) == 0)
+    {
+      value = header;
+    }
+    
+    // 2 bytes
+    else if((header & 0xC0) == 0x80 && cursor+2 <= data.size)
+    {
+      U8 second_byte;
+      cursor += str8_deserial_read_struct(data, cursor, &second_byte);
+      value = ((header & 0x3F) << 8) | second_byte;
+    }
+    
+    // 4 bytes
+    else if((header & 0xE0) == 0xC0 && cursor+3 <= data.size)
+    {
+      U8 second_byte, third_byte, fourth_byte;
+      cursor += str8_deserial_read_struct(data, cursor, &second_byte);
+      cursor += str8_deserial_read_struct(data, cursor, &third_byte);
+      cursor += str8_deserial_read_struct(data, cursor, &fourth_byte);
+      value = (((U32)header & 0x1F) << 24) | ((U32)second_byte << 16) | ((U32)third_byte << 8) | (U32)fourth_byte;
+    }
+    
+    // bad encode
+    else if((header & 0xE0) == 0xE0)
+    {
+      value = max_U32;
+    }
   }
-  // 2 bytes
-  else if((header & 0xC0) == 0x80)
+  
+  // rjf: output results
+  if(out_value)
   {
-    Assert(cursor + sizeof(U8) * 2 <= data.size);
-    U8 second_byte;
-    cursor += str8_deserial_read_struct(data, cursor, &second_byte);
-    value = ((header & 0x3F) << 8) | second_byte;
+    *out_value = value;
   }
-  // 4 bytes
-  else if((header & 0xE0) == 0xC0)
-  {
-    Assert(cursor + sizeof(U8) * 3 <= data.size);
-    U8 second_byte, third_byte, fourth_byte;
-    cursor += str8_deserial_read_struct(data, cursor, &second_byte);
-    cursor += str8_deserial_read_struct(data, cursor, &third_byte);
-    cursor += str8_deserial_read_struct(data, cursor, &fourth_byte);
-    value = (((U32)header & 0x1F) << 24) | ((U32)second_byte << 16) | ((U32)third_byte << 8) | (U32)fourth_byte;
-  }
-  // bad encode
-  else if((header & 0xE0) == 0xE0)
-  {
-    value = max_U32;
-  }
-
-  *out_value = value;
-
   U64 read_size = cursor - offset;
   return read_size;
 }
@@ -217,9 +224,9 @@ internal U64
 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value)
 {
   U32 value;
-
+  
   U64 read_size = cv_decode_inline_annot_u32(data, offset, &value);
-
+  
   if(value & 1)
   {
     value = -(value >> 1);
@@ -228,9 +235,9 @@ cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value)
   {
     value = value >> 1;
   }
-
+  
   *out_value = (S32)value;
-
+  
   return read_size;
 }
 
