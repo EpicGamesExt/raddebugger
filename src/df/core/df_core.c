@@ -1516,8 +1516,12 @@ df_display_string_from_entity(Arena *arena, DF_Entity *entity)
     
     case DF_EntityKind_Module:
     {
-      result = push_str8_copy(arena, entity->name);
-      result = str8_skip_last_slash(result);
+      result = push_str8_copy(arena, str8_skip_last_slash(entity->name));
+    }break;
+    
+    case DF_EntityKind_RecentProject:
+    {
+      result = push_str8_copy(arena, str8_skip_last_slash(entity->name));
     }break;
   }
   return result;

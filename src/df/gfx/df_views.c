@@ -2856,7 +2856,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
           // rjf: filename
           UI_PrefWidth(ui_pct(1, 0))
           {
-            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##%p", file->filename, view);
+            UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, file->filename);
             ui_box_equip_fuzzy_match_ranges(box, &file->match_ranges);
           }
         }
