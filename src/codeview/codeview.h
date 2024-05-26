@@ -1761,8 +1761,8 @@ struct CV_SymBuildInfo
 
 //- (SymKind: INLINESITE)
 
-typedef U32 CV_InlineBinaryAnnotaiton;
-typedef enum CV_InlineBinaryAnnotationenum
+typedef U32 CV_InlineBinaryAnnotation;
+typedef enum CV_InlineBinaryAnnotationEnum
 {
   CV_InlineBinaryAnnotation_Null,
   CV_InlineBinaryAnnotation_CodeOffset,
@@ -1778,14 +1778,16 @@ typedef enum CV_InlineBinaryAnnotationenum
   CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset,
   CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset,
   CV_InlineBinaryAnnotaiton_ChangeColumnEnd
-};
+}
+CV_InlineBinaryAnnotationEnum;
 
 typedef U32 CV_InlineRangeKind;
-typedef enum CV_InlnineRangeKindEnum
+typedef enum CV_InlineRangeKindEnum
 {
   CV_InlineRangeKind_Expr,
   CV_InlineRangeKind_Stmt
-};
+}
+CV_InlineRangeKindEnum;
 
 typedef struct CV_SymInlineSite CV_SymInlineSite;
 struct CV_SymInlineSite
@@ -2916,7 +2918,6 @@ struct CV_TypeIdArray
   CV_TypeId *itypes;
   U64 count;
 };
-
 
 ////////////////////////////////
 //~ CodeView Common Functions
