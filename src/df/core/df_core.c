@@ -6214,7 +6214,7 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
     if(node->reggen != reg_gen ||
        node->memgen != mem_gen)
     {
-      CTRL_Unwind new_unwind = ctrl_unwind_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+100);
+      CTRL_Unwind new_unwind = ctrl_unwind_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+1000);
       if(!(new_unwind.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)) && new_unwind.frames.count != 0)
       {
         node->unwind = ctrl_unwind_deep_copy(node->arena, thread->arch, &new_unwind);
@@ -7395,10 +7395,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               case DF_CoreCmdKind_StepOut:
               {
                 // rjf: thread => full unwind
-                CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+                CTRL_Unwind unwind = ctrl_unwind_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+10000);
                 
                 // rjf: use first unwind frame to generate trap
-                if(unwind.frames.count > 1)
+                if(unwind.flags == 0 && unwind.frames.count > 1)
                 {
                   U64 vaddr = regs_rip_from_arch_block(thread->arch, unwind.frames.v[1].regs);
                   CTRL_Trap trap = {CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck, vaddr};
