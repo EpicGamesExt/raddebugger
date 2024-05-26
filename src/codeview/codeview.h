@@ -1152,6 +1152,7 @@ struct CV_SymFrameproc
 };
 
 //- (SymKind: ANNOTATION)
+
 typedef struct CV_SymAnnotation CV_SymAnnotation;
 struct CV_SymAnnotation
 {
@@ -1769,15 +1770,15 @@ typedef enum CV_InlineBinaryAnnotationEnum
   CV_InlineBinaryAnnotation_ChangeCodeOffsetBase,
   CV_InlineBinaryAnnotation_ChangeCodeOffset,
   CV_InlineBinaryAnnotation_ChangeCodeLength,
-  CV_InlineBinaryAnnotation_ChnageFile,
+  CV_InlineBinaryAnnotation_ChangeFile,
   CV_InlineBinaryAnnotation_ChangeLineOffset,
-  CV_InlineBinaryAnnotation_ChnageLineEndDelta,
+  CV_InlineBinaryAnnotation_ChangeLineEndDelta,
   CV_InlineBinaryAnnotation_ChangeRangeKind,
   CV_InlineBinaryAnnotation_ChangeColumnStart,
   CV_InlineBinaryAnnotation_ChangeColumnEndDelta,
   CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset,
   CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset,
-  CV_InlineBinaryAnnotaiton_ChangeColumnEnd
+  CV_InlineBinaryAnnotation_ChangeColumnEnd
 }
 CV_InlineBinaryAnnotationEnum;
 
@@ -1826,7 +1827,7 @@ struct CV_SymFileStatic
 //- (SymKind: ARMSWITCHTABLE)
 
 typedef U16 CV_ArmSwitchKind;
-typedef enum
+typedef enum CV_ArmSwitchKindEnum
 {
   CV_ArmSwitchKind_INT1,
   CV_ArmSwitchKind_UINT1,
@@ -1839,7 +1840,8 @@ typedef enum
   CV_ArmSwitchKind_UINT2SHL1,
   CV_ArmSwitchKind_INT1SSHL1,
   CV_ArmSwitchKind_INT2SSHL1,
-} CV_ArmSwitchKindEnum;
+}
+CV_ArmSwitchKindEnum;
 
 typedef struct CV_SymArmSwitchTable CV_SymArmSwitchTable;
 struct CV_SymArmSwitchTable
@@ -2669,12 +2671,13 @@ X(XfgHashType,         0xFF)\
 X(XfgHashVirtual,      0x100)
 
 typedef U32 CV_C13_SubSectionKind;
-typedef enum
+typedef enum CV_C13_SubSectionKindEnum
 {
 #define X(N,c) CV_C13_SubSectionKind_##N = c,
   CV_C13_SubSectionKindXList(X)
 #undef X
-} CV_C13_SubSectionKindEnum;
+}
+CV_C13_SubSectionKindEnum;
 
 typedef struct CV_C13_SubSectionHeader CV_C13_SubSectionHeader;
 struct CV_C13_SubSectionHeader
@@ -2686,13 +2689,14 @@ struct CV_C13_SubSectionHeader
 //- FileChksms sub-section
 
 typedef U8 CV_C13_ChecksumKind;
-typedef enum
+typedef enum CV_C13_ChecksumKindEnum
 {
   CV_C13_ChecksumKind_Null,
   CV_C13_ChecksumKind_MD5,
   CV_C13_ChecksumKind_SHA1,
   CV_C13_ChecksumKind_SHA256,
-} CV_C13_ChecksumKindEnum;
+}
+CV_C13_ChecksumKindEnum;
 
 typedef struct CV_C13_Checksum CV_C13_Checksum;
 struct CV_C13_Checksum
