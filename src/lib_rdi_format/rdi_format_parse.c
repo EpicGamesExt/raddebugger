@@ -221,6 +221,17 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
   return(result);
 }
 
+RDI_PROC RDI_U64
+rdi_decompressed_size_from_parsed(RDI_Parsed *rdi)
+{
+  RDI_U64 decompressed_size = rdi->raw_data_size;
+  for(RDI_U64 dsec_idx = 0; dsec_idx < rdi->dsec_count; dsec_idx += 1)
+  {
+    decompressed_size += (rdi->dsecs[dsec_idx].unpacked_size - rdi->dsecs[dsec_idx].encoded_size);
+  }
+  return decompressed_size;
+}
+
 RDI_PROC RDI_U8*
 rdi_string_from_idx(RDI_Parsed *parsed, RDI_U32 idx, RDI_U64 *len_out){
   RDI_U8 *result = 0;

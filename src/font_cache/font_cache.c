@@ -792,7 +792,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
       F32 advance = info->advance;
       if(is_tab)
       {
-        advance = tab_size_px - mod_f32(base_align_px, tab_size_px);
+        advance = floor_f32(tab_size_px) - mod_f32(floor_f32(base_align_px), floor_f32(tab_size_px));
       }
       
       // rjf: push piece

@@ -813,11 +813,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         CTRL_Entity *module = ctrl_entity_alloc(store, process, CTRL_EntityKind_Module, event->arch, event->machine_id, event->entity, event->vaddr_rng.min);
         ctrl_entity_equip_string(store, module, event->string);
         module->timestamp = event->timestamp;
-        CTRL_Entity *debug_info_path = ctrl_entity_alloc(store, module, CTRL_EntityKind_DebugInfoPath, Architecture_Null, 0, dmn_handle_zero(), 0);
-        String8 initial_debug_info_path = ctrl_initial_debug_info_path_from_module(scratch.arena, event->machine_id, event->entity);
-        ctrl_entity_equip_string(store, debug_info_path, initial_debug_info_path);
         module->vaddr_range = event->vaddr_rng;
-        debug_info_path->timestamp = module->timestamp;
         scratch_end(scratch);
       }break;
       case CTRL_EventKind_EndModule:
@@ -834,6 +830,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
           debug_info_path = ctrl_entity_alloc(store, module, CTRL_EntityKind_DebugInfoPath, Architecture_Null, 0, dmn_handle_zero(), 0);
         }
         ctrl_entity_equip_string(store, debug_info_path, event->string);
+        debug_info_path->timestamp = event->timestamp;
       }break;
     }
   }
@@ -2855,10 +2852,11 @@ ctrl_thread__entry_point(void *p)
             String8 path = msg->path;
             CTRL_Entity *module = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, msg->machine_id, msg->entity);
             CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
-            DI_Key old_dbgi_key = {debug_info_path->string, module->timestamp};
+            DI_Key old_dbgi_key = {debug_info_path->string, debug_info_path->timestamp};
             di_close(&old_dbgi_key);
             ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path);
-            DI_Key new_dbgi_key = {debug_info_path->string, module->timestamp};
+            U64 new_dbgi_timestamp = os_properties_from_file_path(path).modified;
+            DI_Key new_dbgi_key = {debug_info_path->string, new_dbgi_timestamp};
             di_open(&new_dbgi_key);
             CTRL_EventList evts = {0};
             CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
@@ -3009,7 +3007,7 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_MachineID 
 //- rjf: module lifetime open/close work
 
 internal void
-ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path, U64 exe_timestamp)
+ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path)
 {
   //////////////////////////////
   //- rjf: parse module image info
@@ -3231,8 +3229,8 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
     String8 builtin_debug_info_path__relative = push_str8f(scratch.arena, "%S/%S", exe_folder, builtin_debug_info_path);
     String8 dbg_path_candidates[] =
     {
-      /* inferred (treated as absolute): */ builtin_debug_info_path__absolute,
       /* inferred (treated as relative): */ builtin_debug_info_path__relative,
+      /* inferred (treated as absolute): */ builtin_debug_info_path__absolute,
       /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(path)),
       /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", path),
     };
@@ -3594,8 +3592,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt1 = ctrl_event_list_push(scratch.arena, &evts);
       String8 module_path = event->string;
-      U64 timestamp = os_properties_from_file_path(module_path).modified;
-      ctrl_thread__module_open(CTRL_MachineID_Local, event->process, event->module, r1u64(event->address, event->address+event->size), module_path, timestamp);
+      U64 exe_timestamp = os_properties_from_file_path(module_path).modified;
+      ctrl_thread__module_open(CTRL_MachineID_Local, event->process, event->module, r1u64(event->address, event->address+event->size), module_path);
       out_evt1->kind       = CTRL_EventKind_NewModule;
       out_evt1->msg_id     = msg->msg_id;
       out_evt1->machine_id = CTRL_MachineID_Local;
@@ -3605,18 +3603,19 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt1->entity_id  = event->code;
       out_evt1->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt1->rip_vaddr  = event->address;
-      out_evt1->timestamp  = timestamp;
+      out_evt1->timestamp  = exe_timestamp;
       out_evt1->string     = module_path;
       CTRL_Event *out_evt2 = ctrl_event_list_push(scratch.arena, &evts);
       String8 initial_debug_info_path = ctrl_initial_debug_info_path_from_module(scratch.arena, CTRL_MachineID_Local, event->module);
+      U64 debug_info_timestamp = os_properties_from_file_path(initial_debug_info_path).modified;
       out_evt2->kind       = CTRL_EventKind_ModuleDebugInfoPathChange;
       out_evt2->msg_id     = msg->msg_id;
       out_evt2->machine_id = CTRL_MachineID_Local;
       out_evt2->entity     = event->module;
       out_evt2->parent     = event->process;
-      out_evt2->timestamp  = timestamp;
+      out_evt2->timestamp  = debug_info_timestamp;
       out_evt2->string     = initial_debug_info_path;
-      DI_Key initial_dbgi_key = {initial_debug_info_path, timestamp};
+      DI_Key initial_dbgi_key = {initial_debug_info_path, debug_info_timestamp};
       di_open(&initial_dbgi_key);
     }break;
     case DMN_EventKind_ExitProcess:

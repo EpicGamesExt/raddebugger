@@ -955,7 +955,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   //
   U128 texture_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
   TEX_Topology topology = tex_topology_make(v2s32((S32)topology_info.width, (S32)topology_info.height), topology_info.fmt);
-  R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology);
+  R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology, 0);
   
   //////////////////////////////
   //- rjf: animate
@@ -1097,7 +1097,9 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
   //
   U128 texture_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
   TEX_Topology topology = tex_topology_make(v2s32((S32)bvs->top.width, (S32)bvs->top.height), bvs->top.fmt);
-  R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology);
+  U128 data_hash = {0};
+  R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology, &data_hash);
+  String8 data = hs_data_from_hash(hs_scope, data_hash);
   
   //////////////////////////////
   //- rjf: build canvas box
@@ -1112,10 +1114,10 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
   }
   
   //////////////////////////////
-  //- rjf: canvas box interaction
+  //- rjf: canvas dragging
   //
+  UI_Signal canvas_sig = ui_signal_from_box(canvas_box);
   {
-    UI_Signal canvas_sig = ui_signal_from_box(canvas_box);
     if(ui_dragging(canvas_sig))
     {
       if(ui_pressed(canvas_sig))
@@ -1150,12 +1152,69 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
   }
   
   //////////////////////////////
+  //- rjf: calculate image coordinates
+  //
+  Rng2F32 img_rect_cvs = r2f32p(-topology.dim.x/2, -topology.dim.y/2, +topology.dim.x/2, +topology.dim.y/2);
+  Rng2F32 img_rect_scr = df_bitmap_view_state__screen_from_canvas_rect(bvs, canvas_rect, img_rect_cvs);
+  
+  //////////////////////////////
+  //- rjf: image-region canvas interaction
+  //
+  Vec2S32 mouse_bmp = {-1, -1};
+  if(ui_hovering(canvas_sig) && !ui_dragging(canvas_sig))
+  {
+    Vec2F32 mouse_scr = sub_2f32(ui_mouse(), rect.p0);
+    Vec2F32 mouse_cvs = df_bitmap_view_state__canvas_from_screen_pos(bvs, canvas_rect, mouse_scr);
+    if(contains_2f32(img_rect_cvs, mouse_cvs))
+    {
+      mouse_bmp = v2s32((S32)(mouse_cvs.x-img_rect_cvs.x0), (S32)(mouse_cvs.y-img_rect_cvs.y0));
+      S64 off_px = mouse_bmp.y*topology.dim.x + mouse_bmp.x;
+      S64 off_bytes = off_px*r_tex2d_format_bytes_per_pixel_table[topology.fmt];
+      if(0 <= off_bytes && off_bytes+r_tex2d_format_bytes_per_pixel_table[topology.fmt] <= data.size &&
+         r_tex2d_format_bytes_per_pixel_table[topology.fmt] != 0)
+      {
+        B32 color_is_good = 1;
+        Vec4F32 color = {0};
+        switch(topology.fmt)
+        {
+          default:{color_is_good = 0;}break;
+          case R_Tex2DFormat_R8:     {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, 0, 0, 1);}break;
+          case R_Tex2DFormat_RG8:    {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, 0, 1);}break;
+          case R_Tex2DFormat_RGBA8:  {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, ((U8 *)(data.str+off_bytes))[2]/255.f, ((U8 *)(data.str+off_bytes))[3]/255.f);}break;
+          case R_Tex2DFormat_BGRA8:  {color = v4f32(((U8 *)(data.str+off_bytes))[3]/255.f, ((U8 *)(data.str+off_bytes))[2]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, ((U8 *)(data.str+off_bytes))[0]/255.f);}break;
+          case R_Tex2DFormat_R16:    {color = v4f32(((U16 *)(data.str+off_bytes))[0]/(F32)max_U16, 0, 0, 1);}break;
+          case R_Tex2DFormat_RGBA16: {color = v4f32(((U16 *)(data.str+off_bytes))[0]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[1]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[2]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[3]/(F32)max_U16);}break;
+          case R_Tex2DFormat_R32:    {color = v4f32(((F32 *)(data.str+off_bytes))[0], 0, 0, 1);}break;
+          case R_Tex2DFormat_RG32:   {color = v4f32(((F32 *)(data.str+off_bytes))[0], ((F32 *)(data.str+off_bytes))[1], 0, 1);}break;
+          case R_Tex2DFormat_RGBA32: {color = v4f32(((F32 *)(data.str+off_bytes))[0], ((F32 *)(data.str+off_bytes))[1], ((F32 *)(data.str+off_bytes))[2], ((F32 *)(data.str+off_bytes))[3]);}break;
+        }
+        if(color_is_good)
+        {
+          Vec4F32 hsva = hsva_from_rgba(color);
+          ui_do_color_tooltip_hsva(hsva);
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build image
   //
   UI_Parent(canvas_box)
   {
-    Rng2F32 img_rect_cvs = r2f32p(-topology.dim.x/2, -topology.dim.y/2, +topology.dim.x/2, +topology.dim.y/2);
-    Rng2F32 img_rect_scr = df_bitmap_view_state__screen_from_canvas_rect(bvs, canvas_rect, img_rect_cvs);
+    if(0 <= mouse_bmp.x && mouse_bmp.x < bvs->top.width &&
+       0 <= mouse_bmp.x && mouse_bmp.x < bvs->top.height)
+    {
+      F32 pixel_size_scr = 1.f*bvs->zoom;
+      Rng2F32 indicator_rect_scr = r2f32p(img_rect_scr.x0 + mouse_bmp.x*pixel_size_scr,
+                                          img_rect_scr.y0 + mouse_bmp.y*pixel_size_scr,
+                                          img_rect_scr.x0 + (mouse_bmp.x+1)*pixel_size_scr,
+                                          img_rect_scr.y0 + (mouse_bmp.y+1)*pixel_size_scr);
+      UI_Rect(indicator_rect_scr)
+      {
+        ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_Floating, ui_key_zero());
+      }
+    }
     UI_Rect(img_rect_scr) UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_Floating)
     {
       ui_image(texture, R_Tex2DSampleKind_Nearest, r2f32p(0, 0, (F32)bvs->top.width, (F32)bvs->top.height), v4f32(1, 1, 1, 1), 0, str8_lit("bmp_image"));

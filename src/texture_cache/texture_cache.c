@@ -213,7 +213,7 @@ tex_texture_from_hash_topology(TEX_Scope *scope, U128 hash, TEX_Topology topolog
 }
 
 internal R_Handle
-tex_texture_from_key_topology(TEX_Scope *scope, U128 key, TEX_Topology topology)
+tex_texture_from_key_topology(TEX_Scope *scope, U128 key, TEX_Topology topology, U128 *hash_out)
 {
   R_Handle handle = {0};
   for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
@@ -222,6 +222,10 @@ tex_texture_from_key_topology(TEX_Scope *scope, U128 key, TEX_Topology topology)
     handle = tex_texture_from_hash_topology(scope, hash, topology);
     if(!r_handle_match(handle, r_handle_zero()))
     {
+      if(hash_out)
+      {
+        *hash_out = hash;
+      }
       break;
     }
   }

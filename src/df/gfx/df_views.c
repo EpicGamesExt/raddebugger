@@ -2856,7 +2856,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
           // rjf: filename
           UI_PrefWidth(ui_pct(1, 0))
           {
-            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##%p", file->filename, view);
+            UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, file->filename);
             ui_box_equip_fuzzy_match_ranges(box, &file->match_ranges);
           }
         }
@@ -6875,7 +6875,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
   //
-  if(is_loading)
+  if(is_loading && !df_ctrl_targets_running())
   {
     df_view_equip_loading_info(view, is_loading, 0, 0);
   }
