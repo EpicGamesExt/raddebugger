@@ -4553,7 +4553,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           //- rjf: gather tex2dformats
           if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Tex2DFormats)
           {
-            for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
+            for(EachEnumVal(R_Tex2DFormat, fmt))
             {
               DF_AutoCompListerItem item = {0};
               {
