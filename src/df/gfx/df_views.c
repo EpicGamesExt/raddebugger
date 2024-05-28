@@ -6875,7 +6875,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
   //
-  if(is_loading)
+  if(is_loading && !df_ctrl_targets_running())
   {
     df_view_equip_loading_info(view, is_loading, 0, 0);
   }
