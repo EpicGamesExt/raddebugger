@@ -6214,7 +6214,7 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
     if(node->reggen != reg_gen ||
        node->memgen != mem_gen)
     {
-      CTRL_Unwind new_unwind = ctrl_unwind_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+1000);
+      CTRL_Unwind new_unwind = ctrl_unwind_from_thread(scratch.arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+100);
       if(!(new_unwind.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)) && new_unwind.frames.count != 0)
       {
         node->unwind = ctrl_unwind_deep_copy(node->arena, thread->arch, &new_unwind);
@@ -6685,6 +6685,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         case CTRL_EventKind_Stopped:
         {
+          B32 should_snap = !(df_state->ctrl_soft_halt_issued);
           df_state->ctrl_is_running = 0;
           df_state->ctrl_soft_halt_issued = 0;
           DF_Entity *stop_thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
@@ -6697,7 +6698,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           }
           
           // rjf: select & snap to thread causing stop
-          if(stop_thread->kind == DF_EntityKind_Thread)
+          if(should_snap && stop_thread->kind == DF_EntityKind_Thread)
           {
             DF_CmdParams params = df_cmd_params_zero();
             params.entity = df_handle_from_entity(stop_thread);
@@ -6706,7 +6707,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           }
           
           // rjf: if no stop-causing thread, and if selected thread, snap to selected
-          if(df_entity_is_nil(stop_thread))
+          if(should_snap && df_entity_is_nil(stop_thread))
           {
             DF_Entity *selected_thread = df_entity_from_handle(df_state->ctrl_ctx.thread);
             if(!df_entity_is_nil(selected_thread))
@@ -6719,7 +6720,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           }
           
           // rjf: thread hit user breakpoint -> increment breakpoint hit count
-          if(event->cause == CTRL_EventCause_UserBreakpoint)
+          if(should_snap && event->cause == CTRL_EventCause_UserBreakpoint)
           {
             U64 stop_thread_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, stop_thread->ctrl_machine_id, stop_thread->ctrl_handle);
             DF_Entity *process = df_entity_ancestor_from_kind(stop_thread, DF_EntityKind_Process);
