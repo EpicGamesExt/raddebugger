@@ -6206,8 +6206,8 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
       {
         node = push_array_no_zero(df_state->arena, DF_UnwindCacheNode, 1);
       }
-      DLLPushBack(slot->first, slot->last, node);
       MemoryZeroStruct(node);
+      DLLPushBack(slot->first, slot->last, node);
       node->arena = arena_alloc();
       node->thread = handle;
     }
