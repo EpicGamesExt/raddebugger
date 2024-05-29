@@ -1981,7 +1981,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }
             
             //- rjf: determine whether to roll back instruction pointer
-            B32 should_do_rollback = (hit_user_trap);
+            B32 should_do_rollback = (hit_user_trap || (is_trap && !hit_explicit_trap));
             
             //- rjf: roll back thread's instruction pointer
             U64 post_trap_rip = 0;
