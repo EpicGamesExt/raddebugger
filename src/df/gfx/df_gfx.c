@@ -10709,8 +10709,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           line_num += 1, line_idx += 1)
       {
         DF_EntityList line_ips  = params->line_ips[line_idx];
-        DF_EntityList line_bps  = params->line_bps[line_idx];
-        DF_EntityList line_pins = params->line_pins[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         ui_set_next_background_color(v4f32(0, 0, 0, 0));
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
@@ -10771,7 +10769,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
                                                        UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
-                                                       UI_BoxFlag_AnimatePosX|
                                                        UI_BoxFlag_DrawText,
                                                        thread_box_key);
             ui_box_equip_display_string(thread_box, df_g_icon_kind_text_table[DF_IconKind_RightArrow]);
@@ -10937,7 +10934,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
                                                        UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
-                                                       UI_BoxFlag_AnimatePosX|
                                                        UI_BoxFlag_DrawText,
                                                        thread_box_key);
             ui_box_equip_display_string(thread_box, df_g_icon_kind_text_table[DF_IconKind_RightArrow]);
@@ -11062,7 +11058,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                                                        UI_BoxFlag_DrawActiveEffects|
                                                        UI_BoxFlag_DrawHotEffects|
                                                        UI_BoxFlag_DrawBorder|
-                                                       UI_BoxFlag_AnimatePosX|
                                                        UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DisableTextTrunc,
                                                        "%S##bp_%p",
@@ -11131,7 +11126,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                                                         UI_BoxFlag_DrawHotEffects|
                                                         UI_BoxFlag_DrawBorder|
                                                         UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
-                                                        UI_BoxFlag_AnimatePosX|
                                                         UI_BoxFlag_DisableTextTrunc,
                                                         "%S##watch_%p",
                                                         df_g_icon_kind_text_table[DF_IconKind_Pin],
