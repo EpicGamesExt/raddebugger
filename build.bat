@@ -60,8 +60,8 @@ if "%msvc%"=="1"    set EHsc=/EHsc
 if "%clang%"=="1"   set EHsc=
 if "%msvc%"=="1"    set no_aslr=/DYNAMICBASE:NO
 if "%clang%"=="1"   set no_aslr=
-if "%msvc%"=="1"  set rc=call rc
-if "%clang%"=="1" set rc=call llvm-rc
+if "%msvc%"=="1"    set rc=call rc
+if "%clang%"=="1"   set rc=call llvm-rc
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%
