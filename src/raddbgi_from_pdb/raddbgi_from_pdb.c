@@ -4483,11 +4483,19 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_vmap_task__entry_point)
   return s;
 }
 
+internal TS_TASK_FUNCTION_DEF(p2r_bake_line_numbers_task__entry_point)
+{
+  P2R_BakeLineNumbersIn *in = (P2R_BakeLineNumbersIn *)p;
+  P2R_BakeLineNumbersOut *out = push_array(arena, P2R_BakeLineNumbersOut, 1);
+  ProfScope("bake line numbers") out->sections = rdim_bake_line_number_section_list_from_params(arena, in->params, &out->line_number_map_idxs);
+  return out;
+}
+
 internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_task__entry_point)
 {
   P2R_BakeSrcFilesIn *in = (P2R_BakeSrcFilesIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake src files") *s = rdim_bake_src_file_section_list_from_params(arena, in->strings, in->path_tree, in->checksum_offsets, in->params);
+  ProfScope("bake src files") *s = rdim_bake_src_file_section_list_from_params(arena, in->strings, in->path_tree, in->checksum_offsets, in->line_number_map_idxs, in->params);
   return s;
 }
 
@@ -4880,8 +4888,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   TS_Ticket bake_units_top_level_ticket = ts_kickoff(p2r_bake_units_top_level_task__entry_point, 0, &bake_units_top_level_in);
   P2R_BakeUnitVMapIn bake_unit_vmap_in = {params};
   TS_Ticket bake_unit_vmap_ticket = ts_kickoff(p2r_bake_unit_vmap_task__entry_point, 0, &bake_unit_vmap_in);
-  P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, checksum_offsets, params};
-  TS_Ticket bake_src_files_ticket = ts_kickoff(p2r_bake_src_files_task__entry_point, 0, &bake_src_files_in);
+  P2R_BakeLineNumbersIn bake_line_numbers_in = {params};
+  TS_Ticket bake_line_numbers_ticket = ts_kickoff(p2r_bake_line_numbers_task__entry_point, 0, &bake_line_numbers_in);
   P2R_BakeUDTsIn bake_udts_in = {&bake_strings, params};
   TS_Ticket bake_udts_ticket = ts_kickoff(p2r_bake_udts_task__entry_point, 0, &bake_udts_in);
   P2R_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, params};
@@ -4979,10 +4987,22 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     RDIM_BakeSectionList *s = ts_join_struct(bake_unit_vmap_ticket, max_U64, RDIM_BakeSectionList);
     rdim_bake_section_list_concat_in_place(&sections, s);
   }
-  
+
+  ProfBegin("line numbers");
+  RDI_U64 *line_number_map_idxs = 0;
+  {
+    P2R_BakeLineNumbersOut *out = ts_join_struct(bake_line_numbers_ticket, max_U64, P2R_BakeLineNumbersOut);
+    rdim_bake_section_list_concat_in_place(&sections, &out->sections);
+    line_number_map_idxs = out->line_number_map_idxs;
+  }
+  ProfEnd();
+
   //- rjf: join source files
   ProfScope("source files")
   {
+    P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, checksum_offsets, line_number_map_idxs, params};
+    TS_Ticket bake_src_files_ticket = ts_kickoff(p2r_bake_src_files_task__entry_point, 0, &bake_src_files_in);
+
     RDIM_BakeSectionList *s = ts_join_struct(bake_src_files_ticket, max_U64, RDIM_BakeSectionList);
     rdim_bake_section_list_concat_in_place(&sections, s);
   }

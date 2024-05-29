@@ -12,16 +12,19 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
   // out header
   RDI_Header *hdr = 0;
   {
-    if (sizeof(*hdr) <= size){
+    if(sizeof(*hdr) <= size)
+    {
       hdr = (RDI_Header*)data;
     }
     
-    //  (errors)
-    if (hdr == 0 || hdr->magic != RDI_MAGIC_CONSTANT){
+    // (errors)
+    if(hdr == 0 || hdr->magic != RDI_MAGIC_CONSTANT)
+    {
       hdr = 0;
       result = RDI_ParseStatus_HeaderDoesNotMatch;
     }
-    if (hdr != 0 && hdr->encoding_version != 1){
+    if(hdr != 0 && hdr->encoding_version != 1)
+    {
       hdr = 0;
       result = RDI_ParseStatus_UnsupportedVersionNumber;
     }
@@ -30,62 +33,72 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
   // out data sections
   RDI_DataSection *dsecs = 0;
   RDI_U32 dsec_count = 0;
-  if (hdr != 0){
+  if(hdr != 0)
+  {
     RDI_U64 opl = (RDI_U64)hdr->data_section_off + (RDI_U64)hdr->data_section_count*sizeof(*dsecs);
-    if (opl <= size){
+    if(opl <= size)
+    {
       dsecs = (RDI_DataSection*)(data + hdr->data_section_off);
       dsec_count = hdr->data_section_count;
     }
     
     //  (errors)
-    if (dsecs == 0){
+    if(dsecs == 0)
+    {
       result = RDI_ParseStatus_InvalidDataSecionLayout;
     }
   }
   
   // extract primary data section indexes
   RDI_U32 dsec_idx[RDI_DataSectionTag_PRIMARY_COUNT] = {0};
-  if (result == RDI_ParseStatus_Good){
+  if(result == RDI_ParseStatus_Good)
+  {
     RDI_DataSection *sec_ptr = dsecs;
-    for (RDI_U32 i = 0; i < dsec_count; i += 1, sec_ptr += 1){
-      if (sec_ptr->tag < RDI_DataSectionTag_PRIMARY_COUNT){
+    for(RDI_U32 i = 0; i < dsec_count; i += 1, sec_ptr += 1)
+    {
+      if(sec_ptr->tag < RDI_DataSectionTag_PRIMARY_COUNT)
+      {
         dsec_idx[sec_ptr->tag] = i;
       }
     }
   }
   
   // fill out data block (part 1)
-  if (result == RDI_ParseStatus_Good){
-    out->raw_data = data;
+  if(result == RDI_ParseStatus_Good)
+  {
+    out->raw_data      = data;
     out->raw_data_size = size;
-    out->dsecs = dsecs;
-    out->dsec_count = dsec_count;
-    for (RDI_U32 i = 0; i < RDI_DataSectionTag_PRIMARY_COUNT; i += 1){
+    out->dsecs         = dsecs;
+    out->dsec_count    = dsec_count;
+    for(RDI_U32 i = 0; i < RDI_DataSectionTag_PRIMARY_COUNT; i += 1)
+    {
       out->dsec_idx[i] = dsec_idx[i];
     }
   }
   
   // out string table
-  RDI_U8 *string_data = 0;
-  RDI_U64 string_opl = 0;
-  RDI_U32 *string_offs = 0;
-  RDI_U64 string_count = 0;
-  if (result == RDI_ParseStatus_Good){
-    rdi_parse__extract_primary(out, string_data, &string_opl,
-                               RDI_DataSectionTag_StringData);
+  RDI_U8  *string_data  = 0;
+  RDI_U64  string_opl   = 0;
+  RDI_U32 *string_offs  = 0;
+  RDI_U64  string_count = 0;
+  if(result == RDI_ParseStatus_Good)
+  {
+    rdi_parse__extract_primary(out, string_data, &string_opl, RDI_DataSectionTag_StringData);
     
     RDI_U64 table_entry_count = 0;
-    rdi_parse__extract_primary(out, string_offs, &table_entry_count,
-                               RDI_DataSectionTag_StringTable);
-    if (table_entry_count > 0){
+    rdi_parse__extract_primary(out, string_offs, &table_entry_count, RDI_DataSectionTag_StringTable);
+    if(table_entry_count > 0)
+    {
       string_count = table_entry_count - 1;
     }
     
     //  (errors)
-    if (string_data == 0){
+    if(string_data == 0)
+    {
       result = RDI_ParseStatus_MissingStringDataSection;
     }
-    else if (string_offs == 0){
+    else if(string_offs == 0)
+    {
       result = RDI_ParseStatus_MissingStringTableSection;
     }
   }
@@ -93,109 +106,61 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
   // out index runs
   RDI_U32 *idx_run_data = 0;
   RDI_U64 idx_run_count = 0;
-  if (result == RDI_ParseStatus_Good){
+  if(result == RDI_ParseStatus_Good)
+  {
     rdi_parse__extract_primary(out, idx_run_data, &idx_run_count,
                                RDI_DataSectionTag_IndexRuns);
     
     //  (errors)
-    if (idx_run_data == 0){
+    if(idx_run_data == 0)
+    {
       result = RDI_ParseStatus_MissingIndexRunSection;
     }
   }
   
-  if (result == RDI_ParseStatus_Good){
+  if(result == RDI_ParseStatus_Good)
+  {
+    RDI_U64 top_level_count = 0;
+
     // fill out primary data structures (part 2)
-    out->string_data = string_data;
-    out->string_offs = string_offs;
+    out->string_data      = string_data;
+    out->string_offs      = string_offs;
     out->string_data_size = string_opl;
-    out->string_count = string_count;
-    out->idx_run_data = idx_run_data;
-    out->idx_run_count = idx_run_count;
+    out->string_count     = string_count;
+    out->idx_run_data     = idx_run_data;
+    out->idx_run_count    = idx_run_count;
     
-    {
-      RDI_TopLevelInfo *tli = 0;
-      RDI_U64 dummy = 0;
-      rdi_parse__extract_primary(out, tli, &dummy, RDI_DataSectionTag_TopLevelInfo);
-      if (dummy != 1){
-        tli = 0;
-      }
-      out->top_level_info = tli;
-    }
-    
-    rdi_parse__extract_primary(out, out->binary_sections, &out->binary_sections_count,
-                               RDI_DataSectionTag_BinarySections);
-    
-    rdi_parse__extract_primary(out, out->file_paths, &out->file_paths_count,
-                               RDI_DataSectionTag_FilePathNodes);
-    
-    rdi_parse__extract_primary(out, out->source_files, &out->source_files_count,
-                               RDI_DataSectionTag_SourceFiles);
-    
-    rdi_parse__extract_primary(out, out->units, &out->units_count,
-                               RDI_DataSectionTag_Units);
-    
-    rdi_parse__extract_primary(out, out->unit_vmap, &out->unit_vmap_count,
-                               RDI_DataSectionTag_UnitVmap);
-    
-    rdi_parse__extract_primary(out, out->unit_vmap, &out->unit_vmap_count,
-                               RDI_DataSectionTag_UnitVmap);
-    
-    rdi_parse__extract_primary(out, out->type_nodes, &out->type_nodes_count,
-                               RDI_DataSectionTag_TypeNodes);
-    
-    rdi_parse__extract_primary(out, out->udts, &out->udts_count,
-                               RDI_DataSectionTag_UDTs);
-    
-    rdi_parse__extract_primary(out, out->members, &out->members_count,
-                               RDI_DataSectionTag_Members);
-    
-    rdi_parse__extract_primary(out, out->enum_members, &out->enum_members_count,
-                               RDI_DataSectionTag_EnumMembers);
-    
-    rdi_parse__extract_primary(out, out->global_variables, &out->global_variables_count,
-                               RDI_DataSectionTag_GlobalVariables);
-    
-    rdi_parse__extract_primary(out, out->global_vmap, &out->global_vmap_count,
-                               RDI_DataSectionTag_GlobalVmap);
-    
-    rdi_parse__extract_primary(out, out->thread_variables, &out->thread_variables_count,
-                               RDI_DataSectionTag_ThreadVariables);
-    
-    rdi_parse__extract_primary(out, out->procedures, &out->procedures_count,
-                               RDI_DataSectionTag_Procedures);
-    
-    rdi_parse__extract_primary(out, out->scopes, &out->scopes_count,
-                               RDI_DataSectionTag_Scopes);
-    
-    rdi_parse__extract_primary(out, out->scope_voffs, &out->scope_voffs_count,
-                               RDI_DataSectionTag_ScopeVoffData);
-    
-    rdi_parse__extract_primary(out, out->scope_vmap, &out->scope_vmap_count,
-                               RDI_DataSectionTag_ScopeVmap);
-
-    rdi_parse__extract_primary(out, out->inline_sites, &out->inline_site_count,
-                               RDI_DataSectionTag_InlineSites);
-    
-    rdi_parse__extract_primary(out, out->locals, &out->locals_count,
-                               RDI_DataSectionTag_Locals);
-    
-    rdi_parse__extract_primary(out, out->location_blocks, &out->location_blocks_count,
-                               RDI_DataSectionTag_LocationBlocks);
-    
-    rdi_parse__extract_primary(out, out->location_data, &out->location_data_size,
-                               RDI_DataSectionTag_LocationData);
-
-    rdi_parse__extract_primary(out, out->line_info, &out->line_info_count,
-                              RDI_DataSectionTag_LineInfo);
-    rdi_parse__extract_primary(out, out->line_info_voffs, &out->line_info_voff_count,
-                              RDI_DataSectionTag_LineInfoVoffs);
-    rdi_parse__extract_primary(out, out->line_info_data, &out->line_info_data_count,
-                              RDI_DataSectionTag_LineInfoData);
-    rdi_parse__extract_primary(out, out->line_info_cols, &out->line_info_col_count,
-                              RDI_DataSectionTag_LineInfoColumns);
-
-    rdi_parse__extract_primary(out, out->checksums, &out->checksums_size,
-                              RDI_DataSectionTag_Checksums);
+    rdi_parse__extract_primary(out, out->top_level_info,    &top_level_count,             RDI_DataSectionTag_TopLevelInfo);
+    rdi_parse__extract_primary(out, out->binary_sections,   &out->binary_sections_count,  RDI_DataSectionTag_BinarySections);
+    rdi_parse__extract_primary(out, out->file_paths,        &out->file_paths_count,       RDI_DataSectionTag_FilePathNodes);
+    rdi_parse__extract_primary(out, out->source_files,      &out->source_files_count,     RDI_DataSectionTag_SourceFiles);
+    rdi_parse__extract_primary(out, out->units,             &out->units_count,            RDI_DataSectionTag_Units);
+    rdi_parse__extract_primary(out, out->unit_vmap,         &out->unit_vmap_count,        RDI_DataSectionTag_UnitVmap);
+    rdi_parse__extract_primary(out, out->unit_vmap,         &out->unit_vmap_count,        RDI_DataSectionTag_UnitVmap);
+    rdi_parse__extract_primary(out, out->type_nodes,        &out->type_nodes_count,       RDI_DataSectionTag_TypeNodes);
+    rdi_parse__extract_primary(out, out->udts,              &out->udts_count,             RDI_DataSectionTag_UDTs);
+    rdi_parse__extract_primary(out, out->members,           &out->members_count,          RDI_DataSectionTag_Members);
+    rdi_parse__extract_primary(out, out->enum_members,      &out->enum_members_count,     RDI_DataSectionTag_EnumMembers);
+    rdi_parse__extract_primary(out, out->global_variables,  &out->global_variables_count, RDI_DataSectionTag_GlobalVariables);
+    rdi_parse__extract_primary(out, out->global_vmap,       &out->global_vmap_count,      RDI_DataSectionTag_GlobalVmap);
+    rdi_parse__extract_primary(out, out->thread_variables,  &out->thread_variables_count, RDI_DataSectionTag_ThreadVariables);
+    rdi_parse__extract_primary(out, out->procedures,        &out->procedures_count,       RDI_DataSectionTag_Procedures);
+    rdi_parse__extract_primary(out, out->scopes,            &out->scopes_count,           RDI_DataSectionTag_Scopes);
+    rdi_parse__extract_primary(out, out->scope_voffs,       &out->scope_voffs_count,      RDI_DataSectionTag_ScopeVoffData);
+    rdi_parse__extract_primary(out, out->scope_vmap,        &out->scope_vmap_count,       RDI_DataSectionTag_ScopeVmap);
+    rdi_parse__extract_primary(out, out->inline_sites,      &out->inline_site_count,      RDI_DataSectionTag_InlineSites);
+    rdi_parse__extract_primary(out, out->locals,            &out->locals_count,           RDI_DataSectionTag_Locals);
+    rdi_parse__extract_primary(out, out->location_blocks,   &out->location_blocks_count,  RDI_DataSectionTag_LocationBlocks);
+    rdi_parse__extract_primary(out, out->location_data,     &out->location_data_size,     RDI_DataSectionTag_LocationData);
+    rdi_parse__extract_primary(out, out->line_info,         &out->line_info_count,        RDI_DataSectionTag_LineInfo);
+    rdi_parse__extract_primary(out, out->line_info_voffs,   &out->line_info_voff_count,   RDI_DataSectionTag_LineInfoVoffs);
+    rdi_parse__extract_primary(out, out->line_info_data,    &out->line_info_data_count,   RDI_DataSectionTag_LineInfoData);
+    rdi_parse__extract_primary(out, out->line_info_cols,    &out->line_info_col_count,    RDI_DataSectionTag_LineInfoColumns);
+    rdi_parse__extract_primary(out, out->line_number_maps,  &out->line_number_map_count,  RDI_DataSectionTag_LineNumberMaps);
+    rdi_parse__extract_primary(out, out->line_map_numbers,  &out->line_map_number_count,  RDI_DataSectionTag_LineMapNumbers);
+    rdi_parse__extract_primary(out, out->line_map_ranges,   &out->line_map_range_count,   RDI_DataSectionTag_LineMapRanges);
+    rdi_parse__extract_primary(out, out->line_map_voffs,    &out->line_map_voff_count,    RDI_DataSectionTag_LineMapVoffs);
+    rdi_parse__extract_primary(out, out->checksums,         &out->checksums_size,         RDI_DataSectionTag_Checksums);
     
     {
       rdi_parse__extract_primary(out, out->name_maps, &out->name_maps_count,
@@ -203,8 +168,10 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
       
       RDI_NameMap *name_map_ptr = out->name_maps;
       RDI_NameMap *name_map_opl = out->name_maps + out->name_maps_count;
-      for (; name_map_ptr < name_map_opl; name_map_ptr += 1){
-        if (out->name_maps_by_kind[name_map_ptr->kind] == 0){
+      for (; name_map_ptr < name_map_opl; name_map_ptr += 1)
+      {
+        if (out->name_maps_by_kind[name_map_ptr->kind] == 0)
+        {
           out->name_maps_by_kind[name_map_ptr->kind] = name_map_ptr;
         }
       }
@@ -332,35 +299,27 @@ rdi_line_info_idx_from_voff(RDI_ParsedLineInfo *line_info, RDI_U64 voff)
 }
 
 RDI_PROC void
-rdi_line_map_from_source_file(RDI_Parsed *p, RDI_SourceFile *srcfile,
-                              RDI_ParsedLineMap *out){
-  RDI_U64 num_count = 0;
-  RDI_U32 *nums = (RDI_U32*)
-    rdi_data_from_dsec(p, srcfile->line_map_nums_data_idx, sizeof(RDI_U32),
-                       RDI_DataSectionTag_LineMapNumbers,
-                       &num_count);
-  
-  RDI_U64 range_count = 0;
-  RDI_U32 *ranges = (RDI_U32*)
-    rdi_data_from_dsec(p, srcfile->line_map_range_data_idx, sizeof(RDI_U32),
-                       RDI_DataSectionTag_LineMapRanges,
-                       &range_count);
-  
-  RDI_U64 voff_count = 0;
-  RDI_U64 *voffs = (RDI_U64*)
-    rdi_data_from_dsec(p, srcfile->line_map_voff_data_idx, sizeof(RDI_U64),
-                       RDI_DataSectionTag_LineMapVoffs,
-                       &voff_count);
-  
-  RDI_U32 count_a = (range_count > 0)?(range_count - 1):0;
-  RDI_U32 count_b = rdi_parse__min(count_a, num_count);
-  RDI_U32 count = rdi_parse__min(count_b, srcfile->line_map_count);
-  
-  out->nums = nums;
-  out->ranges = ranges;
-  out->voffs = voffs;
-  out->count = count;
-  out->voff_count = voff_count;
+rdi_parse_line_number_map(RDI_Parsed *rdi, RDI_U32 line_number_map_idx, RDI_ParsedLineMap *out)
+{
+  if(line_number_map_idx < rdi->line_number_map_count)
+  {
+    RDI_LineNumberMap *map = rdi->line_number_maps + line_number_map_idx;
+    if(map->line_data_idx  + map->line_count     <= rdi->line_map_number_count &&
+       map->range_data_idx + map->line_count + 1 <= rdi->line_map_range_count)
+    {
+      out->nums       = rdi->line_map_numbers + map->line_data_idx;
+      out->ranges     = rdi->line_map_ranges  + map->range_data_idx;
+      out->voffs      = rdi->line_map_voffs   + map->voff_data_idx;
+      out->count      = map->line_count;
+      out->voff_count = map->voff_count;
+    }
+  }
+}
+
+RDI_PROC void
+rdi_line_map_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file, RDI_ParsedLineMap *out)
+{
+  rdi_parse_line_number_map(rdi, src_file->line_number_map_idx, out);
 }
 
 RDI_PROC RDI_U64*

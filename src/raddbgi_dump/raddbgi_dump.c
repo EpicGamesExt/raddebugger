@@ -320,50 +320,29 @@ rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                          RDI_SourceFile *source_file, U32 indent_level){
-  // extract line map data
+rdi_stringize_line_number_map(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_U64 line_number_map_idx, U32 indent_level)
+{
   RDI_ParsedLineMap line_map = {0};
-  rdi_line_map_from_source_file(parsed, source_file, &line_map);
+  rdi_parse_line_number_map(rdi, line_number_map_idx, &line_map);
 
-  // stringize checksum
-  str8_list_pushf(arena, out, "%.*schecksum_offset=%llX\n", indent_level, rdi_stringize_spaces, source_file->checksum_offset);
-  
-  // stringize line map data
-  str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
-  
-  for (U32 i = 0; i < line_map.count; i += 1){
-    U32 line_num = line_map.nums[i];
-    
-    U32 digit_count = 1;
-    if (line_num > 0){
-      U32 x = line_num;
-      for (;;){
-        x /= 10;
-        if (x == 0){
-          break;
-        }
-        digit_count += 1;
-      }
-    }
-    
-    str8_list_pushf(arena, out, "%.*s %u: ",
-                    indent_level, rdi_stringize_spaces, line_num);
-    
-    U32 first = line_map.ranges[i];
+  for(U32 i = 0; i < line_map.count; i += 1)
+  {
+    str8_list_pushf(arena, out, "%.*s%4u:", indent_level, rdi_stringize_spaces, line_map.nums[i]);
+    U32 first   = line_map.ranges[i];
     U32 opl_raw = line_map.ranges[i + 1];
-    U32 opl = ClampTop(opl_raw, line_map.voff_count);
-    for (U32 j = first; j < opl; j += 1){
-      if (j == first){
-        str8_list_pushf(arena, out, "0x%08x\n", line_map.voffs[j]);
-      }
-      else{
-        str8_list_pushf(arena, out, "%.*s0x%08x\n",
-                        indent_level + digit_count + 3, rdi_stringize_spaces,
-                        line_map.voffs[j]);
-      }
+    U32 opl     = ClampTop(opl_raw, rdi->line_map_voff_count);
+    for(U32 j = first; j < opl; j += 1){
+      str8_list_pushf(arena, out, "%.*s%08x\n", (first == j ? indent_level : indent_level + 6), rdi_stringize_spaces, line_map.voffs[j]);
     }
   }
+}
+
+internal void
+rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
+                          RDI_SourceFile *source_file, U32 indent_level)
+{
+  str8_list_pushf(arena, out, "%.*schecksum_offset=%llX\n",      indent_level, rdi_stringize_spaces, source_file->checksum_offset);
+  str8_list_pushf(arena, out, "%.*sline_number_map_idx=%llX\n", indent_level, rdi_stringize_spaces, source_file->line_number_map_idx);
 }
 
 internal void

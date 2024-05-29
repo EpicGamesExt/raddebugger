@@ -79,6 +79,14 @@ typedef struct RDI_Parsed{
   RDI_U64             line_info_data_count;
   RDI_Column         *line_info_cols;
   RDI_U64             line_info_col_count;
+  RDI_LineNumberMap  *line_number_maps;
+  RDI_U64             line_number_map_count;
+  RDI_U32            *line_map_numbers;
+  RDI_U64             line_map_number_count;
+  RDI_U32            *line_map_ranges;
+  RDI_U64             line_map_range_count;
+  RDI_U64            *line_map_voffs;
+  RDI_U64             line_map_voff_count;
   RDI_U8             *checksums;
   RDI_U64             checksums_size;
 
@@ -169,6 +177,7 @@ static RDI_LineInfo       rdi_line_info_nil       = {0};
 static RDI_Line           rdi_line_nil            = {0};
 static RDI_Column         rdi_column_nil          = {0};
 static RDI_Checksum       rdi_checksum_nil        = {0};
+static RDI_LineNumberMap  rdi_line_number_map_nil = {0};
 #endif
 
 ////////////////////////////////
@@ -198,8 +207,10 @@ RDI_PROC RDI_U64
 rdi_line_info_idx_from_voff(RDI_ParsedLineInfo *line_info, RDI_U64 voff);
 
 RDI_PROC void
-rdi_line_map_from_source_file(RDI_Parsed *p, RDI_SourceFile *srcfile,
-                              RDI_ParsedLineMap *out);
+rdi_parse_line_number_map(RDI_Parsed *rdi, RDI_U32 line_number_map_idx, RDI_ParsedLineMap *out);
+
+RDI_PROC void
+rdi_line_map_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file, RDI_ParsedLineMap *out);
 
 RDI_PROC RDI_U64*
 rdi_line_voffs_from_num(RDI_ParsedLineMap *map, RDI_U32 linenum, RDI_U32 *n_out);

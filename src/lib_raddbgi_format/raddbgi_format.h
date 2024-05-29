@@ -288,15 +288,16 @@ X(LineInfo,            0x0019)\
 X(LineInfoVoffs,       0x001A)\
 X(LineInfoData,        0x001B)\
 X(LineInfoColumns,     0x001C)\
-X(InlineSites,         0x001D)\
-X(Checksums,           0x001E)\
+X(LineNumberMaps,      0x001D)\
+X(LineMapNumbers,      0x001E)\
+X(LineMapRanges,       0x001F)\
+X(LineMapVoffs,        0x0020)\
+X(InlineSites,         0x0021)\
+X(Checksums,           0x0022)\
 Y(PRIMARY_COUNT)\
 X(SKIP,                RDI_DataSectionTag_SECONDARY|0x0000)\
-X(LineMapNumbers,      RDI_DataSectionTag_SECONDARY|0x0001)\
-X(LineMapRanges,       RDI_DataSectionTag_SECONDARY|0x0002)\
-X(LineMapVoffs,        RDI_DataSectionTag_SECONDARY|0x0003)\
-X(NameMapBuckets,      RDI_DataSectionTag_SECONDARY|0x0004)\
-X(NameMapNodes,        RDI_DataSectionTag_SECONDARY|0x0005)
+X(NameMapBuckets,      RDI_DataSectionTag_SECONDARY|0x0001)\
+X(NameMapNodes,        RDI_DataSectionTag_SECONDARY|0x0002)
 
 typedef RDI_U32 RDI_DataSectionTag;
 typedef enum RDI_DataSectionTagEnum{
@@ -383,22 +384,24 @@ typedef struct RDI_Checksum{
   //RDI_U8 data[0];
 } RDI_Checksum;
 
-typedef struct RDI_SourceFile{
-  RDI_U32 file_path_node_idx;
-  
-  RDI_U32 normal_full_path_string_idx;
-
-  RDI_U64 checksum_offset;
-  
+typedef struct RDI_LineNumberMap{
   // usage of line map to go from a line number to an array of voffs
   //  (line_map_nums * line_number) -> (nil | index)
   //  (line_map_data * index) -> (range)
   //  (line_map_voff_data * range) -> (array(voff))
   
-  RDI_U32 line_map_count;
-  RDI_U32 line_map_nums_data_idx;  // U32[line_map_count] (sorted - not closed ranges)
-  RDI_U32 line_map_range_data_idx; // U32[line_map_count + 1] (pairs form ranges)
-  RDI_U32 line_map_voff_data_idx;  // U64[...] (idx by line_map_range_data)
+  RDI_U32 line_count;
+  RDI_U32 voff_count;
+  RDI_U32 line_data_idx;  // U32[line_count] (sorted - not closed ranges)
+  RDI_U32 range_data_idx; // U32[line_count + 1] (pairs form ranges)
+  RDI_U32 voff_data_idx;  // U64[...] (idx by line_map_range_data)
+} RDI_LineNumberMap;
+
+typedef struct RDI_SourceFile{
+  RDI_U32 file_path_node_idx;
+  RDI_U32 normal_full_path_string_idx;
+  RDI_U32 line_number_map_idx;
+  RDI_U64 checksum_offset;
 } RDI_SourceFile;
 
 //- line info
@@ -435,7 +438,7 @@ typedef struct RDI_Unit{
   RDI_U32 archive_file_path_node;
   RDI_U32 build_path_node;
   RDI_Language language;
-  RDI_U64 line_info_idx;
+  RDI_U32 line_info_idx;
 } RDI_Unit;
 
 //- type info

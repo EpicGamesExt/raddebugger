@@ -68,6 +68,7 @@ entry_point(CmdLine *cmd_line)
     DumpFlag_InlineSites        = (1<<17),
     DumpFlag_LineInfo           = (1<<18),
     DumpFlag_Checksums          = (1<<19),
+    DumpFlag_LineNumberMaps     = (1<<20),
   };
   String8 input_name = {0};
   String8 input_data = {0};
@@ -106,6 +107,7 @@ entry_point(CmdLine *cmd_line)
           else if(str8_match(n->string, str8_lit("name_maps"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_NameMaps;        }
           else if(str8_match(n->string, str8_lit("inline_sites"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_InlineSites;     }
           else if(str8_match(n->string, str8_lit("checksums"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Checksums;       }
+          else if(str8_match(n->string, str8_lit("line_number_maps"),        StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_LineNumberMaps;  }
         }
       }
     }
@@ -454,6 +456,17 @@ entry_point(CmdLine *cmd_line)
       str8_list_pushf(arena, &dump, "# CHECKSUMS:\n");
       rdi_stringize_checksums(arena, &dump, raddbg, 1);
       str8_list_pushf(arena, &dump, "\n");
+    }
+
+    if(dump_flags & DumpFlag_LineNumberMaps)
+    {
+      str8_list_pushf(arena, &dump, "# LINE NUMBER MAPS:\n");
+      for(U64 line_number_map_idx = 0; line_number_map_idx < raddbg->line_number_map_count; line_number_map_idx += 1)
+      {
+        str8_list_pushf(arena, &dump, "line_number_map[%llx]\n", line_number_map_idx);
+        rdi_stringize_line_number_map(arena, &dump, raddbg, line_number_map_idx, 1);
+        str8_list_pushf(arena, &dump, "\n");
+      }
     }
   }
   

@@ -468,12 +468,26 @@ struct P2R_BakeUnitVMapIn
   RDIM_BakeParams *params;
 };
 
+typedef struct P2R_BakeLineNumbersIn P2R_BakeLineNumbersIn;
+struct P2R_BakeLineNumbersIn
+{
+  RDIM_BakeParams *params;
+};
+
+typedef struct P2R_BakeLineNumbersOut P2R_BakeLineNumbersOut;
+struct P2R_BakeLineNumbersOut
+{
+  RDI_U64 *line_number_map_idxs;
+  RDIM_BakeSectionList sections;
+};
+
 typedef struct P2R_BakeSrcFilesIn P2R_BakeSrcFilesIn;
 struct P2R_BakeSrcFilesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_BakePathTree *path_tree;
   RDI_U64 *checksum_offsets;
+  RDI_U64 *line_number_map_idxs;
   RDIM_BakeParams *params;
 };
 

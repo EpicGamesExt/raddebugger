@@ -451,6 +451,17 @@ struct RDIM_BinarySectionList
 ////////////////////////////////
 //~ rjf: Source File Info Types
 
+typedef struct RDIM_LineNumberMap RDIM_LineNumberMap;
+struct RDIM_LineNumberMap
+{
+  RDI_U64 line_count;
+  RDI_U64 voff_count;
+  RDI_U64 range_count;
+  RDI_U32 *line_nums;
+  RDI_U32 *line_ranges;
+  RDI_U64 *voffs;
+};
+
 typedef struct RDIM_Checksum RDIM_Checksum;
 struct RDIM_Checksum
 {
@@ -1348,8 +1359,11 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_unit_vmap_section_list_from_params(RDIM_
 //- checksums
 RDI_PROC RDIM_BakeSectionList rdim_bake_checksums_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params, RDI_U64 **out_checksum_offsets);
 
+//- line numbers
+RDI_PROC RDIM_BakeSectionList rdim_bake_line_number_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params, RDI_U64 **line_number_map_idxs_out);
+
 //- rjf: source files
-RDI_PROC RDIM_BakeSectionList rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDI_U64 *checksum_offsets, RDIM_BakeParams *params);
+RDI_PROC RDIM_BakeSectionList rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDI_U64 *checksum_offsets, RDI_U64 *line_number_map_idxs, RDIM_BakeParams *params);
 
 //- rjf: type nodes
 RDI_PROC RDIM_BakeSectionList rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params);
