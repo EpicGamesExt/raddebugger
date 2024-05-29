@@ -180,7 +180,7 @@ global read_only TG_Type tg_type_nil =
 {
   /* kind        */           TG_Kind_Null,
   /* flags       */           0,
-  /* name        */           {(U8*)"<nil>",5},
+  /* name        */           {(U8*)"???",3},
 };
 
 global read_only TG_Type tg_type_variadic =

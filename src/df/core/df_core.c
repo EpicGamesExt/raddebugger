@@ -4473,6 +4473,7 @@ df_string_from_ascii_value(Arena *arena, U8 val)
     case '\'':{result = str8_lit("\\'");}break;
     case '\\':{result = str8_lit("\\\\");}break;
     default:
+    if(32 <= val && val < 255)
     {
       result = push_str8f(arena, "%c", val);
     }break;
@@ -4511,14 +4512,21 @@ df_string_from_simple_typed_eval(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi,
     case TG_Kind_UChar32:
     {
       String8 char_str = df_string_from_ascii_value(arena, eval.imm_s64);
-      if(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules)
+      if(char_str.size != 0)
       {
-        String8 imm_string = str8_from_s64(arena, eval.imm_s64, radix, 0, digit_group_separator);
-        result = push_str8f(arena, "'%S' (%S)", char_str, imm_string);
+        if(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules)
+        {
+          String8 imm_string = str8_from_s64(arena, eval.imm_s64, radix, 0, digit_group_separator);
+          result = push_str8f(arena, "'%S' (%S)", char_str, imm_string);
+        }
+        else
+        {
+          result = push_str8f(arena, "'%S'", char_str);
+        }
       }
       else
       {
-        result = push_str8f(arena, "'%S'", char_str);
+        result = str8_from_s64(arena, eval.imm_s64, radix, 0, digit_group_separator);
       }
     }break;
     
@@ -6206,8 +6214,8 @@ df_query_cached_unwind_from_thread(DF_Entity *thread)
       {
         node = push_array_no_zero(df_state->arena, DF_UnwindCacheNode, 1);
       }
-      DLLPushBack(slot->first, slot->last, node);
       MemoryZeroStruct(node);
+      DLLPushBack(slot->first, slot->last, node);
       node->arena = arena_alloc();
       node->thread = handle;
     }

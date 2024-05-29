@@ -1900,7 +1900,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           //
           case EXCEPTION_DEBUG_EVENT:
           {
-            // NOTE(rjf): Notes on multithreaded breakpoint events
+            //- NOTE(rjf): Notes on multithreaded breakpoint events
             // (2021/11/1):
             //
             // When many threads are simultaneously running, multiple threads
@@ -1928,7 +1928,17 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             //   #B. If the actual unmodified instruction is an int 3, then this
             //       becomes a trap event and we do not reset RIP.
             
-            // NOTE(rjf): The exception record struct has a 32-bit version and a
+            //- NOTE(rjf): Further notes on MULTITHREADED STEPPING ACCESS VIOLATION
+            // EVENTS! @rjf @rjf @rjf
+            // (2024/05/29):
+            //
+            // Just adding another comment here to document that the above long
+            // comment went completely unnoticed by me during a pass over demon,
+            // and I had removed the proper rollback stuff here without reading
+            // the above comment. So this comment just serves to make that
+            // original comment even heftier.
+            
+            //- NOTE(rjf): The exception record struct has a 32-bit version and a
             // 64-bit version. We only currently handle the 64-bit version.
             
             //- rjf: unpack
@@ -1981,7 +1991,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }
             
             //- rjf: determine whether to roll back instruction pointer
-            B32 should_do_rollback = (hit_user_trap);
+            B32 should_do_rollback = (hit_user_trap || (is_trap && !hit_explicit_trap));
             
             //- rjf: roll back thread's instruction pointer
             U64 post_trap_rip = 0;

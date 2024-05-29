@@ -388,9 +388,10 @@ enum
 typedef U32 DF_CodeSliceFlags;
 enum
 {
-  DF_CodeSliceFlag_Clickable = (1<<0),
-  DF_CodeSliceFlag_Margin    = (1<<1),
-  DF_CodeSliceFlag_LineNums  = (1<<2),
+  DF_CodeSliceFlag_Clickable         = (1<<0),
+  DF_CodeSliceFlag_PriorityMargin    = (1<<1),
+  DF_CodeSliceFlag_CatchallMargin    = (1<<2),
+  DF_CodeSliceFlag_LineNums          = (1<<3),
 };
 
 typedef struct DF_CodeSliceParams DF_CodeSliceParams;
@@ -415,7 +416,8 @@ struct DF_CodeSliceParams
   F32 tab_size;
   String8 search_query;
   F32 line_height_px;
-  F32 margin_width_px;
+  F32 priority_margin_width_px;
+  F32 catchall_margin_width_px;
   F32 line_num_width_px;
   F32 line_text_max_width_px;
   DF_EntityList flash_ranges;

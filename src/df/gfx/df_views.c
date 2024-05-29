@@ -3867,13 +3867,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
         UI_FocusHot((row_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
       {
         UI_Signal sig = df_icon_buttonf(target->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", target);
-        if(ui_clicked(sig) && sig.event_flags == 0)
-        {
-          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-          p.entity = df_handle_from_entity(target);
-          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectTarget));
-        }
-        else if(ui_clicked(sig) && sig.event_flags == OS_EventFlag_Ctrl)
+        if(ui_clicked(sig))
         {
           DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
           p.entity = df_handle_from_entity(target);
@@ -4835,6 +4829,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+  DI_Scope *scope = di_scope_open();
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   U64 selected_unwind_count = ctrl_ctx.unwind_count;
@@ -4915,20 +4910,33 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         {
           continue;
         }
-        U64 frame_idx = row_num-1;
-        CTRL_UnwindFrame *frame = &unwind.frames.v[frame_idx];
-        
-        // rjf: determine selection
         B32 row_selected = (cs->cursor.y == row_num);
         
-        // rjf: regs => rip
+        // rjf: unpack frame
+        U64 frame_idx = row_num-1;
+        CTRL_UnwindFrame *frame = &unwind.frames.v[frame_idx];
         U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, frame->regs);
-        
-        // rjf: rip_vaddr => module
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-        
-        // rjf: rip => validity?
         B32 frame_valid = (rip_vaddr != 0);
+        U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
+        RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+        String8 symbol_name = {0};
+        String8 symbol_type_string = {0};
+        if(rdi->scope_vmap != 0)
+        {
+          U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, rip_voff);
+          RDI_Scope *scope = rdi_element_from_idx(rdi, scopes, scope_idx);
+          U64 proc_idx = scope->proc_idx;
+          RDI_Procedure *procedure = &rdi->procedures[proc_idx];
+          RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, procedure->type_idx);
+          TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
+          U64 name_size = 0;
+          U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
+          TG_Graph *graph = tg_graph_begin(rdi_addr_size_from_arch(rdi->top_level_info->architecture), 256);
+          symbol_name = str8(name_ptr, name_size);
+          symbol_type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
+        }
         
         // rjf: build row
         if(frame_valid) UI_NamedTableVectorF("###callstack_%p_%I64x", view, frame_idx)
@@ -4981,21 +4989,32 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             }
           }
           
-          // rjf: build cell for function name
+          // rjf: build cell for function header
           UI_TableCell UI_Font(df_font_from_slot(DF_FontSlot_Code))
             UI_FocusHot((row_selected && cs->cursor.x == 2) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
-            String8 symbol = df_symbol_name_from_process_vaddr(scratch.arena, process, rip_vaddr);
-            if(symbol.size == 0)
+            ui_set_next_child_layout_axis(Axis2_X);
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_Clip, "frame_%I64x", frame_idx);
+            UI_Parent(box)
             {
-              symbol = str8_lit("[external code]");
-              ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
+              if(symbol_name.size == 0)
+              {
+                ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
+                ui_label(str8_lit("[unknown symbol]"));
+              }
+              else UI_WidthFill
+              {
+                D_FancyStringList symbol_name_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), symbol_name);
+                D_FancyStringList symbol_type_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), symbol_type_string);
+                D_FancyStringList fstrs = {0};
+                d_fancy_string_list_concat_in_place(&fstrs, &symbol_name_fstrs);
+                D_FancyString sep = {ui_top_font(), str8_lit(": "), df_rgba_from_theme_color(DF_ThemeColor_WeakText), ui_top_font_size()};
+                d_fancy_string_list_push(scratch.arena, &fstrs, &sep);
+                d_fancy_string_list_concat_in_place(&fstrs, &symbol_type_fstrs);
+                UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                ui_box_equip_display_fancy_strings(label, 0, &fstrs);
+              }
             }
-            else
-            {
-              ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_CodeFunction));
-            }
-            UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, symbol);
             UI_Signal sig = ui_signal_from_box(box);
             if(ui_pressed(sig))
             {
@@ -5046,6 +5065,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
     }
   }
   
+  di_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -5819,7 +5839,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 margin_width_px = big_glyph_advance*3.5f;
+  F32 priority_margin_width_px = big_glyph_advance*3.5f;
+  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
   TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &text_info, data, visible_line_num_range);
   
@@ -5847,7 +5868,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   if(text_info_is_ready)
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
+    code_slice_params.flags                     = DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
@@ -5862,7 +5883,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
-    code_slice_params.margin_width_px           = margin_width_px;
+    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
+    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
@@ -6382,7 +6404,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(snap[Axis2_X])
     {
       String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -6390,7 +6412,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       };
       Rng1S64 cursor_pixel_range =
       {
-        cursor_off - (S64)(big_glyph_advance*4) - (S64)(margin_width_px + line_num_width_px),
+        cursor_off - (S64)(big_glyph_advance*4) - (S64)(priority_margin_width_px + catchall_margin_width_px + line_num_width_px),
         cursor_off + (S64)(big_glyph_advance*4),
       };
       S64 min_delta = Min(0, cursor_pixel_range.min - visible_pixel_range.min);
@@ -6895,7 +6917,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 margin_width_px = big_glyph_advance*3.5f;
+  F32 priority_margin_width_px = big_glyph_advance*3.5f;
+  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
   TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &dasm_text_info, dasm_text_data, visible_line_num_range);
   
@@ -6936,7 +6959,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   if(has_disasm)
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
+    code_slice_params.flags                     = DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
@@ -6951,7 +6974,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
-    code_slice_params.margin_width_px           = margin_width_px;
+    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
+    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, process, DF_EntityKind_FlashMarker);
@@ -7750,7 +7774,8 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 margin_width_px = big_glyph_advance*3.5f;
+  F32 priority_margin_width_px = big_glyph_advance*3.5f;
+  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
   TXTI_Slice slice = txti_slice_from_handle_line_range(scratch.arena, txti_handle, visible_line_num_range);
   
@@ -7793,7 +7818,8 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
-    code_slice_params.margin_width_px           = margin_width_px;
+    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
+    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
@@ -8079,7 +8105,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     if(snap[Axis2_X])
     {
       String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -8087,7 +8113,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
       };
       Rng1S64 cursor_pixel_range =
       {
-        cursor_off - (S64)(big_glyph_advance*4) - (S64)(margin_width_px + line_num_width_px),
+        cursor_off - (S64)(big_glyph_advance*4) - (S64)(priority_margin_width_px + catchall_margin_width_px + line_num_width_px),
         cursor_off + (S64)(big_glyph_advance*4),
       };
       S64 min_delta = Min(0, cursor_pixel_range.min - visible_pixel_range.min);

@@ -1155,7 +1155,13 @@ ui_end_build(void)
   
   //- rjf: ensure special floating roots are within screen bounds
   UI_Box *floating_roots[] = {ui_state->tooltip_root, ui_state->ctx_menu_root};
-  B32 force_contain[]      = {0,                      1};
+  B32 force_contain[] =
+  {
+    (ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()) &&
+     ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero())),
+    1,
+  };
   for(U64 idx = 0; idx < ArrayCount(floating_roots); idx += 1)
   {
     UI_Box *root = floating_roots[idx];
@@ -1164,11 +1170,10 @@ ui_end_build(void)
       Rng2F32 window_rect = os_client_rect_from_window(ui_window());
       Vec2F32 window_dim = dim_2f32(window_rect);
       Rng2F32 root_rect = root->rect;
-      Vec2F32 root_rect_dim = dim_2f32(root_rect);
       Vec2F32 shift =
       {
-        -ClampBot(0, root_rect.x1 - window_rect.x1) * (root_rect_dim.x < root->font_size*15.f || force_contain[idx]),
-        -ClampBot(0, root_rect.y1 - window_rect.y1) * (root_rect_dim.y < root->font_size*15.f || force_contain[idx]),
+        -ClampBot(0, root_rect.x1 - window_rect.x1) * (force_contain[idx]),
+        -ClampBot(0, root_rect.y1 - window_rect.y1) * (force_contain[idx]),
       };
       Rng2F32 new_root_rect = shift_2f32(root_rect, shift);
       root->fixed_position = new_root_rect.p0;
@@ -1420,14 +1425,22 @@ ui_end_build(void)
         {
           if(b->flags & UI_BoxFlag_DrawText && !(b->flags & UI_BoxFlag_DisableTextTrunc))
           {
+            Rng2F32 rect = b->rect;
+            for(UI_Box *p = b->parent; !ui_box_is_nil(p); p = p->parent)
+            {
+              if(p->flags & UI_BoxFlag_Clip)
+              {
+                rect = intersect_2f32(rect, p->rect);
+              }
+            }
             String8 box_display_string = ui_box_display_string(b);
             Vec2F32 text_pos = ui_box_text_position(b);
             Vec2F32 drawn_text_dim = b->display_string_runs.dim;
-            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > b->rect.x1);
+            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > rect.x1);
             B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
-                                                         b->rect.y0,
-                                                         Min(text_pos.x+drawn_text_dim.x, b->rect.x1),
-                                                         b->rect.y1),
+                                                         rect.y0,
+                                                         Min(text_pos.x+drawn_text_dim.x, rect.x1),
+                                                         rect.y1),
                                                   ui_state->mouse);
             if(text_is_truncated && mouse_is_hovering)
             {
@@ -1442,6 +1455,10 @@ ui_end_build(void)
               found = 1;
               goto break_all_hover_string;
             }
+          }
+          if(b != box && ui_key_match(b->key, ui_hot_key()))
+          {
+            goto break_all_hover_string;
           }
           if(b != box && contains_2f32(b->rect, ui_state->mouse) && b->flags & UI_BoxFlag_DrawText)
           {
