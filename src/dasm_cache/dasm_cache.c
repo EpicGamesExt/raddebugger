@@ -69,7 +69,8 @@ dasm_inst_array_idx_from_code_off__linear_scan(DASM_InstArray *array, U64 off)
   U64 result = 0;
   for(U64 idx = 0; idx < array->count; idx += 1)
   {
-    if(array->v[idx].code_off == off)
+    U64 next_off = (idx+1 < array->count ? array->v[idx+1].code_off : max_U64);
+    if(array->v[idx].code_off <= off && off < next_off)
     {
       result = idx;
       break;
