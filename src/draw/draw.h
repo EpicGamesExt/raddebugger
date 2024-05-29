@@ -109,6 +109,7 @@ internal U64 d_hash_from_string(String8 string);
 //~ rjf: Fancy String Type Functions
 
 internal void d_fancy_string_list_push(Arena *arena, D_FancyStringList *list, D_FancyString *str);
+internal void d_fancy_string_list_concat_in_place(D_FancyStringList *dst, D_FancyStringList *to_push);
 internal String8 d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list);
 internal D_FancyRunList d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, D_FancyStringList *strs);
 internal D_FancyRunList d_fancy_run_list_copy(Arena *arena, D_FancyRunList *src);

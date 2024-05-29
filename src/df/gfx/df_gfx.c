@@ -5992,7 +5992,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               //- rjf: calculate width of exp row
               if(row == viz_rows.first)
               {
-                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), row->display_expr).x + ui_top_font_size()*0.5f;
+                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), row->display_expr).x + ui_top_font_size()*2.5f;
                 expr_column_width_px = Max(expr_column_width_px, ui_top_font_size()*10.f);
               }
               

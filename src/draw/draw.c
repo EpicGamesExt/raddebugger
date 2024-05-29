@@ -54,6 +54,23 @@ d_fancy_string_list_push(Arena *arena, D_FancyStringList *list, D_FancyString *s
   list->total_size += str->string.size;
 }
 
+internal void
+d_fancy_string_list_concat_in_place(D_FancyStringList *dst, D_FancyStringList *to_push)
+{
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->node_count += to_push->node_count;
+    dst->total_size += to_push->total_size;
+  }
+  else if(to_push->first != 0)
+  {
+    MemoryCopyStruct(dst, to_push);
+  }
+  MemoryZeroStruct(to_push);
+}
+
 internal String8
 d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list)
 {
