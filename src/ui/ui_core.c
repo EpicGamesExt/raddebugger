@@ -1425,14 +1425,22 @@ ui_end_build(void)
         {
           if(b->flags & UI_BoxFlag_DrawText && !(b->flags & UI_BoxFlag_DisableTextTrunc))
           {
+            Rng2F32 rect = b->rect;
+            for(UI_Box *p = b->parent; !ui_box_is_nil(p); p = p->parent)
+            {
+              if(p->flags & UI_BoxFlag_Clip)
+              {
+                rect = intersect_2f32(rect, p->rect);
+              }
+            }
             String8 box_display_string = ui_box_display_string(b);
             Vec2F32 text_pos = ui_box_text_position(b);
             Vec2F32 drawn_text_dim = b->display_string_runs.dim;
-            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > b->rect.x1);
+            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > rect.x1);
             B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
-                                                         b->rect.y0,
-                                                         Min(text_pos.x+drawn_text_dim.x, b->rect.x1),
-                                                         b->rect.y1),
+                                                         rect.y0,
+                                                         Min(text_pos.x+drawn_text_dim.x, rect.x1),
+                                                         rect.y1),
                                                   ui_state->mouse);
             if(text_is_truncated && mouse_is_hovering)
             {
@@ -1447,6 +1455,10 @@ ui_end_build(void)
               found = 1;
               goto break_all_hover_string;
             }
+          }
+          if(b != box && ui_key_match(b->key, ui_hot_key()))
+          {
+            goto break_all_hover_string;
           }
           if(b != box && contains_2f32(b->rect, ui_state->mouse) && b->flags & UI_BoxFlag_DrawText)
           {
