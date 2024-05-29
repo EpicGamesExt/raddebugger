@@ -570,7 +570,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     code_slice_params.font_size = ui_top_font_size();
     code_slice_params.tab_size = f_column_size_from_tag_size(code_slice_params.font, code_slice_params.font_size)*4.f;
     code_slice_params.line_height_px = ui_top_font_size()*1.5f;
-    code_slice_params.margin_width_px = 0;
+    code_slice_params.priority_margin_width_px = 0;
+    code_slice_params.catchall_margin_width_px = 0;
     code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
     code_slice_params.line_text_max_width_px = ui_top_font_size()*2.f*info.lines_max_size;
   }
@@ -731,7 +732,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
       code_slice_params.font_size = ui_top_font_size();
       code_slice_params.tab_size = f_column_size_from_tag_size(code_slice_params.font, code_slice_params.font_size)*4.f;
       code_slice_params.line_height_px = ui_top_font_size()*1.5f;
-      code_slice_params.margin_width_px = 0;
+      code_slice_params.priority_margin_width_px = 0;
+      code_slice_params.catchall_margin_width_px = 0;
       code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
       code_slice_params.line_text_max_width_px = ui_top_font_size()*2.f*dasm_text_info.lines_max_size;
     }

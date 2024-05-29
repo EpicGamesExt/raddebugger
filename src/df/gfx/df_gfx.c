@@ -2903,6 +2903,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectThread));
             }break;
+            case DF_EntityKind_Target:
+            {
+              DF_CmdParams params = df_cmd_params_from_window(ws);
+              params.entity = df_handle_from_entity(entity);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+              df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectTarget));
+            }break;
           }
         }break;
         case DF_CoreCmdKind_SpawnEntityView:
@@ -10424,9 +10431,9 @@ internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions)
   
   // rjf: draw line before next-to-execute line
   {
-    R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
+    R_Rect2DInst *inst = d_rect(r2f32p(box->parent->parent->parent->rect.x0,
                                        box->parent->rect.y0 - box->font_size*0.125f,
-                                       box->rect.x0 + box->font_size*260*u->alive_t,
+                                       box->parent->parent->parent->rect.x0 + box->font_size*260*u->alive_t,
                                        box->parent->rect.y0 + box->font_size*0.125f),
                                 v4f32(u->thread_color.x, u->thread_color.y, u->thread_color.z, 0),
                                 0, 0, 1);
@@ -10451,9 +10458,9 @@ internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions)
   {
     Vec4F32 weak_thread_color = u->thread_color;
     weak_thread_color.w *= 0.3f;
-    R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
+    R_Rect2DInst *inst = d_rect(r2f32p(box->parent->parent->parent->rect.x0,
                                        box->parent->rect.y0,
-                                       box->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
+                                       box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
                                        box->parent->rect.y1),
                                 v4f32(0, 0, 0, 0),
                                 0, 0, 1);
@@ -10491,9 +10498,9 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
   
   // rjf: draw line before next-to-execute line
   {
-    R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
+    R_Rect2DInst *inst = d_rect(r2f32p(box->parent->parent->parent->rect.x0,
                                        box->parent->rect.y0 - box->font_size*0.125f,
-                                       box->rect.x0 + ui_top_font_size()*250.f*u->alive_t,
+                                       box->parent->parent->parent->rect.x0 + ui_top_font_size()*250.f*u->alive_t,
                                        box->parent->rect.y0 + box->font_size*0.125f),
                                 v4f32(u->color.x, u->color.y, u->color.z, 0),
                                 0, 0, 1.f);
@@ -10504,9 +10511,9 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
   {
     Vec4F32 weak_thread_color = u->color;
     weak_thread_color.w *= 0.3f;
-    R_Rect2DInst *inst = d_rect(r2f32p(box->rect.x0,
+    R_Rect2DInst *inst = d_rect(r2f32p(box->parent->parent->parent->rect.x0,
                                        box->parent->rect.y0,
-                                       box->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
+                                       box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
                                        box->parent->rect.y1),
                                 v4f32(0, 0, 0, 0),
                                 0, 0, 1);
@@ -10677,24 +10684,24 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
-  //- rjf: build margins
+  //- rjf: build priority margin
   //
-  UI_Box *margin_container_box = &ui_g_nil_box;
-  if(params->flags & DF_CodeSliceFlag_Margin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build margins")
+  UI_Box *priority_margin_container_box = &ui_g_nil_box;
+  if(params->flags & DF_CodeSliceFlag_PriorityMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build priority margins")
   {
     if(params->margin_float_off_px != 0)
     {
-      ui_set_next_pref_width(ui_px(params->margin_width_px, 1));
+      ui_set_next_pref_width(ui_px(params->priority_margin_width_px, 1));
       ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
       ui_build_box_from_key(0, ui_key_zero());
       ui_set_next_fixed_x(params->margin_float_off_px);
       ui_set_next_flags(UI_BoxFlag_DrawBackground);
     }
-    ui_set_next_pref_width(ui_px(params->margin_width_px, 1));
+    ui_set_next_pref_width(ui_px(params->priority_margin_width_px, 1));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_set_next_child_layout_axis(Axis2_Y);
-    margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable), str8_lit("margin_container"));
-    UI_Parent(margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+    priority_margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable), str8_lit("priority_margin_container"));
+    UI_Parent(priority_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
     {
       U64 line_idx = 0;
       for(S64 line_num = params->line_num_range.min;
@@ -10714,6 +10721,176 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           {
             // rjf: unpack thread
             DF_Entity *thread = n->entity;
+            if(thread != selected_thread)
+            {
+              continue;
+            }
+            U64 unwind_count = (thread == selected_thread) ? ctrl_ctx->unwind_count : 0;
+            U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+            DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+            DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_vaddr);
+            DI_Key dbgi_key = df_dbgi_key_from_module(module);
+            U64 thread_rip_voff = df_voff_from_vaddr(module, thread_rip_vaddr);
+            
+            // rjf: thread info => color
+            Vec4F32 color = v4f32(1, 1, 1, 1);
+            {
+              if(unwind_count != 0)
+              {
+                color = df_rgba_from_theme_color(DF_ThemeColor_ThreadUnwound);
+              }
+              else if(thread == stopper_thread &&
+                      (stop_event.cause == CTRL_EventCause_InterruptedByHalt ||
+                       stop_event.cause == CTRL_EventCause_InterruptedByTrap ||
+                       stop_event.cause == CTRL_EventCause_InterruptedByException))
+              {
+                color = df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
+              }
+              else if(thread->flags & DF_EntityFlag_HasColor)
+              {
+                color = df_rgba_from_entity(thread);
+              }
+              if(df_ctrl_targets_running() && df_ctrl_last_run_frame_idx() < df_frame_index())
+              {
+                color.w *= 0.5f;
+              }
+              if(thread != selected_thread)
+              {
+                color.w *= 0.8f;
+              }
+            }
+            
+            // rjf: build thread box
+            ui_set_next_hover_cursor(OS_Cursor_UpDownLeftRight);
+            ui_set_next_font(ui_icon_font());
+            ui_set_next_font_size(params->font_size);
+            ui_set_next_pref_width(ui_pct(1, 0));
+            ui_set_next_pref_height(ui_pct(1, 0));
+            ui_set_next_text_color(color);
+            ui_set_next_text_alignment(UI_TextAlign_Center);
+            UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
+            UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
+                                                       UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
+                                                       UI_BoxFlag_AnimatePosX|
+                                                       UI_BoxFlag_DrawText,
+                                                       thread_box_key);
+            ui_box_equip_display_string(thread_box, df_g_icon_kind_text_table[DF_IconKind_RightArrow]);
+            UI_Signal thread_sig = ui_signal_from_box(thread_box);
+            
+            // rjf: custom draw
+            {
+              DF_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), DF_ThreadBoxDrawExtData, 1);
+              u->thread_color = color;
+              u->alive_t = thread->alive_t;
+              u->is_selected = (thread == selected_thread);
+              u->is_frozen = df_entity_is_frozen(thread);
+              ui_box_equip_custom_draw(thread_box, df_thread_box_draw_extensions, u);
+              
+              // rjf: fill out progress t (progress into range of current line's
+              // voff range)
+              if(params->line_src2dasm[line_idx].first != 0)
+              {
+                DF_TextLineSrc2DasmInfoList *line_info_list = &params->line_src2dasm[line_idx];
+                DF_TextLineSrc2DasmInfo *line_info = 0;
+                for(DF_TextLineSrc2DasmInfoNode *n = line_info_list->first;
+                    n != 0;
+                    n = n->next)
+                {
+                  if(di_key_match(&n->v.dbgi_key, &dbgi_key))
+                  {
+                    line_info = &n->v;
+                    break;
+                  }
+                }
+                if(line_info != 0)
+                {
+                  Rng1U64 line_voff_rng = line_info->voff_range;
+                  Vec4F32 weak_thread_color = color;
+                  weak_thread_color.w *= 0.4f;
+                  F32 progress_t = (line_voff_rng.max != line_voff_rng.min) ? ((F32)(thread_rip_voff - line_voff_rng.min) / (F32)(line_voff_rng.max - line_voff_rng.min)) : 0;
+                  progress_t = Clamp(0, progress_t, 1);
+                  u->progress_t = progress_t;
+                }
+              }
+            }
+            
+            // rjf: hover tooltips
+            if(ui_hovering(thread_sig))
+            {
+              df_entity_tooltips(thread);
+            }
+            
+            // rjf: ip right-click menu
+            if(ui_right_clicked(thread_sig))
+            {
+              DF_Handle handle = df_handle_from_entity(thread);
+              if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
+              {
+                ui_ctx_menu_close();
+              }
+              else
+              {
+                ui_ctx_menu_open(ws->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
+                ws->entity_ctx_menu_entity = handle;
+              }
+            }
+            
+            // rjf: drag start
+            if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
+            {
+              DF_DragDropPayload payload = {0};
+              payload.key = thread_box->key;
+              payload.entity = df_handle_from_entity(thread);
+              df_drag_begin(&payload);
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build catchall margin
+  //
+  UI_Box *catchall_margin_container_box = &ui_g_nil_box;
+  if(params->flags & DF_CodeSliceFlag_CatchallMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) ProfScope("build catchall margins")
+  {
+    if(params->margin_float_off_px != 0)
+    {
+      ui_set_next_pref_width(ui_px(params->catchall_margin_width_px, 1));
+      ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+      ui_build_box_from_key(0, ui_key_zero());
+      ui_set_next_fixed_x(params->margin_float_off_px + params->priority_margin_width_px);
+      ui_set_next_flags(UI_BoxFlag_DrawBackground);
+    }
+    ui_set_next_pref_width(ui_px(params->catchall_margin_width_px, 1));
+    ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+    ui_set_next_child_layout_axis(Axis2_Y);
+    catchall_margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable), str8_lit("catchall_margin_container"));
+    UI_Parent(catchall_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+    {
+      U64 line_idx = 0;
+      for(S64 line_num = params->line_num_range.min;
+          line_num <= params->line_num_range.max;
+          line_num += 1, line_idx += 1)
+      {
+        DF_EntityList line_ips  = params->line_ips[line_idx];
+        DF_EntityList line_bps  = params->line_bps[line_idx];
+        DF_EntityList line_pins = params->line_pins[line_idx];
+        ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+        ui_set_next_background_color(v4f32(0, 0, 0, 0));
+        UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
+        UI_Parent(line_margin_box)
+        {
+          //- rjf: build margin thread ip ui
+          for(DF_EntityNode *n = line_ips.first; n != 0; n = n->next)
+          {
+            // rjf: unpack thread
+            DF_Entity *thread = n->entity;
+            if(thread == selected_thread)
+            {
+              continue;
+            }
             U64 unwind_count = (thread == selected_thread) ? ctrl_ctx->unwind_count : 0;
             U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -10831,6 +11008,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               params.entity = df_handle_from_entity(thread);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectThread));
+              ui_kill_action();
             }
             
             // rjf: drag start
@@ -11236,7 +11414,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //////////////////////////////
   //- rjf: interact with margin box & text box
   //
-  UI_Signal margin_container_sig = ui_signal_from_box(margin_container_box);
+  UI_Signal priority_margin_container_sig = ui_signal_from_box(priority_margin_container_box);
+  UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
   DF_Entity *line_drag_entity = &df_g_nil_entity;
   {

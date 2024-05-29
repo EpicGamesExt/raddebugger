@@ -3867,13 +3867,7 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
         UI_FocusHot((row_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
       {
         UI_Signal sig = df_icon_buttonf(target->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", target);
-        if(ui_clicked(sig) && sig.event_flags == 0)
-        {
-          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-          p.entity = df_handle_from_entity(target);
-          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectTarget));
-        }
-        else if(ui_clicked(sig) && sig.event_flags == OS_EventFlag_Ctrl)
+        if(ui_clicked(sig))
         {
           DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
           p.entity = df_handle_from_entity(target);
@@ -5845,7 +5839,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 margin_width_px = big_glyph_advance*3.5f;
+  F32 priority_margin_width_px = big_glyph_advance*3.5f;
+  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
   TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &text_info, data, visible_line_num_range);
   
@@ -5873,7 +5868,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   if(text_info_is_ready)
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
+    code_slice_params.flags                     = DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
@@ -5888,7 +5883,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
-    code_slice_params.margin_width_px           = margin_width_px;
+    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
+    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
@@ -6408,7 +6404,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     if(snap[Axis2_X])
     {
       String8 cursor_line = str8_substr(data, text_info.lines_ranges[tv->cursor.line-1]);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -6416,7 +6412,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       };
       Rng1S64 cursor_pixel_range =
       {
-        cursor_off - (S64)(big_glyph_advance*4) - (S64)(margin_width_px + line_num_width_px),
+        cursor_off - (S64)(big_glyph_advance*4) - (S64)(priority_margin_width_px + catchall_margin_width_px + line_num_width_px),
         cursor_off + (S64)(big_glyph_advance*4),
       };
       S64 min_delta = Min(0, cursor_pixel_range.min - visible_pixel_range.min);
@@ -6921,7 +6917,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 margin_width_px = big_glyph_advance*3.5f;
+  F32 priority_margin_width_px = big_glyph_advance*3.5f;
+  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
   TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &dasm_text_info, dasm_text_data, visible_line_num_range);
   
@@ -6962,7 +6959,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   if(has_disasm)
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_Margin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
+    code_slice_params.flags                     = DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
@@ -6977,7 +6974,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
-    code_slice_params.margin_width_px           = margin_width_px;
+    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
+    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, process, DF_EntityKind_FlashMarker);
@@ -7776,7 +7774,8 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 margin_width_px = big_glyph_advance*3.5f;
+  F32 priority_margin_width_px = big_glyph_advance*3.5f;
+  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
   TXTI_Slice slice = txti_slice_from_handle_line_range(scratch.arena, txti_handle, visible_line_num_range);
   
@@ -7819,7 +7818,8 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
-    code_slice_params.margin_width_px           = margin_width_px;
+    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
+    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
@@ -8105,7 +8105,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     if(snap[Axis2_X])
     {
       String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -8113,7 +8113,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
       };
       Rng1S64 cursor_pixel_range =
       {
-        cursor_off - (S64)(big_glyph_advance*4) - (S64)(margin_width_px + line_num_width_px),
+        cursor_off - (S64)(big_glyph_advance*4) - (S64)(priority_margin_width_px + catchall_margin_width_px + line_num_width_px),
         cursor_off + (S64)(big_glyph_advance*4),
       };
       S64 min_delta = Min(0, cursor_pixel_range.min - visible_pixel_range.min);
