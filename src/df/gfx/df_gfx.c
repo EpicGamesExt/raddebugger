@@ -10866,7 +10866,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     ui_set_next_pref_width(ui_px(params->catchall_margin_width_px, 1));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_set_next_child_layout_axis(Axis2_Y);
-    catchall_margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable), str8_lit("catchall_margin_container"));
+    catchall_margin_container_box = ui_build_box_from_string(UI_BoxFlag_DrawSideLeft|UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable), str8_lit("catchall_margin_container"));
     UI_Parent(catchall_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
     {
       U64 line_idx = 0;
