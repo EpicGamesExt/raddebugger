@@ -366,6 +366,10 @@ global DBGI_Parse dbgi_parse_nil =
     &rdi_voff_nil, 1,
     &rdi_line_nil, 1,
     &rdi_column_nil, 1,
+    &rdi_line_number_map_nil, 1,
+    0,0,
+    0,0,
+    0,0,
     (U8*)&rdi_checksum_nil, sizeof(rdi_checksum_nil),
   },
 };
