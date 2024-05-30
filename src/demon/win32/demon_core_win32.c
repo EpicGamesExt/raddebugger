@@ -1552,6 +1552,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //////////////////////////
       //- rjf: loop, consume win32 debug events until we produce the relevant demon events
       //
+      U64 begin_time = os_now_microseconds();
       String8List debug_strings = {0};
       for(B32 keep_going = 1; keep_going;)
       {
@@ -2197,6 +2198,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               NoOp;
             }break;
           }
+        }
+        
+        ////////////////////////
+        //- rjf: exit loop after a little while, so we keep pumping e.g. debug strings
+        //
+        if(os_now_microseconds() >= begin_time+100000)
+        {
+          keep_going = 0;
         }
       }
       
