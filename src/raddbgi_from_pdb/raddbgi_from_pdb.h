@@ -566,14 +566,20 @@ struct P2R_BakeTypeNodesIn
   RDIM_BakeParams *params;
 };
 
-typedef struct P2R_BakeNameMapIn P2R_BakeNameMapIn;
-struct P2R_BakeNameMapIn
+typedef struct P2R_MakeNameMapIn P2R_MakeNameMapIn;
+struct P2R_MakeNameMapIn
 {
+  RDI_NameMapKind kind;
   RDIM_BakeStringMapTight *strings;
   RDIM_BakeIdxRunMap *idx_runs;
-  RDIM_BakeParams *params;
+  RDIM_BakeNameMap *bake_map;
+};
+
+typedef struct P2R_MakeNameMapOut P2R_MakeNameMapOut;
+struct P2R_MakeNameMapOut
+{
   RDI_NameMapKind kind;
-  RDIM_BakeNameMap *map;
+  RDIM_NameMap name_map;
 };
 
 typedef struct P2R_BakeIdxRunsIn P2R_BakeIdxRunsIn;

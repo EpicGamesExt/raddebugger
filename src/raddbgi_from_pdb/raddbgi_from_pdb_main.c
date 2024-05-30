@@ -17,6 +17,8 @@
 //- rjf: [lib]
 #include "lib_raddbgi_format/raddbgi_format.h"
 #include "lib_raddbgi_format/raddbgi_format.c"
+#include "lib_raddbgi_format/raddbgi_enum.h"
+#include "lib_raddbgi_format/raddbgi_enum.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 

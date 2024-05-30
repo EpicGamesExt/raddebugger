@@ -1,212 +1,180 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-////////////////////////////////
-//~ RADDBG Parse API
+RDI_PROC void *
+rdi_extract_section_data(RDI_U8 *raw_data, RDI_U64 raw_data_size, RDI_DataSection *sections, RDI_DataSectionTag tag, RDI_U32 item_size, RDI_U64 *out_count)
+{
+  RDI_DataSection *sect = &sections[tag];
+  void *data = raw_data + sect->off;
+  *out_count = sect->unpacked_size / item_size;
+  return data;
+}
 
 RDI_PROC RDI_ParseStatus
-rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
+rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out_rdi)
 {
-  RDI_ParseStatus result = RDI_ParseStatus_Good;
+  RDI_ParseStatus parse_status = RDI_ParseStatus_Good;
   
-  // out header
-  RDI_Header *hdr = 0;
+  // parse data sections
+  RDI_DataSection *sections      = 0;
+  RDI_U64          section_count = 0;
+  do
   {
-    if(sizeof(*hdr) <= size)
+    RDI_Header *header = (RDI_Header *)data;
+
+    // error check header
+    parse_status = RDI_ParseStatus_Unknown;
+    if(sizeof(*header) > size)
     {
-      hdr = (RDI_Header*)data;
+      parse_status = RDI_ParseStatus_OutOfData;
+      break;
     }
-    
-    // (errors)
-    if(hdr == 0 || hdr->magic != RDI_MAGIC_CONSTANT)
+    if(header->magic != RDI_MAGIC_CONSTANT)
     {
-      hdr = 0;
-      result = RDI_ParseStatus_HeaderDoesNotMatch;
+      parse_status = RDI_ParseStatus_HeaderDoesNotMatch;
+      break;
     }
-    if(hdr != 0 && hdr->encoding_version != 1)
+    if(header->encoding_version != RDI_ENCODING_VERSION)
     {
-      hdr = 0;
-      result = RDI_ParseStatus_UnsupportedVersionNumber;
+      parse_status = RDI_ParseStatus_UnsupportedVersionNumber;
+      break;
     }
-  }
-  
-  // out data sections
-  RDI_DataSection *dsecs = 0;
-  RDI_U32 dsec_count = 0;
-  if(hdr != 0)
-  {
-    RDI_U64 opl = (RDI_U64)hdr->data_section_off + (RDI_U64)hdr->data_section_count*sizeof(*dsecs);
-    if(opl <= size)
+
+    // error check data section array
+    RDI_U64 opl = (RDI_U64)header->data_section_off + (RDI_U64)header->data_section_count*sizeof(RDI_DataSection);
+    if(opl > size)
     {
-      dsecs = (RDI_DataSection*)(data + hdr->data_section_off);
-      dsec_count = hdr->data_section_count;
+      parse_status = RDI_ParseStatus_InvalidDataSecionLayout;
+      break;
     }
-    
-    //  (errors)
-    if(dsecs == 0)
+
+    // sanity check sections headers & distribute by tag
+    parse_status  = RDI_ParseStatus_Good;
+    sections      = (RDI_DataSection *)(data + header->data_section_off);
+    section_count = header->data_section_count;
+    for(RDI_U32 i = 0; i < section_count; i += 1)
     {
-      result = RDI_ParseStatus_InvalidDataSecionLayout;
-    }
-  }
-  
-  // extract primary data section indexes
-  RDI_U32 dsec_idx[RDI_DataSectionTag_PRIMARY_COUNT] = {0};
-  if(result == RDI_ParseStatus_Good)
-  {
-    RDI_DataSection *sec_ptr = dsecs;
-    for(RDI_U32 i = 0; i < dsec_count; i += 1, sec_ptr += 1)
-    {
-      if(sec_ptr->tag < RDI_DataSectionTag_PRIMARY_COUNT)
+      RDI_DataSection *sect = sections + i;
+
+      RDI_U64 encoded_opl = sect->off + sect->encoded_size;
+      if(encoded_opl > size)
       {
-        dsec_idx[sec_ptr->tag] = i;
+        parse_status = RDI_ParseStatus_InvalidSectionEncoding;
+        break;
+      }
+      if(sect->tag >= RDI_DataSectionTag_PRIMARY_COUNT)
+      {
+        parse_status = RDI_ParseStatus_InvalidDataSectionTag;
+        break;
       }
     }
-  }
+  } while(0);
   
-  // fill out data block (part 1)
-  if(result == RDI_ParseStatus_Good)
-  {
-    out->raw_data      = data;
-    out->raw_data_size = size;
-    out->dsecs         = dsecs;
-    out->dsec_count    = dsec_count;
-    for(RDI_U32 i = 0; i < RDI_DataSectionTag_PRIMARY_COUNT; i += 1)
-    {
-      out->dsec_idx[i] = dsec_idx[i];
-    }
-  }
-  
-  // out string table
-  RDI_U8  *string_data  = 0;
-  RDI_U64  string_opl   = 0;
-  RDI_U32 *string_offs  = 0;
-  RDI_U64  string_count = 0;
-  if(result == RDI_ParseStatus_Good)
-  {
-    rdi_parse__extract_primary(out, string_data, &string_opl, RDI_DataSectionTag_StringData);
-    
-    RDI_U64 table_entry_count = 0;
-    rdi_parse__extract_primary(out, string_offs, &table_entry_count, RDI_DataSectionTag_StringTable);
-    if(table_entry_count > 0)
-    {
-      string_count = table_entry_count - 1;
-    }
-    
-    //  (errors)
-    if(string_data == 0)
-    {
-      result = RDI_ParseStatus_MissingStringDataSection;
-    }
-    else if(string_offs == 0)
-    {
-      result = RDI_ParseStatus_MissingStringTableSection;
-    }
-  }
-  
-  // out index runs
-  RDI_U32 *idx_run_data = 0;
-  RDI_U64 idx_run_count = 0;
-  if(result == RDI_ParseStatus_Good)
-  {
-    rdi_parse__extract_primary(out, idx_run_data, &idx_run_count,
-                               RDI_DataSectionTag_IndexRuns);
-    
-    //  (errors)
-    if(idx_run_data == 0)
-    {
-      result = RDI_ParseStatus_MissingIndexRunSection;
-    }
-  }
-  
-  if(result == RDI_ParseStatus_Good)
+  if(parse_status == RDI_ParseStatus_Good)
   {
     RDI_U64 top_level_count = 0;
 
-    // fill out primary data structures (part 2)
-    out->string_data      = string_data;
-    out->string_offs      = string_offs;
-    out->string_data_size = string_opl;
-    out->string_count     = string_count;
-    out->idx_run_data     = idx_run_data;
-    out->idx_run_count    = idx_run_count;
-    
-    rdi_parse__extract_primary(out, out->top_level_info,    &top_level_count,             RDI_DataSectionTag_TopLevelInfo);
-    rdi_parse__extract_primary(out, out->binary_sections,   &out->binary_sections_count,  RDI_DataSectionTag_BinarySections);
-    rdi_parse__extract_primary(out, out->file_paths,        &out->file_paths_count,       RDI_DataSectionTag_FilePathNodes);
-    rdi_parse__extract_primary(out, out->source_files,      &out->source_files_count,     RDI_DataSectionTag_SourceFiles);
-    rdi_parse__extract_primary(out, out->units,             &out->units_count,            RDI_DataSectionTag_Units);
-    rdi_parse__extract_primary(out, out->unit_vmap,         &out->unit_vmap_count,        RDI_DataSectionTag_UnitVmap);
-    rdi_parse__extract_primary(out, out->unit_vmap,         &out->unit_vmap_count,        RDI_DataSectionTag_UnitVmap);
-    rdi_parse__extract_primary(out, out->type_nodes,        &out->type_nodes_count,       RDI_DataSectionTag_TypeNodes);
-    rdi_parse__extract_primary(out, out->udts,              &out->udts_count,             RDI_DataSectionTag_UDTs);
-    rdi_parse__extract_primary(out, out->members,           &out->members_count,          RDI_DataSectionTag_Members);
-    rdi_parse__extract_primary(out, out->enum_members,      &out->enum_members_count,     RDI_DataSectionTag_EnumMembers);
-    rdi_parse__extract_primary(out, out->global_variables,  &out->global_variables_count, RDI_DataSectionTag_GlobalVariables);
-    rdi_parse__extract_primary(out, out->global_vmap,       &out->global_vmap_count,      RDI_DataSectionTag_GlobalVmap);
-    rdi_parse__extract_primary(out, out->thread_variables,  &out->thread_variables_count, RDI_DataSectionTag_ThreadVariables);
-    rdi_parse__extract_primary(out, out->procedures,        &out->procedures_count,       RDI_DataSectionTag_Procedures);
-    rdi_parse__extract_primary(out, out->scopes,            &out->scopes_count,           RDI_DataSectionTag_Scopes);
-    rdi_parse__extract_primary(out, out->scope_voffs,       &out->scope_voffs_count,      RDI_DataSectionTag_ScopeVoffData);
-    rdi_parse__extract_primary(out, out->scope_vmap,        &out->scope_vmap_count,       RDI_DataSectionTag_ScopeVmap);
-    rdi_parse__extract_primary(out, out->inline_sites,      &out->inline_site_count,      RDI_DataSectionTag_InlineSites);
-    rdi_parse__extract_primary(out, out->locals,            &out->locals_count,           RDI_DataSectionTag_Locals);
-    rdi_parse__extract_primary(out, out->location_blocks,   &out->location_blocks_count,  RDI_DataSectionTag_LocationBlocks);
-    rdi_parse__extract_primary(out, out->location_data,     &out->location_data_size,     RDI_DataSectionTag_LocationData);
-    rdi_parse__extract_primary(out, out->line_info,         &out->line_info_count,        RDI_DataSectionTag_LineInfo);
-    rdi_parse__extract_primary(out, out->line_info_voffs,   &out->line_info_voff_count,   RDI_DataSectionTag_LineInfoVoffs);
-    rdi_parse__extract_primary(out, out->line_info_data,    &out->line_info_data_count,   RDI_DataSectionTag_LineInfoData);
-    rdi_parse__extract_primary(out, out->line_info_cols,    &out->line_info_col_count,    RDI_DataSectionTag_LineInfoColumns);
-    rdi_parse__extract_primary(out, out->line_number_maps,  &out->line_number_map_count,  RDI_DataSectionTag_LineNumberMaps);
-    rdi_parse__extract_primary(out, out->line_map_numbers,  &out->line_map_number_count,  RDI_DataSectionTag_LineMapNumbers);
-    rdi_parse__extract_primary(out, out->line_map_ranges,   &out->line_map_range_count,   RDI_DataSectionTag_LineMapRanges);
-    rdi_parse__extract_primary(out, out->line_map_voffs,    &out->line_map_voff_count,    RDI_DataSectionTag_LineMapVoffs);
-    rdi_parse__extract_primary(out, out->checksums,         &out->checksums_size,         RDI_DataSectionTag_Checksums);
-    
+    out_rdi->raw_data          = data;
+    out_rdi->raw_data_size     = size;
+    out_rdi->sections          = sections;
+    out_rdi->section_count     = section_count;
+    out_rdi->top_level_info    = (RDI_TopLevelInfo *)  rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_TopLevelInfo   , sizeof(out_rdi->top_level_info[0])   , &top_level_count                  );
+    out_rdi->string_data       = (RDI_U8 *)            rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_StringData     , sizeof(out_rdi->string_data[0])      , &out_rdi->string_data_size        );
+    out_rdi->string_offs       = (RDI_U32 *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_StringTable    , sizeof(out_rdi->string_offs[0])      , &out_rdi->string_count            );
+    out_rdi->idx_run_data      = (RDI_U32 *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_IndexRuns      , sizeof(out_rdi->idx_run_data[0])     , &out_rdi->idx_run_count           );
+    out_rdi->binary_sections   = (RDI_BinarySection *) rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_BinarySections , sizeof(out_rdi->binary_sections[0])  , &out_rdi->binary_sections_count   );
+    out_rdi->file_paths        = (RDI_FilePathNode *)  rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_FilePathNodes  , sizeof(out_rdi->file_paths[0])       , &out_rdi->file_paths_count        );
+    out_rdi->source_files      = (RDI_SourceFile *)    rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_SourceFiles    , sizeof(out_rdi->source_files[0])     , &out_rdi->source_files_count      );
+    out_rdi->units             = (RDI_Unit *)          rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_Units          , sizeof(out_rdi->units[0])            , &out_rdi->units_count             );
+    out_rdi->unit_vmap         = (RDI_VMapEntry *)     rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_UnitVmap       , sizeof(out_rdi->unit_vmap[0])        , &out_rdi->unit_vmap_count         );
+    out_rdi->type_nodes        = (RDI_TypeNode *)      rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_TypeNodes      , sizeof(out_rdi->type_nodes[0])       , &out_rdi->type_nodes_count        );
+    out_rdi->udts              = (RDI_UDT *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_UDTs           , sizeof(out_rdi->udts[0])             , &out_rdi->udts_count              );
+    out_rdi->members           = (RDI_Member *)        rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_Members        , sizeof(out_rdi->members[0])          , &out_rdi->members_count           );
+    out_rdi->enum_members      = (RDI_EnumMember *)    rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_EnumMembers    , sizeof(out_rdi->enum_members[0])     , &out_rdi->enum_members_count      );
+    out_rdi->global_variables  = (RDI_GlobalVariable *)rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_GlobalVariables, sizeof(out_rdi->global_variables[0]) , &out_rdi->global_variables_count  );
+    out_rdi->global_vmap       = (RDI_VMapEntry *)     rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_GlobalVmap     , sizeof(out_rdi->global_vmap[0])      , &out_rdi->global_vmap_count       );
+    out_rdi->thread_variables  = (RDI_ThreadVariable *)rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_ThreadVariables, sizeof(out_rdi->thread_variables[0]) , &out_rdi->thread_variables_count  );
+    out_rdi->procedures        = (RDI_Procedure *)     rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_Procedures     , sizeof(out_rdi->procedures[0])       , &out_rdi->procedures_count        );
+    out_rdi->scopes            = (RDI_Scope *)         rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_Scopes         , sizeof(out_rdi->scopes[0])           , &out_rdi->scopes_count            );
+    out_rdi->scope_voffs       = (RDI_U64 *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_ScopeVoffData  , sizeof(out_rdi->scope_voffs[0])      , &out_rdi->scope_voffs_count       );
+    out_rdi->scope_vmap        = (RDI_VMapEntry *)     rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_ScopeVmap      , sizeof(out_rdi->scope_vmap[0])       , &out_rdi->scope_vmap_count        );
+    out_rdi->inline_sites      = (RDI_InlineSite *)    rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_InlineSites    , sizeof(out_rdi->inline_sites[0])     , &out_rdi->inline_site_count       );
+    out_rdi->locals            = (RDI_Local *)         rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_Locals         , sizeof(out_rdi->locals[0])           , &out_rdi->locals_count            );
+    out_rdi->location_blocks   = (RDI_LocationBlock *) rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LocationBlocks , sizeof(out_rdi->location_blocks[0])  , &out_rdi->location_blocks_count   );
+    out_rdi->location_data     = (RDI_U8 *)            rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LocationData   , sizeof(out_rdi->location_data[0])    , &out_rdi->location_data_size      );
+    out_rdi->name_maps         = (RDI_NameMap *)       rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_NameMaps       , sizeof(out_rdi->name_maps[0])        , &out_rdi->name_maps_count         );
+    out_rdi->name_maps_buckets = (RDI_NameMapBucket *) rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_NameMapsBuckets, sizeof(out_rdi->name_maps_buckets[0]), &out_rdi->name_maps_bucket_count  );
+    out_rdi->name_maps_nodes   = (RDI_NameMapNode *)   rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_NameMapsNodes  , sizeof(out_rdi->name_maps_nodes[0])  , &out_rdi->name_maps_node_count    );
+    out_rdi->line_info         = (RDI_LineInfo *)      rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineInfo       , sizeof(out_rdi->line_info[0])        , &out_rdi->line_info_count         );
+    out_rdi->line_info_voffs   = (RDI_U64 *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineInfoVoffs  , sizeof(out_rdi->line_info_voffs[0])  , &out_rdi->line_info_voff_count    );
+    out_rdi->line_info_data    = (RDI_Line *)          rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineInfoData   , sizeof(out_rdi->line_info_data[0])   , &out_rdi->line_info_data_count    );
+    out_rdi->line_info_cols    = (RDI_Column *)        rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineInfoColumns, sizeof(out_rdi->line_info_cols[0])   , &out_rdi->line_info_col_count     );
+    out_rdi->line_number_maps  = (RDI_LineNumberMap *) rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineNumberMaps , sizeof(out_rdi->line_number_maps[0]) , &out_rdi->line_number_map_count   );
+    out_rdi->line_map_numbers  = (RDI_U32 *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineMapNumbers , sizeof(out_rdi->line_map_numbers[0]) , &out_rdi->line_map_number_count   );
+    out_rdi->line_map_ranges   = (RDI_U32 *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineMapRanges  , sizeof(out_rdi->line_map_ranges[0])  , &out_rdi->line_map_range_count    );
+    out_rdi->line_map_voffs    = (RDI_U64 *)           rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_LineMapVoffs   , sizeof(out_rdi->line_map_voffs[0])   , &out_rdi->line_map_voff_count     );
+    out_rdi->checksums         = (RDI_U8 *)            rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_Checksums      , sizeof(out_rdi->checksums[0])        , &out_rdi->checksums_size          );
+
+    // TODO: why is string count off by one?
+    if(out_rdi->string_count > 0)
     {
-      rdi_parse__extract_primary(out, out->name_maps, &out->name_maps_count,
-                                 RDI_DataSectionTag_NameMaps);
-      
-      RDI_NameMap *name_map_ptr = out->name_maps;
-      RDI_NameMap *name_map_opl = out->name_maps + out->name_maps_count;
-      for (; name_map_ptr < name_map_opl; name_map_ptr += 1)
+      out_rdi->string_count -= 1;
+    }
+
+    // fill out sections by tag
+    for(RDI_U64 i = 0; i < section_count; i += 1)
+    {
+      RDI_DataSection *sect = sections + i;
+      out_rdi->sections_by_tag[sect->tag] = *sect;
+    }
+
+    // fill out name maps by kind
+    for(RDI_U64 nm_idx = 0; nm_idx < out_rdi->name_maps_count; nm_idx += 1)
+    {
+      RDI_NameMap *nm = &out_rdi->name_maps[nm_idx];
+      if(out_rdi->name_maps_by_kind[nm->kind] == 0)
       {
-        if (out->name_maps_by_kind[name_map_ptr->kind] == 0)
-        {
-          out->name_maps_by_kind[name_map_ptr->kind] = name_map_ptr;
-        }
+        out_rdi->name_maps_by_kind[nm->kind] = nm;
+      }
+      else
+      {
+        out_rdi->name_maps_by_kind[nm->kind] = 0;
       }
     }
   }
   
 #if !defined(RDI_DISABLE_NILS)
-  if(out->top_level_info   == 0) { out->top_level_info   = &rdi_top_level_info_nil;                                       }
-  if(out->binary_sections  == 0) { out->binary_sections  = &rdi_binary_section_nil;      out->binary_sections_count  = 1; }
-  if(out->file_paths       == 0) { out->file_paths       = &rdi_file_path_node_nil;      out->file_paths_count       = 1; }
-  if(out->source_files     == 0) { out->source_files     = &rdi_source_file_nil;         out->source_files_count     = 1; }
-  if(out->units            == 0) { out->units            = &rdi_unit_nil;                out->units_count            = 1; }
-  if(out->unit_vmap        == 0) { out->unit_vmap        = &rdi_vmap_entry_nil;          out->unit_vmap_count        = 1; }
-  if(out->type_nodes       == 0) { out->type_nodes       = &rdi_type_node_nil;           out->type_nodes_count       = 1; }
-  if(out->udts             == 0) { out->udts             = &rdi_udt_nil;                 out->udts_count             = 1; }
-  if(out->members          == 0) { out->members          = &rdi_member_nil;              out->members_count          = 1; }
-  if(out->enum_members     == 0) { out->enum_members     = &rdi_enum_member_nil;         out->enum_members_count     = 1; }
-  if(out->global_variables == 0) { out->global_variables = &rdi_global_variable_nil;     out->global_variables_count = 1; }
-  if(out->global_vmap      == 0) { out->global_vmap      = &rdi_vmap_entry_nil;          out->global_vmap_count      = 1; }
-  if(out->thread_variables == 0) { out->thread_variables = &rdi_thread_variable_nil;     out->thread_variables_count = 1; }
-  if(out->procedures       == 0) { out->procedures       = &rdi_procedure_nil;           out->procedures_count       = 1; }
-  if(out->scopes           == 0) { out->scopes           = &rdi_scope_nil;               out->scopes_count           = 1; }
-  if(out->scope_voffs      == 0) { out->scope_voffs      = &rdi_voff_nil;                out->scope_voffs_count      = 1; }
-  if(out->scope_vmap       == 0) { out->scope_vmap       = &rdi_vmap_entry_nil;          out->scope_vmap_count       = 1; }
-  if(out->locals           == 0) { out->locals           = &rdi_local_nil;               out->locals_count           = 1; }
-  if(out->location_blocks  == 0) { out->location_blocks  = &rdi_location_block_nil;      out->location_blocks_count  = 1; }
-  if(out->inline_sites     == 0) { out->inline_sites     = &rdi_inline_site_nil;         out->inline_site_count      = 1; }
-  if(out->line_info        == 0) { out->line_info        = &rdi_line_info_nil;           out->line_info_count        = 1; }
-  if(out->line_info_voffs  == 0) { out->line_info_voffs  = &rdi_voff_nil;                out->line_info_voff_count   = 1; }
-  if(out->line_info_data   == 0) { out->line_info_data   = &rdi_line_nil;                out->line_info_data_count   = 1; }
-  if(out->line_info_cols   == 0) { out->line_info_cols   = &rdi_column_nil;              out->line_info_col_count    = 1; }
-  if(out->checksums        == 0) { out->checksums        = (RDI_U8 *)&rdi_checksum_nil;  out->checksums_size         = sizeof(rdi_checksum_nil); }
+  if(out_rdi->top_level_info    == 0) { out_rdi->top_level_info    = &rdi_top_level_info_nil;                                           }
+  if(out_rdi->binary_sections   == 0) { out_rdi->binary_sections   = &rdi_binary_section_nil;      out_rdi->binary_sections_count  = 1; }
+  if(out_rdi->file_paths        == 0) { out_rdi->file_paths        = &rdi_file_path_node_nil;      out_rdi->file_paths_count       = 1; }
+  if(out_rdi->source_files      == 0) { out_rdi->source_files      = &rdi_source_file_nil;         out_rdi->source_files_count     = 1; }
+  if(out_rdi->units             == 0) { out_rdi->units             = &rdi_unit_nil;                out_rdi->units_count            = 1; }
+  if(out_rdi->unit_vmap         == 0) { out_rdi->unit_vmap         = &rdi_vmap_entry_nil;          out_rdi->unit_vmap_count        = 1; }
+  if(out_rdi->type_nodes        == 0) { out_rdi->type_nodes        = &rdi_type_node_nil;           out_rdi->type_nodes_count       = 1; }
+  if(out_rdi->udts              == 0) { out_rdi->udts              = &rdi_udt_nil;                 out_rdi->udts_count             = 1; }
+  if(out_rdi->members           == 0) { out_rdi->members           = &rdi_member_nil;              out_rdi->members_count          = 1; }
+  if(out_rdi->enum_members      == 0) { out_rdi->enum_members      = &rdi_enum_member_nil;         out_rdi->enum_members_count     = 1; }
+  if(out_rdi->global_variables  == 0) { out_rdi->global_variables  = &rdi_global_variable_nil;     out_rdi->global_variables_count = 1; }
+  if(out_rdi->global_vmap       == 0) { out_rdi->global_vmap       = &rdi_vmap_entry_nil;          out_rdi->global_vmap_count      = 1; }
+  if(out_rdi->thread_variables  == 0) { out_rdi->thread_variables  = &rdi_thread_variable_nil;     out_rdi->thread_variables_count = 1; }
+  if(out_rdi->procedures        == 0) { out_rdi->procedures        = &rdi_procedure_nil;           out_rdi->procedures_count       = 1; }
+  if(out_rdi->scopes            == 0) { out_rdi->scopes            = &rdi_scope_nil;               out_rdi->scopes_count           = 1; }
+  if(out_rdi->scope_voffs       == 0) { out_rdi->scope_voffs       = &rdi_voff_nil;                out_rdi->scope_voffs_count      = 1; }
+  if(out_rdi->scope_vmap        == 0) { out_rdi->scope_vmap        = &rdi_vmap_entry_nil;          out_rdi->scope_vmap_count       = 1; }
+  if(out_rdi->locals            == 0) { out_rdi->locals            = &rdi_local_nil;               out_rdi->locals_count           = 1; }
+  if(out_rdi->location_blocks   == 0) { out_rdi->location_blocks   = &rdi_location_block_nil;      out_rdi->location_blocks_count  = 1; }
+  if(out_rdi->name_maps         == 0) { out_rdi->name_maps         = &rdi_name_map_nil;            out_rdi->name_maps_count        = 1; }
+  if(out_rdi->name_maps_buckets == 0) { out_rdi->name_maps_buckets = &rdi_name_map_bucket_nil;     out_rdi->name_maps_bucket_count = 1; }
+  if(out_rdi->name_maps_nodes   == 0) { out_rdi->name_maps_nodes   = &rdi_name_map_node_nil;       out_rdi->name_maps_node_count   = 1; }
+  if(out_rdi->inline_sites      == 0) { out_rdi->inline_sites      = &rdi_inline_site_nil;         out_rdi->inline_site_count      = 1; }
+  if(out_rdi->line_info         == 0) { out_rdi->line_info         = &rdi_line_info_nil;           out_rdi->line_info_count        = 1; }
+  if(out_rdi->line_info_voffs   == 0) { out_rdi->line_info_voffs   = &rdi_voff_nil;                out_rdi->line_info_voff_count   = 1; }
+  if(out_rdi->line_info_data    == 0) { out_rdi->line_info_data    = &rdi_line_nil;                out_rdi->line_info_data_count   = 1; }
+  if(out_rdi->line_info_cols    == 0) { out_rdi->line_info_cols    = &rdi_column_nil;              out_rdi->line_info_col_count    = 1; }
+  if(out_rdi->checksums         == 0) { out_rdi->checksums         = (RDI_U8 *)&rdi_checksum_nil;  out_rdi->checksums_size         = sizeof(rdi_checksum_nil); }
 #endif
   
-  return(result);
+  return parse_status;
 }
 
 RDI_PROC RDI_U8*
@@ -407,33 +375,38 @@ rdi_vmap_idx_from_voff(RDI_VMapEntry *vmap, RDI_U32 vmap_count, RDI_U64 voff){
 //- name maps
 
 RDI_PROC RDI_NameMap*
-rdi_name_map_from_kind(RDI_Parsed *p, RDI_NameMapKind kind){
-  RDI_NameMap *result = 0;
-  if (0 < kind && kind < RDI_NameMapKind_COUNT){
-    result = p->name_maps_by_kind[kind];
+rdi_name_map_from_kind(RDI_Parsed *rdi, RDI_NameMapKind kind)
+{
+  RDI_NameMap *nm = 0;
+  if(0 < kind && kind < RDI_NameMapKind_COUNT)
+  {
+    nm = rdi->name_maps_by_kind[kind];
   }
-  return(result);
+  return nm;
 }
 
 RDI_PROC void
-rdi_name_map_parse(RDI_Parsed *p, RDI_NameMap *mapptr, RDI_ParsedNameMap *out){
-  out->buckets = 0;
+rdi_name_map_parse(RDI_Parsed *rdi, RDI_NameMap *nm, RDI_ParsedNameMap *out)
+{
+  out->buckets      = 0;
+  out->nodes        = 0;
   out->bucket_count = 0;
-  if (mapptr != 0){
-    out->buckets = (RDI_NameMapBucket*)
-      rdi_data_from_dsec(p, mapptr->bucket_data_idx, sizeof(RDI_NameMapBucket),
-                         RDI_DataSectionTag_NameMapBuckets, &out->bucket_count);
-    out->nodes = (RDI_NameMapNode*)
-      rdi_data_from_dsec(p, mapptr->node_data_idx, sizeof(RDI_NameMapNode),
-                         RDI_DataSectionTag_NameMapNodes, &out->node_count);
+  out->node_count   = 0;
+  if(nm != 0)
+  {
+    out->buckets      = rdi->name_maps_buckets + nm->bucket_data_idx;
+    out->nodes        = rdi->name_maps_nodes   + nm->node_data_idx;
+    out->bucket_count = nm->bucket_count;
+    out->node_count   = nm->node_count;
   }
 }
 
-RDI_PROC RDI_NameMapNode*
-rdi_name_map_lookup(RDI_Parsed *p, RDI_ParsedNameMap *map,
-                    RDI_U8 *str, RDI_U64 len){
+RDI_PROC RDI_NameMapNode *
+rdi_name_map_lookup(RDI_Parsed *rdi, RDI_ParsedNameMap *map, RDI_U8 *str, RDI_U64 len)
+{
   RDI_NameMapNode *result = 0;
-  if (map->bucket_count > 0){
+  if(map->bucket_count > 0)
+  {
     RDI_NameMapBucket *buckets = map->buckets;
     RDI_U64 bucket_count = map->bucket_count;
     RDI_U64 hash = rdi_hash(str, len);
@@ -442,14 +415,16 @@ rdi_name_map_lookup(RDI_Parsed *p, RDI_ParsedNameMap *map,
     
     RDI_NameMapNode *node = map->nodes + bucket->first_node;
     RDI_NameMapNode *node_opl = node + bucket->node_count;
-    for (;node < node_opl; node += 1){
+    for(;node < node_opl; node += 1)
+    {
       // extract a string from this node
       RDI_U64 nlen = 0;
-      RDI_U8 *nstr = rdi_string_from_idx(p, node->string_idx, &nlen);
+      RDI_U8 *nstr = rdi_string_from_idx(rdi, node->string_idx, &nlen);
       
       // compare this to the needle string
       RDI_S32 match = 0;
-      if (nlen == len){
+      if(nlen == len)
+      {
         RDI_U8 *a = str;
         RDI_U8 *aopl = str + len;
         RDI_U8 *b = nstr;
@@ -458,42 +433,47 @@ rdi_name_map_lookup(RDI_Parsed *p, RDI_ParsedNameMap *map,
       }
       
       // stop with a matching node in result
-      if (match){
+      if(match)
+      {
         result = node;
         break;
       }
-      
     }
   }
-  return(result);
+  return result;
 }
 
-RDI_PROC RDI_U32*
-rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node,
-                          RDI_U32 *n_out){
+RDI_PROC RDI_U32 *
+rdi_matches_from_map_node(RDI_Parsed *rdi, RDI_NameMapNode *node, RDI_U32 *n_out)
+{
   RDI_U32 *result = 0;
   *n_out = 0;
-  if (node != 0){
-    if (node->match_count == 1){
+  if(node != 0)
+  {
+    if(node->match_count == 1)
+    {
       result = &node->match_idx_or_idx_run_first;
       *n_out = 1;
     }
-    else{
-      result = rdi_idx_run_from_first_count(p, node->match_idx_or_idx_run_first,
-                                            node->match_count, n_out);
+    else
+    {
+      result = rdi_idx_run_from_first_count(rdi, node->match_idx_or_idx_run_first, node->match_count, n_out);
     }
   }
-  return(result);
+  return result;
 }
 
 //- checksums
 
 RDI_PROC RDI_U64
-rdi_checksum_from_offset(RDI_Parsed *p, RDI_U64 checksum_offset, RDI_ParsedChecksum *out){
+rdi_checksum_from_offset(RDI_Parsed *rdi, RDI_U64 checksum_offset, RDI_ParsedChecksum *out)
+{
   RDI_U64 size = 0;
-  if (checksum_offset + sizeof(RDI_Checksum) <= p->checksums_size) {
-    RDI_Checksum *header = (RDI_Checksum *)(p->checksums + checksum_offset);
-    if (checksum_offset + sizeof(RDI_Checksum) + header->size <= p->checksums_size){
+  if(checksum_offset + sizeof(RDI_Checksum) <= rdi->checksums_size)
+  {
+    RDI_Checksum *header = (RDI_Checksum *)(rdi->checksums + checksum_offset);
+    if(checksum_offset + sizeof(RDI_Checksum) + header->size <= rdi->checksums_size)
+    {
       out->kind = header->kind;
       out->size = header->size;
       out->data = (RDI_U8 *)(header + 1);
@@ -536,32 +516,5 @@ rdi_first_voff_from_proc(RDI_Parsed *p, RDI_U32 proc_id){
       }
     }
   }
-  return(result);
-}
-
-////////////////////////////////
-//~ RADDBG Parsing Helpers
-
-RDI_PROC void*
-rdi_data_from_dsec(RDI_Parsed *parsed, RDI_U32 idx, RDI_U32 item_size,
-                   RDI_DataSectionTag expected_tag,
-                   RDI_U64 *count_out)
-{
-  void *result = 0;
-  RDI_U32 count_result = 0;
-  if(0 < idx && idx < parsed->dsec_count)
-  {
-    RDI_DataSection *ds = parsed->dsecs + idx;
-    if(ds->tag == expected_tag)
-    {
-      RDI_U64 encoded_opl = ds->off + ds->encoded_size;
-      if(encoded_opl <= parsed->raw_data_size)
-      {
-        count_result = ds->unpacked_size/item_size;
-        result = (parsed->raw_data + ds->off);
-      }
-    }
-  }
-  *count_out = count_result;
   return(result);
 }

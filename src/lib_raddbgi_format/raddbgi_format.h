@@ -256,8 +256,6 @@ typedef struct RDI_Header{
 
 //- data sections
 
-#define RDI_DataSectionTag_SECONDARY 0x80000000
-
 #define RDI_DataSectionTagXList(X,Y) \
 X(NULL,                0x0000)\
 X(TopLevelInfo,        0x0001)\
@@ -269,12 +267,12 @@ X(FilePathNodes,       0x0006)\
 X(SourceFiles,         0x0007)\
 X(Units,               0x0008)\
 X(UnitVmap,            0x0009)\
-X(TypeNodes,           0x000A)\
-X(UDTs,                0x000B)\
-X(Members,             0x000C)\
-X(EnumMembers,         0x000D)\
-X(GlobalVariables,     0x000E)\
-X(GlobalVmap,          0x000F)\
+X(TypeNodes,           0x000a)\
+X(UDTs,                0x000b)\
+X(Members,             0x000c)\
+X(EnumMembers,         0x000d)\
+X(GlobalVariables,     0x000e)\
+X(GlobalVmap,          0x000f)\
 X(ThreadVariables,     0x0010)\
 X(Procedures,          0x0011)\
 X(Scopes,              0x0012)\
@@ -284,20 +282,19 @@ X(Locals,              0x0015)\
 X(LocationBlocks,      0x0016)\
 X(LocationData,        0x0017)\
 X(NameMaps,            0x0018)\
-X(LineInfo,            0x0019)\
-X(LineInfoVoffs,       0x001A)\
-X(LineInfoData,        0x001B)\
-X(LineInfoColumns,     0x001C)\
-X(LineNumberMaps,      0x001D)\
-X(LineMapNumbers,      0x001E)\
-X(LineMapRanges,       0x001F)\
-X(LineMapVoffs,        0x0020)\
-X(InlineSites,         0x0021)\
-X(Checksums,           0x0022)\
-Y(PRIMARY_COUNT)\
-X(SKIP,                RDI_DataSectionTag_SECONDARY|0x0000)\
-X(NameMapBuckets,      RDI_DataSectionTag_SECONDARY|0x0001)\
-X(NameMapNodes,        RDI_DataSectionTag_SECONDARY|0x0002)
+X(NameMapsBuckets,     0x0019)\
+X(NameMapsNodes,       0x001a)\
+X(LineInfo,            0x001b)\
+X(LineInfoVoffs,       0x001c)\
+X(LineInfoData,        0x001d)\
+X(LineInfoColumns,     0x001e)\
+X(LineNumberMaps,      0x001f)\
+X(LineMapNumbers,      0x0020)\
+X(LineMapRanges,       0x0021)\
+X(LineMapVoffs,        0x0022)\
+X(InlineSites,         0x0023)\
+X(Checksums,           0x0024)\
+Y(PRIMARY_COUNT)
 
 typedef RDI_U32 RDI_DataSectionTag;
 typedef enum RDI_DataSectionTagEnum{
@@ -789,7 +786,9 @@ typedef enum RDI_NameMapKindEnum{
 typedef struct RDI_NameMap{
   RDI_NameMapKind kind;
   RDI_U32 bucket_data_idx;
+  RDI_U32 bucket_count;
   RDI_U32 node_data_idx;
+  RDI_U32 node_count;
 } RDI_NameMap;
 
 typedef struct RDI_NameMapBucket{

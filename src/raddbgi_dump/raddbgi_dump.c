@@ -219,22 +219,25 @@ rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *rdi, U32
 
   U64 total_sect_unpacked_size = 0;
   U64 total_sect_encoded_size  = 0;
-  for (U64 sect_idx = 0; sect_idx < rdi->dsec_count; sect_idx += 1) {
-    total_sect_unpacked_size += rdi->dsecs[sect_idx].unpacked_size;
-    total_sect_encoded_size  += rdi->dsecs[sect_idx].encoded_size;
+  for (U64 sect_idx = 0; sect_idx < rdi->section_count; sect_idx += 1) {
+    total_sect_unpacked_size += rdi->sections[sect_idx].unpacked_size;
+    total_sect_encoded_size  += rdi->sections[sect_idx].encoded_size;
   }
 
   str8_list_pushf(arena, out, "%.*s%-3s %-8s %-8s %-6s %-8s %-6s %-8s %-8s\n",
                   indent_level, rdi_stringize_spaces,
                   "No.", "Offset", "Size", "Mem%", "EncSize", "Disk%", "EncType", "Name");
-  for (U64 sect_idx = 0; sect_idx < rdi->dsec_count; sect_idx += 1) {
-    F64 unpacked_size_percent = ((F64)rdi->dsecs[sect_idx].unpacked_size / (F64)total_sect_unpacked_size) * 100.0;
-    F64 encoded_size_percent  = ((F64)rdi->dsecs[sect_idx].encoded_size  / (F64)total_sect_encoded_size)  * 100.0;
-    RDI_DataSection *sect = rdi->dsecs + sect_idx;
-    String8 tag_str = rdi_string_from_data_section_tag(sect->tag);
-    String8 enc_str = rdi_string_from_data_section_encoding(sect->encoding);
+  for (U64 sect_idx = 0, no = 0; sect_idx < rdi->section_count; sect_idx += 1) {
+    RDI_DataSection *sect = rdi->sections + sect_idx;
+
+    F64 unpacked_size_percent = ((F64)rdi->sections[sect_idx].unpacked_size / (F64)total_sect_unpacked_size) * 100.0;
+    F64 encoded_size_percent  = ((F64)rdi->sections[sect_idx].encoded_size  / (F64)total_sect_encoded_size)  * 100.0;
+
+    String8 tag_str              = rdi_string_from_data_section_tag(sect->tag);
+    String8 enc_str              = rdi_string_from_data_section_encoding(sect->encoding);
     String8 unpacked_percent_str = push_str8f(scratch.arena, "%.2f", unpacked_size_percent);
     String8 encoded_percent_str  = push_str8f(scratch.arena, "%.2f", encoded_size_percent);
+
     str8_list_pushf(arena, out, "%.*s%3llx %08llx %08llx %-6.*s %08llx %-6.*s %-8.*s %.*s\n",
                     indent_level, rdi_stringize_spaces,
                     sect_idx, sect->off, sect->unpacked_size, str8_varg(unpacked_percent_str), sect->encoded_size, str8_varg(encoded_percent_str), str8_varg(enc_str), str8_varg(tag_str));

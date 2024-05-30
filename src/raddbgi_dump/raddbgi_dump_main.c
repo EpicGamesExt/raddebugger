@@ -17,8 +17,10 @@
 //- rjf: [lib]
 #include "lib_raddbgi_format/raddbgi_format.h"
 #include "lib_raddbgi_format/raddbgi_format_parse.h"
+#include "lib_raddbgi_format/raddbgi_enum.h"
 #include "lib_raddbgi_format/raddbgi_format.c"
 #include "lib_raddbgi_format/raddbgi_format_parse.c"
+#include "lib_raddbgi_format/raddbgi_enum.c"
 
 //- rjf: [h]
 #include "base/base_inc.h"
@@ -385,7 +387,7 @@ entry_point(CmdLine *cmd_line)
       {
         RDI_ParsedNameMap name_map = {0};
         rdi_name_map_parse(raddbg, ptr, &name_map);
-        str8_list_pushf(arena, &dump, " name_map[%u]:\n", i);
+        str8_list_pushf(arena, &dump, " name_map[%u] (%s):\n", i, rdi_cstring_from_name_map_kind(ptr->kind));
         RDI_NameMapBucket *bucket = name_map.buckets;
         for(U32 j = 0; j < name_map.bucket_count; j += 1, bucket += 1)
         {

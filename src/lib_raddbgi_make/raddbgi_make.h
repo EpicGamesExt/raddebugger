@@ -296,6 +296,8 @@ RDIM_CheckNil(nil,p) ? \
 #endif
 #define rdim_noop ((void)0)
 
+#define rdim_array_count(x) (sizeof(x) / sizeof((x)[0]))
+
 ////////////////////////////////
 //~ rjf: Auxiliary Data Structure Types
 
@@ -1079,6 +1081,15 @@ struct RDIM_BakePathTree
 
 //- rjf: name maps
 
+typedef struct RDIM_NameMap RDIM_NameMap;
+struct RDIM_NameMap
+{
+  RDI_NameMapBucket *buckets;
+  RDI_NameMapNode *nodes;
+  RDI_U64 bucket_count;
+  RDI_U64 node_count;
+};
+
 typedef struct RDIM_BakeNameMapValNode RDIM_BakeNameMapValNode;
 struct RDIM_BakeNameMapValNode
 {
@@ -1390,8 +1401,8 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_scope_section_list_from_params(RDIM_Aren
 RDI_PROC RDIM_BakeSectionList rdim_bake_scope_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
 
 //- rjf: name maps
-RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
-RDI_PROC RDIM_BakeSectionList rdim_bake_name_map_section_list_from_params_kind_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeParams *params, RDI_NameMapKind k, RDIM_BakeNameMap *map);
+RDI_PROC RDIM_NameMap rdim_make_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *map);
+RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_name_map_section_list_from_params_maps(RDIM_Arena *arena, RDIM_NameMap name_maps[RDI_NameMapKind_COUNT]);
 
 //- rjf: file paths
 RDI_PROC RDIM_BakeSectionList rdim_bake_file_path_section_list_from_path_tree(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree);
