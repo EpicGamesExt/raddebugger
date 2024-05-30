@@ -355,7 +355,7 @@ internal String8
 dmn_w32_read_memory_str(Arena *arena, HANDLE process_handle, U64 address)
 {
   // TODO(rjf): @rewrite
-  // 
+  //
   // OLD: this could be done better with a demon_w32_read_memory
   // that returns a read amount instead of a success/fail.
   //
@@ -404,7 +404,7 @@ internal String16
 dmn_w32_read_memory_str16(Arena *arena, HANDLE process_handle, U64 address)
 {
   // TODO(rjf): @rewrite
-  // 
+  //
   // OLD: this could be done better with a demon_w32_read_memory
   // that returns a read amount instead of a success/fail.
   //
@@ -1418,6 +1418,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //- rjf: write all traps into memory
       //
       U8 *trap_swap_bytes = push_array_no_zero(scratch.arena, U8, ctrls->traps.trap_count);
+      ProfScope("write all traps into memory")
       {
         U64 trap_idx = 0;
         for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
@@ -1438,6 +1439,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //
       DMN_W32_EntityNode *first_run_thread = 0;
       DMN_W32_EntityNode *last_run_thread = 0;
+      ProfScope("produce list of threads which will run")
       {
         //- rjf: scan all processes
         for(DMN_W32_Entity *process = dmn_w32_shared->entities_base->first;
@@ -1446,7 +1448,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         {
           if(process->kind != DMN_W32_EntityKind_Process) {continue;}
           
-          //- rjf: determine if this process is frozen 
+          //- rjf: determine if this process is frozen
           B32 process_is_frozen = 0;
           if(ctrls->run_entities_are_processes)
           {
@@ -1519,696 +1521,735 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //////////////////////////
       //- rjf: resume threads which will run
       //
-      for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
+      ProfScope("resume threads which will run")
       {
-        DMN_W32_Entity *thread = n->v;
-        DWORD resume_result = ResumeThread(thread->handle);
-        switch(resume_result)
+        for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
         {
-          case 0xffffffffu:
+          DMN_W32_Entity *thread = n->v;
+          DWORD resume_result = ResumeThread(thread->handle);
+          switch(resume_result)
           {
-            // TODO(rjf): error - unknown cause. need to do GetLastError, FormatMessage
-          }break;
-          default:
-          {
-            DWORD desired_counter = 0;
-            DWORD current_counter = resume_result - 1;
-            if(current_counter != desired_counter)
+            case 0xffffffffu:
             {
-              // NOTE(rjf): Warning. The user has manually suspended this thread,
-              // so even though from Demon's perspective it thinks this thread
-              // should run, it will not, because the user has manually called
-              // SuspendThread or used CREATE_SUSPENDED or whatever.
-            }
-          }break;
-        }
-      }
-      
-      //////////////////////////
-      //- rjf: choose win32 resume code
-      //
-      DWORD resume_code = DBG_CONTINUE;
-      {
-        if(dmn_w32_shared->exception_not_handled && !ctrls->ignore_previous_exception)
-        {
-          dmn_w32_shared->exception_not_handled = 0;
-          resume_code = DBG_EXCEPTION_NOT_HANDLED;
-        }
-      }
-      
-      //////////////////////////
-      //- rjf: inform windows that we're resuming, run, & obtain next debug event
-      //
-      DEBUG_EVENT evt = {0};
-      B32 evt_good = 0;
-      {
-        B32 resume_good = 1;
-        if(dmn_w32_shared->resume_needed)
-        {
-          dmn_w32_shared->resume_needed = 0;
-          resume_good = !!ContinueDebugEvent(dmn_w32_shared->resume_pid, dmn_w32_shared->resume_tid, resume_code);
-          dmn_w32_shared->resume_needed = 0;
-          dmn_w32_shared->resume_tid = 0;
-          dmn_w32_shared->resume_pid = 0;
-        }
-        if(resume_good)
-        {
-          evt_good = !!WaitForDebugEvent(&evt, INFINITE);
-          if(evt_good)
-          {
-            dmn_w32_shared->resume_needed = 1;
-            dmn_w32_shared->resume_pid = evt.dwProcessId;
-            dmn_w32_shared->resume_tid = evt.dwThreadId;
-          }
-          ins_atomic_u64_inc_eval(&dmn_w32_shared->run_gen);
-          ins_atomic_u64_inc_eval(&dmn_w32_shared->mem_gen);
-          ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
-        }
-      }
-      
-      //////////////////////////
-      //- rjf: suspend threads which ran
-      //
-      if(evt_good) for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
-      {
-        DMN_W32_Entity *thread = n->v;
-        DWORD suspend_result = SuspendThread(thread->handle);
-        switch(suspend_result)
-        {
-          case 0xffffffffu:
-          {
-            // TODO(rjf): error - unknown cause. need to do do GetLastError, FormatMessage
-            //
-            // NOTE(rjf): this can happen when the event is EXIT_THREAD_DEBUG_EVENT
-            // or EXIT_PROCESS_DEBUG_EVENT. after such an event, SuspendThread
-            // gives error code 5 (access denied). this has no adverse effects, but
-            // if we want to start reporting errors we should take care to avoid
-            // calling SuspendThread in that case.
-          }break;
-          default:
-          {
-            DWORD desired_counter = 1;
-            DWORD current_counter = suspend_result + 1;
-            if(current_counter != desired_counter)
+              // TODO(rjf): error - unknown cause. need to do GetLastError, FormatMessage
+            }break;
+            default:
             {
-              // NOTE(rjf): Warning. We've suspended to something higher than 1.
-              // In this case, it means the user probably created the thread in
-              // a suspended state, or they called SuspendThread.
-            }
-          }break;
-        }
-      }
-      
-      //////////////////////////
-      //- rjf: process the new event
-      //
-      if(evt_good)
-      {
-        switch(evt.dwDebugEventCode)
-        {
-          //////////////////////
-          //- rjf: process was created
-          //
-          case CREATE_PROCESS_DEBUG_EVENT:
-          {
-            // rjf: zero out "process pending" state
-            dmn_w32_shared->new_process_pending = 0;
-            
-            // rjf: unpack event
-            HANDLE process_handle = evt.u.CreateProcessInfo.hProcess;
-            HANDLE thread_handle = evt.u.CreateProcessInfo.hThread;
-            HANDLE module_handle = evt.u.CreateProcessInfo.hFile;
-            U64 tls_base = (U64)evt.u.CreateProcessInfo.lpThreadLocalBase;
-            U64 module_base = (U64)evt.u.CreateProcessInfo.lpBaseOfImage;
-            U64 module_name_vaddr = (U64)evt.u.CreateProcessInfo.lpImageName;
-            B32 module_name_is_unicode = (evt.u.CreateProcessInfo.fUnicode != 0);
-            DMN_W32_ImageInfo image_info = dmn_w32_image_info_from_process_base_vaddr(process_handle, module_base);
-            
-            // rjf: create entities (thread/module are implied for initial - they are not reported by win32)
-            DMN_W32_Entity *process = dmn_w32_entity_alloc(dmn_w32_shared->entities_base, DMN_W32_EntityKind_Process, evt.dwProcessId);
-            DMN_W32_Entity *thread = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Thread, evt.dwThreadId);
-            DMN_W32_Entity *module = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Module, module_base);
-            {
-              process->handle = process_handle;
-              process->arch   = image_info.arch;
-              thread->handle                   = thread_handle;
-              thread->arch                     = image_info.arch;
-              thread->thread.thread_local_base = tls_base;
-              module->handle                         = module_handle;
-              module->module.vaddr_range             = r1u64(module_base, image_info.size);
-              module->module.is_main                 = 1;
-              module->module.address_of_name_pointer = module_name_vaddr;
-              module->module.name_is_unicode         = module_name_is_unicode;
-            }
-            
-            // rjf: put thread into suspended state, so it matches expected initial state
-            SuspendThread(thread_handle);
-            
-            // rjf: set up per-process injected code (to run halter threads on &
-            // generate debug events)
-            {
-              U8 injection_code[DMN_W32_INJECTED_CODE_SIZE];
-              MemorySet(injection_code, 0xCC, DMN_W32_INJECTED_CODE_SIZE);
-              injection_code[0] = 0xC3;
-              U64 injection_size = DMN_W32_INJECTED_CODE_SIZE + sizeof(DMN_W32_InjectedBreak);
-              U64 injection_address = (U64)VirtualAllocEx(process_handle, 0, injection_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE);
-              dmn_w32_process_write(process_handle, r1u64(injection_address, injection_address+sizeof(injection_code)), injection_code);
-              process->proc.injection_address = injection_address;
-            }
-            
-            // rjf: generate events
-            {
-              // rjf: create process
+              DWORD desired_counter = 0;
+              DWORD current_counter = resume_result - 1;
+              if(current_counter != desired_counter)
               {
-                DMN_Event *e = dmn_event_list_push(arena, &events);
-                e->kind    = DMN_EventKind_CreateProcess;
-                e->process = dmn_w32_handle_from_entity(process);
-                e->arch    = image_info.arch;
-                e->code    = evt.dwProcessId;
+                // NOTE(rjf): Warning. The user has manually suspended this thread,
+                // so even though from Demon's perspective it thinks this thread
+                // should run, it will not, because the user has manually called
+                // SuspendThread or used CREATE_SUSPENDED or whatever.
+              }
+            }break;
+          }
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: loop, consume win32 debug events until we produce the relevant demon events
+      //
+      String8List debug_strings = {0};
+      for(B32 keep_going = 1; keep_going;)
+      {
+        keep_going = 0;
+        
+        ////////////////////////
+        //- rjf: choose win32 resume code
+        //
+        DWORD resume_code = DBG_CONTINUE;
+        {
+          if(dmn_w32_shared->exception_not_handled && !ctrls->ignore_previous_exception)
+          {
+            dmn_w32_shared->exception_not_handled = 0;
+            resume_code = DBG_EXCEPTION_NOT_HANDLED;
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: inform windows that we're resuming, run, & obtain next debug event
+        //
+        DEBUG_EVENT evt = {0};
+        B32 evt_good = 0;
+        ProfScope("inform windows that we're resuming, run, & obtain next debug event")
+        {
+          B32 resume_good = 1;
+          if(dmn_w32_shared->resume_needed)
+          {
+            dmn_w32_shared->resume_needed = 0;
+            resume_good = !!ContinueDebugEvent(dmn_w32_shared->resume_pid, dmn_w32_shared->resume_tid, resume_code);
+            dmn_w32_shared->resume_needed = 0;
+            dmn_w32_shared->resume_tid = 0;
+            dmn_w32_shared->resume_pid = 0;
+          }
+          if(resume_good)
+          {
+            evt_good = !!WaitForDebugEvent(&evt, INFINITE);
+            if(evt_good)
+            {
+              dmn_w32_shared->resume_needed = 1;
+              dmn_w32_shared->resume_pid = evt.dwProcessId;
+              dmn_w32_shared->resume_tid = evt.dwThreadId;
+            }
+            ins_atomic_u64_inc_eval(&dmn_w32_shared->run_gen);
+            ins_atomic_u64_inc_eval(&dmn_w32_shared->mem_gen);
+            ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: process the new event
+        //
+        if(evt_good) ProfScope("process the new event")
+        {
+          switch(evt.dwDebugEventCode)
+          {
+            //////////////////////
+            //- rjf: process was created
+            //
+            case CREATE_PROCESS_DEBUG_EVENT:
+            {
+              // rjf: zero out "process pending" state
+              dmn_w32_shared->new_process_pending = 0;
+              
+              // rjf: unpack event
+              HANDLE process_handle = evt.u.CreateProcessInfo.hProcess;
+              HANDLE thread_handle = evt.u.CreateProcessInfo.hThread;
+              HANDLE module_handle = evt.u.CreateProcessInfo.hFile;
+              U64 tls_base = (U64)evt.u.CreateProcessInfo.lpThreadLocalBase;
+              U64 module_base = (U64)evt.u.CreateProcessInfo.lpBaseOfImage;
+              U64 module_name_vaddr = (U64)evt.u.CreateProcessInfo.lpImageName;
+              B32 module_name_is_unicode = (evt.u.CreateProcessInfo.fUnicode != 0);
+              DMN_W32_ImageInfo image_info = dmn_w32_image_info_from_process_base_vaddr(process_handle, module_base);
+              
+              // rjf: create entities (thread/module are implied for initial - they are not reported by win32)
+              DMN_W32_Entity *process = dmn_w32_entity_alloc(dmn_w32_shared->entities_base, DMN_W32_EntityKind_Process, evt.dwProcessId);
+              DMN_W32_Entity *thread = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Thread, evt.dwThreadId);
+              DMN_W32_Entity *module = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Module, module_base);
+              {
+                process->handle = process_handle;
+                process->arch   = image_info.arch;
+                thread->handle                   = thread_handle;
+                thread->arch                     = image_info.arch;
+                thread->thread.thread_local_base = tls_base;
+                module->handle                         = module_handle;
+                module->module.vaddr_range             = r1u64(module_base, image_info.size);
+                module->module.is_main                 = 1;
+                module->module.address_of_name_pointer = module_name_vaddr;
+                module->module.name_is_unicode         = module_name_is_unicode;
               }
               
-              // rjf: create thread
+              // rjf: put thread into suspended state, so it matches expected initial state
+              SuspendThread(thread_handle);
+              
+              // rjf: set up per-process injected code (to run halter threads on &
+              // generate debug events)
+              {
+                U8 injection_code[DMN_W32_INJECTED_CODE_SIZE];
+                MemorySet(injection_code, 0xCC, DMN_W32_INJECTED_CODE_SIZE);
+                injection_code[0] = 0xC3;
+                U64 injection_size = DMN_W32_INJECTED_CODE_SIZE + sizeof(DMN_W32_InjectedBreak);
+                U64 injection_address = (U64)VirtualAllocEx(process_handle, 0, injection_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE);
+                dmn_w32_process_write(process_handle, r1u64(injection_address, injection_address+sizeof(injection_code)), injection_code);
+                process->proc.injection_address = injection_address;
+              }
+              
+              // rjf: generate events
+              {
+                // rjf: create process
+                {
+                  DMN_Event *e = dmn_event_list_push(arena, &events);
+                  e->kind    = DMN_EventKind_CreateProcess;
+                  e->process = dmn_w32_handle_from_entity(process);
+                  e->arch    = image_info.arch;
+                  e->code    = evt.dwProcessId;
+                }
+                
+                // rjf: create thread
+                {
+                  DMN_Event *e = dmn_event_list_push(arena, &events);
+                  e->kind    = DMN_EventKind_CreateThread;
+                  e->process = dmn_w32_handle_from_entity(process);
+                  e->thread  = dmn_w32_handle_from_entity(thread);
+                  e->arch    = image_info.arch;
+                  e->code    = evt.dwThreadId;
+                }
+                
+                // rjf: load module
+                {
+                  DMN_Event *e = dmn_event_list_push(arena, &events);
+                  e->kind    = DMN_EventKind_LoadModule;
+                  e->process = dmn_w32_handle_from_entity(process);
+                  e->module  = dmn_w32_handle_from_entity(module);
+                  e->arch    = image_info.arch;
+                  e->address = module_base;
+                  e->size    = image_info.size;
+                  e->string  = dmn_w32_full_path_from_module(arena, module);
+                }
+              }
+            }break;
+            
+            //////////////////////
+            //- rjf: process exited
+            //
+            case EXIT_PROCESS_DEBUG_EVENT:
+            {
+              DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
+              
+              // rjf: generate events for children
+              for(DMN_W32_Entity *child = process->first; child != &dmn_w32_entity_nil; child = child->next)
+              {
+                switch(child->kind)
+                {
+                  default:{}break;
+                  case DMN_W32_EntityKind_Thread:
+                  {
+                    DMN_Event *e = dmn_event_list_push(arena, &events);
+                    e->kind = DMN_EventKind_ExitThread;
+                    e->process = dmn_w32_handle_from_entity(process);
+                    e->thread = dmn_w32_handle_from_entity(child);
+                  }break;
+                  case DMN_W32_EntityKind_Module:
+                  {
+                    DMN_Event *e = dmn_event_list_push(arena, &events);
+                    e->kind = DMN_EventKind_UnloadModule;
+                    e->process = dmn_w32_handle_from_entity(process);
+                    e->module = dmn_w32_handle_from_entity(child);
+                    e->string = dmn_w32_full_path_from_module(arena, child);
+                  }break;
+                }
+              }
+              
+              // rjf: generate event for process
               {
                 DMN_Event *e = dmn_event_list_push(arena, &events);
-                e->kind    = DMN_EventKind_CreateThread;
+                e->kind = DMN_EventKind_ExitProcess;
+                e->process = dmn_w32_handle_from_entity(process);
+                e->code = evt.u.ExitProcess.dwExitCode;
+              }
+              
+              // rjf: release entity storage
+              dmn_w32_entity_release(process);
+              
+              // rjf: detach
+              DebugActiveProcessStop(evt.dwProcessId);
+            }break;
+            
+            //////////////////////
+            //- rjf: thread was created
+            //
+            case CREATE_THREAD_DEBUG_EVENT:
+            {
+              DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
+              
+              // rjf: create thread entity
+              DMN_W32_Entity *thread = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Thread, evt.dwThreadId);
+              {
+                thread->handle                   = evt.u.CreateThread.hThread;
+                thread->arch                     = process->arch;
+                thread->thread.thread_local_base = (U64)evt.u.CreateThread.lpThreadLocalBase;
+              }
+              
+              // rjf: suspend thread immediately upon creation, to match with expected suspension state
+              DWORD sus_result = SuspendThread(thread->handle);
+              (void)sus_result;
+              
+              // rjf: unpack thread name
+              String8 thread_name = {0};
+              if(dmn_w32_GetThreadDescription != 0)
+              {
+                WCHAR *thread_name_w = 0;
+                HRESULT hr = dmn_w32_GetThreadDescription(thread->handle, &thread_name_w);
+                if(SUCCEEDED(hr))
+                {
+                  thread_name = str8_from_16(arena, str16_cstring((U16 *)thread_name_w));
+                  LocalFree(thread_name_w);
+                }
+              }
+              
+              // rjf: determine if this is a "halter thread" - the threads we spawn to halt processes
+              B32 is_halter = (evt.dwThreadId == dmn_w32_shared->halter_tid);
+              
+              // rjf: generate events for non-halter threads
+              if(!is_halter)
+              {
+                DMN_Event *e = dmn_event_list_push(arena, &events);
+                e->kind = DMN_EventKind_CreateThread;
                 e->process = dmn_w32_handle_from_entity(process);
                 e->thread  = dmn_w32_handle_from_entity(thread);
-                e->arch    = image_info.arch;
+                e->arch    = thread->arch;
                 e->code    = evt.dwThreadId;
+                e->string  = thread_name;
               }
+            }break;
+            
+            //////////////////////
+            //- rjf: thread exited
+            //
+            case EXIT_THREAD_DEBUG_EVENT:
+            {
+              DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
+              DMN_W32_Entity *process = thread->parent;
               
-              // rjf: load module
+              // rjf: determine if this is the halter thread
+              B32 is_halter = (evt.dwThreadId == dmn_w32_shared->halter_tid);
+              
+              // rjf: generate a halt event if this thread is the halter
+              if(is_halter)
               {
                 DMN_Event *e = dmn_event_list_push(arena, &events);
-                e->kind    = DMN_EventKind_LoadModule;
+                e->kind = DMN_EventKind_Halt;
+                dmn_w32_shared->halter_process = dmn_handle_zero();
+                dmn_w32_shared->halter_tid = 0;
+              }
+              
+              // rjf: if this thread is *not* the halter, then generate a regular exit-thread event
+              if(!is_halter)
+              {
+                DMN_Event *e = dmn_event_list_push(arena, &events);
+                e->kind    = DMN_EventKind_ExitThread;
+                e->process = dmn_w32_handle_from_entity(process);
+                e->thread  = dmn_w32_handle_from_entity(thread);
+                e->code    = evt.u.ExitThread.dwExitCode;
+              }
+              
+              // rjf: release entity storage
+              dmn_w32_entity_release(thread);
+            }break;
+            
+            //////////////////////
+            //- rjf: DLL was loaded
+            //
+            case LOAD_DLL_DEBUG_EVENT:
+            {
+              DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
+              
+              // rjf: extract image info
+              U64 module_base = (U64)evt.u.LoadDll.lpBaseOfDll;
+              DMN_W32_ImageInfo image_info = dmn_w32_image_info_from_process_base_vaddr(process->handle, module_base);
+              
+              // rjf: create module entity
+              DMN_W32_Entity *module = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Module, module_base);
+              {
+                module->handle                         = evt.u.LoadDll.hFile;
+                module->arch                           = image_info.arch;
+                module->module.vaddr_range             = r1u64(module_base, module_base+image_info.size);
+                module->module.address_of_name_pointer = (U64)evt.u.LoadDll.lpImageName;
+                module->module.name_is_unicode         = (evt.u.LoadDll.fUnicode != 0);
+              }
+              
+              // rjf: generate event
+              {
+                DMN_Event *e = dmn_event_list_push(arena, &events);
+                e->kind = DMN_EventKind_LoadModule;
                 e->process = dmn_w32_handle_from_entity(process);
                 e->module  = dmn_w32_handle_from_entity(module);
-                e->arch    = image_info.arch;
+                e->arch    = module->arch;
                 e->address = module_base;
                 e->size    = image_info.size;
                 e->string  = dmn_w32_full_path_from_module(arena, module);
               }
-            }
-          }break;
-          
-          //////////////////////
-          //- rjf: process exited
-          //
-          case EXIT_PROCESS_DEBUG_EVENT:
-          {
-            DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
+            }break;
             
-            // rjf: generate events for children
-            for(DMN_W32_Entity *child = process->first; child != &dmn_w32_entity_nil; child = child->next)
+            //////////////////////
+            //- rjf: DLL was unloaded
+            //
+            case UNLOAD_DLL_DEBUG_EVENT:
             {
-              switch(child->kind)
+              U64 module_base = (U64)evt.u.UnloadDll.lpBaseOfDll;
+              DMN_W32_Entity *module = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Module, module_base);
+              DMN_W32_Entity *process = module->parent;
+              
+              // rjf: generate event
               {
-                default:{}break;
-                case DMN_W32_EntityKind_Thread:
-                {
-                  DMN_Event *e = dmn_event_list_push(arena, &events);
-                  e->kind = DMN_EventKind_ExitThread;
-                  e->process = dmn_w32_handle_from_entity(process);
-                  e->thread = dmn_w32_handle_from_entity(child);
-                }break;
-                case DMN_W32_EntityKind_Module:
-                {
-                  DMN_Event *e = dmn_event_list_push(arena, &events);
-                  e->kind = DMN_EventKind_UnloadModule;
-                  e->process = dmn_w32_handle_from_entity(process);
-                  e->module = dmn_w32_handle_from_entity(child);
-                  e->string = dmn_w32_full_path_from_module(arena, child);
-                }break;
+                DMN_Event *e = dmn_event_list_push(arena, &events);
+                e->kind = DMN_EventKind_UnloadModule;
+                e->process = dmn_w32_handle_from_entity(process);
+                e->module  = dmn_w32_handle_from_entity(module);
+                e->string  = dmn_w32_full_path_from_module(arena, module);
               }
-            }
+              
+              // rjf: release entity storage
+              dmn_w32_entity_release(module);
+            }break;
             
-            // rjf: generate event for process
+            //////////////////////
+            //- rjf: exception was hit
+            //
+            case EXCEPTION_DEBUG_EVENT:
             {
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind = DMN_EventKind_ExitProcess;
-              e->process = dmn_w32_handle_from_entity(process);
-              e->code = evt.u.ExitProcess.dwExitCode;
-            }
-            
-            // rjf: release entity storage
-            dmn_w32_entity_release(process);
-            
-            // rjf: detach
-            DebugActiveProcessStop(evt.dwProcessId);
-          }break;
-          
-          //////////////////////
-          //- rjf: thread was created
-          //
-          case CREATE_THREAD_DEBUG_EVENT:
-          {
-            DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
-            
-            // rjf: create thread entity
-            DMN_W32_Entity *thread = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Thread, evt.dwThreadId);
-            {
-              thread->handle                   = evt.u.CreateThread.hThread;
-              thread->arch                     = process->arch;
-              thread->thread.thread_local_base = (U64)evt.u.CreateThread.lpThreadLocalBase;
-            }
-            
-            // rjf: suspend thread immediately upon creation, to match with expected suspension state
-            DWORD sus_result = SuspendThread(thread->handle);
-            (void)sus_result;
-            
-            // rjf: unpack thread name
-            String8 thread_name = {0};
-            if(dmn_w32_GetThreadDescription != 0)
-            {
-              WCHAR *thread_name_w = 0;
-              HRESULT hr = dmn_w32_GetThreadDescription(thread->handle, &thread_name_w);
-              if(SUCCEEDED(hr))
+              //- NOTE(rjf): Notes on multithreaded breakpoint events
+              // (2021/11/1):
+              //
+              // When many threads are simultaneously running, multiple threads
+              // may hit a trap "at the same time". When this happens there will be
+              // multiple events in an internal queue that we cannot see. If there
+              // is another event in the queue we will not see it until we call
+              // ContinueDebugEvent again, in a subsequent call to demon_os_run.
+              //
+              // When we get a trap event, the instruction pointer stored
+              // in the event will have the address of the int 3 instruction that
+              // was hit. Our RIP register, however, will be one byte past that.
+              // So, to get the behavior we want, we need to set the RIP register
+              // back to the address of the int 3.
+              //
+              // To deal with the fact that we may get breakpoint events later that
+              // were actually from this run what we do is:
+              //
+              // #1. If we get a trap event, and it corresponds to a user submitted
+              //     trap, then we treat it is a breakpoint event.
+              // #2. If we get a trap event, and it does NOT correspond to a user
+              //     trap in this call:
+              //   #A. If the actual unmodified instruction byte is NOT an int 3,
+              //       then this is a queued event from a previous run that is no
+              //       longer applicable and we skip it.
+              //   #B. If the actual unmodified instruction is an int 3, then this
+              //       becomes a trap event and we do not reset RIP.
+              
+              //- NOTE(rjf): Further notes on MULTITHREADED STEPPING ACCESS VIOLATION
+              // EVENTS! @rjf @rjf @rjf
+              // (2024/05/29):
+              //
+              // Just adding another comment here to document that the above long
+              // comment went completely unnoticed by me during a pass over demon,
+              // and I had removed the proper rollback stuff here without reading
+              // the above comment. So this comment just serves to make that
+              // original comment even heftier.
+              
+              //- NOTE(rjf): The exception record struct has a 32-bit version and a
+              // 64-bit version. We only currently handle the 64-bit version.
+              
+              //- rjf: unpack
+              DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
+              DMN_W32_Entity *process = thread->parent;
+              EXCEPTION_DEBUG_INFO *edi = &evt.u.Exception;
+              EXCEPTION_RECORD *exception = &edi->ExceptionRecord;
+              U64 instruction_pointer = (U64)exception->ExceptionAddress;
+              
+              //- rjf: determine if this is the first breakpoint in a process
+              // (breakpoint notifying us that the debugger is attached)
+              B32 first_bp = 0;
+              if(!process->proc.did_first_bp && exception->ExceptionCode == DMN_W32_EXCEPTION_BREAKPOINT)
               {
-                thread_name = str8_from_16(arena, str16_cstring((U16 *)thread_name_w));
-                LocalFree(thread_name_w);
+                process->proc.did_first_bp = 1;
+                first_bp = 1;
               }
-            }
-            
-            // rjf: determine if this is a "halter thread" - the threads we spawn to halt processes
-            B32 is_halter = (evt.dwThreadId == dmn_w32_shared->halter_tid);
-            
-            // rjf: generate events for non-halter threads
-            if(!is_halter)
-            {
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind = DMN_EventKind_CreateThread;
-              e->process = dmn_w32_handle_from_entity(process);
-              e->thread  = dmn_w32_handle_from_entity(thread);
-              e->arch    = thread->arch;
-              e->code    = evt.dwThreadId;
-              e->string  = thread_name;
-            }
-          }break;
-          
-          //////////////////////
-          //- rjf: thread exited
-          //
-          case EXIT_THREAD_DEBUG_EVENT:
-          {
-            DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
-            DMN_W32_Entity *process = thread->parent;
-            
-            // rjf: determine if this is the halter thread
-            B32 is_halter = (evt.dwThreadId == dmn_w32_shared->halter_tid);
-            
-            // rjf: generate a halt event if this thread is the halter
-            if(is_halter)
-            {
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind = DMN_EventKind_Halt;
-              dmn_w32_shared->halter_process = dmn_handle_zero();
-              dmn_w32_shared->halter_tid = 0;
-            }
-            
-            // rjf: if this thread is *not* the halter, then generate a regular exit-thread event
-            if(!is_halter)
-            {
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind    = DMN_EventKind_ExitThread;
-              e->process = dmn_w32_handle_from_entity(process);
-              e->thread  = dmn_w32_handle_from_entity(thread);
-              e->code    = evt.u.ExitThread.dwExitCode;
-            }
-            
-            // rjf: release entity storage
-            dmn_w32_entity_release(thread);
-          }break;
-          
-          //////////////////////
-          //- rjf: DLL was loaded
-          //
-          case LOAD_DLL_DEBUG_EVENT:
-          {
-            DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
-            
-            // rjf: extract image info
-            U64 module_base = (U64)evt.u.LoadDll.lpBaseOfDll;
-            DMN_W32_ImageInfo image_info = dmn_w32_image_info_from_process_base_vaddr(process->handle, module_base);
-            
-            // rjf: create module entity
-            DMN_W32_Entity *module = dmn_w32_entity_alloc(process, DMN_W32_EntityKind_Module, module_base);
-            {
-              module->handle                         = evt.u.LoadDll.hFile;
-              module->arch                           = image_info.arch;
-              module->module.vaddr_range             = r1u64(module_base, module_base+image_info.size);
-              module->module.address_of_name_pointer = (U64)evt.u.LoadDll.lpImageName;
-              module->module.name_is_unicode         = (evt.u.LoadDll.fUnicode != 0);
-            }
-            
-            // rjf: generate event
-            {
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind = DMN_EventKind_LoadModule;
-              e->process = dmn_w32_handle_from_entity(process);
-              e->module  = dmn_w32_handle_from_entity(module);
-              e->arch    = module->arch;
-              e->address = module_base;
-              e->size    = image_info.size;
-              e->string  = dmn_w32_full_path_from_module(arena, module);
-            }
-          }break;
-          
-          //////////////////////
-          //- rjf: DLL was unloaded
-          //
-          case UNLOAD_DLL_DEBUG_EVENT:
-          {
-            U64 module_base = (U64)evt.u.UnloadDll.lpBaseOfDll;
-            DMN_W32_Entity *module = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Module, module_base);
-            DMN_W32_Entity *process = module->parent;
-            
-            // rjf: generate event
-            {
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind = DMN_EventKind_UnloadModule;
-              e->process = dmn_w32_handle_from_entity(process);
-              e->module  = dmn_w32_handle_from_entity(module);
-              e->string  = dmn_w32_full_path_from_module(arena, module);
-            }
-            
-            // rjf: release entity storage
-            dmn_w32_entity_release(module);
-          }break;
-          
-          //////////////////////
-          //- rjf: exception was hit
-          //
-          case EXCEPTION_DEBUG_EVENT:
-          {
-            //- NOTE(rjf): Notes on multithreaded breakpoint events
-            // (2021/11/1):
-            //
-            // When many threads are simultaneously running, multiple threads
-            // may hit a trap "at the same time". When this happens there will be
-            // multiple events in an internal queue that we cannot see. If there
-            // is another event in the queue we will not see it until we call
-            // ContinueDebugEvent again, in a subsequent call to demon_os_run.
-            //
-            // When we get a trap event, the instruction pointer stored
-            // in the event will have the address of the int 3 instruction that
-            // was hit. Our RIP register, however, will be one byte past that.
-            // So, to get the behavior we want, we need to set the RIP register
-            // back to the address of the int 3.
-            //
-            // To deal with the fact that we may get breakpoint events later that
-            // were actually from this run what we do is:
-            //
-            // #1. If we get a trap event, and it corresponds to a user submitted
-            //     trap, then we treat it is a breakpoint event.
-            // #2. If we get a trap event, and it does NOT correspond to a user
-            //     trap in this call:
-            //   #A. If the actual unmodified instruction byte is NOT an int 3,
-            //       then this is a queued event from a previous run that is no
-            //       longer applicable and we skip it.
-            //   #B. If the actual unmodified instruction is an int 3, then this
-            //       becomes a trap event and we do not reset RIP.
-            
-            //- NOTE(rjf): Further notes on MULTITHREADED STEPPING ACCESS VIOLATION
-            // EVENTS! @rjf @rjf @rjf
-            // (2024/05/29):
-            //
-            // Just adding another comment here to document that the above long
-            // comment went completely unnoticed by me during a pass over demon,
-            // and I had removed the proper rollback stuff here without reading
-            // the above comment. So this comment just serves to make that
-            // original comment even heftier.
-            
-            //- NOTE(rjf): The exception record struct has a 32-bit version and a
-            // 64-bit version. We only currently handle the 64-bit version.
-            
-            //- rjf: unpack
-            DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
-            DMN_W32_Entity *process = thread->parent;
-            EXCEPTION_DEBUG_INFO *edi = &evt.u.Exception;
-            EXCEPTION_RECORD *exception = &edi->ExceptionRecord;
-            U64 instruction_pointer = (U64)exception->ExceptionAddress;
-            
-            //- rjf: determine if this is the first breakpoint in a process
-            // (breakpoint notifying us that the debugger is attached)
-            B32 first_bp = 0;
-            if(!process->proc.did_first_bp && exception->ExceptionCode == DMN_W32_EXCEPTION_BREAKPOINT)
-            {
-              process->proc.did_first_bp = 1;
-              first_bp = 1;
-            }
-            
-            //- rjf: determine if this exception is a trap
-            B32 is_trap = (!first_bp &&
-                           (exception->ExceptionCode == DMN_W32_EXCEPTION_BREAKPOINT ||
-                            exception->ExceptionCode == DMN_W32_EXCEPTION_STACK_BUFFER_OVERRUN));
-            
-            //- rjf: check if this trap is a usage-code-specified trap or something else
-            B32 hit_user_trap = 0;
-            if(is_trap)
-            {
-              for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
+              
+              //- rjf: determine if this exception is a trap
+              B32 is_trap = (!first_bp &&
+                             (exception->ExceptionCode == DMN_W32_EXCEPTION_BREAKPOINT ||
+                              exception->ExceptionCode == DMN_W32_EXCEPTION_STACK_BUFFER_OVERRUN));
+              
+              //- rjf: check if this trap is a usage-code-specified trap or something else
+              B32 hit_user_trap = 0;
+              if(is_trap)
               {
-                for(U64 idx = 0; idx < n->count; idx += 1)
+                for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
                 {
-                  if(dmn_handle_match(n->v[idx].process, dmn_w32_handle_from_entity(process)) && n->v[idx].vaddr == instruction_pointer)
+                  for(U64 idx = 0; idx < n->count; idx += 1)
                   {
-                    hit_user_trap = 1;
-                    break;
+                    if(dmn_handle_match(n->v[idx].process, dmn_w32_handle_from_entity(process)) && n->v[idx].vaddr == instruction_pointer)
+                    {
+                      hit_user_trap = 1;
+                      break;
+                    }
                   }
                 }
               }
-            }
-            
-            //- rjf: check if trap is explicit in the actual code memory
-            B32 hit_explicit_trap = 0;
-            if(is_trap && !hit_user_trap)
-            {
-              U8 instruction_byte = 0;
-              if(dmn_w32_process_read_struct(process->handle, instruction_pointer, &instruction_byte))
-              {
-                hit_explicit_trap = (instruction_byte == 0xCC || instruction_byte == 0xCD);
-              }
-            }
-            
-            //- rjf: determine whether to roll back instruction pointer
-            B32 should_do_rollback = (hit_user_trap || (is_trap && !hit_explicit_trap));
-            
-            //- rjf: roll back thread's instruction pointer
-            U64 post_trap_rip = 0;
-            if(should_do_rollback)
-            {
-              Temp temp = temp_begin(scratch.arena);
-              U64 regs_block_size = regs_block_size_from_architecture(thread->arch);
-              void *regs_block = push_array(scratch.arena, U8, regs_block_size);
-              if(dmn_w32_thread_read_reg_block(thread->arch, thread->handle, regs_block))
-              {
-                post_trap_rip = regs_rip_from_arch_block(thread->arch, regs_block);
-                regs_arch_block_write_rip(thread->arch, regs_block, instruction_pointer);
-                dmn_w32_thread_write_reg_block(thread->arch, thread->handle, regs_block);
-              }
-              temp_end(temp);
-            }
-            
-            //- rjf: not a user trap, not an explicit trap, then it's a trap that
-            // this thread hit previously but has since skipped
-            B32 hit_previous_trap = (is_trap && !hit_user_trap && !hit_explicit_trap);
-            
-            //- rjf: determine whether to skip this event
-            B32 skip_event = (hit_previous_trap);
-            
-            //- rjf: generate event
-            if(!skip_event)
-            {
-              // rjf: fill top-level info
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind    = DMN_EventKind_Exception;
-              e->process = dmn_w32_handle_from_entity(process);
-              e->thread  = dmn_w32_handle_from_entity(thread);
-              e->code    = exception->ExceptionCode;
-              e->flags   = exception->ExceptionFlags;
-              e->instruction_pointer = (U64)exception->ExceptionAddress;
               
-              //- rjf: fill according to exception code
-              switch(exception->ExceptionCode)
+              //- rjf: check if trap is explicit in the actual code memory
+              B32 hit_explicit_trap = 0;
+              if(is_trap && !hit_user_trap)
               {
-                //- rjf: fill breakpoint event info
-                case DMN_W32_EXCEPTION_BREAKPOINT:
+                U8 instruction_byte = 0;
+                if(dmn_w32_process_read_struct(process->handle, instruction_pointer, &instruction_byte))
                 {
-                  DMN_EventKind report_event_kind = DMN_EventKind_Trap;
-                  if(first_bp)
+                  hit_explicit_trap = (instruction_byte == 0xCC || instruction_byte == 0xCD);
+                }
+              }
+              
+              //- rjf: determine whether to roll back instruction pointer
+              B32 should_do_rollback = (hit_user_trap || (is_trap && !hit_explicit_trap));
+              
+              //- rjf: roll back thread's instruction pointer
+              U64 post_trap_rip = 0;
+              if(should_do_rollback)
+              {
+                Temp temp = temp_begin(scratch.arena);
+                U64 regs_block_size = regs_block_size_from_architecture(thread->arch);
+                void *regs_block = push_array(scratch.arena, U8, regs_block_size);
+                if(dmn_w32_thread_read_reg_block(thread->arch, thread->handle, regs_block))
+                {
+                  post_trap_rip = regs_rip_from_arch_block(thread->arch, regs_block);
+                  regs_arch_block_write_rip(thread->arch, regs_block, instruction_pointer);
+                  dmn_w32_thread_write_reg_block(thread->arch, thread->handle, regs_block);
+                }
+                temp_end(temp);
+              }
+              
+              //- rjf: not a user trap, not an explicit trap, then it's a trap that
+              // this thread hit previously but has since skipped
+              B32 hit_previous_trap = (is_trap && !hit_user_trap && !hit_explicit_trap);
+              
+              //- rjf: determine whether to skip this event
+              B32 skip_event = (hit_previous_trap);
+              
+              //- rjf: generate event
+              if(!skip_event)
+              {
+                // rjf: fill top-level info
+                DMN_Event *e = dmn_event_list_push(arena, &events);
+                e->kind    = DMN_EventKind_Exception;
+                e->process = dmn_w32_handle_from_entity(process);
+                e->thread  = dmn_w32_handle_from_entity(thread);
+                e->code    = exception->ExceptionCode;
+                e->flags   = exception->ExceptionFlags;
+                e->instruction_pointer = (U64)exception->ExceptionAddress;
+                
+                //- rjf: fill according to exception code
+                switch(exception->ExceptionCode)
+                {
+                  //- rjf: fill breakpoint event info
+                  case DMN_W32_EXCEPTION_BREAKPOINT:
                   {
-                    report_event_kind = DMN_EventKind_HandshakeComplete;
-                  }
-                  else if(hit_user_trap)
+                    DMN_EventKind report_event_kind = DMN_EventKind_Trap;
+                    if(first_bp)
+                    {
+                      report_event_kind = DMN_EventKind_HandshakeComplete;
+                    }
+                    else if(hit_user_trap)
+                    {
+                      report_event_kind = DMN_EventKind_Breakpoint;
+                    }
+                    e->kind = report_event_kind;
+                  }break;
+                  
+                  //- rjf: fill stack buffer overrun event info
+                  case DMN_W32_EXCEPTION_STACK_BUFFER_OVERRUN:
                   {
-                    report_event_kind = DMN_EventKind_Breakpoint;
-                  }
-                  e->kind = report_event_kind;
-                }break;
-                
-                //- rjf: fill stack buffer overrun event info
-                case DMN_W32_EXCEPTION_STACK_BUFFER_OVERRUN:
-                {
-                  e->kind = DMN_EventKind_Trap;
-                }break;
-                
-                //- rjf: fill single-step event info
-                case DMN_W32_EXCEPTION_SINGLE_STEP:
-                {
-                  e->kind = DMN_EventKind_SingleStep;
-                }break;
-                
-                //- rjf: fill throw info
-                case DMN_W32_EXCEPTION_THROW:
-                {
-                  U64 exception_sp = 0;
-                  U64 exception_ip = 0;
-                  if(exception->NumberParameters >= 3)
+                    e->kind = DMN_EventKind_Trap;
+                  }break;
+                  
+                  //- rjf: fill single-step event info
+                  case DMN_W32_EXCEPTION_SINGLE_STEP:
                   {
-                    exception_sp = (U64)exception->ExceptionInformation[1];
-                    exception_ip = (U64)exception->ExceptionInformation[2];
-                  }
-                  e->stack_pointer = exception_sp;
-                  e->exception_kind = DMN_ExceptionKind_CppThrow;
-                  e->exception_repeated = (edi->dwFirstChance == 0);
-                  dmn_w32_shared->exception_not_handled = (edi->dwFirstChance != 0);
-                }break;
-                
-                //- rjf: fill access violation info
-                case DMN_W32_EXCEPTION_ACCESS_VIOLATION:
-                case DMN_W32_EXCEPTION_IN_PAGE_ERROR:
-                {
-                  U64 exception_address = 0;
-                  DMN_ExceptionKind exception_kind = DMN_ExceptionKind_Null;
+                    e->kind = DMN_EventKind_SingleStep;
+                  }break;
+                  
+                  //- rjf: fill throw info
+                  case DMN_W32_EXCEPTION_THROW:
+                  {
+                    U64 exception_sp = 0;
+                    U64 exception_ip = 0;
+                    if(exception->NumberParameters >= 3)
+                    {
+                      exception_sp = (U64)exception->ExceptionInformation[1];
+                      exception_ip = (U64)exception->ExceptionInformation[2];
+                    }
+                    e->stack_pointer = exception_sp;
+                    e->exception_kind = DMN_ExceptionKind_CppThrow;
+                    e->exception_repeated = (edi->dwFirstChance == 0);
+                    dmn_w32_shared->exception_not_handled = (edi->dwFirstChance != 0);
+                  }break;
+                  
+                  //- rjf: fill access violation info
+                  case DMN_W32_EXCEPTION_ACCESS_VIOLATION:
+                  case DMN_W32_EXCEPTION_IN_PAGE_ERROR:
+                  {
+                    U64 exception_address = 0;
+                    DMN_ExceptionKind exception_kind = DMN_ExceptionKind_Null;
+                    if(exception->NumberParameters >= 2)
+                    {
+                      switch(exception->ExceptionInformation[0])
+                      {
+                        case 0: exception_kind = DMN_ExceptionKind_MemoryRead;    break;
+                        case 1: exception_kind = DMN_ExceptionKind_MemoryWrite;   break;
+                        case 8: exception_kind = DMN_ExceptionKind_MemoryExecute; break;
+                      }
+                      exception_address = exception->ExceptionInformation[1];
+                    }
+                    e->address = exception_address;
+                    e->exception_kind = exception_kind;
+                    e->exception_repeated = (edi->dwFirstChance == 0);
+                    dmn_w32_shared->exception_not_handled = (edi->dwFirstChance != 0);
+                  }break;
+                  
+                  //- rjf: fill set-thread-name info
+                  case DMN_W32_EXCEPTION_SET_THREAD_NAME:
                   if(exception->NumberParameters >= 2)
                   {
-                    switch(exception->ExceptionInformation[0])
+                    U64 thread_name_address = exception->ExceptionInformation[1];
+                    DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
+                    String8List thread_name_strings = {0};
                     {
-                      case 0: exception_kind = DMN_ExceptionKind_MemoryRead;    break;
-                      case 1: exception_kind = DMN_ExceptionKind_MemoryWrite;   break;
-                      case 8: exception_kind = DMN_ExceptionKind_MemoryExecute; break;
-                    }
-                    exception_address = exception->ExceptionInformation[1];
-                  }
-                  e->address = exception_address;
-                  e->exception_kind = exception_kind;
-                  e->exception_repeated = (edi->dwFirstChance == 0);
-                  dmn_w32_shared->exception_not_handled = (edi->dwFirstChance != 0);
-                }break;
-                
-                //- rjf: fill set-thread-name info
-                case DMN_W32_EXCEPTION_SET_THREAD_NAME:
-                if(exception->NumberParameters >= 2)
-                {
-                  U64 thread_name_address = exception->ExceptionInformation[1];
-                  DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
-                  String8List thread_name_strings = {0};
-                  {
-                    U64 read_addr = thread_name_address;
-                    U64 total_string_size = 0;
-                    for(;total_string_size < KB(4);)
-                    {
-                      U8 *buffer = push_array(scratch.arena, U8, 256);
-                      B32 good_read = dmn_w32_process_read(process->handle, r1u64(read_addr, read_addr+256), buffer);
-                      if(good_read)
+                      U64 read_addr = thread_name_address;
+                      U64 total_string_size = 0;
+                      for(;total_string_size < KB(4);)
                       {
-                        U64 size = 256;
-                        for(U64 idx = 0; idx < 256; idx += 1)
+                        U8 *buffer = push_array(scratch.arena, U8, 256);
+                        B32 good_read = dmn_w32_process_read(process->handle, r1u64(read_addr, read_addr+256), buffer);
+                        if(good_read)
                         {
-                          if(buffer[idx] == 0)
+                          U64 size = 256;
+                          for(U64 idx = 0; idx < 256; idx += 1)
                           {
-                            size = idx;
+                            if(buffer[idx] == 0)
+                            {
+                              size = idx;
+                              break;
+                            }
+                          }
+                          String8 string_part = str8(buffer, size);
+                          str8_list_push(scratch.arena, &thread_name_strings, string_part);
+                          total_string_size += size;
+                          read_addr += size;
+                          if(size < 256)
+                          {
                             break;
                           }
                         }
-                        String8 string_part = str8(buffer, size);
-                        str8_list_push(scratch.arena, &thread_name_strings, string_part);
-                        total_string_size += size;
-                        read_addr += size;
-                        if(size < 256)
+                        else
                         {
                           break;
                         }
                       }
-                      else
-                      {
-                        break;
-                      }
                     }
-                  }
-                  e->kind = DMN_EventKind_SetThreadName;
-                  e->string = str8_list_join(arena, &thread_name_strings, 0);
-                  if(exception->NumberParameters > 2)
+                    e->kind = DMN_EventKind_SetThreadName;
+                    e->string = str8_list_join(arena, &thread_name_strings, 0);
+                    if(exception->NumberParameters > 2)
+                    {
+                      e->code = exception->ExceptionInformation[2];
+                    }
+                  }break;
+                  
+                  //- rjf: unhandled exception case
+                  default:
                   {
-                    e->code = exception->ExceptionInformation[2];
-                  }
-                }break;
-                
-                //- rjf: unhandled exception case
-                default:
-                {
-                  e->exception_repeated = (edi->dwFirstChance == 0);
-                  dmn_w32_shared->exception_not_handled = (edi->dwFirstChance != 0);
-                }break;
+                    e->exception_repeated = (edi->dwFirstChance == 0);
+                    dmn_w32_shared->exception_not_handled = (edi->dwFirstChance != 0);
+                  }break;
+                }
               }
-            }
-          }break;
-          
-          //////////////////////
-          //- rjf: output debug string was gathered
-          //
-          case OUTPUT_DEBUG_STRING_EVENT:
-          {
-            // rjf: unpack event
-            DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
-            DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
-            U64 string_address = (U64)evt.u.DebugString.lpDebugStringData;
-            U64 string_size = (U64)evt.u.DebugString.nDebugStringLength;
+            }break;
             
-            // rjf: read memory
-            U8 *buffer = push_array_no_zero(arena, U8, string_size + 1);
-            dmn_w32_process_read(process->handle, r1u64(string_address, string_address+string_size), buffer);
-            buffer[string_size] = 0;
-            
-            // rjf: generate event
+            //////////////////////
+            //- rjf: output debug string was gathered
+            //
+            case OUTPUT_DEBUG_STRING_EVENT:
             {
-              DMN_Event *e = dmn_event_list_push(arena, &events);
-              e->kind = DMN_EventKind_DebugString;
-              e->process = dmn_w32_handle_from_entity(process);
-              e->thread = dmn_w32_handle_from_entity(thread);
-              e->string = str8(buffer, string_size);
-              if(string_size != 0 && buffer[string_size-1] == 0)
+              // rjf: unpack event
+              DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
+              DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
+              U64 string_address = (U64)evt.u.DebugString.lpDebugStringData;
+              U64 string_size = (U64)evt.u.DebugString.nDebugStringLength;
+              
+              // rjf: read memory
+              U8 *buffer = push_array_no_zero(scratch.arena, U8, string_size + 1);
+              dmn_w32_process_read(process->handle, r1u64(string_address, string_address+string_size), buffer);
+              buffer[string_size] = 0;
+              
+              // rjf: extract into string
+              String8 debug_string = str8(buffer, string_size);
+              if(debug_string.size != 0 && buffer[string_size-1] == 0)
               {
-                e->string.size -= 1;
+                debug_string.size -= 1;
               }
-            }
-          }break;
-          
-          //////////////////////
-          //- rjf: a "rip event" - a "system debugging error".
-          //
-          case RIP_EVENT:
+              
+              // rjf: push into debug strings
+              str8_list_push(scratch.arena, &debug_strings, debug_string);
+              keep_going = 1;
+              
+              // rjf: generate event, given sufficient amount of text
+              if(debug_strings.total_size >= KB(4))
+              {
+                String8 debug_strings_joined = str8_list_join(arena, &debug_strings, 0);
+                MemoryZeroStruct(&debug_strings);
+                DMN_Event *e = dmn_event_list_push(arena, &events);
+                e->kind = DMN_EventKind_DebugString;
+                e->process = dmn_w32_handle_from_entity(process);
+                e->thread = dmn_w32_handle_from_entity(thread);
+                e->string = debug_strings_joined;
+                keep_going = 0;
+              }
+            }break;
+            
+            //////////////////////
+            //- rjf: a "rip event" - a "system debugging error".
+            //
+            case RIP_EVENT:
+            {
+              DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
+              DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
+              DMN_Event *e = dmn_event_list_push(arena, &events);
+              e->kind    = DMN_EventKind_Exception;
+              e->process = dmn_w32_handle_from_entity(process);
+              e->thread  = dmn_w32_handle_from_entity(thread);
+            }break;
+            
+            //////////////////////
+            //- rjf: default case - some kind of debugging event that we don't currently consume.
+            //
+            default:
+            {
+              NoOp;
+            }break;
+          }
+        }
+      }
+      
+      ////////////////////////
+      //- rjf: send out event for any remaining debug strings
+      //
+      if(debug_strings.total_size != 0)
+      {
+        String8 debug_strings_joined = str8_list_join(arena, &debug_strings, 0);
+        MemoryZeroStruct(&debug_strings);
+        DMN_Event *e = dmn_event_list_push(arena, &events);
+        e->kind = DMN_EventKind_DebugString;
+        e->string = debug_strings_joined;
+      }
+      
+      ////////////////////////
+      //- rjf: suspend threads which ran
+      //
+      ProfScope("suspend threads which ran")
+      {
+        for(DMN_W32_EntityNode *n = first_run_thread; n != 0; n = n->next)
+        {
+          DMN_W32_Entity *thread = n->v;
+          DWORD suspend_result = SuspendThread(thread->handle);
+          switch(suspend_result)
           {
-            DMN_W32_Entity *process = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Process, evt.dwProcessId);
-            DMN_W32_Entity *thread = dmn_w32_entity_from_kind_id(DMN_W32_EntityKind_Thread, evt.dwThreadId);
-            DMN_Event *e = dmn_event_list_push(arena, &events);
-            e->kind    = DMN_EventKind_Exception;
-            e->process = dmn_w32_handle_from_entity(process);
-            e->thread  = dmn_w32_handle_from_entity(thread);
-          }break;
-          
-          //////////////////////
-          //- rjf: default case - some kind of debugging event that we don't currently consume.
-          //
-          default:
-          {
-            NoOp;
-          }break;
+            case 0xffffffffu:
+            {
+              // TODO(rjf): error - unknown cause. need to do do GetLastError, FormatMessage
+              //
+              // NOTE(rjf): this can happen when the event is EXIT_THREAD_DEBUG_EVENT
+              // or EXIT_PROCESS_DEBUG_EVENT. after such an event, SuspendThread
+              // gives error code 5 (access denied). this has no adverse effects, but
+              // if we want to start reporting errors we should take care to avoid
+              // calling SuspendThread in that case.
+            }break;
+            default:
+            {
+              DWORD desired_counter = 1;
+              DWORD current_counter = suspend_result + 1;
+              if(current_counter != desired_counter)
+              {
+                // NOTE(rjf): Warning. We've suspended to something higher than 1.
+                // In this case, it means the user probably created the thread in
+                // a suspended state, or they called SuspendThread.
+              }
+            }break;
+          }
         }
       }
       
       //- rjf: gather new thread-names
-      if(dmn_w32_GetThreadDescription != 0)
+      ProfScope("gather new thread names") if(dmn_w32_GetThreadDescription != 0)
       {
         for(DMN_W32_Entity *process = dmn_w32_shared->entities_base->first;
             process != &dmn_w32_entity_nil;
@@ -2252,6 +2293,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //////////////////////////
       //- rjf: restore original memory at trap locations
       //
+      ProfScope("restore original memory at trap locations")
       {
         U64 trap_idx = 0;
         for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
@@ -2271,7 +2313,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //////////////////////////
       //- rjf: unset single step bit
       //
-      if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero()))
+      if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero())) ProfScope("unset single step bit")
       {
         DMN_W32_Entity *thread = dmn_w32_entity_from_handle(ctrls->single_step_thread);
         Architecture arch = thread->arch;
