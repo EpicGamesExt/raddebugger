@@ -40,6 +40,10 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
+// [ ] investigate heavy outputdebugstring usage causing major issues
+//     (both in debugger and in target application, apparently)
+// [ ] "Browse..." buttons should adopt a more relevant starting search path,
+//     if possible
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
 //
@@ -65,6 +69,10 @@
 //  [ ] max view rule
 //  [ ] min view rule
 //  [ ] double click on procedure in procedures tab to jump to source
+//
+// [ ] filesystem drag/drop support
+// [ ] double-click vs. single-click for folder navigation, see if we can infer
+// [ ] use backslashes on windows by default, forward slashes elsewhere
 //
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
