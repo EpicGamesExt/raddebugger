@@ -1044,9 +1044,9 @@ dbgi_parse_thread_entry_point(void *p)
     if(do_task)
     {
       U64 decompressed_size = raddbgi_file_props.size;
-      for(U64 dsec_idx = 0; dsec_idx < rdi_parsed_maybe_compressed.dsec_count; dsec_idx += 1)
+      for(U64 dsec_idx = 0; dsec_idx < rdi_parsed_maybe_compressed.section_count; dsec_idx += 1)
       {
-        decompressed_size += (rdi_parsed_maybe_compressed.dsecs[dsec_idx].unpacked_size - rdi_parsed_maybe_compressed.dsecs[dsec_idx].encoded_size);
+        decompressed_size += (rdi_parsed_maybe_compressed.sections[dsec_idx].unpacked_size - rdi_parsed_maybe_compressed.sections[dsec_idx].encoded_size);
       }
       if(decompressed_size > raddbgi_file_props.size)
       {
@@ -1060,14 +1060,14 @@ dbgi_parse_thread_entry_point(void *p)
         }
         
         // rjf: copy & adjust sections for decompressed version
-        if(rdi_parsed_maybe_compressed.dsec_count != 0)
+        if(rdi_parsed_maybe_compressed.section_count != 0)
         {
           RDI_DataSection *dsec_base = (RDI_DataSection *)(decompressed_data + dst_header->data_section_off);
-          MemoryCopy(dsec_base, (U8 *)raddbgi_file_base + src_header->data_section_off, sizeof(RDI_DataSection) * rdi_parsed_maybe_compressed.dsec_count);
-          U64 off = dst_header->data_section_off + sizeof(RDI_DataSection) * rdi_parsed_maybe_compressed.dsec_count;
+          MemoryCopy(dsec_base, (U8 *)raddbgi_file_base + src_header->data_section_off, sizeof(RDI_DataSection) * rdi_parsed_maybe_compressed.section_count);
+          U64 off = dst_header->data_section_off + sizeof(RDI_DataSection) * rdi_parsed_maybe_compressed.section_count;
           off += 7;
           off -= off%8;
-          for(U64 idx = 0; idx < rdi_parsed_maybe_compressed.dsec_count; idx += 1)
+          for(U64 idx = 0; idx < rdi_parsed_maybe_compressed.section_count; idx += 1)
           {
             dsec_base[idx].encoding = RDI_DataSectionEncoding_Unpacked;
             dsec_base[idx].off = off;
@@ -1079,12 +1079,12 @@ dbgi_parse_thread_entry_point(void *p)
         }
         
         // rjf: decompress sections into new decompressed file buffer
-        if(rdi_parsed_maybe_compressed.dsec_count != 0)
+        if(rdi_parsed_maybe_compressed.sections != 0)
         {
-          RDI_DataSection *src_first = rdi_parsed_maybe_compressed.dsecs;
+          RDI_DataSection *src_first = rdi_parsed_maybe_compressed.sections;
           RDI_DataSection *dst_first = (RDI_DataSection *)(decompressed_data + dst_header->data_section_off);
-          RDI_DataSection *src_opl = src_first + rdi_parsed_maybe_compressed.dsec_count;
-          RDI_DataSection *dst_opl = dst_first + rdi_parsed_maybe_compressed.dsec_count;
+          RDI_DataSection *src_opl = src_first + rdi_parsed_maybe_compressed.section_count;
+          RDI_DataSection *dst_opl = dst_first + rdi_parsed_maybe_compressed.section_count;
           for(RDI_DataSection *src = src_first, *dst = dst_first;
               src < src_opl && dst < dst_opl;
               src += 1, dst += 1)

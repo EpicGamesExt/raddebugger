@@ -329,18 +329,17 @@ global DBGI_Parse dbgi_parse_nil =
   {0},
   {0},
   {
-    0,
-    0,
-    0,
-    0,
-    {0},
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
+    0, // raw_data
+    0, // raw_data_size
+    0, // sections
+    0, // section_count
+    0, // string_data
+    0, // string_data_size
+    0, // string_offs
+    0, // string_count
+    0, // idx_run_data
+    0, // idx_run_count
+    0, // top_level_info
     &rdi_binary_section_nil, 1,
     &rdi_file_path_node_nil, 1,
     &rdi_source_file_nil, 1,
@@ -361,7 +360,9 @@ global DBGI_Parse dbgi_parse_nil =
     &rdi_local_nil, 1,
     &rdi_location_block_nil, 1,
     0, 0,
-    0, 0,
+    &rdi_name_map_nil, 1,
+    &rdi_name_map_bucket_nil, 1,
+    &rdi_name_map_node_nil, 1,
     &rdi_line_info_nil, 1,
     &rdi_voff_nil, 1,
     &rdi_line_nil, 1,
