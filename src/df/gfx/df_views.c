@@ -1142,6 +1142,12 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               String8 string = str8(edit_state->input_buffer, edit_state->input_size);
               UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
               
+              // rjf: copy
+              if(op.flags & UI_TxtOpFlag_Copy && selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y)
+              {
+                os_set_clipboard_text(op.copy);
+              }
+              
               // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
               if(autocomplete_hint_string.size != 0)
               {
