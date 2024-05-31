@@ -43,6 +43,25 @@ ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind)
   return cause;
 }
 
+internal String8
+ctrl_string_from_msg_kind(CTRL_MsgKind kind)
+{
+  String8 result = {0};
+  switch(kind)
+  {
+    default:{}break;
+    case CTRL_MsgKind_Launch:                    {result = str8_lit("Launch");}break;
+    case CTRL_MsgKind_Attach:                    {result = str8_lit("Attach");}break;
+    case CTRL_MsgKind_Kill:                      {result = str8_lit("Kill");}break;
+    case CTRL_MsgKind_Detach:                    {result = str8_lit("Detach");}break;
+    case CTRL_MsgKind_Run:                       {result = str8_lit("Run");}break;
+    case CTRL_MsgKind_SingleStep:                {result = str8_lit("SingleStep");}break;
+    case CTRL_MsgKind_SetUserEntryPoints:        {result = str8_lit("SetUserEntryPoints");}break;
+    case CTRL_MsgKind_SetModuleDebugInfoPath:    {result = str8_lit("SetModuleDebugInfoPath");}break;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Machine/Handle Pair Type Functions
 
@@ -2823,6 +2842,9 @@ ctrl_thread__entry_point(void *p)
       for(CTRL_MsgNode *msg_n = msgs.first; msg_n != 0 && done == 0; msg_n = msg_n->next)
       {
         CTRL_Msg *msg = &msg_n->v;
+        {
+          log_infof("[user -> ctrl %S message]\n", ctrl_string_from_msg_kind(msg->kind));
+        }
         MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
         switch(msg->kind)
         {

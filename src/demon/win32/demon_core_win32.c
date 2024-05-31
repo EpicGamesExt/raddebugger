@@ -2163,16 +2163,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               str8_list_push(scratch.arena, &debug_strings, debug_string);
               keep_going = 1;
               
-              // rjf: generate event, given sufficient amount of text
+              // rjf: exit loop, given sufficient amount of text
               if(debug_strings.total_size >= KB(4))
               {
-                String8 debug_strings_joined = str8_list_join(arena, &debug_strings, 0);
-                MemoryZeroStruct(&debug_strings);
-                DMN_Event *e = dmn_event_list_push(arena, &events);
-                e->kind = DMN_EventKind_DebugString;
-                e->process = dmn_w32_handle_from_entity(process);
-                e->thread = dmn_w32_handle_from_entity(thread);
-                e->string = debug_strings_joined;
                 keep_going = 0;
               }
             }break;
