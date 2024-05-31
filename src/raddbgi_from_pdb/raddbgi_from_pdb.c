@@ -5120,16 +5120,10 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       rdim_str8_list_concat_in_place(&lines,      &baked_line_chunk->lines);
       rdim_str8_list_concat_in_place(&cols,       &baked_line_chunk->cols);
     }
-    
-    String8 line_infos_data = str8_list_join(arena, &line_infos, 0);
-    String8 voffs_data      = str8_list_join(arena, &voffs,      0);
-    String8 lines_data      = str8_list_join(arena, &lines,      0);
-    String8 cols_data       = str8_list_join(arena, &cols,       0);
-
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, line_infos_data.str, line_infos_data.size, RDI_DataSectionTag_LineInfo       );
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, voffs_data.str,      voffs_data.size,      RDI_DataSectionTag_LineInfoVoffs  );
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, lines_data.str,      lines_data.size,      RDI_DataSectionTag_LineInfoData   );
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, cols_data.str,       cols_data.size,       RDI_DataSectionTag_LineInfoColumns);
+    rdim_bake_section_list_push_new_unpacked_list(arena, &sections, RDI_DataSectionTag_LineInfo       , line_infos);
+    rdim_bake_section_list_push_new_unpacked_list(arena, &sections, RDI_DataSectionTag_LineInfoVoffs  , voffs     );
+    rdim_bake_section_list_push_new_unpacked_list(arena, &sections, RDI_DataSectionTag_LineInfoData   , lines     );
+    rdim_bake_section_list_push_new_unpacked_list(arena, &sections, RDI_DataSectionTag_LineInfoColumns, cols      );
   }
   
   //- rjf: fill & return
@@ -5162,29 +5156,41 @@ p2r_compress(Arena *arena, P2R_Bake2Serialize *in)
       RDIM_BakeSection *dst = rdim_bake_section_list_push(arena, &postpack_sections);
       
       // rjf: unpack uncompressed section info
-      void *data = src->data;
+      RDIM_String8List data = src->data;
       RDI_DataSectionEncoding encoding = src->encoding;
-      RDI_U64 encoded_size = src->encoded_size;
-      RDI_U64 unpacked_size = src->unpacked_size;
+      RDI_U64 encoded_size = src->data.total_size;
       
       // rjf: determine if this section should be compressed
-      B32 should_compress = 1;
+      B32 should_compress = src->tag != RDI_DataSectionTag_Checksums;
       
       // rjf: compress if needed
       if(should_compress)
       {
+        // push output buffer
+        RDI_U8 *compress_buffer = push_array_no_zero(arena, RDI_U8, data.total_size);
+        RDI_U64 compress_cursor = 0;
+
+        // reset compressor
         MemoryZero(ctx.m_hashTable, sizeof(U16)*(1<<ctx.m_tableSizeBits));
-        void *raw_data = data;
-        data = push_array_no_zero(arena, U8, unpacked_size);
-        encoded_size = rr_lzb_simple_encode_veryfast(&ctx, raw_data, unpacked_size, data);
+
+        // compress data nodes
+        for(RDIM_String8Node *data_n = data.first; data_n != 0; data_n = data_n->next)
+        {
+          compress_cursor += rr_lzb_simple_encode_veryfast(&ctx, data_n->string.str, data_n->string.size, compress_buffer + compress_cursor);
+        }
+
+        // set encoding
         encoding = RDI_DataSectionEncoding_LZB;
+
+        // wrap encoded data
+        MemoryZeroStruct(&data);
+        rdim_str8_list_push(arena, &data, rdim_str8(compress_buffer, compress_cursor));
       }
       
       // rjf: fill
       dst->data          = data;
       dst->encoding      = encoding;
-      dst->encoded_size  = encoded_size;
-      dst->unpacked_size = unpacked_size;
+      dst->unpacked_size = src->unpacked_size;
       dst->tag           = src->tag;
     }
   }

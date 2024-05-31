@@ -110,7 +110,7 @@ entry_point(CmdLine *cmdline)
   }
   
   //- rjf: serialize
-  String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(arena, &convert2bake->bake_params, &bake2srlz_compressed->sections);
+  String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(arena, &bake2srlz_compressed->sections);
   
   //- rjf: write
   ProfScope("write")

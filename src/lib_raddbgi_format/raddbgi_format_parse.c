@@ -74,6 +74,13 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out_rdi)
   {
     RDI_U64 top_level_count = 0;
 
+    // fill out sections by tag
+    for (RDI_U64 i = 0; i < section_count; i += 1)
+    {
+        RDI_DataSection* sect = sections + i;
+        out_rdi->sections_by_tag[sect->tag] = *sect;
+    }
+
     out_rdi->raw_data          = data;
     out_rdi->raw_data_size     = size;
     out_rdi->sections          = sections;
@@ -119,13 +126,6 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out_rdi)
     if(out_rdi->string_count > 0)
     {
       out_rdi->string_count -= 1;
-    }
-
-    // fill out sections by tag
-    for(RDI_U64 i = 0; i < section_count; i += 1)
-    {
-      RDI_DataSection *sect = sections + i;
-      out_rdi->sections_by_tag[sect->tag] = *sect;
     }
 
     // fill out name maps by kind

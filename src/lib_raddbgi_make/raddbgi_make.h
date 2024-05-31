@@ -945,11 +945,10 @@ struct RDIM_BakeParams
 typedef struct RDIM_BakeSection RDIM_BakeSection;
 struct RDIM_BakeSection
 {
-  void *data;
-  RDI_DataSectionEncoding encoding;
-  RDI_U64 encoded_size;
-  RDI_U64 unpacked_size;
   RDI_DataSectionTag tag;
+  RDI_DataSectionEncoding encoding;
+  RDIM_String8List data;
+  RDI_U64 unpacked_size;
 };
 
 typedef struct RDIM_BakeSectionNode RDIM_BakeSectionNode;
@@ -1305,7 +1304,8 @@ RDI_PROC void rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, 
 //~ rjf: [Baking Helpers] Data Section List Building Helpers
 
 RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push(RDIM_Arena *arena, RDIM_BakeSectionList *list);
-RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new_unpacked(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_DataSectionTag tag);
+RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new_unpacked_list(RDIM_Arena *arena, RDIM_BakeSectionList *list, RDI_DataSectionTag tag, RDIM_String8List data);
+RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new_unpacked_raw(RDIM_Arena *arena, RDIM_BakeSectionList *list, RDI_DataSectionTag tag, void *data, RDI_U64 size);
 RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, RDIM_BakeSectionList *to_push);
 
 ////////////////////////////////
@@ -1409,6 +1409,6 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_idx_run_section_list_from_idx_run_map(RD
 ////////////////////////////////
 //~ rjf: [Serializing] Baked Data Section List -> Serialized Binary Strings
 
-RDI_PROC RDIM_String8List rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeParams *params, RDIM_BakeSectionList *sections);
+RDI_PROC RDIM_String8List rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeSectionList *sections);
 
 #endif // RADDBGI_MAKE_H
