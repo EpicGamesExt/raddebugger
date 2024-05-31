@@ -338,6 +338,7 @@ typedef struct RDI_TopLevelInfo{
   RDI_U32 exe_name_string_idx;
   RDI_U64 exe_hash;
   RDI_U64 voff_max;
+  RDI_U32 producer_string_idx;
 } RDI_TopLevelInfo;
 
 //- binary sections

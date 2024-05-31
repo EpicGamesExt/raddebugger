@@ -252,6 +252,8 @@ rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed,
   String8 arch_str = rdi_string_from_arch(tli->architecture);
   String8 exe_name = {0};
   exe_name.str = rdi_string_from_idx(parsed, tli->exe_name_string_idx, &exe_name.size);
+  String8 producer_string = {0};
+  producer_string.str = rdi_string_from_idx(parsed, tli->producer_string_idx, &producer_string.size);
   
   str8_list_pushf(arena, out, "%.*sarchitecture=%.*s\n",
                   indent_level, rdi_stringize_spaces, str8_varg(arch_str));
@@ -259,6 +261,9 @@ rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed,
                   indent_level, rdi_stringize_spaces, str8_varg(exe_name));
   str8_list_pushf(arena, out, "%.*svoff_max=0x%08llx\n",
                   indent_level, rdi_stringize_spaces, tli->voff_max);
+  str8_list_pushf(arena, out, "%.*sproducer_string='%.*s'\n",
+                  indent_level, rdi_stringize_spaces, str8_varg(producer_string));
+
 }
 
 internal void

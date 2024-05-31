@@ -3313,10 +3313,11 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //
   RDIM_TopLevelInfo top_level_info = {0};
   {
-    top_level_info.arch     = arch;
-    top_level_info.exe_name = str8_skip_last_slash(in->input_exe_name);
-    top_level_info.exe_hash = exe_hash;
-    top_level_info.voff_max = exe_voff_max;
+    top_level_info.arch            = arch;
+    top_level_info.exe_name        = str8_skip_last_slash(in->input_exe_name);
+    top_level_info.exe_hash        = exe_hash;
+    top_level_info.voff_max        = exe_voff_max;
+    top_level_info.producer_string = rdim_str8_lit("Epic Games Tools (R) RAD PDB Converter  Version " Stringify(BUILD_VERSION_MAJOR) "." Stringify(BUILD_VERSION_MINOR) "." Stringify(BUILD_VERSION_PATCH) " " BUILD_RELEASE_PHASE_STRING_LITERAL);
   }
   
   //////////////////////////////////////////////////////////////

@@ -1867,6 +1867,7 @@ RDI_PROC void
 rdim_bake_string_map_loose_push_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_TopLevelInfo *tli)
 {
   rdim_bake_string_map_loose_insert(arena, top, map, 1, tli->exe_name);
+  rdim_bake_string_map_loose_insert(arena, top, map, 1, tli->producer_string);
 }
 
 RDI_PROC void
@@ -2239,6 +2240,7 @@ rdim_bake_top_level_info_section_list_from_params(RDIM_Arena *arena, RDIM_BakeSt
   dst_tli->exe_name_string_idx = rdim_bake_idx_from_string(strings, src_tli->exe_name);
   dst_tli->exe_hash            = src_tli->exe_hash;
   dst_tli->voff_max            = src_tli->voff_max;
+  dst_tli->producer_string_idx = rdim_bake_idx_from_string(strings, src_tli->producer_string);
   rdim_bake_section_list_push_new_unpacked_raw(arena, &sections, RDI_DataSectionTag_TopLevelInfo, dst_tli, sizeof(*dst_tli));
   return sections;
 }

@@ -419,6 +419,7 @@ struct RDIM_TopLevelInfo
   RDIM_String8 exe_name;
   RDI_U64 exe_hash;
   RDI_U64 voff_max;
+  RDIM_String8 producer_string;
 };
 
 ////////////////////////////////
