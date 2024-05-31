@@ -198,7 +198,7 @@ os_init(void)
       w32_VirtualAlloc2_func = (W32_VirtualAlloc2_Type*)GetProcAddress(module, "VirtualAlloc2");
       w32_MapViewOfFile3_func = (W32_MapViewOfFile3_Type*)GetProcAddress(module, "MapViewOfFile3");
       w32_SetThreadDescription_func = (W32_SetThreadDescription_Type*)GetProcAddress(module, "SetThreadDescription");
-            
+      
       FreeLibrary(module);
     }
   }
@@ -964,7 +964,27 @@ os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
   OS_FileIter *iter = push_array(arena, OS_FileIter, 1);
   iter->flags = flags;
   W32_FileIter *w32_iter = (W32_FileIter*)iter->memory;
-  w32_iter->handle = FindFirstFileW((WCHAR*)path16.str, &w32_iter->find_data);
+  if(path.size == 0)
+  {
+    w32_iter->is_volume_iter = 1;
+    WCHAR buffer[512] = {0};
+    DWORD length = GetLogicalDriveStringsW(sizeof(buffer), buffer);
+    String8List drive_strings = {0};
+    for(U64 off = 0; off < (U64)length;)
+    {
+      String16 next_drive_string_16 = str16_cstring((U16 *)buffer+off);
+      off += next_drive_string_16.size+1;
+      String8 next_drive_string = str8_from_16(arena, next_drive_string_16);
+      next_drive_string = str8_chop_last_slash(next_drive_string);
+      str8_list_push(scratch.arena, &drive_strings, next_drive_string);
+    }
+    w32_iter->drive_strings = str8_array_from_list(arena, &drive_strings);
+    w32_iter->drive_strings_iter_idx = 0;
+  }
+  else
+  {
+    w32_iter->handle = FindFirstFileW((WCHAR*)path16.str, &w32_iter->find_data);
+  }
   scratch_end(scratch);
   return iter;
 }
@@ -975,55 +995,76 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
   B32 result = 0;
   OS_FileIterFlags flags = iter->flags;
   W32_FileIter *w32_iter = (W32_FileIter*)iter->memory;
-  if (!(flags & OS_FileIterFlag_Done) && w32_iter->handle != INVALID_HANDLE_VALUE)
+  switch(w32_iter->is_volume_iter)
   {
-    do
+    //- rjf: file iteration
+    default:
+    case 0:
     {
-      // check is usable
-      B32 usable_file = 1;
-      
-      WCHAR *file_name = w32_iter->find_data.cFileName;
-      DWORD attributes = w32_iter->find_data.dwFileAttributes;
-      if (file_name[0] == '.'){
-        if (flags & OS_FileIterFlag_SkipHiddenFiles){
-          usable_file = 0;
-        }
-        else if (file_name[1] == 0){
-          usable_file = 0;
-        }
-        else if (file_name[1] == '.' && file_name[2] == 0){
-          usable_file = 0;
-        }
+      if (!(flags & OS_FileIterFlag_Done) && w32_iter->handle != INVALID_HANDLE_VALUE)
+      {
+        do
+        {
+          // check is usable
+          B32 usable_file = 1;
+          
+          WCHAR *file_name = w32_iter->find_data.cFileName;
+          DWORD attributes = w32_iter->find_data.dwFileAttributes;
+          if (file_name[0] == '.'){
+            if (flags & OS_FileIterFlag_SkipHiddenFiles){
+              usable_file = 0;
+            }
+            else if (file_name[1] == 0){
+              usable_file = 0;
+            }
+            else if (file_name[1] == '.' && file_name[2] == 0){
+              usable_file = 0;
+            }
+          }
+          if (attributes & FILE_ATTRIBUTE_DIRECTORY){
+            if (flags & OS_FileIterFlag_SkipFolders){
+              usable_file = 0;
+            }
+          }
+          else{
+            if (flags & OS_FileIterFlag_SkipFiles){
+              usable_file = 0;
+            }
+          }
+          
+          // emit if usable
+          if (usable_file){
+            info_out->name = str8_from_16(arena, str16_cstring((U16*)file_name));
+            info_out->props.size = (U64)w32_iter->find_data.nFileSizeLow | (((U64)w32_iter->find_data.nFileSizeHigh)<<32);
+            w32_dense_time_from_file_time(&info_out->props.created,  &w32_iter->find_data.ftCreationTime);
+            w32_dense_time_from_file_time(&info_out->props.modified, &w32_iter->find_data.ftLastWriteTime);
+            info_out->props.flags = w32_file_property_flags_from_dwFileAttributes(attributes);
+            result = 1;
+            if (!FindNextFileW(w32_iter->handle, &w32_iter->find_data)){
+              iter->flags |= OS_FileIterFlag_Done;
+            }
+            break;
+          }
+        }while(FindNextFileW(w32_iter->handle, &w32_iter->find_data));
       }
-      if (attributes & FILE_ATTRIBUTE_DIRECTORY){
-        if (flags & OS_FileIterFlag_SkipFolders){
-          usable_file = 0;
-        }
-      }
-      else{
-        if (flags & OS_FileIterFlag_SkipFiles){
-          usable_file = 0;
-        }
-      }
-      
-      // emit if usable
-      if (usable_file){
-        info_out->name = str8_from_16(arena, str16_cstring((U16*)file_name));
-        info_out->props.size = (U64)w32_iter->find_data.nFileSizeLow | (((U64)w32_iter->find_data.nFileSizeHigh)<<32);
-        w32_dense_time_from_file_time(&info_out->props.created,  &w32_iter->find_data.ftCreationTime);
-        w32_dense_time_from_file_time(&info_out->props.modified, &w32_iter->find_data.ftLastWriteTime);
-        info_out->props.flags = w32_file_property_flags_from_dwFileAttributes(attributes);
-        result = 1;
-        if (!FindNextFileW(w32_iter->handle, &w32_iter->find_data)){
-          iter->flags |= OS_FileIterFlag_Done;
-        }
-        break;
-      }
-    }while(FindNextFileW(w32_iter->handle, &w32_iter->find_data));
+    }break;
     
-    if (!result){
-      iter->flags |= OS_FileIterFlag_Done;
-    }
+    //- rjf: volume iteration
+    case 1:
+    {
+      result = w32_iter->drive_strings_iter_idx < w32_iter->drive_strings.count;
+      if(result != 0)
+      {
+        MemoryZeroStruct(info_out);
+        info_out->name = w32_iter->drive_strings.v[w32_iter->drive_strings_iter_idx];
+        info_out->props.flags |= FilePropertyFlag_IsFolder;
+        w32_iter->drive_strings_iter_idx += 1;
+      }
+    }break;
+  }
+  if(!result)
+  {
+    iter->flags |= OS_FileIterFlag_Done;
   }
   return result;
 }

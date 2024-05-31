@@ -23,6 +23,9 @@ struct W32_FileIter
 {
   HANDLE handle;
   WIN32_FIND_DATAW find_data;
+  B32 is_volume_iter;
+  String8Array drive_strings;
+  U64 drive_strings_iter_idx;
 };
 StaticAssert(sizeof(Member(OS_FileIter, memory)) >= sizeof(W32_FileIter), file_iter_memory_size);
 

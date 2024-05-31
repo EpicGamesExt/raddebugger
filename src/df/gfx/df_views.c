@@ -2811,12 +2811,9 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       if(ui_clicked(sig))
       {
         String8 new_path = str8_chop_last_slash(str8_chop_last_slash(path_query.path));
-        if(new_path.size != 0)
-        {
-          new_path = path_normalized_from_string(scratch.arena, new_path);
-          String8 new_cmd = push_str8f(scratch.arena, "%S/", new_path);
-          df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
-        }
+        new_path = path_normalized_from_string(scratch.arena, new_path);
+        String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
+        df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
       }
     }
     
@@ -2893,11 +2890,11 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       if(ui_clicked(file_sig))
       {
         String8 existing_path = str8_chop_last_slash(path_query.path);
-        String8 new_path = push_str8f(scratch.arena, "%S/%S/", existing_path, file->filename);
+        String8 new_path = push_str8f(scratch.arena, "%S%s%S/", existing_path, existing_path.size != 0 ? "/" : "", file->filename);
         new_path = path_normalized_from_string(scratch.arena, new_path);
         if(file->props.flags & FilePropertyFlag_IsFolder)
         {
-          String8 new_cmd = push_str8f(scratch.arena, "%S/", new_path);
+          String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
           df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
         }
         else

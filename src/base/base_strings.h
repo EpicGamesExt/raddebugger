@@ -63,7 +63,7 @@ struct String8List
 typedef struct String8Array String8Array;
 struct String8Array
 {
-  String8 *strings;
+  String8 *v;
   U64 count;
 };
 

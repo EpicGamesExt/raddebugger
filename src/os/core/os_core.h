@@ -34,7 +34,7 @@ typedef struct OS_FileIter OS_FileIter;
 struct OS_FileIter
 {
   OS_FileIterFlags flags;
-  U8 memory[600];
+  U8 memory[800];
 };
 
 typedef struct OS_FileInfo OS_FileInfo;

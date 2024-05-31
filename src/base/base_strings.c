@@ -946,11 +946,11 @@ str8_array_from_list(Arena *arena, String8List *list)
 {
   String8Array array;
   array.count   = list->node_count;
-  array.strings = push_array_no_zero(arena, String8, array.count);
+  array.v = push_array_no_zero(arena, String8, array.count);
   U64 idx = 0;
   for(String8Node *n = list->first; n != 0; n = n->next, idx += 1)
   {
-    array.strings[idx] = n->string;
+    array.v[idx] = n->string;
   }
   return array;
 }
@@ -960,7 +960,7 @@ str8_array_reserve(Arena *arena, U64 count)
 {
   String8Array arr;
   arr.count = 0;
-  arr.strings = push_array(arena, String8, count);
+  arr.v = push_array(arena, String8, count);
   return arr;
 }
 
