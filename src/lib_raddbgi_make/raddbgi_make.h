@@ -1410,6 +1410,6 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_idx_run_section_list_from_idx_run_map(RD
 ////////////////////////////////
 //~ rjf: [Serializing] Baked Data Section List -> Serialized Binary Strings
 
-RDI_PROC RDIM_String8List rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeSectionList *sections);
+RDI_PROC RDIM_String8List rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeSectionList *sections, RDI_U64 time_stamp);
 
 #endif // RADDBGI_MAKE_H

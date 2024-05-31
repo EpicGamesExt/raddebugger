@@ -241,3 +241,65 @@ os_string_from_guid(Arena *arena, OS_Guid guid)
                               guid.data4[7]);
   return result;
 }
+
+internal DateTime
+os_date_time_from_unix_time_stamp(OS_UnixTime time_stamp)
+{
+  DateTime date = {0};
+  date.micro_sec = 0;
+  date.msec      = 0;
+  date.sec       = 0;
+  date.min       = 0;
+  date.hour      = 0;
+  date.day       = 0;
+  date.month     = 0;
+  date.year      = 1970;
+
+  U64 day_counter = time_stamp / 86400;
+  for(;;)
+  {
+    for(date.month = 0; date.month < 12; date.month += 1)
+    {
+      U64 c = 0;
+      switch(date.month)
+      {
+      case 0: c = 31; break;  // January
+      case 1: // February
+      {
+        if((date.year % 4 == 0) && ((date.year % 100) != 0 || (date.year % 400) == 0))
+        {
+          c = 29;
+        }
+        else
+        {
+          c = 28;
+        }
+      }break;
+      case 2:  c = 31; break; // March
+      case 3:  c = 30; break; // April
+      case 4:  c = 31; break; // May
+      case 5:  c = 30; break; // June
+      case 6:  c = 31; break; // July
+      case 7:  c = 31; break; // August
+      case 8:  c = 30; break; // September
+      case 9:  c = 31; break; // October
+      case 10: c = 30; break; // Novemeber
+      case 11: c = 31; break; // December
+      }
+      if(day_counter < c)
+      {
+        goto exit;
+      }
+      day_counter -= c;
+    }
+    ++date.year;
+  }
+  exit:;
+
+  date.day  = day_counter + 1;
+  date.hour = (U32)(time_stamp / 3600) % 24;
+  date.min  = (U32)(time_stamp / 60) % 60;
+  date.sec  = (U32)time_stamp % 60;
+
+  return date;
+}

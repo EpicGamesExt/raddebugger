@@ -295,6 +295,7 @@ internal DateTime    os_universal_time_from_local_time(DateTime *local_time);
 internal DateTime    os_local_time_from_universal_time(DateTime *universal_time);
 internal U64         os_now_microseconds(void);
 internal void        os_sleep_milliseconds(U32 msec);
+internal OS_UnixTime os_get_process_start_time(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Child Processes (Implemented Per-OS)
@@ -365,6 +366,10 @@ internal void os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *f
 
 internal OS_Guid os_make_guid(void);
 internal String8 os_string_from_guid(Arena *arena, OS_Guid guid);
+
+////////////////////////////////
+
+internal DateTime os_date_time_from_unix_time_stamp(OS_UnixTime time_stamp);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Entry Points (Implemented Per-OS)

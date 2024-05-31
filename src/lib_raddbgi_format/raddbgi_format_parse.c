@@ -18,6 +18,8 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out_rdi)
   // parse data sections
   RDI_DataSection *sections      = 0;
   RDI_U64          section_count = 0;
+  RDI_U32          version       = 0;
+  RDI_U64          time_stamp    = 0;
   do
   {
     RDI_Header *header = (RDI_Header *)data;
@@ -39,6 +41,10 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out_rdi)
       parse_status = RDI_ParseStatus_UnsupportedVersionNumber;
       break;
     }
+
+    // copy out version # and time stamp
+    version    = header->encoding_version;
+    time_stamp = header->time_stamp;
 
     // error check data section array
     RDI_U64 opl = (RDI_U64)header->data_section_off + (RDI_U64)header->data_section_count*sizeof(RDI_DataSection);
@@ -83,6 +89,8 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out_rdi)
 
     out_rdi->raw_data          = data;
     out_rdi->raw_data_size     = size;
+    out_rdi->version           = version;
+    out_rdi->time_stamp        = time_stamp;
     out_rdi->sections          = sections;
     out_rdi->section_count     = section_count;
     out_rdi->top_level_info    = (RDI_TopLevelInfo *)  rdi_extract_section_data(data, size, out_rdi->sections_by_tag, RDI_DataSectionTag_TopLevelInfo   , sizeof(out_rdi->top_level_info[0])   , &top_level_count                  );

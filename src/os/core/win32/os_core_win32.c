@@ -81,6 +81,18 @@ w32_file_properties_from_attributes(FileProperties *properties, WIN32_FILE_ATTRI
 
 //- rjf: time
 
+internal OS_UnixTime
+w32_unix_time_from_file_time(FILETIME file_time)
+{
+  U64 win32_time = ((U64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
+  U64 unix_time64 = ((win32_time - 0x19DB1DED53E8000ULL) / 10000000);
+  
+  Assert(unix_time64 <= OS_UNIX_TIME_MAX);
+  OS_UnixTime unix_time32 = (OS_UnixTime)unix_time64;
+
+  return unix_time32;
+}
+
 internal void
 w32_date_time_from_system_time(DateTime *out, SYSTEMTIME *in){
   out->year    = in->wYear;
@@ -1114,14 +1126,7 @@ os_now_unix(void)
 {
   FILETIME file_time;
   GetSystemTimeAsFileTime(&file_time);
-  
-  U64 win32_time = ((U64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
-  U64 unix_time64 = ((win32_time - 0x19DB1DED53E8000ULL) / 10000000);
-  
-  Assert(unix_time64 <= OS_UNIX_TIME_MAX);
-  OS_UnixTime unix_time32 = (OS_UnixTime)unix_time64;
-  
-  return unix_time32;
+  return w32_unix_time_from_file_time(file_time);
 }
 
 internal DateTime
@@ -1174,6 +1179,20 @@ os_now_microseconds(void){
 internal void
 os_sleep_milliseconds(U32 msec){
   Sleep(msec);
+}
+
+internal OS_UnixTime
+os_get_process_start_time(void)
+{
+  HANDLE handle = GetCurrentProcess();
+  FILETIME start_time = {0};
+  FILETIME exit_time;
+  FILETIME kernel_time;
+  FILETIME user_time;
+  if (GetProcessTimes(handle, &start_time, &exit_time, &kernel_time, &user_time)) {
+    return w32_unix_time_from_file_time(start_time);
+  }
+  return 0;
 }
 
 ////////////////////////////////

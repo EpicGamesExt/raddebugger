@@ -144,6 +144,17 @@ entry_point(CmdLine *cmd_line)
   String8List dump = {0};
   if(parse_status == RDI_ParseStatus_Good)
   {
+    {
+      DateTime creation_date        = os_date_time_from_unix_time_stamp(raddbg->time_stamp);
+      DateTime creation_date_local  = os_local_time_from_universal_time(&creation_date);
+      String8  creation_date_string = push_date_time_string(arena, &creation_date_local);
+
+      str8_list_pushf(arena, &dump, "# HEADER:\n");
+      str8_list_pushf(arena, &dump, "%.*sversion=%u\n"          , 1, rdi_stringize_spaces, raddbg->version);
+      str8_list_pushf(arena, &dump, "%.*stime_stamp=%llu (%S)\n", 1, rdi_stringize_spaces, raddbg->time_stamp, creation_date_string);
+      str8_list_pushf(arena, &dump, "\n");
+    }
+
     //- rjf: DATA SECTIONS
     if(dump_flags & DumpFlag_DataSections)
     {

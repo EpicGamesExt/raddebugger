@@ -1376,6 +1376,13 @@ os_sleep_milliseconds(U32 msec){
   usleep(msec*Thousand(1));
 }
 
+internal OS_UnixTime
+os_get_process_start_time(void)
+{
+  NotImplemented;
+  return 0;
+}
+
 ////////////////////////////////
 //~ rjf: @os_hooks Child Processes (Implemented Per-OS)
 

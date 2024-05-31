@@ -247,6 +247,7 @@ typedef struct RDI_Header{
   // identification
   RDI_U64 magic;
   RDI_U32 encoding_version;
+  RDI_U64 time_stamp;
   
   // data sections
   RDI_U32 data_section_off;

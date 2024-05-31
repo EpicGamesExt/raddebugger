@@ -8,6 +8,8 @@ typedef struct RDI_Parsed
 {
   RDI_U8 *raw_data;
   RDI_U64 raw_data_size;
+  RDI_U32 version;
+  RDI_U64 time_stamp;
 
   // (any of these may be empty and null even in a successful parse)
   RDI_DataSection     *sections;

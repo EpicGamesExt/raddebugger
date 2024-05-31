@@ -66,6 +66,7 @@ internal FilePropertyFlags w32_file_property_flags_from_dwFileAttributes(DWORD d
 internal void w32_file_properties_from_attributes(FileProperties *properties, WIN32_FILE_ATTRIBUTE_DATA *attributes);
 
 //- rjf: time
+internal OS_UnixTime w32_unix_time_from_file_time(FILETIME file_time);
 internal void w32_date_time_from_system_time(DateTime *out, SYSTEMTIME *in);
 internal void w32_system_time_from_date_time(SYSTEMTIME *out, DateTime *in);
 internal void w32_dense_time_from_file_time(DenseTime *out, FILETIME *in);
