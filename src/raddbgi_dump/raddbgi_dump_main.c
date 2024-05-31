@@ -175,13 +175,7 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_BinarySections)
     {
       str8_list_pushf(arena, &dump, "# BINARY SECTIONS:\n");
-      RDI_BinarySection *ptr = raddbg->binary_sections;
-      for(U32 i = 0; i < raddbg->binary_sections_count; i += 1, ptr += 1)
-      {
-        str8_list_pushf(arena, &dump, " section[%u]:\n", i);
-        rdi_stringize_binary_section(arena, &dump, raddbg, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
-      }
+      rdi_stringize_binary_sections(arena, &dump, raddbg, 1);
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
     

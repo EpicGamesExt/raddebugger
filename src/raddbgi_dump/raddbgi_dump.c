@@ -106,21 +106,36 @@ rdi_string_from_checksum_kind(RDI_ChecksumKind kind)
 ////////////////////////////////
 //~ rjf: RADDBGI Flags -> String Functions
 
-internal void
-rdi_stringize_binary_section_flags(Arena *arena, String8List *out,
-                                   RDI_BinarySectionFlags flags){
-  if (flags == 0){
-    str8_list_push(arena, out, str8_lit("0"));
+internal String8
+rdi_string_from_binary_section_flags(Arena *arena, RDI_BinarySectionFlags flags)
+{
+  String8 string;
+  if(flags != 0)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    String8List list = {0};
+    if(flags & RDI_BinarySectionFlag_Read)
+    {
+      str8_list_pushf(scratch.arena, &list, "Read");
+    }
+    if(flags & RDI_BinarySectionFlag_Write)
+    {
+      str8_list_pushf(scratch.arena, &list, "Write");
+    }
+    if(flags & RDI_BinarySectionFlag_Execute)
+    {
+      str8_list_pushf(scratch.arena, &list, "Execute");
+    }
+    StringJoin join = {0};
+    join.sep = str8_lit(",");
+    string = str8_list_join(arena, &list, &join);
+    scratch_end(scratch);
   }
-  if (flags & RDI_BinarySectionFlag_Read){
-    str8_list_push(arena, out, str8_lit("Read "));
+  else
+  {
+    string = str8_lit("Null");
   }
-  if (flags & RDI_BinarySectionFlag_Write){
-    str8_list_push(arena, out, str8_lit("Write "));
-  }
-  if (flags & RDI_BinarySectionFlag_Execute){
-    str8_list_push(arena, out, str8_lit("Execute "));
-  }
+  return string;
 }
 
 internal void
@@ -267,25 +282,30 @@ rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                             RDI_BinarySection *bin_section, U32 indent_level){
-  String8 name = {0};
-  name.str = rdi_string_from_idx(parsed, bin_section->name_string_idx, &name.size);
-  str8_list_pushf(arena, out, "%.*sname='%.*s'\n",
-                  indent_level, rdi_stringize_spaces, str8_varg(name));
-  
-  str8_list_pushf(arena, out, "%.*sflags=", indent_level, rdi_stringize_spaces);
-  rdi_stringize_binary_section_flags(arena, out, bin_section->flags);
-  str8_list_pushf(arena, out, "\n");
-  
-  str8_list_pushf(arena, out, "%.*svoff_first=0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->voff_first);
-  str8_list_pushf(arena, out, "%.*svoff_opl  =0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->voff_opl);
-  str8_list_pushf(arena, out, "%.*sfoff_first=0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->foff_first);
-  str8_list_pushf(arena, out, "%.*sfoff_opl  =0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->foff_opl);
+rdi_stringize_binary_sections(Arena *arena, String8List *out, RDI_Parsed *rdi, U32 indent_level)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  str8_list_pushf(arena, out, "%.*s%-3s %-8s %-8s %-8s %-8s %-8s %-8s\n",
+                  indent_level, rdi_stringize_spaces, "No.", "VirtOff", "VirtSize", "FileOff", "FileSize", "Name", "Flags");
+  for(U64 sect_idx = 0; sect_idx < rdi->binary_sections_count; sect_idx += 1)
+  {
+    Temp temp = temp_begin(scratch.arena);
+
+    RDI_BinarySection *sect = &rdi->binary_sections[sect_idx];
+    RDI_U64 virt_size = sect->voff_opl - sect->voff_first;
+    RDI_U64 file_size = sect->foff_opl - sect->foff_first;
+    String8 flags = rdi_string_from_binary_section_flags(temp.arena, sect->flags);
+    String8 name = {0};
+    name.str = rdi_string_from_idx(rdi, sect->name_string_idx, &name.size);
+
+    str8_list_pushf(arena, out, "%.*s%3llx %08llx %08llx %08llx %08llx %-8.*s %.*s\n",
+                   indent_level, rdi_stringize_spaces, sect_idx, sect->voff_first, virt_size, sect->foff_first, file_size, str8_varg(name), str8_varg(flags));
+    
+    temp_end(temp);
+  }
+
+  scratch_end(scratch);
 }
 
 internal void
