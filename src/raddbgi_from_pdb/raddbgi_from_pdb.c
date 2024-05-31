@@ -5126,10 +5126,10 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     String8 lines_data      = str8_list_join(arena, &lines,      0);
     String8 cols_data       = str8_list_join(arena, &cols,       0);
 
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, line_infos_data.str, line_infos_data.size, RDI_DataSectionTag_LineInfo,        0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, voffs_data.str,      voffs_data.size,      RDI_DataSectionTag_LineInfoVoffs,   0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, lines_data.str,      lines_data.size,      RDI_DataSectionTag_LineInfoData,    0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, cols_data.str,       cols_data.size,       RDI_DataSectionTag_LineInfoColumns, 0);
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, line_infos_data.str, line_infos_data.size, RDI_DataSectionTag_LineInfo       );
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, voffs_data.str,      voffs_data.size,      RDI_DataSectionTag_LineInfoVoffs  );
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, lines_data.str,      lines_data.size,      RDI_DataSectionTag_LineInfoData   );
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, cols_data.str,       cols_data.size,       RDI_DataSectionTag_LineInfoColumns);
   }
   
   //- rjf: fill & return
@@ -5186,7 +5186,6 @@ p2r_compress(Arena *arena, P2R_Bake2Serialize *in)
       dst->encoded_size  = encoded_size;
       dst->unpacked_size = unpacked_size;
       dst->tag           = src->tag;
-      dst->tag_idx       = src->tag_idx;
     }
   }
   P2R_Bake2Serialize *out = push_array(arena, P2R_Bake2Serialize, 1);

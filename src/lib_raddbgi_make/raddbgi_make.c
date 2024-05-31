@@ -1159,7 +1159,7 @@ rdim_bake_section_count_from_params(RDIM_BakeParams *params)
 }
 
 RDI_PROC RDI_U64
-rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSectionTag tag, RDI_U64 idx)
+rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSectionTag tag)
 {
   RDI_U64 result = 0;
   if(tag < RDI_DataSectionTag_PRIMARY_COUNT)
@@ -1848,7 +1848,7 @@ rdim_bake_section_list_push(RDIM_Arena *arena, RDIM_BakeSectionList *list)
 }
 
 RDI_PROC RDIM_BakeSection *
-rdim_bake_section_list_push_new_unpacked(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_DataSectionTag tag, RDI_U64 tag_idx)
+rdim_bake_section_list_push_new_unpacked(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_DataSectionTag tag)
 {
   RDIM_BakeSection *section = rdim_bake_section_list_push(arena, list);
   section->data = data;
@@ -1856,7 +1856,6 @@ rdim_bake_section_list_push_new_unpacked(RDIM_Arena *arena, RDIM_BakeSectionList
   section->encoded_size = size;
   section->unpacked_size = size;
   section->tag = tag;
-  section->tag_idx = tag_idx;
   return section;
 }
 
@@ -2257,7 +2256,7 @@ rdim_bake_top_level_info_section_list_from_params(RDIM_Arena *arena, RDIM_BakeSt
   dst_tli->exe_name_string_idx = rdim_bake_idx_from_string(strings, src_tli->exe_name);
   dst_tli->exe_hash            = src_tli->exe_hash;
   dst_tli->voff_max            = src_tli->voff_max;
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_tli, sizeof(*dst_tli), RDI_DataSectionTag_TopLevelInfo, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_tli, sizeof(*dst_tli), RDI_DataSectionTag_TopLevelInfo);
   return sections;
 }
 
@@ -2281,7 +2280,7 @@ rdim_bake_binary_section_section_list_from_params(RDIM_Arena *arena, RDIM_BakeSt
     dst->foff_first      = src->foff_first;
     dst->foff_opl        = src->foff_opl;
   }
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_base, sizeof(*dst_base)*dst_idx, RDI_DataSectionTag_BinarySections, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_base, sizeof(*dst_base)*dst_idx, RDI_DataSectionTag_BinarySections);
   return sections;
 }
 
@@ -2495,7 +2494,7 @@ rdim_bake_unit_top_level_section_list(RDIM_Arena *arena, RDIM_BakeStringMapTight
       dst->line_info_idx            = (RDI_U32)rdim_idx_from_line_sequence_list(src->main_line_table); // @u64_to_u32
     }
   }
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_base, sizeof(*dst_base)*dst_idx, RDI_DataSectionTag_Units, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_base, sizeof(*dst_base)*dst_idx, RDI_DataSectionTag_Units);
   RDIM_ProfEnd();
   return sections;
 }
@@ -2571,7 +2570,7 @@ rdim_bake_unit_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams 
   //- rjf: build section
   RDIM_BakeSectionList sections = {0};
   RDI_U64 unit_vmap_size = sizeof(unit_vmap.vmap[0])*(unit_vmap.count+1);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, unit_vmap.vmap, unit_vmap_size, RDI_DataSectionTag_UnitVmap, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, unit_vmap.vmap, unit_vmap_size, RDI_DataSectionTag_UnitVmap);
   return sections;
 }
 
@@ -2638,7 +2637,7 @@ rdim_bake_checksums_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params,
 
   // build section
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, raw_checksums, raw_checksums_size, RDI_DataSectionTag_Checksums, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, raw_checksums, raw_checksums_size, RDI_DataSectionTag_Checksums);
   return sections;
 }
 
@@ -2858,10 +2857,10 @@ rdim_bake_line_number_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParam
 
   RDIM_BakeSectionList sections = {0};
   RDI_U64 line_number_maps_size = sizeof(line_number_maps[0]) * line_number_map_count; 
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, line_number_maps, line_number_maps_size, RDI_DataSectionTag_LineNumberMaps, 0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, line_data.str,    line_data.size,        RDI_DataSectionTag_LineMapNumbers, 0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, range_data.str,   range_data.size,       RDI_DataSectionTag_LineMapRanges,  0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, voff_data.str,    voff_data.size,        RDI_DataSectionTag_LineMapVoffs,   0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, line_number_maps, line_number_maps_size, RDI_DataSectionTag_LineNumberMaps);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, line_data.str,    line_data.size,        RDI_DataSectionTag_LineMapNumbers);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, range_data.str,   range_data.size,       RDI_DataSectionTag_LineMapRanges );
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, voff_data.str,    voff_data.size,        RDI_DataSectionTag_LineMapVoffs  );
 
   *line_number_map_idxs_out = line_number_map_idxs;
 
@@ -2906,7 +2905,7 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena              *arena,
   //- rjf: build section for all source files
   //
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_files, sizeof(RDI_SourceFile)*dst_files_count, RDI_DataSectionTag_SourceFiles, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_files, sizeof(RDI_SourceFile)*dst_files_count, RDI_DataSectionTag_SourceFiles);
   return sections;
 }
 
@@ -2981,7 +2980,7 @@ rdim_bake_type_node_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringM
   
   //- rjf: build sections
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, type_nodes, sizeof(RDI_TypeNode)*(params->types.total_count+1), RDI_DataSectionTag_TypeNodes, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, type_nodes, sizeof(RDI_TypeNode)*(params->types.total_count+1), RDI_DataSectionTag_TypeNodes);
   return sections;
 }
 
@@ -3049,9 +3048,9 @@ rdim_bake_udt_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTigh
   
   //- rjf: build sections
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, udts,          sizeof(RDI_UDT)        * (params->udts.total_count+1),          RDI_DataSectionTag_UDTs, 0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, members   ,    sizeof(RDI_Member)     * (params->udts.total_member_count+1),   RDI_DataSectionTag_Members, 0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, enum_members,  sizeof(RDI_EnumMember) * (params->udts.total_enum_val_count+1), RDI_DataSectionTag_EnumMembers, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, udts,          sizeof(RDI_UDT)        * (params->udts.total_count+1),          RDI_DataSectionTag_UDTs       );
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, members   ,    sizeof(RDI_Member)     * (params->udts.total_member_count+1),   RDI_DataSectionTag_Members    );
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, enum_members,  sizeof(RDI_EnumMember) * (params->udts.total_enum_val_count+1), RDI_DataSectionTag_EnumMembers);
   return sections;
 }
 
@@ -3093,7 +3092,7 @@ rdim_bake_global_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeS
   
   //- rjf: build sections
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, global_variables, sizeof(RDI_GlobalVariable)*(params->global_variables.total_count+1), RDI_DataSectionTag_GlobalVariables, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, global_variables, sizeof(RDI_GlobalVariable)*(params->global_variables.total_count+1), RDI_DataSectionTag_GlobalVariables);
   return sections;
 }
 
@@ -3173,7 +3172,7 @@ rdim_bake_global_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParam
   
   //- rjf: build sections
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, global_vmap.vmap, sizeof(RDI_VMapEntry)*(global_vmap.count+1), RDI_DataSectionTag_GlobalVmap, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, global_vmap.vmap, sizeof(RDI_VMapEntry)*(global_vmap.count+1), RDI_DataSectionTag_GlobalVmap);
   return sections;
 }
 
@@ -3215,7 +3214,7 @@ rdim_bake_thread_variable_section_list_from_params(RDIM_Arena *arena, RDIM_BakeS
   
   //- rjf: build sections
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, thread_variables, sizeof(RDI_ThreadVariable)*(params->thread_variables.total_count+1), RDI_DataSectionTag_ThreadVariables, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, thread_variables, sizeof(RDI_ThreadVariable)*(params->thread_variables.total_count+1), RDI_DataSectionTag_ThreadVariables);
   return sections;
 }
 
@@ -3258,7 +3257,7 @@ rdim_bake_procedure_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringM
   
   //- rjf: build sections
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, procedures, sizeof(RDI_Procedure)*(params->procedures.total_count+1), RDI_DataSectionTag_Procedures, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, procedures, sizeof(RDI_Procedure)*(params->procedures.total_count+1), RDI_DataSectionTag_Procedures);
   return sections;
 }
 
@@ -3426,11 +3425,11 @@ rdim_bake_scope_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTi
   RDIM_BakeSectionList sections = {0};
   RDIM_ProfScope("push all symbol info sections")
   {
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, scopes,                   sizeof(RDI_Scope)            * (params->scopes.total_count+1),      RDI_DataSectionTag_Scopes, 0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, scope_voffs,              sizeof(RDI_U64)              * (params->scopes.scope_voff_count+1), RDI_DataSectionTag_ScopeVoffData, 0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, locals,                   sizeof(RDI_Local)            * (params->scopes.local_count+1),      RDI_DataSectionTag_Locals, 0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, location_blocks,          sizeof(RDI_LocationBlock)    * (params->scopes.location_count+1),   RDI_DataSectionTag_LocationBlocks, 0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, location_data_blob.str,   location_data_blob.size,                                            RDI_DataSectionTag_LocationData, 0);
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, scopes,                   sizeof(RDI_Scope)            * (params->scopes.total_count+1),      RDI_DataSectionTag_Scopes        );
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, scope_voffs,              sizeof(RDI_U64)              * (params->scopes.scope_voff_count+1), RDI_DataSectionTag_ScopeVoffData );
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, locals,                   sizeof(RDI_Local)            * (params->scopes.local_count+1),      RDI_DataSectionTag_Locals        );
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, location_blocks,          sizeof(RDI_LocationBlock)    * (params->scopes.location_count+1),   RDI_DataSectionTag_LocationBlocks);
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, location_data_blob.str,   location_data_blob.size,                                            RDI_DataSectionTag_LocationData  );
   }
   rdim_scratch_end(scratch);
   return sections;
@@ -3488,7 +3487,7 @@ rdim_bake_scope_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams
   
   //- rjf: build sections
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, scope_vmap.vmap, sizeof(RDI_VMapEntry)*(scope_vmap.count+1), RDI_DataSectionTag_ScopeVmap, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, scope_vmap.vmap, sizeof(RDI_VMapEntry)*(scope_vmap.count+1), RDI_DataSectionTag_ScopeVmap);
   return sections;
 }
 
@@ -3520,7 +3519,7 @@ rdim_bake_inline_sites_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStri
 
   // build section
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, inline_sites, sizeof(inline_sites[0]) * inline_site_count, RDI_DataSectionTag_InlineSites, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, inline_sites, sizeof(inline_sites[0]) * inline_site_count, RDI_DataSectionTag_InlineSites);
   return sections;
 }
 
@@ -3666,9 +3665,9 @@ rdim_bake_name_maps_sections(RDIM_Arena *arena, RDIM_NameMap name_maps[RDI_NameM
   RDIM_String8 baked_nodes     = rdim_str8_list_join(arena, &nodes_list    , rdim_str8(0,0));
   
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, baked_name_maps.str, baked_name_maps.size, RDI_DataSectionTag_NameMaps       , 0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, baked_buckets.str  , baked_buckets.size  , RDI_DataSectionTag_NameMapsBuckets, 0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, baked_nodes.str    , baked_nodes.size    , RDI_DataSectionTag_NameMapsNodes  , 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, baked_name_maps.str, baked_name_maps.size, RDI_DataSectionTag_NameMaps       );
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, baked_buckets.str  , baked_buckets.size  , RDI_DataSectionTag_NameMapsBuckets);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, baked_nodes.str    , baked_nodes.size    , RDI_DataSectionTag_NameMapsNodes  );
 
   rdim_scratch_end(scratch);
   return sections;
@@ -3705,7 +3704,7 @@ rdim_bake_file_path_section_list_from_path_tree(RDIM_Arena *arena, RDIM_BakeStri
     }
   }
   RDIM_BakeSectionList sections = {0};
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_nodes, sizeof(RDI_FilePathNode)*dst_nodes_count, RDI_DataSectionTag_FilePathNodes, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_nodes, sizeof(RDI_FilePathNode)*dst_nodes_count, RDI_DataSectionTag_FilePathNodes);
   return sections;
 }
 
@@ -3751,8 +3750,8 @@ rdim_bake_string_section_list_from_string_map(RDIM_Arena *arena, RDIM_BakeString
       }
     }
   }
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, str_offs, sizeof(RDI_U32)*(strings->total_count+1), RDI_DataSectionTag_StringTable, 0);
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, buf, off_cursor, RDI_DataSectionTag_StringData, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, str_offs, sizeof(RDI_U32)*(strings->total_count+1), RDI_DataSectionTag_StringTable);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, buf, off_cursor, RDI_DataSectionTag_StringData);
   return sections;
 }
 
@@ -3774,7 +3773,7 @@ rdim_bake_idx_run_section_list_from_idx_run_map(RDIM_Arena *arena, RDIM_BakeIdxR
       out_ptr += node->count;
     }
   }
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, idx_data, sizeof(RDI_U32)*idx_runs->idx_count, RDI_DataSectionTag_IndexRuns, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, idx_data, sizeof(RDI_U32)*idx_runs->idx_count, RDI_DataSectionTag_IndexRuns);
   return sections;
 }
 
@@ -3797,7 +3796,7 @@ rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_Ba
     for(RDIM_BakeSectionNode *n = sections->first; n != 0; n = n->next)
     {
       RDIM_BakeSection *bake_section = &n->v;
-      RDI_U64 idx = rdim_bake_section_idx_from_params_tag_idx(params, bake_section->tag, bake_section->tag_idx);
+      RDI_U64 idx = rdim_bake_section_idx_from_params_tag_idx(params, bake_section->tag);
       if(0 <= idx && idx < section_count)
       {
         if(bake_sections[idx] != 0)
