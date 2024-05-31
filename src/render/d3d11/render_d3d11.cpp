@@ -1236,64 +1236,29 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
           // rjf: set up uniforms
           R_D3D11_Uniforms_Blur uniforms = { 0 };
           {
-            F32 weights[ArrayCount(uniforms.kernel)*2] = {0};
-            
-            F32 blur_size = Min(params->blur_size, ArrayCount(weights));
-            U64 blur_count = (U64)round_f32(blur_size);
-            
-            F32 stdev = (blur_size-1.f)/2.f;
-            F32 one_over_root_2pi_stdev2 = 1/sqrt_f32(2*pi32*stdev*stdev);
-            F32 euler32 = 2.718281828459045f;
-            
-            weights[0] = 1.f;
-            if(stdev > 0.f)
+            R_Blur_Kernel kernel = {0};
+            r_fill_blur_kernel(params->blur_size, &kernel);
+
+            // each kernel element is float2(weight, offset)
+            // weights & offsets are adjusted for bilinear sampling
+            // zw elements are not used, a bit of waste but it allows for simpler shader code
+            for(U64 i = 0; i < ArrayCount(uniforms.kernel); i++)
             {
-              for(U64 idx = 0; idx < blur_count; idx += 1)
-              {
-                F32 kernel_x = (F32)idx;
-                weights[idx] = one_over_root_2pi_stdev2*pow_f32(euler32, -kernel_x*kernel_x/(2.f*stdev*stdev)); 
-              }
+              uniforms.kernel[i] = v4f32(kernel.weights[i].x, kernel.weights[i].y, 0, 0);
             }
-            if(weights[0] > 1.f)
-            {
-              MemoryZeroArray(weights);
-              weights[0] = 1.f;
-            }
-            else
-            {
-              // prepare weights & offsets for bilinear lookup
-              // blur filter wants to calculate w0*pixel[pos] + w1*pixel[pos+1] + ...
-              // with bilinear filter we can do this calulation by doing only w*sample(pos+t) = w*((1-t)*pixel[pos] + t*pixel[pos+1])
-              // we can see w0=w*(1-t) and w1=w*t
-              // thus w=w0+w1 and t=w1/w
-              for (U64 idx = 1; idx < blur_count; idx += 2)
-              {
-                F32 w0 = weights[idx + 0];
-                F32 w1 = weights[idx + 1];
-                F32 w = w0 + w1;
-                F32 t = w1 / w;
-                
-                // each kernel element is float2(weight, offset)
-                // weights & offsets are adjusted for bilinear sampling
-                // zw elements are not used, a bit of waste but it allows for simpler shader code
-                uniforms.kernel[(idx+1)/2] = v4f32(w, (F32)idx + t, 0, 0);
-              }
-            }
-            uniforms.kernel[0].x = weights[0];
-            
             // technically we need just direction be different
             // but there are 256 bytes of usable space anyway for each constant buffer chunk
             
             uniforms.passes[Axis2_X].viewport_size = v2f32(resolution.x, resolution.y);
             uniforms.passes[Axis2_X].rect          = params->rect;
             uniforms.passes[Axis2_X].direction     = v2f32(1.f / resolution.x, 0);
-            uniforms.passes[Axis2_X].blur_count    = 1 + blur_count / 2; // 2x smaller because of bilinear sampling
+            uniforms.passes[Axis2_X].blur_count    = 1 + kernel.blur_count / 2; // 2x smaller because of bilinear sampling
             MemoryCopyArray(uniforms.passes[Axis2_X].corner_radii.v, params->corner_radii);
             
             uniforms.passes[Axis2_Y].viewport_size = v2f32(resolution.x, resolution.y);
             uniforms.passes[Axis2_Y].rect          = params->rect;
             uniforms.passes[Axis2_Y].direction     = v2f32(0, 1.f / resolution.y);
-            uniforms.passes[Axis2_Y].blur_count    = 1 + blur_count / 2; // 2x smaller because of bilinear sampling
+            uniforms.passes[Axis2_Y].blur_count    = 1 + kernel.blur_count / 2; // 2x smaller because of bilinear sampling
             MemoryCopyArray(uniforms.passes[Axis2_Y].corner_radii.v, params->corner_radii);
             
             D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};

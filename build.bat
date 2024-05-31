@@ -33,6 +33,7 @@ if "%debug%"=="1"   set release=0 && echo [debug mode]
 if "%release%"=="1" set debug=0 && echo [release mode]
 if "%msvc%"=="1"    set clang=0 && echo [msvc compile]
 if "%clang%"=="1"   set msvc=0 && echo [clang compile]
+if "%opengl%"=="1"  echo [opengl backend]
 if "%~1"==""        echo [default mode, assuming `raddbg` build] && set raddbg=1
 
 :: --- Unpack Command Line Build Arguments ------------------------------------
@@ -86,6 +87,9 @@ popd
 
 :: --- Get Current Git Commit Id ----------------------------------------------
 for /f %%i in ('call git describe --always --dirty') do set compile=%compile% -DBUILD_GIT_HASH=\"%%i\"
+
+:: --- Set rendering backend -----------------------------------------------
+if "%opengl%"=="1" set compile=%compile% -DR_BACKEND=2 -DBUILD_RENDERING_BACKEND=\"OpenGL\"
 
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]
