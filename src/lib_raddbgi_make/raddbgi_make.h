@@ -1266,12 +1266,6 @@ RDI_PROC RDIM_Location *rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg
 RDI_PROC void rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location);
 
 ////////////////////////////////
-//~ rjf: [Baking Helpers] Baked File Layout Calculations
-
-RDI_PROC RDI_U64 rdim_bake_section_count_from_params(RDIM_BakeParams *params);
-RDI_PROC RDI_U64 rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSectionTag tag);
-
-////////////////////////////////
 //~ rjf: [Baking Helpers] Baked VMap Building
 
 RDI_PROC RDIM_BakeVMap rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count);

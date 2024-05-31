@@ -1146,30 +1146,6 @@ rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM
 }
 
 ////////////////////////////////
-//~ rjf: [Baking Helpers] Baked File Layout Calculations
-
-RDI_PROC RDI_U64
-rdim_bake_section_count_from_params(RDIM_BakeParams *params)
-{
-  RDI_U64 section_count = 0;
-  {
-    section_count += RDI_DataSectionTag_PRIMARY_COUNT;
-  }
-  return section_count;
-}
-
-RDI_PROC RDI_U64
-rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSectionTag tag)
-{
-  RDI_U64 result = 0;
-  if(tag < RDI_DataSectionTag_PRIMARY_COUNT)
-  {
-    result = (RDI_U64)tag;
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: [Baking Helpers] Baked VMap Building
 
 RDI_PROC RDIM_BakeVMap
@@ -3789,23 +3765,22 @@ rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_Ba
     RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
     
     //- rjf: calculate total possible section count, given these params
-    RDI_U64 section_count = rdim_bake_section_count_from_params(params);
+    RDI_U64 section_count = RDI_DataSectionTag_PRIMARY_COUNT;
     
     //- rjf: make table for actually laid out sections
     RDIM_BakeSection **bake_sections = rdim_push_array(scratch.arena, RDIM_BakeSection *, section_count);
     for(RDIM_BakeSectionNode *n = sections->first; n != 0; n = n->next)
     {
       RDIM_BakeSection *bake_section = &n->v;
-      RDI_U64 idx = rdim_bake_section_idx_from_params_tag_idx(params, bake_section->tag);
-      if(0 <= idx && idx < section_count)
+      if(0 <= bake_section->tag && bake_section->tag < section_count)
       {
-        if(bake_sections[idx] != 0)
+        if(bake_sections[bake_section->tag] != 0)
         {
           // TODO(rjf): error - malformed input! we have a duplicate section.
         }
         else
         {
-          bake_sections[idx] = bake_section;
+          bake_sections[bake_section->tag] = bake_section;
         }
       }
     }
