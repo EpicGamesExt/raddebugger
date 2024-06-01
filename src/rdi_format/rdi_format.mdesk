@@ -5,7 +5,7 @@
 //~ rjf: Generated File Format
 
 @option library
-
+@gen_folder "lib"
 @h_name "rdi_format.h"
 @c_name "rdi_format.c"
 
