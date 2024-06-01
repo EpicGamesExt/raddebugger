@@ -618,7 +618,7 @@ eval_parse_type_from_text_tokens(Arena *arena, EVAL_ParseCtx *ctx, String8 text,
       if(str8_match(token_string, str8_lit("*"), 0))
       {
         token_it += 1;
-        parse.expr = eval_expr(arena, EVAL_ExprKind_Ptr, token_string.str, parse.expr, 0, 0);
+        parse.expr = eval_expr(arena, EVAL_ExprKind_Ptr, token_string.str, parse.expr, &eval_expr_nil, &eval_expr_nil);
       }
       else
       {
@@ -797,8 +797,8 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
       it = nested_parse.last_token;
       
       // rjf: build cast-to-U64*, and dereference operators
-      atom = eval_expr(arena, EVAL_ExprKind_Cast, token_string.str, eval_expr_leaf_type(arena, token_string.str, tg_cons_type_make(ctx->type_graph, TG_Kind_Ptr, tg_key_basic(TG_Kind_U64), 0)), atom, 0);
-      atom = eval_expr(arena, EVAL_ExprKind_Deref, token_string.str, atom, 0, 0);
+      atom = eval_expr(arena, EVAL_ExprKind_Cast, token_string.str, eval_expr_leaf_type(arena, token_string.str, tg_cons_type_make(ctx->type_graph, TG_Kind_Ptr, tg_key_basic(TG_Kind_U64), 0)), atom, &eval_expr_nil);
+      atom = eval_expr(arena, EVAL_ExprKind_Deref, token_string.str, atom, &eval_expr_nil, &eval_expr_nil);
       
       // rjf: expect ]
       EVAL_Token close_paren_maybe = eval_token_at_it(it, tokens);
@@ -1172,7 +1172,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
             if(atom_implicit_member_name.size != 0)
             {
               EVAL_Expr *member_expr = eval_expr_leaf_member(arena, atom_implicit_member_name.str, atom_implicit_member_name);
-              atom = eval_expr(arena, EVAL_ExprKind_MemberAccess, atom_implicit_member_name.str, atom, member_expr, 0);
+              atom = eval_expr(arena, EVAL_ExprKind_MemberAccess, atom_implicit_member_name.str, atom, member_expr, &eval_expr_nil);
             }
           }
           
@@ -1283,7 +1283,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
       if(good_member_name)
       {
         EVAL_Expr *member_expr = eval_expr_leaf_member(arena, member_name.str, member_name);
-        atom = eval_expr(arena, EVAL_ExprKind_MemberAccess, token_string.str, atom, member_expr, 0);
+        atom = eval_expr(arena, EVAL_ExprKind_MemberAccess, token_string.str, atom, member_expr, &eval_expr_nil);
       }
       
       // rjf: increment past good member names
@@ -1311,7 +1311,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
       // rjf: valid indexing expression => produce index expr
       if(idx_expr_parse.expr != &eval_expr_nil)
       {
-        atom = eval_expr(arena, EVAL_ExprKind_ArrayIndex, token_string.str, atom, idx_expr_parse.expr, 0);
+        atom = eval_expr(arena, EVAL_ExprKind_ArrayIndex, token_string.str, atom, idx_expr_parse.expr, &eval_expr_nil);
       }
       
       // rjf: expect ]
@@ -1346,7 +1346,8 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
     {
       atom = eval_expr(arena, prefix_unary->kind, prefix_unary->location,
                        prefix_unary->cast_expr != &eval_expr_nil ? prefix_unary->cast_expr : atom,
-                       prefix_unary->cast_expr != &eval_expr_nil ? atom : 0, 0);
+                       prefix_unary->cast_expr != &eval_expr_nil ? atom : &eval_expr_nil,
+                       &eval_expr_nil);
     }
   }
   else if(atom == 0 && first_prefix_unary != 0)
@@ -1359,7 +1360,8 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
     {
       atom = eval_expr(arena, prefix_unary->kind, prefix_unary->location,
                        prefix_unary->cast_expr != &eval_expr_nil ? prefix_unary->cast_expr : atom,
-                       prefix_unary->cast_expr != &eval_expr_nil ? atom : 0, 0);
+                       prefix_unary->cast_expr != &eval_expr_nil ? atom : &eval_expr_nil,
+                       &eval_expr_nil);
     }
   }
   
@@ -1401,7 +1403,7 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
         }
         else
         {
-          atom = eval_expr(arena, binary_kind, token_string.str, atom, rhs, 0);
+          atom = eval_expr(arena, binary_kind, token_string.str, atom, rhs, &eval_expr_nil);
         }
       }
     }
