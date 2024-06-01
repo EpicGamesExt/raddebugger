@@ -1,8 +1,7 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-//#include "lib_rdi_format/rdi_format.c"
-#include "rdi_format/lib/rdi_format.c"
+#include "lib_rdi_format/rdi_format.c"
 #include "lib_rdi_format/rdi_format_parse.c"
 
 internal void

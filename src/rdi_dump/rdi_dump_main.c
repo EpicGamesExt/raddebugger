@@ -21,13 +21,13 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "rdi_format_local/rdi_format_local.h"
+#include "rdi_format/rdi_format_local.h"
 #include "rdi_dump.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "rdi_format_local/rdi_format_local.c"
+#include "rdi_format/rdi_format_local.c"
 #include "rdi_dump.c"
 
 ////////////////////////////////
