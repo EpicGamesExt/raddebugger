@@ -79,16 +79,16 @@ struct {RDI_U8 *str; RDI_U64 size;} rdi_eval_conversion_kind_message_string_tabl
 {(RDI_U8 *)"COUNT", sizeof("COUNT")},
 };
 
-RDI_PROC RDI_U64
-rdi_hash(RDI_U8 *ptr, RDI_U64 size)
-{
-  RDI_U64 result = 5381;
-  RDI_U8 *opl = ptr + size;
-  for(;ptr < opl; ptr += 1)
-  {
-    result = ((result << 5) + result) + *ptr;
-  }
-  return result;
+RDI_PROC RDI_U64
+rdi_hash(RDI_U8 *ptr, RDI_U64 size)
+{
+  RDI_U64 result = 5381;
+  RDI_U8 *opl = ptr + size;
+  for(;ptr < opl; ptr += 1)
+  {
+    result = ((result << 5) + result) + *ptr;
+  }
+  return result;
 }
 
 RDI_PROC RDI_U32
@@ -148,49 +148,49 @@ case RDI_Arch_X64:{result = 8;}break;
 return result;
 }
 
-RDI_PROC RDI_EvalConversionKind
-rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out)
-{
-  RDI_EvalConversionKind k = rdi_eval_typegroup_conversion_kind_matrix[in].dst_typegroups[out];
-  return k;
+RDI_PROC RDI_EvalConversionKind
+rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out)
+{
+  RDI_EvalConversionKind k = rdi_eval_typegroup_conversion_kind_matrix[in].dst_typegroups[out];
+  return k;
 }
 
-RDI_PROC RDI_S32
-rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group)
-{
-  RDI_S32 result = 0;
-  switch(op)
-  {
-    case RDI_EvalOp_Neg: case RDI_EvalOp_Add: case RDI_EvalOp_Sub:
-    case RDI_EvalOp_Mul: case RDI_EvalOp_Div:
-    case RDI_EvalOp_EqEq:case RDI_EvalOp_NtEq:
-    case RDI_EvalOp_LsEq:case RDI_EvalOp_GrEq:
-    case RDI_EvalOp_Less:case RDI_EvalOp_Grtr:
-    {
-      if(group != RDI_EvalTypeGroup_Other)
-      {
-        result = 1;
-      }
-    }break;
-    case RDI_EvalOp_Mod:case RDI_EvalOp_LShift:case RDI_EvalOp_RShift:
-    case RDI_EvalOp_BitNot:case RDI_EvalOp_BitAnd:case RDI_EvalOp_BitXor:
-    case RDI_EvalOp_BitOr:case RDI_EvalOp_LogNot:case RDI_EvalOp_LogAnd:
-    case RDI_EvalOp_LogOr: 
-    {
-      if(group == RDI_EvalTypeGroup_S || group == RDI_EvalTypeGroup_U)
-      {
-        result = 1;
-      }
-    }break;
-  }
-  return result;
+RDI_PROC RDI_S32
+rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group)
+{
+  RDI_S32 result = 0;
+  switch(op)
+  {
+    case RDI_EvalOp_Neg: case RDI_EvalOp_Add: case RDI_EvalOp_Sub:
+    case RDI_EvalOp_Mul: case RDI_EvalOp_Div:
+    case RDI_EvalOp_EqEq:case RDI_EvalOp_NtEq:
+    case RDI_EvalOp_LsEq:case RDI_EvalOp_GrEq:
+    case RDI_EvalOp_Less:case RDI_EvalOp_Grtr:
+    {
+      if(group != RDI_EvalTypeGroup_Other)
+      {
+        result = 1;
+      }
+    }break;
+    case RDI_EvalOp_Mod:case RDI_EvalOp_LShift:case RDI_EvalOp_RShift:
+    case RDI_EvalOp_BitNot:case RDI_EvalOp_BitAnd:case RDI_EvalOp_BitXor:
+    case RDI_EvalOp_BitOr:case RDI_EvalOp_LogNot:case RDI_EvalOp_LogAnd:
+    case RDI_EvalOp_LogOr: 
+    {
+      if(group == RDI_EvalTypeGroup_S || group == RDI_EvalTypeGroup_U)
+      {
+        result = 1;
+      }
+    }break;
+  }
+  return result;
 }
 
-RDI_PROC RDI_U8 *
-rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out)
-{
-  *size_out = rdi_eval_conversion_kind_message_string_table[kind].size;
-  return rdi_eval_conversion_kind_message_string_table[kind].str;
+RDI_PROC RDI_U8 *
+rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out)
+{
+  *size_out = rdi_eval_conversion_kind_message_string_table[kind].size;
+  return rdi_eval_conversion_kind_message_string_table[kind].str;
 }
 
 #endif // RDI_FORMAT_C

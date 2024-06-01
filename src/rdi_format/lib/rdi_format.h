@@ -708,10 +708,10 @@ X(LinkNameProcedures)\
 X(NormalSourcePaths)\
 X(COUNT)\
 
-#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
-#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0xf)
-#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0x3)
-#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 6) & 0x3)
+#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
+#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0xf)
+#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0x3)
+#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 6) & 0x3)
 #define RDI_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
 
 typedef struct RDI_Header RDI_Header;
@@ -817,44 +817,44 @@ struct RDI_TypeNode
 RDI_TypeKind kind;
 RDI_U16 flags;
 RDI_U32 byte_size;
-
-    union
-  {
-    // kind is 'built-in'
-    struct
-    {
-      RDI_U32 name_string_idx;
-    } built_in;
-    
-    // kind is 'constructed'
-    struct
-    {
-      RDI_U32 direct_type_idx;
-      RDI_U32 count;
-      union{
-        // when kind is 'Function' or 'Method'
-        RDI_U32 param_idx_run_first;
-        // when kind is 'MemberPtr'
-        RDI_U32 owner_type_idx;
-      };
-    } constructed;
-    
-    // kind is 'user defined'
-    struct
-    {
-      RDI_U32 name_string_idx;
-      RDI_U32 direct_type_idx;
-      RDI_U32 udt_idx;
-    } user_defined;
-    
-    // (kind = Bitfield)
-    struct
-    {
-      RDI_U32 direct_type_idx;
-      RDI_U32 off;
-      RDI_U32 size;
-    } bitfield;
-  }
+
+    union
+  {
+    // kind is 'built-in'
+    struct
+    {
+      RDI_U32 name_string_idx;
+    } built_in;
+    
+    // kind is 'constructed'
+    struct
+    {
+      RDI_U32 direct_type_idx;
+      RDI_U32 count;
+      union{
+        // when kind is 'Function' or 'Method'
+        RDI_U32 param_idx_run_first;
+        // when kind is 'MemberPtr'
+        RDI_U32 owner_type_idx;
+      };
+    } constructed;
+    
+    // kind is 'user defined'
+    struct
+    {
+      RDI_U32 name_string_idx;
+      RDI_U32 direct_type_idx;
+      RDI_U32 udt_idx;
+    } user_defined;
+    
+    // (kind = Bitfield)
+    struct
+    {
+      RDI_U32 direct_type_idx;
+      RDI_U32 off;
+      RDI_U32 size;
+    } bitfield;
+  }
   ;
 };
 
@@ -997,11 +997,11 @@ RDI_U32 match_count;
 RDI_U32 match_idx_or_idx_run_first;
 };
 
-RDI_PROC RDI_U64 rdi_hash(RDI_U8 *ptr, RDI_U64 size);
-RDI_PROC RDI_U32 rdi_size_from_basic_type_kind(RDI_TypeKind kind);
-RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
-RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
-RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
+RDI_PROC RDI_U64 rdi_hash(RDI_U8 *ptr, RDI_U64 size);
+RDI_PROC RDI_U32 rdi_size_from_basic_type_kind(RDI_TypeKind kind);
+RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
+RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
+RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
 RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
 
 extern RDI_U8 rdi_eval_op_ctrlbits_table[45];

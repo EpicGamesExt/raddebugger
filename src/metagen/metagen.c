@@ -137,7 +137,7 @@ mg_escaped_from_str8(Arena *arena, String8 string)
   U64 start = 0;
   for(U64 idx = 0; idx <= string.size; idx += 1)
   {
-    if(idx == string.size || string.str[idx] == '\\')
+    if(idx == string.size || string.str[idx] == '\\' || string.str[idx] == '\r')
     {
       String8 str = str8_substr(string, r1u64(start, idx));
       if(str.size != 0)
