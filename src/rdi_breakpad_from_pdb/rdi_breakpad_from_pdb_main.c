@@ -12,13 +12,12 @@
 //~ rjf: Includes
 
 //- rjf: [lib]
-#include "lib_rdi_format/rdi_format.h"
+#include "rdi_format/lib/rdi_format.h"
+#include "rdi_format/lib/rdi_format.c"
 #include "lib_rdi_format/rdi_format_parse.h"
-#include "lib_rdi_format/rdi_format.c"
 #include "lib_rdi_format/rdi_format_parse.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
-
 
 //- rjf: [h]
 #include "base/base_inc.h"
