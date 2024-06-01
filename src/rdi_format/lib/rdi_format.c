@@ -155,13 +155,6 @@ rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup
   return k;
 }
 
-RDI_PROC RDI_U8 *
-rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out)
-{
-  *size_out = rdi_eval_conversion_kind_message_string_table[kind].size;
-  return rdi_eval_conversion_kind_message_string_table[kind].str;
-}
-
 RDI_PROC RDI_S32
 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group)
 {
@@ -191,6 +184,13 @@ rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group)
     }break;
   }
   return result;
+}
+
+RDI_PROC RDI_U8 *
+rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out)
+{
+  *size_out = rdi_eval_conversion_kind_message_string_table[kind].size;
+  return rdi_eval_conversion_kind_message_string_table[kind].str;
 }
 
 #endif // RDI_FORMAT_C
