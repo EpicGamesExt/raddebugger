@@ -80,7 +80,6 @@ RDI_DataSectionTag_LocationData         = 0x0017,
 RDI_DataSectionTag_NameMaps             = 0x0018,
 RDI_DataSectionTag_PRIMARY_COUNT        = 0x0019,
 RDI_DataSectionTag_SECONDARY            = 0x80000000,
-RDI_DataSectionTag_SKIP                 = RDI_DataSectionTag_SECONDARY|0x0000,
 RDI_DataSectionTag_LineInfoVoffs        = RDI_DataSectionTag_SECONDARY|0x0001,
 RDI_DataSectionTag_LineInfoData         = RDI_DataSectionTag_SECONDARY|0x0002,
 RDI_DataSectionTag_LineInfoColumns      = RDI_DataSectionTag_SECONDARY|0x0003,
@@ -486,6 +485,229 @@ RDI_NameMapKind_NormalSourcePaths    = 6,
 RDI_NameMapKind_COUNT                = 7,
 } RDI_NameMapKindEnum;
 
+#define RDI_DataSectionTag_XList \
+X(NULL)\
+X(TopLevelInfo)\
+X(StringData)\
+X(StringTable)\
+X(IndexRuns)\
+X(BinarySections)\
+X(FilePathNodes)\
+X(SourceFiles)\
+X(Units)\
+X(UnitVmap)\
+X(TypeNodes)\
+X(UDTs)\
+X(Members)\
+X(EnumMembers)\
+X(GlobalVariables)\
+X(GlobalVmap)\
+X(ThreadVariables)\
+X(Procedures)\
+X(Scopes)\
+X(ScopeVoffData)\
+X(ScopeVmap)\
+X(Locals)\
+X(LocationBlocks)\
+X(LocationData)\
+X(NameMaps)\
+X(PRIMARY_COUNT)\
+X(SECONDARY)\
+X(LineInfoVoffs)\
+X(LineInfoData)\
+X(LineInfoColumns)\
+X(LineMapNumbers)\
+X(LineMapRanges)\
+X(LineMapVoffs)\
+X(NameMapBuckets)\
+X(NameMapNodes)\
+
+#define RDI_DataSectionEncoding_XList \
+X(Unpacked)\
+X(LZB)\
+
+#define RDI_Arch_XList \
+X(NULL)\
+X(X86)\
+X(X64)\
+
+#define RDI_BinarySectionFlags_XList \
+X(NULL)\
+X(X86)\
+X(X64)\
+
+#define RDI_Language_XList \
+X(NULL)\
+X(C)\
+X(CPlusPlus)\
+X(COUNT)\
+
+#define RDI_TypeKind_XList \
+X(NULL)\
+X(Void)\
+X(Handle)\
+X(Char8)\
+X(Char16)\
+X(Char32)\
+X(UChar8)\
+X(UChar16)\
+X(UChar32)\
+X(U8)\
+X(U16)\
+X(U32)\
+X(U64)\
+X(U128)\
+X(U256)\
+X(U512)\
+X(S8)\
+X(S16)\
+X(S32)\
+X(S64)\
+X(S128)\
+X(S256)\
+X(S512)\
+X(Bool)\
+X(F16)\
+X(F32)\
+X(F32PP)\
+X(F48)\
+X(F64)\
+X(F80)\
+X(F128)\
+X(ComplexF32)\
+X(ComplexF64)\
+X(ComplexF80)\
+X(ComplexF128)\
+X(Modifier)\
+X(Ptr)\
+X(LRef)\
+X(RRef)\
+X(Array)\
+X(Function)\
+X(Method)\
+X(MemberPtr)\
+X(Struct)\
+X(Class)\
+X(Union)\
+X(Enum)\
+X(Alias)\
+X(IncompleteStruct)\
+X(IncompleteUnion)\
+X(IncompleteClass)\
+X(IncompleteEnum)\
+X(Bitfield)\
+X(Variadic)\
+
+#define RDI_TypeModifierFlags_XList \
+X(Const)\
+X(Volatile)\
+
+#define RDI_UDTFlag_XList \
+X(EnumMembers)\
+
+#define RDI_MemberKind_XList \
+X(NULL)\
+X(DataField)\
+X(StaticData)\
+X(Method)\
+X(StaticMethod)\
+X(VirtualMethod)\
+X(VTablePtr)\
+X(Base)\
+X(VirtualBase)\
+X(NestedType)\
+
+#define RDI_LinkFlags_XList \
+X(External)\
+X(TypeScoped)\
+X(ProcScoped)\
+
+#define RDI_LocalKind_XList \
+X(NULL)\
+X(Parameter)\
+X(Variable)\
+
+#define RDI_LocationKind_XList \
+X(NULL)\
+X(AddrBytecodeStream)\
+X(ValBytecodeStream)\
+X(AddrRegPlusU16)\
+X(AddrAddrRegPlusU16)\
+X(ValReg)\
+
+#define RDI_EvalOp_XList \
+X(Stop)\
+X(Noop)\
+X(Cond)\
+X(Skip)\
+X(MemRead)\
+X(RegRead)\
+X(RegReadDyn)\
+X(FrameOff)\
+X(ModuleOff)\
+X(TLSOff)\
+X(ObjectOff)\
+X(CFA)\
+X(ConstU8)\
+X(ConstU16)\
+X(ConstU32)\
+X(ConstU64)\
+X(Abs)\
+X(Neg)\
+X(Add)\
+X(Sub)\
+X(Mul)\
+X(Div)\
+X(Mod)\
+X(LShift)\
+X(RShift)\
+X(BitAnd)\
+X(BitOr)\
+X(BitXor)\
+X(BitNot)\
+X(LogAnd)\
+X(LogOr)\
+X(LogNot)\
+X(EqEq)\
+X(NtEq)\
+X(LsEq)\
+X(GrEq)\
+X(Less)\
+X(Grtr)\
+X(Trunc)\
+X(TruncSigned)\
+X(Convert)\
+X(Pick)\
+X(Pop)\
+X(Insert)\
+X(COUNT)\
+
+#define RDI_EvalTypeGroup_XList \
+X(Other)\
+X(U)\
+X(S)\
+X(F32)\
+X(F64)\
+X(COUNT)\
+
+#define RDI_EvalConversionKind_XList \
+X(Noop)\
+X(Legal)\
+X(OtherToOther)\
+X(ToOther)\
+X(FromOther)\
+X(COUNT)\
+
+#define RDI_NameMapKind_XList \
+X(NULL)\
+X(GlobalVariables)\
+X(ThreadVariables)\
+X(Procedures)\
+X(Types)\
+X(LinkNameProcedures)\
+X(NormalSourcePaths)\
+X(COUNT)\
+
 #define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
 #define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0xf)
 #define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0x3)
@@ -779,8 +1001,8 @@ RDI_PROC RDI_U64 rdi_hash(RDI_U8 *ptr, RDI_U64 size);
 RDI_PROC RDI_U32 rdi_size_from_basic_type_kind(RDI_TypeKind kind);
 RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
 RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
-RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
-RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
+RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
+RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
 
 extern RDI_U8 rdi_eval_op_ctrlbits_table[45];
 
