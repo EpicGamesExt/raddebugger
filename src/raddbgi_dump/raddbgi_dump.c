@@ -374,6 +374,19 @@ rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
+rdi_stringize_source_files(Arena *arena, String8List *out, RDI_Parsed *rdi, U32 indent_level)
+{
+  str8_list_pushf(arena, out, "%.*s%-4s %-8s %-8s %-8s\n", indent_level, rdi_stringize_spaces, "No.", "ChksmOff", "LnMapIdx", "Path");
+  for(U64 i = 0; i < rdi->source_files_count; i += 1)
+  {
+    RDI_SourceFile *src_file = rdi->source_files + i;
+    String8 path = {0};
+    path.str = rdi_string_from_idx(rdi, src_file->normal_full_path_string_idx, &path.size);
+    str8_list_pushf(arena, out, "%.*s%4llx %08x %08x %S\n", indent_level, rdi_stringize_spaces, i, src_file->checksum_offset, src_file->line_number_map_idx, path);
+  }
+}
+
+internal void
 rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed,
                    RDI_Unit *unit, U32 indent_level){
   String8 unit_name = {0};
