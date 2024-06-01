@@ -15,8 +15,8 @@
 //~ rjf: Includes
 
 //- rjf: [lib]
-#include "rdi_format/lib/rdi_format.h"
-#include "rdi_format/lib/rdi_format.c"
+#include "lib_rdi_format/rdi_format.h"
+#include "lib_rdi_format/rdi_format.c"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.h"
 #include "third_party/rad_lzb_simple/rad_lzb_simple.c"
 
@@ -24,7 +24,7 @@
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "task_system/task_system.h"
-#include "rdi_make_local/rdi_make_local.h"
+#include "rdi_make/rdi_make_local.h"
 #include "coff/coff.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_stringize.h"
@@ -37,7 +37,7 @@
 #include "base/base_inc.c"
 #include "os/os_inc.c"
 #include "task_system/task_system.c"
-#include "rdi_make_local/rdi_make_local.c"
+#include "rdi_make/rdi_make_local.c"
 #include "coff/coff.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_stringize.c"
