@@ -213,6 +213,7 @@ struct MG_Layer
 {
   String8 key;
   B32 is_library;
+  String8 gen_folder_name;
   String8 h_name_override;
   String8 c_name_override;
   String8List enums;

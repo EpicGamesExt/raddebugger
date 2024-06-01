@@ -166,19 +166,10 @@ int main(int argument_count, char **arguments)
           layer->is_library = 1;
         }
       }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: gather hand-written h/c names & decorations
-  //
-  for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
-  {
-    MD_Node *file = n->v.root;
-    String8 layer_key = mg_layer_key_from_path(file->string);
-    MG_Layer *layer = mg_layer_from_key(layer_key);
-    for(MD_EachNode(node, file->first))
-    {
+      if(md_node_has_tag(node, str8_lit("gen_folder"), 0))
+      {
+        layer->gen_folder_name = node->string;
+      }
       if(md_node_has_tag(node, str8_lit("h_name"), 0))
       {
         layer->h_name_override = node->string;
@@ -499,7 +490,12 @@ int main(int argument_count, char **arguments)
       for(MG_LayerNode *n = slot->first; n != 0; n = n->next)
       {
         MG_Layer *layer = &n->v;
-        String8 layer_generated_folder = push_str8f(mg_arena, "%S/%S/generated", code_dir_path, layer->key);
+        String8 gen_folder = str8_lit("generated");
+        if(layer->gen_folder_name.size != 0)
+        {
+          gen_folder = layer->gen_folder_name;
+        }
+        String8 layer_generated_folder = push_str8f(mg_arena, "%S/%S/%S", code_dir_path, layer->key, gen_folder);
         if(os_make_directory(layer_generated_folder))
         {
           String8List layer_key_parts = str8_split_path(mg_arena, layer->key);
