@@ -522,16 +522,16 @@ internal RDI_BinarySectionFlags p2r_rdi_binary_section_flags_from_coff_section_f
 //~ rjf: CodeView => RDI Canonical Conversions
 
 internal RDI_Arch         p2r_rdi_arch_from_cv_arch(CV_Arch arch);
-internal RDI_RegisterCode p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
+internal RDI_RegCode p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
 internal RDI_Language     p2r_rdi_language_from_cv_language(CV_Language language);
 internal RDI_TypeKind     p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
 
 ////////////////////////////////
 //~ rjf: Location Info Building Helpers
 
-internal RDIM_Location *p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegisterCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection);
+internal RDIM_Location *p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection);
 internal CV_EncodedFramePtrReg p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFrameproc *frameproc, B32 param_base);
-internal RDI_RegisterCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
+internal RDI_RegCode p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg);
 internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Location *location, CV_LvarAddrRange *range, COFF_SectionHeader *section, CV_LvarAddrGap *gaps, U64 gap_count);
 
 ////////////////////////////////

@@ -43,7 +43,7 @@ rdi_addr_size_from_arch(RDI_Arch arch){
 //- eval helpers
 
 RDI_PROC RDI_EvalConversionKind
-rdi_eval_conversion_rule(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out){
+rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out){
   RDI_EvalConversionKind result = 0;
   switch (in + (out << 8)){
 #define Y(i,o) case ((RDI_EvalTypeGroup_##i) + ((RDI_EvalTypeGroup_##o) << 8)):
@@ -58,7 +58,7 @@ rdi_eval_conversion_rule(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out){
 }
 
 RDI_PROC RDI_U8*
-rdi_eval_conversion_message(RDI_EvalConversionKind conversion_kind, RDI_U64 *lenout){
+rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind conversion_kind, RDI_U64 *lenout){
   RDI_U8 *result = 0;
   switch (conversion_kind){
 #define X(N,msg) \
@@ -70,7 +70,7 @@ case RDI_EvalConversionKind_##N: result = (RDI_U8*)msg; *lenout = sizeof(msg) - 
 }
 
 RDI_PROC RDI_S32
-rdi_eval_opcode_type_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group){
+rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group){
   RDI_S32 result = 0;
   switch (op){
     case RDI_EvalOp_Neg: case RDI_EvalOp_Add: case RDI_EvalOp_Sub:

@@ -173,7 +173,7 @@ eval_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff)
   *map = eval_string2num_map_make(arena, 64);
   
   //- rjf: udt -> fill member map
-  if(udt != 0 && !(udt->flags & RDI_UserDefinedTypeFlag_EnumMembers) && rdi->members != 0)
+  if(udt != 0 && !(udt->flags & RDI_UDTFlag_EnumMembers) && rdi->members != 0)
   {
     U64 data_member_num = 1;
     for(U32 member_idx = udt->member_first;
@@ -827,14 +827,14 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
           B32 mapped_identifier = 0;
           B32 identifier_type_is_possibly_dynamically_overridden = 0;
           B32 identifier_looks_like_type_expr = 0;
-          RDI_LocationKind            loc_kind = RDI_LocationKind_NULL;
-          RDI_LocationRegister        loc_reg = {0};
-          RDI_LocationRegisterPlusU16 loc_reg_u16 = {0};
-          String8                        loc_bytecode = {0};
-          REGS_RegCode                   reg_code = 0;
-          REGS_AliasCode                 alias_code = 0;
-          TG_Key                         type_key = zero_struct;
-          String8                        local_lookup_string = token_string;
+          RDI_LocationKind        loc_kind = RDI_LocationKind_NULL;
+          RDI_LocationReg         loc_reg = {0};
+          RDI_LocationRegPlusU16  loc_reg_u16 = {0};
+          String8                 loc_bytecode = {0};
+          REGS_RegCode            reg_code = 0;
+          REGS_AliasCode          alias_code = 0;
+          TG_Key                  type_key = zero_struct;
+          String8                 local_lookup_string = token_string;
           
           //- rjf: form namespaceified fallback versions of this lookup string
           String8List namespaceified_token_strings = {0};
@@ -911,18 +911,18 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
                         {
                           break;
                         }
-                        U8 ctrlbits = rdi_eval_opcode_ctrlbits[op];
+                        U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
                         U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
                         bytecode_size += 1+p_size;
                       }
                       loc_bytecode = str8(bytecode_base, bytecode_size);
                     }break;
-                    case RDI_LocationKind_AddrRegisterPlusU16:
-                    case RDI_LocationKind_AddrAddrRegisterPlusU16:
+                    case RDI_LocationKind_AddrRegPlusU16:
+                    case RDI_LocationKind_AddrAddrRegPlusU16:
                     {
                       MemoryCopy(&loc_reg_u16, (ctx->rdi->location_data + block->location_data_off), sizeof(loc_reg_u16));
                     }break;
-                    case RDI_LocationKind_ValRegister:
+                    case RDI_LocationKind_ValReg:
                     {
                       MemoryCopy(&loc_reg, (ctx->rdi->location_data + block->location_data_off), sizeof(loc_reg));
                     }break;
@@ -1134,35 +1134,35 @@ eval_parse_expr_from_text_tokens__prec(Arena *arena, EVAL_ParseCtx *ctx, String8
               {
                 atom = eval_expr_leaf_bytecode(arena, token_string.str, type_key, loc_bytecode, EVAL_EvalMode_Value);
               }break;
-              case RDI_LocationKind_AddrRegisterPlusU16:
+              case RDI_LocationKind_AddrRegPlusU16:
               {
                 EVAL_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(ctx->arch)/8;
-                U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.register_code, byte_size, 0);
+                U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
                 atom = eval_expr_leaf_op_list(arena, token_string.str, type_key, &oplist, EVAL_EvalMode_Addr);
               }break;
-              case RDI_LocationKind_AddrAddrRegisterPlusU16:
+              case RDI_LocationKind_AddrAddrRegPlusU16:
               {
                 EVAL_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(ctx->arch)/8;
-                U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.register_code, byte_size, 0);
+                U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(ctx->arch)/8);
                 atom = eval_expr_leaf_op_list(arena, token_string.str, type_key, &oplist, EVAL_EvalMode_Addr);
               }break;
-              case RDI_LocationKind_ValRegister:
+              case RDI_LocationKind_ValReg:
               {
-                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(ctx->arch, loc_reg.register_code);
+                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(ctx->arch, loc_reg.reg_code);
                 REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(ctx->arch)[regs_reg_code];
                 EVAL_OpList oplist = {0};
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;
-                U64 regread_param = RDI_EncodeRegReadParam(loc_reg.register_code, byte_size, byte_pos);
+                U64 regread_param = RDI_EncodeRegReadParam(loc_reg.reg_code, byte_size, byte_pos);
                 eval_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 atom = eval_expr_leaf_op_list(arena, token_string.str, type_key, &oplist, EVAL_EvalMode_Value);
               }break;

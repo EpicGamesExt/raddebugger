@@ -23,7 +23,7 @@ eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
       default:
       {
         // compute bytecode advance
-        U8 ctrlbits = rdi_eval_opcode_ctrlbits[opcode];
+        U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
         U64 extra_byte_count = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
         
         U8 *next_ptr = ptr + 1 + extra_byte_count;
@@ -63,7 +63,7 @@ eval_bytecode_from_oplist(Arena *arena, EVAL_OpList *list){
 
 internal void
 eval_oplist_push_op(Arena *arena, EVAL_OpList *list, RDI_EvalOp opcode, U64 p){
-  U8 ctrlbits = rdi_eval_opcode_ctrlbits[opcode];
+  U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
   U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   
   EVAL_Op *node = push_array_no_zero(arena, EVAL_Op, 1);
@@ -654,7 +654,7 @@ eval_irtree_convert_hi(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, EVAL_IRTr
   TG_Kind out_kind = tg_kind_from_key(out);
   U8 in_group  = eval_type_group_from_kind(in_kind);
   U8 out_group = eval_type_group_from_kind(out_kind);
-  U32 conversion_rule = rdi_eval_conversion_rule(in_group, out_group);
+  U32 conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
   if(conversion_rule == RDI_EvalConversionKind_Legal)
   {
     result = eval_irtree_convert_lo(arena, result, out_group, in_group);
@@ -1080,7 +1080,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, E
         // analyze situation
         U8 in_group  = eval_type_group_from_kind(c_restype_kind);
         U8 out_group = eval_type_group_from_kind(cast_type_kind);
-        RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_rule(in_group, out_group);
+        RDI_EvalConversionKind conversion_rule = rdi_eval_conversion_kind_from_typegroups(in_group, out_group);
         
         // generate tree
         switch(conversion_rule)
@@ -1107,7 +1107,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, E
           {
             String8 text = str8_lit("(internal) unknown conversion rule");
             if (conversion_rule < RDI_EvalConversionKind_COUNT){
-              text.str = rdi_eval_conversion_message(conversion_rule, &text.size);
+              text.str = rdi_explanation_string_from_eval_conversion_kind(conversion_rule, &text.size);
             }
             eval_error(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, text);
           }break;
@@ -1172,7 +1172,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, E
         B32 can_generate = 0;
         RDI_EvalOp op = eval_opcode_from_expr_kind(kind);
         U8 c_group = eval_type_group_from_kind(c_restype_kind);
-        if (!rdi_eval_opcode_type_compatible(op, c_group)){
+        if (!rdi_eval_op_typegroup_are_compatible(op, c_group)){
           eval_errorf(arena, eout, EVAL_ErrorKind_MalformedInput, expr->location, "Cannot use this operator on this type.");
         }
         else{
@@ -1301,7 +1301,7 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, E
             U8 cv_group = eval_type_group_from_kind(cv_type_kind);
             
             B32 can_generate = 0;
-            if (rdi_eval_opcode_type_compatible(op, cv_group)){
+            if (rdi_eval_op_typegroup_are_compatible(op, cv_group)){
               can_generate = 1;
             }
             else{
@@ -1620,7 +1620,7 @@ eval_oplist_from_irtree(Arena *arena, EVAL_IRTree *tree, EVAL_OpList *out){
       }
       else{
         // handle all children
-        U8 ctrlbits = rdi_eval_opcode_ctrlbits[op];
+        U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
         U64 child_count = RDI_POPN_FROM_CTRLBITS(ctrlbits);
         EVAL_IRTree**child = tree->children;
         for (U64 i = 0; i < child_count; i += 1, child += 1){

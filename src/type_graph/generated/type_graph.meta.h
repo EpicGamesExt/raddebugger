@@ -78,6 +78,7 @@ TG_Kind_LastIncomplete  = TG_Kind_IncompleteEnum,
 C_LINKAGE_BEGIN
 extern U8 tg_kind_basic_byte_size_table[54];
 extern String8 tg_kind_basic_string_table[54];
+
 C_LINKAGE_END
 
 #endif // TYPE_GRAPH_META_H

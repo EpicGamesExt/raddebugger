@@ -212,14 +212,21 @@ typedef struct MG_Layer MG_Layer;
 struct MG_Layer
 {
   String8 key;
+  B32 is_library;
+  String8 h_name_override;
+  String8 c_name_override;
   String8List enums;
   String8List structs;
   String8List h_functions;
   String8List h_tables;
   String8List h_catchall;
+  String8List h_header;
+  String8List h_footer;
   String8List c_functions;
   String8List c_tables;
   String8List c_catchall;
+  String8List c_header;
+  String8List c_footer;
 };
 
 typedef struct MG_LayerNode MG_LayerNode;

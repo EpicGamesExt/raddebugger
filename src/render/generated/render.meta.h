@@ -59,6 +59,7 @@ extern String8 r_tex2d_kind_display_string_table[1];
 extern String8 r_tex2d_sample_kind_display_string_table[2];
 extern String8 r_pass_kind_display_string_table[3];
 extern U8 r_pass_kind_batch_table[3];
+
 C_LINKAGE_END
 
 #endif // RENDER_META_H

@@ -73,6 +73,7 @@ extern U8 eval_expr_kind_child_counts[40];
 extern String8 eval_expr_kind_strings[40];
 extern String8 eval_result_code_display_strings[11];
 extern String8 eval_expr_op_strings[40];
+
 C_LINKAGE_END
 
 #endif // EVAL_META_H

@@ -668,7 +668,7 @@ typedef struct RDIM_Location RDIM_Location;
 struct RDIM_Location
 {
   RDI_LocationKind kind;
-  RDI_U8 register_code;
+  RDI_U8 reg_code;
   RDI_U16 offset;
   RDIM_EvalBytecode bytecode;
 };

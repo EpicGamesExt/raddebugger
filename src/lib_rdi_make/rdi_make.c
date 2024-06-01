@@ -844,7 +844,7 @@ rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope
 RDI_PROC void
 rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
 {
-  RDI_U8 ctrlbits = rdi_eval_opcode_ctrlbits[op];
+  RDI_U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
   RDI_U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   
   RDIM_EvalBytecodeOp *node = rdim_push_array(arena, RDIM_EvalBytecodeOp, 1);
@@ -945,8 +945,8 @@ RDI_PROC RDIM_Location *
 rdim_push_location_addr_reg_plus_u16(RDIM_Arena *arena, RDI_U8 reg_code, RDI_U16 offset)
 {
   RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
-  result->kind = RDI_LocationKind_AddrRegisterPlusU16;
-  result->register_code = reg_code;
+  result->kind = RDI_LocationKind_AddrRegPlusU16;
+  result->reg_code = reg_code;
   result->offset = offset;
   return result;
 }
@@ -955,8 +955,8 @@ RDI_PROC RDIM_Location *
 rdim_push_location_addr_addr_reg_plus_u16(RDIM_Arena *arena, RDI_U8 reg_code, RDI_U16 offset)
 {
   RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
-  result->kind = RDI_LocationKind_AddrAddrRegisterPlusU16;
-  result->register_code = reg_code;
+  result->kind = RDI_LocationKind_AddrAddrRegPlusU16;
+  result->reg_code = reg_code;
   result->offset = offset;
   return result;
 }
@@ -965,8 +965,8 @@ RDI_PROC RDIM_Location *
 rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg_code)
 {
   RDIM_Location *result = rdim_push_array(arena, RDIM_Location, 1);
-  result->kind = RDI_LocationKind_ValRegister;
-  result->register_code = reg_code;
+  result->kind = RDI_LocationKind_ValReg;
+  result->reg_code = reg_code;
   return result;
 }
 
@@ -2140,7 +2140,7 @@ rdim_bake_top_level_info_section_list_from_params(RDIM_Arena *arena, RDIM_BakeSt
   RDIM_BakeSectionList sections = {0};
   RDI_TopLevelInfo  *dst_tli = rdim_push_array(arena, RDI_TopLevelInfo, 1);
   RDIM_TopLevelInfo *src_tli = &params->top_level_info;
-  dst_tli->architecture        = src_tli->arch;
+  dst_tli->arch                = src_tli->arch;
   dst_tli->exe_name_string_idx = rdim_bake_idx_from_string(strings, src_tli->exe_name);
   dst_tli->exe_hash            = src_tli->exe_hash;
   dst_tli->voff_max            = src_tli->voff_max;
@@ -2827,7 +2827,7 @@ rdim_bake_udt_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTigh
         //- rjf: fill enum members
         else if(src_udt->enum_val_count != 0)
         {
-          dst_udt->flags |= RDI_UserDefinedTypeFlag_EnumMembers;
+          dst_udt->flags |= RDI_UDTFlag_EnumMembers;
           dst_udt->member_first = dst_enum_member_idx;
           dst_udt->member_count = src_udt->enum_val_count;
           for(RDIM_UDTEnumVal *src_member = src_udt->first_enum_val;
@@ -3160,22 +3160,22 @@ rdim_bake_scope_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTi
                 }break;
                 
                 // rjf: simple addr+off cases
-                case RDI_LocationKind_AddrRegisterPlusU16:
-                case RDI_LocationKind_AddrAddrRegisterPlusU16:
+                case RDI_LocationKind_AddrRegPlusU16:
+                case RDI_LocationKind_AddrAddrRegPlusU16:
                 {
-                  RDI_LocationRegisterPlusU16 loc = {0};
+                  RDI_LocationRegPlusU16 loc = {0};
                   loc.kind = src_location->kind;
-                  loc.register_code = src_location->register_code;
+                  loc.reg_code = src_location->reg_code;
                   loc.offset = src_location->offset;
                   rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
                 }break;
                 
                 // rjf: register cases
-                case RDI_LocationKind_ValRegister:
+                case RDI_LocationKind_ValReg:
                 {
-                  RDI_LocationRegister loc = {0};
+                  RDI_LocationReg loc = {0};
                   loc.kind = src_location->kind;
-                  loc.register_code = src_location->register_code;
+                  loc.reg_code = src_location->reg_code;
                   rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
                 }break;
               }

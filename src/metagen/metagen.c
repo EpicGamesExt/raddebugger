@@ -1026,7 +1026,12 @@ mg_string_list_from_table_gen(Arena *arena, MG_Map grid_name_map, MG_Map grid_co
 {
   String8List result = {0};
   Temp scratch = scratch_begin(&arena, 1);
-  for(MD_EachNode(strexpr_node, gen->first))
+  if(md_node_is_nil(gen->first) && gen->string.size != 0)
+  {
+    str8_list_push(arena, &result, gen->string);
+    str8_list_push(arena, &result, str8_lit("\n"));
+  }
+  else for(MD_EachNode(strexpr_node, gen->first))
   {
     // rjf: build task list
     MG_TableExpandTask *first_task = 0;

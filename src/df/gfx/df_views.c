@@ -3273,7 +3273,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
     for(U64 idx = 0; idx < rdis_count; idx += 1)
     {
       rdis[idx] = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], endt_us);
-      graphs[idx] = tg_graph_begin(rdi_addr_size_from_arch(rdis[idx]->top_level_info->architecture), 256);
+      graphs[idx] = tg_graph_begin(rdi_addr_size_from_arch(rdis[idx]->top_level_info->arch), 256);
     }
   }
   
@@ -4936,7 +4936,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
           TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
           U64 name_size = 0;
           U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-          TG_Graph *graph = tg_graph_begin(rdi_addr_size_from_arch(rdi->top_level_info->architecture), 256);
+          TG_Graph *graph = tg_graph_begin(rdi_addr_size_from_arch(rdi->top_level_info->arch), 256);
           symbol_name = str8(name_ptr, name_size);
           symbol_type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
         }

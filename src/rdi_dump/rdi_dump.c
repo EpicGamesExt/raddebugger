@@ -113,12 +113,12 @@ rdi_stringize_type_modifier_flags(Arena *arena, String8List *out,
 }
 
 internal void
-rdi_stringize_user_defined_type_flags(Arena *arena, String8List *out,
-                                      RDI_UserDefinedTypeFlags flags){
+rdi_stringize_udt_flags(Arena *arena, String8List *out,
+                        RDI_UDTFlags flags){
   if (flags == 0){
     str8_list_push(arena, out, str8_lit("0"));
   }
-  if (flags & RDI_UserDefinedTypeFlag_EnumMembers){
+  if (flags & RDI_UDTFlag_EnumMembers){
     str8_list_push(arena, out, str8_lit("EnumMembers "));
   }
 }
@@ -452,7 +452,7 @@ rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed,
                   indent_level, rdi_stringize_spaces, udt->self_type_idx);
   
   str8_list_pushf(arena, out, "%.*sflags=", indent_level, rdi_stringize_spaces);
-  rdi_stringize_user_defined_type_flags(arena, out, udt->flags);
+  rdi_stringize_udt_flags(arena, out, udt->flags);
   str8_list_push(arena, out, str8_lit("\n"));
   
   if (udt->file_idx != 0){
@@ -462,7 +462,7 @@ rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed,
   }
   
   // enum members
-  if (udt->flags & RDI_UserDefinedTypeFlag_EnumMembers){
+  if (udt->flags & RDI_UDTFlag_EnumMembers){
     U32 first_raw = udt->member_first;
     U32 opl_raw = first_raw + udt->member_count;
     U32 opl = ClampTop(opl_raw, member_bundle->enum_member_count);
@@ -712,38 +712,38 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed,
                   str8_list_pushf(arena, out, "\n");
                 }break;
                 
-                case RDI_LocationKind_AddrRegisterPlusU16:
+                case RDI_LocationKind_AddrRegPlusU16:
                 {
-                  if (loc_base_ptr + sizeof(RDI_LocationRegisterPlusU16) > loc_data_opl){
-                    str8_list_pushf(arena, out, "AddrRegisterPlusU16( <invalid-encoding> )\n");
+                  if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl){
+                    str8_list_pushf(arena, out, "AddrRegPlusU16( <invalid-encoding> )\n");
                   }
                   else{
-                    RDI_LocationRegisterPlusU16 *loc = (RDI_LocationRegisterPlusU16*)loc_base_ptr;
-                    str8_list_pushf(arena, out, "AddrRegisterPlusU16(reg: %u, off: %u)\n",
-                                    loc->register_code, loc->offset);
+                    RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
+                    str8_list_pushf(arena, out, "AddrRegPlusU16(reg: %u, off: %u)\n",
+                                    loc->reg_code, loc->offset);
                   }
                 }break;
                 
-                case RDI_LocationKind_AddrAddrRegisterPlusU16:
+                case RDI_LocationKind_AddrAddrRegPlusU16:
                 {
-                  if (loc_base_ptr + sizeof(RDI_LocationRegisterPlusU16) > loc_data_opl){
-                    str8_list_pushf(arena, out, "AddrAddrRegisterPlusU16( <invalid-encoding> )\n");
+                  if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl){
+                    str8_list_pushf(arena, out, "AddrAddrRegPlusU16( <invalid-encoding> )\n");
                   }
                   else{
-                    RDI_LocationRegisterPlusU16 *loc = (RDI_LocationRegisterPlusU16*)loc_base_ptr;
+                    RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
                     str8_list_pushf(arena, out, "AddrAddrRegisterPlusU16(reg: %u, off: %u)\n",
-                                    loc->register_code, loc->offset);
+                                    loc->reg_code, loc->offset);
                   }
                 }break;
                 
-                case RDI_LocationKind_ValRegister:
+                case RDI_LocationKind_ValReg:
                 {
-                  if (loc_base_ptr + sizeof(RDI_LocationRegister) > loc_data_opl){
-                    str8_list_pushf(arena, out, "ValRegister( <invalid-encoding> )\n");
+                  if (loc_base_ptr + sizeof(RDI_LocationReg) > loc_data_opl){
+                    str8_list_pushf(arena, out, "ValReg( <invalid-encoding> )\n");
                   }
                   else{
-                    RDI_LocationRegister *loc = (RDI_LocationRegister*)loc_base_ptr;
-                    str8_list_pushf(arena, out, "ValRegister(reg: %u)\n", loc->register_code);
+                    RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
+                    str8_list_pushf(arena, out, "ValReg(reg: %u)\n", loc->reg_code);
                   }
                 }break;
               }

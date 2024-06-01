@@ -157,6 +157,7 @@ OS_Key_COUNT,
 C_LINKAGE_BEGIN
 extern String8 os_g_key_display_string_table[143];
 extern String8 os_g_key_cfg_string_table[143];
+
 C_LINKAGE_END
 
 #endif // OS_GFX_META_H

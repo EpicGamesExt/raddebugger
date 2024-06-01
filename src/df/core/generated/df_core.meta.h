@@ -1541,6 +1541,7 @@ extern DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_apply_cmd_kind_table[4];
 extern String8 df_g_icon_kind_text_table[69];
+
 C_LINKAGE_END
 
 #endif // DF_CORE_META_H

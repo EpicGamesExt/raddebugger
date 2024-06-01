@@ -701,6 +701,3 @@ case CV_LeafKind_STRUCT2:{result = sizeof(CV_LeafStruct2);}break;
 }
 return result;
 }
-C_LINKAGE_BEGIN
-C_LINKAGE_END
-

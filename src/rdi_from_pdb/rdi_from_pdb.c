@@ -241,17 +241,17 @@ p2r_rdi_arch_from_cv_arch(CV_Arch cv_arch)
   return(result);
 }
 
-internal RDI_RegisterCode
+internal RDI_RegCode
 p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
 {
-  RDI_RegisterCode result = 0;
+  RDI_RegCode result = 0;
   switch(arch)
   {
     case RDI_Arch_X86:
     {
       switch(reg_code)
       {
-#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegisterCode_X86_##RDN; break;
+#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegCodeX86_##RDN; break;
         CV_Reg_X86_XList(X)
 #undef X
       }
@@ -260,7 +260,7 @@ p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
     {
       switch(reg_code)
       {
-#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegisterCode_X64_##RDN; break;
+#define X(CVN,C,RDN,BP,BZ) case C: result = RDI_RegCodeX64_##RDN; break;
         CV_Reg_X64_XList(X)
 #undef X
       }
@@ -376,7 +376,7 @@ p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type)
 //~ rjf: Location Info Building Helpers
 
 internal RDIM_Location *
-p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegisterCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection)
+p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection)
 {
   RDIM_Location *result = 0;
   if(0 <= offset && offset <= (S64)max_U16)
@@ -423,10 +423,10 @@ p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFrameproc *frameproc, B32 param_base)
   return result;
 }
 
-internal RDI_RegisterCode
+internal RDI_RegCode
 p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg)
 {
-  RDI_RegisterCode result = 0;
+  RDI_RegCode result = 0;
   switch(arch)
   {
     case RDI_Arch_X86:
@@ -440,11 +440,11 @@ p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encod
         }break;
         case CV_EncodedFramePtrReg_FramePtr:
         {
-          result = RDI_RegisterCode_X86_ebp;
+          result = RDI_RegCodeX86_ebp;
         }break;
         case CV_EncodedFramePtrReg_BasePtr:
         {
-          result = RDI_RegisterCode_X86_ebx;
+          result = RDI_RegCodeX86_ebx;
         }break;
       }
     }break;
@@ -454,15 +454,15 @@ p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encod
       {
         case CV_EncodedFramePtrReg_StackPtr:
         {
-          result = RDI_RegisterCode_X64_rsp;
+          result = RDI_RegCodeX64_rsp;
         }break;
         case CV_EncodedFramePtrReg_FramePtr:
         {
-          result = RDI_RegisterCode_X64_rbp;
+          result = RDI_RegCodeX64_rbp;
         }break;
         case CV_EncodedFramePtrReg_BasePtr:
         {
-          result = RDI_RegisterCode_X64_r13;
+          result = RDI_RegCodeX64_r13;
         }break;
       }
     }break;
@@ -2207,13 +2207,13 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
             }
             
             // rjf: get raddbg register code
-            RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+            RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
             // TODO(rjf): real byte_size & byte_pos from cv_reg goes here
             U32 byte_size = 8;
             U32 byte_pos = 0;
             
             // rjf: set location case
-            RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, in->arch, register_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
+            RDIM_Location *loc = p2r_location_from_addr_reg_off(arena, in->arch, reg_code, byte_size, byte_pos, (S64)(S32)var_off, extra_indirection_to_value);
             RDIM_Rng1U64 voff_range = {0, max_U64};
             rdim_location_set_push_case(arena, &sym_scopes, &local->locset, voff_range, loc);
           }
@@ -2327,10 +2327,10 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register+1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+          RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
           
           // rjf: build location
-          RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
+          RDIM_Location *location = rdim_push_location_val_reg(arena, reg_code);
           
           // rjf: emit locations over ranges
           p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
@@ -2369,7 +2369,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           
           // rjf: select frame pointer register
           CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
-          RDI_RegisterCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
+          RDI_RegCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
           
           // rjf: build location
           B32 extra_indirection = 0;
@@ -2399,7 +2399,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
-          RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+          RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
           
           // rjf: skip "subfield" location info - currently not supported
           if(defrange_subfield_register->field_offset != 0)
@@ -2408,7 +2408,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           }
           
           // rjf: build location
-          RDIM_Location *location = rdim_push_location_val_reg(arena, register_code);
+          RDIM_Location *location = rdim_push_location_val_reg(arena, reg_code);
           
           // rjf: emit locations over ranges
           p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
@@ -2441,7 +2441,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           // rjf: unpack sym
           CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope = (CV_SymDefrangeFramepointerRelFullScope*)sym_header_struct_base;
           CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
-          RDI_RegisterCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
+          RDI_RegCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
           
           // rjf: build location
           B32 extra_indirection = 0;
@@ -2468,7 +2468,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           // rjf: unpack sym
           CV_SymDefrangeRegisterRel *defrange_register_rel = (CV_SymDefrangeRegisterRel*)sym_header_struct_base;
           CV_Reg cv_reg = defrange_register_rel->reg;
-          RDI_RegisterCode register_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
+          RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
           CV_LvarAddrRange *range = &defrange_register_rel->range;
           COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
@@ -2480,7 +2480,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           U32 byte_pos = 0;
           B32 extra_indirection_to_value = 0;
           S64 var_off = defrange_register_rel->reg_off;
-          RDIM_Location *location = p2r_location_from_addr_reg_off(arena, in->arch, register_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
+          RDIM_Location *location = p2r_location_from_addr_reg_off(arena, in->arch, reg_code, byte_size, byte_pos, var_off, extra_indirection_to_value);
           
           // rjf: emit locations over ranges
           p2r_location_over_lvar_addr_range(arena, &sym_scopes, defrange_target, location, range, range_section, gaps, gap_count);
