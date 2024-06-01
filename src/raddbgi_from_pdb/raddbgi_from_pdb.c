@@ -3187,7 +3187,12 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   if(dbi)
   {
     String8 raw_psi_data = msf_data_from_stream(msf, dbi->psi_sn);
-    str8_deserial_read_struct(raw_psi_data, 0, &psi_gsi_header);
+    str8_deserial_read_struct(raw_psi_data, sizeof(PDB_PsiHeader), &psi_gsi_header);
+    if(psi_gsi_header.signature != PDB_GsiSignature_Basic ||
+       psi_gsi_header.version != PDB_GsiVersion_V70)
+    {
+      MemoryZeroStruct(&psi_gsi_header);
+    }
   }
   ProfEnd();
   
