@@ -27,7 +27,7 @@ eval_interpret(EVAL_Machine *machine, String8 bytecode)
       result.code = EVAL_ResultCode_BadOp;
       goto done;
     }
-    U8 ctrlbits = rdi_eval_opcode_ctrlbits[op];
+    U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
     ptr += 1;
     
     // decode

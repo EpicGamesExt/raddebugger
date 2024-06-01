@@ -462,6 +462,7 @@ str8_lit_comp(
 ""
 );
 
+
 C_LINKAGE_END
 
 #endif // RENDER_D3D11_META_H

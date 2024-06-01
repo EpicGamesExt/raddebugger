@@ -517,7 +517,4 @@ internal String8 cv_type_name_from_basic_type(CV_BasicType v);
 internal String8 cv_string_from_leaf_kind(CV_LeafKind v);
 internal U64 cv_header_struct_size_from_sym_kind(CV_SymKind v);
 internal U64 cv_header_struct_size_from_leaf_kind(CV_LeafKind v);
-C_LINKAGE_BEGIN
-C_LINKAGE_END
-
 #endif // CODEVIEW_META_H

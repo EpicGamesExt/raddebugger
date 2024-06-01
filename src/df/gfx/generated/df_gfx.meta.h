@@ -5002,6 +5002,7 @@ read_only global U8 df_g_icon_file_bytes__data[] =
 };
 
 read_only global String8 df_g_icon_file_bytes = {df_g_icon_file_bytes__data, sizeof(df_g_icon_file_bytes__data)};
+
 C_LINKAGE_END
 
 #endif // DF_GFX_META_H

@@ -46,7 +46,4 @@ internal F32                        d_top_transparency(void);
 #define D_ClipScope(v)              DeferLoop(d_push_clip(v), d_pop_clip())
 #define D_TransparencyScope(v)      DeferLoop(d_push_transparency(v), d_pop_transparency())
 #endif
-C_LINKAGE_BEGIN
-C_LINKAGE_END
-
 #endif // DRAW_META_H

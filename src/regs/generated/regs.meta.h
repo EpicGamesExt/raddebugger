@@ -439,6 +439,7 @@ extern String8 regs_g_reg_code_x86_string_table[61];
 extern String8 regs_g_alias_code_x86_string_table[36];
 extern REGS_Rng regs_g_reg_code_x86_rng_table[61];
 extern REGS_Slice regs_g_alias_code_x86_slice_table[36];
+
 C_LINKAGE_END
 
 #endif // REGS_META_H

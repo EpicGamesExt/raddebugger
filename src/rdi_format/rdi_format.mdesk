@@ -2,6 +2,90 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated File Format
+
+@option library
+
+@h_name "rdi_format.h"
+@c_name "rdi_format.c"
+
+@h_header
+{
+  "////////////////////////////////////////////////////////////////";
+  "//~ RAD Debug Info, (R)AD(D)BG(I) Format Library";
+  "//";
+  "// Defines standard RDI debug information format types and";
+  "// functions.";
+  "";
+  "#ifndef RDI_FORMAT_H";
+  "#define RDI_FORMAT_H";
+  "";
+  "////////////////////////////////////////////////////////////////";
+  "//~ Overridable Procedure Decoration";
+  "";
+  "#if !defined(RDI_PROC)";
+  "# define RDI_PROC static";
+  "#endif";
+  "";
+  "////////////////////////////////////////////////////////////////";
+  "//~ Overridable Basic Integer Types";
+  "";
+  "#if !defined(RDI_U8)";
+  "# define RDI_U8 RDI_U8";
+  "# define RDI_U16 RDI_U16";
+  "# define RDI_U32 RDI_U32";
+  "# define RDI_U64 RDI_U64";
+  "# define RDI_S8 RDI_S8";
+  "# define RDI_S16 RDI_S16";
+  "# define RDI_S32 RDI_S32";
+  "# define RDI_S64 RDI_S64";
+  "#include <stdint.h>";
+  "typedef uint8_t  RDI_U8;";
+  "typedef uint16_t RDI_U16;";
+  "typedef uint32_t RDI_U32;";
+  "typedef uint64_t RDI_U64;";
+  "typedef int8_t   RDI_S8;";
+  "typedef int16_t  RDI_S16;";
+  "typedef int32_t  RDI_S32;";
+  "typedef int64_t  RDI_S64;";
+  "#endif";
+  "";
+  "////////////////////////////////////////////////////////////////";
+  "//~ Format Constants";
+  "";
+  "// \"raddbg\0\0\"";
+  "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
+  "#define RDI_ENCODING_VERSION 1";
+  "";
+  "////////////////////////////////////////////////////////////////";
+  "//~ Format Types & Functions";
+  "";
+}
+
+@h_footer
+{
+  "#endif // RDI_FORMAT_H";
+}
+
+@c_header
+{
+  "////////////////////////////////////////////////////////////////";
+  "//~ RAD Debug Info, (R)AD(D)BG(I) Format Library";
+  "//";
+  "// Defines standard RDI debug information format types and";
+  "// functions.";
+  "";
+  "#ifndef RDI_FORMAT_C";
+  "#define RDI_FORMAT_C";
+  "";
+}
+
+@c_footer
+{
+  "#endif // RDI_FORMAT_C";
+}
+
+////////////////////////////////
 //~ rjf: Format Header Tables
 
 @table(name type desc)
@@ -52,6 +136,7 @@ RDI_DataSectionTable:
   {LocationData        0x0017                                             ""}
   {NameMaps            0x0018                                             ""}
   {PRIMARY_COUNT       0x0019                                             ""}
+  {SECONDARY           0x80000000                                         ""}
   {SKIP                `RDI_DataSectionTag_SECONDARY|0x0000`              ""}
   {LineInfoVoffs       `RDI_DataSectionTag_SECONDARY|0x0001`              ""}
   {LineInfoData        `RDI_DataSectionTag_SECONDARY|0x0002`              ""}
@@ -73,8 +158,11 @@ RDI_DataSectionEncodingTable:
 @table(name type desc)
 RDI_DataSectionMemberTable:
 {
-  {tag         RDI_DataSectionTag      ""}
-  {encoding    RDI_DataSectionEncoding ""}
+  {tag           RDI_DataSectionTag      ""}
+  {encoding      RDI_DataSectionEncoding ""}
+  {off           RDI_U64                 ""}
+  {encoded_size  RDI_U64                 ""}
+  {unpacked_size RDI_U64                 ""}
 }
 
 @enum(RDI_U32) RDI_DataSectionTag:
@@ -271,12 +359,14 @@ RDI_RegCodeX64Table:
   @expand(RDI_ArchTable a) `$(a.name .. =>10) = $(a.value)`
 }
 
-@enum RDI_RegCodeX86:
+@enum(RDI_U8) RDI_RegCode: {nil}
+
+@enum(RDI_U8) RDI_RegCodeX86:
 {
   @expand(RDI_RegCodeX86Table a) `$(a.name .. =>10) = $(a.value)`
 }
 
-@enum RDI_RegCodeX64:
+@enum(RDI_U8) RDI_RegCodeX64:
 {
   @expand(RDI_RegCodeX64Table a) `$(a.name .. =>10) = $(a.value)`
 }
@@ -325,6 +415,11 @@ RDI_BinarySectionMemberTable:
   @expand(RDI_BinarySectionFlagTable a) `$(a.name .. =>10) = $(a.value)`;
 }
 
+@struct RDI_BinarySection:
+{
+  @expand(RDI_BinarySectionMemberTable a) `$(a.type) $(a.name)`
+}
+
 ////////////////////////////////
 //~ rjf: File Path Tree Info Type Tables
 
@@ -353,6 +448,16 @@ RDI_SourceFileMemberTable:
   {line_map_voff_data_idx       RDI_U32          ""} // U64[...] (idx by line_map_range_data)
 }
 
+@struct RDI_FilePathNode:
+{
+  @expand(RDI_FilePathNodeMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_SourceFile:
+{
+  @expand(RDI_SourceFileMemberTable a) `$(a.type) $(a.name)`
+}
+
 ////////////////////////////////
 //~ rjf: Unit Info Type Tables
 
@@ -375,6 +480,11 @@ RDI_UnitMemberTable:
   {line_info_count               RDI_U32      ""}
 }
 
+@struct RDI_Unit:
+{
+  @expand(RDI_UnitMemberTable a) `$(a.type) $(a.name)`
+}
+
 ////////////////////////////////
 //~ rjf: Line Info Type Tables
 
@@ -392,6 +502,16 @@ RDI_ColumnMemberTable:
   {col_opl    RDI_U16     ""}
 }
 
+@struct RDI_Line:
+{
+  @expand(RDI_LineMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_Column:
+{
+  @expand(RDI_ColumnMemberTable a) `$(a.type) $(a.name)`
+}
+
 ////////////////////////////////
 //~ rjf: Language Info Tables
 
@@ -401,6 +521,12 @@ RDI_LanguageTable:
   {NULL        0}
   {C           1}
   {CPlusPlus   2}
+  {COUNT       3}
+}
+
+@enum(RDI_U32) RDI_Language:
+{
+  @expand(RDI_LanguageTable a) `$(a.name .. =>10) = $(a.value)`
 }
 
 ////////////////////////////////
@@ -469,22 +595,22 @@ RDI_TypeKindTable:
   {Variadic             0xF001     0                                             }
 }
 
-@table(name val)
+@table(name value)
 RDI_TypeModifierFlagTable:
 {
   {Const     `1<<0`}
   {Volatile  `1<<1`}
 }
 
-@table(name type desc)
+@table(name type_lhs type_rhs desc)
 RDI_TypeNodeMemberTable:
 {
-  {kind       RDI_TypeKind ""}
-  {byte_size  RDI_U32      ""}
-  {kind_info `RDI_U32[3]`  ""}
+  {kind       RDI_TypeKind ``     ""}
+  {flags      RDI_U16      ``     ""}
+  {byte_size  RDI_U32      ``     ""}
 }
 
-@table(name val)
+@table(name value)
 RDI_UDTFlagTable:
 {
   {EnumMembers `1<<0`}
@@ -502,7 +628,7 @@ RDI_UDTMemberTable:
   {col             RDI_U32       ""}
 }
 
-@table(name val)
+@table(name value)
 RDI_MemberKindTable:
 {
   {NULL          0x0000}
@@ -535,10 +661,91 @@ RDI_EnumMemberTable:
   {val             RDI_U64           ""}
 }
 
+@enum(RDI_U16) RDI_TypeKind:
+{
+  @expand(RDI_TypeKindTable a) `$(a.name .. =>20) = $(a.value)`;
+  @expand(RDI_TypeKindTable a) `$(a.bookend1 != "" -> a.bookend1 .. =>20 .. " = RDI_TypeKind_" .. a.name)`;
+  @expand(RDI_TypeKindTable a) `$(a.bookend2 != "" -> a.bookend2 .. =>20 .. " = RDI_TypeKind_" .. a.name)`;
+}
+
+@enum(RDI_U16) RDI_TypeModifierFlags:
+{
+  @expand(RDI_TypeModifierFlagTable a) `$(a.name .. =>20) = $(a.value)`,
+}
+
+@struct RDI_TypeNode:
+{
+  @expand(RDI_TypeNodeMemberTable a) `$(a.type_lhs) $(a.name)$(a.type_rhs)`
+    ```
+    union
+  {
+    // kind is 'built-in'
+    struct
+    {
+      RDI_U32 name_string_idx;
+    } built_in;
+    
+    // kind is 'constructed'
+    struct
+    {
+      RDI_U32 direct_type_idx;
+      RDI_U32 count;
+      union{
+        // when kind is 'Function' or 'Method'
+        RDI_U32 param_idx_run_first;
+        // when kind is 'MemberPtr'
+        RDI_U32 owner_type_idx;
+      };
+    } constructed;
+    
+    // kind is 'user defined'
+    struct
+    {
+      RDI_U32 name_string_idx;
+      RDI_U32 direct_type_idx;
+      RDI_U32 udt_idx;
+    } user_defined;
+    
+    // (kind = Bitfield)
+    struct
+    {
+      RDI_U32 direct_type_idx;
+      RDI_U32 off;
+      RDI_U32 size;
+    } bitfield;
+  }
+  ```
+}
+
+@enum(RDI_U32) RDI_UDTFlags:
+{
+  @expand(RDI_UDTFlagTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@struct RDI_UDT:
+{
+  @expand(RDI_UDTMemberTable a) `$(a.type) $(a.name)`
+}
+
+@enum(RDI_U16) RDI_MemberKind:
+{
+  @expand(RDI_MemberKindTable a) `$(a.name .. =>25) = $(a.value)`
+}
+
+@struct RDI_Member:
+{
+  @expand(RDI_MemberMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_EnumMember:
+{
+  @expand(RDI_EnumMemberTable a) `$(a.type) $(a.name)`
+}
+
 ////////////////////////////////
 //~ rjf: Symbol Info Tables
 
-@table(name val)
+@table(name value)
 RDI_LinkFlagTable:
 {
   {External   `1<<0`}
@@ -546,7 +753,7 @@ RDI_LinkFlagTable:
   {ProcScoped `1<<2`}
 }
 
-@table(name val)
+@table(name value)
 RDI_LocalKindTable:
 {
   {NULL      0x0}
@@ -554,15 +761,15 @@ RDI_LocalKindTable:
   {Variable  0x2}
 }
 
-@table(name val)
+@table(name value)
 RDI_LocationKindTable:
 {
   {NULL                      0x0}
   {AddrBytecodeStream        0x1}
   {ValBytecodeStream         0x2}
-  {AddrRegisterPlusU16       0x3}
-  {AddrAddrRegisterPlusU16   0x4}
-  {ValRegister               0x5}
+  {AddrRegPlusU16       0x3}
+  {AddrAddrRegPlusU16   0x4}
+  {ValReg               0x5}
 }
 
 @table(name type desc)
@@ -638,83 +845,147 @@ RDI_LocationBytecodeStreamMemberTable:
 }
 
 @table(name type desc)
-RDI_LocationRegisterPlusU16MemberTable:
+RDI_LocationRegPlusU16MemberTable:
 {
   {kind             RDI_LocationKind }
-  {register_code    RDI_RegisterCode }
+  {reg_code         RDI_RegCode }
   {offset           RDI_U16 }
 }
 
 @table(name type desc)
-RDI_LocationRegister:
+RDI_LocationRegMemberTable:
 {
   {kind             RDI_LocationKind }
-  {register_code    RDI_RegisterCode }
+  {reg_code         RDI_RegCode }
+}
+
+@enum(RDI_U32) RDI_LinkFlags:
+{
+  @expand(RDI_LinkFlagTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@enum(RDI_U32) RDI_LocalKind:
+{
+  @expand(RDI_LocalKindTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@enum(RDI_U8) RDI_LocationKind:
+{
+  @expand(RDI_LocationKindTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@struct RDI_GlobalVariable:
+{
+  @expand(RDI_GlobalVariableMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_ThreadVariable:
+{
+  @expand(RDI_ThreadVariableMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_Procedure:
+{
+  @expand(RDI_ProcedureMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_Scope:
+{
+  @expand(RDI_ScopeMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_Local:
+{
+  @expand(RDI_LocalMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_LocationBlock:
+{
+  @expand(RDI_LocationBlockMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_LocationBytecodeStream:
+{
+  @expand(RDI_LocationBytecodeStreamMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_LocationRegPlusU16:
+{
+  @expand(RDI_LocationRegPlusU16MemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_LocationReg:
+{
+  @expand(RDI_LocationRegMemberTable a) `$(a.type) $(a.name)`
 }
 
 ////////////////////////////////
 //~ rjf: Evaluation Bytecode Tables
 
-@table(name num_decodes num_pops num_pushes)
+@table(name value num_decodes num_pops num_pushes)
 RDI_EvalOpTable:
 {
-  {Stop        0 0 0}
-  {Noop        0 0 0}
-  {Cond        1 1 0}
-  {Skip        1 0 0}
-  {MemRead     1 1 1}
-  {RegRead     4 0 1}
-  {RegReadDyn  0 1 1}
-  {FrameOff    1 0 1}
-  {ModuleOff   4 0 1}
-  {TLSOff      4 0 1}
-  {ObjectOff   0 0 0}
-  {CFA         0 0 0}
-  {ConstU8     1 0 1}
-  {ConstU16    2 0 1}
-  {ConstU32    4 0 1}
-  {ConstU64    8 0 1}
-  {Abs         1 1 1}
-  {Neg         1 1 1}
-  {Add         1 2 1}
-  {Sub         1 2 1}
-  {Mul         1 2 1}
-  {Div         1 2 1}
-  {Mod         1 2 1}
-  {LShift      1 2 1}
-  {RShift      1 2 1}
-  {BitAnd      1 2 1}
-  {BitOr       1 2 1}
-  {BitXor      1 2 1}
-  {BitNot      1 1 1}
-  {LogAnd      1 2 1}
-  {LogOr       1 2 1}
-  {LogNot      1 1 1}
-  {EqEq        1 2 1}
-  {NtEq        1 2 1}
-  {LsEq        1 2 1}
-  {GrEq        1 2 1}
-  {Less        1 2 1}
-  {Grtr        1 2 1}
-  {Trunc       1 1 1}
-  {TruncSigned 1 1 1}
-  {Convert     2 1 1}
-  {Pick        1 0 1}
-  {Pop         0 1 0}
-  {Insert      1 0 0}
+  {Stop        0       0 0 0}
+  {Noop        1       0 0 0}
+  {Cond        2       1 1 0}
+  {Skip        3       1 0 0}
+  {MemRead     4       1 1 1}
+  {RegRead     5       4 0 1}
+  {RegReadDyn  6       0 1 1}
+  {FrameOff    7       1 0 1}
+  {ModuleOff   8       4 0 1}
+  {TLSOff      9       4 0 1}
+  {ObjectOff   10      0 0 0}
+  {CFA         11      0 0 0}
+  {ConstU8     12      1 0 1}
+  {ConstU16    13      2 0 1}
+  {ConstU32    14      4 0 1}
+  {ConstU64    15      8 0 1}
+  {Abs         16      1 1 1}
+  {Neg         17      1 1 1}
+  {Add         18      1 2 1}
+  {Sub         19      1 2 1}
+  {Mul         20      1 2 1}
+  {Div         21      1 2 1}
+  {Mod         22      1 2 1}
+  {LShift      23      1 2 1}
+  {RShift      24      1 2 1}
+  {BitAnd      25      1 2 1}
+  {BitOr       26      1 2 1}
+  {BitXor      27      1 2 1}
+  {BitNot      28      1 1 1}
+  {LogAnd      29      1 2 1}
+  {LogOr       30      1 2 1}
+  {LogNot      31      1 1 1}
+  {EqEq        32      1 2 1}
+  {NtEq        33      1 2 1}
+  {LsEq        34      1 2 1}
+  {GrEq        35      1 2 1}
+  {Less        36      1 2 1}
+  {Grtr        37      1 2 1}
+  {Trunc       38      1 1 1}
+  {TruncSigned 39      1 1 1}
+  {Convert     40      2 1 1}
+  {Pick        41      1 0 1}
+  {Pop         42      0 1 0}
+  {Insert      43      1 0 0}
+  {COUNT       44      0 0 0}
 }
 
-@table(name val)
+// NOTE(rjf): "ck" -> "conversion kind, when converted to type group", used in square matrix form
+// e.g. x:0, y:0 means other -> other, x:3, y:1 means uint -> f32, etc.
+@table(name value      ck0             ck1         ck2          ck3         ck4)
 RDI_EvalTypeGroupTable:
 {
-  {Other 0}
-  {U     1}
-  {S     2}
-  {F32   3}
-  {F64   4}
+  {Other 0              OtherToOther    FromOther   FromOther    FromOther   FromOther }
+  {U     1              ToOther         Noop        Noop         Legal       Legal     }
+  {S     2              ToOther         Noop        Noop         Legal       Legal     }
+  {F32   3              ToOther         Legal       Legal        Noop        Legal     }
+  {F64   4              ToOther         Legal       Legal        Legal       Noop      }
+  {COUNT 5              Noop            Noop        Noop         Noop        Noop      }
 }
 
-@table(name val error_string)
+@table(name value error_string)
 RDI_EvalConversionKindTable:
 {
   {Noop         0 ""                                   }
@@ -722,12 +993,54 @@ RDI_EvalConversionKindTable:
   {OtherToOther 2 "Cannot convert between these types."}
   {ToOther      3 "Cannot convert to this type."       }
   {FromOther    4 "Cannot convert this type."          }
+  {COUNT        5 ""                                   }
+}
+
+@enum(RDI_U8) RDI_EvalOp:
+{
+  @expand(RDI_EvalOpTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@enum(RDI_U8) RDI_EvalTypeGroup:
+{
+  @expand(RDI_EvalTypeGroupTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@enum(RDI_U8) RDI_EvalConversionKind:
+{
+  @expand(RDI_EvalConversionKindTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@gen(enums)
+```
+#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
+#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0xf)
+#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0x3)
+#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 6) & 0x3)
+#define RDI_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
+```
+
+@data(RDI_U8) rdi_eval_op_ctrlbits_table:
+{
+  @expand(RDI_EvalOpTable a) `RDI_EVAL_CTRLBITS($(a.num_decodes), $(a.num_pops), $(a.num_pushes))`;
+}
+
+@data(`struct {RDI_EvalConversionKind dst_typegroups[RDI_EvalTypeGroup_COUNT];}`) @c_file
+rdi_eval_typegroup_conversion_kind_matrix:
+{
+  @expand(RDI_EvalTypeGroupTable a) `{{RDI_EvalConversionKind_$(a.ck0), RDI_EvalConversionKind_$(a.ck1), RDI_EvalConversionKind_$(a.ck2), RDI_EvalConversionKind_$(a.ck3), RDI_EvalConversionKind_$(a.ck4)}}`
+}
+
+@data(`struct {RDI_U8 *str; RDI_U64 size;}`) @c_file
+rdi_eval_conversion_kind_message_string_table:
+{
+  @expand(RDI_EvalTypeGroupTable a) `{(RDI_U8 *)"$(a.error_string)", sizeof("$(a.error_string)")}`
 }
 
 ////////////////////////////////
 //~ rjf: Name Map Tables
 
-@table(name val)
+@table(name value)
 RDI_NameMapKindTable:
 {
   {NULL               0}
@@ -737,6 +1050,7 @@ RDI_NameMapKindTable:
   {Types              4}
   {LinkNameProcedures 5}
   {NormalSourcePaths  6}
+  {COUNT              7}
 }
 
 @table(name type desc)
@@ -764,3 +1078,136 @@ RDI_NameMapNodeMemberTable:
   {match_idx_or_idx_run_first    RDI_U32   ""}
 }
 
+@enum(RDI_U32) RDI_NameMapKind:
+{
+  @expand(RDI_NameMapKindTable a) `$(a.name .. =>20) = $(a.value)`
+}
+
+@struct RDI_NameMap:
+{
+  @expand(RDI_NameMapMemberTable a) `$(a.type) $(a.val)`
+}
+
+@struct RDI_NameMapBucket:
+{
+  @expand(RDI_NameMapBucketMemberTable a) `$(a.type) $(a.val)`
+}
+
+@struct RDI_NameMapNode:
+{
+  @expand(RDI_NameMapNodeMemberTable a) `$(a.type) $(a.val)`
+}
+
+////////////////////////////////
+//~ rjf: Functions
+
+@gen(functions)
+```
+RDI_PROC RDI_U64 rdi_hash(RDI_U8 *ptr, RDI_U64 size);
+RDI_PROC RDI_U32 rdi_size_from_basic_type_kind(RDI_TypeKind kind);
+RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
+RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
+RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out);
+RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
+```
+
+@gen(functions) @c_file
+```
+RDI_PROC RDI_U64
+rdi_hash(RDI_U8 *ptr, RDI_U64 size)
+{
+  RDI_U64 result = 5381;
+  RDI_U8 *opl = ptr + size;
+  for(;ptr < opl; ptr += 1)
+  {
+    result = ((result << 5) + result) + *ptr;
+  }
+  return result;
+}
+```
+
+@gen(functions) @c_file
+{
+  `RDI_PROC RDI_U32`;
+  `rdi_size_from_basic_type_kind(RDI_TypeKind kind)`;
+  `{`;
+    `RDI_U32 result = 0;`;
+    `switch(kind)`;
+    `{`;
+      `default:{}break;`;
+      @expand(RDI_TypeKindTable a) `$(a.size != 0 -> "    case RDI_TypeKind_" .. a.name .. ":{result = " .. a.size .. ";}break;")`,
+      `}`;
+    `return result;`;
+    `}`;
+  ``;
+}
+
+@gen(functions) @c_file
+{
+  `RDI_PROC RDI_U32`;
+  `rdi_addr_size_from_arch(RDI_Arch arch)`;
+  `{`;
+    `RDI_U32 result = 0;`;
+    `switch(arch)`;
+    `{`;
+      `default:{}break;`;
+      @expand(RDI_ArchTable a) `$(a.addr_size != 0 -> "    case RDI_Arch_" .. a.name .. ":{result = " .. a.addr_size .. ";}break;")`;
+      `}`;
+    `return result;`;
+    `}`;
+  ``;
+}
+
+@gen(functions) @c_file
+```
+RDI_PROC RDI_EvalConversionKind
+rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out)
+{
+  RDI_EvalConversionKind k = rdi_eval_typegroup_conversion_kind_matrix[in].dst_typegroups[out];
+  return k;
+}
+```
+
+@gen(functions) @c_file
+```
+RDI_PROC RDI_U8 *
+rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind kind, RDI_U64 *size_out)
+{
+  *size_out = rdi_eval_conversion_kind_message_string_table[kind].size;
+  return rdi_eval_conversion_kind_message_string_table[kind].str;
+}
+```
+
+@gen(functions) @c_file
+```
+RDI_PROC RDI_S32
+rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group)
+{
+  RDI_S32 result = 0;
+  switch(op)
+  {
+    case RDI_EvalOp_Neg: case RDI_EvalOp_Add: case RDI_EvalOp_Sub:
+    case RDI_EvalOp_Mul: case RDI_EvalOp_Div:
+    case RDI_EvalOp_EqEq:case RDI_EvalOp_NtEq:
+    case RDI_EvalOp_LsEq:case RDI_EvalOp_GrEq:
+    case RDI_EvalOp_Less:case RDI_EvalOp_Grtr:
+    {
+      if(group != RDI_EvalTypeGroup_Other)
+      {
+        result = 1;
+      }
+    }break;
+    case RDI_EvalOp_Mod:case RDI_EvalOp_LShift:case RDI_EvalOp_RShift:
+    case RDI_EvalOp_BitNot:case RDI_EvalOp_BitAnd:case RDI_EvalOp_BitXor:
+    case RDI_EvalOp_BitOr:case RDI_EvalOp_LogNot:case RDI_EvalOp_LogAnd:
+    case RDI_EvalOp_LogOr: 
+    {
+      if(group == RDI_EvalTypeGroup_S || group == RDI_EvalTypeGroup_U)
+      {
+        result = 1;
+      }
+    }break;
+  }
+  return result;
+}
+```

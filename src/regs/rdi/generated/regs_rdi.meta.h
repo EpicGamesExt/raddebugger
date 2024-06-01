@@ -6,7 +6,4 @@
 #ifndef REGS_RDI_META_H
 #define REGS_RDI_META_H
 
-C_LINKAGE_BEGIN
-C_LINKAGE_END
-
 #endif // REGS_RDI_META_H

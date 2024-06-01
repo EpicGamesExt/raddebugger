@@ -150,6 +150,83 @@ int main(int argument_count, char **arguments)
   }
   
   //////////////////////////////
+  //- rjf: gather layer options
+  //
+  for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
+  {
+    MD_Node *file = n->v.root;
+    String8 layer_key = mg_layer_key_from_path(file->string);
+    MG_Layer *layer = mg_layer_from_key(layer_key);
+    for(MD_EachNode(node, file->first))
+    {
+      if(md_node_has_tag(node, str8_lit("option"), 0))
+      {
+        if(str8_match(node->string, str8_lit("library"), 0))
+        {
+          layer->is_library = 1;
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: gather hand-written h/c names & decorations
+  //
+  for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
+  {
+    MD_Node *file = n->v.root;
+    String8 layer_key = mg_layer_key_from_path(file->string);
+    MG_Layer *layer = mg_layer_from_key(layer_key);
+    for(MD_EachNode(node, file->first))
+    {
+      if(md_node_has_tag(node, str8_lit("h_name"), 0))
+      {
+        layer->h_name_override = node->string;
+      }
+      if(md_node_has_tag(node, str8_lit("c_name"), 0))
+      {
+        layer->c_name_override = node->string;
+      }
+      if(md_node_has_tag(node, str8_lit("h_header"), 0))
+      {
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        for(String8Node *n = gen_strings.first; n != 0; n = n->next)
+        {
+          str8_list_push(mg_arena, &layer->h_header, n->string);
+          str8_list_push(mg_arena, &layer->h_header, str8_lit("\n"));
+        }
+      }
+      if(md_node_has_tag(node, str8_lit("h_footer"), 0))
+      {
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        for(String8Node *n = gen_strings.first; n != 0; n = n->next)
+        {
+          str8_list_push(mg_arena, &layer->h_footer, n->string);
+          str8_list_push(mg_arena, &layer->h_footer, str8_lit("\n"));
+        }
+      }
+      if(md_node_has_tag(node, str8_lit("c_header"), 0))
+      {
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        for(String8Node *n = gen_strings.first; n != 0; n = n->next)
+        {
+          str8_list_push(mg_arena, &layer->c_header, n->string);
+          str8_list_push(mg_arena, &layer->c_header, str8_lit("\n"));
+        }
+      }
+      if(md_node_has_tag(node, str8_lit("c_footer"), 0))
+      {
+        String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+        for(String8Node *n = gen_strings.first; n != 0; n = n->next)
+        {
+          str8_list_push(mg_arena, &layer->c_footer, n->string);
+          str8_list_push(mg_arena, &layer->c_footer, str8_lit("\n"));
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: generate enums
   //
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
@@ -160,31 +237,37 @@ int main(int argument_count, char **arguments)
       MD_Node *tag = md_tag_from_string(node, str8_lit("enum"), 0);
       if(!md_node_is_nil(tag))
       {
+        String8 enum_name = node->string;
+        String8 enum_member_prefix = enum_name;
+        if(str8_match(str8_postfix(enum_name, 5), str8_lit("Flags"), 0))
+        {
+          enum_member_prefix = str8_chop(enum_name, 1);
+        }
         String8 enum_base_type_name = tag->first->string;
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
         String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
         if(enum_base_type_name.size == 0)
         {
-          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %S\n{\n", node->string);
+          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %S\n{\n", enum_name);
         }
         else
         {
-          str8_list_pushf(mg_arena, &layer->enums, "typedef %S %S;\n", enum_base_type_name, node->string);
-          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %SEnum\n{\n", node->string);
+          str8_list_pushf(mg_arena, &layer->enums, "typedef %S %S;\n", enum_base_type_name, enum_name);
+          str8_list_pushf(mg_arena, &layer->enums, "typedef enum %SEnum\n{\n", enum_name);
         }
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_pushf(mg_arena, &layer->enums, "%S_%S,\n", node->string, escaped);
+          str8_list_pushf(mg_arena, &layer->enums, "%S_%S,\n", enum_member_prefix, escaped);
         }
         if(enum_base_type_name.size == 0)
         {
-          str8_list_pushf(mg_arena, &layer->enums, "} %S;\n\n", node->string);
+          str8_list_pushf(mg_arena, &layer->enums, "} %S;\n\n", enum_name);
         }
         else
         {
-          str8_list_pushf(mg_arena, &layer->enums, "} %SEnum;\n\n", node->string);
+          str8_list_pushf(mg_arena, &layer->enums, "} %SEnum;\n\n", enum_name);
         }
       }
     }
@@ -301,7 +384,8 @@ int main(int argument_count, char **arguments)
         String8List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
-          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
+          String8 trimmed = str8_skip_chop_whitespace(n->string);
+          String8 escaped = mg_escaped_from_str8(mg_arena, trimmed);
           str8_list_push(mg_arena, out, escaped);
           str8_list_push(mg_arena, out, str8_lit("\n"));
         }
@@ -425,13 +509,28 @@ int main(int argument_count, char **arguments)
           String8 layer_key_filename_upper = upper_from_str8(mg_arena, layer_key_filename);
           String8 h_path = push_str8f(mg_arena, "%S/%S.meta.h", layer_generated_folder, layer_key_filename);
           String8 c_path = push_str8f(mg_arena, "%S/%S.meta.c", layer_generated_folder, layer_key_filename);
+          if(layer->h_name_override.size != 0)
+          {
+            h_path = push_str8f(mg_arena, "%S/%S", layer_generated_folder, str8_skip_last_slash(layer->h_name_override));
+          }
+          if(layer->c_name_override.size != 0)
+          {
+            c_path = push_str8f(mg_arena, "%S/%S", layer_generated_folder, str8_skip_last_slash(layer->c_name_override));
+          }
           {
             FILE *h = fopen((char *)h_path.str, "w");
             fprintf(h, "// Copyright (c) 2024 Epic Games Tools\n");
             fprintf(h, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
-            fprintf(h, "//- GENERATED CODE\n\n");
-            fprintf(h, "#ifndef %.*s_META_H\n", str8_varg(layer_key_filename_upper));
-            fprintf(h, "#define %.*s_META_H\n\n", str8_varg(layer_key_filename_upper));
+            if(layer->h_header.first == 0)
+            {
+              fprintf(h, "//- GENERATED CODE\n\n");
+              fprintf(h, "#ifndef %.*s_META_H\n", str8_varg(layer_key_filename_upper));
+              fprintf(h, "#define %.*s_META_H\n\n", str8_varg(layer_key_filename_upper));
+            }
+            else for(String8Node *n = layer->h_header.first; n != 0; n = n->next)
+            {
+              fwrite(n->string.str, n->string.size, 1, h);
+            }
             for(String8Node *n = layer->enums.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, h);
@@ -448,34 +547,74 @@ int main(int argument_count, char **arguments)
             {
               fwrite(n->string.str, n->string.size, 1, h);
             }
-            fprintf(h, "C_LINKAGE_BEGIN\n");
-            for(String8Node *n = layer->h_tables.first; n != 0; n = n->next)
+            if(layer->h_tables.first != 0)
+            {
+              if(!layer->is_library)
+              {
+                fprintf(h, "C_LINKAGE_BEGIN\n");
+              }
+              for(String8Node *n = layer->h_tables.first; n != 0; n = n->next)
+              {
+                fwrite(n->string.str, n->string.size, 1, h);
+              }
+              fprintf(h, "\n");
+              if(!layer->is_library)
+              {
+                fprintf(h, "C_LINKAGE_END\n\n");
+              }
+            }
+            if(layer->h_footer.first == 0)
+            {
+              fprintf(h, "#endif // %.*s_META_H\n", str8_varg(layer_key_filename_upper));
+            }
+            else for(String8Node *n = layer->h_footer.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, h);
             }
-            fprintf(h, "C_LINKAGE_END\n\n");
-            fprintf(h, "#endif // %.*s_META_H\n", str8_varg(layer_key_filename_upper));
             fclose(h);
           }
           {
             FILE *c = fopen((char *)c_path.str, "w");
             fprintf(c, "// Copyright (c) 2024 Epic Games Tools\n");
             fprintf(c, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
-            fprintf(c, "//- GENERATED CODE\n\n");
+            if(layer->c_header.first == 0)
+            {
+              fprintf(c, "//- GENERATED CODE\n\n");
+            }
+            else for(String8Node *n = layer->c_header.first; n != 0; n = n->next)
+            {
+              fwrite(n->string.str, n->string.size, 1, c);
+            }
             for(String8Node *n = layer->c_catchall.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, c);
+            }
+            if(layer->c_tables.first != 0)
+            {
+              if(!layer->is_library)
+              {
+                fprintf(c, "C_LINKAGE_BEGIN\n");
+              }
+              for(String8Node *n = layer->c_tables.first; n != 0; n = n->next)
+              {
+                fwrite(n->string.str, n->string.size, 1, c);
+              }
+              if(!layer->is_library)
+              {
+                fprintf(c, "C_LINKAGE_END\n\n");
+              }
             }
             for(String8Node *n = layer->c_functions.first; n != 0; n = n->next)
             {
               fwrite(n->string.str, n->string.size, 1, c);
             }
-            fprintf(c, "C_LINKAGE_BEGIN\n");
-            for(String8Node *n = layer->c_tables.first; n != 0; n = n->next)
+            if(layer->c_footer.first != 0)
             {
-              fwrite(n->string.str, n->string.size, 1, c);
+              for(String8Node *n = layer->c_footer.first; n != 0; n = n->next)
+              {
+                fwrite(n->string.str, n->string.size, 1, c);
+              }
             }
-            fprintf(c, "C_LINKAGE_END\n\n");
             fclose(c);
           }
         }

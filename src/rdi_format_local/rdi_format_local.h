@@ -4,7 +4,8 @@
 #ifndef RDI_FORMAT_LOCAL_H
 #define RDI_FORMAT_LOCAL_H
 
-#include "lib_rdi_format/rdi_format.h"
+//#include "lib_rdi_format/rdi_format.h"
+#include "rdi_format/generated/rdi_format.h"
 #include "lib_rdi_format/rdi_format_parse.h"
 
 internal void rdi_decompress_parsed(U8 *decompressed_data, U64 decompressed_size, RDI_Parsed *og_rdi);

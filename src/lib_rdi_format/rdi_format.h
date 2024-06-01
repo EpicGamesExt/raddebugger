@@ -57,7 +57,7 @@ typedef enum RDI_ArchEnum{
 } RDI_ArchEnum;
 
 
-typedef RDI_U8 RDI_RegisterCode;
+typedef RDI_U8 RDI_RegCode;
 
 // x86 registers
 #define RDI_RegisterCode_X86_XList(X) \
@@ -327,7 +327,7 @@ typedef struct RDI_VMapEntry{
 
 //- top level info
 typedef struct RDI_TopLevelInfo{
-  RDI_Arch architecture;
+  RDI_Arch arch;
   RDI_U32 exe_name_string_idx;
   RDI_U64 exe_hash;
   RDI_U64 voff_max;
@@ -541,14 +541,14 @@ typedef struct RDI_TypeNode{
   };
 } RDI_TypeNode;
 
-typedef RDI_U32 RDI_UserDefinedTypeFlags;
+typedef RDI_U32 RDI_UDTFlags;
 enum{
-  RDI_UserDefinedTypeFlag_EnumMembers = (1 << 0),
+  RDI_UDTFlag_EnumMembers = (1 << 0),
 };
 
 typedef struct RDI_UDT{
   RDI_U32 self_type_idx;
-  RDI_UserDefinedTypeFlags flags;
+  RDI_UDTFlags flags;
   
   // when EnumMembers flag is set, indexes into enum "enum_members" instead of "members"
   RDI_U32 member_first;
@@ -697,9 +697,9 @@ typedef enum{
   RDI_LocationKind_NULL,
   RDI_LocationKind_AddrBytecodeStream,
   RDI_LocationKind_ValBytecodeStream,
-  RDI_LocationKind_AddrRegisterPlusU16,
-  RDI_LocationKind_AddrAddrRegisterPlusU16,
-  RDI_LocationKind_ValRegister,
+  RDI_LocationKind_AddrRegPlusU16,
+  RDI_LocationKind_AddrAddrRegPlusU16,
+  RDI_LocationKind_ValReg,
   RDI_LocationKind_COUNT
 } RDI_LocationKindEnum;
 
@@ -708,16 +708,16 @@ typedef struct RDI_LocationBytecodeStream{
   // [... 0] null terminated byte sequence RDI_EvalBytecodeStream
 } RDI_LocationBytecodeStream;
 
-typedef struct RDI_LocationRegisterPlusU16{
+typedef struct RDI_LocationRegPlusU16{
   RDI_LocationKind kind;
-  RDI_RegisterCode register_code;
+  RDI_RegCode reg_code;
   RDI_U16 offset;
-} RDI_LocationRegisterPlusU16;
+} RDI_LocationRegPlusU16;
 
-typedef struct RDI_LocationRegister{
+typedef struct RDI_LocationReg{
   RDI_LocationKind kind;
-  RDI_RegisterCode register_code;
-} RDI_LocationRegister;
+  RDI_RegCode reg_code;
+} RDI_LocationReg;
 
 //- name map types
 #define RDI_NameMapXList(X)\
@@ -905,7 +905,7 @@ typedef enum RDI_EvalConversionKindEnum{
 #define RDI_POPN_FROM_CTRLBITS(ctrlbits)    (((ctrlbits) >> 4) & 0x3)
 #define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)   (((ctrlbits) >> 6) & 0x3)
 
-static RDI_U8 rdi_eval_opcode_ctrlbits[] = {
+static RDI_U8 rdi_eval_op_ctrlbits_table[] = {
 #define X(Name, decodeN, popN, pushN) RDI_EVAL_CTRLBITS(decodeN,popN,pushN),
   RDI_EvalOpXList(X)
 #undef X
@@ -920,8 +920,8 @@ RDI_PROC RDI_U32 rdi_addr_size_from_arch(RDI_Arch arch);
 
 //- eval helpers
 
-RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_rule(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
-RDI_PROC RDI_U8* rdi_eval_conversion_message(RDI_EvalConversionKind conversion_kind, RDI_U64 *lennout);
-RDI_PROC RDI_S32 rdi_eval_opcode_type_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
+RDI_PROC RDI_EvalConversionKind rdi_eval_conversion_kind_from_typegroups(RDI_EvalTypeGroup in, RDI_EvalTypeGroup out);
+RDI_PROC RDI_U8* rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConversionKind conversion_kind, RDI_U64 *lennout);
+RDI_PROC RDI_S32 rdi_eval_op_typegroup_are_compatible(RDI_EvalOp op, RDI_EvalTypeGroup group);
 
 #endif // RDI_FORMAT_H
