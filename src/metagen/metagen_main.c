@@ -515,12 +515,17 @@ int main(int argument_count, char **arguments)
       for(MG_LayerNode *n = slot->first; n != 0; n = n->next)
       {
         MG_Layer *layer = &n->v;
-        String8 gen_folder = str8_lit("generated");
+        String8 layer_generated_folder = {0};
         if(layer->gen_folder_name.size != 0)
         {
-          gen_folder = layer->gen_folder_name;
+          String8 gen_folder = layer->gen_folder_name;
+          layer_generated_folder = push_str8f(mg_arena, "%S/%S", code_dir_path, gen_folder);
         }
-        String8 layer_generated_folder = push_str8f(mg_arena, "%S/%S/%S", code_dir_path, layer->key, gen_folder);
+        else
+        {
+          String8 gen_folder = str8_lit("generated");
+          layer_generated_folder = push_str8f(mg_arena, "%S/%S/%S", code_dir_path, layer->key, gen_folder);
+        }
         if(os_make_directory(layer_generated_folder))
         {
           String8List layer_key_parts = str8_split_path(mg_arena, layer->key);
