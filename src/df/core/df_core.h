@@ -265,10 +265,15 @@ struct DF_Eval
 ////////////////////////////////
 //~ rjf: View Rule Hook Types
 
-#define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(name) DF_Eval name(Arena *arena, DI_Scope *di_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_Eval eval, struct DF_CfgVal *val)
+typedef struct DF_CfgNode DF_CfgNode;
+typedef struct DF_CfgVal DF_CfgVal;
+typedef struct DF_CfgTable DF_CfgTable;
+typedef struct DF_EvalView DF_EvalView;
+typedef struct DF_EvalVizBlockList DF_EvalVizBlockList;
+#define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(name) DF_Eval name(Arena *arena, DI_Scope *di_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_Eval eval, DF_CfgVal *val)
 #define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_NAME(name) df_core_view_rule_eval_resolution__##name
 #define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_NAME(name))
-#define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena, DI_Scope *di_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_EvalView *eval_view, DF_Eval eval, String8 string, struct DF_CfgTable *cfg_table, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth, struct DF_CfgNode *cfg, struct DF_EvalVizBlockList *out)
+#define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena, DI_Scope *di_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, DF_Eval eval, String8 string, DF_CfgTable *cfg_table, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth, DF_CfgNode *cfg, struct DF_EvalVizBlockList *out)
 #define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name) df_core_view_rule_viz_block_prod__##name
 #define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name))
 typedef DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(DF_CoreViewRuleEvalResolutionHookFunctionType);
@@ -1270,8 +1275,7 @@ read_only global DF_Entity df_g_nil_entity =
   0,
   
   // rjf: name equipment
-  0,
-  zero_struct,
+  {0},
   0,
   
   // rjf: timestamp
