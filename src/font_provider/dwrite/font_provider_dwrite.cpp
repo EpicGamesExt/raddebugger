@@ -1,3 +1,6 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 ////////////////////////////////
 //~ rjf: Globals
 
@@ -169,47 +172,47 @@ fp_init(void)
   }
   
   //- rjf: make dwrite factory
-  error = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown **)&fp_dwrite_state->factory);
+  error = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory, (void **)&fp_dwrite_state->factory);
   
   //- rjf: register static data font "loader" interface
-  error = fp_dwrite_state->factory->RegisterFontFileLoader((IDWriteFontFileLoader *)&fp_dwrite_static_data_font_file_loader);
+  error = IDWriteFactory_RegisterFontFileLoader(fp_dwrite_state->factory, (IDWriteFontFileLoader *)&fp_dwrite_static_data_font_file_loader);
   
   //- rjf: make base rendering params
-  error = fp_dwrite_state->factory->CreateRenderingParams(&fp_dwrite_state->base_rendering_params);
+  error = IDWriteFactory_CreateRenderingParams(fp_dwrite_state->factory, &fp_dwrite_state->base_rendering_params);
   
   //- rjf: make sharp rendering params
   {
     FLOAT gamma = 1.f;
-    FLOAT enhanced_contrast = fp_dwrite_state->base_rendering_params->GetEnhancedContrast();
+    FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
     // FLOAT clear_type_level = fp_dwrite_state->base_rendering_params->GetClearTypeLevel();
-    error = fp_dwrite_state->factory->CreateCustomRenderingParams(gamma,
-                                                                  enhanced_contrast,
-                                                                  2.f,
-                                                                  DWRITE_PIXEL_GEOMETRY_FLAT,
-                                                                  DWRITE_RENDERING_MODE_GDI_NATURAL,
-                                                                  &fp_dwrite_state->rendering_params[FP_RasterMode_Sharp]);
+    error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory, gamma,
+                                                       enhanced_contrast,
+                                                       2.f,
+                                                       DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                       DWRITE_RENDERING_MODE_GDI_NATURAL,
+                                                       &fp_dwrite_state->rendering_params[FP_RasterMode_Sharp]);
   }
   
   //- rjf: make smooth rendering params
   {
     FLOAT gamma = 1.f;
-    FLOAT enhanced_contrast = fp_dwrite_state->base_rendering_params->GetEnhancedContrast();
+    FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
     // FLOAT clear_type_level = fp_dwrite_state->base_rendering_params->GetClearTypeLevel();
-    error = fp_dwrite_state->factory->CreateCustomRenderingParams(gamma,
-                                                                  enhanced_contrast,
-                                                                  2.f,
-                                                                  DWRITE_PIXEL_GEOMETRY_FLAT,
-                                                                  DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
-                                                                  &fp_dwrite_state->rendering_params[FP_RasterMode_Smooth]);
+    error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory, gamma,
+                                                       enhanced_contrast,
+                                                       2.f,
+                                                       DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                       DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+                                                       &fp_dwrite_state->rendering_params[FP_RasterMode_Smooth]);
   }
   
   //- rjf: make dwrite gdi interop
-  error = fp_dwrite_state->factory->GetGdiInterop(&fp_dwrite_state->gdi_interop);
+  error = IDWriteFactory_GetGdiInterop(fp_dwrite_state->factory, &fp_dwrite_state->gdi_interop);
   
   //- rjf: build render target for rasterization
   fp_dwrite_state->bitmap_render_target_dim = v2s32(2048, 256);
-  error = fp_dwrite_state->gdi_interop->CreateBitmapRenderTarget(0, fp_dwrite_state->bitmap_render_target_dim.x, fp_dwrite_state->bitmap_render_target_dim.y, &fp_dwrite_state->bitmap_render_target);
-  fp_dwrite_state->bitmap_render_target->SetPixelsPerDip(1.0);
+  error = IDWriteGdiInterop_CreateBitmapRenderTarget(fp_dwrite_state->gdi_interop, 0, fp_dwrite_state->bitmap_render_target_dim.x, fp_dwrite_state->bitmap_render_target_dim.y, &fp_dwrite_state->bitmap_render_target);
+  IDWriteBitmapRenderTarget_SetPixelsPerDip(fp_dwrite_state->bitmap_render_target, 1.0);
   ProfEnd();
 }
 
@@ -223,10 +226,10 @@ fp_font_open(String8 path)
   HRESULT error = 0;
   
   //- rjf: open font file reference
-  error = fp_dwrite_state->factory->CreateFontFileReference((WCHAR *)path16.str, 0, &font.file);
+  error = IDWriteFactory_CreateFontFileReference(fp_dwrite_state->factory, (WCHAR *)path16.str, 0, &font.file);
   
   //- rjf: open font face
-  error = fp_dwrite_state->factory->CreateFontFace(DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
+  error = IDWriteFactory_CreateFontFace(fp_dwrite_state->factory, DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
   
   //- rjf: handlify & return
   FP_Handle handle = fp_dwrite_handle_from_font(font);
@@ -244,10 +247,10 @@ fp_font_open_from_static_data_string(String8 *data_ptr)
   HRESULT error = 0;
   
   //- rjf: open font file reference
-  error = fp_dwrite_state->factory->CreateCustomFontFileReference(&data_ptr, sizeof(String8 *), (IDWriteFontFileLoader *)&fp_dwrite_static_data_font_file_loader, &font.file);
+  error = IDWriteFactory_CreateCustomFontFileReference(fp_dwrite_state->factory, &data_ptr, sizeof(String8 *), (IDWriteFontFileLoader *)&fp_dwrite_static_data_font_file_loader, &font.file);
   
   //- rjf: open font face
-  error = fp_dwrite_state->factory->CreateFontFace(DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
+  error = IDWriteFactory_CreateFontFace(fp_dwrite_state->factory, DWRITE_FONT_FACE_TYPE_TRUETYPE, 1, &font.file, 0, DWRITE_FONT_SIMULATIONS_NONE, &font.face);
   
   //- rjf: handlify & return
   FP_Handle handle = fp_dwrite_handle_from_font(font);
@@ -263,11 +266,11 @@ fp_font_close(FP_Handle handle)
   FP_DWrite_Font font = fp_dwrite_font_from_handle(handle);
   if(font.face != 0)
   {
-    font.face->Release();
+    IDWriteFontFace_Release(font.face);
   }
   if(font.file != 0)
   {
-    font.file->Release();
+    IDWriteFontFile_Release(font.file);
   }
   ProfEnd();
 }
@@ -280,7 +283,7 @@ fp_metrics_from_font(FP_Handle handle)
   DWRITE_FONT_METRICS metrics = {0};
   if(font.face != 0)
   {
-    font.face->GetMetrics(&metrics);
+    IDWriteFontFace_GetMetrics(font.face, &metrics);
   }
   FP_Metrics result = {0};
   {
@@ -309,7 +312,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   DWRITE_FONT_METRICS font_metrics = {0};
   if(font.face != 0)
   {
-    font.face->GetMetrics(&font_metrics);
+    IDWriteFontFace_GetMetrics(font.face, &font_metrics);
   }
   F32 design_units_per_em = (F32)font_metrics.designUnitsPerEm;
   
@@ -317,7 +320,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   U16 *glyph_indices = push_array_no_zero(scratch.arena, U16, string32.size);
   if(font.face != 0)
   {
-    error = font.face->GetGlyphIndices(string32.str, string32.size, glyph_indices);
+    error = IDWriteFontFace_GetGlyphIndices(font.face, string32.str, string32.size, glyph_indices);
   }
   
   //- rjf: get metrics info
@@ -325,7 +328,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   DWRITE_GLYPH_METRICS *glyphs_metrics = push_array_no_zero(scratch.arena, DWRITE_GLYPH_METRICS, glyphs_count);
   if(font.face != 0)
   {
-    error = font.face->GetGdiCompatibleGlyphMetrics((96.f/72.f)*size, 1.f, 0, 1, glyph_indices, glyphs_count, glyphs_metrics, 0);
+    error = IDWriteFontFace_GetGdiCompatibleGlyphMetrics(font.face, (96.f/72.f)*size, 1.f, 0, 1, glyph_indices, glyphs_count, glyphs_metrics, 0);
   }
   
   //- rjf: derive info from metrics
@@ -352,15 +355,15 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   IDWriteBitmapRenderTarget *render_target = 0;
   if(font.face != 0)
   {
-    error = fp_dwrite_state->gdi_interop->CreateBitmapRenderTarget(0, atlas_dim.x, atlas_dim.y, &render_target);
-    render_target->SetPixelsPerDip(1.0);
+    error = IDWriteGdiInterop_CreateBitmapRenderTarget(fp_dwrite_state->gdi_interop, 0, atlas_dim.x, atlas_dim.y, &render_target);
+    IDWriteBitmapRenderTarget_SetPixelsPerDip(render_target, 1.f);
   }
   
   //- rjf: get bitmap & clear
   HDC dc = 0;
   if(font.face != 0)
   {
-    dc = render_target->GetMemoryDC();
+    dc = IDWriteBitmapRenderTarget_GetMemoryDC(render_target);
     HGDIOBJ original = SelectObject(dc, GetStockObject(DC_PEN));
     SetDCPenColor(dc, bg_color);
     SelectObject(dc, GetStockObject(DC_BRUSH));
@@ -388,12 +391,12 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   RECT bounding_box = {0};
   if(font.face != 0)
   {
-    error = render_target->DrawGlyphRun(draw_p.x, draw_p.y,
-                                        DWRITE_MEASURING_MODE_NATURAL,
-                                        &glyph_run,
-                                        fp_dwrite_state->rendering_params[mode],
-                                        fg_color,
-                                        &bounding_box);
+    error = IDWriteBitmapRenderTarget_DrawGlyphRun(render_target, draw_p.x, draw_p.y,
+                                                   DWRITE_MEASURING_MODE_NATURAL,
+                                                   &glyph_run,
+                                                   fp_dwrite_state->rendering_params[mode],
+                                                   fg_color,
+                                                   &bounding_box);
   }
   
   //- rjf: get bitmap
@@ -446,7 +449,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
         result.atlas_dim = v2s16(0, 0);
       }
     }
-    render_target->Release();
+    IDWriteBitmapRenderTarget_Release(render_target);
   }
   scratch_end(scratch);
   ProfEnd();
