@@ -192,16 +192,17 @@ static inline UINT32                            IDWriteBitmapRenderTarget_Releas
 
 //- rjf: font file loader interface types
 
+typedef struct FP_DWrite_FontFileLoader FP_DWrite_FontFileLoader;
 typedef struct FP_DWrite_FontFileLoaderVTable FP_DWrite_FontFileLoaderVTable;
+
 struct FP_DWrite_FontFileLoaderVTable
 {
   HRESULT (*QueryInterface)(void *obj, REFIID riid, void *ptr_to_object);
   ULONG (*AddRef)(void *obj);
   ULONG (*Release)(void *obj);
-  HRESULT (*CreateStreamFromKey)(struct FP_DWrite_FontFileLoader *loader, void const *font_file_ref_key, UINT32 font_file_ref_key_size, IDWriteFontFileStream **stream_out);
+  HRESULT (*CreateStreamFromKey)(FP_DWrite_FontFileLoader *loader, void const *font_file_ref_key, UINT32 font_file_ref_key_size, IDWriteFontFileStream **stream_out);
 };
 
-typedef struct FP_DWrite_FontFileLoader FP_DWrite_FontFileLoader;
 struct FP_DWrite_FontFileLoader
 {
   FP_DWrite_FontFileLoaderVTable *lpVtbl;
@@ -209,26 +210,27 @@ struct FP_DWrite_FontFileLoader
 
 //- rjf: font file stream interface types
 
+typedef struct FP_DWrite_FontFileStream FP_DWrite_FontFileStream;
 typedef struct FP_DWrite_FontFileStreamVTable FP_DWrite_FontFileStreamVTable;
+typedef struct FP_DWrite_FontFileStreamNode FP_DWrite_FontFileStreamNode;
+
 struct FP_DWrite_FontFileStreamVTable
 {
   HRESULT (*QueryInterface)(void *obj, REFIID riid, void *ptr_to_object);
   ULONG (*AddRef)(void *obj);
   ULONG (*Release)(void *obj);
-  HRESULT (*ReadFileFragment)(struct FP_DWrite_FontFileStream *obj, void const **fragment_start, UINT64 file_offset, UINT64 fragment_size, void **fragment_context);
-  HRESULT (*ReleaseFileFragment)(struct FP_DWrite_FontFileStream *obj, void *fragment_context);
-  HRESULT (*GetFileSize)(struct FP_DWrite_FontFileStream *obj, UINT64 *size_out);
-  HRESULT (*GetLastWriteTime)(struct FP_DWrite_FontFileStream *obj, UINT64 *time_out);
+  HRESULT (*ReadFileFragment)(FP_DWrite_FontFileStream *obj, void const **fragment_start, UINT64 file_offset, UINT64 fragment_size, void **fragment_context);
+  HRESULT (*ReleaseFileFragment)(FP_DWrite_FontFileStream *obj, void *fragment_context);
+  HRESULT (*GetFileSize)(FP_DWrite_FontFileStream *obj, UINT64 *size_out);
+  HRESULT (*GetLastWriteTime)(FP_DWrite_FontFileStream *obj, UINT64 *time_out);
 };
 
-typedef struct FP_DWrite_FontFileStream FP_DWrite_FontFileStream;
 struct FP_DWrite_FontFileStream
 {
   FP_DWrite_FontFileStreamVTable *lpVtbl;
   String8 *data;
 };
 
-typedef struct FP_DWrite_FontFileStreamNode FP_DWrite_FontFileStreamNode;
 struct FP_DWrite_FontFileStreamNode
 {
   FP_DWrite_FontFileStreamNode *next;
