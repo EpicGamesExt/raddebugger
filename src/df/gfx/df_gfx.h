@@ -69,9 +69,9 @@ struct DF_KeyMapSlot
 ////////////////////////////////
 //~ rjf: View Functions
 
-struct DF_View;
-struct DF_Panel;
-struct DF_Window;
+typedef struct DF_View DF_View;
+typedef struct DF_Panel DF_Panel;
+typedef struct DF_Window DF_Window;
 
 #define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_Window *ws, struct DF_View *view, DF_CfgNode *cfg_root)
 #define DF_VIEW_SETUP_FUNCTION_NAME(name) df_view_setup_##name

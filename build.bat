@@ -98,7 +98,7 @@ if not "%no_meta%"=="1" (
 
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
-if "%raddbg%"=="1"                     %compile% %gfx%       ..\src\raddbg\raddbg_main.cpp                                                %compile_link% %out%raddbg.exe || exit /b 1
+if "%raddbg%"=="1"                     %compile% %gfx%       ..\src\raddbg\raddbg_main.c                                                  %compile_link% %out%raddbg.exe || exit /b 1
 if "%rdi_from_pdb%"=="1"               %compile%             ..\src\rdi_from_pdb\rdi_from_pdb_main.c                                      %compile_link% %out%rdi_from_pdb.exe || exit /b 1
 if "%rdi_from_dwarf%"=="1"             %compile%             ..\src\rdi_from_dwarf\rdi_from_dwarf.c                                       %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
 if "%rdi_dump%"=="1"                   %compile%             ..\src\rdi_dump\rdi_dump_main.c                                              %compile_link% %out%rdi_dump.exe || exit /b 1

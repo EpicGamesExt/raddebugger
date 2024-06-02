@@ -114,7 +114,7 @@ r_d3d11_instance_buffer_from_size(U64 size)
         desc.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
         desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
       }
-      HRESULT error = r_d3d11_state->device->CreateBuffer(&desc, 0, &buffer);
+      HRESULT error = r_d3d11_state->device->lpVtbl->CreateBuffer(r_d3d11_state->device, &desc, 0, &buffer);
     }
     
     // rjf: push buffer to flush list
@@ -213,24 +213,24 @@ r_init(CmdLine *cmdln)
   if(cmd_line_has_flag(cmdln, str8_lit("d3d11_debug")))
   {
     ID3D11InfoQueue *info = 0;
-    error = r_d3d11_state->base_device->QueryInterface(__uuidof(ID3D11InfoQueue), (void **)(&info));
+    error = r_d3d11_state->base_device->lpVtbl->QueryInterface(r_d3d11_state->base_device, &IID_ID3D11InfoQueue, (void **)(&info));
     if(SUCCEEDED(error))
     {
-      error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-      error = info->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
-      info->Release();
+      error = info->lpVtbl->SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+      error = info->lpVtbl->SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
+      info->lpVtbl->Release(info);
     }
   }
 #endif
   
   //- rjf: get main device
-  error = r_d3d11_state->base_device->QueryInterface(__uuidof(ID3D11Device1), (void **)(&r_d3d11_state->device));
-  error = r_d3d11_state->base_device_ctx->QueryInterface(__uuidof(ID3D11DeviceContext1), (void **)(&r_d3d11_state->device_ctx));
+  error = r_d3d11_state->base_device->lpVtbl->QueryInterface(r_d3d11_state->base_device, &IID_ID3D11Device1, (void **)(&r_d3d11_state->device));
+  error = r_d3d11_state->base_device_ctx->lpVtbl->QueryInterface(r_d3d11_state->base_device_ctx, &IID_ID3D11DeviceContext1, (void **)(&r_d3d11_state->device_ctx));
   
   //- rjf: get dxgi device/adapter/factory
-  error = r_d3d11_state->device->QueryInterface(__uuidof(IDXGIDevice1), (void **)(&r_d3d11_state->dxgi_device));
-  error = r_d3d11_state->dxgi_device->GetAdapter(&r_d3d11_state->dxgi_adapter);
-  error = r_d3d11_state->dxgi_adapter->GetParent(__uuidof(IDXGIFactory2), (void **)(&r_d3d11_state->dxgi_factory));
+  error = r_d3d11_state->device->lpVtbl->QueryInterface(r_d3d11_state->device, &IID_IDXGIDevice1, (void **)(&r_d3d11_state->dxgi_device));
+  error = r_d3d11_state->dxgi_device->lpVtbl->GetAdapter(r_d3d11_state->dxgi_device, &r_d3d11_state->dxgi_adapter);
+  error = r_d3d11_state->dxgi_adapter->lpVtbl->GetParent(r_d3d11_state->dxgi_adapter, &IID_IDXGIFactory2, (void **)(&r_d3d11_state->dxgi_factory));
   
   //- rjf: create main rasterizer
   {
@@ -240,7 +240,7 @@ r_init(CmdLine *cmdln)
       desc.CullMode = D3D11_CULL_BACK;
       desc.ScissorEnable = 1;
     }
-    error = r_d3d11_state->device->CreateRasterizerState1(&desc, &r_d3d11_state->main_rasterizer);
+    error = r_d3d11_state->device->lpVtbl->CreateRasterizerState1(r_d3d11_state->device, &desc, &r_d3d11_state->main_rasterizer);
   }
   
   //- rjf: create main blend state
@@ -256,7 +256,7 @@ r_init(CmdLine *cmdln)
       desc.RenderTarget[0].BlendOpAlpha           = D3D11_BLEND_OP_ADD;
       desc.RenderTarget[0].RenderTargetWriteMask  = D3D11_COLOR_WRITE_ENABLE_ALL;
     }
-    error = r_d3d11_state->device->CreateBlendState(&desc, &r_d3d11_state->main_blend_state);
+    error = r_d3d11_state->device->lpVtbl->CreateBlendState(r_d3d11_state->device, &desc, &r_d3d11_state->main_blend_state);
   }
   
   {
@@ -265,7 +265,7 @@ r_init(CmdLine *cmdln)
       desc.RenderTarget[0].BlendEnable           = FALSE;
       desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     }
-    error = r_d3d11_state->device->CreateBlendState(&desc, &r_d3d11_state->no_blend_state);
+    error = r_d3d11_state->device->lpVtbl->CreateBlendState(r_d3d11_state->device, &desc, &r_d3d11_state->no_blend_state);
   }
   
   //- rjf: create nearest-neighbor sampler
@@ -278,7 +278,7 @@ r_init(CmdLine *cmdln)
       desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
       desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
     }
-    error = r_d3d11_state->device->CreateSamplerState(&desc, &r_d3d11_state->samplers[R_Tex2DSampleKind_Nearest]);
+    error = r_d3d11_state->device->lpVtbl->CreateSamplerState(r_d3d11_state->device, &desc, &r_d3d11_state->samplers[R_Tex2DSampleKind_Nearest]);
   }
   
   //- rjf: create bilinear sampler
@@ -291,7 +291,7 @@ r_init(CmdLine *cmdln)
       desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
       desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
     }
-    error = r_d3d11_state->device->CreateSamplerState(&desc, &r_d3d11_state->samplers[R_Tex2DSampleKind_Linear]);
+    error = r_d3d11_state->device->lpVtbl->CreateSamplerState(r_d3d11_state->device, &desc, &r_d3d11_state->samplers[R_Tex2DSampleKind_Linear]);
   }
   
   //- rjf: create noop depth/stencil state
@@ -302,7 +302,7 @@ r_init(CmdLine *cmdln)
       desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
       desc.DepthFunc      = D3D11_COMPARISON_LESS;
     }
-    error = r_d3d11_state->device->CreateDepthStencilState(&desc, &r_d3d11_state->noop_depth_stencil);
+    error = r_d3d11_state->device->lpVtbl->CreateDepthStencilState(r_d3d11_state->device, &desc, &r_d3d11_state->noop_depth_stencil);
   }
   
   //- rjf: create plain depth/stencil state
@@ -313,7 +313,7 @@ r_init(CmdLine *cmdln)
       desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
       desc.DepthFunc      = D3D11_COMPARISON_LESS;
     }
-    error = r_d3d11_state->device->CreateDepthStencilState(&desc, &r_d3d11_state->plain_depth_stencil);
+    error = r_d3d11_state->device->lpVtbl->CreateDepthStencilState(r_d3d11_state->device, &desc, &r_d3d11_state->plain_depth_stencil);
   }
   
   //- rjf: create buffers
@@ -325,7 +325,7 @@ r_init(CmdLine *cmdln)
       desc.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
       desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     }
-    error = r_d3d11_state->device->CreateBuffer(&desc, 0, &r_d3d11_state->instance_scratch_buffer_64kb);
+    error = r_d3d11_state->device->lpVtbl->CreateBuffer(r_d3d11_state->device, &desc, 0, &r_d3d11_state->instance_scratch_buffer_64kb);
   }
   
   //- rjf: build vertex shaders & input layouts
@@ -333,7 +333,7 @@ r_init(CmdLine *cmdln)
       kind < R_D3D11_VShadKind_COUNT;
       kind = (R_D3D11_VShadKind)(kind+1))
   {
-    String8 source = r_d3d11_g_vshad_kind_source_table[kind];
+    String8 source = *r_d3d11_g_vshad_kind_source_table[kind];
     String8 source_name = r_d3d11_g_vshad_kind_source_name_table[kind];
     D3D11_INPUT_ELEMENT_DESC *ilay_elements = r_d3d11_g_vshad_kind_elements_ptr_table[kind];
     U64 ilay_elements_count = r_d3d11_g_vshad_kind_elements_count_table[kind];
@@ -357,13 +357,13 @@ r_init(CmdLine *cmdln)
       String8 errors = {0};
       if(FAILED(error))
       {
-        errors = str8((U8 *)vshad_source_errors->GetBufferPointer(),
-                      (U64)vshad_source_errors->GetBufferSize());
+        errors = str8((U8 *)vshad_source_errors->lpVtbl->GetBufferPointer(vshad_source_errors),
+                      (U64)vshad_source_errors->lpVtbl->GetBufferSize(vshad_source_errors));
         os_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), errors);
       }
       else
       {
-        error = r_d3d11_state->device->CreateVertexShader(vshad_source_blob->GetBufferPointer(), vshad_source_blob->GetBufferSize(), 0, &vshad);
+        error = r_d3d11_state->device->lpVtbl->CreateVertexShader(r_d3d11_state->device, vshad_source_blob->lpVtbl->GetBufferPointer(vshad_source_blob), vshad_source_blob->lpVtbl->GetBufferSize(vshad_source_blob), 0, &vshad);
       }
     }
     
@@ -371,13 +371,13 @@ r_init(CmdLine *cmdln)
     ID3D11InputLayout *ilay = 0;
     if(ilay_elements != 0)
     {
-      error = r_d3d11_state->device->CreateInputLayout(ilay_elements, ilay_elements_count,
-                                                       vshad_source_blob->GetBufferPointer(),
-                                                       vshad_source_blob->GetBufferSize(),
-                                                       &ilay);
+      error = r_d3d11_state->device->lpVtbl->CreateInputLayout(r_d3d11_state->device, ilay_elements, ilay_elements_count,
+                                                               vshad_source_blob->lpVtbl->GetBufferPointer(vshad_source_blob),
+                                                               vshad_source_blob->lpVtbl->GetBufferSize(vshad_source_blob),
+                                                               &ilay);
     }
     
-    vshad_source_blob->Release();
+    vshad_source_blob->lpVtbl->Release(vshad_source_blob);
     
     // rjf: store
     r_d3d11_state->vshads[kind] = vshad;
@@ -389,7 +389,7 @@ r_init(CmdLine *cmdln)
       kind < R_D3D11_PShadKind_COUNT;
       kind = (R_D3D11_PShadKind)(kind+1))
   {
-    String8 source = r_d3d11_g_pshad_kind_source_table[kind];
+    String8 source = *r_d3d11_g_pshad_kind_source_table[kind];
     String8 source_name = r_d3d11_g_pshad_kind_source_name_table[kind];
     
     // rjf: compile pixel shader
@@ -411,17 +411,17 @@ r_init(CmdLine *cmdln)
       String8 errors = {0};
       if(FAILED(error))
       {
-        errors = str8((U8 *)pshad_source_errors->GetBufferPointer(),
-                      (U64)pshad_source_errors->GetBufferSize());
+        errors = str8((U8 *)pshad_source_errors->lpVtbl->GetBufferPointer(pshad_source_errors),
+                      (U64)pshad_source_errors->lpVtbl->GetBufferSize(pshad_source_errors));
         os_graphical_message(1, str8_lit("Pixel Shader Compilation Failure"), errors);
       }
       else
       {
-        error = r_d3d11_state->device->CreatePixelShader(pshad_source_blob->GetBufferPointer(), pshad_source_blob->GetBufferSize(), 0, &pshad);
+        error = r_d3d11_state->device->lpVtbl->CreatePixelShader(r_d3d11_state->device, pshad_source_blob->lpVtbl->GetBufferPointer(pshad_source_blob), pshad_source_blob->lpVtbl->GetBufferSize(pshad_source_blob), 0, &pshad);
       }
     }
     
-    pshad_source_blob->Release();
+    pshad_source_blob->lpVtbl->Release(pshad_source_blob);
     
     // rjf: store
     r_d3d11_state->pshads[kind] = pshad;
@@ -443,7 +443,7 @@ r_init(CmdLine *cmdln)
         desc.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
         desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
       }
-      r_d3d11_state->device->CreateBuffer(&desc, 0, &buffer);
+      r_d3d11_state->device->lpVtbl->CreateBuffer(r_d3d11_state->device, &desc, 0, &buffer);
     }
     r_d3d11_state->uniform_type_kind_buffers[kind] = buffer;
   }
@@ -515,7 +515,7 @@ r_window_equip(OS_Handle handle)
       swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
       swapchain_desc.Flags              = 0;
     }
-    HRESULT error = r_d3d11_state->dxgi_factory->CreateSwapChainForHwnd(r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
+    HRESULT error = r_d3d11_state->dxgi_factory->lpVtbl->CreateSwapChainForHwnd(r_d3d11_state->dxgi_factory, (IUnknown *)r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
     if(FAILED(error))
     {
       char buffer[256] = {0};
@@ -524,11 +524,11 @@ r_window_equip(OS_Handle handle)
       os_exit_process(1);
     }
     
-    r_d3d11_state->dxgi_factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
+    r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
     
     //- rjf: create framebuffer & view
-    window->swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)(&window->framebuffer));
-    r_d3d11_state->device->CreateRenderTargetView(window->framebuffer, 0, &window->framebuffer_rtv);
+    window->swapchain->lpVtbl->GetBuffer(window->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&window->framebuffer));
+    r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, 0, &window->framebuffer_rtv);
     
     result = r_d3d11_handle_from_window(window);
   }
@@ -543,15 +543,15 @@ r_window_unequip(OS_Handle handle, R_Handle equip_handle)
   OS_MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Window *window = r_d3d11_window_from_handle(equip_handle);
-    window->stage_color_srv->Release();
-    window->stage_color_rtv->Release();
-    window->stage_color->Release();
-    window->stage_scratch_color_srv->Release();
-    window->stage_scratch_color_rtv->Release();
-    window->stage_scratch_color->Release();
-    window->framebuffer_rtv->Release();
-    window->framebuffer->Release();
-    window->swapchain->Release();
+    window->stage_color_srv->lpVtbl->Release(window->stage_color_srv);
+    window->stage_color_rtv->lpVtbl->Release(window->stage_color_rtv);
+    window->stage_color->lpVtbl->Release(window->stage_color);
+    window->stage_scratch_color_srv->lpVtbl->Release(window->stage_scratch_color_srv);
+    window->stage_scratch_color_rtv->lpVtbl->Release(window->stage_scratch_color_rtv);
+    window->stage_scratch_color->lpVtbl->Release(window->stage_scratch_color);
+    window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);
+    window->framebuffer->lpVtbl->Release(window->framebuffer);
+    window->swapchain->lpVtbl->Release(window->swapchain);
     window->generation += 1;
     SLLStackPush(r_d3d11_state->first_free_window, window);
   }
@@ -633,10 +633,10 @@ r_tex2d_alloc(R_ResourceKind kind, Vec2S32 size, R_Tex2DFormat format, void *dat
     texture_desc.BindFlags          = D3D11_BIND_SHADER_RESOURCE;
     texture_desc.CPUAccessFlags     = cpu_access_flags;
   }
-  r_d3d11_state->device->CreateTexture2D(&texture_desc, initial_data, &texture->texture);
+  r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &texture_desc, initial_data, &texture->texture);
   
   //- rjf: create texture srv
-  r_d3d11_state->device->CreateShaderResourceView(texture->texture, 0, &texture->view);
+  r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)texture->texture, 0, &texture->view);
   
   //- rjf: fill basics
   {
@@ -698,7 +698,7 @@ r_fill_tex2d_region(R_Handle handle, Rng2S32 subrect, void *data)
       (UINT)subrect.x0, (UINT)subrect.y0, 0,
       (UINT)subrect.x1, (UINT)subrect.y1, 1,
     };
-    r_d3d11_state->device_ctx->UpdateSubresource(texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
+    r_d3d11_state->device_ctx->lpVtbl->UpdateSubresource(r_d3d11_state->device_ctx, (ID3D11Resource *)texture->texture, 0, &dst_box, data, dim.x*bytes_per_pixel, 0);
   }
   ProfEnd();
 }
@@ -754,7 +754,7 @@ r_buffer_alloc(R_ResourceKind kind, U64 size, void *data)
     desc.BindFlags      = D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_INDEX_BUFFER;
     desc.CPUAccessFlags = cpu_access_flags;
   }
-  r_d3d11_state->device->CreateBuffer(&desc, initial_data, &buffer->buffer);
+  r_d3d11_state->device->lpVtbl->CreateBuffer(r_d3d11_state->device, &desc, initial_data, &buffer->buffer);
   
   //- rjf: fill basics
   {
@@ -797,15 +797,15 @@ r_end_frame(void)
   {
     for(R_D3D11_FlushBuffer *buffer = r_d3d11_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
     {
-      buffer->buffer->Release();
+      buffer->buffer->lpVtbl->Release(buffer->buffer);
     }
     for(R_D3D11_Tex2D *tex = r_d3d11_state->first_to_free_tex2d, *next = 0;
         tex != 0;
         tex = next)
     {
       next = tex->next;
-      tex->view->Release();
-      tex->texture->Release();
+      tex->view->lpVtbl->Release(tex->view);
+      tex->texture->lpVtbl->Release(tex->texture);
       tex->generation += 1;
       SLLStackPush(r_d3d11_state->first_free_tex2d, tex);
     }
@@ -814,7 +814,7 @@ r_end_frame(void)
         buf = next)
     {
       next = buf->next;
-      buf->buffer->Release();
+      buf->buffer->lpVtbl->Release(buf->buffer);
       buf->generation += 1;
       SLLStackPush(r_d3d11_state->first_free_buffer, buf);
     }
@@ -847,108 +847,108 @@ r_window_begin_frame(OS_Handle window, R_Handle window_equip)
       wnd->last_resolution = resolution;
       
       // rjf: release screen-sized render target resources, if there
-      if(wnd->stage_scratch_color_srv){wnd->stage_scratch_color_srv->Release();}
-      if(wnd->stage_scratch_color_rtv){wnd->stage_scratch_color_rtv->Release();}
-      if(wnd->stage_scratch_color)    {wnd->stage_scratch_color->Release();}
-      if(wnd->stage_color_srv)        {wnd->stage_color_srv->Release();}
-      if(wnd->stage_color_rtv)        {wnd->stage_color_rtv->Release();}
-      if(wnd->stage_color)            {wnd->stage_color->Release();}
-      if(wnd->geo3d_color_srv)        {wnd->geo3d_color_srv->Release();}
-      if(wnd->geo3d_color_rtv)        {wnd->geo3d_color_rtv->Release();}
-      if(wnd->geo3d_color)            {wnd->geo3d_color->Release();}
-      if(wnd->geo3d_depth_srv)        {wnd->geo3d_depth_srv->Release();}
-      if(wnd->geo3d_depth_dsv)        {wnd->geo3d_depth_dsv->Release();}
-      if(wnd->geo3d_depth)            {wnd->geo3d_depth->Release();}
+      if(wnd->stage_scratch_color_srv){wnd->stage_scratch_color_srv->lpVtbl->Release(wnd->stage_scratch_color_srv);}
+      if(wnd->stage_scratch_color_rtv){wnd->stage_scratch_color_rtv->lpVtbl->Release(wnd->stage_scratch_color_rtv);}
+      if(wnd->stage_scratch_color)    {wnd->stage_scratch_color->lpVtbl->Release(wnd->stage_scratch_color);}
+      if(wnd->stage_color_srv)        {wnd->stage_color_srv->lpVtbl->Release(wnd->stage_color_srv);}
+      if(wnd->stage_color_rtv)        {wnd->stage_color_rtv->lpVtbl->Release(wnd->stage_color_rtv);}
+      if(wnd->stage_color)            {wnd->stage_color->lpVtbl->Release(wnd->stage_color);}
+      if(wnd->geo3d_color_srv)        {wnd->geo3d_color_srv->lpVtbl->Release(wnd->geo3d_color_srv);}
+      if(wnd->geo3d_color_rtv)        {wnd->geo3d_color_rtv->lpVtbl->Release(wnd->geo3d_color_rtv);}
+      if(wnd->geo3d_color)            {wnd->geo3d_color->lpVtbl->Release(wnd->geo3d_color);}
+      if(wnd->geo3d_depth_srv)        {wnd->geo3d_depth_srv->lpVtbl->Release(wnd->geo3d_depth_srv);}
+      if(wnd->geo3d_depth_dsv)        {wnd->geo3d_depth_dsv->lpVtbl->Release(wnd->geo3d_depth_dsv);}
+      if(wnd->geo3d_depth)            {wnd->geo3d_depth->lpVtbl->Release(wnd->geo3d_depth);}
       
       // rjf: resize swapchain & main framebuffer
-      wnd->framebuffer_rtv->Release();
-      wnd->framebuffer->Release();
-      wnd->swapchain->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
-      wnd->swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)(&wnd->framebuffer));
-      r_d3d11_state->device->CreateRenderTargetView(wnd->framebuffer, 0, &wnd->framebuffer_rtv);
+      wnd->framebuffer_rtv->lpVtbl->Release(wnd->framebuffer_rtv);
+      wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);
+      wnd->swapchain->lpVtbl->ResizeBuffers(wnd->swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+      wnd->swapchain->lpVtbl->GetBuffer(wnd->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&wnd->framebuffer));
+      r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->framebuffer, 0, &wnd->framebuffer_rtv);
       
       // rjf: create stage color targets
       {
-        D3D11_TEXTURE2D_DESC color_desc = {};
+        D3D11_TEXTURE2D_DESC color_desc = zero_struct;
         {
-          wnd->framebuffer->GetDesc(&color_desc);
+          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
           color_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
           color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         }
-        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
+        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = zero_struct;
         {
           rtv_desc.Format         = color_desc.Format;
           rtv_desc.ViewDimension  = D3D11_RTV_DIMENSION_TEXTURE2D;
         }
-        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = zero_struct;
         {
           srv_desc.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
           srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
           srv_desc.Texture2D.MipLevels       = -1;
         }
-        r_d3d11_state->device->CreateTexture2D(&color_desc, 0, &wnd->stage_color);
-        r_d3d11_state->device->CreateRenderTargetView(wnd->stage_color, &rtv_desc, &wnd->stage_color_rtv);
-        r_d3d11_state->device->CreateShaderResourceView(wnd->stage_color, &srv_desc, &wnd->stage_color_srv);
-        r_d3d11_state->device->CreateTexture2D(&color_desc, 0, &wnd->stage_scratch_color);
-        r_d3d11_state->device->CreateRenderTargetView(wnd->stage_scratch_color, &rtv_desc, &wnd->stage_scratch_color_rtv);
-        r_d3d11_state->device->CreateShaderResourceView(wnd->stage_scratch_color, &srv_desc, &wnd->stage_scratch_color_srv);
+        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &color_desc, 0, &wnd->stage_color);
+        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_color, &rtv_desc, &wnd->stage_color_rtv);
+        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_color, &srv_desc, &wnd->stage_color_srv);
+        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &color_desc, 0, &wnd->stage_scratch_color);
+        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_scratch_color, &rtv_desc, &wnd->stage_scratch_color_rtv);
+        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_scratch_color, &srv_desc, &wnd->stage_scratch_color_srv);
       }
       
       // rjf: create geo3d targets
       {
-        D3D11_TEXTURE2D_DESC color_desc = {};
+        D3D11_TEXTURE2D_DESC color_desc = zero_struct;
         {
-          wnd->framebuffer->GetDesc(&color_desc);
+          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
           color_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
           color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         }
-        D3D11_RENDER_TARGET_VIEW_DESC color_rtv_desc = {};
+        D3D11_RENDER_TARGET_VIEW_DESC color_rtv_desc = zero_struct;
         {
           color_rtv_desc.Format         = color_desc.Format;
           color_rtv_desc.ViewDimension  = D3D11_RTV_DIMENSION_TEXTURE2D;
         }
-        D3D11_SHADER_RESOURCE_VIEW_DESC color_srv_desc = {};
+        D3D11_SHADER_RESOURCE_VIEW_DESC color_srv_desc = zero_struct;
         {
           color_srv_desc.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
           color_srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
           color_srv_desc.Texture2D.MipLevels       = -1;
         }
-        D3D11_TEXTURE2D_DESC depth_desc = {};
+        D3D11_TEXTURE2D_DESC depth_desc = zero_struct;
         {
-          wnd->framebuffer->GetDesc(&depth_desc);
+          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &depth_desc);
           depth_desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
           depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL|D3D11_BIND_SHADER_RESOURCE;
         }
-        D3D11_DEPTH_STENCIL_VIEW_DESC depth_dsv_desc = {};
+        D3D11_DEPTH_STENCIL_VIEW_DESC depth_dsv_desc = zero_struct;
         {
           depth_dsv_desc.Flags = 0;
           depth_dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
           depth_dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
           depth_dsv_desc.Texture2D.MipSlice = 0;
         }
-        D3D11_SHADER_RESOURCE_VIEW_DESC depth_srv_desc = {};
+        D3D11_SHADER_RESOURCE_VIEW_DESC depth_srv_desc = zero_struct;
         {
           depth_srv_desc.Format                    = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
           depth_srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
           depth_srv_desc.Texture2D.MostDetailedMip = 0;
           depth_srv_desc.Texture2D.MipLevels       = -1;
         }
-        r_d3d11_state->device->CreateTexture2D(&color_desc, 0, &wnd->geo3d_color);
-        r_d3d11_state->device->CreateRenderTargetView(wnd->geo3d_color, &color_rtv_desc, &wnd->geo3d_color_rtv);
-        r_d3d11_state->device->CreateShaderResourceView(wnd->geo3d_color, &color_srv_desc, &wnd->geo3d_color_srv);
-        r_d3d11_state->device->CreateTexture2D(&depth_desc, 0, &wnd->geo3d_depth);
-        r_d3d11_state->device->CreateDepthStencilView(wnd->geo3d_depth, &depth_dsv_desc, &wnd->geo3d_depth_dsv);
-        r_d3d11_state->device->CreateShaderResourceView(wnd->geo3d_depth, &depth_srv_desc, &wnd->geo3d_depth_srv);
+        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &color_desc, 0, &wnd->geo3d_color);
+        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_color, &color_rtv_desc, &wnd->geo3d_color_rtv);
+        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_color, &color_srv_desc, &wnd->geo3d_color_srv);
+        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &depth_desc, 0, &wnd->geo3d_depth);
+        r_d3d11_state->device->lpVtbl->CreateDepthStencilView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_depth, &depth_dsv_desc, &wnd->geo3d_depth_dsv);
+        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_depth, &depth_srv_desc, &wnd->geo3d_depth_srv);
       }
     }
     
     //- rjf: clear framebuffers
     Vec4F32 clear_color = {0, 0, 0, 0};
-    d_ctx->ClearRenderTargetView(wnd->framebuffer_rtv, clear_color.v);
-    d_ctx->ClearRenderTargetView(wnd->stage_color_rtv, clear_color.v);
+    d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->framebuffer_rtv, clear_color.v);
+    d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->stage_color_rtv, clear_color.v);
     if(resize_done)
     {
-      d_ctx->Flush();
+      d_ctx->lpVtbl->Flush(d_ctx);
     }
   }
   ProfEnd();
@@ -972,25 +972,25 @@ r_window_end_frame(OS_Handle window, R_Handle window_equip)
       ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Finalize];
       
       // rjf: setup output merger
-      d_ctx->OMSetRenderTargets(1, &wnd->framebuffer_rtv, 0);
-      d_ctx->OMSetDepthStencilState(r_d3d11_state->noop_depth_stencil, 0);
-      d_ctx->OMSetBlendState(r_d3d11_state->main_blend_state, 0, 0xffffffff);
+      d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->framebuffer_rtv, 0);
+      d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
+      d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
       
       // rjf: set up rasterizer
       Vec2S32 resolution = wnd->last_resolution;
       D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-      d_ctx->RSSetViewports(1, &viewport);
-      d_ctx->RSSetState(r_d3d11_state->main_rasterizer);
+      d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+      d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
       
       // rjf: setup input assembly
-      d_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-      d_ctx->IASetInputLayout(0);
+      d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+      d_ctx->lpVtbl->IASetInputLayout(d_ctx, 0);
       
       // rjf: setup shaders
-      d_ctx->VSSetShader(vshad, 0, 0);
-      d_ctx->PSSetShader(pshad, 0, 0);
-      d_ctx->PSSetShaderResources(0, 1, &wnd->stage_color_srv);
-      d_ctx->PSSetSamplers(0, 1, &sampler);
+      d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
+      d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
+      d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->stage_color_srv);
+      d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &sampler);
       
       // rjf: setup scissor rect
       {
@@ -999,17 +999,17 @@ r_window_end_frame(OS_Handle window, R_Handle window_equip)
         rect.right = (LONG)wnd->last_resolution.x;
         rect.top = 0;
         rect.bottom = (LONG)wnd->last_resolution.y;
-        d_ctx->RSSetScissorRects(1, &rect);
+        d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
       }
       
       // rjf: draw
-      d_ctx->Draw(4, 0);
+      d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
     }
     
     ////////////////////////////
     //- rjf: present
     //
-    HRESULT error = wnd->swapchain->Present(1, 0);
+    HRESULT error = wnd->swapchain->lpVtbl->Present(wnd->swapchain, 1, 0);
     if(FAILED(error))
     {
       char buffer[256] = {0};
@@ -1017,7 +1017,7 @@ r_window_end_frame(OS_Handle window, R_Handle window_equip)
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       os_exit_process(1);
     }
-    d_ctx->ClearState();
+    d_ctx->lpVtbl->ClearState(d_ctx);
   }
   ProfEnd();
 }
@@ -1058,8 +1058,8 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
           //- rjf: set up rasterizer
           Vec2S32 resolution = wnd->last_resolution;
           D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-          d_ctx->RSSetViewports(1, &viewport);
-          d_ctx->RSSetState(r_d3d11_state->main_rasterizer);
+          d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+          d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
           
           //- rjf: draw each batch group
           for(R_BatchGroup2DNode *group_n = rect_batch_groups->first; group_n != 0; group_n = group_n->next)
@@ -1078,7 +1078,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             ID3D11Buffer *buffer = r_d3d11_instance_buffer_from_size(batches->byte_count);
             {
               D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};
-              r_d3d11_state->device_ctx->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
+              d_ctx->lpVtbl->Map(d_ctx, (ID3D11Resource *)buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
               U8 *dst_ptr = (U8 *)sub_rsrc.pData;
               U64 off = 0;
               for(R_BatchNode *batch_n = batches->first; batch_n != 0; batch_n = batch_n->next)
@@ -1086,7 +1086,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                 MemoryCopy(dst_ptr+off, batch_n->v.v, batch_n->v.byte_count);
                 off += batch_n->v.byte_count;
               }
-              r_d3d11_state->device_ctx->Unmap(buffer, 0);
+              d_ctx->lpVtbl->Unmap(d_ctx, (ID3D11Resource *)buffer, 0);
             }
             
             // rjf: get texture
@@ -1132,30 +1132,30 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             }
             {
               D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};
-              r_d3d11_state->device_ctx->Map(uniforms_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
+              d_ctx->lpVtbl->Map(d_ctx, (ID3D11Resource *)uniforms_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
               MemoryCopy((U8 *)sub_rsrc.pData, &uniforms, sizeof(uniforms));
-              r_d3d11_state->device_ctx->Unmap(uniforms_buffer, 0);
+              d_ctx->lpVtbl->Unmap(d_ctx, (ID3D11Resource *)uniforms_buffer, 0);
             }
             
             // rjf: setup output merger
-            d_ctx->OMSetRenderTargets(1, &wnd->stage_color_rtv, 0);
-            d_ctx->OMSetDepthStencilState(r_d3d11_state->noop_depth_stencil, 0);
-            d_ctx->OMSetBlendState(r_d3d11_state->main_blend_state, 0, 0xffffffff);
+            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_color_rtv, 0);
+            d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
+            d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
             
             // rjf: setup input assembly
             U32 stride = batches->bytes_per_inst;
             U32 offset = 0;
-            d_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-            d_ctx->IASetInputLayout(ilay);
-            d_ctx->IASetVertexBuffers(0, 1, &buffer, &stride, &offset);
+            d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+            d_ctx->lpVtbl->IASetInputLayout(d_ctx, ilay);
+            d_ctx->lpVtbl->IASetVertexBuffers(d_ctx, 0, 1, &buffer, &stride, &offset);
             
             // rjf: setup shaders
-            d_ctx->VSSetShader(vshad, 0, 0);
-            d_ctx->VSSetConstantBuffers(0, 1, &uniforms_buffer);
-            d_ctx->PSSetShader(pshad, 0, 0);
-            d_ctx->PSSetConstantBuffers(0, 1, &uniforms_buffer);
-            d_ctx->PSSetShaderResources(0, 1, &texture->view);
-            d_ctx->PSSetSamplers(0, 1, &sampler);
+            d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
+            d_ctx->lpVtbl->VSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
+            d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
+            d_ctx->lpVtbl->PSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
+            d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &texture->view);
+            d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &sampler);
             
             // rjf: setup scissor rect
             {
@@ -1184,11 +1184,11 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                   rect.bottom = (LONG)clip.y1;
                 }
               }
-              d_ctx->RSSetScissorRects(1, &rect);
+              d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
             }
             
             // rjf: draw
-            d_ctx->DrawInstanced(4, batches->byte_count / batches->bytes_per_inst, 0, 0);
+            d_ctx->lpVtbl->DrawInstanced(d_ctx, 4, batches->byte_count / batches->bytes_per_inst, 0, 0);
           }
         }break;
         
@@ -1204,24 +1204,24 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
           ID3D11Buffer *uniforms_buffer = r_d3d11_state->uniform_type_kind_buffers[R_D3D11_VShadKind_Blur];
           
           // rjf: setup output merger
-          d_ctx->OMSetDepthStencilState(r_d3d11_state->noop_depth_stencil, 0);
-          d_ctx->OMSetBlendState(r_d3d11_state->no_blend_state, 0, 0xffffffff);
+          d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
+          d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->no_blend_state, 0, 0xffffffff);
           
           // rjf: set up viewport
           Vec2S32 resolution = wnd->last_resolution;
           D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-          d_ctx->RSSetViewports(1, &viewport);
-          d_ctx->RSSetState(r_d3d11_state->main_rasterizer);
+          d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+          d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
           
           // rjf: setup input assembly
-          d_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-          d_ctx->IASetInputLayout(0);
+          d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+          d_ctx->lpVtbl->IASetInputLayout(d_ctx, 0);
           
           // rjf: setup shaders
-          d_ctx->VSSetShader(vshad, 0, 0);
-          d_ctx->VSSetConstantBuffers(0, 1, &uniforms_buffer);
-          d_ctx->PSSetShader(pshad, 0, 0);
-          d_ctx->PSSetSamplers(0, 1, &sampler);
+          d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
+          d_ctx->lpVtbl->VSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
+          d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
+          d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &sampler);
           
           // rjf: setup scissor rect
           {
@@ -1230,7 +1230,7 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             rect.right = (LONG)wnd->last_resolution.x;
             rect.top = 0;
             rect.bottom = (LONG)wnd->last_resolution.y;
-            d_ctx->RSSetScissorRects(1, &rect);
+            d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
           }
           
           // rjf: set up uniforms
@@ -1297,12 +1297,12 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             MemoryCopyArray(uniforms.passes[Axis2_Y].corner_radii.v, params->corner_radii);
             
             D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};
-            r_d3d11_state->device_ctx->Map(uniforms_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
+            d_ctx->lpVtbl->Map(d_ctx, (ID3D11Resource *)uniforms_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
             MemoryCopy((U8 *)sub_rsrc.pData, &uniforms, sizeof(uniforms));
-            r_d3d11_state->device_ctx->Unmap(uniforms_buffer, 0);
+            d_ctx->lpVtbl->Unmap(d_ctx, (ID3D11Resource *)uniforms_buffer, 0);
           }
           
-          ID3D11Buffer* uniforms_buffers[] = { uniforms_buffer, uniforms_buffer };
+          ID3D11Buffer *uniforms_buffers[] = { uniforms_buffer, uniforms_buffer };
           
           U32 uniform_offset[Axis2_COUNT][2] =
           {
@@ -1320,18 +1320,18 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
           ID3D11ShaderResourceView* srv = 0;
           
           // horizontal pass
-          d_ctx->OMSetRenderTargets(1, &wnd->stage_scratch_color_rtv, 0);
-          d_ctx->PSSetConstantBuffers1(0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_X], uniform_count[Axis2_X]);
-          d_ctx->PSSetShaderResources(0, 1, &wnd->stage_color_srv);
-          d_ctx->Draw(4, 0);
-          d_ctx->PSSetShaderResources(0, 1, &srv);
+          d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_scratch_color_rtv, 0);
+          d_ctx->lpVtbl->PSSetConstantBuffers1(d_ctx, 0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_X], uniform_count[Axis2_X]);
+          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->stage_color_srv);
+          d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
+          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &srv);
           
           // vertical pass
-          d_ctx->OMSetRenderTargets(1, &wnd->stage_color_rtv, 0);
-          d_ctx->PSSetConstantBuffers1(0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_Y], uniform_count[Axis2_Y]);
-          d_ctx->PSSetShaderResources(0, 1, &wnd->stage_scratch_color_srv);
-          d_ctx->Draw(4, 0);
-          d_ctx->PSSetShaderResources(0, 1, &srv);
+          d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_color_rtv, 0);
+          d_ctx->lpVtbl->PSSetConstantBuffers1(d_ctx, 0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_Y], uniform_count[Axis2_Y]);
+          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->stage_scratch_color_srv);
+          d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
+          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &srv);
         }break;
         
         
@@ -1347,14 +1347,14 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
           //- rjf: set up rasterizer
           Vec2F32 viewport_dim = dim_2f32(params->viewport);
           D3D11_VIEWPORT viewport = { params->viewport.x0, params->viewport.y0, viewport_dim.x, viewport_dim.y, 0.f, 1.f };
-          d_ctx->RSSetViewports(1, &viewport);
-          d_ctx->RSSetState(r_d3d11_state->main_rasterizer);
+          d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+          d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
           
           //- rjf: clear render targets
           {
             Vec4F32 bg_color = v4f32(0, 0, 0, 0);
-            d_ctx->ClearRenderTargetView(wnd->geo3d_color_rtv, bg_color.v);
-            d_ctx->ClearDepthStencilView(wnd->geo3d_depth_dsv, D3D11_CLEAR_DEPTH, 1.f, 0);
+            d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->geo3d_color_rtv, bg_color.v);
+            d_ctx->lpVtbl->ClearDepthStencilView(d_ctx, wnd->geo3d_depth_dsv, D3D11_CLEAR_DEPTH, 1.f, 0);
           }
           
           //- rjf: draw mesh batches
@@ -1366,9 +1366,9 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             ID3D11Buffer *uniforms_buffer = r_d3d11_state->uniform_type_kind_buffers[R_D3D11_VShadKind_Mesh];
             
             // rjf: setup output merger
-            d_ctx->OMSetRenderTargets(1, &wnd->geo3d_color_rtv, wnd->geo3d_depth_dsv);
-            d_ctx->OMSetDepthStencilState(r_d3d11_state->plain_depth_stencil, 0);
-            d_ctx->OMSetBlendState(r_d3d11_state->main_blend_state, 0, 0xffffffff);
+            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->geo3d_color_rtv, wnd->geo3d_depth_dsv);
+            d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->plain_depth_stencil, 0);
+            d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
             
             // rjf: draw all batches
             for(U64 slot_idx = 0; slot_idx < mesh_group_map->slots_count; slot_idx += 1)
@@ -1384,10 +1384,10 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                 // rjf: setup input assembly
                 U32 stride = 11 * sizeof(F32);
                 U32 offset = 0;
-                d_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-                d_ctx->IASetInputLayout(ilay);
-                d_ctx->IASetVertexBuffers(0, 1, &mesh_vertices->buffer, &stride, &offset);
-                d_ctx->IASetIndexBuffer(mesh_indices->buffer, DXGI_FORMAT_R32_UINT, 0);
+                d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                d_ctx->lpVtbl->IASetInputLayout(d_ctx, ilay);
+                d_ctx->lpVtbl->IASetVertexBuffers(d_ctx, 0, 1, &mesh_vertices->buffer, &stride, &offset);
+                d_ctx->lpVtbl->IASetIndexBuffer(d_ctx, mesh_indices->buffer, DXGI_FORMAT_R32_UINT, 0);
                 
                 // rjf: setup uniforms buffer
                 R_D3D11_Uniforms_Mesh uniforms = {0};
@@ -1396,17 +1396,17 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                 }
                 {
                   D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};
-                  r_d3d11_state->device_ctx->Map(uniforms_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
+                  d_ctx->lpVtbl->Map(d_ctx, (ID3D11Resource *)uniforms_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
                   MemoryCopy((U8 *)sub_rsrc.pData, &uniforms, sizeof(uniforms));
-                  r_d3d11_state->device_ctx->Unmap(uniforms_buffer, 0);
+                  d_ctx->lpVtbl->Unmap(d_ctx, (ID3D11Resource *)uniforms_buffer, 0);
                 }
                 
                 
                 // rjf: setup shaders
-                d_ctx->VSSetShader(vshad, 0, 0);
-                d_ctx->VSSetConstantBuffers(0, 1, &uniforms_buffer);
-                d_ctx->PSSetShader(pshad, 0, 0);
-                d_ctx->PSSetConstantBuffers(0, 1, &uniforms_buffer);
+                d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
+                d_ctx->lpVtbl->VSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
+                d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
+                d_ctx->lpVtbl->PSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
                 
                 // rjf: setup scissor rect
                 {
@@ -1417,11 +1417,11 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                     rect.top = 0;
                     rect.bottom = (LONG)wnd->last_resolution.y;
                   }
-                  d_ctx->RSSetScissorRects(1, &rect);
+                  d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
                 }
                 
                 // rjf: draw
-                d_ctx->DrawIndexed(mesh_indices->size/sizeof(U32), 0, 0);
+                d_ctx->lpVtbl->DrawIndexed(d_ctx, mesh_indices->size/sizeof(U32), 0, 0);
               }
             }
           }
@@ -1433,25 +1433,25 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Geo3DComposite];
             
             // rjf: setup output merger
-            d_ctx->OMSetRenderTargets(1, &wnd->stage_color_rtv, 0);
-            d_ctx->OMSetDepthStencilState(r_d3d11_state->noop_depth_stencil, 0);
-            d_ctx->OMSetBlendState(r_d3d11_state->main_blend_state, 0, 0xffffffff);
+            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_color_rtv, 0);
+            d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
+            d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
             
             // rjf: set up rasterizer
             Vec2S32 resolution = wnd->last_resolution;
             D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-            d_ctx->RSSetViewports(1, &viewport);
-            d_ctx->RSSetState(r_d3d11_state->main_rasterizer);
+            d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+            d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
             
             // rjf: setup input assembly
-            d_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-            d_ctx->IASetInputLayout(0);
+            d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+            d_ctx->lpVtbl->IASetInputLayout(d_ctx, 0);
             
             // rjf: setup shaders
-            d_ctx->VSSetShader(vshad, 0, 0);
-            d_ctx->PSSetShader(pshad, 0, 0);
-            d_ctx->PSSetShaderResources(0, 1, &wnd->geo3d_color_srv);
-            d_ctx->PSSetSamplers(0, 1, &sampler);
+            d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
+            d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
+            d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->geo3d_color_srv);
+            d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &sampler);
             
             // rjf: setup scissor rect
             {
@@ -1478,11 +1478,11 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
                 rect.top = (LONG)clip.y0;
                 rect.bottom = (LONG)clip.y1;
               }
-              d_ctx->RSSetScissorRects(1, &rect);
+              d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
             }
             
             // rjf: draw
-            d_ctx->Draw(4, 0);
+            d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
           }
         }break;
       }

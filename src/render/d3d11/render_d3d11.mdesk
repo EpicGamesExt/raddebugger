@@ -480,10 +480,10 @@ ps_main(Vertex2Pixel v2p) : SV_TARGET
   COUNT,
 }
 
-@c_file @data(String8)
+@c_file @data(`String8*`)
 r_d3d11_g_vshad_kind_source_table:
 {
-  @expand(R_D3D11_VShadTable a) `$(a.source)`;
+  @expand(R_D3D11_VShadTable a) `&$(a.source)`;
 }
 
 @c_file @data(String8)
@@ -504,10 +504,10 @@ r_d3d11_g_vshad_kind_elements_count_table:
   @expand(R_D3D11_VShadTable a) `$(a.ilay_table != 0 -> "ArrayCount("..a.ilay_table..")") $(a.ilay_table == 0 -> "0")`;
 }
 
-@c_file @data(String8)
+@c_file @data(`String8*`)
 r_d3d11_g_pshad_kind_source_table:
 {
-  @expand(R_D3D11_PShadTable a) `$(a.source)`;
+  @expand(R_D3D11_PShadTable a) `&$(a.source)`;
 }
 
 @c_file @data(String8)

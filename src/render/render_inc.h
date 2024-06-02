@@ -25,14 +25,12 @@
 ////////////////////////////////
 //~ rjf: Backend Includes
 
-#if LANG_CPP
-# if R_BACKEND == R_BACKEND_STUB
-#  include "stub/render_stub.h"
-# elif R_BACKEND == R_BACKEND_D3D11
-#  include "d3d11/render_d3d11.h"
-# else
-#  error Renderer backend not specified.
-# endif
+#if R_BACKEND == R_BACKEND_STUB
+# include "stub/render_stub.h"
+#elif R_BACKEND == R_BACKEND_D3D11
+# include "d3d11/render_d3d11.h"
+#else
+# error Renderer backend not specified.
 #endif
 
 #endif // RENDER_INC_H
