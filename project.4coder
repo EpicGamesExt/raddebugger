@@ -47,7 +47,7 @@ commands =
 {
   .rjf_f1 =
   {
-    .win = "build raddbg telemetry clang",
+    .win = "build raddbg telemetry",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
