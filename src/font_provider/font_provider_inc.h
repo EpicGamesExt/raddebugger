@@ -24,12 +24,10 @@
 ////////////////////////////////
 //~ rjf: Backend Includes
 
-#if LANG_CPP
-# if FP_BACKEND == FP_BACKEND_DWRITE
-#  include "dwrite/font_provider_dwrite.h"
-# else
-#  error Font provider backend not specified.
-# endif
+#if FP_BACKEND == FP_BACKEND_DWRITE
+# include "dwrite/font_provider_dwrite.h"
+#else
+# error Font provider backend not specified.
 #endif
 
 #endif // FONT_PROVIDER_INC_H
