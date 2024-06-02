@@ -192,6 +192,7 @@ static inline UINT32                            IDWriteBitmapRenderTarget_Releas
 
 //- rjf: font file loader interface types
 
+typedef struct FP_DWrite_FontFileLoaderVTable FP_DWrite_FontFileLoaderVTable;
 struct FP_DWrite_FontFileLoaderVTable
 {
   HRESULT (*QueryInterface)(void *obj, REFIID riid, void *ptr_to_object);
@@ -200,6 +201,7 @@ struct FP_DWrite_FontFileLoaderVTable
   HRESULT (*CreateStreamFromKey)(struct FP_DWrite_FontFileLoader *loader, void const *font_file_ref_key, UINT32 font_file_ref_key_size, IDWriteFontFileStream **stream_out);
 };
 
+typedef struct FP_DWrite_FontFileLoader FP_DWrite_FontFileLoader;
 struct FP_DWrite_FontFileLoader
 {
   FP_DWrite_FontFileLoaderVTable *lpVtbl;
@@ -207,6 +209,7 @@ struct FP_DWrite_FontFileLoader
 
 //- rjf: font file stream interface types
 
+typedef struct FP_DWrite_FontFileStreamVTable FP_DWrite_FontFileStreamVTable;
 struct FP_DWrite_FontFileStreamVTable
 {
   HRESULT (*QueryInterface)(void *obj, REFIID riid, void *ptr_to_object);
@@ -218,12 +221,14 @@ struct FP_DWrite_FontFileStreamVTable
   HRESULT (*GetLastWriteTime)(struct FP_DWrite_FontFileStream *obj, UINT64 *time_out);
 };
 
+typedef struct FP_DWrite_FontFileStream FP_DWrite_FontFileStream;
 struct FP_DWrite_FontFileStream
 {
   FP_DWrite_FontFileStreamVTable *lpVtbl;
   String8 *data;
 };
 
+typedef struct FP_DWrite_FontFileStreamNode FP_DWrite_FontFileStreamNode;
 struct FP_DWrite_FontFileStreamNode
 {
   FP_DWrite_FontFileStreamNode *next;
@@ -233,6 +238,7 @@ struct FP_DWrite_FontFileStreamNode
 
 //- rjf: state & underlying handle types
 
+typedef struct FP_DWrite_State FP_DWrite_State;
 struct FP_DWrite_State
 {
   Arena *arena;
@@ -247,6 +253,7 @@ struct FP_DWrite_State
   FP_DWrite_FontFileStreamNode *free_stream_node;
 };
 
+typedef struct FP_DWrite_Font FP_DWrite_Font;
 struct FP_DWrite_Font
 {
   IDWriteFontFile *file;

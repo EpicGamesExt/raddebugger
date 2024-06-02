@@ -7971,7 +7971,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rhp: disabled overlay color blends from plain background and inactive panel overlay
             Vec4F32 bg = df_rgba_from_theme_color(DF_ThemeColor_PlainBackground);
             Vec4F32 ov = df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay);
-            Vec4F32 color = {};
+            Vec4F32 color = {0};
             color.x = bg.x * bg.w + ov.x * ov.w * (1.0f - bg.w);
             color.y = bg.y * bg.w + ov.y * ov.w * (1.0f - bg.w);
             color.z = bg.z * bg.w + ov.z * ov.w * (1.0f - bg.w);
