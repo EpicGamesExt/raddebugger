@@ -64,7 +64,7 @@ ts_thread_count(void)
 internal TS_Ticket
 ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p)
 {
-  // rjf: obtain number & slot/stripefor next artifact
+  // rjf: obtain number & slot/stripe for next artifact
   U64 artifact_num = ins_atomic_u64_inc_eval(&ts_shared->artifact_num_gen);
   U64 slot_idx = artifact_num%ts_shared->artifact_slots_count;
   U64 stripe_idx = slot_idx%ts_shared->artifact_stripes_count;

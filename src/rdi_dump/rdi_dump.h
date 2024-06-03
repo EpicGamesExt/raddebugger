@@ -64,6 +64,7 @@ internal void rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_P
 internal void rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_BinarySection *bin_section, U32 indent_level);
 internal void rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_FilePathBundle *bundle, RDI_FilePathNode *file_path, U32 indent_level);
 internal void rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceFile *source_file, U32 indent_level);
+internal void rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_LineTable *line_table, U32 indent_level);
 internal void rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Unit *unit, U32 indent_level);
 internal void rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_TypeNode *type, U32 indent_level);
 internal void rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_UDTMemberBundle *bundle, RDI_UDT *udt, U32 indent_level);

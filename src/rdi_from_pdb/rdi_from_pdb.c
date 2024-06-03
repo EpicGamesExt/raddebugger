@@ -580,7 +580,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     src_file_map.slots_count = 65536;
     src_file_map.slots = push_array(scratch.arena, P2R_SrcFileNode *, src_file_map.slots_count);
     
-    //- rjf: pass 1: fill basic per-unit info & line info
+    //- rjf: pass 1: build per-unit info & per-unit line tables
     for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
       PDB_CompUnit *pdb_unit     = in->comp_units->units[comp_unit_idx];
@@ -606,6 +606,61 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
         MemoryZeroStruct(&obj_name);
       }
       
+      //- rjf: build this unit's line table
+      RDIM_LineTable *line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 256);
+      if(pdb_unit_c13->first_sub_section != 0)
+      {
+        for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
+            node != 0;
+            node = node->next)
+        {
+          if(node->kind == CV_C13_SubSectionKind_Lines)
+          {
+            for(CV_C13LinesParsedNode *lines_n = node->lines_first;
+                lines_n != 0;
+                lines_n = lines_n->next)
+            {
+              CV_C13LinesParsed *lines = &lines_n->v;
+              
+              // rjf: file name -> normalized file path
+              String8 file_path = lines->file_name;
+              String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+              for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
+              {
+                if(file_path_normalized.str[idx] == '\\')
+                {
+                  file_path_normalized.str[idx] = '/';
+                }
+              }
+              
+              // rjf: normalized file path -> source file node
+              U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
+              U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
+              P2R_SrcFileNode *src_file_node = 0;
+              for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+              {
+                if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
+                {
+                  src_file_node = n;
+                  break;
+                }
+              }
+              if(src_file_node == 0)
+              {
+                src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
+                SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
+                src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &out->src_files, 4096);
+                src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
+              }
+              
+              // rjf: push sequence into both line table & source file's line map
+              RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, lines->voffs, lines->line_nums, lines->col_nums, lines->line_count);
+              rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
+            }
+          }
+        }
+      }
+      
       //- rjf: build unit
       RDIM_Unit *dst_unit = rdim_unit_chunk_list_push(arena, &out->units, units_chunk_cap);
       dst_unit->unit_name     = unit_name;
@@ -613,62 +668,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
       dst_unit->object_file   = obj_name;
       dst_unit->archive_file  = pdb_unit->group_name;
       dst_unit->language      = p2r_rdi_language_from_cv_language(pdb_unit_sym->info.language);
-      
-      //- rjf: fill unit line info
-      for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
-          node != 0;
-          node = node->next)
-      {
-        if(node->kind == CV_C13_SubSectionKind_Lines)
-        {
-          for(CV_C13LinesParsedNode *lines_n = node->lines_first;
-              lines_n != 0;
-              lines_n = lines_n->next)
-          {
-            CV_C13LinesParsed *lines = &lines_n->v;
-            
-            // rjf: file name -> normalized file path
-            String8 file_path = lines->file_name;
-            String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
-            for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
-            {
-              if(file_path_normalized.str[idx] == '\\')
-              {
-                file_path_normalized.str[idx] = '/';
-              }
-            }
-            
-            // rjf: normalized file path -> source file node
-            U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-            U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
-            P2R_SrcFileNode *src_file_node = 0;
-            for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
-            {
-              if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
-              {
-                src_file_node = n;
-                break;
-              }
-            }
-            if(src_file_node == 0)
-            {
-              src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
-              SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
-              src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &out->src_files, 4096);
-              src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
-            }
-            
-            // rjf: build sequence
-            RDIM_LineSequence *seq = rdim_line_sequence_list_push(arena, &dst_unit->line_sequences);
-            rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
-            seq->src_file   = src_file_node->src_file;
-            seq->voffs      = lines->voffs;
-            seq->line_nums  = lines->line_nums;
-            seq->col_nums   = lines->col_nums;
-            seq->line_count = lines->line_count;
-          }
-        }
-      }
+      dst_unit->line_table    = line_table;
     }
     
     //- rjf: pass 2: build per-unit voff ranges from comp unit contributions table
@@ -3498,15 +3498,17 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   }
   
   //////////////////////////////////////////////////////////////
-  //- rjf: join unit conversion & src file tasks
+  //- rjf: join unit conversion & src file & line table tasks
   //
   RDIM_UnitChunkList all_units = {0};
   RDIM_SrcFileChunkList all_src_files = {0};
+  RDIM_LineTableChunkList all_line_tables = {0};
   ProfScope("join unit conversion & src file tasks")
   {
     P2R_UnitConvertOut *out = ts_join_struct(unit_convert_ticket, max_U64, P2R_UnitConvertOut);
     all_units = out->units;
     all_src_files = out->src_files;
+    all_line_tables = out->line_tables;
   }
   
   //////////////////////////////////////////////////////////////
@@ -3530,6 +3532,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     out->bake_params.types            = all_types;
     out->bake_params.udts             = all_udts;
     out->bake_params.src_files        = all_src_files;
+    out->bake_params.line_tables      = all_line_tables;
     out->bake_params.global_variables = all_global_variables;
     out->bake_params.thread_variables = all_thread_variables;
     out->bake_params.procedures       = all_procedures;
@@ -3619,6 +3622,14 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point)
   return 0;
 }
 
+internal TS_TASK_FUNCTION_DEF(p2r_bake_line_tables_task__entry_point)
+{
+  P2R_BakeLineTablesIn *in = (P2R_BakeLineTablesIn *)p;
+  RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
+  ProfScope("bake line tables") *s = rdim_bake_line_table_section_list_from_params(arena, in->params);
+  return s;
+}
+
 #undef p2r_make_string_map_if_needed
 
 //- rjf: bake string map joining
@@ -3688,19 +3699,11 @@ internal TS_TASK_FUNCTION_DEF(p2r_build_bake_name_map_task__entry_point)
 
 //- rjf: pass 2: string-map-dependent debug info stream builds
 
-internal TS_TASK_FUNCTION_DEF(p2r_bake_units_top_level_task__entry_point)
+internal TS_TASK_FUNCTION_DEF(p2r_bake_units_task__entry_point)
 {
   P2R_BakeUnitsTopLevelIn *in = (P2R_BakeUnitsTopLevelIn *)p;
   RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake units") *s = rdim_bake_unit_top_level_section_list_from_params(arena, in->strings, in->path_tree, in->params);
-  return s;
-}
-
-internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_task__entry_point)
-{
-  P2R_BakeUnitIn *in = (P2R_BakeUnitIn *)p;
-  RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake unit") *s = rdim_bake_section_list_from_unit(arena, in->unit);
+  ProfScope("bake units") *s = rdim_bake_unit_section_list_from_params(arena, in->strings, in->path_tree, in->params);
   return s;
 }
 
@@ -3828,26 +3831,19 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   RDIM_BakeParams *params = &in->bake_params;
   RDIM_BakeSectionList sections = {0};
   
+  //- rjf: kick off line tables baking
+  TS_Ticket bake_line_tables_ticket = {0};
+  {
+    P2R_BakeLineTablesIn *in = push_array(scratch.arena, P2R_BakeLineTablesIn, 1);
+    in->params = params;
+    bake_line_tables_ticket = ts_kickoff(p2r_bake_line_tables_task__entry_point, 0, in);
+  }
+  
   //- rjf: build interned path tree
   RDIM_BakePathTree *path_tree = 0;
   ProfScope("build interned path tree")
   {
     path_tree = rdim_bake_path_tree_from_params(arena, params);
-  }
-  
-  //- rjf: kick off per-unit baking tasks
-  P2R_BakeUnitIn *bake_units_in = push_array(scratch.arena, P2R_BakeUnitIn, params->units.total_count);
-  TS_Ticket *bake_units_tickets = push_array(scratch.arena, TS_Ticket, params->units.total_count);
-  {
-    U64 idx = 0;
-    for(RDIM_UnitChunkNode *n = params->units.first; n != 0; n = n->next)
-    {
-      for(U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, idx += 1)
-      {
-        bake_units_in[idx].unit = &n->v[chunk_idx];
-        bake_units_tickets[idx] = ts_kickoff(p2r_bake_unit_task__entry_point, 0, &bake_units_in[idx]);
-      }
-    }
   }
   
   //- rjf: kick off string map building tasks
@@ -4070,7 +4066,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   
   //- rjf: kick off pass 2 tasks
   P2R_BakeUnitsTopLevelIn bake_units_top_level_in = {&bake_strings, path_tree, params};
-  TS_Ticket bake_units_top_level_ticket = ts_kickoff(p2r_bake_units_top_level_task__entry_point, 0, &bake_units_top_level_in);
+  TS_Ticket bake_units_top_level_ticket = ts_kickoff(p2r_bake_units_task__entry_point, 0, &bake_units_top_level_in);
   P2R_BakeUnitVMapIn bake_unit_vmap_in = {params};
   TS_Ticket bake_unit_vmap_ticket = ts_kickoff(p2r_bake_unit_vmap_task__entry_point, 0, &bake_unit_vmap_in);
   P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, params};
@@ -4265,14 +4261,11 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     rdim_bake_section_list_concat_in_place(&sections, s);
   }
   
-  //- rjf: join per-unit bakes
-  ProfScope("units")
+  //- rjf: join line tables
+  ProfScope("line tables")
   {
-    for(U64 idx = 0; idx < params->units.total_count; idx += 1)
-    {
-      RDIM_BakeSectionList *s = ts_join_struct(bake_units_tickets[idx], max_U64, RDIM_BakeSectionList);
-      rdim_bake_section_list_concat_in_place(&sections, s);
-    }
+    RDIM_BakeSectionList *s = ts_join_struct(bake_line_tables_ticket, max_U64, RDIM_BakeSectionList);
+    rdim_bake_section_list_concat_in_place(&sections, s);
   }
   
   //- rjf: fill & return
