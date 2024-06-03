@@ -3276,9 +3276,10 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
           {
             U64 base_voff = voffs[idx];
             U64 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, base_voff);
-            RDI_Unit *unit = &rdi->units[unit_idx];
-            RDI_ParsedLineInfo unit_line_info = {0};
-            rdi_line_info_from_unit(rdi, unit, &unit_line_info);
+            RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
+            RDI_LineTable *line_table = rdi_element_from_idx(rdi, line_tables, unit->line_table_idx);
+            RDI_ParsedLineTable unit_line_info = {0};
+            rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
             U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
             if(unit_line_info.voffs != 0)
             {
@@ -3320,15 +3321,16 @@ df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
   if(rdi->unit_vmap != 0 && rdi->units != 0 && rdi->source_files != 0)
   {
     U64 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, voff);
-    RDI_Unit *unit = &rdi->units[unit_idx];
-    RDI_ParsedLineInfo unit_line_info = {0};
-    rdi_line_info_from_unit(rdi, unit, &unit_line_info);
+    RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
+    RDI_LineTable *line_table = rdi_element_from_idx(rdi, line_tables, unit->line_table_idx);
+    RDI_ParsedLineTable unit_line_info = {0};
+    rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
     U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
     if(line_info_idx < unit_line_info.count)
     {
       RDI_Line *line = &unit_line_info.lines[line_info_idx];
       RDI_Column *column = (line_info_idx < unit_line_info.col_count) ? &unit_line_info.cols[line_info_idx] : 0;
-      RDI_SourceFile *file = &rdi->source_files[line->file_idx];
+      RDI_SourceFile *file = rdi_element_from_idx(rdi, source_files, line->file_idx);
       String8 file_normalized_full_path = {0};
       file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
       MemoryCopyStruct(&result.dbgi_key, dbgi_key);
@@ -3956,9 +3958,10 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
         {
           U64 base_voff = voffs[idx];
           U64 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, base_voff);
-          RDI_Unit *unit = &rdi->units[unit_idx];
-          RDI_ParsedLineInfo unit_line_info = {0};
-          rdi_line_info_from_unit(rdi, unit, &unit_line_info);
+          RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
+          RDI_LineTable *line_table = rdi_element_from_idx(rdi, line_tables, unit->line_table_idx);
+          RDI_ParsedLineTable unit_line_info = {0};
+          rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
           U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
           Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
           S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;

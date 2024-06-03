@@ -162,7 +162,7 @@ internal TS_TASK_FUNCTION_DEF(p2b_dump_proc_chunk_task__entry_point)
       {
         // rjf: unpack unit line info
         P2B_BakeUnitOut *bake_unit_out = in->bake_units_out[unit_idx];
-        RDI_ParsedLineInfo line_info = {bake_unit_out->unit_line_voffs, bake_unit_out->unit_lines, 0, bake_unit_out->unit_line_count, 0};
+        RDI_ParsedLineTable line_info = {bake_unit_out->unit_line_voffs, bake_unit_out->unit_lines, 0, bake_unit_out->unit_line_count, 0};
         for(U64 voff = voff_range.min, last_voff = 0;
             voff < voff_range.max && voff > last_voff;)
         {

@@ -178,6 +178,7 @@ struct P2R_UnitConvertOut
 {
   RDIM_UnitChunkList units;
   RDIM_SrcFileChunkList src_files;
+  RDIM_LineTableChunkList line_tables;
 };
 
 //- rjf: link name map building tasks
@@ -261,6 +262,14 @@ struct P2R_SymbolStreamConvertOut
 
 ////////////////////////////////
 //~ rjf: Baking Task Types
+
+//- rjf: line table baking task types
+
+typedef struct P2R_BakeLineTablesIn P2R_BakeLineTablesIn;
+struct P2R_BakeLineTablesIn
+{
+  RDIM_BakeParams *params;
+};
 
 //- rjf: string map baking task types
 
@@ -586,6 +595,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_types_strings_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_strings_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_symbols_strings_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_scopes_strings_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_line_tables_task__entry_point);
 
 //- rjf: bake string map joining
 internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_join_task__entry_point);
@@ -597,8 +607,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_string_map_sort_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_build_bake_name_map_task__entry_point);
 
 //- rjf: pass 2: string-map-dependent debug info stream builds
-internal TS_TASK_FUNCTION_DEF(p2r_bake_units_top_level_task__entry_point);
-internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_task__entry_point);
+internal TS_TASK_FUNCTION_DEF(p2r_bake_units_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_vmap_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_udts_task__entry_point);

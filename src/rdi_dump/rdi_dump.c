@@ -92,61 +92,40 @@ rdi_string_from_local_kind(RDI_LocalKind v)
 //~ rjf: RDI Flags -> String Functions
 
 internal void
-rdi_stringize_binary_section_flags(Arena *arena, String8List *out,
-                                   RDI_BinarySectionFlags flags){
-  if (flags == 0){
-    str8_list_push(arena, out, str8_lit("0"));
-  }
-  if (flags & RDI_BinarySectionFlag_Read){
-    str8_list_push(arena, out, str8_lit("Read "));
-  }
-  if (flags & RDI_BinarySectionFlag_Write){
-    str8_list_push(arena, out, str8_lit("Write "));
-  }
-  if (flags & RDI_BinarySectionFlag_Execute){
-    str8_list_push(arena, out, str8_lit("Execute "));
-  }
+rdi_stringize_binary_section_flags(Arena *arena, String8List *out, RDI_BinarySectionFlags flags)
+{
+  if(flags == 0) { str8_list_push(arena, out, str8_lit("0")); }
+#define X(name) if(flags & RDI_BinarySectionFlag_##name) { str8_list_push(arena, out, str8_lit(#name " ")); }
+  RDI_BinarySectionFlags_XList;
+#undef X
 }
 
 internal void
 rdi_stringize_type_modifier_flags(Arena *arena, String8List *out,
-                                  RDI_TypeModifierFlags flags){
-  if (flags == 0){
-    str8_list_push(arena, out, str8_lit("0"));
-  }
-  if (flags & RDI_TypeModifierFlag_Const){
-    str8_list_push(arena, out, str8_lit("Const "));
-  }
-  if (flags & RDI_TypeModifierFlag_Volatile){
-    str8_list_push(arena, out, str8_lit("Volatile "));
-  }
+                                  RDI_TypeModifierFlags flags)
+{
+  if(flags == 0) { str8_list_push(arena, out, str8_lit("0")); }
+#define X(name) if(flags & RDI_TypeModifierFlag_##name) { str8_list_push(arena, out, str8_lit(#name " ")); }
+  RDI_TypeModifierFlags_XList;
+#undef X
 }
 
 internal void
-rdi_stringize_udt_flags(Arena *arena, String8List *out,
-                        RDI_UDTFlags flags){
-  if (flags == 0){
-    str8_list_push(arena, out, str8_lit("0"));
-  }
-  if (flags & RDI_UDTFlag_EnumMembers){
-    str8_list_push(arena, out, str8_lit("EnumMembers "));
-  }
+rdi_stringize_udt_flags(Arena *arena, String8List *out, RDI_UDTFlags flags)
+{
+  if(flags == 0) { str8_list_push(arena, out, str8_lit("0")); }
+#define X(name) if(flags & RDI_UDTFlag_##name) { str8_list_push(arena, out, str8_lit(#name " ")); }
+  RDI_UDTFlags_XList;
+#undef X
 }
 
 internal void
-rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkFlags flags){
-  if (flags == 0){
-    str8_list_push(arena, out, str8_lit("0"));
-  }
-  if (flags & RDI_LinkFlag_External){
-    str8_list_push(arena, out, str8_lit("External "));
-  }
-  if (flags & RDI_LinkFlag_TypeScoped){
-    str8_list_push(arena, out, str8_lit("TypeScoped "));
-  }
-  if (flags & RDI_LinkFlag_ProcScoped){
-    str8_list_push(arena, out, str8_lit("ProcScoped "));
-  }
+rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkFlags flags)
+{
+  if(flags == 0) { str8_list_push(arena, out, str8_lit("0")); }
+#define X(name) if(flags & RDI_LinkFlag_##name) { str8_list_push(arena, out, str8_lit(#name " ")); }
+  RDI_LinkFlags_XList;
+#undef X
 }
 
 ////////////////////////////////
@@ -155,11 +134,12 @@ rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkFlags flags){
 global char rdi_stringize_spaces[] = "                                ";
 
 internal void
-rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                            U32 indent_level){
+rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *parsed, U32 indent_level)
+{
   U64 data_section_count = parsed->dsec_count;
   RDI_DataSection *ptr = parsed->dsecs;
-  for (U64 i = 0; i < data_section_count; i += 1, ptr += 1){
+  for(U64 i = 0; i < data_section_count; i += 1, ptr += 1)
+  {
     String8 tag_str = rdi_string_from_data_section_tag(ptr->tag);
     str8_list_pushf(arena, out, "%.*sdata_section[%5u] = {0x%08llx, %7u, %7u} %.*s\n",
                     indent_level, rdi_stringize_spaces,
@@ -168,64 +148,54 @@ rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                             RDI_TopLevelInfo *tli, U32 indent_level){
+rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_TopLevelInfo *tli, U32 indent_level)
+{
   String8 arch_str = rdi_string_from_arch(tli->arch);
   String8 exe_name = {0};
   exe_name.str = rdi_string_from_idx(parsed, tli->exe_name_string_idx, &exe_name.size);
-  
-  str8_list_pushf(arena, out, "%.*sarch=%.*s\n",
-                  indent_level, rdi_stringize_spaces, str8_varg(arch_str));
-  str8_list_pushf(arena, out, "%.*sexe_name='%.*s'\n",
-                  indent_level, rdi_stringize_spaces, str8_varg(exe_name));
-  str8_list_pushf(arena, out, "%.*svoff_max=0x%08llx\n",
-                  indent_level, rdi_stringize_spaces, tli->voff_max);
+  str8_list_pushf(arena, out, "%.*sarch=%.*s\n", indent_level, rdi_stringize_spaces, str8_varg(arch_str));
+  str8_list_pushf(arena, out, "%.*sexe_name='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(exe_name));
+  str8_list_pushf(arena, out, "%.*svoff_max=0x%08llx\n", indent_level, rdi_stringize_spaces, tli->voff_max);
 }
 
 internal void
-rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                             RDI_BinarySection *bin_section, U32 indent_level){
+rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_BinarySection *bin_section, U32 indent_level)
+{
   String8 name = {0};
   name.str = rdi_string_from_idx(parsed, bin_section->name_string_idx, &name.size);
-  str8_list_pushf(arena, out, "%.*sname='%.*s'\n",
-                  indent_level, rdi_stringize_spaces, str8_varg(name));
+  str8_list_pushf(arena, out, "%.*sname='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(name));
   
   str8_list_pushf(arena, out, "%.*sflags=", indent_level, rdi_stringize_spaces);
   rdi_stringize_binary_section_flags(arena, out, bin_section->flags);
   str8_list_pushf(arena, out, "\n");
   
-  str8_list_pushf(arena, out, "%.*svoff_first=0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->voff_first);
-  str8_list_pushf(arena, out, "%.*svoff_opl  =0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->voff_opl);
-  str8_list_pushf(arena, out, "%.*sfoff_first=0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->foff_first);
-  str8_list_pushf(arena, out, "%.*sfoff_opl  =0x%08x\n",
-                  indent_level, rdi_stringize_spaces, bin_section->foff_opl);
+  str8_list_pushf(arena, out, "%.*svoff_first=0x%08x\n", indent_level, rdi_stringize_spaces, bin_section->voff_first);
+  str8_list_pushf(arena, out, "%.*svoff_opl  =0x%08x\n", indent_level, rdi_stringize_spaces, bin_section->voff_opl);
+  str8_list_pushf(arena, out, "%.*sfoff_first=0x%08x\n", indent_level, rdi_stringize_spaces, bin_section->foff_first);
+  str8_list_pushf(arena, out, "%.*sfoff_opl  =0x%08x\n", indent_level, rdi_stringize_spaces, bin_section->foff_opl);
 }
 
 internal void
-rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                        RDI_FilePathBundle *bundle, RDI_FilePathNode *file_path,
-                        U32 indent_level){
+rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_FilePathBundle *bundle, RDI_FilePathNode *file_path, U32 indent_level)
+{
   String8 name = {0};
   name.str = rdi_string_from_idx(parsed, file_path->name_string_idx, &name.size);
-  
   U32 this_idx = (U32)(file_path - bundle->file_paths);
-  
-  if (file_path->source_file_idx == 0){
+  if(file_path->source_file_idx == 0)
+  {
     str8_list_pushf(arena, out, "%.*s[%u] '%.*s'\n",
                     indent_level, rdi_stringize_spaces,
                     this_idx, str8_varg(name));
   }
-  else{
+  else
+  {
     str8_list_pushf(arena, out, "%.*s[%u] '%.*s'; source_file=%u\n",
                     indent_level, rdi_stringize_spaces,
                     this_idx, str8_varg(name), file_path->source_file_idx);
   }
   
-  for (U32 child = file_path->first_child;
-       child != 0;){
+  for(U32 child = file_path->first_child; child != 0;)
+  {
     // get node for child
     RDI_FilePathNode *child_node = 0;
     if (child < bundle->file_path_count){
@@ -244,8 +214,8 @@ rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                          RDI_SourceFile *source_file, U32 indent_level){
+rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceFile *source_file, U32 indent_level)
+{
   // extract line map data
   RDI_ParsedLineMap line_map = {0};
   rdi_line_map_from_source_file(parsed, source_file, &line_map);
@@ -258,32 +228,37 @@ rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
   // stringize line map data
   str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
   
-  for (U32 i = 0; i < line_map.count; i += 1){
+  for(U32 i = 0; i < line_map.count; i += 1)
+  {
     U32 line_num = line_map.nums[i];
-    
     U32 digit_count = 1;
-    if (line_num > 0){
+    if(line_num > 0)
+    {
       U32 x = line_num;
-      for (;;){
+      for(;;)
+      {
         x /= 10;
-        if (x == 0){
+        if(x == 0)
+        {
           break;
         }
         digit_count += 1;
       }
     }
     
-    str8_list_pushf(arena, out, "%.*s %u: ",
-                    indent_level, rdi_stringize_spaces, line_num);
+    str8_list_pushf(arena, out, "%.*s %u: ", indent_level, rdi_stringize_spaces, line_num);
     
     U32 first = line_map.ranges[i];
     U32 opl_raw = line_map.ranges[i + 1];
     U32 opl = ClampTop(opl_raw, line_map.voff_count);
-    for (U32 j = first; j < opl; j += 1){
-      if (j == first){
+    for(U32 j = first; j < opl; j += 1)
+    {
+      if(j == first)
+      {
         str8_list_pushf(arena, out, "0x%08x\n", line_map.voffs[j]);
       }
-      else{
+      else
+      {
         str8_list_pushf(arena, out, "%.*s0x%08x\n",
                         indent_level + digit_count + 3, rdi_stringize_spaces,
                         line_map.voffs[j]);
@@ -293,61 +268,60 @@ rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed,
-                   RDI_Unit *unit, U32 indent_level){
-  String8 unit_name = {0};
-  unit_name.str = rdi_string_from_idx(parsed, unit->unit_name_string_idx, &unit_name.size);
-  String8 compiler_name = {0};
-  compiler_name.str = rdi_string_from_idx(parsed, unit->compiler_name_string_idx,
-                                          &compiler_name.size);
+rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_LineTable *line_table, U32 indent_level)
+{
+  // rjf: parse line table
+  RDI_ParsedLineTable parsed_line_table = {0};
+  rdi_parsed_from_line_table(parsed, line_table, &parsed_line_table);
   
-  str8_list_pushf(arena, out, "%.*sunit_name='%.*s'\n",
-                  indent_level, rdi_stringize_spaces, str8_varg(unit_name));
-  str8_list_pushf(arena, out, "%.*scompiler_name='%.*s'\n",
-                  indent_level, rdi_stringize_spaces, str8_varg(compiler_name));
-  
-  str8_list_pushf(arena, out, "%.*ssource_file_path=%u\n",
-                  indent_level, rdi_stringize_spaces, unit->source_file_path_node);
-  str8_list_pushf(arena, out, "%.*sobject_file_path=%u\n",
-                  indent_level, rdi_stringize_spaces, unit->object_file_path_node);
-  str8_list_pushf(arena, out, "%.*sarchive_file_path=%u\n",
-                  indent_level, rdi_stringize_spaces, unit->archive_file_path_node);
-  str8_list_pushf(arena, out, "%.*sbuild_path=%u\n",
-                  indent_level, rdi_stringize_spaces, unit->build_path_node);
-  
-  String8 language_str = rdi_string_from_language(unit->language);
-  str8_list_pushf(arena, out, "%.*slanguage=%.*s\n",
-                  indent_level, rdi_stringize_spaces, str8_varg(language_str));
-  
-  // extract line info data
-  RDI_ParsedLineInfo line_info = {0};
-  rdi_line_info_from_unit(parsed, unit, &line_info);
-  
-  
-  // stringize line info
+  // rjf: stringize lines
   str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
-  
-  for (U32 i = 0; i < line_info.count; i += 1){
-    U64 first = line_info.voffs[i];
-    U64 opl   = line_info.voffs[i + 1];
-    RDI_Line *line = line_info.lines + i;
+  for(U32 i = 0; i < parsed_line_table.count; i += 1)
+  {
+    U64 first = parsed_line_table.voffs[i];
+    U64 opl   = parsed_line_table.voffs[i + 1];
+    RDI_Line *line = parsed_line_table.lines + i;
     RDI_Column *col = 0;
-    if (i < line_info.col_count){
-      col = line_info.cols + i;
+    if(i < parsed_line_table.col_count)
+    {
+      col = parsed_line_table.cols + i;
     }
-    
-    if (col == 0){
+    if(col == 0)
+    {
       str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u\n",
                       indent_level, rdi_stringize_spaces,
                       first, opl, line->file_idx, line->line_num);
     }
-    else{
+    else
+    {
       str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u; columns=[%u,%u)\n",
                       indent_level, rdi_stringize_spaces,
                       first, opl, line->file_idx, line->line_num,
                       col->col_first, col->col_opl);
     }
   }
+}
+
+internal void
+rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Unit *unit, U32 indent_level)
+{
+  String8 unit_name = {0};
+  unit_name.str = rdi_string_from_idx(parsed, unit->unit_name_string_idx, &unit_name.size);
+  String8 compiler_name = {0};
+  compiler_name.str = rdi_string_from_idx(parsed, unit->compiler_name_string_idx, &compiler_name.size);
+  
+  str8_list_pushf(arena, out, "%.*sunit_name='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(unit_name));
+  str8_list_pushf(arena, out, "%.*scompiler_name='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(compiler_name));
+  
+  str8_list_pushf(arena, out, "%.*ssource_file_path=%u\n", indent_level, rdi_stringize_spaces, unit->source_file_path_node);
+  str8_list_pushf(arena, out, "%.*sobject_file_path=%u\n", indent_level, rdi_stringize_spaces, unit->object_file_path_node);
+  str8_list_pushf(arena, out, "%.*sarchive_file_path=%u\n", indent_level, rdi_stringize_spaces, unit->archive_file_path_node);
+  str8_list_pushf(arena, out, "%.*sbuild_path=%u\n", indent_level, rdi_stringize_spaces, unit->build_path_node);
+  
+  String8 language_str = rdi_string_from_language(unit->language);
+  str8_list_pushf(arena, out, "%.*slanguage=%.*s\n", indent_level, rdi_stringize_spaces, str8_varg(language_str));
+  
+  str8_list_pushf(arena, out, "%.*sline_table_idx=%u\n", indent_level, rdi_stringize_spaces, unit->line_table_idx);
 }
 
 internal void
