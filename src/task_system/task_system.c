@@ -64,6 +64,8 @@ ts_thread_count(void)
 internal TS_Ticket
 ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p)
 {
+  ProfBeginFunction();
+  
   // rjf: obtain number & slot/stripe for next artifact
   U64 artifact_num = ins_atomic_u64_inc_eval(&ts_shared->artifact_num_gen);
   U64 slot_idx = artifact_num%ts_shared->artifact_slots_count;
@@ -73,51 +75,58 @@ ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p
   
   // rjf: allocate artifact
   TS_TaskArtifact *artifact = 0;
-  OS_MutexScopeW(stripe->rw_mutex)
+  ProfScope("allocate artifact")
   {
-    artifact = stripe->free_artifact;
-    if(artifact != 0)
+    OS_MutexScopeW(stripe->rw_mutex)
     {
-      SLLStackPop(stripe->free_artifact);
+      artifact = stripe->free_artifact;
+      if(artifact != 0)
+      {
+        SLLStackPop(stripe->free_artifact);
+      }
+      else
+      {
+        artifact = push_array_no_zero(stripe->arena, TS_TaskArtifact, 1);
+      }
+      artifact->num          = artifact_num;
+      artifact->task_is_done = 0;
+      artifact->result       = 0;
     }
-    else
-    {
-      artifact = push_array_no_zero(stripe->arena, TS_TaskArtifact, 1);
-    }
-    artifact->num          = artifact_num;
-    artifact->task_is_done = 0;
-    artifact->result       = 0;
   }
   
   // rjf: form ticket out of artifact info
   TS_Ticket ticket = {artifact_num, (U64)artifact};
   
   // rjf: push task info to task ring buffer
-  OS_MutexScope(ts_shared->u2t_ring_mutex) for(;;)
+  ProfScope("push task info to task ring buffer")
   {
-    U64 unconsumed_size = ts_shared->u2t_ring_write_pos - ts_shared->u2t_ring_read_pos;
-    U64 available_size = ts_shared->u2t_ring_size-unconsumed_size;
-    if(available_size >= sizeof(entry_point) + sizeof(p) + sizeof(ticket))
+    OS_MutexScope(ts_shared->u2t_ring_mutex) for(;;)
     {
-      Arena *task_arena = 0;
-      if(optional_arena_ptr != 0)
+      U64 unconsumed_size = ts_shared->u2t_ring_write_pos - ts_shared->u2t_ring_read_pos;
+      U64 available_size = ts_shared->u2t_ring_size-unconsumed_size;
+      if(available_size >= sizeof(entry_point) + sizeof(p) + sizeof(ticket))
       {
-        task_arena = *optional_arena_ptr;
+        Arena *task_arena = 0;
+        if(optional_arena_ptr != 0)
+        {
+          task_arena = *optional_arena_ptr;
+        }
+        ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &entry_point);
+        ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &task_arena);
+        ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &p);
+        ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &ticket);
+        if(optional_arena_ptr != 0)
+        {
+          *optional_arena_ptr = 0;
+        }
+        break;
       }
-      ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &entry_point);
-      ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &task_arena);
-      ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &p);
-      ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &ticket);
-      if(optional_arena_ptr != 0)
-      {
-        *optional_arena_ptr = 0;
-      }
-      break;
+      os_condition_variable_wait(ts_shared->u2t_ring_cv, ts_shared->u2t_ring_mutex, max_U64);
     }
-    os_condition_variable_wait(ts_shared->u2t_ring_cv, ts_shared->u2t_ring_mutex, max_U64);
+    os_condition_variable_signal(ts_shared->u2t_ring_cv);
   }
-  os_condition_variable_broadcast(ts_shared->u2t_ring_cv);
   
+  ProfEnd();
   return ticket;
 }
 

@@ -1588,12 +1588,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }
           if(resume_good)
           {
-            evt_good = !!WaitForDebugEvent(&evt, INFINITE);
+            evt_good = !!WaitForDebugEvent(&evt, 100);
             if(evt_good)
             {
               dmn_w32_shared->resume_needed = 1;
               dmn_w32_shared->resume_pid = evt.dwProcessId;
               dmn_w32_shared->resume_tid = evt.dwThreadId;
+            }
+            else
+            {
+              keep_going = 1;
             }
             ins_atomic_u64_inc_eval(&dmn_w32_shared->run_gen);
             ins_atomic_u64_inc_eval(&dmn_w32_shared->mem_gen);
