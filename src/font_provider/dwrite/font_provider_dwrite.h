@@ -164,7 +164,7 @@ DEFINE_GUID(IID_IDWriteFactory2,                 0x0439fc60, 0xca44, 0x4994, 0x8
 
 //- rjf: functions
 
-EXTERN_C HRESULT DECLSPEC_IMPORT WINAPI DWriteCreateFactory (DWRITE_FACTORY_TYPE factoryType, const GUID* iid, void** factory) WIN_NOEXCEPT;
+EXTERN_C HRESULT DECLSPEC_IMPORT WINAPI DWriteCreateFactory (DWRITE_FACTORY_TYPE factoryType, const GUID* iid, void** factory);
 
 //- rjf: methods
 
