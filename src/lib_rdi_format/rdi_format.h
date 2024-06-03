@@ -797,6 +797,16 @@ RDI_U32 line_info_col_data_idx;
 RDI_U32 line_info_count;
 };
 
+typedef struct RDI_LineTable RDI_LineTable;
+struct RDI_LineTable
+{
+RDI_U32 voffs_base_idx;
+RDI_U32 lines_base_idx;
+RDI_U32 cols_base_idx;
+RDI_U32 lines_count;
+RDI_U32 cols_count;
+};
+
 typedef struct RDI_Line RDI_Line;
 struct RDI_Line
 {
@@ -932,6 +942,18 @@ RDI_U32 local_first;
 RDI_U32 local_count;
 RDI_U32 static_local_idx_run_first;
 RDI_U32 static_local_count;
+};
+
+typedef struct RDI_InlineSite RDI_InlineSite;
+struct RDI_InlineSite
+{
+RDI_U32 name_string_idx;
+RDI_U32 call_src_file_idx;
+RDI_U32 call_line_num;
+RDI_U32 call_col_num;
+RDI_U32 type_idx;
+RDI_U32 owner_type_idx;
+RDI_U32 line_table_idx;
 };
 
 typedef struct RDI_Local RDI_Local;

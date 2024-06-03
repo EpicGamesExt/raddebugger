@@ -508,6 +508,16 @@ RDI_UnitMemberTable:
 //~ rjf: Line Info Type Tables
 
 @table(name type desc)
+RDI_LineTableMemberTable:
+{
+  {voffs_base_idx     RDI_U32     ""} // U64[lines_count+1] (sorted ranges)
+  {lines_base_idx     RDI_U32     ""} // RDI_Line[lines_count]
+  {cols_base_idx      RDI_U32     ""} // RDI_Column[cols_count]
+  {lines_count        RDI_U32     ""}
+  {cols_count         RDI_U32     ""}
+}
+
+@table(name type desc)
 RDI_LineMemberTable:
 {
   {file_idx    RDI_U32     ""}
@@ -519,6 +529,11 @@ RDI_ColumnMemberTable:
 {
   {col_first  RDI_U16     ""}
   {col_opl    RDI_U16     ""}
+}
+
+@struct RDI_LineTable:
+{
+  @expand(RDI_LineTableMemberTable a) `$(a.type) $(a.name)`
 }
 
 @struct RDI_Line:
@@ -808,9 +823,9 @@ RDI_LocalKindTable:
 @table(name value)
 RDI_LocationKindTable:
 {
-  {NULL                      0x0}
-  {AddrBytecodeStream        0x1}
-  {ValBytecodeStream         0x2}
+  {NULL                 0x0}
+  {AddrBytecodeStream   0x1}
+  {ValBytecodeStream    0x2}
   {AddrRegPlusU16       0x3}
   {AddrAddrRegPlusU16   0x4}
   {ValReg               0x5}
@@ -860,6 +875,18 @@ RDI_ScopeMemberTable:
   {local_count                RDI_U32 ""}
   {static_local_idx_run_first RDI_U32 ""}
   {static_local_count         RDI_U32 ""}
+}
+
+@table(name type desc)
+RDI_InlineSiteMemberTable:
+{
+  {name_string_idx     RDI_U32    ""}
+  {call_src_file_idx   RDI_U32    ""}
+  {call_line_num       RDI_U32    ""}
+  {call_col_num        RDI_U32    ""}
+  {type_idx            RDI_U32    ""}
+  {owner_type_idx      RDI_U32    ""}
+  {line_table_idx      RDI_U32    ""}
 }
 
 @table(name type desc)
@@ -951,6 +978,11 @@ RDI_LocationRegMemberTable:
 @struct RDI_Scope:
 {
   @expand(RDI_ScopeMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_InlineSite:
+{
+  @expand(RDI_InlineSiteMemberTable a) `$(a.type) $(a.name)`
 }
 
 @struct RDI_Local:
