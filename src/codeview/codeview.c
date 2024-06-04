@@ -933,9 +933,12 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
     }break;
     case CV_InlineBinaryAnnotation_ChangeFile:
     {
-      U32 new_file_off = file_off;
-      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &new_file_off);
-      file_off_changed = new_file_off != file_off;
+      U32 old_file_off = file_off;
+      cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &file_off);
+      file_off_changed = old_file_off != file_off;
+      // Compiler isn't obligated to terminate code sequence before chaning files,
+      // so we have to always force emit code range on file change.
+      code_length_changed = file_off_changed;
     }break;
     case CV_InlineBinaryAnnotation_ChangeLineOffset:
     {
@@ -1016,6 +1019,45 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
     }break;
     }
 
+    U64 line_code_offset = code_offset;
+
+    if(code_length_changed)
+    {
+      // compute upper bound of the range
+      U64 code_offset_hi = code_offset + code_length;
+
+      // can last code range be extended to cover current sequence too?
+      if(code_range_last != 0 && code_range_last->range.max == parent_voff + code_offset_lo)
+      {
+        code_range_last->range.max = parent_voff + code_offset_hi;
+      }
+      else
+      {
+        // append range
+        struct CodeRange *code_range = push_array(scratch.arena, struct CodeRange, 1);
+        code_range->range = rng_1u64(parent_voff + code_offset_lo, parent_voff + code_offset_hi);
+        SLLQueuePush(code_range_first, code_range_last, code_range);
+        ++code_range_count;
+
+        // update last code range in file
+        if(file_last)
+        {
+          file_last->last_code_range = code_range->range;
+        }
+      }
+
+      // update low offset for next range
+      code_offset_lo = code_offset_hi;
+
+      // advance code offset
+      code_offset += code_length;
+
+      // reset state
+      code_offset_lo_changed = 0;
+      code_length_changed    = 0;
+      code_length            = 0;
+    }
+
     if(file_off_changed || (file_first == 0))
     {
       // append file
@@ -1040,7 +1082,7 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
       {
         // append line
         struct SourceLine *line = push_array(scratch.arena, struct SourceLine, 1);
-        line->voff = parent_voff + code_offset;
+        line->voff = parent_voff + line_code_offset;
         line->ln   = (U64)ln;
         line->cn   = (U64)cn;
         SLLQueuePush(file_last->line_first, file_last->line_last, line);
@@ -1051,48 +1093,6 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
       code_offset_changed = 0;
       ln_changed          = 0;
     }
-
-    if(code_length_changed)
-    {
-      // compute upper bound of the range
-      U64 code_offset_hi = code_offset + code_length;
-
-      // empty code range check
-      if(code_offset_lo < code_offset_hi)
-      {
-        // can last code range be extended to cover current sequence too?
-        if(code_range_last != 0 && code_range_last->range.max == parent_voff + code_offset_lo)
-        {
-          code_range_last->range.max = parent_voff + code_offset_hi;
-        }
-        else
-        {
-          // append range
-          struct CodeRange *code_range = push_array(scratch.arena, struct CodeRange, 1);
-          code_range->range = rng_1u64(parent_voff + code_offset_lo, parent_voff + code_offset_hi);
-          SLLQueuePush(code_range_first, code_range_last, code_range);
-          ++code_range_count;
-
-          // update last code range in file
-          if(file_last)
-          {
-            file_last->last_code_range = code_range->range;
-          }
-        }
-      }
-
-      // advance code offset
-      code_offset += code_length;
-
-      // update low offset for next range
-      code_offset_lo = code_offset_hi;
-
-      // reset state
-      code_length            = 0;
-      code_offset_lo_changed = 0;
-      code_length_changed    = 0;
-    }
-
   }
 
   Rng1U64 *code_ranges;

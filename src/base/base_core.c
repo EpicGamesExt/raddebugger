@@ -570,7 +570,7 @@ bsearch_nearest_u64(void *arr, U64 count, U64 val, U64 stride, U64 offset)
 
   U64 match = count;
 
-  if(count > 0 && GetItem(0) <= val && val < GetItem(count-1))
+  if(count > 0 && GetItem(0) <= val && val <= GetItem(count-1))
   {
     U64 min = 0;
     U64 max = count;
