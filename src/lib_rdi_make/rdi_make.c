@@ -2574,9 +2574,9 @@ rdim_bake_line_table_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams
 {
   //- rjf: build all combined line info
   RDI_LineTable *dst_line_tables = push_array(arena, RDI_LineTable, params->line_tables.total_count+1);
-  RDI_U64 *dst_line_voffs = push_array(arena, RDI_U64, params->line_tables.total_line_count + params->line_tables.total_seq_count);
-  RDI_Line *dst_lines = push_array(arena, RDI_Line, params->line_tables.total_line_count);
-  RDI_Column *dst_cols = push_array(arena, RDI_Column, params->line_tables.total_col_count);
+  RDI_U64 *dst_line_voffs = push_array(arena, RDI_U64, params->line_tables.total_line_count + 2*params->line_tables.total_seq_count);
+  RDI_Line *dst_lines = push_array(arena, RDI_Line, params->line_tables.total_line_count + params->line_tables.total_seq_count);
+  RDI_Column *dst_cols = push_array(arena, RDI_Column, 1);
   {
     RDI_U64 dst_table_idx = 1;
     RDI_U64 dst_voff_idx = 0;
@@ -2606,13 +2606,8 @@ rdim_bake_line_table_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams
             RDI_U16 col_first;
             RDI_U16 col_opl;
           };
-          RDI_U64 line_count = 0;
-          RDI_U64 seq_count = 0;
-          for(RDIM_LineSequenceNode *seq_n = src_line_table->first_seq; seq_n != 0; seq_n = seq_n->next)
-          {
-            seq_count += 1;
-            line_count += seq_n->v.line_count;
-          }
+          RDI_U64 line_count = src_line_table->line_count;
+          RDI_U64 seq_count = src_line_table->seq_count;
           RDI_U64 key_count = line_count + seq_count;
           RDIM_SortKey *line_keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, key_count);
           RDIM_LineRec *line_recs = rdim_push_array_no_zero(scratch.arena, RDIM_LineRec, line_count);
@@ -2686,14 +2681,12 @@ rdim_bake_line_table_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams
         dst_line_table->voffs_base_idx = (RDI_U32)dst_voff_idx; // TODO(rjf): @u64_to_u32
         dst_line_table->lines_base_idx = (RDI_U32)dst_line_idx; // TODO(rjf): @u64_to_u32
         dst_line_table->cols_base_idx  = (RDI_U32)dst_col_idx;  // TODO(rjf): @u64_to_u32
-        dst_line_table->lines_count    = (RDI_U32)src_line_table->line_count; // TODO(rjf): @u64_to_u32
-        dst_line_table->cols_count     = (RDI_U32)src_line_table->col_count;  // TODO(rjf): @u64_to_u32
+        dst_line_table->lines_count    = (RDI_U32)src_line_table->line_count + src_line_table->seq_count; // TODO(rjf): @u64_to_u32
         
         //- rjf: increment
         dst_table_idx += 1;
-        dst_voff_idx += src_line_table->line_count + src_line_table->seq_count;
-        dst_line_idx += src_line_table->line_count;
-        dst_col_idx += src_line_table->col_count;
+        dst_voff_idx += src_line_table->line_count + 2*src_line_table->seq_count;
+        dst_line_idx += src_line_table->line_count + src_line_table->seq_count;
       }
     }
   }
@@ -2703,7 +2696,7 @@ rdim_bake_line_table_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams
   {
     rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_line_tables, sizeof(RDI_LineTable)*params->line_tables.total_count, RDI_DataSectionTag_LineTables, 0);
     rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_line_voffs, sizeof(RDI_U64) * (params->line_tables.total_line_count + params->line_tables.total_seq_count), RDI_DataSectionTag_LineInfoVoffs, 0);
-    rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_lines, sizeof(RDI_Line) * params->line_tables.total_line_count, RDI_DataSectionTag_LineInfoLines, 0);
+    rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_lines, sizeof(RDI_Line) * (params->line_tables.total_line_count + params->line_tables.total_seq_count), RDI_DataSectionTag_LineInfoLines, 0);
     rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_cols, sizeof(RDI_Column) * params->line_tables.total_col_count, RDI_DataSectionTag_LineInfoColumns, 0);
   }
   return sections;
