@@ -509,9 +509,14 @@ rdim_src_file_chunk_list_concat_in_place(RDIM_SrcFileChunkList *dst, RDIM_SrcFil
 RDI_PROC void
 rdim_src_file_push_line_sequence(RDIM_Arena *arena, RDIM_SrcFileChunkList *src_files, RDIM_SrcFile *src_file, RDIM_LineSequence *seq)
 {
+  if(src_file->first_line_map_fragment == 0)
+  {
+    src_files->source_line_map_count += 1;
+  }
   RDIM_SrcFileLineMapFragment *fragment = rdim_push_array(arena, RDIM_SrcFileLineMapFragment, 1);
   fragment->seq = seq;
   RDIM_SLLQueuePush(src_file->first_line_map_fragment, src_file->last_line_map_fragment, fragment);
+  src_files->total_line_count += seq->line_count;
 }
 
 ////////////////////////////////
@@ -1058,9 +1063,6 @@ rdim_bake_section_count_from_params(RDIM_BakeParams *params)
   RDI_U64 section_count = 0;
   {
     section_count += RDI_DataSectionTag_PRIMARY_COUNT;
-    section_count += params->src_files.total_count; // PER-SOURCE-FILE line map numbers
-    section_count += params->src_files.total_count; // PER-SOURCE-FILE line map ranges
-    section_count += params->src_files.total_count; // PER-SOURCE-FILE line map voffs
     section_count += RDI_NameMapKind_COUNT-1;       // PER-NAME-MAP buckets section
     section_count += RDI_NameMapKind_COUNT-1;       // PER-NAME-MAP nodes section
   }
@@ -1079,33 +1081,16 @@ rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSecti
   {
     default:{}break;
     
-    //- rjf: per-source-file sections
-    case (RDI_U32)RDI_DataSectionTag_LineMapNumbers:
-    if(idx != 0)
-    {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 0*params->src_files.total_count + (idx-1)%params->src_files.total_count;
-    }break;
-    case (RDI_U32)RDI_DataSectionTag_LineMapRanges:
-    if(idx != 0)
-    {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 1*params->src_files.total_count + (idx-1)%params->src_files.total_count;
-    }break;
-    case (RDI_U32)RDI_DataSectionTag_LineMapVoffs:
-    if(idx != 0)
-    {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 2*params->src_files.total_count + (idx-1)%params->src_files.total_count;
-    }break;
-    
     //- rjf: per-name-map sections
     case (RDI_U32)RDI_DataSectionTag_NameMapBuckets:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->src_files.total_count + 0*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 0*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
     }break;
     case (RDI_U32)RDI_DataSectionTag_NameMapNodes:
     if(idx != 0)
     {
-      result = RDI_DataSectionTag_PRIMARY_COUNT + 3*params->src_files.total_count + 1*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
+      result = RDI_DataSectionTag_PRIMARY_COUNT + 1*(RDI_NameMapKind_COUNT-1) + (idx-1)%(RDI_NameMapKind_COUNT-1);
     }break;
   }
   return result;
@@ -2329,14 +2314,34 @@ rdim_bake_unit_vmap_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams 
 RDI_PROC RDIM_BakeSectionList
 rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_BakeParams *params)
 {
+  RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
   RDIM_BakeSectionList sections = {0};
   
   ////////////////////////////
-  //- rjf: iterate all source files, fill serialized version, build sections for line info
+  //- rjf: iterate all source files, fill serialized version, fill line maps, fill line map tables
   //
+  typedef struct RDIM_DataNode RDIM_DataNode;
+  struct RDIM_DataNode
+  {
+    RDIM_DataNode *next;
+    void *data;
+    RDI_U64 size;
+  };
   RDI_U32 dst_files_count = params->src_files.total_count + 1;
+  RDI_U32 dst_maps_count = params->src_files.source_line_map_count + 1;
   RDI_SourceFile *dst_files = rdim_push_array(arena, RDI_SourceFile, dst_files_count);
+  RDI_SourceLineMap *dst_maps = rdim_push_array(arena, RDI_SourceLineMap, dst_maps_count);
+  RDIM_DataNode *first_dst_nums_node = 0;
+  RDIM_DataNode *last_dst_nums_node = 0;
+  RDIM_DataNode *first_dst_rngs_node = 0;
+  RDIM_DataNode *last_dst_rngs_node = 0;
+  RDIM_DataNode *first_dst_voffs_node = 0;
+  RDIM_DataNode *last_dst_voffs_node = 0;
+  RDI_U64 dst_nums_idx = 0;
+  RDI_U64 dst_rngs_idx = 0;
+  RDI_U64 dst_voffs_idx = 0;
   RDI_U32 dst_file_idx = 1;
+  RDI_U32 dst_map_idx = 1;
   for(RDIM_SrcFileChunkNode *chunk_n = params->src_files.first;
       chunk_n != 0;
       chunk_n = chunk_n->next)
@@ -2347,12 +2352,6 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
       RDI_SourceFile *dst_file = &dst_files[dst_file_idx];
       
       ////////////////////////
-      //- rjf: fill basics
-      //
-      dst_file->file_path_node_idx = rdim_bake_path_node_idx_from_string(path_tree, src_file->normal_full_path);
-      dst_file->normal_full_path_string_idx = rdim_bake_idx_from_string(strings, src_file->normal_full_path);
-      
-      ////////////////////////
       //- rjf: produce combined source file line info
       //
       RDI_U32 *src_file_line_nums   = 0;
@@ -2361,8 +2360,6 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
       RDI_U32  src_file_line_count  = 0;
       RDI_U32  src_file_voff_count  = 0;
       {
-        RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
-        
         //- rjf: gather line number map
         typedef struct RDIM_SrcLineMapVoffBlock RDIM_SrcLineMapVoffBlock;
         struct RDIM_SrcLineMapVoffBlock
@@ -2458,9 +2455,9 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
         RDIM_SortKey *sorted_keys = rdim_sort_key_array(scratch.arena, keys, line_count);
         
         //- rjf: bake result
-        RDI_U32 *line_nums = rdim_push_array_no_zero(arena, RDI_U32, line_count);
-        RDI_U32 *line_ranges = rdim_push_array_no_zero(arena, RDI_U32, line_count + 1);
-        RDI_U64 *voffs = rdim_push_array_no_zero(arena, RDI_U64, voff_count);
+        RDI_U32 *line_nums = rdim_push_array_no_zero(scratch.arena, RDI_U32, line_count);
+        RDI_U32 *line_ranges = rdim_push_array_no_zero(scratch.arena, RDI_U32, line_count + 1);
+        RDI_U64 *voffs = rdim_push_array_no_zero(scratch.arena, RDI_U64, voff_count);
         {
           RDI_U64 *voff_ptr = voffs;
           for(RDI_U32 i = 0; i < line_count; i += 1)
@@ -2483,30 +2480,90 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
         src_file_line_count  = line_count;
         src_file_voffs       = voffs;
         src_file_voff_count  = voff_count;
-        rdim_scratch_end(scratch);
       }
       
-      //////////////////////////
-      //- rjf: produce data sections for this source file's line info tables
+      ////////////////////////
+      //- rjf: grab & fill the next line map, if this file has one
       //
-      if(src_file_line_count != 0)
+      RDI_SourceLineMap *dst_map = 0;
+      if(src_file->first_line_map_fragment != 0)
       {
-        dst_file->line_map_count = src_file_line_count;
-        dst_file->line_map_nums_data_idx  = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_LineMapNumbers, dst_file_idx); // TODO(rjf): @u64_to_u32
-        dst_file->line_map_range_data_idx = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_LineMapRanges,  dst_file_idx); // TODO(rjf): @u64_to_u32
-        dst_file->line_map_voff_data_idx  = (RDI_U32)rdim_bake_section_idx_from_params_tag_idx(params, RDI_DataSectionTag_LineMapVoffs,   dst_file_idx); // TODO(rjf): @u64_to_u32
-        rdim_bake_section_list_push_new_unpacked(arena, &sections, src_file_line_nums, sizeof(*src_file_line_nums)*src_file_line_count, RDI_DataSectionTag_LineMapNumbers, dst_file_idx);
-        rdim_bake_section_list_push_new_unpacked(arena, &sections, src_file_line_ranges, sizeof(*src_file_line_ranges)*(src_file_line_count + 1), RDI_DataSectionTag_LineMapRanges, dst_file_idx);
-        rdim_bake_section_list_push_new_unpacked(arena, &sections, src_file_voffs, sizeof(*src_file_voffs)*src_file_voff_count, RDI_DataSectionTag_LineMapVoffs, dst_file_idx);
+        dst_map = &dst_maps[dst_map_idx];
+        dst_map_idx += 1;
+        dst_map->line_count = (RDI_U32)src_file_line_count; // TODO(rjf): @u64_to_u32
+        dst_map->voff_count = (RDI_U32)src_file_voff_count; // TODO(rjf): @u64_to_u32
+        dst_map->line_map_nums_base_idx  = (RDI_U32)dst_nums_idx; // TODO(rjf): @u64_to_u32
+        dst_map->line_map_range_base_idx = (RDI_U32)dst_rngs_idx; // TODO(rjf): @u64_to_u32
+        dst_map->line_map_voff_base_idx  = (RDI_U32)dst_voffs_idx; // TODO(rjf): @u64_to_u32
       }
+      
+      ////////////////////////
+      //- rjf: gather line map data chunks for later collation & storage into their own top-level sections
+      //
+      {
+        RDIM_DataNode *dst_num_node = rdim_push_array(scratch.arena, RDIM_DataNode, 1);
+        RDIM_SLLQueuePush(first_dst_nums_node, last_dst_nums_node, dst_num_node);
+        dst_num_node->data = src_file_line_nums;
+        dst_num_node->size = sizeof(RDI_U32)*src_file_line_count;
+        RDIM_DataNode *dst_rng_node = rdim_push_array(scratch.arena, RDIM_DataNode, 1);
+        RDIM_SLLQueuePush(first_dst_rngs_node, last_dst_rngs_node, dst_rng_node);
+        dst_rng_node->data = src_file_line_ranges;
+        dst_rng_node->size = sizeof(RDI_U32)*(src_file_line_count+1);
+        RDIM_DataNode *dst_voff_node = rdim_push_array(scratch.arena, RDIM_DataNode, 1);
+        RDIM_SLLQueuePush(first_dst_voffs_node, last_dst_voffs_node, dst_voff_node);
+        dst_voff_node->data = src_file_voffs;
+        dst_voff_node->size = sizeof(RDI_U64)*(src_file_voff_count);
+        dst_nums_idx += src_file_line_count;
+        dst_rngs_idx += src_file_line_count+1;
+        dst_voffs_idx+= src_file_voff_count;
+      }
+      
+      ////////////////////////
+      //- rjf: fill file info
+      //
+      dst_file->file_path_node_idx = rdim_bake_path_node_idx_from_string(path_tree, src_file->normal_full_path);
+      dst_file->normal_full_path_string_idx = rdim_bake_idx_from_string(strings, src_file->normal_full_path);
+      dst_file->source_line_map_idx = (RDI_U32)(dst_map ? (dst_map - dst_maps) : 0);
     }
   }
   
   ////////////////////////////
-  //- rjf: build section for all source files
+  //- rjf: coalesce source line map data blobs
   //
-  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_files, sizeof(RDI_SourceFile)*dst_files_count, RDI_DataSectionTag_SourceFiles, 0);
+  RDI_U32 *source_line_map_nums = rdim_push_array_no_zero(arena, RDI_U32, dst_nums_idx);
+  RDI_U32 *source_line_map_rngs = rdim_push_array_no_zero(arena, RDI_U32, dst_rngs_idx);
+  RDI_U64 *source_line_map_voffs= rdim_push_array_no_zero(arena, RDI_U64, dst_voffs_idx);
+  {
+    RDI_U64 num_idx = 0;
+    RDI_U64 rng_idx = 0;
+    RDI_U64 voff_idx= 0;
+    for(RDIM_DataNode *num_n = first_dst_nums_node; num_n != 0; num_n = num_n->next)
+    {
+      rdim_memcpy(source_line_map_nums+num_idx, num_n->data, num_n->size);
+      num_idx += num_n->size/sizeof(RDI_U32);
+    }
+    for(RDIM_DataNode *rng_n = first_dst_rngs_node; rng_n != 0; rng_n = rng_n->next)
+    {
+      rdim_memcpy(source_line_map_rngs+rng_idx, rng_n->data, rng_n->size);
+      rng_idx += rng_n->size/sizeof(RDI_U32);
+    }
+    for(RDIM_DataNode *voff_n = first_dst_voffs_node; voff_n != 0; voff_n = voff_n->next)
+    {
+      rdim_memcpy(source_line_map_voffs+voff_idx, voff_n->data, voff_n->size);
+      voff_idx += voff_n->size/sizeof(RDI_U64);
+    }
+  }
   
+  ////////////////////////////
+  //- rjf: build sections
+  //
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_files, sizeof(RDI_SourceFile)*dst_files_count,   RDI_DataSectionTag_SourceFiles, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, dst_maps,  sizeof(RDI_SourceLineMap)*dst_maps_count, RDI_DataSectionTag_SourceLineMaps, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, source_line_map_nums, sizeof(RDI_U32)*dst_nums_idx,  RDI_DataSectionTag_SourceLineMapNumbers, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, source_line_map_rngs, sizeof(RDI_U32)*dst_rngs_idx,  RDI_DataSectionTag_SourceLineMapRanges, 0);
+  rdim_bake_section_list_push_new_unpacked(arena, &sections, source_line_map_voffs,sizeof(RDI_U64)*dst_voffs_idx, RDI_DataSectionTag_SourceLineMapVOffs, 0);
+  
+  rdim_scratch_end(scratch);
   return sections;
 }
 
@@ -2515,17 +2572,6 @@ rdim_bake_src_file_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMa
 RDI_PROC RDIM_BakeSectionList
 rdim_bake_line_table_section_list_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
 {
-  //
-  // TODO(rjf):
-  // 1. section for all line tables
-  // 2. section for all line info voff ranges
-  // 3. section for all line info lines
-  // 4. section for all line info columns
-  //
-  // the entire line info voffs/lines/columns tables are not sorted together; only sub-sections, belonging to
-  // specific line tables, are sorted as one. so it is known up-front which line table maps to which index
-  // range into the collated line info sections.
-  //
   //- rjf: build all combined line info
   RDI_LineTable *dst_line_tables = push_array(arena, RDI_LineTable, params->line_tables.total_count+1);
   RDI_U64 *dst_line_voffs = push_array(arena, RDI_U64, params->line_tables.total_line_count + params->line_tables.total_seq_count);

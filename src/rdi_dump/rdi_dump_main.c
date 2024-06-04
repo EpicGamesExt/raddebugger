@@ -54,18 +54,19 @@ entry_point(CmdLine *cmd_line)
     DumpFlag_FilePaths          = (1<<3),
     DumpFlag_SourceFiles        = (1<<4),
     DumpFlag_LineTables         = (1<<5),
-    DumpFlag_Units              = (1<<6),
-    DumpFlag_UnitVMap           = (1<<7),
-    DumpFlag_TypeNodes          = (1<<8),
-    DumpFlag_UDTs               = (1<<9),
-    DumpFlag_GlobalVariables    = (1<<10),
-    DumpFlag_GlobalVMap         = (1<<11),
-    DumpFlag_ThreadVariables    = (1<<12),
-    DumpFlag_Procedures         = (1<<13),
-    DumpFlag_Scopes             = (1<<14),
-    DumpFlag_ScopeVMap          = (1<<15),
-    DumpFlag_NameMaps           = (1<<16),
-    DumpFlag_Strings            = (1<<17),
+    DumpFlag_SourceLineMaps     = (1<<6),
+    DumpFlag_Units              = (1<<7),
+    DumpFlag_UnitVMap           = (1<<8),
+    DumpFlag_TypeNodes          = (1<<9),
+    DumpFlag_UDTs               = (1<<10),
+    DumpFlag_GlobalVariables    = (1<<11),
+    DumpFlag_GlobalVMap         = (1<<12),
+    DumpFlag_ThreadVariables    = (1<<13),
+    DumpFlag_Procedures         = (1<<14),
+    DumpFlag_Scopes             = (1<<15),
+    DumpFlag_ScopeVMap          = (1<<16),
+    DumpFlag_NameMaps           = (1<<17),
+    DumpFlag_Strings            = (1<<18),
   };
   String8 input_name = {0};
   DumpFlags dump_flags = (U32)0xffffffff;
@@ -88,6 +89,7 @@ entry_point(CmdLine *cmd_line)
           else if(str8_match(n->string, str8_lit("file_paths"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_FilePaths; }
           else if(str8_match(n->string, str8_lit("source_files"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_SourceFiles; }
           else if(str8_match(n->string, str8_lit("line_tables"),             StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_LineTables; }
+          else if(str8_match(n->string, str8_lit("source_line_maps"),        StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_SourceLineMaps; }
           else if(str8_match(n->string, str8_lit("units"),                   StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Units; }
           else if(str8_match(n->string, str8_lit("unit_vmap"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_UnitVMap; }
           else if(str8_match(n->string, str8_lit("type_nodes"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_TypeNodes; }
@@ -185,7 +187,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " section[%u]:\n", i);
         rdi_stringize_binary_section(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -219,7 +220,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " source_file[%u]:\n", i);
         rdi_stringize_source_file(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -233,7 +233,19 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " line_table[%u]:\n", i);
         rdi_stringize_line_table(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
+      }
+      str8_list_push(arena, &dump, str8_lit("\n"));
+    }
+    
+    //- rjf: SOURCE LINE MAPS
+    if(dump_flags & DumpFlag_SourceLineMaps)
+    {
+      str8_list_pushf(arena, &dump, "# SOURCE LINE MAPS\n");
+      RDI_SourceLineMap *ptr = rdi->source_line_maps;
+      for(U32 i = 0; i < rdi->source_line_maps_count; i += 1, ptr += 1)
+      {
+        str8_list_pushf(arena, &dump, " source_line_map[%u]:\n", i);
+        rdi_stringize_source_line_map(arena, &dump, rdi, ptr, 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -247,7 +259,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " unit[%u]:\n", i);
         rdi_stringize_unit(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -273,7 +284,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " type[%u]:\n", i);
         rdi_stringize_type_node(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -294,7 +304,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " udt[%u]:\n", i);
         rdi_stringize_udt(arena, &dump, rdi, &member_bundle, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -308,7 +317,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " global_variable[%u]:\n", i);
         rdi_stringize_global_variable(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -334,7 +342,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " thread_variable[%u]:\n", i);
         rdi_stringize_thread_variable(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -348,7 +355,6 @@ entry_point(CmdLine *cmd_line)
       {
         str8_list_pushf(arena, &dump, " procedure[%u]:\n", i);
         rdi_stringize_procedure(arena, &dump, rdi, ptr, 2);
-        str8_list_push(arena, &dump, str8_lit("\n"));
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -376,7 +382,6 @@ entry_point(CmdLine *cmd_line)
         if(ptr->parent_scope_idx == 0)
         {
           rdi_stringize_scope(arena, &dump, rdi, &scope_bundle, ptr, 1);
-          str8_list_push(arena, &dump, str8_lit("\n"));
         }
       }
       str8_list_push(arena, &dump, str8_lit("\n"));

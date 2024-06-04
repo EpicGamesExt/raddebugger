@@ -3262,8 +3262,9 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
       if(good_src_id)
       {
         RDI_SourceFile *src = rdi->source_files+src_id;
-        RDI_ParsedLineMap line_map = {0};
-        rdi_line_map_from_source_file(rdi, src, &line_map);
+        RDI_SourceLineMap *src_line_map = rdi_element_from_idx(rdi, source_line_maps, src->source_line_map_idx);
+        RDI_ParsedSourceLineMap line_map = {0};
+        rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
         U64 line_idx = 0;
         for(S64 line_num = line_num_range.min;
             line_num <= line_num_range.max;
@@ -3950,8 +3951,9 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
       if(good_src_id)
       {
         RDI_SourceFile *src = rdi->source_files+src_id;
-        RDI_ParsedLineMap line_map = {0};
-        rdi_line_map_from_source_file(rdi, src, &line_map);
+        RDI_SourceLineMap *src_line_map = rdi_element_from_idx(rdi, source_line_maps, src->source_line_map_idx);
+        RDI_ParsedSourceLineMap line_map = {0};
+        rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
         U32 voff_count = 0;
         U64 *voffs = rdi_line_voffs_from_num(&line_map, (U32)pt.line, &voff_count);
         for(U64 idx = 0; idx < voff_count; idx += 1)

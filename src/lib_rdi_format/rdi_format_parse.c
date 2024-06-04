@@ -145,6 +145,7 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
     rdi_parse__extract_primary(out, out->file_paths,             &out->file_paths_count,                      RDI_DataSectionTag_FilePathNodes);
     rdi_parse__extract_primary(out, out->source_files,           &out->source_files_count,                    RDI_DataSectionTag_SourceFiles);
     rdi_parse__extract_primary(out, out->line_tables,            &out->line_tables_count,                     RDI_DataSectionTag_LineTables);
+    rdi_parse__extract_primary(out, out->source_line_maps,       &out->source_line_maps_count,                RDI_DataSectionTag_SourceLineMaps);
     rdi_parse__extract_primary(out, out->line_info_voffs,        &out->line_info_voffs_count,                 RDI_DataSectionTag_LineInfoVoffs);
     rdi_parse__extract_primary(out, out->line_info_lines,        &out->line_info_lines_count,                 RDI_DataSectionTag_LineInfoLines);
     rdi_parse__extract_primary(out, out->line_info_columns,      &out->line_info_columns_count,               RDI_DataSectionTag_LineInfoColumns);
@@ -185,6 +186,8 @@ rdi_parse(RDI_U8 *data, RDI_U64 size, RDI_Parsed *out)
   if(out->binary_sections == 0)                { out->binary_sections        = &rdi_binary_section_nil;           out->binary_sections_count = 1; }
   if(out->file_paths == 0)                     { out->file_paths             = &rdi_file_path_node_nil;           out->file_paths_count = 1; }
   if(out->source_files == 0)                   { out->source_files           = &rdi_source_file_nil;              out->source_files_count = 1; }
+  if(out->line_tables == 0)                    { out->line_tables            = &rdi_line_table_nil;               out->line_tables_count = 1; }
+  if(out->source_line_maps == 0)               { out->source_line_maps       = &rdi_source_line_map_nil;          out->source_line_maps_count = 1; }
   if(out->units == 0)                          { out->units                  = &rdi_unit_nil;                     out->units_count = 1; }
   if(out->unit_vmap == 0)                      { out->unit_vmap              = &rdi_vmap_entry_nil;               out->unit_vmap_count = 1; }
   if(out->type_nodes == 0)                     { out->type_nodes             = &rdi_type_node_nil;                out->type_nodes_count = 1; }
@@ -329,36 +332,39 @@ rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff)
 }
 
 RDI_PROC void
-rdi_line_map_from_source_file(RDI_Parsed *p, RDI_SourceFile *srcfile, RDI_ParsedLineMap *out)
+rdi_parsed_from_source_line_map(RDI_Parsed *p, RDI_SourceLineMap *map, RDI_ParsedSourceLineMap *out)
 {
-  RDI_U64 num_count = 0;
-  RDI_U32 *nums = (RDI_U32*)rdi_data_from_dsec(p, srcfile->line_map_nums_data_idx, sizeof(RDI_U32),
-                                               RDI_DataSectionTag_LineMapNumbers,
-                                               &num_count);
+  //- rjf: extract top-level line info tables
+  RDI_U64 all_nums_count = 0;
+  RDI_U32 *all_nums = (RDI_U32 *)rdi_data_from_dsec(p, p->dsec_idx[RDI_DataSectionTag_SourceLineMapNumbers], sizeof(RDI_U32), RDI_DataSectionTag_SourceLineMapNumbers, &all_nums_count);
+  RDI_U32 *all_nums_opl = all_nums + all_nums_count;
+  RDI_U64 all_rngs_count = 0;
+  RDI_U32 *all_rngs = (RDI_U32 *)rdi_data_from_dsec(p, p->dsec_idx[RDI_DataSectionTag_SourceLineMapRanges], sizeof(RDI_U32), RDI_DataSectionTag_SourceLineMapRanges, &all_rngs_count);
+  RDI_U32 *all_rngs_opl = all_rngs + all_rngs_count;
+  RDI_U64 all_voffs_count = 0;
+  RDI_U64 *all_voffs = (RDI_U64 *)rdi_data_from_dsec(p, p->dsec_idx[RDI_DataSectionTag_SourceLineMapVOffs], sizeof(RDI_U64), RDI_DataSectionTag_SourceLineMapVOffs, &all_voffs_count);
+  RDI_U64 *all_voffs_opl = all_voffs + all_voffs_count;
   
-  RDI_U64 range_count = 0;
-  RDI_U32 *ranges = (RDI_U32*)rdi_data_from_dsec(p, srcfile->line_map_range_data_idx, sizeof(RDI_U32),
-                                                 RDI_DataSectionTag_LineMapRanges,
-                                                 &range_count);
+  //- rjf: extract ranges of top-level tables belonging to this line map
+  RDI_U32 *map_nums = all_nums + map->line_map_nums_base_idx;
+  RDI_U32 *map_rngs = all_rngs + map->line_map_range_base_idx;
+  RDI_U64 *map_voffs= all_voffs+ map->line_map_voff_base_idx;
+  RDI_U64 lines_count = (RDI_U64)map->line_count;
+  RDI_U64 voffs_count = (RDI_U64)map->voff_count;
+  if(map_nums >= all_nums_opl) {map_nums = all_nums; lines_count = 0;}
+  if(map_rngs >= all_rngs_opl) {map_rngs = all_rngs; lines_count = 0;}
+  if(map_voffs>= all_voffs_opl){map_voffs= all_voffs;voffs_count = 0;}
   
-  RDI_U64 voff_count = 0;
-  RDI_U64 *voffs = (RDI_U64*)rdi_data_from_dsec(p, srcfile->line_map_voff_data_idx, sizeof(RDI_U64),
-                                                RDI_DataSectionTag_LineMapVoffs,
-                                                &voff_count);
-  
-  RDI_U32 count_a = (range_count > 0)?(range_count - 1):0;
-  RDI_U32 count_b = rdi_parse__min(count_a, num_count);
-  RDI_U32 count = rdi_parse__min(count_b, srcfile->line_map_count);
-  
-  out->nums = nums;
-  out->ranges = ranges;
-  out->voffs = voffs;
-  out->count = count;
-  out->voff_count = voff_count;
+  //- rjf: fill result
+  out->nums       = map_nums;
+  out->ranges     = map_rngs;
+  out->voffs      = map_voffs;
+  out->count      = lines_count;
+  out->voff_count = voffs_count;
 }
 
 RDI_PROC RDI_U64*
-rdi_line_voffs_from_num(RDI_ParsedLineMap *map, RDI_U32 linenum, RDI_U32 *n_out)
+rdi_line_voffs_from_num(RDI_ParsedSourceLineMap *map, RDI_U32 linenum, RDI_U32 *n_out)
 {
   RDI_U64 *result = 0;
   *n_out = 0;

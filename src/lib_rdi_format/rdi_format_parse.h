@@ -53,6 +53,8 @@ struct RDI_Parsed
   RDI_U64             source_files_count;
   RDI_LineTable*      line_tables;
   RDI_U64             line_tables_count;
+  RDI_SourceLineMap*  source_line_maps;
+  RDI_U64             source_line_maps_count;
   RDI_U64*            line_info_voffs;
   RDI_U64             line_info_voffs_count;
   RDI_Line*           line_info_lines;
@@ -110,8 +112,8 @@ struct RDI_ParsedLineTable
   RDI_U64 col_count;
 };
 
-typedef struct RDI_ParsedLineMap RDI_ParsedLineMap;
-struct RDI_ParsedLineMap
+typedef struct RDI_ParsedSourceLineMap RDI_ParsedSourceLineMap;
+struct RDI_ParsedSourceLineMap
 {
   // NOTE: Mapping LINE_NUMBER -> VOFFs
   //
@@ -146,6 +148,7 @@ static RDI_BinarySection rdi_binary_section_nil = {0};
 static RDI_FilePathNode rdi_file_path_node_nil = {0};
 static RDI_SourceFile rdi_source_file_nil = {0};
 static RDI_LineTable rdi_line_table_nil = {0};
+static RDI_SourceLineMap rdi_source_line_map_nil = {0};
 static RDI_Line rdi_line_nil = {0};
 static RDI_Column rdi_column_nil = {0};
 static RDI_Unit rdi_unit_nil = {0};
@@ -186,8 +189,8 @@ RDI_PROC RDI_U32 *rdi_idx_run_from_first_count(RDI_Parsed *parsed, RDI_U32 first
 //- line info
 RDI_PROC void rdi_parsed_from_line_table(RDI_Parsed *p, RDI_LineTable *line_table, RDI_ParsedLineTable *out);
 RDI_PROC RDI_U64 rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff);
-RDI_PROC void rdi_line_map_from_source_file(RDI_Parsed *p, RDI_SourceFile *srcfile, RDI_ParsedLineMap *out);
-RDI_PROC RDI_U64 *rdi_line_voffs_from_num(RDI_ParsedLineMap *map, RDI_U32 linenum, RDI_U32 *n_out);
+RDI_PROC void rdi_parsed_from_source_line_map(RDI_Parsed *p, RDI_SourceLineMap *map, RDI_ParsedSourceLineMap *out);
+RDI_PROC RDI_U64 *rdi_line_voffs_from_num(RDI_ParsedSourceLineMap *map, RDI_U32 linenum, RDI_U32 *n_out);
 
 //- vmap lookups
 RDI_PROC RDI_U64 rdi_vmap_idx_from_voff(RDI_VMapEntry *vmap, RDI_U32 vmap_count, RDI_U64 voff);

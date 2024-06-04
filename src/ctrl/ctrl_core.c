@@ -2965,8 +2965,9 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
         // rjf: src_id * pt -> push
         {
           RDI_SourceFile *src = rdi_element_from_idx(rdi, source_files, src_id);
-          RDI_ParsedLineMap line_map = {0};
-          rdi_line_map_from_source_file(rdi, src, &line_map);
+          RDI_SourceLineMap *src_line_map = rdi_element_from_idx(rdi, source_line_maps, src->source_line_map_idx);
+          RDI_ParsedSourceLineMap line_map = {0};
+          rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
           U32 voff_count = 0;
           U64 *voffs = rdi_line_voffs_from_num(&line_map, pt.line, &voff_count);
           for(U32 i = 0; i < voff_count; i += 1)

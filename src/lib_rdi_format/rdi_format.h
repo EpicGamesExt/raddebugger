@@ -45,7 +45,7 @@ typedef int64_t  RDI_S64;
 
 // \"raddbg\0\0\"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 2
+#define RDI_ENCODING_VERSION 3
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -65,31 +65,32 @@ RDI_DataSectionTag_LineTables           = 0x0008,
 RDI_DataSectionTag_LineInfoVoffs        = 0x0009,
 RDI_DataSectionTag_LineInfoLines        = 0x000A,
 RDI_DataSectionTag_LineInfoColumns      = 0x000B,
-RDI_DataSectionTag_Units                = 0x000C,
-RDI_DataSectionTag_UnitVmap             = 0x000D,
-RDI_DataSectionTag_TypeNodes            = 0x000E,
-RDI_DataSectionTag_UDTs                 = 0x000F,
-RDI_DataSectionTag_Members              = 0x0010,
-RDI_DataSectionTag_EnumMembers          = 0x0011,
-RDI_DataSectionTag_GlobalVariables      = 0x0012,
-RDI_DataSectionTag_GlobalVmap           = 0x0013,
-RDI_DataSectionTag_ThreadVariables      = 0x0014,
-RDI_DataSectionTag_Procedures           = 0x0015,
-RDI_DataSectionTag_Scopes               = 0x0016,
-RDI_DataSectionTag_ScopeVoffData        = 0x0017,
-RDI_DataSectionTag_ScopeVmap            = 0x0018,
-RDI_DataSectionTag_InlineSites          = 0x0019,
-RDI_DataSectionTag_Locals               = 0x001A,
-RDI_DataSectionTag_LocationBlocks       = 0x001B,
-RDI_DataSectionTag_LocationData         = 0x001C,
-RDI_DataSectionTag_NameMaps             = 0x001D,
-RDI_DataSectionTag_PRIMARY_COUNT        = 0x001E,
+RDI_DataSectionTag_SourceLineMaps       = 0x000C,
+RDI_DataSectionTag_SourceLineMapNumbers = 0x000D,
+RDI_DataSectionTag_SourceLineMapRanges  = 0x000E,
+RDI_DataSectionTag_SourceLineMapVOffs   = 0x000F,
+RDI_DataSectionTag_Units                = 0x0010,
+RDI_DataSectionTag_UnitVmap             = 0x0011,
+RDI_DataSectionTag_TypeNodes            = 0x0012,
+RDI_DataSectionTag_UDTs                 = 0x0013,
+RDI_DataSectionTag_Members              = 0x0014,
+RDI_DataSectionTag_EnumMembers          = 0x0015,
+RDI_DataSectionTag_GlobalVariables      = 0x0016,
+RDI_DataSectionTag_GlobalVmap           = 0x0017,
+RDI_DataSectionTag_ThreadVariables      = 0x0018,
+RDI_DataSectionTag_Procedures           = 0x0019,
+RDI_DataSectionTag_Scopes               = 0x001A,
+RDI_DataSectionTag_ScopeVoffData        = 0x001B,
+RDI_DataSectionTag_ScopeVmap            = 0x001C,
+RDI_DataSectionTag_InlineSites          = 0x001D,
+RDI_DataSectionTag_Locals               = 0x001E,
+RDI_DataSectionTag_LocationBlocks       = 0x001F,
+RDI_DataSectionTag_LocationData         = 0x0020,
+RDI_DataSectionTag_NameMaps             = 0x0021,
+RDI_DataSectionTag_PRIMARY_COUNT        = 0x0022,
 RDI_DataSectionTag_SECONDARY            = 0x80000000,
-RDI_DataSectionTag_LineMapNumbers       = RDI_DataSectionTag_SECONDARY|0x0001,
-RDI_DataSectionTag_LineMapRanges        = RDI_DataSectionTag_SECONDARY|0x0002,
-RDI_DataSectionTag_LineMapVoffs         = RDI_DataSectionTag_SECONDARY|0x0003,
-RDI_DataSectionTag_NameMapBuckets       = RDI_DataSectionTag_SECONDARY|0x0004,
-RDI_DataSectionTag_NameMapNodes         = RDI_DataSectionTag_SECONDARY|0x0005,
+RDI_DataSectionTag_NameMapBuckets       = RDI_DataSectionTag_SECONDARY|0x0001,
+RDI_DataSectionTag_NameMapNodes         = RDI_DataSectionTag_SECONDARY|0x0002,
 } RDI_DataSectionTagEnum;
 
 typedef RDI_U32 RDI_DataSectionEncoding;
@@ -506,6 +507,10 @@ X(LineTables)\
 X(LineInfoVoffs)\
 X(LineInfoLines)\
 X(LineInfoColumns)\
+X(SourceLineMaps)\
+X(SourceLineMapNumbers)\
+X(SourceLineMapRanges)\
+X(SourceLineMapVOffs)\
 X(Units)\
 X(UnitVmap)\
 X(TypeNodes)\
@@ -526,9 +531,6 @@ X(LocationData)\
 X(NameMaps)\
 X(PRIMARY_COUNT)\
 X(SECONDARY)\
-X(LineMapNumbers)\
-X(LineMapRanges)\
-X(LineMapVoffs)\
 X(NameMapBuckets)\
 X(NameMapNodes)\
 
@@ -581,10 +583,7 @@ X(RDI_U32, source_file_idx)\
 #define RDI_SourceFile_XList \
 X(RDI_U32, file_path_node_idx)\
 X(RDI_U32, normal_full_path_string_idx)\
-X(RDI_U32, line_map_count)\
-X(RDI_U32, line_map_nums_data_idx)\
-X(RDI_U32, line_map_range_data_idx)\
-X(RDI_U32, line_map_voff_data_idx)\
+X(RDI_U32, source_line_map_idx)\
 
 #define RDI_Unit_XList \
 X(RDI_U32, unit_name_string_idx)\
@@ -610,6 +609,13 @@ X(RDI_U32, line_num)\
 #define RDI_Column_XList \
 X(RDI_U16, col_first)\
 X(RDI_U16, col_opl)\
+
+#define RDI_SourceLineMapMemberTable \
+X(RDI_U32, line_count)\
+X(RDI_U32, voff_count)\
+X(RDI_U32, line_map_nums_base_idx)\
+X(RDI_U32, line_map_range_base_idx)\
+X(RDI_U32, line_map_voff_base_idx)\
 
 #define RDI_Language_XList \
 X(NULL)\
@@ -958,10 +964,7 @@ struct RDI_SourceFile
 {
 RDI_U32 file_path_node_idx;
 RDI_U32 normal_full_path_string_idx;
-RDI_U32 line_map_count;
-RDI_U32 line_map_nums_data_idx;
-RDI_U32 line_map_range_data_idx;
-RDI_U32 line_map_voff_data_idx;
+RDI_U32 source_line_map_idx;
 };
 
 typedef struct RDI_Unit RDI_Unit;
@@ -999,6 +1002,16 @@ struct RDI_Column
 {
 RDI_U16 col_first;
 RDI_U16 col_opl;
+};
+
+typedef struct RDI_SourceLineMap RDI_SourceLineMap;
+struct RDI_SourceLineMap
+{
+RDI_U32 line_count;
+RDI_U32 voff_count;
+RDI_U32 line_map_nums_base_idx;
+RDI_U32 line_map_range_base_idx;
+RDI_U32 line_map_voff_base_idx;
 };
 
 typedef struct RDI_TypeNode RDI_TypeNode;
