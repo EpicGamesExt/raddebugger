@@ -484,6 +484,8 @@ struct RDIM_SrcFileChunkList
   RDIM_SrcFileChunkNode *last;
   RDI_U64 chunk_count;
   RDI_U64 total_count;
+  RDI_U64 source_line_map_count;
+  RDI_U64 total_line_count;
 };
 
 ////////////////////////////////

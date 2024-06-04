@@ -55,7 +55,7 @@
   "";
   "// \"raddbg\0\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 2";
+  "#define RDI_ENCODING_VERSION 3";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -113,43 +113,44 @@ RDI_HeaderMemberTable:
 @table(name value desc)
 RDI_DataSectionTable:
 {
-  {NULL                0x0000                                             ""}
-  {TopLevelInfo        0x0001                                             ""}
-  {StringData          0x0002                                             ""}
-  {StringTable         0x0003                                             ""}
-  {IndexRuns           0x0004                                             ""}
-  {BinarySections      0x0005                                             ""}
-  {FilePathNodes       0x0006                                             ""}
-  {SourceFiles         0x0007                                             ""}
-  {LineTables          0x0008                                             ""}
-  {LineInfoVoffs       0x0009                                             ""}
-  {LineInfoLines       0x000A                                             ""}
-  {LineInfoColumns     0x000B                                             ""}
-  {Units               0x000C                                             ""}
-  {UnitVmap            0x000D                                             ""}
-  {TypeNodes           0x000E                                             ""}
-  {UDTs                0x000F                                             ""}
-  {Members             0x0010                                             ""}
-  {EnumMembers         0x0011                                             ""}
-  {GlobalVariables     0x0012                                             ""}
-  {GlobalVmap          0x0013                                             ""}
-  {ThreadVariables     0x0014                                             ""}
-  {Procedures          0x0015                                             ""}
-  {Scopes              0x0016                                             ""}
-  {ScopeVoffData       0x0017                                             ""}
-  {ScopeVmap           0x0018                                             ""}
-  {InlineSites         0x0019                                             ""}
-  {Locals              0x001A                                             ""}
-  {LocationBlocks      0x001B                                             ""}
-  {LocationData        0x001C                                             ""}
-  {NameMaps            0x001D                                             ""}
-  {PRIMARY_COUNT       0x001E                                             ""}
-  {SECONDARY           0x80000000                                         ""}
-  {LineMapNumbers      `RDI_DataSectionTag_SECONDARY|0x0001`              ""}
-  {LineMapRanges       `RDI_DataSectionTag_SECONDARY|0x0002`              ""}
-  {LineMapVoffs        `RDI_DataSectionTag_SECONDARY|0x0003`              ""}
-  {NameMapBuckets      `RDI_DataSectionTag_SECONDARY|0x0004`              ""}
-  {NameMapNodes        `RDI_DataSectionTag_SECONDARY|0x0005`              ""}
+  {NULL                          0x0000                                             ""}
+  {TopLevelInfo                  0x0001                                             ""}
+  {StringData                    0x0002                                             ""}
+  {StringTable                   0x0003                                             ""}
+  {IndexRuns                     0x0004                                             ""}
+  {BinarySections                0x0005                                             ""}
+  {FilePathNodes                 0x0006                                             ""}
+  {SourceFiles                   0x0007                                             ""}
+  {LineTables                    0x0008                                             ""}
+  {LineInfoVoffs                 0x0009                                             ""}
+  {LineInfoLines                 0x000A                                             ""}
+  {LineInfoColumns               0x000B                                             ""}
+  {SourceLineMaps                0x000C                                             ""}
+  {SourceLineMapNumbers          0x000D                                             ""}
+  {SourceLineMapRanges           0x000E                                             ""}
+  {SourceLineMapVOffs            0x000F                                             ""}
+  {Units                         0x0010                                             ""}
+  {UnitVmap                      0x0011                                             ""}
+  {TypeNodes                     0x0012                                             ""}
+  {UDTs                          0x0013                                             ""}
+  {Members                       0x0014                                             ""}
+  {EnumMembers                   0x0015                                             ""}
+  {GlobalVariables               0x0016                                             ""}
+  {GlobalVmap                    0x0017                                             ""}
+  {ThreadVariables               0x0018                                             ""}
+  {Procedures                    0x0019                                             ""}
+  {Scopes                        0x001A                                             ""}
+  {ScopeVoffData                 0x001B                                             ""}
+  {ScopeVmap                     0x001C                                             ""}
+  {InlineSites                   0x001D                                             ""}
+  {Locals                        0x001E                                             ""}
+  {LocationBlocks                0x001F                                             ""}
+  {LocationData                  0x0020                                             ""}
+  {NameMaps                      0x0021                                             ""}
+  {PRIMARY_COUNT                 0x0022                                             ""}
+  {SECONDARY                     0x80000000                                         ""}
+  {NameMapBuckets                `RDI_DataSectionTag_SECONDARY|0x0001`              ""}
+  {NameMapNodes                  `RDI_DataSectionTag_SECONDARY|0x0002`              ""}
 }
 
 @table(name value)
@@ -486,10 +487,7 @@ RDI_SourceFileMemberTable:
   //  (line_map_nums * line_number) -> (nil | index)
   //  (line_map_data * index) -> (range)
   //  (line_map_voff_data * range) -> (array(voff))
-  {line_map_count               RDI_U32          ""}
-  {line_map_nums_data_idx       RDI_U32          ""} // U32[line_map_count] (sorted - not closed ranges)
-  {line_map_range_data_idx      RDI_U32          ""} // U32[line_map_count + 1] (pairs form ranges)
-  {line_map_voff_data_idx       RDI_U32          ""} // U64[...] (idx by line_map_range_data)
+  {source_line_map_idx          RDI_U32          ""}
 }
 
 @xlist RDI_FilePathNode_XList:
@@ -568,6 +566,20 @@ RDI_ColumnMemberTable:
   {col_opl    RDI_U16     ""}
 }
 
+@table(name type desc)
+RDI_SourceLineMapMemberTable:
+{
+  // usage of line map to go from a line number to an array of voffs
+  //  (line_map_nums * line_number) -> (nil | index)
+  //  (line_map_data * index) -> (range)
+  //  (line_map_voff_data * range) -> (array(voff))
+  {line_count                   RDI_U32          ""}
+  {voff_count                   RDI_U32          ""}
+  {line_map_nums_base_idx       RDI_U32          ""} // U32[line_count] (sorted - not closed ranges)
+  {line_map_range_base_idx      RDI_U32          ""} // U32[line_count + 1] (pairs form ranges)
+  {line_map_voff_base_idx       RDI_U32          ""} // U64[voff_count] (idx by line_map_range_data)
+}
+
 @xlist RDI_LineTable_XList:
 {
   @expand(RDI_LineTableMemberTable a) `$(a.type), $(a.name)`
@@ -583,6 +595,11 @@ RDI_ColumnMemberTable:
   @expand(RDI_ColumnMemberTable a) `$(a.type), $(a.name)`
 }
 
+@xlist RDI_SourceLineMapMemberTable:
+{
+  @expand(RDI_SourceLineMapMemberTable a) `$(a.type), $(a.name)`
+}
+
 @struct RDI_LineTable:
 {
   @expand(RDI_LineTableMemberTable a) `$(a.type) $(a.name)`
@@ -596,6 +613,11 @@ RDI_ColumnMemberTable:
 @struct RDI_Column:
 {
   @expand(RDI_ColumnMemberTable a) `$(a.type) $(a.name)`
+}
+
+@struct RDI_SourceLineMap:
+{
+  @expand(RDI_SourceLineMapMemberTable a) `$(a.type) $(a.name)`
 }
 
 ////////////////////////////////

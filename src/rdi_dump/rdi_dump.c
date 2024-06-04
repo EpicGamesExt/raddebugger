@@ -216,16 +216,55 @@ rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_
 internal void
 rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceFile *source_file, U32 indent_level)
 {
-  // extract line map data
-  RDI_ParsedLineMap line_map = {0};
-  rdi_line_map_from_source_file(parsed, source_file, &line_map);
-  
   // normal source path
   String8 path = {0};
   path.str = rdi_string_from_idx(parsed, source_file->normal_full_path_string_idx, &path.size);
   str8_list_pushf(arena, out, "%.*spath: \"%S\"\n", indent_level, rdi_stringize_spaces, path);
   
-  // stringize line map data
+  // rjf: source line map idx
+  str8_list_pushf(arena, out, "%.*ssource_line_map: %u\n", indent_level, rdi_stringize_spaces, source_file->source_line_map_idx);
+}
+
+internal void
+rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_LineTable *line_table, U32 indent_level)
+{
+  // rjf: parse line table
+  RDI_ParsedLineTable parsed_line_table = {0};
+  rdi_parsed_from_line_table(parsed, line_table, &parsed_line_table);
+  
+  // rjf: stringize lines
+  str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
+  for(U32 i = 0; i < parsed_line_table.count; i += 1)
+  {
+    U64 first = parsed_line_table.voffs[i];
+    U64 opl   = parsed_line_table.voffs[i + 1];
+    RDI_Line *line = parsed_line_table.lines + i;
+    RDI_Column *col = 0;
+    if(i < parsed_line_table.col_count)
+    {
+      col = parsed_line_table.cols + i;
+    }
+    if(col == 0)
+    {
+      str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u\n",
+                      indent_level, rdi_stringize_spaces,
+                      first, opl, line->file_idx, line->line_num);
+    }
+    else
+    {
+      str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u; columns=[%u,%u)\n",
+                      indent_level, rdi_stringize_spaces,
+                      first, opl, line->file_idx, line->line_num,
+                      col->col_first, col->col_opl);
+    }
+  }
+}
+
+internal void
+rdi_stringize_source_line_map(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceLineMap *map, U32 indent_level)
+{
+  RDI_ParsedSourceLineMap line_map = {0};
+  rdi_parsed_from_source_line_map(parsed, map, &line_map);
   str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
   
   for(U32 i = 0; i < line_map.count; i += 1)
@@ -263,41 +302,6 @@ rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed, RD
                         indent_level + digit_count + 3, rdi_stringize_spaces,
                         line_map.voffs[j]);
       }
-    }
-  }
-}
-
-internal void
-rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_LineTable *line_table, U32 indent_level)
-{
-  // rjf: parse line table
-  RDI_ParsedLineTable parsed_line_table = {0};
-  rdi_parsed_from_line_table(parsed, line_table, &parsed_line_table);
-  
-  // rjf: stringize lines
-  str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
-  for(U32 i = 0; i < parsed_line_table.count; i += 1)
-  {
-    U64 first = parsed_line_table.voffs[i];
-    U64 opl   = parsed_line_table.voffs[i + 1];
-    RDI_Line *line = parsed_line_table.lines + i;
-    RDI_Column *col = 0;
-    if(i < parsed_line_table.col_count)
-    {
-      col = parsed_line_table.cols + i;
-    }
-    if(col == 0)
-    {
-      str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u\n",
-                      indent_level, rdi_stringize_spaces,
-                      first, opl, line->file_idx, line->line_num);
-    }
-    else
-    {
-      str8_list_pushf(arena, out, "%.*s [0x%08llx,0x%08llx) file=%u; line=%u; columns=[%u,%u)\n",
-                      indent_level, rdi_stringize_spaces,
-                      first, opl, line->file_idx, line->line_num,
-                      col->col_first, col->col_opl);
     }
   }
 }

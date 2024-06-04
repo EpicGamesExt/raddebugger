@@ -210,6 +210,7 @@ global RDI_Parsed di_rdi_parsed_nil =
   &rdi_file_path_node_nil, 1,
   &rdi_source_file_nil, 1,
   &rdi_line_table_nil, 1,
+  &rdi_source_line_map_nil, 1,
   &rdi_voff_nil, 1,
   &rdi_line_nil, 1,
   &rdi_column_nil, 1,
