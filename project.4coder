@@ -74,7 +74,7 @@ commands =
   },
   .rjf_f4 =
   {
-    .win = "build rdi_from_pdb release telemetry && pushd build && rdi_from_pdb.exe --pdb:mule_main.pdb --out:mule_main.rdi --capture && popd",
+    .win = "build rdi_from_pdb release telemetry && pushd build && rdi_from_pdb.exe --pdb:UnrealEditorFortnite.pdb --out:profile.rdi --capture && popd",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,

@@ -3437,12 +3437,27 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   }
   
   //////////////////////////////////////////////////////////////
+  //- rjf: join unit conversion & src file & line table tasks
+  //
+  RDIM_UnitChunkList all_units = {0};
+  RDIM_SrcFileChunkList all_src_files = {0};
+  RDIM_LineTableChunkList all_line_tables = {0};
+  ProfScope("join unit conversion & src file tasks")
+  {
+    P2R_UnitConvertOut *out = ts_join_struct(unit_convert_ticket, max_U64, P2R_UnitConvertOut);
+    all_units = out->units;
+    all_src_files = out->src_files;
+    all_line_tables = out->line_tables;
+  }
+  
+  //////////////////////////////////////////////////////////////
   //- rjf: produce symbols from all streams
   //
   RDIM_SymbolChunkList all_procedures = {0};
   RDIM_SymbolChunkList all_global_variables = {0};
   RDIM_SymbolChunkList all_thread_variables = {0};
   RDIM_ScopeChunkList all_scopes = {0};
+  RDIM_InlineSiteChunkList all_inline_sites = {0};
   ProfScope("produce symbols from all streams")
   {
     ////////////////////////////
@@ -3493,22 +3508,9 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         rdim_symbol_chunk_list_concat_in_place(&all_global_variables, &out->global_variables);
         rdim_symbol_chunk_list_concat_in_place(&all_thread_variables, &out->thread_variables);
         rdim_scope_chunk_list_concat_in_place(&all_scopes,            &out->scopes);
+        rdim_inline_site_chunk_list_concat_in_place(&all_inline_sites,&out->inline_sites);
       }
     }
-  }
-  
-  //////////////////////////////////////////////////////////////
-  //- rjf: join unit conversion & src file & line table tasks
-  //
-  RDIM_UnitChunkList all_units = {0};
-  RDIM_SrcFileChunkList all_src_files = {0};
-  RDIM_LineTableChunkList all_line_tables = {0};
-  ProfScope("join unit conversion & src file tasks")
-  {
-    P2R_UnitConvertOut *out = ts_join_struct(unit_convert_ticket, max_U64, P2R_UnitConvertOut);
-    all_units = out->units;
-    all_src_files = out->src_files;
-    all_line_tables = out->line_tables;
   }
   
   //////////////////////////////////////////////////////////////
@@ -3537,6 +3539,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     out->bake_params.thread_variables = all_thread_variables;
     out->bake_params.procedures       = all_procedures;
     out->bake_params.scopes           = all_scopes;
+    out->bake_params.inline_sites     = all_inline_sites;
   }
   
   scratch_end(scratch);

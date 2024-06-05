@@ -834,6 +834,61 @@ rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChu
 }
 
 ////////////////////////////////
+//~ rjf: [Building] Inline Site Info Building
+
+RDI_PROC RDIM_InlineSite *
+rdim_inline_site_chunk_list_push(RDIM_Arena *arena, RDIM_InlineSiteChunkList *list, RDI_U64 cap)
+{
+  RDIM_InlineSiteChunkNode *n = list->last;
+  if(n == 0 || n->count >= n->cap)
+  {
+    n = rdim_push_array(arena, RDIM_InlineSiteChunkNode, 1);
+    n->cap = cap;
+    n->base_idx = list->total_count;
+    n->v = rdim_push_array(arena, RDIM_InlineSite, n->cap);
+    RDIM_SLLQueuePush(list->first, list->last, n);
+    list->chunk_count += 1;
+  }
+  RDIM_InlineSite *result = &n->v[n->count];
+  result->chunk = n;
+  n->count += 1;
+  list->total_count += 1;
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdim_idx_from_inline_site(RDIM_InlineSite *inline_site)
+{
+  RDI_U64 idx = 0;
+  if(inline_site != 0 && inline_site->chunk != 0)
+  {
+    idx = inline_site->chunk->base_idx + (inline_site - inline_site->chunk->v) + 1;
+  }
+  return idx;
+}
+
+RDI_PROC void
+rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_InlineSiteChunkList *to_push)
+{
+  for(RDIM_InlineSiteChunkNode *n = to_push->first; n != 0; n = n->next)
+  {
+    n->base_idx += dst->total_count;
+  }
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->chunk_count += to_push->chunk_count;
+    dst->total_count += to_push->total_count;
+  }
+  else if(dst->first == 0)
+  {
+    rdim_memcpy_struct(dst, to_push);
+  }
+  rdim_memzero_struct(to_push);
+}
+
+////////////////////////////////
 //~ rjf: [Building] Scope Info Building
 
 //- rjf: scopes

@@ -258,6 +258,7 @@ struct P2R_SymbolStreamConvertOut
   RDIM_SymbolChunkList global_variables;
   RDIM_SymbolChunkList thread_variables;
   RDIM_ScopeChunkList scopes;
+  RDIM_InlineSiteChunkList inline_sites;
 };
 
 ////////////////////////////////

@@ -778,7 +778,7 @@ struct RDIM_InlineSite
   RDI_U32 call_col_num;
   RDIM_Type *type;
   RDIM_Type *owner;
-  RDIM_LineTable *line_info;
+  RDIM_LineTable *line_table;
 };
 
 typedef struct RDIM_InlineSiteChunkNode RDIM_InlineSiteChunkNode;
@@ -1156,6 +1156,13 @@ RDI_PROC RDIM_UDTEnumVal *rdim_udt_push_enum_val(RDIM_Arena *arena, RDIM_UDTChun
 RDI_PROC RDIM_Symbol *rdim_symbol_chunk_list_push(RDIM_Arena *arena, RDIM_SymbolChunkList *list, RDI_U64 cap);
 RDI_PROC RDI_U64 rdim_idx_from_symbol(RDIM_Symbol *symbol);
 RDI_PROC void rdim_symbol_chunk_list_concat_in_place(RDIM_SymbolChunkList *dst, RDIM_SymbolChunkList *to_push);
+
+////////////////////////////////
+//~ rjf: [Building] Inline Site Info Building
+
+RDI_PROC RDIM_InlineSite *rdim_inline_site_chunk_list_push(RDIM_Arena *arena, RDIM_InlineSiteChunkList *list, RDI_U64 cap);
+RDI_PROC RDI_U64 rdim_idx_from_inline_site(RDIM_InlineSite *inline_site);
+RDI_PROC void rdim_inline_site_chunk_list_concat_in_place(RDIM_InlineSiteChunkList *dst, RDIM_InlineSiteChunkList *to_push);
 
 ////////////////////////////////
 //~ rjf: [Building] Scope Info Building
