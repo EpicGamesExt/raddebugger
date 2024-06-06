@@ -336,7 +336,7 @@ eval_type_unwrap_enum(TG_Graph *graph, RDI_Parsed *rdi, TG_Key key)
   TG_Key result = key;
   for(B32 good = 1; good;)
   {
-    TG_Kind kind = tg_kind_from_key(key);
+    TG_Kind kind = tg_kind_from_key(result);
     if(kind == TG_Kind_Enum)
     {
       result = tg_direct_from_graph_rdi_key(graph, rdi, result);
@@ -785,6 +785,11 @@ eval_irtree_and_type_from_expr(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, E
         TG_Key r_restype = tg_unwrapped_from_graph_rdi_key(graph, rdi, r.type_key);
         TG_Kind l_restype_kind = tg_kind_from_key(l_restype);
         TG_Kind r_restype_kind = tg_kind_from_key(r_restype);
+        if(eval_kind_is_basic_or_enum(r_restype_kind))
+        {
+          r_restype = eval_type_unwrap_enum(graph, rdi, r_restype);
+          r_restype_kind = tg_kind_from_key(r_restype);
+        }
         
         // analyze situation
         B32 can_generate = 0;
