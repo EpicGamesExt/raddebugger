@@ -1058,6 +1058,167 @@ struct RDIM_VMapMarker
   RDI_U32 begin_range;
 };
 
+//- rjf: baking results
+
+typedef struct RDIM_TopLevelInfoBakeResult RDIM_TopLevelInfoBakeResult;
+struct RDIM_TopLevelInfoBakeResult
+{
+  RDI_TopLevelInfo *top_level_info;
+};
+
+typedef struct RDIM_BinarySectionBakeResult RDIM_BinarySectionBakeResult;
+struct RDIM_BinarySectionBakeResult
+{
+  RDI_BinarySection *binary_sections;
+  RDI_U64 binary_sections_count;
+};
+
+typedef struct RDIM_UnitBakeResult RDIM_UnitBakeResult;
+struct RDIM_UnitBakeResult
+{
+  RDI_Unit *units;
+  RDI_U64 units_count;
+};
+
+typedef struct RDIM_UnitVMapBakeResult RDIM_UnitVMapBakeResult;
+struct RDIM_UnitVMapBakeResult
+{
+  RDIM_BakeVMap vmap;
+};
+
+typedef struct RDIM_SrcFileBakeResult RDIM_SrcFileBakeResult;
+struct RDIM_SrcFileBakeResult
+{
+  RDI_SourceFile *source_files;
+  RDI_U64 source_files_count;
+  RDI_SourceLineMap *source_line_maps;
+  RDI_U64 source_line_maps_count;
+  RDI_U32 *source_line_map_nums;
+  RDI_U32 *source_line_map_rngs;
+  RDI_U64 *source_line_map_voffs;
+  RDI_U64 source_line_map_nums_count;
+  RDI_U64 source_line_map_rngs_count;
+  RDI_U64 source_line_map_voffs_count;
+};
+
+typedef struct RDIM_LineTableBakeResult RDIM_LineTableBakeResult;
+struct RDIM_LineTableBakeResult
+{
+  RDI_LineTable *line_tables;
+  RDI_U64 line_tables_count;
+  RDI_U64 *line_table_voffs;
+  RDI_U64 line_table_voffs_count;
+  RDI_Line *line_table_lines;
+  RDI_U64 line_table_lines_count;
+  RDI_Column *line_table_columns;
+  RDI_U64 line_table_columns_count;
+};
+
+typedef struct RDIM_TypeNodeBakeResult RDIM_TypeNodeBakeResult;
+struct RDIM_TypeNodeBakeResult
+{
+  RDI_TypeNode *type_nodes;
+  RDI_U64 type_nodes_count;
+};
+
+typedef struct RDIM_UDTBakeResult RDIM_UDTBakeResult;
+struct RDIM_UDTBakeResult
+{
+  RDI_UDT *udts;
+  RDI_U64 udts_count;
+  RDI_Member *members;
+  RDI_U64 members_count;
+  RDI_EnumMember *enum_members;
+  RDI_U64 enum_members_count;
+};
+
+typedef struct RDIM_GlobalVariableBakeResult RDIM_GlobalVariableBakeResult;
+struct RDIM_GlobalVariableBakeResult
+{
+  RDI_GlobalVariable *global_variables;
+  RDI_U64 global_variables_count;
+};
+
+typedef struct RDIM_GlobalVMapBakeResult RDIM_GlobalVMapBakeResult;
+struct RDIM_GlobalVMapBakeResult
+{
+  RDIM_BakeVMap vmap;
+};
+
+typedef struct RDIM_ThreadVariableBakeResult RDIM_ThreadVariableBakeResult;
+struct RDIM_ThreadVariableBakeResult
+{
+  RDI_ThreadVariable *thread_variables;
+  RDI_U64 thread_variables_count;
+};
+
+typedef struct RDIM_ProcedureBakeResult RDIM_ProcedureBakeResult;
+struct RDIM_ProcedureBakeResult
+{
+  RDI_Procedure *procedures;
+  RDI_U64 procedures_count;
+};
+
+typedef struct RDIM_ScopeBakeResult RDIM_ScopeBakeResult;
+struct RDIM_ScopeBakeResult
+{
+  RDI_Scope *scopes;
+  RDI_U64 scopes_count;
+  RDI_U64 *scope_voffs;
+  RDI_U64 scope_voffs_count;
+  RDI_Local *locals;
+  RDI_U64 locals_count;
+  RDI_LocationBlock *location_blocks;
+  RDI_U64 location_blocks_count;
+  RDI_U8 *location_data;
+  RDI_U64 location_data_size;
+};
+
+typedef struct RDIM_ScopeVMapBakeResult RDIM_ScopeVMapBakeResult;
+struct RDIM_ScopeVMapBakeResult
+{
+  RDIM_BakeVMap vmap;
+};
+
+typedef struct RDIM_TopLevelNameMapBakeResult RDIM_TopLevelNameMapBakeResult;
+struct RDIM_TopLevelNameMapBakeResult
+{
+  RDI_NameMap *name_maps;
+  RDI_U64 name_maps_count;
+};
+
+typedef struct RDIM_NameMapBakeResult RDIM_NameMapBakeResult;
+struct RDIM_NameMapBakeResult
+{
+  RDI_NameMapBucket *buckets;
+  RDI_U64 buckets_count;
+  RDI_NameMapNode *nodes;
+  RDI_U64 nodes_count;
+};
+
+typedef struct RDIM_FilePathBakeResult RDIM_FilePathBakeResult;
+struct RDIM_FilePathBakeResult
+{
+  RDI_FilePathNode *nodes;
+  RDI_U64 nodes_count;
+};
+
+typedef struct RDIM_StringBakeResult RDIM_StringBakeResult;
+struct RDIM_StringBakeResult
+{
+  RDI_U32 *string_offs;
+  RDI_U64 string_offs_count;
+  RDI_U8 *string_data;
+  RDI_U64 string_data_size;
+};
+
+typedef struct RDIM_IndexRunBakeResult RDIM_IndexRunBakeResult;
+struct RDIM_IndexRunBakeResult
+{
+  RDI_U32 *idx_runs;
+  RDI_U64 idx_count;
+};
+
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
@@ -1265,6 +1426,9 @@ RDI_PROC RDIM_BakeIdxRunMap *rdim_bake_idx_run_map_from_params(RDIM_Arena *arena
 
 //- rjf: bake path tree building
 RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params);
+
+////////////////////////////////
+//~ rjf: [Baking] Build Artifacts -> Baked Versions
 
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
