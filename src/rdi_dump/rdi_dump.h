@@ -11,7 +11,7 @@ typedef struct RDI_FilePathBundle RDI_FilePathBundle;
 struct RDI_FilePathBundle
 {
   RDI_FilePathNode *file_paths;
-  U32 file_path_count;
+  U64 file_path_count;
 };
 
 typedef struct RDI_UDTMemberBundle RDI_UDTMemberBundle;
@@ -41,7 +41,7 @@ struct RDI_ScopeBundle
 ////////////////////////////////
 //~ rjf: RDI Enum -> String Functions
 
-internal String8 rdi_string_from_data_section_tag(RDI_DataSectionTag v);
+internal String8 rdi_string_from_data_section_kind(RDI_SectionKind v);
 internal String8 rdi_string_from_arch(RDI_Arch v);
 internal String8 rdi_string_from_language(RDI_Language v);
 internal String8 rdi_string_from_type_kind(RDI_TypeKind v);
@@ -59,19 +59,19 @@ internal void rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkF
 ////////////////////////////////
 //~ rjf: RDI Compound Stringize Functions
 
-internal void rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *parsed, U32 indent_level);
-internal void rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_TopLevelInfo *tli, U32 indent_level);
-internal void rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_BinarySection *bin_section, U32 indent_level);
-internal void rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_FilePathBundle *bundle, RDI_FilePathNode *file_path, U32 indent_level);
-internal void rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceFile *source_file, U32 indent_level);
-internal void rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_LineTable *line_table, U32 indent_level);
-internal void rdi_stringize_source_line_map(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceLineMap *map, U32 indent_level);
-internal void rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Unit *unit, U32 indent_level);
-internal void rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_TypeNode *type, U32 indent_level);
-internal void rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_UDTMemberBundle *bundle, RDI_UDT *udt, U32 indent_level);
-internal void rdi_stringize_global_variable(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_GlobalVariable *global_variable, U32 indent_level);
-internal void rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_ThreadVariable *thread_var, U32 indent_level);
-internal void rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Procedure *proc, U32 indent_level);
-internal void rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level);
+internal void rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *rdi, U32 indent_level);
+internal void rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_TopLevelInfo *tli, U32 indent_level);
+internal void rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_BinarySection *bin_section, U32 indent_level);
+internal void rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_FilePathBundle *bundle, RDI_FilePathNode *file_path, U32 indent_level);
+internal void rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_SourceFile *source_file, U32 indent_level);
+internal void rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_LineTable *line_table, U32 indent_level);
+internal void rdi_stringize_source_line_map(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_SourceLineMap *map, U32 indent_level);
+internal void rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_Unit *unit, U32 indent_level);
+internal void rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_TypeNode *type, U32 indent_level);
+internal void rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_UDTMemberBundle *bundle, RDI_UDT *udt, U32 indent_level);
+internal void rdi_stringize_global_variable(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_GlobalVariable *global_variable, U32 indent_level);
+internal void rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_ThreadVariable *thread_var, U32 indent_level);
+internal void rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_Procedure *proc, U32 indent_level);
+internal void rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level);
 
 #endif // RDI_DUMP_H

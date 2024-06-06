@@ -77,7 +77,7 @@ internal TS_TASK_FUNCTION_DEF(p2b_bake_unit_vmap_task__entry_point)
     switch(n->v.tag)
     {
       default:{}break;
-      case RDI_DataSectionTag_UnitVmap:{vmap_section = &n->v;}break;
+      case RDI_SectionKind_UnitVmap:{vmap_section = &n->v;}break;
     }
   }
   if(vmap_section != 0)
@@ -116,8 +116,8 @@ internal TS_TASK_FUNCTION_DEF(p2b_bake_unit_task__entry_point)
     switch(n->v.tag)
     {
       default:{}break;
-      case RDI_DataSectionTag_LineInfoVoffs:{voffs_section = &n->v;}break;
-      case RDI_DataSectionTag_LineInfoData: {lines_section = &n->v;}break;
+      case RDI_SectionKind_LineInfoVoffs:{voffs_section = &n->v;}break;
+      case RDI_SectionKind_LineInfoData: {lines_section = &n->v;}break;
     }
   }
   if(voffs_section != 0 && lines_section != 0)

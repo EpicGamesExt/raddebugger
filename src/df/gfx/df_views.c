@@ -3272,8 +3272,10 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   {
     for(U64 idx = 0; idx < rdis_count; idx += 1)
     {
-      rdis[idx] = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], endt_us);
-      graphs[idx] = tg_graph_begin(rdi_addr_size_from_arch(rdis[idx]->top_level_info->arch), 256);
+      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], endt_us);
+      RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+      rdis[idx] = rdi;
+      graphs[idx] = tg_graph_begin(rdi_addr_size_from_arch(tli->arch), 256);
     }
   }
   
@@ -3302,9 +3304,11 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
     for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
     {
       RDI_Parsed *rdi = rdis[rdi_idx];
-      if(base_idx <= item->idx && item->idx < base_idx + rdi->procedures_count)
+      U64 rdi_procedures_count = 0;
+      rdi_section_raw_table_from_kind(rdi, RDI_SectionKind_Procedures, &rdi_procedures_count);
+      if(base_idx <= item->idx && item->idx < base_idx + rdi_procedures_count)
       {
-        RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, item->idx-base_idx);
+        RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, item->idx-base_idx);
         U64 name_size = 0;
         U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
         String8 name = str8(name_base, name_size);
@@ -3317,7 +3321,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         }
         break;
       }
-      base_idx += rdi->procedures_count;
+      base_idx += rdi_procedures_count;
     }
   }
   
@@ -3360,23 +3364,25 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       {
         for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
         {
-          if(base_idx <= item->idx && item->idx < base_idx + rdis[rdi_idx]->procedures_count)
+          U64 procedures_count = 0;
+          rdi_section_raw_table_from_kind(rdis[rdi_idx], RDI_SectionKind_Procedures, &procedures_count);
+          if(base_idx <= item->idx && item->idx < base_idx + procedures_count)
           {
             dbgi_key = dbgi_keys.v[rdi_idx];
             rdi = rdis[rdi_idx];
             graph = graphs[rdi_idx];
             break;
           }
-          base_idx += rdis[rdi_idx]->procedures_count;
+          base_idx += procedures_count;
         }
       }
       
       //- rjf: unpack this item's info
-      RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, item->idx-base_idx);
+      RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, item->idx-base_idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
-      RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, procedure->type_idx);
+      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
       TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
       
       //- rjf: build item button
@@ -4926,17 +4932,17 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
         String8 symbol_name = {0};
         String8 symbol_type_string = {0};
-        if(rdi->scope_vmap != 0)
         {
-          U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, rip_voff);
-          RDI_Scope *scope = rdi_element_from_idx(rdi, scopes, scope_idx);
+          U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, rip_voff);
+          RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
           U64 proc_idx = scope->proc_idx;
-          RDI_Procedure *procedure = &rdi->procedures[proc_idx];
-          RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, procedure->type_idx);
+          RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
+          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
           TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
           U64 name_size = 0;
           U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-          TG_Graph *graph = tg_graph_begin(rdi_addr_size_from_arch(rdi->top_level_info->arch), 256);
+          RDI_TopLevelInfo *top_level_info = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+          TG_Graph *graph = tg_graph_begin(rdi_addr_size_from_arch(top_level_info->arch), 256);
           symbol_name = str8(name_ptr, name_size);
           symbol_type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
         }

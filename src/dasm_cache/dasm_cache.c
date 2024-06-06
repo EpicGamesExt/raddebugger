@@ -433,7 +433,7 @@ dasm_parse_thread__entry_point(void *p)
           ud_set_syntax(&udc, params.syntax == DASM_Syntax_Intel ? UD_SYN_INTEL : UD_SYN_ATT);
           
           // rjf: disassemble
-          RDI_SourceFile *last_file = &rdi_source_file_nil;
+          RDI_SourceFile *last_file = &rdi_nil_element_union.source_file;
           RDI_Line *last_line = 0;
           for(U64 off = 0; off < data.size;)
           {
@@ -455,16 +455,16 @@ dasm_parse_thread__entry_point(void *p)
               if(rdi != &di_rdi_parsed_nil)
               {
                 U64 voff = (params.vaddr+off) - params.base_vaddr;
-                U32 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, voff);
-                RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
-                RDI_LineTable *line_table = rdi_element_from_idx(rdi, line_tables, unit->line_table_idx);
+                U32 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, voff);
+                RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+                RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
                 RDI_ParsedLineTable unit_line_info = {0};
                 rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
                 U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
                 if(line_info_idx < unit_line_info.count)
                 {
                   RDI_Line *line = &unit_line_info.lines[line_info_idx];
-                  RDI_SourceFile *file = rdi_element_from_idx(rdi, source_files, line->file_idx);
+                  RDI_SourceFile *file = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
                   String8 file_normalized_full_path = {0};
                   file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
                   if(file != last_file)
@@ -552,12 +552,12 @@ dasm_parse_thread__entry_point(void *p)
             String8 symbol_part = {0};
             if(jump_dst_vaddr != 0 && rdi != &di_rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
             {
-              RDI_U32 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, jump_dst_vaddr-params.base_vaddr);
+              RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, jump_dst_vaddr-params.base_vaddr);
               if(scope_idx != 0)
               {
-                RDI_Scope *scope = rdi_element_from_idx(rdi, scopes, scope_idx);
+                RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
                 RDI_U32 procedure_idx = scope->proc_idx;
-                RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, procedure_idx);
+                RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_idx);
                 String8 procedure_name = {0};
                 procedure_name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &procedure_name.size);
                 if(procedure_name.size != 0)

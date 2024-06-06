@@ -5,14 +5,14 @@
 //~ rjf: RDI Enum -> String Functions
 
 internal String8
-rdi_string_from_data_section_tag(RDI_DataSectionTag v)
+rdi_string_from_data_section_kind(RDI_SectionKind v)
 {
-  String8 result = str8_lit("<invalid RDI_DataSectionTag>");
+  String8 result = str8_lit("<invalid RDI_SectionKind>");
   switch(v)
   {
     default:{}break;
-#define X(name) case RDI_DataSectionTag_##name:{result = str8_lit(#name);}break;
-    RDI_DataSectionTag_XList
+#define X(name, lower, type) case RDI_SectionKind_##name:{result = str8_lit(#name);}break;
+    RDI_SectionKind_XList
 #undef X
   }
   return result;
@@ -134,35 +134,35 @@ rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkFlags flags)
 global char rdi_stringize_spaces[] = "                                ";
 
 internal void
-rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *parsed, U32 indent_level)
+rdi_stringize_data_sections(Arena *arena, String8List *out, RDI_Parsed *rdi, U32 indent_level)
 {
-  U64 data_section_count = parsed->dsec_count;
-  RDI_DataSection *ptr = parsed->dsecs;
-  for(U64 i = 0; i < data_section_count; i += 1, ptr += 1)
+  for(U64 idx = 0; idx < rdi->sections_count; idx += 1)
   {
-    String8 tag_str = rdi_string_from_data_section_tag(ptr->tag);
-    str8_list_pushf(arena, out, "%.*sdata_section[%5u] = {0x%08llx, %7u, %7u} %.*s\n",
+    RDI_SectionKind kind = (RDI_SectionKind)idx;
+    RDI_Section *section = &rdi->sections[idx];
+    String8 kind_str = rdi_string_from_data_section_kind(kind);
+    str8_list_pushf(arena, out, "%.*sdata_section[%5I64u] = {0x%08llx, %7u, %7u} %S\n",
                     indent_level, rdi_stringize_spaces,
-                    i, ptr->off, ptr->encoded_size, ptr->unpacked_size, str8_varg(tag_str));
+                    idx, section->off, section->encoded_size, section->unpacked_size, kind_str);
   }
 }
 
 internal void
-rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_TopLevelInfo *tli, U32 indent_level)
+rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_TopLevelInfo *tli, U32 indent_level)
 {
   String8 arch_str = rdi_string_from_arch(tli->arch);
   String8 exe_name = {0};
-  exe_name.str = rdi_string_from_idx(parsed, tli->exe_name_string_idx, &exe_name.size);
+  exe_name.str = rdi_string_from_idx(rdi, tli->exe_name_string_idx, &exe_name.size);
   str8_list_pushf(arena, out, "%.*sarch=%.*s\n", indent_level, rdi_stringize_spaces, str8_varg(arch_str));
   str8_list_pushf(arena, out, "%.*sexe_name='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(exe_name));
   str8_list_pushf(arena, out, "%.*svoff_max=0x%08llx\n", indent_level, rdi_stringize_spaces, tli->voff_max);
 }
 
 internal void
-rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_BinarySection *bin_section, U32 indent_level)
+rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_BinarySection *bin_section, U32 indent_level)
 {
   String8 name = {0};
-  name.str = rdi_string_from_idx(parsed, bin_section->name_string_idx, &name.size);
+  name.str = rdi_string_from_idx(rdi, bin_section->name_string_idx, &name.size);
   str8_list_pushf(arena, out, "%.*sname='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(name));
   
   str8_list_pushf(arena, out, "%.*sflags=", indent_level, rdi_stringize_spaces);
@@ -176,10 +176,10 @@ rdi_stringize_binary_section(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_FilePathBundle *bundle, RDI_FilePathNode *file_path, U32 indent_level)
+rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_FilePathBundle *bundle, RDI_FilePathNode *file_path, U32 indent_level)
 {
   String8 name = {0};
-  name.str = rdi_string_from_idx(parsed, file_path->name_string_idx, &name.size);
+  name.str = rdi_string_from_idx(rdi, file_path->name_string_idx, &name.size);
   U32 this_idx = (U32)(file_path - bundle->file_paths);
   if(file_path->source_file_idx == 0)
   {
@@ -206,7 +206,7 @@ rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_
     }
     
     // stringize child
-    rdi_stringize_file_path(arena, out, parsed, bundle, child_node, indent_level + 1);
+    rdi_stringize_file_path(arena, out, rdi, bundle, child_node, indent_level + 1);
     
     // increment iterator
     child = child_node->next_sibling;
@@ -214,11 +214,11 @@ rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_
 }
 
 internal void
-rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceFile *source_file, U32 indent_level)
+rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_SourceFile *source_file, U32 indent_level)
 {
   // normal source path
   String8 path = {0};
-  path.str = rdi_string_from_idx(parsed, source_file->normal_full_path_string_idx, &path.size);
+  path.str = rdi_string_from_idx(rdi, source_file->normal_full_path_string_idx, &path.size);
   str8_list_pushf(arena, out, "%.*spath: \"%S\"\n", indent_level, rdi_stringize_spaces, path);
   
   // rjf: source line map idx
@@ -226,11 +226,11 @@ rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *parsed, RD
 }
 
 internal void
-rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_LineTable *line_table, U32 indent_level)
+rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_LineTable *line_table, U32 indent_level)
 {
   // rjf: parse line table
   RDI_ParsedLineTable parsed_line_table = {0};
-  rdi_parsed_from_line_table(parsed, line_table, &parsed_line_table);
+  rdi_parsed_from_line_table(rdi, line_table, &parsed_line_table);
   
   // rjf: stringize lines
   str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
@@ -261,10 +261,10 @@ rdi_stringize_line_table(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI
 }
 
 internal void
-rdi_stringize_source_line_map(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_SourceLineMap *map, U32 indent_level)
+rdi_stringize_source_line_map(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_SourceLineMap *map, U32 indent_level)
 {
   RDI_ParsedSourceLineMap line_map = {0};
-  rdi_parsed_from_source_line_map(parsed, map, &line_map);
+  rdi_parsed_from_source_line_map(rdi, map, &line_map);
   str8_list_pushf(arena, out, "%.*slines:\n", indent_level, rdi_stringize_spaces);
   
   for(U32 i = 0; i < line_map.count; i += 1)
@@ -307,12 +307,12 @@ rdi_stringize_source_line_map(Arena *arena, String8List *out, RDI_Parsed *parsed
 }
 
 internal void
-rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Unit *unit, U32 indent_level)
+rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_Unit *unit, U32 indent_level)
 {
   String8 unit_name = {0};
-  unit_name.str = rdi_string_from_idx(parsed, unit->unit_name_string_idx, &unit_name.size);
+  unit_name.str = rdi_string_from_idx(rdi, unit->unit_name_string_idx, &unit_name.size);
   String8 compiler_name = {0};
-  compiler_name.str = rdi_string_from_idx(parsed, unit->compiler_name_string_idx, &compiler_name.size);
+  compiler_name.str = rdi_string_from_idx(rdi, unit->compiler_name_string_idx, &compiler_name.size);
   
   str8_list_pushf(arena, out, "%.*sunit_name='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(unit_name));
   str8_list_pushf(arena, out, "%.*scompiler_name='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(compiler_name));
@@ -329,7 +329,7 @@ rdi_stringize_unit(Arena *arena, String8List *out, RDI_Parsed *parsed, RDI_Unit 
 }
 
 internal void
-rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *parsed,
+rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *rdi,
                         RDI_TypeNode *type, U32 indent_level){
   RDI_TypeKind kind = type->kind;
   String8 type_kind_str = rdi_string_from_type_kind(kind);
@@ -360,7 +360,7 @@ rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *parsed,
   if (RDI_TypeKind_FirstBuiltIn <= kind &&
       kind <= RDI_TypeKind_LastBuiltIn){
     String8 name = {0};
-    name.str = rdi_string_from_idx(parsed, type->built_in.name_string_idx, &name.size);
+    name.str = rdi_string_from_idx(rdi, type->built_in.name_string_idx, &name.size);
     str8_list_pushf(arena, out, "%.*sbuilt_in.name='%.*s'\n",
                     indent_level, rdi_stringize_spaces, str8_varg(name));
   }
@@ -381,7 +381,7 @@ rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *parsed,
       U32 run_count_raw = type->constructed.count;
       
       U32 run_count = 0;
-      U32 *run = rdi_idx_run_from_first_count(parsed, run_first, run_count_raw, &run_count);
+      U32 *run = rdi_idx_run_from_first_count(rdi, run_first, run_count_raw, &run_count);
       
       U32 this_type_idx = 0;
       if (run_count > 0 && type->kind == RDI_TypeKind_Method){
@@ -413,7 +413,7 @@ rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *parsed,
   else if (RDI_TypeKind_FirstUserDefined <= kind &&
            kind <= RDI_TypeKind_LastUserDefined){
     String8 name = {0};
-    name.str = rdi_string_from_idx(parsed, type->user_defined.name_string_idx, &name.size);
+    name.str = rdi_string_from_idx(rdi, type->user_defined.name_string_idx, &name.size);
     str8_list_pushf(arena, out, "%.*suser_defined.name='%.*s'\n",
                     indent_level, rdi_stringize_spaces, str8_varg(name));
     str8_list_pushf(arena, out, "%.*suser_defined.direct_type=%u\n",
@@ -433,7 +433,7 @@ rdi_stringize_type_node(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed,
+rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *rdi,
                   RDI_UDTMemberBundle *member_bundle, RDI_UDT *udt,
                   U32 indent_level){
   str8_list_pushf(arena, out, "%.*sself_type=%u\n",
@@ -461,7 +461,7 @@ rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed,
       RDI_EnumMember *enum_member = member_bundle->enum_members + first;
       for (U32 i = first; i < opl; i += 1, enum_member += 1){
         String8 name = {0};
-        name.str = rdi_string_from_idx(parsed, enum_member->name_string_idx, &name.size);
+        name.str = rdi_string_from_idx(rdi, enum_member->name_string_idx, &name.size);
         str8_list_pushf(arena, out, "%.*s '%.*s' %llu\n",
                         indent_level, rdi_stringize_spaces,
                         str8_varg(name), enum_member->val);
@@ -489,7 +489,7 @@ rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed,
         
         if (member->name_string_idx != 0){
           String8 name = {0};
-          name.str = rdi_string_from_idx(parsed, member->name_string_idx, &name.size);
+          name.str = rdi_string_from_idx(rdi, member->name_string_idx, &name.size);
           str8_list_pushf(arena, out, "%.*s  name='%.*s'\n",
                           indent_level, rdi_stringize_spaces, str8_varg(name));
         }
@@ -507,10 +507,10 @@ rdi_stringize_udt(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_global_variable(Arena *arena, String8List *out, RDI_Parsed *parsed,
+rdi_stringize_global_variable(Arena *arena, String8List *out, RDI_Parsed *rdi,
                               RDI_GlobalVariable *global_variable, U32 indent_level){
   String8 name = {0};
-  name.str = rdi_string_from_idx(parsed, global_variable->name_string_idx, &name.size);
+  name.str = rdi_string_from_idx(rdi, global_variable->name_string_idx, &name.size);
   str8_list_pushf(arena, out, "%.*sname='%.*s'\n",
                   indent_level, rdi_stringize_spaces, str8_varg(name));
   
@@ -529,11 +529,11 @@ rdi_stringize_global_variable(Arena *arena, String8List *out, RDI_Parsed *parsed
 }
 
 internal void
-rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_Parsed *parsed,
+rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_Parsed *rdi,
                               RDI_ThreadVariable *thread_var,
                               U32 indent_level){
   String8 name = {0};
-  name.str = rdi_string_from_idx(parsed, thread_var->name_string_idx, &name.size);
+  name.str = rdi_string_from_idx(rdi, thread_var->name_string_idx, &name.size);
   str8_list_pushf(arena, out, "%.*sname='%.*s'\n",
                   indent_level, rdi_stringize_spaces, str8_varg(name));
   
@@ -552,15 +552,15 @@ rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_Parsed *parsed
 }
 
 internal void
-rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *parsed,
+rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *rdi,
                         RDI_Procedure *proc, U32 indent_level){
   String8 name = {0};
-  name.str = rdi_string_from_idx(parsed, proc->name_string_idx, &name.size);
+  name.str = rdi_string_from_idx(rdi, proc->name_string_idx, &name.size);
   str8_list_pushf(arena, out, "%.*sname='%.*s'\n",
                   indent_level, rdi_stringize_spaces, str8_varg(name));
   
   String8 link_name = {0};
-  link_name.str = rdi_string_from_idx(parsed, proc->link_name_string_idx, &link_name.size);
+  link_name.str = rdi_string_from_idx(rdi, proc->link_name_string_idx, &link_name.size);
   str8_list_pushf(arena, out, "%.*slink_name='%.*s'\n",
                   indent_level, rdi_stringize_spaces, str8_varg(link_name));
   
@@ -579,7 +579,7 @@ rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *parsed,
 }
 
 internal void
-rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed,
+rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
                     RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level){
   
   U32 this_idx = (U32)(scope - bundle->scopes);
@@ -638,7 +638,7 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed,
                         indent_level, rdi_stringize_spaces, str8_varg(local_kind_str));
         
         String8 name = {0};
-        name.str = rdi_string_from_idx(parsed, local_ptr->name_string_idx, &name.size);
+        name.str = rdi_string_from_idx(rdi, local_ptr->name_string_idx, &name.size);
         str8_list_pushf(arena, out, "%.*s  name='%.*s'\n",
                         indent_level, rdi_stringize_spaces, str8_varg(name));
         
@@ -756,7 +756,7 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *parsed,
     }
     
     // stringize child
-    rdi_stringize_scope(arena, out, parsed, bundle, child_scope, indent_level + 1);
+    rdi_stringize_scope(arena, out, rdi, bundle, child_scope, indent_level + 1);
     
     // increment iterator
     child = child_scope->next_sibling_scope_idx;

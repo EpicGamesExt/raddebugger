@@ -336,9 +336,9 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
       case TG_KeyKind_Ext:
       {
         U64 type_node_idx = key.u64[0];
-        if(0 <= type_node_idx && type_node_idx < rdi->type_nodes_count)
+        RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
+        if(rdi_type->kind != RDI_TypeKind_NULL)
         {
-          RDI_TypeNode *rdi_type = &rdi->type_nodes[type_node_idx];
           TG_Kind kind = tg_kind_from_rdi_type_kind(rdi_type->kind);
           
           //- rjf: record types => unpack name * members & produce
@@ -349,7 +349,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             name.str = rdi_string_from_idx(rdi, rdi_type->user_defined.name_string_idx, &name.size);
             
             // rjf: unpack UDT info
-            RDI_UDT *udt = rdi_element_from_idx(rdi, udts, rdi_type->user_defined.udt_idx);
+            RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, rdi_type->user_defined.udt_idx);
             
             // rjf: unpack members
             TG_Member *members = 0;
@@ -357,19 +357,16 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             {
               members_count = udt->member_count;
               members = push_array(arena, TG_Member, members_count);
-              if(members_count != 0 && 0 <= udt->member_first && udt->member_first+udt->member_count <= rdi->members_count)
+              if(members_count != 0)
               {
                 for(U32 member_idx = udt->member_first;
                     member_idx < udt->member_first+udt->member_count;
                     member_idx += 1)
                 {
-                  RDI_Member *src = &rdi->members[member_idx];
+                  RDI_Member *src = rdi_element_from_name_idx(rdi, Members, member_idx);
                   TG_Kind member_type_kind = TG_Kind_Null;
-                  if(src->type_idx < rdi->type_nodes_count)
-                  {
-                    RDI_TypeNode *member_type = &rdi->type_nodes[src->type_idx];
-                    member_type_kind = tg_kind_from_rdi_type_kind(member_type->kind);
-                  }
+                  RDI_TypeNode *member_type = rdi_element_from_name_idx(rdi, TypeNodes, src->type_idx);
+                  member_type_kind = tg_kind_from_rdi_type_kind(member_type->kind);
                   TG_Member *dst = &members[member_idx-udt->member_first];
                   dst->kind     = tg_member_kind_from_rdi_member_kind(src->kind);
                   dst->type_key = tg_key_ext(member_type_kind, (U64)src->type_idx);
@@ -399,7 +396,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             TG_Key direct_type_key = zero_struct;
             if(rdi_type->user_defined.direct_type_idx < type_node_idx)
             {
-              RDI_TypeNode *direct_type_node = &rdi->type_nodes[rdi_type->user_defined.direct_type_idx];
+              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
               TG_Kind direct_type_kind = tg_kind_from_rdi_type_kind(direct_type_node->kind);
               direct_type_key = tg_key_ext(direct_type_kind, (U64)rdi_type->user_defined.direct_type_idx);
             }
@@ -409,23 +406,17 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             U32 enum_vals_count = 0;
             {
               U32 udt_idx = rdi_type->user_defined.udt_idx;
-              if(0 <= udt_idx && udt_idx < rdi->udts_count)
+              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, udt_idx);
+              enum_vals_count = udt->member_count;
+              enum_vals = push_array(arena, TG_EnumVal, enum_vals_count);
+              for(U32 member_idx = udt->member_first;
+                  member_idx < udt->member_first+udt->member_count;
+                  member_idx += 1)
               {
-                RDI_UDT *udt = &rdi->udts[udt_idx];
-                enum_vals_count = udt->member_count;
-                enum_vals = push_array(arena, TG_EnumVal, enum_vals_count);
-                if(0 <= udt->member_first && udt->member_first+udt->member_count < rdi->enum_members_count)
-                {
-                  for(U32 member_idx = udt->member_first;
-                      member_idx < udt->member_first+udt->member_count;
-                      member_idx += 1)
-                  {
-                    RDI_EnumMember *src = &rdi->enum_members[member_idx];
-                    TG_EnumVal *dst = &enum_vals[member_idx-udt->member_first];
-                    dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
-                    dst->val      = src->val;
-                  }
-                }
+                RDI_EnumMember *src = rdi_element_from_name_idx(rdi, EnumMembers, member_idx);
+                TG_EnumVal *dst = &enum_vals[member_idx-udt->member_first];
+                dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
+                dst->val      = src->val;
               }
             }
             
@@ -448,7 +439,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             U64 direct_type_byte_size = 0;
             if(rdi_type->constructed.direct_type_idx < type_node_idx)
             {
-              RDI_TypeNode *direct_type_node = &rdi->type_nodes[rdi_type->constructed.direct_type_idx];
+              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.direct_type_idx);
               TG_Kind direct_type_kind = tg_kind_from_rdi_type_kind(direct_type_node->kind);
               direct_type_key = tg_key_ext(direct_type_kind, (U64)rdi_type->constructed.direct_type_idx);
               direct_type_is_good = 1;
@@ -512,7 +503,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
                     U32 param_type_idx = idx_run[idx];
                     if(param_type_idx < type_node_idx)
                     {
-                      RDI_TypeNode *param_type_node = &rdi->type_nodes[param_type_idx];
+                      RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
                       TG_Kind param_kind = tg_kind_from_rdi_type_kind(param_type_node->kind);
                       type->param_type_keys[idx] = tg_key_ext(param_kind, (U64)param_type_idx);
                     }
@@ -545,7 +536,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
                     U32 param_type_idx = idx_run[idx];
                     if(param_type_idx < type_node_idx)
                     {
-                      RDI_TypeNode *param_type_node = &rdi->type_nodes[param_type_idx];
+                      RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
                       TG_Kind param_kind = tg_kind_from_rdi_type_kind(param_type_node->kind);
                       type->param_type_keys[idx] = tg_key_ext(param_kind, (U64)param_type_idx);
                     }
@@ -568,7 +559,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
                 TG_Key owner_type_key = zero_struct;
                 if(rdi_type->constructed.owner_type_idx < type_node_idx)
                 {
-                  RDI_TypeNode *owner_type_node = &rdi->type_nodes[rdi_type->constructed.owner_type_idx];
+                  RDI_TypeNode *owner_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.owner_type_idx);
                   TG_Kind owner_type_kind = tg_kind_from_rdi_type_kind(owner_type_node->kind);
                   owner_type_key = tg_key_ext(owner_type_kind, (U64)rdi_type->constructed.owner_type_idx);
                 }
@@ -593,7 +584,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             U64 direct_type_byte_size = 0;
             if(rdi_type->user_defined.direct_type_idx < type_node_idx)
             {
-              RDI_TypeNode *direct_type_node = &rdi->type_nodes[rdi_type->user_defined.direct_type_idx];
+              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
               TG_Kind direct_type_kind = tg_kind_from_rdi_type_kind(direct_type_node->kind);
               direct_type_key = tg_key_ext(direct_type_kind, (U64)rdi_type->user_defined.direct_type_idx);
               direct_type_byte_size = direct_type_node->byte_size;
@@ -615,7 +606,7 @@ tg_type_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rdi, TG_Ke
             U64 direct_type_byte_size = 0;
             if(rdi_type->bitfield.direct_type_idx < type_node_idx)
             {
-              RDI_TypeNode *direct_type_node = &rdi->type_nodes[rdi_type->bitfield.direct_type_idx];
+              RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->bitfield.direct_type_idx);
               TG_Kind direct_type_kind = tg_kind_from_rdi_type_kind(direct_type_node->kind);
               direct_type_key = tg_key_ext(direct_type_kind, (U64)rdi_type->bitfield.direct_type_idx);
               direct_type_byte_size = direct_type_node->byte_size;
