@@ -1430,6 +1430,35 @@ RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, R
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Baked Versions
 
+// TODO(rjf):
+//
+// separate category of partial/joinable/slice-based baking functions
+// (distinct from necessarily serial, top-level, non-trivially-joinable
+// paths) can go here - this includes things like the "parallel-for"
+// style filling of various tables, but it does not include things like
+// vmap building.
+
+//- rjf: independent (top-level, global) baking functions
+RDI_PROC RDIM_TopLevelInfoBakeResult    rdim_bake_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_TopLevelInfo *src);
+RDI_PROC RDIM_BinarySectionBakeResult   rdim_bake_binary_sections(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BinarySectionList *src);
+RDI_PROC RDIM_UnitBakeResult            rdim_bake_units(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_UnitChunkList *src);
+RDI_PROC RDIM_UnitVMapBakeResult        rdim_bake_unit_vmap(RDIM_Arena *arena, RDIM_UnitChunkList *units);
+RDI_PROC RDIM_SrcFileBakeResult         rdim_bake_src_files(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_SrcFileChunkList *src);
+RDI_PROC RDIM_LineTableBakeResult       rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src);
+RDI_PROC RDIM_TypeNodeBakeResult        rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_TypeChunkList *src);
+RDI_PROC RDIM_UDTBakeResult             rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_UDTChunkList *src);
+RDI_PROC RDIM_GlobalVariableBakeResult  rdim_bake_global_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src);
+RDI_PROC RDIM_GlobalVMapBakeResult      rdim_bake_global_vmap(RDIM_Arena *arena, RDIM_SymbolChunkList *src);
+RDI_PROC RDIM_ThreadVariableBakeResult  rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src);
+RDI_PROC RDIM_ProcedureBakeResult       rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src);
+RDI_PROC RDIM_ScopeBakeResult           rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_ScopeChunkList *src);
+RDI_PROC RDIM_ScopeVMapBakeResult       rdim_bake_scope_vmap(RDIM_Arena *arena, RDIM_ScopeChunkList *src);
+RDI_PROC RDIM_TopLevelNameMapBakeResult rdim_bake_name_maps_top_level(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
+RDI_PROC RDIM_NameMapBakeResult         rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src, RDI_U64 base_node_idx);
+RDI_PROC RDIM_FilePathBakeResult        rdim_bake_file_paths(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree);
+RDI_PROC RDIM_StringBakeResult          rdim_bake_strings(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings);
+RDI_PROC RDIM_IndexRunBakeResult        rdim_bake_index_runs(RDIM_Arena *arena, RDIM_BakeIdxRunMap *idx_runs);
+
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
 
