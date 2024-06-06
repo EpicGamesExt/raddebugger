@@ -878,10 +878,10 @@ typedef struct RDIM_BakeSection RDIM_BakeSection;
 struct RDIM_BakeSection
 {
   void *data;
-  RDI_DataSectionEncoding encoding;
+  RDI_SectionEncoding encoding;
   RDI_U64 encoded_size;
   RDI_U64 unpacked_size;
-  RDI_DataSectionTag tag;
+  RDI_SectionKind tag;
   RDI_U64 tag_idx;
 };
 
@@ -1191,12 +1191,6 @@ RDI_PROC RDIM_Location *rdim_push_location_val_reg(RDIM_Arena *arena, RDI_U8 reg
 RDI_PROC void rdim_location_set_push_case(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_LocationSet *locset, RDIM_Rng1U64 voff_range, RDIM_Location *location);
 
 ////////////////////////////////
-//~ rjf: [Baking Helpers] Baked File Layout Calculations
-
-RDI_PROC RDI_U64 rdim_bake_section_count_from_params(RDIM_BakeParams *params);
-RDI_PROC RDI_U64 rdim_bake_section_idx_from_params_tag_idx(RDIM_BakeParams *params, RDI_DataSectionTag tag, RDI_U64 idx);
-
-////////////////////////////////
 //~ rjf: [Baking Helpers] Baked VMap Building
 
 RDI_PROC RDIM_BakeVMap rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_SortKey *keys, RDI_U64 marker_count);
@@ -1217,7 +1211,7 @@ RDI_PROC RDIM_BakeStringMapBaseIndices rdim_bake_string_map_base_indices_from_ma
 
 //- rjf: finalized bake string map
 RDI_PROC RDIM_BakeStringMapTight rdim_bake_string_map_tight_from_loose(RDIM_Arena *arena, RDIM_BakeStringMapTopology *map_topology, RDIM_BakeStringMapBaseIndices *map_base_indices, RDIM_BakeStringMapLoose *map);
-RDI_PROC RDI_U64 rdim_bake_idx_from_string(RDIM_BakeStringMapTight *map, RDIM_String8 string);
+RDI_PROC RDI_U32 rdim_bake_idx_from_string(RDIM_BakeStringMapTight *map, RDIM_String8 string);
 
 //- rjf: bake idx run map reading/writing
 RDI_PROC RDI_U64 rdim_hash_from_idx_run(RDI_U32 *idx_run, RDI_U32 count);
@@ -1236,7 +1230,7 @@ RDI_PROC void rdim_bake_name_map_push(RDIM_Arena *arena, RDIM_BakeNameMap *map, 
 //~ rjf: [Baking Helpers] Data Section List Building Helpers
 
 RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push(RDIM_Arena *arena, RDIM_BakeSectionList *list);
-RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new_unpacked(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_DataSectionTag tag, RDI_U64 tag_idx);
+RDI_PROC RDIM_BakeSection *rdim_bake_section_list_push_new_unpacked(RDIM_Arena *arena, RDIM_BakeSectionList *list, void *data, RDI_U64 size, RDI_SectionKind tag, RDI_U64 tag_idx);
 RDI_PROC void rdim_bake_section_list_concat_in_place(RDIM_BakeSectionList *dst, RDIM_BakeSectionList *to_push);
 
 ////////////////////////////////

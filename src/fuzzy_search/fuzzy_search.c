@@ -52,29 +52,29 @@ fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, FZY_Target target, 
     // NOTE(rjf): no default - warn if we miss a case
     case FZY_Target_Procedures:
     {
-      RDI_Procedure *proc = rdi_element_from_idx(rdi, procedures, element_idx);
+      RDI_Procedure *proc = rdi_element_from_name_idx(rdi, Procedures, element_idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, proc->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case FZY_Target_GlobalVariables:
     {
-      RDI_GlobalVariable *gvar = rdi_element_from_idx(rdi, global_variables, element_idx);
+      RDI_GlobalVariable *gvar = rdi_element_from_name_idx(rdi, GlobalVariables, element_idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, gvar->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case FZY_Target_ThreadVariables:
     {
-      RDI_ThreadVariable *tvar = rdi_element_from_idx(rdi, thread_variables, element_idx);
+      RDI_ThreadVariable *tvar = rdi_element_from_name_idx(rdi, ThreadVariables, element_idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, tvar->name_string_idx, &name_size);
       result = str8(name_base, name_size);
     }break;
     case FZY_Target_UDTs:
     {
-      RDI_UDT *udt = rdi_element_from_idx(rdi, udts, element_idx);
-      RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, udt->self_type_idx);
+      RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, element_idx);
+      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name_size);
       result = str8(name_base, name_size);
@@ -407,10 +407,8 @@ fzy_search_thread__entry_point(void *p)
     ////////////////////////////
     //- rjf: search target -> info about search space
     //
-    U64 table_ptr_off = 0;
-    U64 table_count_off = 0;
+    RDI_SectionKind section_kind = RDI_SectionKind_NULL;
     U64 element_name_idx_off = 0;
-    U64 element_size = 0;
     if(task_is_good)
     {
       switch(params.target)
@@ -419,30 +417,22 @@ fzy_search_thread__entry_point(void *p)
         case FZY_Target_COUNT:{}break;
         case FZY_Target_Procedures:
         {
-          table_ptr_off = OffsetOf(RDI_Parsed, procedures);
-          table_count_off = OffsetOf(RDI_Parsed, procedures_count);
+          section_kind = RDI_SectionKind_Procedures;
           element_name_idx_off = OffsetOf(RDI_Procedure, name_string_idx);
-          element_size = sizeof(RDI_Procedure);
         }break;
         case FZY_Target_GlobalVariables:
         {
-          table_ptr_off = OffsetOf(RDI_Parsed, global_variables);
-          table_count_off = OffsetOf(RDI_Parsed, global_variables_count);
+          section_kind = RDI_SectionKind_GlobalVariables;
           element_name_idx_off = OffsetOf(RDI_GlobalVariable, name_string_idx);
-          element_size = sizeof(RDI_GlobalVariable);
         }break;
         case FZY_Target_ThreadVariables:
         {
-          table_ptr_off = OffsetOf(RDI_Parsed, thread_variables);
-          table_count_off = OffsetOf(RDI_Parsed, thread_variables_count);
+          section_kind = RDI_SectionKind_ThreadVariables;
           element_name_idx_off = OffsetOf(RDI_ThreadVariable, name_string_idx);
-          element_size = sizeof(RDI_ThreadVariable);
         }break;
         case FZY_Target_UDTs:
         {
-          table_ptr_off = OffsetOf(RDI_Parsed, udts);
-          table_count_off = OffsetOf(RDI_Parsed, udts_count);
-          element_size = sizeof(RDI_UDT);
+          section_kind = RDI_SectionKind_UDTs;
         }break;
       }
     }
@@ -457,8 +447,9 @@ fzy_search_thread__entry_point(void *p)
       for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
       {
         RDI_Parsed *rdi = rdis[rdi_idx];
-        void *table_base = (U8*)rdi + table_ptr_off;
-        U64 element_count = *MemberFromOffset(U64 *, rdi, table_count_off);
+        U64 element_count = 0;
+        void *table_base = rdi_section_raw_table_from_kind(rdi, section_kind, &element_count);
+        U64 element_size = rdi_section_element_size_table[section_kind];
         for(U64 idx = 1; task_is_good && idx < element_count; idx += 1)
         {
           void *element = (U8 *)(*(void **)table_base) + element_size*idx;
@@ -466,7 +457,7 @@ fzy_search_thread__entry_point(void *p)
           if(params.target == FZY_Target_UDTs)
           {
             RDI_UDT *udt = (RDI_UDT *)element;
-            RDI_TypeNode *type_node = rdi_element_from_idx(rdi, type_nodes, udt->self_type_idx);
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
             name_idx_ptr = &type_node->user_defined.name_string_idx;
           }
           U32 name_idx = *name_idx_ptr;

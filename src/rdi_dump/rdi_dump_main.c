@@ -174,7 +174,8 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_TopLevelInfo)
     {
       str8_list_pushf(arena, &dump, "# TOP LEVEL INFO:\n");
-      rdi_stringize_top_level_info(arena, &dump, rdi, rdi->top_level_info, 1);
+      RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+      rdi_stringize_top_level_info(arena, &dump, rdi, tli, 1);
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
     
@@ -182,11 +183,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_BinarySections)
     {
       str8_list_pushf(arena, &dump, "# BINARY SECTIONS:\n");
-      RDI_BinarySection *ptr = rdi->binary_sections;
-      for(U32 i = 0; i < rdi->binary_sections_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " section[%u]:\n", i);
-        rdi_stringize_binary_section(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " section[%I64u]:\n", idx);
+        rdi_stringize_binary_section(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -195,13 +197,10 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_FilePaths)
     {
       RDI_FilePathBundle file_path_bundle = {0};
-      {
-        file_path_bundle.file_paths = rdi->file_paths;
-        file_path_bundle.file_path_count = rdi->file_paths_count;
-      }
+      file_path_bundle.file_paths = rdi_table_from_name(rdi, FilePathNodes, &file_path_bundle.file_path_count);
       str8_list_pushf(arena, &dump, "# FILE PATHS\n");
-      RDI_FilePathNode *ptr = rdi->file_paths;
-      for(U32 i = 0; i < rdi->file_paths_count; i += 1, ptr += 1)
+      RDI_FilePathNode *ptr = file_path_bundle.file_paths;
+      for(U32 i = 0; i < file_path_bundle.file_path_count; i += 1, ptr += 1)
       {
         if(ptr->parent_path_node == 0)
         {
@@ -215,11 +214,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_SourceFiles)
     {
       str8_list_pushf(arena, &dump, "# SOURCE FILES\n");
-      RDI_SourceFile *ptr = rdi->source_files;
-      for(U32 i = 0; i < rdi->source_files_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_SourceFile *v = rdi_table_from_name(rdi, SourceFiles, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " source_file[%u]:\n", i);
-        rdi_stringize_source_file(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " source_file[%I64u]:\n", idx);
+        rdi_stringize_source_file(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -228,11 +228,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_LineTables)
     {
       str8_list_pushf(arena, &dump, "# LINE TABLES\n");
-      RDI_LineTable *ptr = rdi->line_tables;
-      for(U32 i = 0; i < rdi->line_tables_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_LineTable *v = rdi_table_from_name(rdi, LineTables, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " line_table[%u]:\n", i);
-        rdi_stringize_line_table(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " line_table[%I64u]:\n", idx);
+        rdi_stringize_line_table(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -241,11 +242,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_SourceLineMaps)
     {
       str8_list_pushf(arena, &dump, "# SOURCE LINE MAPS\n");
-      RDI_SourceLineMap *ptr = rdi->source_line_maps;
-      for(U32 i = 0; i < rdi->source_line_maps_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_SourceLineMap *v = rdi_table_from_name(rdi, SourceLineMaps, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " source_line_map[%u]:\n", i);
-        rdi_stringize_source_line_map(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " source_line_map[%I64u]:\n", idx);
+        rdi_stringize_source_line_map(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -254,11 +256,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_Units)
     {
       str8_list_pushf(arena, &dump, "# UNITS\n");
-      RDI_Unit *ptr = rdi->units;
-      for (U32 i = 0; i < rdi->units_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_Unit *v = rdi_table_from_name(rdi, Units, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " unit[%u]:\n", i);
-        rdi_stringize_unit(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " unit[%I64u]:\n", idx);
+        rdi_stringize_unit(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -267,10 +270,11 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_UnitVMap)
     {
       str8_list_pushf(arena, &dump, "# UNIT VMAP\n");
-      RDI_VMapEntry *ptr = rdi->unit_vmap;
-      for(U32 i = 0; i < rdi->unit_vmap_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_VMapEntry *v = rdi_table_from_name(rdi, UnitVMap, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", ptr->voff, ptr->idx);
+        str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", v[idx].voff, v[idx].idx);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -279,11 +283,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_TypeNodes)
     {
       str8_list_pushf(arena, &dump, "# TYPE NODES:\n");
-      RDI_TypeNode *ptr = rdi->type_nodes;
-      for(U32 i = 0; i < rdi->type_nodes_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_TypeNode *v = rdi_table_from_name(rdi, TypeNodes, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " type[%u]:\n", i);
-        rdi_stringize_type_node(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " type[%I64u]:\n", idx);
+        rdi_stringize_type_node(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -291,19 +296,24 @@ entry_point(CmdLine *cmd_line)
     //- rjf: UDT DATA
     if(dump_flags & DumpFlag_UDTs)
     {
+      U64 all_members_count = 0;
+      RDI_Member *all_members = rdi_table_from_name(rdi, Members, &all_members_count);
+      U64 all_enum_members_count = 0;
+      RDI_EnumMember *all_enum_members = rdi_table_from_name(rdi, EnumMembers, &all_enum_members_count);
+      U64 all_udts_count = 0;
+      RDI_UDT *all_udts = rdi_table_from_name(rdi, UDTs, &all_udts_count);
       RDI_UDTMemberBundle member_bundle = {0};
       {
-        member_bundle.members = rdi->members;
-        member_bundle.enum_members = rdi->enum_members;
-        member_bundle.member_count = rdi->members_count;
-        member_bundle.enum_member_count = rdi->enum_members_count;
+        member_bundle.members = all_members;
+        member_bundle.enum_members = all_enum_members;
+        member_bundle.member_count = (RDI_U32)all_members_count;
+        member_bundle.enum_member_count = (RDI_U32)all_enum_members_count;
       }
       str8_list_pushf(arena, &dump, "# UDTS:\n");
-      RDI_UDT *ptr = rdi->udts;
-      for(U32 i = 0; i < rdi->udts_count; i += 1, ptr += 1)
+      for(U64 idx = 0; idx < all_udts_count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " udt[%u]:\n", i);
-        rdi_stringize_udt(arena, &dump, rdi, &member_bundle, ptr, 2);
+        str8_list_pushf(arena, &dump, " udt[%I64u]:\n", idx);
+        rdi_stringize_udt(arena, &dump, rdi, &member_bundle, &all_udts[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -312,11 +322,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_GlobalVariables)
     {
       str8_list_pushf(arena, &dump, "# GLOBAL VARIABLES:\n");
-      RDI_GlobalVariable *ptr = rdi->global_variables;
-      for(U32 i = 0; i < rdi->global_variables_count; i += 1, ptr += 1)
+      RDI_U64 count = 0;
+      RDI_GlobalVariable *v = rdi_table_from_name(rdi, GlobalVariables, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " global_variable[%u]:\n", i);
-        rdi_stringize_global_variable(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " global_variable[%I64u]:\n", idx);
+        rdi_stringize_global_variable(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -325,10 +336,11 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_GlobalVMap)
     {
       str8_list_pushf(arena, &dump, "# GLOBAL VMAP:\n");
-      RDI_VMapEntry *ptr = rdi->global_vmap;
-      for(U32 i = 0; i < rdi->global_vmap_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_VMapEntry *v = rdi_table_from_name(rdi, GlobalVMap, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", ptr->voff, ptr->idx);
+        str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", v[idx].voff, v[idx].idx);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -337,11 +349,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_ThreadVariables)
     {
       str8_list_pushf(arena, &dump, "# THREAD VARIABLES:\n");
-      RDI_ThreadVariable *ptr = rdi->thread_variables;
-      for(U32 i = 0; i < rdi->thread_variables_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_ThreadVariable *v = rdi_table_from_name(rdi, ThreadVariables, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " thread_variable[%u]:\n", i);
-        rdi_stringize_thread_variable(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " thread_variable[%I64u]:\n", idx);
+        rdi_stringize_thread_variable(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -350,11 +363,12 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_Procedures)
     {
       str8_list_pushf(arena, &dump, "# PROCEDURES:\n");
-      RDI_Procedure *ptr = rdi->procedures;
-      for(U32 i = 0; i < rdi->procedures_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_Procedure *v = rdi_table_from_name(rdi, Procedures, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " procedure[%u]:\n", i);
-        rdi_stringize_procedure(arena, &dump, rdi, ptr, 2);
+        str8_list_pushf(arena, &dump, " procedure[%I64u]:\n", idx);
+        rdi_stringize_procedure(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -362,26 +376,35 @@ entry_point(CmdLine *cmd_line)
     //- rjf: SCOPES
     if(dump_flags & DumpFlag_Scopes)
     {
+      U64 scopes_count = 0;
+      RDI_Scope *scopes = rdi_table_from_name(rdi, Scopes, &scopes_count);
+      U64 scopes_voffs_count = 0;
+      U64 *scopes_voffs = rdi_table_from_name(rdi, ScopeVOffData, &scopes_voffs_count);
+      U64 locals_count = 0;
+      RDI_Local *locals = rdi_table_from_name(rdi, Locals, &locals_count);
+      U64 location_block_count = 0;
+      RDI_LocationBlock *location_blocks = rdi_table_from_name(rdi, LocationBlocks, &location_block_count);
+      U64 location_data_size = 0;
+      RDI_U8 *location_data = rdi_table_from_name(rdi, LocationData, &location_data_size);
       RDI_ScopeBundle scope_bundle = {0};
       {
-        scope_bundle.scopes = rdi->scopes;
-        scope_bundle.scope_count = rdi->scopes_count;
-        scope_bundle.scope_voffs = rdi->scope_voffs;
-        scope_bundle.scope_voff_count = rdi->scope_voffs_count;
-        scope_bundle.locals = rdi->locals;
-        scope_bundle.local_count = rdi->locals_count;
-        scope_bundle.location_blocks = rdi->location_blocks;
-        scope_bundle.location_block_count = rdi->location_blocks_count;
-        scope_bundle.location_data = rdi->location_data;
-        scope_bundle.location_data_size = rdi->location_data_size;
+        scope_bundle.scopes = scopes;
+        scope_bundle.scope_count = scopes_count;
+        scope_bundle.scope_voffs = scopes_voffs;
+        scope_bundle.scope_voff_count = scopes_voffs_count;
+        scope_bundle.locals = locals;
+        scope_bundle.local_count = locals_count;
+        scope_bundle.location_blocks = location_blocks;
+        scope_bundle.location_block_count = location_block_count;
+        scope_bundle.location_data = location_data;
+        scope_bundle.location_data_size = location_data_size;
       }
       str8_list_pushf(arena, &dump, "# SCOPES:\n");
-      RDI_Scope *ptr = rdi->scopes;
-      for(U32 i = 0; i < rdi->scopes_count; i += 1, ptr += 1)
+      for(U64 idx = 0; idx < scopes_count; idx += 1)
       {
-        if(ptr->parent_scope_idx == 0)
+        if(scopes[idx].parent_scope_idx == 0)
         {
-          rdi_stringize_scope(arena, &dump, rdi, &scope_bundle, ptr, 1);
+          rdi_stringize_scope(arena, &dump, rdi, &scope_bundle, &scopes[idx], 1);
         }
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
@@ -391,10 +414,11 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_ScopeVMap)
     {
       str8_list_pushf(arena, &dump, "# SCOPE VMAP:\n");
-      RDI_VMapEntry *ptr = rdi->scope_vmap;
-      for(U32 i = 0; i < rdi->scope_vmap_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_VMapEntry *v = rdi_table_from_name(rdi, ScopeVMap, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
-        str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", ptr->voff, ptr->idx);
+        str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", v[idx].voff, v[idx].idx);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -403,12 +427,13 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_NameMaps)
     {
       str8_list_pushf(arena, &dump, "# NAME MAP:\n");
-      RDI_NameMap *ptr = rdi->name_maps;
-      for(U32 i = 0; i < rdi->name_maps_count; i += 1, ptr += 1)
+      U64 count = 0;
+      RDI_NameMap *v = rdi_table_from_name(rdi, NameMaps, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
         RDI_ParsedNameMap name_map = {0};
-        rdi_name_map_parse(rdi, ptr, &name_map);
-        str8_list_pushf(arena, &dump, " name_map[%u]:\n", i);
+        rdi_parsed_from_name_map(rdi, &v[idx], &name_map);
+        str8_list_pushf(arena, &dump, " name_map[%I64u]:\n", idx);
         RDI_NameMapBucket *bucket = name_map.buckets;
         for(U32 j = 0; j < name_map.bucket_count; j += 1, bucket += 1)
         {
@@ -455,11 +480,13 @@ entry_point(CmdLine *cmd_line)
     if(dump_flags & DumpFlag_Strings)
     {
       str8_list_pushf(arena, &dump, "# STRINGS:\n");
-      for(U64 string_idx = 0; string_idx < rdi->string_count; string_idx += 1)
+      U64 count = 0;
+      U32 *v = rdi_table_from_name(rdi, StringTable, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
       {
         String8 string = {0};
-        string.str = rdi_string_from_idx(rdi, string_idx, &string.size);
-        str8_list_pushf(arena, &dump, " string[%I64u]: \"%S\"\n", string_idx, string);
+        string.str = rdi_string_from_idx(rdi, (RDI_U32)idx, &string.size);
+        str8_list_pushf(arena, &dump, " string[%I64u]: \"%S\"\n", idx, string);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }

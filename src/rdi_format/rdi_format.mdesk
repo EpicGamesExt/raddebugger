@@ -51,11 +51,18 @@
   "#endif";
   "";
   "////////////////////////////////////////////////////////////////";
+  "//~ Overridable Enabling/Disabling Of Table Index Typechecking";
+  "";
+  "#if !defined(RDI_DISABLE_TABLE_INDEX_TYPECHECKING)";
+  "# define RDI_DISABLE_TABLE_INDEX_TYPECHECKING 0";
+  "#endif";
+  "";
+  "////////////////////////////////////////////////////////////////";
   "//~ Format Constants";
   "";
   "// \"raddbg\0\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 3";
+  "#define RDI_ENCODING_VERSION 4";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -108,96 +115,123 @@ RDI_HeaderMemberTable:
 }
 
 ////////////////////////////////
-//~ rjf: Format Data Section Tables
+//~ rjf: Format Section Tables
 
-@table(name value desc)
-RDI_DataSectionTable:
+@table(name  name_lower  element_type  value  is_required  index_base_type  desc)
+RDI_SectionTable:
 {
-  {NULL                          0x0000                                             ""}
-  {TopLevelInfo                  0x0001                                             ""}
-  {StringData                    0x0002                                             ""}
-  {StringTable                   0x0003                                             ""}
-  {IndexRuns                     0x0004                                             ""}
-  {BinarySections                0x0005                                             ""}
-  {FilePathNodes                 0x0006                                             ""}
-  {SourceFiles                   0x0007                                             ""}
-  {LineTables                    0x0008                                             ""}
-  {LineInfoVoffs                 0x0009                                             ""}
-  {LineInfoLines                 0x000A                                             ""}
-  {LineInfoColumns               0x000B                                             ""}
-  {SourceLineMaps                0x000C                                             ""}
-  {SourceLineMapNumbers          0x000D                                             ""}
-  {SourceLineMapRanges           0x000E                                             ""}
-  {SourceLineMapVOffs            0x000F                                             ""}
-  {Units                         0x0010                                             ""}
-  {UnitVmap                      0x0011                                             ""}
-  {TypeNodes                     0x0012                                             ""}
-  {UDTs                          0x0013                                             ""}
-  {Members                       0x0014                                             ""}
-  {EnumMembers                   0x0015                                             ""}
-  {GlobalVariables               0x0016                                             ""}
-  {GlobalVmap                    0x0017                                             ""}
-  {ThreadVariables               0x0018                                             ""}
-  {Procedures                    0x0019                                             ""}
-  {Scopes                        0x001A                                             ""}
-  {ScopeVoffData                 0x001B                                             ""}
-  {ScopeVmap                     0x001C                                             ""}
-  {InlineSites                   0x001D                                             ""}
-  {Locals                        0x001E                                             ""}
-  {LocationBlocks                0x001F                                             ""}
-  {LocationData                  0x0020                                             ""}
-  {NameMaps                      0x0021                                             ""}
-  {PRIMARY_COUNT                 0x0022                                             ""}
-  {SECONDARY                     0x80000000                                         ""}
-  {NameMapBuckets                `RDI_DataSectionTag_SECONDARY|0x0001`              ""}
-  {NameMapNodes                  `RDI_DataSectionTag_SECONDARY|0x0002`              ""}
+  {NULL                          null                               RDI_U8              0x0000   -    -                                              ""}
+  {TopLevelInfo                  top_level_info                     RDI_TopLevelInfo    0x0001   -    -                                              ""}
+  {StringData                    string_data                        RDI_U8              0x0002   x    -                                              ""}
+  {StringTable                   string_table                       RDI_U32             0x0003   x    U32                                            ""}
+  {IndexRuns                     index_runs                         RDI_U32             0x0004   x    U32                                            ""}
+  {BinarySections                binary_sections                    RDI_BinarySection   0x0005   -    U32                                            ""}
+  {FilePathNodes                 file_path_nodes                    RDI_FilePathNode    0x0006   -    U32                                            ""}
+  {SourceFiles                   source_files                       RDI_SourceFile      0x0007   -    U32                                            ""}
+  {LineTables                    line_tables                        RDI_LineTable       0x0008   -    U32                                            ""}
+  {LineInfoVOffs                 line_info_voffs                    RDI_U64             0x0009   -    U32                                            ""}
+  {LineInfoLines                 line_info_lines                    RDI_Line            0x000A   -    U32                                            ""}
+  {LineInfoColumns               line_info_columns                  RDI_Column          0x000B   -    U32                                            ""}
+  {SourceLineMaps                source_line_maps                   RDI_SourceLineMap   0x000C   -    U32                                            ""}
+  {SourceLineMapNumbers          source_line_map_numbers            RDI_U32             0x000D   -    U32                                            ""}
+  {SourceLineMapRanges           source_line_map_ranges             RDI_U32             0x000E   -    U32                                            ""}
+  {SourceLineMapVOffs            source_line_map_voffs              RDI_U64             0x000F   -    U32                                            ""}
+  {Units                         units                              RDI_Unit            0x0010   -    U32                                            ""}
+  {UnitVMap                      unit_vmap                          RDI_VMapEntry       0x0011   -    -                                              ""}
+  {TypeNodes                     type_nodes                         RDI_TypeNode        0x0012   -    U32                                            ""}
+  {UDTs                          udts                               RDI_UDT             0x0013   -    U32                                            ""}
+  {Members                       members                            RDI_Member          0x0014   -    U32                                            ""}
+  {EnumMembers                   enum_members                       RDI_EnumMember      0x0015   -    U32                                            ""}
+  {GlobalVariables               global_variables                   RDI_GlobalVariable  0x0016   -    U32                                            ""}
+  {GlobalVMap                    global_vmap                        RDI_VMapEntry       0x0017   -    -                                              ""}
+  {ThreadVariables               thread_variables                   RDI_ThreadVariable  0x0018   -    U32                                            ""}
+  {Procedures                    procedures                         RDI_Procedure       0x0019   -    U32                                            ""}
+  {Scopes                        scopes                             RDI_Scope           0x001A   -    U32                                            ""}
+  {ScopeVOffData                 scope_voff_data                    RDI_U64             0x001B   -    U32                                            ""}
+  {ScopeVMap                     scope_vmap                         RDI_VMapEntry       0x001C   -    -                                              ""}
+  {InlineSites                   inline_sites                       RDI_InlineSite      0x001D   -    U32                                            ""}
+  {Locals                        locals                             RDI_Local           0x001E   -    U32                                            ""}
+  {LocationBlocks                location_blocks                    RDI_LocationBlock   0x001F   -    U32                                            ""}
+  {LocationData                  location_data                      RDI_U8              0x0020   -    U32                                            ""}
+  {NameMaps                      name_maps                          RDI_NameMap         0x0021   -    U32                                            ""}
+  {NameMapBuckets                name_map_buckets                   RDI_NameMapBucket   0x0022   -    U32                                            ""}
+  {NameMapNodes                  name_map_nodes                     RDI_NameMapNode     0x0023   -    U32                                            ""}
+  {COUNT                         count                              RDI_U8              0x0024   -    -                                              ""}
 }
 
 @table(name value)
-RDI_DataSectionEncodingTable:
+RDI_SectionEncodingTable:
 {
   {Unpacked 0}
   {LZB      1}
 }
 
 @table(name type desc)
-RDI_DataSectionMemberTable:
+RDI_SectionMemberTable:
 {
-  {tag           RDI_DataSectionTag      ""}
-  {encoding      RDI_DataSectionEncoding ""}
+  {encoding      RDI_SectionEncoding ""}
+  {pad           RDI_U32                 ""}
   {off           RDI_U64                 ""}
   {encoded_size  RDI_U64                 ""}
   {unpacked_size RDI_U64                 ""}
 }
 
-@enum(RDI_U32) RDI_DataSectionTag:
+@enum(RDI_U32) RDI_SectionKind:
 {
-  @expand(RDI_DataSectionTable a) `$(a.name .. =>20) = $(a.value)`,
+  @expand(RDI_SectionTable a) `$(a.name .. =>20) = $(a.value)`,
 }
 
-@enum(RDI_U32) RDI_DataSectionEncoding:
+@enum(RDI_U32) RDI_SectionEncoding:
 {
-  @expand(RDI_DataSectionEncodingTable a) `$(a.name .. =>10) = $(a.value)`,
+  @expand(RDI_SectionEncodingTable a) `$(a.name .. =>10) = $(a.value)`,
 }
 
-@xlist RDI_DataSectionTag_XList:
+@xlist RDI_SectionKind_XList:
 {
-  @expand(RDI_DataSectionTable a) `$(a.name)`;
+  @expand(RDI_SectionTable a) `$(a.name != COUNT -> a.name .. ', ' .. a.name_lower .. ', ' .. a.element_type)`;
 }
 
-@xlist RDI_DataSectionEncoding_XList:
+@xlist RDI_SectionEncoding_XList:
 {
-  @expand(RDI_DataSectionEncodingTable a) `$(a.name)`;
+  @expand(RDI_SectionEncodingTable a) `$(a.name)`;
 }
 
-@xlist RDI_DataSection_XList:
+@xlist RDI_Section_XList:
 {
-  @expand(RDI_DataSectionMemberTable a) `$(a.type), $(a.name)`
+  @expand(RDI_SectionMemberTable a) `$(a.type), $(a.name)`
 }
 
-@struct RDI_DataSection:
+@struct RDI_Section:
 {
-  @expand(RDI_DataSectionMemberTable a) `$(a.type) $(a.name)`
+  @expand(RDI_SectionMemberTable a) `$(a.type) $(a.name)`
+}
+
+@gen(enums)
+{
+  `#if !RDI_DISABLE_TABLE_INDEX_TYPECHECKING`;
+  @expand(RDI_SectionTable a) `$(a.index_base_type != '-' -> "typedef struct RDI_" .. a.index_base_type .. "_" .. a.name .. =>50 .. " { RDI_" .. a.index_base_type .. " v; }".. " RDI_" .. a.index_base_type .. "_" .. a.name .. ";")`;
+  `#else`;
+  `typedef struct RDI_U32_Table { RDI_U32 v; } RDI_U32_Table;`;
+  `typedef struct RDI_U64_Table { RDI_U64 v; } RDI_U64_Table;`;
+  @expand(RDI_SectionTable a) `$(a.index_base_type != '-' -> "typedef RDI_" .. a.index_base_type .. "_Table RDI_" .. a.index_base_type .. "_" .. a.name .. ";")`;
+  `#endif`;
+  ``;
+}
+
+@gen(catchall)
+{
+  @expand(RDI_SectionTable a) `$(a.name != COUNT -> "typedef " .. a.element_type .. " RDI_SectionElementType_" .. a.name .. ";")`;
+  ``;
+}
+
+@data(RDI_U16) rdi_section_element_size_table:
+{
+  @expand(RDI_SectionTable a) `sizeof($(a.element_type))`;
+}
+
+@data(RDI_U8) rdi_section_is_required_table:
+{
+  @expand(RDI_SectionTable a) `$(a.is_required == 'x' -> 1)$(a.is_required != 'x' -> 0)`;
 }
 
 ////////////////////////////////
@@ -407,10 +441,10 @@ RDI_RegCodeX64Table:
 @table(name type desc)
 RDI_TopLevelInfoMemberTable:
 {
-  {arch                RDI_Arch  ""}
-  {exe_name_string_idx RDI_U32   ""}
-  {exe_hash            RDI_U64   ""}
-  {voff_max            RDI_U64   ""}
+  {arch                RDI_Arch              ""}
+  {exe_name_string_idx RDI_U32               ""}
+  {exe_hash            RDI_U64               ""}
+  {voff_max            RDI_U64               ""}
 }
 
 @xlist RDI_TopLevelInfo_XList:
@@ -471,23 +505,23 @@ RDI_BinarySectionMemberTable:
 @table(name type desc)
 RDI_FilePathNodeMemberTable:
 {
-  {name_string_idx   RDI_U32         ""}
-  {parent_path_node  RDI_U32         ""}
-  {first_child       RDI_U32         ""}
-  {next_sibling      RDI_U32         ""}
-  {source_file_idx   RDI_U32         ""}
+  {name_string_idx   RDI_U32                ""}
+  {parent_path_node  RDI_U32                ""}
+  {first_child       RDI_U32                ""}
+  {next_sibling      RDI_U32                ""}
+  {source_file_idx   RDI_U32                ""}
 }
 
 @table(name type desc)
 RDI_SourceFileMemberTable:
 {
-  {file_path_node_idx           RDI_U32          ""}
-  {normal_full_path_string_idx  RDI_U32          ""}
+  {file_path_node_idx           RDI_U32        ""}
+  {normal_full_path_string_idx  RDI_U32        ""}
   // usage of line map to go from a line number to an array of voffs
   //  (line_map_nums * line_number) -> (nil | index)
   //  (line_map_data * index) -> (range)
   //  (line_map_voff_data * range) -> (array(voff))
-  {source_line_map_idx          RDI_U32          ""}
+  {source_line_map_idx          RDI_U32        ""}
 }
 
 @xlist RDI_FilePathNode_XList:
@@ -516,14 +550,14 @@ RDI_SourceFileMemberTable:
 @table(name type desc)
 RDI_UnitMemberTable:
 {
-  {unit_name_string_idx          RDI_U32      ""}
-  {compiler_name_string_idx      RDI_U32      ""}
-  {source_file_path_node         RDI_U32      ""}
-  {object_file_path_node         RDI_U32      ""}
-  {archive_file_path_node        RDI_U32      ""}
-  {build_path_node               RDI_U32      ""}
-  {language                      RDI_Language ""}
-  {line_table_idx                RDI_U32      ""}
+  {unit_name_string_idx          RDI_U32               ""}
+  {compiler_name_string_idx      RDI_U32               ""}
+  {source_file_path_node         RDI_U32               ""}
+  {object_file_path_node         RDI_U32               ""}
+  {archive_file_path_node        RDI_U32               ""}
+  {build_path_node               RDI_U32               ""}
+  {language                      RDI_Language          ""}
+  {line_table_idx                RDI_U32               ""}
 }
 
 @xlist RDI_Unit_XList:
@@ -545,18 +579,18 @@ RDI_LineTableMemberTable:
   // usage of line info to go from voff to file & line number:
   //  (line_info_voffs * voff) -> (nil + index)
   //  (line_info_data * index) -> (RDI_Line = (file_idx * line_number))
-  {voffs_base_idx     RDI_U32     ""} // U64[lines_count+1] (sorted ranges)
-  {lines_base_idx     RDI_U32     ""} // RDI_Line[lines_count]
-  {cols_base_idx      RDI_U32     ""} // RDI_Column[cols_count]
-  {lines_count        RDI_U32     ""}
-  {cols_count         RDI_U32     ""}
+  {voffs_base_idx     RDI_U32                   ""} // U64[lines_count+1] (sorted ranges)
+  {lines_base_idx     RDI_U32                   ""} // RDI_Line[lines_count]
+  {cols_base_idx      RDI_U32                   ""} // RDI_Column[cols_count]
+  {lines_count        RDI_U32                   ""}
+  {cols_count         RDI_U32                   ""}
 }
 
 @table(name type desc)
 RDI_LineMemberTable:
 {
-  {file_idx    RDI_U32     ""}
-  {line_num    RDI_U32     ""}
+  {file_idx    RDI_U32                 ""}
+  {line_num    RDI_U32                 ""}
 }
 
 @table(name type desc)
@@ -573,11 +607,11 @@ RDI_SourceLineMapMemberTable:
   //  (line_map_nums * line_number) -> (nil | index)
   //  (line_map_data * index) -> (range)
   //  (line_map_voff_data * range) -> (array(voff))
-  {line_count                   RDI_U32          ""}
-  {voff_count                   RDI_U32          ""}
-  {line_map_nums_base_idx       RDI_U32          ""} // U32[line_count] (sorted - not closed ranges)
-  {line_map_range_base_idx      RDI_U32          ""} // U32[line_count + 1] (pairs form ranges)
-  {line_map_voff_base_idx       RDI_U32          ""} // U64[voff_count] (idx by line_map_range_data)
+  {line_count                   RDI_U32                               ""}
+  {voff_count                   RDI_U32                               ""}
+  {line_map_nums_base_idx       RDI_U32                               ""} // U32[line_count] (sorted - not closed ranges)
+  {line_map_range_base_idx      RDI_U32                               ""} // U32[line_count + 1] (pairs form ranges)
+  {line_map_voff_base_idx       RDI_U32                               ""} // U64[voff_count] (idx by line_map_range_data)
 }
 
 @xlist RDI_LineTable_XList:
@@ -732,13 +766,13 @@ RDI_UDTFlagTable:
 @table(name type desc)
 RDI_UDTMemberTable:
 {
-  {self_type_idx   RDI_U32       ""}
-  {flags           RDI_UDTFlags  ""}
-  {member_first    RDI_U32       ""}
-  {member_count    RDI_U32       ""}
-  {file_idx        RDI_U32       ""}
-  {line            RDI_U32       ""}
-  {col             RDI_U32       ""}
+  {self_type_idx   RDI_U32                   ""}
+  {flags           RDI_UDTFlags              ""}
+  {member_first    RDI_U32                   ""}
+  {member_count    RDI_U32                   ""}
+  {file_idx        RDI_U32                   ""}
+  {line            RDI_U32                   ""}
+  {col             RDI_U32                   ""}
 }
 
 @table(name value)
@@ -759,19 +793,19 @@ RDI_MemberKindTable:
 @table(name type desc)
 RDI_MemberMemberTable:
 {
-  {kind            RDI_MemberKind    ""}
-  {pad             RDI_U16           ""}
-  {name_string_idx RDI_U32           ""}
-  {type_idx        RDI_U32           ""}
-  {off             RDI_U32           ""}
+  {kind            RDI_MemberKind                  ""}
+  {pad             RDI_U16                         ""}
+  {name_string_idx RDI_U32                         ""}
+  {type_idx        RDI_U32                         ""}
+  {off             RDI_U32                         ""}
 }
 
 @table(name type desc)
 RDI_EnumMemberTable:
 {
-  {name_string_idx RDI_U32           ""}
-  {pad             RDI_U32           ""}
-  {val             RDI_U64           ""}
+  {name_string_idx RDI_U32                  ""}
+  {pad             RDI_U32                  ""}
+  {val             RDI_U64                  ""}
 }
 
 @enum(RDI_U16) RDI_TypeKind:
@@ -818,13 +852,15 @@ RDI_EnumMemberTable:
     {
       RDI_U32 direct_type_idx;
       RDI_U32 count;
-      union{
+      union
+      {
         // when kind is 'Function' or 'Method'
         RDI_U32 param_idx_run_first;
         // when kind is 'MemberPtr'
         RDI_U32 owner_type_idx;
       };
-    } constructed;
+    }
+    constructed;
     
     // kind is 'user defined'
     struct
@@ -832,7 +868,8 @@ RDI_EnumMemberTable:
       RDI_U32 name_string_idx;
       RDI_U32 direct_type_idx;
       RDI_U32 udt_idx;
-    } user_defined;
+    }
+    user_defined;
     
     // (kind = Bitfield)
     struct
@@ -840,7 +877,8 @@ RDI_EnumMemberTable:
       RDI_U32 direct_type_idx;
       RDI_U32 off;
       RDI_U32 size;
-    } bitfield;
+    }
+    bitfield;
   }
   ```
 }
@@ -930,44 +968,44 @@ RDI_LocationKindTable:
 @table(name type desc)
 RDI_GlobalVariableMemberTable:
 {
-  {name_string_idx   RDI_U32        ""}
-  {link_flags        RDI_LinkFlags  ""}
-  {voff              RDI_U64        ""}
-  {type_idx          RDI_U32        ""}
-  {container_idx     RDI_U32        ""}
+  {name_string_idx   RDI_U32               ""}
+  {link_flags        RDI_LinkFlags         ""}
+  {voff              RDI_U64               ""}
+  {type_idx          RDI_U32               ""}
+  {container_idx     RDI_U32               ""}
 }
 
 @table(name type desc)
 RDI_ThreadVariableMemberTable:
 {
-  {name_string_idx   RDI_U32        ""}
-  {link_flags        RDI_LinkFlags  ""}
-  {tls_off           RDI_U32        ""}
-  {type_idx          RDI_U32        ""}
-  {container_idx     RDI_U32        ""}
+  {name_string_idx   RDI_U32                    ""}
+  {link_flags        RDI_LinkFlags              ""}
+  {tls_off           RDI_U32                    ""}
+  {type_idx          RDI_U32                    ""}
+  {container_idx     RDI_U32                    ""}
 }
 
 @table(name type desc)
 RDI_ProcedureMemberTable:
 {
-  {name_string_idx        RDI_U32        ""}
-  {link_name_string_idx   RDI_U32        ""}
-  {link_flags             RDI_LinkFlags  ""}
-  {type_idx               RDI_U32        ""}
-  {root_scope_idx         RDI_U32        ""}
-  {container_idx          RDI_U32        ""}
+  {name_string_idx        RDI_U32                    ""}
+  {link_name_string_idx   RDI_U32                    ""}
+  {link_flags             RDI_LinkFlags              ""}
+  {type_idx               RDI_U32                    ""}
+  {root_scope_idx         RDI_U32                    ""}
+  {container_idx          RDI_U32                    ""}
 }
 
 @table(name type desc)
 RDI_ScopeMemberTable:
 {
-  {proc_idx                   RDI_U32 ""}
-  {parent_scope_idx           RDI_U32 ""}
-  {first_child_scope_idx      RDI_U32 ""}
-  {next_sibling_scope_idx     RDI_U32 ""}
-  {voff_range_first           RDI_U32 ""}
-  {voff_range_opl             RDI_U32 ""}
-  {local_first                RDI_U32 ""}
+  {proc_idx                   RDI_U32               ""}
+  {parent_scope_idx           RDI_U32               ""}
+  {first_child_scope_idx      RDI_U32               ""}
+  {next_sibling_scope_idx     RDI_U32               ""}
+  {voff_range_first           RDI_U32               ""}
+  {voff_range_opl             RDI_U32               ""}
+  {local_first                RDI_U32               ""}
   {local_count                RDI_U32 ""}
   {static_local_idx_run_first RDI_U32 ""}
   {static_local_count         RDI_U32 ""}
@@ -976,32 +1014,32 @@ RDI_ScopeMemberTable:
 @table(name type desc)
 RDI_InlineSiteMemberTable:
 {
-  {name_string_idx     RDI_U32    ""}
-  {call_src_file_idx   RDI_U32    ""}
-  {call_line_num       RDI_U32    ""}
-  {call_col_num        RDI_U32    ""}
-  {type_idx            RDI_U32    ""}
-  {owner_type_idx      RDI_U32    ""}
-  {line_table_idx      RDI_U32    ""}
+  {name_string_idx     RDI_U32              ""}
+  {call_src_file_idx   RDI_U32              ""}
+  {call_line_num       RDI_U32              ""}
+  {call_col_num        RDI_U32              ""}
+  {type_idx            RDI_U32              ""}
+  {owner_type_idx      RDI_U32              ""}
+  {line_table_idx      RDI_U32              ""}
 }
 
 @table(name type desc)
 RDI_LocalMemberTable:
 {
-  {kind            RDI_LocalKind  ""}
-  {name_string_idx RDI_U32        ""}
-  {type_idx        RDI_U32        ""}
-  {pad             RDI_U32        ""}
-  {location_first  RDI_U32        ""}
-  {location_opl    RDI_U32        ""}
+  {kind            RDI_LocalKind           ""}
+  {name_string_idx RDI_U32                 ""}
+  {type_idx        RDI_U32                 ""}
+  {pad             RDI_U32                 ""}
+  {location_first  RDI_U32                 ""}
+  {location_opl    RDI_U32                 ""}
 }
 
 @table(name type desc)
 RDI_LocationBlockMemberTable:
 {
-  {scope_off_first     RDI_U32}
-  {scope_off_opl       RDI_U32}
-  {location_data_off   RDI_U32}
+  {scope_off_first     RDI_U32                }
+  {scope_off_opl       RDI_U32                }
+  {location_data_off   RDI_U32                }
 }
 
 @table(name type desc)
@@ -1314,9 +1352,11 @@ RDI_NameMapKindTable:
 @table(name type desc)
 RDI_NameMapMemberTable:
 {
-  {kind               RDI_NameMapKind ""}
-  {bucket_data_idx    RDI_U32         ""}
-  {node_data_idx      RDI_U32         ""}
+  {kind               RDI_NameMapKind                ""}
+  {bucket_base_idx    RDI_U32                        ""}
+  {node_base_idx      RDI_U32                        ""}
+  {bucket_count       RDI_U32                        ""}
+  {node_count         RDI_U32                        ""}
 }
 
 @table(name type desc)
@@ -1329,11 +1369,11 @@ RDI_NameMapBucketMemberTable:
 @table(name type desc)
 RDI_NameMapNodeMemberTable:
 {
-  {string_idx                    RDI_U32   ""}
-  {match_count                   RDI_U32   ""}
+  {string_idx                    RDI_U32               ""}
+  {match_count                   RDI_U32               ""}
   // NOTE: if (match_count == 1) then this is the index of the matching item
   //       if (match_count > 1)  then this is the first for an index run of all the matches
-  {match_idx_or_idx_run_first    RDI_U32   ""}
+  {match_idx_or_idx_run_first    RDI_U32               ""}
 }
 
 @enum(RDI_U32) RDI_NameMapKind:

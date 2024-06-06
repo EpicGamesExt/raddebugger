@@ -2944,11 +2944,11 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
         // rjf: filename -> src_id
         U32 src_id = 0;
         {
-          RDI_NameMap *mapptr = rdi_name_map_from_kind(rdi, RDI_NameMapKind_NormalSourcePaths);
+          RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
           if(mapptr != 0)
           {
             RDI_ParsedNameMap map = {0};
-            rdi_name_map_parse(rdi, mapptr, &map);
+            rdi_parsed_from_name_map(rdi, mapptr, &map);
             RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, filename_normalized.str, filename_normalized.size);
             if(node != 0)
             {
@@ -2964,8 +2964,8 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
         
         // rjf: src_id * pt -> push
         {
-          RDI_SourceFile *src = rdi_element_from_idx(rdi, source_files, src_id);
-          RDI_SourceLineMap *src_line_map = rdi_element_from_idx(rdi, source_line_maps, src->source_line_map_idx);
+          RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+          RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
           RDI_ParsedSourceLineMap line_map = {0};
           rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
           U32 voff_count = 0;
@@ -2984,26 +2984,20 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
       {
         String8 symbol_name = bp->string;
         U64 voff = bp->u64;
-        if(rdi != 0 && rdi->procedures != 0)
+        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
+        RDI_ParsedNameMap map = {0};
+        rdi_parsed_from_name_map(rdi, mapptr, &map);
+        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, symbol_name.str, symbol_name.size);
+        if(node != 0)
         {
-          RDI_NameMap *mapptr = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Procedures);
-          if(mapptr != 0)
+          U32 id_count = 0;
+          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+          for(U32 match_i = 0; match_i < id_count; match_i += 1)
           {
-            RDI_ParsedNameMap map = {0};
-            rdi_name_map_parse(rdi, mapptr, &map);
-            RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, symbol_name.str, symbol_name.size);
-            if(node != 0)
-            {
-              U32 id_count = 0;
-              U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-              for(U32 match_i = 0; match_i < id_count; match_i += 1)
-              {
-                U64 proc_voff = rdi_first_voff_from_proc(rdi, ids[match_i]);
-                U64 proc_vaddr = proc_voff + base_vaddr;
-                DMN_Trap trap = {process, proc_vaddr + voff, (U64)bp};
-                dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
-              }
-            }
+            U64 proc_voff = rdi_first_voff_from_proc_idx(rdi, ids[match_i]);
+            U64 proc_vaddr = proc_voff + base_vaddr;
+            DMN_Trap trap = {process, proc_vaddr + voff, (U64)bp};
+            dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
           }
         }
       }break;
@@ -3446,11 +3440,10 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
                 DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
                 RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
-                RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_GlobalVariables);
-                if(rdi->global_variables != 0 && unparsed_map != 0)
+                RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
                 {
                   RDI_ParsedNameMap map = {0};
-                  rdi_name_map_parse(rdi, unparsed_map, &map);
+                  rdi_parsed_from_name_map(rdi, unparsed_map, &map);
                   String8 name = str8_lit("__asan_shadow_memory_dynamic_address");
                   RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
                   if(node != 0)
@@ -3459,7 +3452,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                     U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
                     if(id_count > 0)
                     {
-                      RDI_GlobalVariable *global_var = rdi_element_from_idx(rdi, global_variables, ids[0]);
+                      RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, ids[0]);
                       U64 global_var_voff = global_var->voff;
                       U64 global_var_vaddr = global_var->voff + module->vaddr_range.min;
                       Architecture arch = process->arch;
@@ -4248,9 +4241,9 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
         DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
         RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
-        RDI_NameMap *unparsed_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Procedures);
+        RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
         RDI_ParsedNameMap map = {0};
-        rdi_name_map_parse(rdi, unparsed_map, &map);
+        rdi_parsed_from_name_map(rdi, unparsed_map, &map);
         
         //- rjf: add traps for user-specified entry points on this message, if specified
         B32 entries_found = 0;
@@ -4269,7 +4262,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
             if(voff != 0)
             {
               entries_found = 1;
@@ -4297,7 +4290,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   procedure_id = ids[0];
                 }
               }
-              U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+              U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
               if(voff != 0)
               {
                 entries_found = 1;
@@ -4324,7 +4317,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
             if(voff != 0)
             {
               DMN_Trap trap = {process->handle, module_base_vaddr + voff};
@@ -4357,7 +4350,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
             if(voff != 0)
             {
               entries_found = 1;
@@ -4401,7 +4394,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc(rdi, procedure_id);
+            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
             if(voff != 0)
             {
               entries_found = 1;

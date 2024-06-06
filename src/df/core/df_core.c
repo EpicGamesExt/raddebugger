@@ -3168,20 +3168,20 @@ df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
     Temp scratch = scratch_begin(&arena, 1);
     DI_Scope *scope = di_scope_open();
     RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
-    if(result.size == 0 && rdi->scope_vmap != 0)
+    if(result.size == 0)
     {
-      U64 scope_idx = rdi_vmap_idx_from_voff(rdi->scope_vmap, rdi->scope_vmap_count, voff);
-      RDI_Scope *scope = rdi_element_from_idx(rdi, scopes, scope_idx);
+      U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, voff);
+      RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
       U64 proc_idx = scope->proc_idx;
-      RDI_Procedure *procedure = &rdi->procedures[proc_idx];
+      RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
       U64 name_size = 0;
       U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
     }
-    if(result.size == 0 && rdi->global_vmap != 0)
+    if(result.size == 0)
     {
-      U64 global_idx = rdi_vmap_idx_from_voff(rdi->global_vmap, rdi->global_vmap_count, voff);
-      RDI_GlobalVariable *global_var = rdi_element_from_idx(rdi, global_variables, global_idx);
+      U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, voff);
+      RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
       U64 name_size = 0;
       U8 *name_ptr = rdi_string_from_idx(rdi, global_var->name_string_idx, &name_size);
       result = push_str8_copy(arena, str8(name_ptr, name_size));
@@ -3239,21 +3239,18 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
       U32 src_id = 0;
       if(rdi != &di_rdi_parsed_nil)
       {
-        RDI_NameMap *mapptr = rdi_name_map_from_kind(rdi, RDI_NameMapKind_NormalSourcePaths);
-        if(mapptr != 0)
+        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+        RDI_ParsedNameMap map = {0};
+        rdi_parsed_from_name_map(rdi, mapptr, &map);
+        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
+        if(node != 0)
         {
-          RDI_ParsedNameMap map = {0};
-          rdi_name_map_parse(rdi, mapptr, &map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
-          if(node != 0)
+          U32 id_count = 0;
+          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+          if(id_count > 0)
           {
-            U32 id_count = 0;
-            U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-            if(id_count > 0)
-            {
-              good_src_id = 1;
-              src_id = ids[0];
-            }
+            good_src_id = 1;
+            src_id = ids[0];
           }
         }
       }
@@ -3261,8 +3258,8 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
       // rjf: good src-id -> look up line info for visible range
       if(good_src_id)
       {
-        RDI_SourceFile *src = rdi->source_files+src_id;
-        RDI_SourceLineMap *src_line_map = rdi_element_from_idx(rdi, source_line_maps, src->source_line_map_idx);
+        RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+        RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
         RDI_ParsedSourceLineMap line_map = {0};
         rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
         U64 line_idx = 0;
@@ -3276,9 +3273,9 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
           for(U64 idx = 0; idx < voff_count; idx += 1)
           {
             U64 base_voff = voffs[idx];
-            U64 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, base_voff);
-            RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
-            RDI_LineTable *line_table = rdi_element_from_idx(rdi, line_tables, unit->line_table_idx);
+            U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
+            RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+            RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
             RDI_ParsedLineTable unit_line_info = {0};
             rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
             U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
@@ -3319,11 +3316,10 @@ df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
   RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
   DF_TextLineDasm2SrcInfo result = {0};
   result.file = &df_g_nil_entity;
-  if(rdi->unit_vmap != 0 && rdi->units != 0 && rdi->source_files != 0)
   {
-    U64 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, voff);
-    RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
-    RDI_LineTable *line_table = rdi_element_from_idx(rdi, line_tables, unit->line_table_idx);
+    U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, voff);
+    RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+    RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
     RDI_ParsedLineTable unit_line_info = {0};
     rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
     U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
@@ -3331,7 +3327,7 @@ df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     {
       RDI_Line *line = &unit_line_info.lines[line_info_idx];
       RDI_Column *column = (line_info_idx < unit_line_info.col_count) ? &unit_line_info.cols[line_info_idx] : 0;
-      RDI_SourceFile *file = rdi_element_from_idx(rdi, source_files, line->file_idx);
+      RDI_SourceFile *file = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
       String8 file_normalized_full_path = {0};
       file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
       MemoryCopyStruct(&result.dbgi_key, dbgi_key);
@@ -3371,9 +3367,9 @@ df_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name)
           name_map_kind_idx += 1)
       {
         RDI_NameMapKind name_map_kind = name_map_kinds[name_map_kind_idx];
-        RDI_NameMap *name_map = rdi_name_map_from_kind(rdi, name_map_kind);
+        RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kind);
         RDI_ParsedNameMap parsed_name_map = {0};
-        rdi_name_map_parse(rdi, name_map, &parsed_name_map);
+        rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
         RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, symbol_name.str, symbol_name.size);
         
         // rjf: node -> num
@@ -3405,14 +3401,14 @@ df_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name)
           default:{}break;
           case RDI_NameMapKind_GlobalVariables:
           {
-            RDI_GlobalVariable *global_var = rdi_element_from_idx(rdi, global_variables, entity_num-1);
+            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, entity_num-1);
             voff = global_var->voff;
           }break;
           case RDI_NameMapKind_Procedures:
           {
-            RDI_Procedure *procedure = rdi_element_from_idx(rdi, procedures, entity_num-1);
-            RDI_Scope *scope = rdi_element_from_idx(rdi, scopes, procedure->root_scope_idx);
-            voff = rdi->scope_voffs[scope->voff_range_first];
+            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, entity_num-1);
+            RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
+            voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
           }break;
         }
         
@@ -3439,9 +3435,9 @@ df_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name)
   U64 result = 0;
   {
     RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
-    RDI_NameMap *name_map = rdi_name_map_from_kind(rdi, RDI_NameMapKind_Types);
+    RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
     RDI_ParsedNameMap parsed_name_map = {0};
-    rdi_name_map_parse(rdi, name_map, &parsed_name_map);
+    rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
     RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
     U64 entity_num = 0;
     if(node != 0)
@@ -3928,21 +3924,18 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
       B32 good_src_id = 0;
       U32 src_id = 0;
       {
-        RDI_NameMap *mapptr = rdi_name_map_from_kind(rdi, RDI_NameMapKind_NormalSourcePaths);
-        if(mapptr != 0)
+        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+        RDI_ParsedNameMap map = {0};
+        rdi_parsed_from_name_map(rdi, mapptr, &map);
+        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
+        if(node != 0)
         {
-          RDI_ParsedNameMap map = {0};
-          rdi_name_map_parse(rdi, mapptr, &map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
-          if(node != 0)
+          U32 id_count = 0;
+          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+          if(id_count > 0)
           {
-            U32 id_count = 0;
-            U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-            if(id_count > 0)
-            {
-              good_src_id = 1;
-              src_id = ids[0];
-            }
+            good_src_id = 1;
+            src_id = ids[0];
           }
         }
       }
@@ -3950,8 +3943,8 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
       // rjf: good src-id -> look up line info for visible range
       if(good_src_id)
       {
-        RDI_SourceFile *src = rdi->source_files+src_id;
-        RDI_SourceLineMap *src_line_map = rdi_element_from_idx(rdi, source_line_maps, src->source_line_map_idx);
+        RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+        RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
         RDI_ParsedSourceLineMap line_map = {0};
         rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
         U32 voff_count = 0;
@@ -3959,9 +3952,9 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
         for(U64 idx = 0; idx < voff_count; idx += 1)
         {
           U64 base_voff = voffs[idx];
-          U64 unit_idx = rdi_vmap_idx_from_voff(rdi->unit_vmap, rdi->unit_vmap_count, base_voff);
-          RDI_Unit *unit = rdi_element_from_idx(rdi, units, unit_idx);
-          RDI_LineTable *line_table = rdi_element_from_idx(rdi, line_tables, unit->line_table_idx);
+          U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
+          RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+          RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
           RDI_ParsedLineTable unit_line_info = {0};
           rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
           U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
@@ -4270,12 +4263,12 @@ df_dynamically_typed_eval_from_eval(TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx
             U64 vtable_vaddr = 0;
             MemoryCopy(&vtable_vaddr, vtable_base_ptr_memory.str, addr_size);
             U64 vtable_voff = df_voff_from_vaddr(module, vtable_vaddr);
-            U64 global_idx = rdi_vmap_idx_from_voff(rdi->global_vmap, rdi->global_vmap_count, vtable_voff);
-            RDI_GlobalVariable *global_var = rdi_element_from_idx(rdi, global_variables, global_idx);
+            U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, vtable_voff);
+            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
             if(global_var->link_flags & RDI_LinkFlag_TypeScoped)
             {
-              RDI_UDT *udt = rdi_element_from_idx(rdi, udts, global_var->container_idx);
-              RDI_TypeNode *type = rdi_element_from_idx(rdi, type_nodes, udt->self_type_idx);
+              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
+              RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
               TG_Key derived_type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type->kind), (U64)udt->self_type_idx);
               TG_Key ptr_to_derived_type_key = tg_cons_type_make(graph, TG_Kind_Ptr, derived_type_key, 0);
               eval.type_key = ptr_to_derived_type_key;

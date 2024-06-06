@@ -4302,7 +4302,7 @@ p2r_compress(Arena *arena, P2R_Bake2Serialize *in)
       
       // rjf: unpack uncompressed section info
       void *data = src->data;
-      RDI_DataSectionEncoding encoding = src->encoding;
+      RDI_SectionEncoding encoding = src->encoding;
       RDI_U64 encoded_size = src->encoded_size;
       RDI_U64 unpacked_size = src->unpacked_size;
       
@@ -4316,7 +4316,7 @@ p2r_compress(Arena *arena, P2R_Bake2Serialize *in)
         void *raw_data = data;
         data = push_array_no_zero(arena, U8, unpacked_size);
         encoded_size = rr_lzb_simple_encode_veryfast(&ctx, raw_data, unpacked_size, data);
-        encoding = RDI_DataSectionEncoding_LZB;
+        encoding = RDI_SectionEncoding_LZB;
       }
       
       // rjf: fill

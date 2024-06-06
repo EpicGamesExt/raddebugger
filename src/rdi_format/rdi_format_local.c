@@ -15,16 +15,16 @@ rdi_decompress_parsed(U8 *decompressed_data, U64 decompressed_size, RDI_Parsed *
   }
   
   // rjf: copy & adjust sections for decompressed version
-  if(og_rdi->dsec_count != 0)
+  if(og_rdi->sections_count != 0)
   {
-    RDI_DataSection *dsec_base = (RDI_DataSection *)(decompressed_data + dst_header->data_section_off);
-    MemoryCopy(dsec_base, (U8 *)og_rdi->raw_data + src_header->data_section_off, sizeof(RDI_DataSection) * og_rdi->dsec_count);
-    U64 off = dst_header->data_section_off + sizeof(RDI_DataSection) * og_rdi->dsec_count;
+    RDI_Section *dsec_base = (RDI_Section *)(decompressed_data + dst_header->data_section_off);
+    MemoryCopy(dsec_base, (U8 *)og_rdi->raw_data + src_header->data_section_off, sizeof(RDI_Section) * og_rdi->sections_count);
+    U64 off = dst_header->data_section_off + sizeof(RDI_Section) * og_rdi->sections_count;
     off += 7;
     off -= off%8;
-    for(U64 idx = 0; idx < og_rdi->dsec_count; idx += 1)
+    for(U64 idx = 0; idx < og_rdi->sections_count; idx += 1)
     {
-      dsec_base[idx].encoding = RDI_DataSectionEncoding_Unpacked;
+      dsec_base[idx].encoding = RDI_SectionEncoding_Unpacked;
       dsec_base[idx].off = off;
       dsec_base[idx].encoded_size = dsec_base[idx].unpacked_size;
       off += dsec_base[idx].unpacked_size;
@@ -34,13 +34,13 @@ rdi_decompress_parsed(U8 *decompressed_data, U64 decompressed_size, RDI_Parsed *
   }
   
   // rjf: decompress sections into new decompressed file buffer
-  if(og_rdi->dsec_count != 0)
+  if(og_rdi->sections_count != 0)
   {
-    RDI_DataSection *src_first = og_rdi->dsecs;
-    RDI_DataSection *dst_first = (RDI_DataSection *)(decompressed_data + dst_header->data_section_off);
-    RDI_DataSection *src_opl = src_first + og_rdi->dsec_count;
-    RDI_DataSection *dst_opl = dst_first + og_rdi->dsec_count;
-    for(RDI_DataSection *src = src_first, *dst = dst_first;
+    RDI_Section *src_first = og_rdi->sections;
+    RDI_Section *dst_first = (RDI_Section *)(decompressed_data + dst_header->data_section_off);
+    RDI_Section *src_opl = src_first + og_rdi->sections_count;
+    RDI_Section *dst_opl = dst_first + og_rdi->sections_count;
+    for(RDI_Section *src = src_first, *dst = dst_first;
         src < src_opl && dst < dst_opl;
         src += 1, dst += 1)
     {

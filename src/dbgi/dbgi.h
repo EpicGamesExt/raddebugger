@@ -192,46 +192,7 @@ struct DI_Shared
 
 global DI_Shared *di_shared = 0;
 thread_static DI_TCTX *di_tctx = 0;
-global RDI_Parsed di_rdi_parsed_nil =
-{
-  0,
-  0,
-  0,
-  0,
-  {0},
-  0,
-  0,
-  0,
-  0,
-  0,
-  0,
-  &rdi_top_level_info_nil,
-  &rdi_binary_section_nil, 1,
-  &rdi_file_path_node_nil, 1,
-  &rdi_source_file_nil, 1,
-  &rdi_line_table_nil, 1,
-  &rdi_source_line_map_nil, 1,
-  &rdi_voff_nil, 1,
-  &rdi_line_nil, 1,
-  &rdi_column_nil, 1,
-  &rdi_unit_nil, 1,
-  &rdi_vmap_entry_nil, 1,
-  &rdi_type_node_nil, 1,
-  &rdi_udt_nil, 1,
-  &rdi_member_nil, 1,
-  &rdi_enum_member_nil, 1,
-  &rdi_global_variable_nil, 1,
-  &rdi_vmap_entry_nil, 1,
-  &rdi_thread_variable_nil, 1,
-  &rdi_procedure_nil, 1,
-  &rdi_scope_nil, 1,
-  &rdi_voff_nil, 1,
-  &rdi_vmap_entry_nil, 1,
-  &rdi_local_nil, 1,
-  &rdi_location_block_nil, 1,
-  0, 0,
-  0, 0,
-};
+global RDI_Parsed di_rdi_parsed_nil = {0};
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
