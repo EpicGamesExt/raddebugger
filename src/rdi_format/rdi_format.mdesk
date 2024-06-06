@@ -1352,7 +1352,6 @@ RDI_NameMapKindTable:
 @table(name type desc)
 RDI_NameMapMemberTable:
 {
-  {kind               RDI_NameMapKind                ""}
   {bucket_base_idx    RDI_U32                        ""}
   {node_base_idx      RDI_U32                        ""}
   {bucket_count       RDI_U32                        ""}

@@ -1430,13 +1430,8 @@ RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, R
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Baked Versions
 
-// TODO(rjf):
-//
-// separate category of partial/joinable/slice-based baking functions
-// (distinct from necessarily serial, top-level, non-trivially-joinable
-// paths) can go here - this includes things like the "parallel-for"
-// style filling of various tables, but it does not include things like
-// vmap building.
+//- rjf: partial/joinable baking functions
+RDI_PROC RDIM_NameMapBakeResult         rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src, RDI_U64 base_node_idx);
 
 //- rjf: independent (top-level, global) baking functions
 RDI_PROC RDIM_TopLevelInfoBakeResult    rdim_bake_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_TopLevelInfo *src);
@@ -1454,7 +1449,6 @@ RDI_PROC RDIM_ProcedureBakeResult       rdim_bake_procedures(RDIM_Arena *arena, 
 RDI_PROC RDIM_ScopeBakeResult           rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_ScopeChunkList *src);
 RDI_PROC RDIM_ScopeVMapBakeResult       rdim_bake_scope_vmap(RDIM_Arena *arena, RDIM_ScopeChunkList *src);
 RDI_PROC RDIM_TopLevelNameMapBakeResult rdim_bake_name_maps_top_level(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
-RDI_PROC RDIM_NameMapBakeResult         rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src, RDI_U64 base_node_idx);
 RDI_PROC RDIM_FilePathBakeResult        rdim_bake_file_paths(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree);
 RDI_PROC RDIM_StringBakeResult          rdim_bake_strings(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings);
 RDI_PROC RDIM_IndexRunBakeResult        rdim_bake_index_runs(RDIM_Arena *arena, RDIM_BakeIdxRunMap *idx_runs);

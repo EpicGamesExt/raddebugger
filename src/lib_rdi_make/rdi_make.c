@@ -90,7 +90,7 @@ rdim_scratch_begin_fallback(RDIM_Arena **conflicts, RDI_U64 conflicts_count)
     rdim_thread_scratches[1] = rdim_arena_alloc();
   }
   RDIM_Arena *arena = 0;
-  for(RDI_U64 scratch_idx = 0; 
+  for(RDI_U64 scratch_idx = 0;
       scratch_idx < sizeof(rdim_thread_scratches)/sizeof(rdim_thread_scratches[0]);
       scratch_idx += 1)
   {
@@ -2182,6 +2182,1241 @@ rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
 }
 
 ////////////////////////////////
+//~ rjf: [Baking] Build Artifacts -> Baked Versions
+
+//- rjf: partial/joinable baking functions
+
+RDI_PROC RDIM_NameMapBakeResult
+rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src, RDI_U64 base_node_idx)
+{
+  RDIM_NameMapBakeResult result = {0};
+  return result;
+}
+
+//- rjf: independent (top-level, global) baking functions
+
+RDI_PROC RDIM_TopLevelInfoBakeResult
+rdim_bake_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_TopLevelInfo *src)
+{
+  RDIM_TopLevelInfoBakeResult result = {0};
+  {
+    result.top_level_info = rdim_push_array(arena, RDI_TopLevelInfo, 1);
+    result.top_level_info->arch                  = src->arch;
+    result.top_level_info->exe_name_string_idx   = rdim_bake_idx_from_string(strings, src->exe_name);
+    result.top_level_info->exe_hash              = src->exe_hash;
+    result.top_level_info->voff_max              = src->voff_max;
+  }
+  return result;
+}
+
+RDI_PROC RDIM_BinarySectionBakeResult
+rdim_bake_binary_sections(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BinarySectionList *src)
+{
+  RDIM_BinarySectionBakeResult result = {0};
+  {
+    RDI_BinarySection *dst_base = rdim_push_array(arena, RDI_BinarySection, src->count+1);
+    U64 dst_idx = 1;
+    for(RDIM_BinarySectionNode *src_n = src->first; src_n != 0; src_n = src_n->next, dst_idx += 1)
+    {
+      RDIM_BinarySection *src = &src_n->v;
+      RDI_BinarySection *dst = &dst_base[dst_idx];
+      dst->name_string_idx = rdim_bake_idx_from_string(strings, src->name);
+      dst->flags           = src->flags;
+      dst->voff_first      = src->voff_first;
+      dst->voff_opl        = src->voff_opl;
+      dst->foff_first      = src->foff_first;
+      dst->foff_opl        = src->foff_opl;
+    }
+    result.binary_sections = dst_base;
+    result.binary_sections_count = dst_idx;
+  }
+  return result;
+}
+
+RDI_PROC RDIM_UnitBakeResult
+rdim_bake_units(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_UnitChunkList *src)
+{
+  RDIM_UnitBakeResult result = {0};
+  {
+    RDI_Unit *dst_base = rdim_push_array(arena, RDI_Unit, src->total_count+1);
+    RDI_U64 dst_idx = 1;
+    for(RDIM_UnitChunkNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+    {
+      for(RDI_U64 src_chunk_idx = 0; src_chunk_idx < src_n->count; src_chunk_idx += 1, dst_idx += 1)
+      {
+        RDIM_Unit *src = &src_n->v[src_chunk_idx];
+        RDI_Unit *dst = &dst_base[dst_idx];
+        dst->unit_name_string_idx     = rdim_bake_idx_from_string(strings, src->unit_name);
+        dst->compiler_name_string_idx = rdim_bake_idx_from_string(strings, src->compiler_name);
+        dst->source_file_path_node    = rdim_bake_path_node_idx_from_string(path_tree, src->source_file);
+        dst->object_file_path_node    = rdim_bake_path_node_idx_from_string(path_tree, src->object_file);
+        dst->archive_file_path_node   = rdim_bake_path_node_idx_from_string(path_tree, src->archive_file);
+        dst->build_path_node          = rdim_bake_path_node_idx_from_string(path_tree, src->build_path);
+        dst->language                 = src->language;
+        dst->line_table_idx           = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
+      }
+    }
+    result.units = dst_base;
+    result.units_count = dst_idx;
+  }
+  return result;
+}
+
+RDI_PROC RDIM_UnitVMapBakeResult
+rdim_bake_unit_vmap(RDIM_Arena *arena, RDIM_UnitChunkList *units)
+{
+  //- rjf: build vmap from unit voff ranges
+  RDIM_BakeVMap unit_vmap = {0};
+  {
+    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+    
+    // rjf: count voff ranges
+    RDI_U64 voff_range_count = 0;
+    for(RDIM_UnitChunkNode *n = units->first; n != 0; n = n->next)
+    {
+      for(RDI_U64 idx = 0; idx < n->count; idx += 1)
+      {
+        RDIM_Unit *unit = &n->v[idx];
+        voff_range_count += unit->voff_ranges.count;
+      }
+    }
+    
+    // rjf: count necessary markers
+    RDI_U64 marker_count = voff_range_count*2;
+    
+    // rjf: build keys/markers arrays
+    RDIM_SortKey    *keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, marker_count);
+    RDIM_VMapMarker *markers = rdim_push_array_no_zero(scratch.arena, RDIM_VMapMarker, marker_count);
+    {
+      RDIM_SortKey *key_ptr = keys;
+      RDIM_VMapMarker *marker_ptr = markers;
+      RDI_U32 unit_idx = 1;
+      for(RDIM_UnitChunkNode *unit_chunk_n = units->first;
+          unit_chunk_n != 0;
+          unit_chunk_n = unit_chunk_n->next)
+      {
+        for(RDI_U64 idx = 0; idx < unit_chunk_n->count; idx += 1)
+        {
+          RDIM_Unit *unit = &unit_chunk_n->v[idx];
+          for(RDIM_Rng1U64Node *n = unit->voff_ranges.first; n != 0; n = n->next)
+          {
+            RDIM_Rng1U64 range = n->v;
+            if(range.min < range.max)
+            {
+              key_ptr->key = range.min;
+              key_ptr->val = marker_ptr;
+              marker_ptr->idx = unit_idx;
+              marker_ptr->begin_range = 1;
+              key_ptr += 1;
+              marker_ptr += 1;
+              
+              key_ptr->key = range.max;
+              key_ptr->val = marker_ptr;
+              marker_ptr->idx = unit_idx;
+              marker_ptr->begin_range = 0;
+              key_ptr += 1;
+              marker_ptr += 1;
+            }
+          }
+          unit_idx += 1;
+        }
+      }
+    }
+    
+    // rjf: keys/markers -> unit vmap
+    unit_vmap = rdim_bake_vmap_from_markers(arena, markers, keys, marker_count);
+    rdim_scratch_end(scratch);
+  }
+  
+  //- rjf: fill result
+  RDIM_UnitVMapBakeResult result = {unit_vmap};
+  return result;
+}
+
+RDI_PROC RDIM_SrcFileBakeResult
+rdim_bake_src_files(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree, RDIM_SrcFileChunkList *src)
+{
+  RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+  
+  ////////////////////////////
+  //- rjf: iterate all source files, fill serialized version, fill line maps, fill line map tables
+  //
+  typedef struct RDIM_DataNode RDIM_DataNode;
+  struct RDIM_DataNode
+  {
+    RDIM_DataNode *next;
+    void *data;
+    RDI_U64 size;
+  };
+  RDI_U32 dst_files_count = src->total_count + 1;
+  RDI_U32 dst_maps_count = src->source_line_map_count + 1;
+  RDI_SourceFile *dst_files = rdim_push_array(arena, RDI_SourceFile, dst_files_count);
+  RDI_SourceLineMap *dst_maps = rdim_push_array(arena, RDI_SourceLineMap, dst_maps_count);
+  RDIM_DataNode *first_dst_nums_node = 0;
+  RDIM_DataNode *last_dst_nums_node = 0;
+  RDIM_DataNode *first_dst_rngs_node = 0;
+  RDIM_DataNode *last_dst_rngs_node = 0;
+  RDIM_DataNode *first_dst_voffs_node = 0;
+  RDIM_DataNode *last_dst_voffs_node = 0;
+  RDI_U64 dst_nums_idx = 0;
+  RDI_U64 dst_rngs_idx = 0;
+  RDI_U64 dst_voffs_idx = 0;
+  RDI_U32 dst_file_idx = 1;
+  RDI_U32 dst_map_idx = 1;
+  for(RDIM_SrcFileChunkNode *chunk_n = src->first;
+      chunk_n != 0;
+      chunk_n = chunk_n->next)
+  {
+    for(RDI_U64 idx = 0; idx < chunk_n->count; idx += 1, dst_file_idx += 1)
+    {
+      RDIM_SrcFile *src_file = &chunk_n->v[idx];
+      RDI_SourceFile *dst_file = &dst_files[dst_file_idx];
+      
+      ////////////////////////
+      //- rjf: produce combined source file line info
+      //
+      RDI_U32 *src_file_line_nums   = 0;
+      RDI_U32 *src_file_line_ranges = 0;
+      RDI_U64 *src_file_voffs       = 0;
+      RDI_U32  src_file_line_count  = 0;
+      RDI_U32  src_file_voff_count  = 0;
+      {
+        //- rjf: gather line number map
+        typedef struct RDIM_SrcLineMapVoffBlock RDIM_SrcLineMapVoffBlock;
+        struct RDIM_SrcLineMapVoffBlock
+        {
+          RDIM_SrcLineMapVoffBlock *next;
+          RDI_U64 voff;
+        };
+        typedef struct RDIM_SrcLineMapBucket RDIM_SrcLineMapBucket;
+        struct RDIM_SrcLineMapBucket
+        {
+          RDIM_SrcLineMapBucket *order_next;
+          RDIM_SrcLineMapBucket *hash_next;
+          RDI_U32 line_num;
+          RDIM_SrcLineMapVoffBlock *first_voff_block;
+          RDIM_SrcLineMapVoffBlock *last_voff_block;
+          RDI_U64 voff_count;
+        };
+        RDIM_SrcLineMapBucket *first_bucket = 0;
+        RDIM_SrcLineMapBucket *last_bucket = 0;
+        RDI_U64 line_hash_slots_count = 2048;
+        RDIM_SrcLineMapBucket **line_hash_slots = rdim_push_array(scratch.arena, RDIM_SrcLineMapBucket *, line_hash_slots_count);
+        RDI_U64 line_count = 0;
+        RDI_U64 voff_count = 0;
+        RDI_U64 max_line_num = 0;
+        {
+          for(RDIM_SrcFileLineMapFragment *map_fragment = src_file->first_line_map_fragment;
+              map_fragment != 0;
+              map_fragment = map_fragment->next)
+          {
+            RDIM_LineSequence *sequence = map_fragment->seq;
+            RDI_U64 *seq_voffs = sequence->voffs;
+            RDI_U32 *seq_line_nums = sequence->line_nums;
+            RDI_U64 seq_line_count = sequence->line_count;
+            for(RDI_U64 i = 0; i < seq_line_count; i += 1)
+            {
+              RDI_U32 line_num = seq_line_nums[i];
+              RDI_U64 voff = seq_voffs[i];
+              RDI_U64 line_hash_slot_idx = line_num%line_hash_slots_count;
+              
+              // rjf: update unique voff counter & max line number
+              voff_count += 1;
+              max_line_num = Max(max_line_num, line_num);
+              
+              // rjf: find match
+              RDIM_SrcLineMapBucket *match = 0;
+              {
+                for(RDIM_SrcLineMapBucket *node = line_hash_slots[line_hash_slot_idx];
+                    node != 0;
+                    node = node->hash_next)
+                {
+                  if(node->line_num == line_num)
+                  {
+                    match = node;
+                    break;
+                  }
+                }
+              }
+              
+              // rjf: introduce new map if no match
+              if(match == 0)
+              {
+                match = rdim_push_array(scratch.arena, RDIM_SrcLineMapBucket, 1);
+                RDIM_SLLQueuePush_N(first_bucket, last_bucket, match, order_next);
+                RDIM_SLLStackPush_N(line_hash_slots[line_hash_slot_idx], match, hash_next);
+                match->line_num = line_num;
+                line_count += 1;
+              }
+              
+              // rjf: insert new voff
+              {
+                RDIM_SrcLineMapVoffBlock *block = rdim_push_array(scratch.arena, RDIM_SrcLineMapVoffBlock, 1);
+                RDIM_SLLQueuePush(match->first_voff_block, match->last_voff_block, block);
+                match->voff_count += 1;
+                block->voff = voff;
+              }
+            }
+          }
+        }
+        
+        //- rjf: bake sortable keys array
+        RDIM_SortKey *keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, line_count);
+        {
+          RDIM_SortKey *key_ptr = keys;
+          for(RDIM_SrcLineMapBucket *node = first_bucket;
+              node != 0;
+              node = node->order_next, key_ptr += 1){
+            key_ptr->key = node->line_num;
+            key_ptr->val = node;
+          }
+        }
+        
+        //- rjf: sort keys array
+        RDIM_SortKey *sorted_keys = rdim_sort_key_array(scratch.arena, keys, line_count);
+        
+        //- rjf: bake result
+        RDI_U32 *line_nums = rdim_push_array_no_zero(scratch.arena, RDI_U32, line_count);
+        RDI_U32 *line_ranges = rdim_push_array_no_zero(scratch.arena, RDI_U32, line_count + 1);
+        RDI_U64 *voffs = rdim_push_array_no_zero(scratch.arena, RDI_U64, voff_count);
+        {
+          RDI_U64 *voff_ptr = voffs;
+          for(RDI_U32 i = 0; i < line_count; i += 1)
+          {
+            line_nums[i] = sorted_keys[i].key;
+            line_ranges[i] = (RDI_U32)(voff_ptr - voffs); // TODO(rjf): @u64_to_u32
+            RDIM_SrcLineMapBucket *bucket = (RDIM_SrcLineMapBucket*)sorted_keys[i].val;
+            for(RDIM_SrcLineMapVoffBlock *node = bucket->first_voff_block; node != 0; node = node->next)
+            {
+              *voff_ptr = node->voff;
+              voff_ptr += 1;
+            }
+          }
+          line_ranges[line_count] = voff_count;
+        }
+        
+        //- rjf: fill output
+        src_file_line_nums   = line_nums;
+        src_file_line_ranges = line_ranges;
+        src_file_line_count  = line_count;
+        src_file_voffs       = voffs;
+        src_file_voff_count  = voff_count;
+      }
+      
+      ////////////////////////
+      //- rjf: grab & fill the next line map, if this file has one
+      //
+      RDI_SourceLineMap *dst_map = 0;
+      if(src_file->first_line_map_fragment != 0)
+      {
+        dst_map = &dst_maps[dst_map_idx];
+        dst_map_idx += 1;
+        dst_map->line_count = (RDI_U32)src_file_line_count; // TODO(rjf): @u64_to_u32
+        dst_map->voff_count = (RDI_U32)src_file_voff_count; // TODO(rjf): @u64_to_u32
+        dst_map->line_map_nums_base_idx  = (RDI_U32)dst_nums_idx; // TODO(rjf): @u64_to_u32
+        dst_map->line_map_range_base_idx = (RDI_U32)dst_rngs_idx; // TODO(rjf): @u64_to_u32
+        dst_map->line_map_voff_base_idx  = (RDI_U32)dst_voffs_idx; // TODO(rjf): @u64_to_u32
+      }
+      
+      ////////////////////////
+      //- rjf: gather line map data chunks for later collation & storage into their own top-level sections
+      //
+      {
+        RDIM_DataNode *dst_num_node = rdim_push_array(scratch.arena, RDIM_DataNode, 1);
+        RDIM_SLLQueuePush(first_dst_nums_node, last_dst_nums_node, dst_num_node);
+        dst_num_node->data = src_file_line_nums;
+        dst_num_node->size = sizeof(RDI_U32)*src_file_line_count;
+        RDIM_DataNode *dst_rng_node = rdim_push_array(scratch.arena, RDIM_DataNode, 1);
+        RDIM_SLLQueuePush(first_dst_rngs_node, last_dst_rngs_node, dst_rng_node);
+        dst_rng_node->data = src_file_line_ranges;
+        dst_rng_node->size = sizeof(RDI_U32)*(src_file_line_count+1);
+        RDIM_DataNode *dst_voff_node = rdim_push_array(scratch.arena, RDIM_DataNode, 1);
+        RDIM_SLLQueuePush(first_dst_voffs_node, last_dst_voffs_node, dst_voff_node);
+        dst_voff_node->data = src_file_voffs;
+        dst_voff_node->size = sizeof(RDI_U64)*(src_file_voff_count);
+        dst_nums_idx += src_file_line_count;
+        dst_rngs_idx += src_file_line_count+1;
+        dst_voffs_idx+= src_file_voff_count;
+      }
+      
+      ////////////////////////
+      //- rjf: fill file info
+      //
+      dst_file->file_path_node_idx = rdim_bake_path_node_idx_from_string(path_tree, src_file->normal_full_path);
+      dst_file->normal_full_path_string_idx = rdim_bake_idx_from_string(strings, src_file->normal_full_path);
+      dst_file->source_line_map_idx = (RDI_U32)(dst_map ? (dst_map - dst_maps) : 0);
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: coalesce source line map data blobs
+  //
+  RDI_U32 *source_line_map_nums = rdim_push_array_no_zero(arena, RDI_U32, dst_nums_idx);
+  RDI_U32 *source_line_map_rngs = rdim_push_array_no_zero(arena, RDI_U32, dst_rngs_idx);
+  RDI_U64 *source_line_map_voffs= rdim_push_array_no_zero(arena, RDI_U64, dst_voffs_idx);
+  {
+    RDI_U64 num_idx = 0;
+    RDI_U64 rng_idx = 0;
+    RDI_U64 voff_idx= 0;
+    for(RDIM_DataNode *num_n = first_dst_nums_node; num_n != 0; num_n = num_n->next)
+    {
+      rdim_memcpy(source_line_map_nums+num_idx, num_n->data, num_n->size);
+      num_idx += num_n->size/sizeof(RDI_U32);
+    }
+    for(RDIM_DataNode *rng_n = first_dst_rngs_node; rng_n != 0; rng_n = rng_n->next)
+    {
+      rdim_memcpy(source_line_map_rngs+rng_idx, rng_n->data, rng_n->size);
+      rng_idx += rng_n->size/sizeof(RDI_U32);
+    }
+    for(RDIM_DataNode *voff_n = first_dst_voffs_node; voff_n != 0; voff_n = voff_n->next)
+    {
+      rdim_memcpy(source_line_map_voffs+voff_idx, voff_n->data, voff_n->size);
+      voff_idx += voff_n->size/sizeof(RDI_U64);
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: fill result
+  //
+  RDIM_SrcFileBakeResult result = {0};
+  result.source_files               = dst_files;
+  result.source_files_count         = dst_files_count;
+  result.source_line_maps           = dst_maps;
+  result.source_line_maps_count     = dst_maps_count;
+  result.source_line_map_nums       = source_line_map_nums;
+  result.source_line_map_nums_count = dst_nums_idx;
+  result.source_line_map_rngs       = source_line_map_rngs;
+  result.source_line_map_rngs_count = dst_rngs_idx;
+  result.source_line_map_voffs      = source_line_map_voffs;
+  result.source_line_map_voffs_count= dst_voffs_idx;
+  
+  rdim_scratch_end(scratch);
+  return result;
+}
+
+RDI_PROC RDIM_LineTableBakeResult
+rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src)
+{
+  //////////////////////////////
+  //- rjf: build all combined line info
+  //
+  RDI_LineTable *dst_line_tables = push_array(arena, RDI_LineTable, src->total_count+1);
+  RDI_U64 *dst_line_voffs = push_array(arena, RDI_U64, src->total_line_count + 2*src->total_seq_count);
+  RDI_Line *dst_lines = push_array(arena, RDI_Line, src->total_line_count + src->total_seq_count);
+  RDI_Column *dst_cols = push_array(arena, RDI_Column, 1);
+  {
+    RDI_U64 dst_table_idx = 1;
+    RDI_U64 dst_voff_idx = 0;
+    RDI_U64 dst_line_idx = 0;
+    RDI_U64 dst_col_idx = 0;
+    for(RDIM_LineTableChunkNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+    {
+      for(RDI_U64 chunk_idx = 0; chunk_idx < src_n->count; chunk_idx += 1)
+      {
+        RDIM_LineTable *src_line_table = &src_n->v[chunk_idx];
+        RDI_LineTable *dst_line_table = &dst_line_tables[dst_table_idx];
+        
+        //- rjf: fill combined line table info
+        {
+          RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+          
+          //- rjf: gather up all line info into two arrays:
+          //
+          // [1] keys: sortable array; pairs voffs with line info records; null records are sequence enders
+          // [2] recs: contains all the source coordinates for a range of voffs
+          //
+          typedef struct RDIM_LineRec RDIM_LineRec;
+          struct RDIM_LineRec
+          {
+            RDI_U32 file_id;
+            RDI_U32 line_num;
+            RDI_U16 col_first;
+            RDI_U16 col_opl;
+          };
+          RDI_U64 line_count = src_line_table->line_count;
+          RDI_U64 seq_count = src_line_table->seq_count;
+          RDI_U64 key_count = line_count + seq_count;
+          RDIM_SortKey *line_keys = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, key_count);
+          RDIM_LineRec *line_recs = rdim_push_array_no_zero(scratch.arena, RDIM_LineRec, line_count);
+          {
+            RDIM_SortKey *key_ptr = line_keys;
+            RDIM_LineRec *rec_ptr = line_recs;
+            for(RDIM_LineSequenceNode *seq_n = src_line_table->first_seq; seq_n != 0; seq_n = seq_n->next)
+            {
+              RDIM_LineSequence *seq = &seq_n->v;
+              for(RDI_U64 line_idx = 0; line_idx < seq->line_count; line_idx += 1)
+              {
+                key_ptr->key = seq->voffs[line_idx];
+                key_ptr->val = rec_ptr;
+                key_ptr += 1;
+                rec_ptr->file_id = (RDI_U32)rdim_idx_from_src_file(seq->src_file); // TODO(rjf): @u64_to_u32
+                rec_ptr->line_num = seq->line_nums[line_idx];
+                if(seq->col_nums != 0)
+                {
+                  rec_ptr->col_first = seq->col_nums[line_idx*2];
+                  rec_ptr->col_opl = seq->col_nums[line_idx*2 + 1];
+                }
+                rec_ptr += 1;
+              }
+              key_ptr->key = seq->voffs[seq->line_count];
+              key_ptr->val = 0;
+              key_ptr += 1;
+            }
+          }
+          
+          //- rjf: sort
+          RDIM_SortKey *sorted_line_keys = 0;
+          RDIM_ProfScope("sort")
+          {
+            sorted_line_keys = rdim_sort_key_array(scratch.arena, line_keys, key_count);
+          }
+          
+          // TODO(rjf): do a pass over sorted keys to make sure duplicate keys
+          // are sorted with null record first, and no more than one null
+          // record and one non-null record
+          
+          //- rjf: arrange output
+          RDI_U64 *arranged_voffs = dst_line_voffs + dst_voff_idx;
+          RDI_Line *arranged_lines = dst_lines + dst_line_idx;
+          RDIM_ProfScope("arrange output")
+          {
+            for(RDI_U64 i = 0; i < key_count; i += 1)
+            {
+              arranged_voffs[i] = sorted_line_keys[i].key;
+            }
+            arranged_voffs[key_count] = ~0ull;
+            for(RDI_U64 i = 0; i < key_count; i += 1)
+            {
+              RDIM_LineRec *rec = (RDIM_LineRec*)sorted_line_keys[i].val;
+              if(rec != 0)
+              {
+                arranged_lines[i].file_idx = rec->file_id;
+                arranged_lines[i].line_num = rec->line_num;
+              }
+              else
+              {
+                arranged_lines[i].file_idx = 0;
+                arranged_lines[i].line_num = 0;
+              }
+            }
+          }
+          
+          rdim_scratch_end(scratch);
+        }
+        
+        //- rjf: fill destination table
+        dst_line_table->voffs_base_idx = (RDI_U32)dst_voff_idx; // TODO(rjf): @u64_to_u32
+        dst_line_table->lines_base_idx = (RDI_U32)dst_line_idx; // TODO(rjf): @u64_to_u32
+        dst_line_table->cols_base_idx  = (RDI_U32)dst_col_idx;  // TODO(rjf): @u64_to_u32
+        dst_line_table->lines_count    = (RDI_U32)src_line_table->line_count + src_line_table->seq_count; // TODO(rjf): @u64_to_u32
+        
+        //- rjf: increment
+        dst_table_idx += 1;
+        dst_voff_idx += src_line_table->line_count + 2*src_line_table->seq_count;
+        dst_line_idx += src_line_table->line_count + src_line_table->seq_count;
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: fill result
+  //
+  RDIM_LineTableBakeResult result = {0};
+  {
+    result.line_tables              = dst_line_tables;
+    result.line_tables_count        = src->total_count;
+    result.line_table_voffs         = dst_line_voffs;
+    result.line_table_voffs_count   = (src->total_line_count + src->total_seq_count);
+    result.line_table_lines         = dst_lines;
+    result.line_table_lines_count   = (src->total_line_count + src->total_seq_count);
+    result.line_table_columns       = dst_cols;
+    result.line_table_columns_count = src->total_col_count;
+  }
+  return result;
+}
+
+RDI_PROC RDIM_TypeNodeBakeResult
+rdim_bake_types(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_TypeChunkList *src)
+{
+  RDI_TypeNode *type_nodes = push_array(arena, RDI_TypeNode, src->total_count+1);
+  RDI_U32 dst_idx = 1;
+  for(RDIM_TypeChunkNode *n = src->first; n != 0; n = n->next)
+  {
+    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+    {
+      RDIM_Type *src = &n->v[chunk_idx];
+      RDI_TypeNode *dst = &type_nodes[dst_idx];
+      
+      //- rjf: fill shared type node info
+      dst->kind      = src->kind;
+      dst->flags     = (RDI_U16)src->flags; // TODO(rjf): @u32_to_u16
+      dst->byte_size = src->byte_size;
+      
+      //- rjf: fill built-in-only type node info
+      if(RDI_TypeKind_FirstBuiltIn <= dst->kind && dst->kind <= RDI_TypeKind_LastBuiltIn)
+      {
+        dst->built_in.name_string_idx = rdim_bake_idx_from_string(strings, src->name);
+      }
+      
+      //- rjf: fill constructed type node info
+      else if(RDI_TypeKind_FirstConstructed <= dst->kind && dst->kind <= RDI_TypeKind_LastConstructed)
+      {
+        dst->constructed.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
+        dst->constructed.count = src->count;
+        if(dst->kind == RDI_TypeKind_Function || dst->kind == RDI_TypeKind_Method)
+        {
+          RDI_U32 param_idx_run_count = src->count;
+          RDI_U32 *param_idx_run = rdim_push_array_no_zero(arena, RDI_U32, param_idx_run_count);
+          for(RDI_U32 idx = 0; idx < param_idx_run_count; idx += 1)
+          {
+            param_idx_run[idx] = (RDI_U32)rdim_idx_from_type(src->param_types[idx]); // TODO(rjf): @u64_to_u32
+          }
+          dst->constructed.param_idx_run_first = rdim_bake_idx_from_idx_run(idx_runs, param_idx_run, param_idx_run_count);
+        }
+        else if(dst->kind == RDI_TypeKind_MemberPtr)
+        {
+          // TODO(rjf): member pointers not currently supported.
+        }
+      }
+      
+      //- rjf: fill user-defined-type info
+      else if(RDI_TypeKind_FirstUserDefined <= dst->kind && dst->kind <= RDI_TypeKind_LastUserDefined)
+      {
+        dst->user_defined.name_string_idx = rdim_bake_idx_from_string(strings, src->name);
+        dst->user_defined.udt_idx         = (RDI_U32)rdim_idx_from_udt(src->udt); // TODO(rjf): @u64_to_u32
+        dst->user_defined.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
+      }
+      
+      //- rjf: fill bitfield info
+      else if(dst->kind == RDI_TypeKind_Bitfield)
+      {
+        dst->bitfield.direct_type_idx = (RDI_U32)rdim_idx_from_type(src->direct_type); // TODO(rjf): @u64_to_u32
+        dst->bitfield.off  = src->off;
+        dst->bitfield.size = src->count;
+      }
+    }
+  }
+  RDIM_TypeNodeBakeResult result = {0};
+  result.type_nodes = type_nodes;
+  result.type_nodes_count = (src->total_count+1);
+  return result;
+}
+
+RDI_PROC RDIM_UDTBakeResult
+rdim_bake_udts(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_UDTChunkList *src)
+{
+  //- rjf: build tables
+  RDI_UDT *       udts         = push_array(arena, RDI_UDT,        src->total_count+1);
+  RDI_Member *    members      = push_array(arena, RDI_Member,     src->total_member_count+1);
+  RDI_EnumMember *enum_members = push_array(arena, RDI_EnumMember, src->total_enum_val_count+1);
+  {
+    RDI_U32 dst_udt_idx = 1;
+    RDI_U32 dst_member_idx = 1;
+    RDI_U32 dst_enum_member_idx = 1;
+    for(RDIM_UDTChunkNode *n = src->first; n != 0; n = n->next)
+    {
+      for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_udt_idx += 1)
+      {
+        RDIM_UDT *src_udt = &n->v[chunk_idx];
+        RDI_UDT *dst_udt = &udts[dst_udt_idx];
+        
+        //- rjf: fill basics
+        dst_udt->self_type_idx = (RDI_U32)rdim_idx_from_type(src_udt->self_type); // TODO(rjf): @u64_to_u32
+        dst_udt->file_idx = (RDI_U32)rdim_idx_from_src_file(src_udt->src_file); // TODO(rjf): @u64_to_u32
+        dst_udt->line = src_udt->line;
+        dst_udt->col  = src_udt->col;
+        
+        //- rjf: fill members
+        if(src_udt->member_count != 0)
+        {
+          dst_udt->member_first = dst_member_idx;
+          dst_udt->member_count = src_udt->member_count;
+          for(RDIM_UDTMember *src_member = src_udt->first_member;
+              src_member != 0;
+              src_member = src_member->next, dst_member_idx += 1)
+          {
+            RDI_Member *dst_member = &members[dst_member_idx];
+            dst_member->kind            = src_member->kind;
+            dst_member->name_string_idx = rdim_bake_idx_from_string(strings, src_member->name);
+            dst_member->type_idx        = (RDI_U32)rdim_idx_from_type(src_member->type); // TODO(rjf): @u64_to_u32
+            dst_member->off             = src_member->off;
+          }
+        }
+        
+        //- rjf: fill enum members
+        else if(src_udt->enum_val_count != 0)
+        {
+          dst_udt->flags |= RDI_UDTFlag_EnumMembers;
+          dst_udt->member_first = dst_enum_member_idx;
+          dst_udt->member_count = src_udt->enum_val_count;
+          for(RDIM_UDTEnumVal *src_member = src_udt->first_enum_val;
+              src_member != 0;
+              src_member = src_member->next, dst_enum_member_idx += 1)
+          {
+            RDI_EnumMember *dst_member = &enum_members[dst_enum_member_idx];
+            dst_member->name_string_idx = rdim_bake_idx_from_string(strings, src_member->name);
+            dst_member->val             = src_member->val;
+          }
+        }
+      }
+    }
+  }
+  
+  //- rjf: fill result
+  RDIM_UDTBakeResult result = {0};
+  {
+    result.udts               = udts;
+    result.udts_count         = src->total_count+1;
+    result.members            = members;
+    result.members_count      = src->total_member_count+1;
+    result.enum_members       = enum_members;
+    result.enum_members_count = src->total_enum_val_count+1;
+  }
+  return result;
+}
+
+RDI_PROC RDIM_GlobalVariableBakeResult
+rdim_bake_global_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
+{
+  RDI_GlobalVariable *global_variables = push_array(arena, RDI_GlobalVariable, src->total_count+1);
+  RDI_U32 dst_idx = 1;
+  for(RDIM_SymbolChunkNode *n = src->first; n != 0; n = n->next)
+  {
+    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+    {
+      RDIM_Symbol *src = &n->v[chunk_idx];
+      RDI_GlobalVariable *dst = &global_variables[dst_idx];
+      dst->name_string_idx = rdim_bake_idx_from_string(strings, src->name);
+      dst->voff            = src->offset;
+      dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+      if(src->is_extern)
+      {
+        dst->link_flags |= RDI_LinkFlag_External;
+      }
+      if(src->container_type != 0)
+      {
+        dst->link_flags |= RDI_LinkFlag_TypeScoped;
+        dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
+      }
+      else if(src->container_symbol != 0)
+      {
+        dst->link_flags |= RDI_LinkFlag_ProcScoped;
+        dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+      }
+    }
+  }
+  RDIM_GlobalVariableBakeResult result = {0};
+  result.global_variables = global_variables;
+  result.global_variables_count = (src->total_count+1);
+  return result;
+}
+
+RDI_PROC RDIM_GlobalVMapBakeResult
+rdim_bake_global_vmap(RDIM_Arena *arena, RDIM_SymbolChunkList *src)
+{
+  //- rjf: build global vmap
+  RDIM_BakeVMap global_vmap = {0};
+  {
+    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+    
+    //- rjf: allocate keys/markers
+    RDI_U64 marker_count = src->total_count*2;
+    RDIM_SortKey    *keys    = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, marker_count);
+    RDIM_VMapMarker *markers = rdim_push_array_no_zero(scratch.arena, RDIM_VMapMarker, marker_count);
+    
+    //- rjf: fill
+    {
+      RDIM_SortKey *key_ptr = keys;
+      RDIM_VMapMarker *marker_ptr = markers;
+      
+      // rjf: fill actual globals
+      for(RDIM_SymbolChunkNode *n = src->first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
+        {
+          RDIM_Symbol *global_var = &n->v[chunk_idx];
+          RDI_U32 global_var_idx = (RDI_U32)rdim_idx_from_symbol(global_var); // TODO(rjf): @u64_to_u32
+          RDI_U64 global_var_size = global_var->type ? global_var->type->byte_size : 1;
+          
+          RDI_U64 first = global_var->offset;
+          RDI_U64 opl   = first + global_var_size;
+          
+          key_ptr->key = first;
+          key_ptr->val = marker_ptr;
+          marker_ptr->idx = global_var_idx;
+          marker_ptr->begin_range = 1;
+          key_ptr += 1;
+          marker_ptr += 1;
+          
+          key_ptr->key = opl;
+          key_ptr->val = marker_ptr;
+          marker_ptr->idx = global_var_idx;
+          marker_ptr->begin_range = 0;
+          key_ptr += 1;
+          marker_ptr += 1;
+        }
+      }
+      
+      // rjf: fill nil global
+      {
+        RDI_U32 global_idx = 0;
+        RDI_U64 first = 0;
+        RDI_U64 opl   = 0xffffffffffffffffull;
+        key_ptr->key = first;
+        key_ptr->val = marker_ptr;
+        marker_ptr->idx = global_idx;
+        marker_ptr->begin_range = 1;
+        key_ptr += 1;
+        marker_ptr += 1;
+        key_ptr->key = opl;
+        key_ptr->val = marker_ptr;
+        marker_ptr->idx = global_idx;
+        marker_ptr->begin_range = 0;
+        key_ptr += 1;
+        marker_ptr += 1;
+      }
+    }
+    
+    // rjf: construct vmap
+    global_vmap = rdim_bake_vmap_from_markers(arena, markers, keys, marker_count);
+    
+    rdim_scratch_end(scratch);
+  }
+  
+  //- rjf: fill result
+  RDIM_GlobalVMapBakeResult result = {global_vmap};
+  return result;
+}
+
+RDI_PROC RDIM_ThreadVariableBakeResult
+rdim_bake_thread_variables(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
+{
+  RDI_ThreadVariable *thread_variables = push_array(arena, RDI_ThreadVariable, src->total_count+1);
+  RDI_U32 dst_idx = 1;
+  for(RDIM_SymbolChunkNode *n = src->first; n != 0; n = n->next)
+  {
+    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+    {
+      RDIM_Symbol *src = &n->v[chunk_idx];
+      RDI_ThreadVariable *dst = &thread_variables[dst_idx];
+      dst->name_string_idx = rdim_bake_idx_from_string(strings, src->name);
+      dst->tls_off         = (RDI_U32)src->offset; // TODO(rjf): @u64_to_u32
+      dst->type_idx        = (RDI_U32)rdim_idx_from_type(src->type);
+      if(src->is_extern)
+      {
+        dst->link_flags |= RDI_LinkFlag_External;
+      }
+      if(src->container_type != 0)
+      {
+        dst->link_flags |= RDI_LinkFlag_TypeScoped;
+        dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
+      }
+      else if(src->container_symbol != 0)
+      {
+        dst->link_flags |= RDI_LinkFlag_ProcScoped;
+        dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+      }
+    }
+  }
+  RDIM_ThreadVariableBakeResult result = {0};
+  result.thread_variables = thread_variables;
+  result.thread_variables_count = src->total_count+1;
+  return result;
+}
+
+RDI_PROC RDIM_ProcedureBakeResult
+rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src)
+{
+  RDI_Procedure *procedures = push_array(arena, RDI_Procedure, src->total_count+1);
+  RDI_U32 dst_idx = 1;
+  for(RDIM_SymbolChunkNode *n = src->first; n != 0; n = n->next)
+  {
+    for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+    {
+      RDIM_Symbol *src = &n->v[chunk_idx];
+      RDI_Procedure *dst = &procedures[dst_idx];
+      dst->name_string_idx      = rdim_bake_idx_from_string(strings, src->name);
+      dst->link_name_string_idx = rdim_bake_idx_from_string(strings, src->link_name);
+      if(src->is_extern)
+      {
+        dst->link_flags |= RDI_LinkFlag_External;
+      }
+      if(src->container_type != 0)
+      {
+        dst->link_flags |= RDI_LinkFlag_TypeScoped;
+        dst->container_idx = src->container_type ? (RDI_U32)rdim_idx_from_udt(src->container_type->udt) : 0; // TODO(rjf): @u64_to_u32
+      }
+      else if(src->container_symbol != 0)
+      {
+        dst->link_flags |= RDI_LinkFlag_ProcScoped;
+        dst->container_idx = (RDI_U32)rdim_idx_from_symbol(src->container_symbol); // TODO(rjf): @u64_to_u32
+      }
+      dst->type_idx             = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+      dst->root_scope_idx       = (RDI_U32)rdim_idx_from_scope(src->root_scope); // TODO(rjf): @u64_to_u32
+    }
+  }
+  RDIM_ProcedureBakeResult result = {0};
+  result.procedures = procedures;
+  result.procedures_count = src->total_count+1;
+  return result;
+}
+
+RDI_PROC RDIM_ScopeBakeResult
+rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_ScopeChunkList *src)
+{
+  RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+  
+  ////////////////////////////
+  //- rjf: build all scopes, scope voffs, locals, and location blocks
+  //
+  RDI_Scope *         scopes          = rdim_push_array(arena, RDI_Scope,         src->total_count+1);
+  RDI_U64 *           scope_voffs     = rdim_push_array(arena, RDI_U64,           src->scope_voff_count+1);
+  RDI_Local *         locals          = rdim_push_array(arena, RDI_Local,         src->local_count+1);
+  RDI_LocationBlock * location_blocks = rdim_push_array(arena, RDI_LocationBlock, src->location_count+1);
+  RDIM_String8List    location_data_blobs = {0};
+  RDIM_ProfScope("build all scopes, scope voffs, locals, and location blocks")
+  {
+    RDI_U64 dst_scope_idx = 1;
+    RDI_U64 dst_scope_voff_idx = 1;
+    RDI_U64 dst_local_idx = 1;
+    RDI_U64 dst_location_block_idx = 1;
+    for(RDIM_ScopeChunkNode *chunk_n = src->first; chunk_n != 0; chunk_n = chunk_n->next)
+    {
+      for(RDI_U64 chunk_idx = 0; chunk_idx < chunk_n->count; chunk_idx += 1, dst_scope_idx += 1)
+      {
+        RDIM_Scope *src_scope = &chunk_n->v[chunk_idx];
+        RDI_Scope *dst_scope = &scopes[dst_scope_idx];
+        
+        //- rjf: push scope's voffs
+        RDI_U64 voff_idx_first = dst_scope_voff_idx;
+        {
+          for(RDIM_Rng1U64Node *n = src_scope->voff_ranges.first; n != 0; n = n->next)
+          {
+            scope_voffs[dst_scope_voff_idx] = n->v.min;
+            dst_scope_voff_idx += 1;
+            scope_voffs[dst_scope_voff_idx] = n->v.max;
+            dst_scope_voff_idx += 1;
+          }
+        }
+        RDI_U64 voff_idx_opl = dst_scope_voff_idx;
+        
+        //- rjf: push locals
+        RDI_U64 local_idx_first = dst_local_idx;
+        for(RDIM_Local *src_local = src_scope->first_local;
+            src_local != 0;
+            src_local = src_local->next, dst_local_idx += 1)
+        {
+          //- rjf: push local's locations
+          RDI_U64 location_block_idx_first = dst_location_block_idx;
+          for(RDIM_LocationCase *loccase = src_local->locset.first_location_case;
+              loccase != 0;
+              loccase = loccase->next, dst_location_block_idx += 1)
+          {
+            // rjf: fill location block
+            RDI_LocationBlock *dst_locblock = &location_blocks[dst_location_block_idx];
+            dst_locblock->scope_off_first   = loccase->voff_range.min;
+            dst_locblock->scope_off_opl     = loccase->voff_range.max;
+            dst_locblock->location_data_off = location_data_blobs.total_size;
+            
+            // rjf: serialize location into location data
+            RDIM_Location *src_location = loccase->location;
+            {
+              // rjf: nil location
+              if(src_location == 0)
+              {
+                rdim_str8_list_push_align(scratch.arena, &location_data_blobs, 8);
+                rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_lit("\0"));
+              }
+              
+              // rjf: valid location
+              else switch(src_location->kind)
+              {
+                // rjf: catchall unsupported case
+                default:
+                {
+                  rdim_str8_list_push_align(scratch.arena, &location_data_blobs, 8);
+                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_lit("\0"));
+                }break;
+                
+                // rjf: bytecode streams
+                case RDI_LocationKind_AddrBytecodeStream:
+                case RDI_LocationKind_ValBytecodeStream:
+                {
+                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&src_location->kind)));
+                  for(RDIM_EvalBytecodeOp *op_node = src_location->bytecode.first_op;
+                      op_node != 0;
+                      op_node = op_node->next)
+                  {
+                    RDI_U8 op_data[9];
+                    op_data[0] = op_node->op;
+                    rdim_memcpy(op_data + 1, &op_node->p, op_node->p_size);
+                    RDIM_String8 op_data_str = rdim_str8(op_data, 1 + op_node->p_size);
+                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, op_data_str));
+                  }
+                  {
+                    RDI_U64 data = 0;
+                    RDIM_String8 data_str = rdim_str8((RDI_U8 *)&data, 1);
+                    rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, data_str));
+                  }
+                }break;
+                
+                // rjf: simple addr+off cases
+                case RDI_LocationKind_AddrRegPlusU16:
+                case RDI_LocationKind_AddrAddrRegPlusU16:
+                {
+                  RDI_LocationRegPlusU16 loc = {0};
+                  loc.kind = src_location->kind;
+                  loc.reg_code = src_location->reg_code;
+                  loc.offset = src_location->offset;
+                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
+                }break;
+                
+                // rjf: register cases
+                case RDI_LocationKind_ValReg:
+                {
+                  RDI_LocationReg loc = {0};
+                  loc.kind = src_location->kind;
+                  loc.reg_code = src_location->reg_code;
+                  rdim_str8_list_push(scratch.arena, &location_data_blobs, rdim_str8_copy(scratch.arena, rdim_str8_struct(&loc)));
+                }break;
+              }
+            }
+          }
+          RDI_U64 location_block_idx_opl = dst_location_block_idx;
+          
+          //- rjf: fill local
+          RDI_Local *dst_local = &locals[dst_local_idx];
+          dst_local->kind            = src_local->kind;
+          dst_local->name_string_idx = rdim_bake_idx_from_string(strings, src_local->name);
+          dst_local->type_idx        = (RDI_U32)rdim_idx_from_type(src_local->type); // TODO(rjf): @u64_to_u32
+          dst_local->location_first  = (RDI_U32)location_block_idx_first; // TODO(rjf): @u64_to_u32
+          dst_local->location_opl    = (RDI_U32)location_block_idx_opl;   // TODO(rjf): @u64_to_u32
+        }
+        RDI_U64 local_idx_opl = dst_local_idx;
+        
+        //- rjf: fill scope
+        dst_scope->proc_idx               = (RDI_U32)rdim_idx_from_symbol(src_scope->symbol); // TODO(rjf): @u64_to_u32
+        dst_scope->parent_scope_idx       = (RDI_U32)rdim_idx_from_scope(src_scope->parent_scope); // TODO(rjf): @u64_to_u32
+        dst_scope->first_child_scope_idx  = (RDI_U32)rdim_idx_from_scope(src_scope->first_child); // TODO(rjf): @u64_to_u32
+        dst_scope->next_sibling_scope_idx = (RDI_U32)rdim_idx_from_scope(src_scope->next_sibling); // TODO(rjf): @u64_to_u32
+        dst_scope->voff_range_first       = (RDI_U32)voff_idx_first;                    // TODO(rjf): @u64_to_u32
+        dst_scope->voff_range_opl         = (RDI_U32)voff_idx_opl;                      // TODO(rjf): @u64_to_u32
+        dst_scope->local_first            = (RDI_U32)local_idx_first;                   // TODO(rjf): @u64_to_u32
+        dst_scope->local_count            = (RDI_U32)(local_idx_opl - local_idx_first); // TODO(rjf): @u64_to_u32
+      }
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: build flattened location data
+  //
+  RDIM_String8 location_data_blob = {0};
+  RDIM_ProfScope("build flattened location data")
+  {
+    location_data_blob = rdim_str8_list_join(arena, &location_data_blobs, rdim_str8_lit(""));
+  }
+  
+  ////////////////////////////
+  //- rjf: fill result
+  //
+  RDIM_ScopeBakeResult result = {0};
+  result.scopes                        = scopes;
+  result.scopes_count                  = src->total_count+1;
+  result.scope_voffs                   = scope_voffs;
+  result.scope_voffs_count             = src->scope_voff_count+1;
+  result.locals                        = locals;
+  result.locals_count                  = src->local_count+1;
+  result.location_blocks               = location_blocks;
+  result.location_blocks_count         = src->location_count+1;
+  result.location_data                 = location_data_blob.str;
+  result.location_data_size            = location_data_blob.size;
+  rdim_scratch_end(scratch);
+  return result;
+}
+
+RDI_PROC RDIM_ScopeVMapBakeResult
+rdim_bake_scope_vmap(RDIM_Arena *arena, RDIM_ScopeChunkList *src)
+{
+  RDIM_BakeVMap scope_vmap = {0};
+  {
+    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+    
+    // rjf: allocate keys/markers
+    RDI_U64 marker_count = src->scope_voff_count;
+    RDIM_SortKey    *keys    = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, marker_count);
+    RDIM_VMapMarker *markers = rdim_push_array_no_zero(scratch.arena, RDIM_VMapMarker, marker_count);
+    
+    // rjf: fill
+    {
+      RDIM_SortKey *key_ptr = keys;
+      RDIM_VMapMarker *marker_ptr = markers;
+      for(RDIM_ScopeChunkNode *chunk_n = src->first; chunk_n != 0; chunk_n = chunk_n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < chunk_n->count; chunk_idx += 1)
+        {
+          RDIM_Scope *src_scope = &chunk_n->v[chunk_idx];
+          RDI_U32 scope_idx = (RDI_U32)rdim_idx_from_scope(src_scope); // TODO(rjf): @u64_to_u32
+          for(RDIM_Rng1U64Node *n = src_scope->voff_ranges.first; n != 0; n = n->next)
+          {
+            key_ptr->key = n->v.min;
+            key_ptr->val = marker_ptr;
+            marker_ptr->idx = scope_idx;
+            marker_ptr->begin_range = 1;
+            key_ptr += 1;
+            marker_ptr += 1;
+            
+            key_ptr->key = n->v.max;
+            key_ptr->val = marker_ptr;
+            marker_ptr->idx = scope_idx;
+            marker_ptr->begin_range = 0;
+            key_ptr += 1;
+            marker_ptr += 1;
+          }
+        }
+      }
+    }
+    
+    // rjf: produce vmap
+    scope_vmap = rdim_bake_vmap_from_markers(arena, markers, keys, marker_count);
+    rdim_scratch_end(scratch);
+  }
+  RDIM_ScopeVMapBakeResult result = {scope_vmap};
+  return result;
+}
+
+RDI_PROC RDIM_TopLevelNameMapBakeResult
+rdim_bake_name_maps_top_level(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT])
+{
+  RDI_NameMap *dst_maps = rdim_push_array(arena, RDI_NameMap, RDI_NameMapKind_COUNT);
+  {
+    RDI_U64 dst_map_idx = 0;
+    RDI_U64 dst_map_bucket_idx = 0;
+    RDI_U64 dst_map_node_idx = 0;
+    for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
+        k < RDI_NameMapKind_COUNT;
+        k = (RDI_NameMapKind)(k+1))
+    {
+      RDI_NameMap *dst_map = &dst_maps[dst_map_idx];
+      RDIM_BakeNameMap *src_map = name_maps[k];
+      dst_map->bucket_base_idx = (RDI_U32)dst_map_bucket_idx; // TODO(rjf): @u64_to_u32
+      dst_map->node_base_idx   = (RDI_U32)dst_map_node_idx; // TODO(rjf): @u64_to_u32
+      dst_map->bucket_count    = (RDI_U32)src_map->name_count; // TODO(rjf): @u64_to_u32
+      dst_map->node_count      = (RDI_U32)src_map->name_count; // TODO(rjf): @u64_to_u32
+      dst_map_idx += 1;
+      dst_map_bucket_idx += dst_map->bucket_count;
+      dst_map_node_idx += dst_map->node_count;
+    }
+  }
+  RDIM_TopLevelNameMapBakeResult result = {0};
+  result.name_maps = dst_maps;
+  result.name_maps_count = RDI_NameMapKind_COUNT;
+  return result;
+}
+
+RDI_PROC RDIM_FilePathBakeResult
+rdim_bake_file_paths(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree)
+{
+  RDI_U32 dst_nodes_count = path_tree->count;
+  RDI_FilePathNode *dst_nodes = rdim_push_array(arena, RDI_FilePathNode, dst_nodes_count);
+  {
+    RDI_U32 dst_node_idx = 0;
+    for(RDIM_BakePathNode *src_node = path_tree->first;
+        src_node != 0;
+        src_node = src_node->next_order, dst_node_idx += 1)
+    {
+      RDI_FilePathNode *dst_node = &dst_nodes[dst_node_idx];
+      dst_node->name_string_idx = rdim_bake_idx_from_string(strings, src_node->name);
+      dst_node->source_file_idx = rdim_idx_from_src_file(src_node->src_file);
+      if(src_node->parent != 0)
+      {
+        dst_node->parent_path_node = src_node->parent->idx;
+      }
+      if(src_node->first_child != 0)
+      {
+        dst_node->first_child = src_node->first_child->idx;
+      }
+      if(src_node->next_sibling != 0)
+      {
+        dst_node->next_sibling = src_node->next_sibling->idx;
+      }
+    }
+  }
+  RDIM_FilePathBakeResult result = {0};
+  result.nodes = dst_nodes;
+  result.nodes_count = dst_nodes_count;
+  return result;
+}
+
+RDI_PROC RDIM_StringBakeResult
+rdim_bake_strings(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings)
+{
+  RDIM_BakeSectionList sections = {0};
+  RDI_U32 *str_offs = rdim_push_array_no_zero(arena, RDI_U32, strings->total_count + 1);
+  RDI_U32 off_cursor = 0;
+  {
+    RDI_U32 *off_ptr = str_offs;
+    *off_ptr = 0;
+    off_ptr += 1;
+    for(RDI_U64 slot_idx = 0; slot_idx < strings->slots_count; slot_idx += 1)
+    {
+      for(RDIM_BakeStringChunkNode *n = strings->slots[slot_idx].first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
+        {
+          RDIM_BakeString *bake_string = &n->v[chunk_idx];
+          *off_ptr = off_cursor;
+          off_cursor += bake_string->string.size;
+          off_ptr += 1;
+        }
+      }
+    }
+  }
+  RDI_U8 *buf = rdim_push_array(arena, RDI_U8, off_cursor);
+  {
+    RDI_U8 *ptr = buf;
+    for(RDI_U64 slot_idx = 0; slot_idx < strings->slots_count; slot_idx += 1)
+    {
+      for(RDIM_BakeStringChunkNode *n = strings->slots[slot_idx].first; n != 0; n = n->next)
+      {
+        for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1)
+        {
+          RDIM_BakeString *bake_string = &n->v[chunk_idx];
+          rdim_memcpy(ptr, bake_string->string.str, bake_string->string.size);
+          ptr += bake_string->string.size;
+        }
+      }
+    }
+  }
+  RDIM_StringBakeResult result = {0};
+  result.string_offs = str_offs;
+  result.string_offs_count = strings->total_count+1;
+  result.string_data = buf;
+  result.string_data_size = off_cursor;
+  return result;
+}
+
+RDI_PROC RDIM_IndexRunBakeResult
+rdim_bake_index_runs(RDIM_Arena *arena, RDIM_BakeIdxRunMap *idx_runs)
+{
+  RDI_U32 *idx_data = rdim_push_array_no_zero(arena, RDI_U32, idx_runs->idx_count);
+  {
+    RDI_U32 *out_ptr = idx_data;
+    RDI_U32 *opl = out_ptr + idx_runs->idx_count;
+    for(RDIM_BakeIdxRunNode *node = idx_runs->order_first;
+        node != 0 && out_ptr < opl;
+        node = node->order_next)
+    {
+      rdim_memcpy(out_ptr, node->idx_run, sizeof(*node->idx_run)*node->count);
+      out_ptr += node->count;
+    }
+  }
+  RDIM_IndexRunBakeResult result = {0};
+  result.idx_runs = idx_data;
+  result.idx_count = idx_runs->idx_count;
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
 
 //- rjf: top-level info
@@ -3321,7 +4556,6 @@ rdim_bake_top_level_name_map_section_list_from_params_maps(RDIM_Arena *arena, RD
       RDI_NameMap *dst_map = &dst_maps[dst_map_idx];
       RDIM_BakeNameMap *src_map = name_maps[k];
       if(src_map == 0 || src_map->name_count == 0) { continue; }
-      dst_map->kind = k;
       dst_map->bucket_base_idx = (RDI_U32)dst_map_bucket_idx; // TODO(rjf): @u64_to_u32
       dst_map->node_base_idx   = (RDI_U32)dst_map_node_idx; // TODO(rjf): @u64_to_u32
       dst_map->bucket_count    = (RDI_U32)src_map->name_count; // TODO(rjf): @u64_to_u32

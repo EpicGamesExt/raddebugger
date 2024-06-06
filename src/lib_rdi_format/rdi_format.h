@@ -888,7 +888,6 @@ X(NormalSourcePaths)\
 X(COUNT)\
 
 #define RDI_NameMap_XList \
-X(RDI_NameMapKind, kind)\
 X(RDI_U32, bucket_base_idx)\
 X(RDI_U32, node_base_idx)\
 X(RDI_U32, bucket_count)\
@@ -1268,7 +1267,6 @@ RDI_RegCode reg_code;
 typedef struct RDI_NameMap RDI_NameMap;
 struct RDI_NameMap
 {
-RDI_NameMapKind kind;
 RDI_U32 bucket_base_idx;
 RDI_U32 node_base_idx;
 RDI_U32 bucket_count;
