@@ -4,6 +4,8 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] mouse-driven way to complete file/folder selection, or more generally
+// query completion
 // [ ] display threads at their last exception address, rather than current
 // rip, if applicable
 //
