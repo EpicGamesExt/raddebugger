@@ -220,7 +220,7 @@ RDI_SectionMemberTable:
 
 @gen(catchall)
 {
-  @expand(RDI_SectionTable a) `$(a.name != COUNT -> "typedef " .. a.element_type .. " RDI_SectionElementType_" .. a.name .. ";")`;
+  @expand(RDI_SectionTable a) `$(a.name != COUNT && a.name != NULL -> "typedef " .. a.element_type .. =>40 .. " RDI_SectionElementType_" .. a.name .. ";")`;
   ``;
 }
 
