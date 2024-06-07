@@ -452,7 +452,7 @@ fzy_search_thread__entry_point(void *p)
         U64 element_size = rdi_section_element_size_table[section_kind];
         for(U64 idx = 1; task_is_good && idx < element_count; idx += 1)
         {
-          void *element = (U8 *)(*(void **)table_base) + element_size*idx;
+          void *element = (U8 *)table_base + element_size*idx;
           U32 *name_idx_ptr = (U32 *)((U8 *)element + element_name_idx_off);
           if(params.target == FZY_Target_UDTs)
           {
