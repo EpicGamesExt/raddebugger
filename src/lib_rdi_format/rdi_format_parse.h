@@ -7,6 +7,37 @@
 // Defines helper types and functions for extracting data from
 // RDI files.
 
+////////////////////////////////////////////////////////////////
+//~ Usage Samples
+//
+#if 0
+// Procedure Name -> Line
+{
+  RDI_Parsed *rdi = ...;
+  char *name = "mule_main";
+  RDI_Procedure *procedure = rdi_procedure_from_name_cstr(rdi, name);                  // 1. name -> procedure
+  RDI_U64 procedure_first_voff = rdi_first_voff_from_procedure(rdi, procedure);        // 2. procedure -> virtual offset
+  RDI_Line line = rdi_line_from_voff(rdi, procedure_first_voff);                       // 3. virtual offset -> line
+  RDI_SourceFile *file = rdi_source_file_from_line(rdi, &line);                        // 4. line -> source file
+  RDI_U64 file_path_size = 0;                                                          // 5. source file -> path
+  RDI_U8 *file_path = rdi_normal_path_from_source_file(rdi, file, &file_path_size);
+  printf("%s is at %.*s:%u\n", name, (int)file_path_size, file_path, line.line_num);
+}
+
+// Line -> Procedure Name
+{
+  RDI_Parsed *rdi = ...;
+  char *path = "c:/devel/raddebugger/src/mule/mule_main.cpp";
+  RDI_U32 line_num = 2557;
+  RDI_SourceFile *file = rdi_source_file_from_normal_path_cstr(rdi, path);      // 1. path -> source file
+  RDI_U64 voff = rdi_first_voff_from_source_file_line_num(rdi, file, line_num); // 2. (source file, line) -> virtual offset
+  RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);                // 3. virtual offset -> procedure
+  RDI_U64 name_size = 0;                                                        // 4. procedure -> name
+  RDI_U8 *name = rdi_name_from_procedure(rdi, procedure, &name_size);
+  printf("%s:%u is inside %.*s\n", path, line_num, (int)name_size, name);
+}
+#endif
+
 #ifndef RDI_FORMAT_PARSE_H
 #define RDI_FORMAT_PARSE_H
 
@@ -147,26 +178,37 @@ RDI_PROC RDI_U32 *rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node
 //- procedures
 RDI_PROC RDI_Procedure *rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size);
 RDI_PROC RDI_Procedure *rdi_procedure_from_name_cstr(RDI_Parsed *rdi, char *cstr);
+RDI_PROC RDI_U8 *rdi_name_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure, RDI_U64 *len_out);
 RDI_PROC RDI_Scope *rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
 RDI_PROC RDI_U64 rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
 RDI_PROC RDI_U64 rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
+RDI_PROC RDI_Procedure *rdi_procedure_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 
 //- scopes
 RDI_PROC RDI_U64 rdi_first_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_U64 rdi_opl_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
+RDI_PROC RDI_Scope *rdi_scope_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+RDI_PROC RDI_Procedure *rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 
 //- units
 RDI_PROC RDI_Unit *rdi_unit_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 RDI_PROC RDI_LineTable *rdi_line_table_from_unit(RDI_Parsed *rdi, RDI_Unit *unit);
 
-//- line info
+//- line tables
 RDI_PROC RDI_Line rdi_line_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 RDI_PROC RDI_Line rdi_line_from_line_table_voff(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_U64 voff);
 RDI_PROC RDI_SourceFile *rdi_source_file_from_line(RDI_Parsed *rdi, RDI_Line *line);
 
 //- source files
+RDI_PROC RDI_SourceFile *rdi_source_file_from_normal_path(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size);
+RDI_PROC RDI_SourceFile *rdi_source_file_from_normal_path_cstr(RDI_Parsed *rdi, char *cstr);
 RDI_PROC RDI_U8 *rdi_normal_path_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file, RDI_U64 *len_out);
 RDI_PROC RDI_FilePathNode *rdi_file_path_node_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file);
+RDI_PROC RDI_SourceLineMap *rdi_source_line_map_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file);
+RDI_PROC RDI_U64 rdi_first_voff_from_source_file_line_num(RDI_Parsed *rdi, RDI_SourceFile *src_file, RDI_U32 line_num);
+
+//- source line maps
+RDI_PROC RDI_U64 rdi_first_voff_from_source_line_map_num(RDI_Parsed *rdi, RDI_SourceLineMap *map, RDI_U32 line_num);
 
 //- file path nodes
 RDI_PROC RDI_FilePathNode *rdi_parent_from_file_path_node(RDI_Parsed *rdi, RDI_FilePathNode *node);
