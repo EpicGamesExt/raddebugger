@@ -475,6 +475,13 @@ struct P2R_BakeScopeVMapIn
   RDIM_ScopeChunkList *scopes;
 };
 
+typedef struct P2R_BakeInlineSitesIn P2R_BakeInlineSitesIn;
+struct P2R_BakeInlineSitesIn
+{
+  RDIM_BakeStringMapTight *strings;
+  RDIM_InlineSiteChunkList *inline_sites;
+};
+
 typedef struct P2R_BakeFilePathsIn P2R_BakeFilePathsIn;
 struct P2R_BakeFilePathsIn
 {

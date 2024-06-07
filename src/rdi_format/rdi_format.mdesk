@@ -62,7 +62,7 @@
   "";
   "// \"raddbg\0\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 4";
+  "#define RDI_ENCODING_VERSION 5";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -1006,9 +1006,10 @@ RDI_ScopeMemberTable:
   {voff_range_first           RDI_U32               ""}
   {voff_range_opl             RDI_U32               ""}
   {local_first                RDI_U32               ""}
-  {local_count                RDI_U32 ""}
-  {static_local_idx_run_first RDI_U32 ""}
-  {static_local_count         RDI_U32 ""}
+  {local_count                RDI_U32               ""}
+  {static_local_idx_run_first RDI_U32               ""}
+  {static_local_count         RDI_U32               ""}
+  {inline_site_idx            RDI_U32               ""}
 }
 
 @table(name type desc)
