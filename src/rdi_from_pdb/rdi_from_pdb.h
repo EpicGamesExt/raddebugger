@@ -502,7 +502,6 @@ struct P2R_BakeNameMapIn
   RDIM_BakeStringMapTight *strings;
   RDIM_BakeIdxRunMap *idx_runs;
   RDIM_BakeNameMap *map;
-  U64 base_node_idx;
   RDI_NameMapKind kind;
 };
 

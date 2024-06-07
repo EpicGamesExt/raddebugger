@@ -1474,7 +1474,7 @@ RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, R
 //~ rjf: [Baking] Build Artifacts -> Baked Versions
 
 //- rjf: partial/joinable baking functions
-RDI_PROC RDIM_NameMapBakeResult         rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src, RDI_U64 base_node_idx);
+RDI_PROC RDIM_NameMapBakeResult         rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src);
 
 //- rjf: partial bakes -> final bake functions
 RDI_PROC RDIM_NameMapBakeResult         rdim_name_map_bake_results_combine(RDIM_Arena *arena, RDIM_NameMapBakeResult *results, RDI_U64 results_count);

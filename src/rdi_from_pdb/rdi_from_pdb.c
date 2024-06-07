@@ -3812,7 +3812,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_name_map_task__entry_point)
 {
   P2R_BakeNameMapIn *in = (P2R_BakeNameMapIn *)p;
   RDIM_NameMapBakeResult *out = push_array(arena, RDIM_NameMapBakeResult, 1);
-  ProfScope("bake name map %i", in->kind) *out = rdim_bake_name_map(arena, in->strings, in->idx_runs, in->map, in->base_node_idx);
+  ProfScope("bake name map %i", in->kind) *out = rdim_bake_name_map(arena, in->strings, in->idx_runs, in->map);
   return out;
 }
 
@@ -4195,7 +4195,6 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   TS_Ticket bake_type_nodes_ticket = ts_kickoff(p2r_bake_type_nodes_task__entry_point, 0, &bake_type_nodes_in);
   TS_Ticket bake_name_maps_tickets[RDI_NameMapKind_COUNT] = {0};
   {
-    U64 base_node_idx = 0;
     for(EachNonZeroEnumVal(RDI_NameMapKind, k))
     {
       if(name_maps[k] == 0 || name_maps[k]->name_count == 0)
@@ -4206,10 +4205,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       in->strings       = &bake_strings;
       in->idx_runs      = idx_runs;
       in->map           = name_maps[k];
-      in->base_node_idx = base_node_idx;
       in->kind          = k;
       bake_name_maps_tickets[k] = ts_kickoff(p2r_bake_name_map_task__entry_point, 0, in);
-      base_node_idx += name_maps[k]->name_count;
     }
   }
   P2R_BakeIdxRunsIn bake_idx_runs_in = {idx_runs};
