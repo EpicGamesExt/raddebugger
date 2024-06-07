@@ -580,7 +580,8 @@ rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *rdi,
 
 internal void
 rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
-                    RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level){
+                    RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level)
+{
   
   U32 this_idx = (U32)(scope - bundle->scopes);
   
@@ -589,6 +590,12 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
   
   str8_list_pushf(arena, out, "%.*s proc_idx=%u\n",
                   indent_level, rdi_stringize_spaces, scope->proc_idx);
+  
+  if(scope->inline_site_idx != 0)
+  {
+    str8_list_pushf(arena, out, "%.*s inline_site_idx=%u\n",
+                    indent_level, rdi_stringize_spaces, scope->inline_site_idx);
+  }
   
   // voff ranges
   {
@@ -764,4 +771,21 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
   
   str8_list_pushf(arena, out, "%.*s[/%u]\n",
                   indent_level, rdi_stringize_spaces, this_idx);
+}
+
+internal void
+rdi_stringize_inline_site(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_InlineSite *inline_site, U32 indent_level)
+{
+  String8 name = {0};
+  name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+  RDI_SourceFile *source_file = rdi_element_from_name_idx(rdi, SourceFiles, inline_site->call_src_file_idx);
+  String8 source_file_path = {0};
+  source_file_path.str = rdi_normal_path_from_source_file(rdi, source_file, &source_file_path.size);
+  str8_list_pushf(arena, out, "%.*sname='%S'\n", indent_level, rdi_stringize_spaces, name);
+  str8_list_pushf(arena, out, "%.*scall_src_file_idx=%u ('%S')\n", indent_level, rdi_stringize_spaces, inline_site->call_src_file_idx, source_file_path);
+  str8_list_pushf(arena, out, "%.*scall_line_num=%u\n", indent_level, rdi_stringize_spaces, inline_site->call_line_num);
+  str8_list_pushf(arena, out, "%.*scall_col_num=%u\n", indent_level, rdi_stringize_spaces, inline_site->call_col_num);
+  str8_list_pushf(arena, out, "%.*stype_idx=%u\n", indent_level, rdi_stringize_spaces, inline_site->type_idx);
+  str8_list_pushf(arena, out, "%.*sowner_type_idx=%u\n", indent_level, rdi_stringize_spaces, inline_site->owner_type_idx);
+  str8_list_pushf(arena, out, "%.*sline_table_idx=%u\n", indent_level, rdi_stringize_spaces, inline_site->line_table_idx);
 }

@@ -73,5 +73,6 @@ internal void rdi_stringize_global_variable(Arena *arena, String8List *out, RDI_
 internal void rdi_stringize_thread_variable(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_ThreadVariable *thread_var, U32 indent_level);
 internal void rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_Procedure *proc, U32 indent_level);
 internal void rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level);
+internal void rdi_stringize_inline_site(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_InlineSite *inline_site, U32 indent_level);
 
 #endif // RDI_DUMP_H

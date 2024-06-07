@@ -52,7 +52,7 @@ typedef int64_t  RDI_S64;
 
 // \"raddbg\0\0\"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 4
+#define RDI_ENCODING_VERSION 5
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -779,6 +779,7 @@ X(RDI_U32, local_first)\
 X(RDI_U32, local_count)\
 X(RDI_U32, static_local_idx_run_first)\
 X(RDI_U32, static_local_count)\
+X(RDI_U32, inline_site_idx)\
 
 #define RDI_InlineSite_XList \
 X(RDI_U32, name_string_idx)\
@@ -1210,6 +1211,7 @@ RDI_U32 local_first;
 RDI_U32 local_count;
 RDI_U32 static_local_idx_run_first;
 RDI_U32 static_local_count;
+RDI_U32 inline_site_idx;
 };
 
 typedef struct RDI_InlineSite RDI_InlineSite;

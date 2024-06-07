@@ -1820,10 +1820,12 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
   U64 sym_global_variables_chunk_cap = 1024;
   U64 sym_thread_variables_chunk_cap = 1024;
   U64 sym_scopes_chunk_cap = 1024;
+  U64 sym_inline_sites_chunk_cap = 1024;
   RDIM_SymbolChunkList sym_procedures = {0};
   RDIM_SymbolChunkList sym_global_variables = {0};
   RDIM_SymbolChunkList sym_thread_variables = {0};
   RDIM_ScopeChunkList sym_scopes = {0};
+  RDIM_InlineSiteChunkList sym_inline_sites = {0};
   
   //////////////////////////
   //- rjf: symbols pass 1: produce procedure frame info map (procedure -> frame info)
@@ -2496,6 +2498,50 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           defrange_target = 0;
           defrange_target_is_param = 0;
         }break;
+        
+        //- rjf: INLINESITE
+        case CV_SymKind_INLINESITE:
+        {
+          // rjf: build inline site
+          RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &sym_inline_sites, sym_inline_sites_chunk_cap);
+          
+          // rjf: build scope
+          RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
+          scope->inline_site = inline_site;
+          if(top_scope_node == 0)
+          {
+            // TODO(rjf): log
+          }
+          if(top_scope_node != 0)
+          {
+            RDIM_Scope *top_scope = top_scope_node->scope;
+            SLLQueuePush_N(top_scope->first_child, top_scope->last_child, scope, next_sibling);
+            scope->parent_scope = top_scope;
+            scope->symbol = top_scope->symbol;
+          }
+          
+          // rjf: push this scope to scope stack
+          {
+            P2R_ScopeNode *node = free_scope_node;
+            if(node != 0) { SLLStackPop(free_scope_node); }
+            else { node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1); }
+            node->scope = scope;
+            SLLStackPush(top_scope_node, node);
+          }
+        }break;
+        
+        //- rjf: INLINESITE_END
+        case CV_SymKind_INLINESITE_END:
+        {
+          P2R_ScopeNode *n = top_scope_node;
+          if(n != 0)
+          {
+            SLLStackPop(top_scope_node);
+            SLLStackPush(free_scope_node, n);
+          }
+          defrange_target = 0;
+          defrange_target_is_param = 0;
+        }break;
       }
     }
   }
@@ -2509,6 +2555,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
     out->global_variables = sym_global_variables;
     out->thread_variables = sym_thread_variables;
     out->scopes           = sym_scopes;
+    out->inline_sites     = sym_inline_sites;
   }
   
 #undef p2r_type_ptr_from_itype
@@ -3782,6 +3829,14 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_scope_vmap_task__entry_point)
   return out;
 }
 
+internal TS_TASK_FUNCTION_DEF(p2r_bake_inline_sites_task__entry_point)
+{
+  P2R_BakeInlineSitesIn *in = (P2R_BakeInlineSitesIn *)p;
+  RDIM_InlineSiteBakeResult *out = push_array(arena, RDIM_InlineSiteBakeResult, 1);
+  ProfScope("bake inline sites") *out = rdim_bake_inline_sites(arena, in->strings, in->inline_sites);
+  return out;
+}
+
 internal TS_TASK_FUNCTION_DEF(p2r_bake_file_paths_task__entry_point)
 {
   P2R_BakeFilePathsIn *in = (P2R_BakeFilePathsIn *)p;
@@ -4153,6 +4208,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   TS_Ticket bake_scopes_ticket = ts_kickoff(p2r_bake_scopes_task__entry_point, 0, &bake_scopes_in);
   P2R_BakeScopeVMapIn bake_scope_vmap_in = {&in_params->scopes};
   TS_Ticket bake_scope_vmap_ticket = ts_kickoff(p2r_bake_scope_vmap_task__entry_point, 0, &bake_scope_vmap_in);
+  P2R_BakeInlineSitesIn bake_inline_sites_in = {&bake_strings, &in_params->inline_sites};
+  TS_Ticket bake_inline_sites_ticket = ts_kickoff(p2r_bake_inline_sites_task__entry_point, 0, &bake_inline_sites_in);
   P2R_BakeFilePathsIn bake_file_paths_in = {&bake_strings, path_tree};
   TS_Ticket bake_file_paths_ticket = ts_kickoff(p2r_bake_file_paths_task__entry_point, 0, &bake_file_paths_in);
   P2R_BakeStringsIn bake_strings_in = {&bake_strings};
@@ -4225,6 +4282,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   ProfScope("procedures")                   out_results->procedures            = *ts_join_struct(bake_procedures_ticket, max_U64, RDIM_ProcedureBakeResult);
   ProfScope("scopes")                       out_results->scopes                = *ts_join_struct(bake_scopes_ticket, max_U64, RDIM_ScopeBakeResult);
   ProfScope("scope vmap")                   out_results->scope_vmap            = *ts_join_struct(bake_scope_vmap_ticket, max_U64, RDIM_ScopeVMapBakeResult);
+  ProfScope("inline sites")                 out_results->inline_sites          = *ts_join_struct(bake_inline_sites_ticket, max_U64, RDIM_InlineSiteBakeResult);
   ProfScope("file paths")                   out_results->file_paths            = *ts_join_struct(bake_file_paths_ticket, max_U64, RDIM_FilePathBakeResult);
   ProfScope("strings")                      out_results->strings               = *ts_join_struct(bake_strings_ticket, max_U64, RDIM_StringBakeResult);
   ProfScope("type nodes")                   out_results->type_nodes            = *ts_join_struct(bake_type_nodes_ticket, max_U64, RDIM_TypeNodeBakeResult);

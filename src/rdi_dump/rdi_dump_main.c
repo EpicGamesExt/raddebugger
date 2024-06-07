@@ -65,8 +65,9 @@ entry_point(CmdLine *cmd_line)
     DumpFlag_Procedures         = (1<<14),
     DumpFlag_Scopes             = (1<<15),
     DumpFlag_ScopeVMap          = (1<<16),
-    DumpFlag_NameMaps           = (1<<17),
-    DumpFlag_Strings            = (1<<18),
+    DumpFlag_InlineSites        = (1<<17),
+    DumpFlag_NameMaps           = (1<<18),
+    DumpFlag_Strings            = (1<<19),
   };
   String8 input_name = {0};
   DumpFlags dump_flags = (U32)0xffffffff;
@@ -100,6 +101,7 @@ entry_point(CmdLine *cmd_line)
           else if(str8_match(n->string, str8_lit("procedures"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Procedures; }
           else if(str8_match(n->string, str8_lit("scopes"),                  StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Scopes; }
           else if(str8_match(n->string, str8_lit("scope_vmap"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_ScopeVMap; }
+          else if(str8_match(n->string, str8_lit("inline_sites"),            StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_InlineSites; }
           else if(str8_match(n->string, str8_lit("name_maps"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_NameMaps; }
           else if(str8_match(n->string, str8_lit("strings"),                 StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Strings; }
         }
@@ -420,6 +422,20 @@ entry_point(CmdLine *cmd_line)
       for(U64 idx = 0; idx < count; idx += 1)
       {
         str8_list_pushf(arena, &dump, " 0x%08x: %llu\n", v[idx].voff, v[idx].idx);
+      }
+      str8_list_push(arena, &dump, str8_lit("\n"));
+    }
+    
+    //- rjf: INLINE SITES
+    if(dump_flags & DumpFlag_InlineSites)
+    {
+      str8_list_pushf(arena, &dump, "# INLINE SITES:\n");
+      U64 count = 0;
+      RDI_InlineSite *v = rdi_table_from_name(rdi, InlineSites, &count);
+      for(U64 idx = 0; idx < count; idx += 1)
+      {
+        str8_list_pushf(arena, &dump, " inline_site[%I64u]:\n", idx);
+        rdi_stringize_inline_site(arena, &dump, rdi, &v[idx], 2);
       }
       str8_list_push(arena, &dump, str8_lit("\n"));
     }

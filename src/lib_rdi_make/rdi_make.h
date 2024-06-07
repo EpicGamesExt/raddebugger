@@ -826,6 +826,7 @@ struct RDIM_Scope
   RDIM_Local *first_local;
   RDIM_Local *last_local;
   RDI_U32 local_count;
+  RDIM_InlineSite *inline_site;
 };
 
 typedef struct RDIM_ScopeChunkNode RDIM_ScopeChunkNode;
@@ -1180,6 +1181,13 @@ struct RDIM_ScopeVMapBakeResult
   RDIM_BakeVMap vmap;
 };
 
+typedef struct RDIM_InlineSiteBakeResult RDIM_InlineSiteBakeResult;
+struct RDIM_InlineSiteBakeResult
+{
+  RDI_InlineSite *inline_sites;
+  RDI_U64 inline_sites_count;
+};
+
 typedef struct RDIM_TopLevelNameMapBakeResult RDIM_TopLevelNameMapBakeResult;
 struct RDIM_TopLevelNameMapBakeResult
 {
@@ -1235,6 +1243,7 @@ struct RDIM_BakeResults
   RDIM_ThreadVariableBakeResult thread_variables;
   RDIM_ProcedureBakeResult procedures;
   RDIM_ScopeBakeResult scopes;
+  RDIM_InlineSiteBakeResult inline_sites;
   RDIM_ScopeVMapBakeResult scope_vmap;
   RDIM_TopLevelNameMapBakeResult top_level_name_maps;
   RDIM_NameMapBakeResult name_maps;
@@ -1494,6 +1503,7 @@ RDI_PROC RDIM_ThreadVariableBakeResult  rdim_bake_thread_variables(RDIM_Arena *a
 RDI_PROC RDIM_ProcedureBakeResult       rdim_bake_procedures(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_SymbolChunkList *src);
 RDI_PROC RDIM_ScopeBakeResult           rdim_bake_scopes(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_ScopeChunkList *src);
 RDI_PROC RDIM_ScopeVMapBakeResult       rdim_bake_scope_vmap(RDIM_Arena *arena, RDIM_ScopeChunkList *src);
+RDI_PROC RDIM_InlineSiteBakeResult      rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_InlineSiteChunkList *src);
 RDI_PROC RDIM_TopLevelNameMapBakeResult rdim_bake_name_maps_top_level(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT]);
 RDI_PROC RDIM_FilePathBakeResult        rdim_bake_file_paths(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree);
 RDI_PROC RDIM_StringBakeResult          rdim_bake_strings(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings);

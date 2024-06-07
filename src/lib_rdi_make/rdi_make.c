@@ -3421,6 +3421,33 @@ rdim_bake_scope_vmap(RDIM_Arena *arena, RDIM_ScopeChunkList *src)
   return result;
 }
 
+RDI_PROC RDIM_InlineSiteBakeResult
+rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_InlineSiteChunkList *src)
+{
+  RDIM_InlineSiteBakeResult result = {0};
+  {
+    result.inline_sites_count = src->total_count;
+    result.inline_sites = rdim_push_array(arena, RDI_InlineSite, result.inline_sites_count+1);
+    RDI_U64 dst_idx = 1;
+    for(RDIM_InlineSiteChunkNode *n = src->first; n != 0; n = n->next)
+    {
+      for(RDI_U64 chunk_idx = 0; chunk_idx < n->count; chunk_idx += 1, dst_idx += 1)
+      {
+        RDI_InlineSite *dst = &result.inline_sites[dst_idx];
+        RDIM_InlineSite *src = &n->v[chunk_idx];
+        dst->name_string_idx   = rdim_bake_idx_from_string(strings, src->name);
+        dst->call_src_file_idx = (RDI_U32)rdim_idx_from_src_file(src->call_src_file); // TODO(rjf): @u64_to_u32
+        dst->call_line_num     = src->call_line_num;
+        dst->call_col_num      = src->call_col_num;
+        dst->type_idx          = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
+        dst->owner_type_idx    = (RDI_U32)rdim_idx_from_type(src->owner); // TODO(rjf): @u64_to_u32
+        dst->line_table_idx    = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
+      }
+    }
+  }
+  return result;
+}
+
 RDI_PROC RDIM_TopLevelNameMapBakeResult
 rdim_bake_name_maps_top_level(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *name_maps[RDI_NameMapKind_COUNT])
 {
@@ -3598,7 +3625,7 @@ rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
   bundle.sections[RDI_SectionKind_Scopes]               = rdim_serialized_section_make_unpacked_array(results->scopes.scopes, results->scopes.scopes_count);
   bundle.sections[RDI_SectionKind_ScopeVOffData]        = rdim_serialized_section_make_unpacked_array(results->scopes.scope_voffs, results->scopes.scope_voffs_count);
   bundle.sections[RDI_SectionKind_ScopeVMap]            = rdim_serialized_section_make_unpacked_array(results->scope_vmap.vmap.vmap, results->scope_vmap.vmap.count+1);
-  bundle.sections[RDI_SectionKind_InlineSites]          = rdim_serialized_section_make_unpacked(0, 0);
+  bundle.sections[RDI_SectionKind_InlineSites]          = rdim_serialized_section_make_unpacked_array(results->inline_sites.inline_sites, results->inline_sites.inline_sites_count);
   bundle.sections[RDI_SectionKind_Locals]               = rdim_serialized_section_make_unpacked_array(results->scopes.locals, results->scopes.locals_count);
   bundle.sections[RDI_SectionKind_LocationBlocks]       = rdim_serialized_section_make_unpacked_array(results->scopes.location_blocks, results->scopes.location_blocks_count);
   bundle.sections[RDI_SectionKind_LocationData]         = rdim_serialized_section_make_unpacked_array(results->scopes.location_data, results->scopes.location_data_size);
