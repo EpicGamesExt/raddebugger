@@ -2187,7 +2187,7 @@ rdim_bake_path_tree_from_params(RDIM_Arena *arena, RDIM_BakeParams *params)
 //- rjf: partial/joinable baking functions
 
 RDI_PROC RDIM_NameMapBakeResult
-rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src, RDI_U64 base_node_idx)
+rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src)
 {
   RDIM_NameMapBakeResult result = {0};
   if(src->name_count != 0)
@@ -2232,7 +2232,7 @@ rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_Bak
         RDI_NameMapNode *node_ptr = baked_nodes;
         for(RDI_U32 i = 0; i < baked_buckets_count; i += 1, bucket_ptr += 1)
         {
-          bucket_ptr->first_node = (RDI_U32)(node_ptr - baked_nodes);
+          bucket_ptr->first_node = (RDI_U32)((RDI_U64)(node_ptr - baked_nodes));
           bucket_ptr->node_count = sbuckets[i].count;
           for(RDIM_NameMapSemiNode *snode = sbuckets[i].first;
               snode != 0;
@@ -3426,20 +3426,18 @@ rdim_bake_name_maps_top_level(RDIM_Arena *arena, RDIM_BakeStringMapTight *string
 {
   RDI_NameMap *dst_maps = rdim_push_array(arena, RDI_NameMap, RDI_NameMapKind_COUNT);
   {
-    RDI_U64 dst_map_idx = 0;
     RDI_U64 dst_map_bucket_idx = 0;
     RDI_U64 dst_map_node_idx = 0;
     for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
         k < RDI_NameMapKind_COUNT;
         k = (RDI_NameMapKind)(k+1))
     {
-      RDI_NameMap *dst_map = &dst_maps[dst_map_idx];
+      RDI_NameMap *dst_map = &dst_maps[k];
       RDIM_BakeNameMap *src_map = name_maps[k];
       dst_map->bucket_base_idx = (RDI_U32)dst_map_bucket_idx; // TODO(rjf): @u64_to_u32
       dst_map->node_base_idx   = (RDI_U32)dst_map_node_idx; // TODO(rjf): @u64_to_u32
       dst_map->bucket_count    = (RDI_U32)src_map->name_count; // TODO(rjf): @u64_to_u32
       dst_map->node_count      = (RDI_U32)src_map->name_count; // TODO(rjf): @u64_to_u32
-      dst_map_idx += 1;
       dst_map_bucket_idx += dst_map->bucket_count;
       dst_map_node_idx += dst_map->node_count;
     }
