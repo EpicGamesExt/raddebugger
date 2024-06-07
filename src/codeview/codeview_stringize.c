@@ -49,12 +49,12 @@ cv_stringize_lvar_addr_gap_list(Arena *arena, String8List *out, void *first, voi
 }
 
 internal String8
-cv_string_from_c13_sub_section_kind(CV_C13_SubSectionKind kind){
+cv_string_from_c13_sub_section_kind(CV_C13SubSectionKind kind){
   String8 result = str8_lit("UNRECOGNIZED_C13_SUB_SECTION_KIND");
   switch (kind){
     case 0: str8_lit("PARSE_ERROR"); break;
-#define X(N,c) case CV_C13_SubSectionKind_##N: result = str8_lit(#N); break;
-    CV_C13_SubSectionKindXList(X)
+#define X(N,c) case CV_C13SubSectionKind_##N: result = str8_lit(#N); break;
+    CV_C13SubSectionKindXList(X)
 #undef X
   }
   return(result);
@@ -2280,7 +2280,7 @@ cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13){
     
     switch(node->kind)
     {
-      case CV_C13_SubSectionKind_Lines:
+      case CV_C13SubSectionKind_Lines:
       {
         if (node->lines_first == 0)
         {
@@ -2309,12 +2309,12 @@ cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13){
         }
       }break;
       
-      case CV_C13_SubSectionKind_FileChksms:
+      case CV_C13SubSectionKind_FileChksms:
       {
         str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
       }break;
       
-      case CV_C13_SubSectionKind_InlineeLines:
+      case CV_C13SubSectionKind_InlineeLines:
       {
         str8_list_push(arena, out, str8_lit(" no stringizer path\n"));
       }break;

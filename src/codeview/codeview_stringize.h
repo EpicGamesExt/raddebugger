@@ -27,7 +27,7 @@ internal void cv_stringize_lvar_addr_gap_list(Arena *arena, String8List *out,
                                               void *first, void *opl);
 
 internal String8 cv_string_from_basic_type(CV_BasicType basic_type);
-internal String8 cv_string_from_c13_sub_section_kind(CV_C13_SubSectionKind kind);
+internal String8 cv_string_from_c13_sub_section_kind(CV_C13SubSectionKind kind);
 internal String8 cv_string_from_reg(CV_Arch arch, CV_Reg reg);
 internal String8 cv_string_from_pointer_kind(CV_PointerKind ptr_kind);
 internal String8 cv_string_from_pointer_mode(CV_PointerMode ptr_mode);

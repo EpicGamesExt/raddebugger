@@ -544,7 +544,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_c13_stream_parse_task__entry_point)
 {
   P2R_C13StreamParseIn *in = (P2R_C13StreamParseIn *)p;
   void *out = 0;
-  ProfScope("parse c13 stream") out = cv_c13_from_data(arena, in->data, in->strtbl, in->coff_sections);
+  ProfScope("parse c13 stream") out = cv_c13_parsed_from_data(arena, in->data, in->strtbl, in->coff_sections);
   return out;
 }
 
@@ -608,56 +608,64 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
       
       //- rjf: build this unit's line table
       RDIM_LineTable *line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 256);
-      if(pdb_unit_c13->first_sub_section != 0)
+      for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
+          node != 0;
+          node = node->next)
       {
-        for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
-            node != 0;
-            node = node->next)
+        if(node->kind == CV_C13SubSectionKind_Lines)
         {
-          if(node->kind == CV_C13_SubSectionKind_Lines)
+          for(CV_C13LinesParsedNode *lines_n = node->lines_first;
+              lines_n != 0;
+              lines_n = lines_n->next)
           {
-            for(CV_C13LinesParsedNode *lines_n = node->lines_first;
-                lines_n != 0;
-                lines_n = lines_n->next)
+            CV_C13LinesParsed *lines = &lines_n->v;
+            
+            // rjf: file name -> normalized file path
+            String8 file_path = lines->file_name;
+            String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+            for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
             {
-              CV_C13LinesParsed *lines = &lines_n->v;
-              
-              // rjf: file name -> normalized file path
-              String8 file_path = lines->file_name;
-              String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
-              for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
+              if(file_path_normalized.str[idx] == '\\')
               {
-                if(file_path_normalized.str[idx] == '\\')
-                {
-                  file_path_normalized.str[idx] = '/';
-                }
+                file_path_normalized.str[idx] = '/';
               }
-              
-              // rjf: normalized file path -> source file node
-              U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
-              U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
-              P2R_SrcFileNode *src_file_node = 0;
-              for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
-              {
-                if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
-                {
-                  src_file_node = n;
-                  break;
-                }
-              }
-              if(src_file_node == 0)
-              {
-                src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
-                SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
-                src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &out->src_files, 4096);
-                src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
-              }
-              
-              // rjf: push sequence into both line table & source file's line map
-              RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, lines->voffs, lines->line_nums, lines->col_nums, lines->line_count);
-              rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
             }
+            
+            // rjf: normalized file path -> source file node
+            U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
+            U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
+            P2R_SrcFileNode *src_file_node = 0;
+            for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+            {
+              if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
+              {
+                src_file_node = n;
+                break;
+              }
+            }
+            if(src_file_node == 0)
+            {
+              src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
+              SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
+              src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &out->src_files, 4096);
+              src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
+            }
+            
+            // rjf: push sequence into both line table & source file's line map
+            RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, lines->voffs, lines->line_nums, lines->col_nums, lines->line_count);
+            rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
           }
+        }
+      }
+      
+      //- rjf: build all inlinee line tables within this unit
+      for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
+          node != 0;
+          node = node->next)
+      {
+        if(node->kind == CV_C13SubSectionKind_InlineeLines)
+        {
+          
         }
       }
       
@@ -2506,6 +2514,22 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
           String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
           
+          // rjf: map inlinee -> parsed cv c13 inlinee line info
+          CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
+          if(in->c13 != 0)
+          {
+            U64 hash = cv_hash_from_item_id(sym->inlinee);
+            U64 slot_idx = in->c13->inlinee_lines_parsed_slots_count;
+            for(CV_C13InlineeLinesParsedNode *n = in->c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
+            {
+              if(n->v.inlinee == sym->inlinee)
+              {
+                inlinee_lines_parsed = &n->v;
+                break;
+              }
+            }
+          }
+          
           // rjf: extract external info about inline site
           String8    name      = str8_zero();
           RDIM_Type *type      = 0;
@@ -3577,6 +3601,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           tasks_inputs[idx].sym             = sym_for_unit[idx-global_stream_subdivision_tasks_count];
           tasks_inputs[idx].sym_ranges_first= 0;
           tasks_inputs[idx].sym_ranges_opl  = sym_for_unit[idx-global_stream_subdivision_tasks_count]->sym_ranges.count;
+          tasks_inputs[idx].c13             = c13_for_unit[idx-global_stream_subdivision_tasks_count];
         }
         tasks_tickets[idx] = ts_kickoff(p2r_symbol_stream_convert_task__entry_point, 0, &tasks_inputs[idx]);
       }
