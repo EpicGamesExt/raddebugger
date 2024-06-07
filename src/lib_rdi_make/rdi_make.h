@@ -1220,6 +1220,15 @@ struct RDIM_IndexRunBakeResult
 };
 
 ////////////////////////////////
+//~ rjf: Serializing Types
+
+typedef struct RDIM_SerializeParams RDIM_SerializeParams;
+struct RDIM_SerializeParams
+{
+  RDIM_String8 section_data[RDI_SectionKind_COUNT];
+};
+
+////////////////////////////////
 //~ rjf: Basic Helpers
 
 //- rjf: memory operations
@@ -1256,8 +1265,9 @@ RDI_PROC RDIM_String8 rdim_str8_copy(RDIM_Arena *arena, RDIM_String8 src);
 RDI_PROC RDIM_String8 rdim_str8f(RDIM_Arena *arena, char *fmt, ...);
 RDI_PROC RDIM_String8 rdim_str8fv(RDIM_Arena *arena, char *fmt, va_list args);
 RDI_PROC RDI_S32 rdim_str8_match(RDIM_String8 a, RDIM_String8 b, RDIM_StringMatchFlags flags);
-#define rdim_str8_lit(S)    rdim_str8((RDI_U8*)(S), sizeof(S) - 1)
-#define rdim_str8_struct(S) rdim_str8((RDI_U8*)(S), sizeof(*(S)))
+#define rdim_str8_lit(S)              rdim_str8((RDI_U8*)(S), sizeof(S) - 1)
+#define rdim_str8_struct(S)           rdim_str8((RDI_U8*)(S), sizeof(*(S)))
+#define rdim_str8_struct_array(S, C)  rdim_str8((RDI_U8*)(S), sizeof(*(S)) * (C))
 
 //- rjf: string lists
 RDI_PROC void rdim_str8_list_push(RDIM_Arena *arena, RDIM_String8List *list, RDIM_String8 string);
@@ -1456,6 +1466,7 @@ RDI_PROC RDIM_IndexRunBakeResult        rdim_bake_index_runs(RDIM_Arena *arena, 
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
 
+#if 0
 //- rjf: top-level info
 RDI_PROC RDIM_BakeSectionList rdim_bake_top_level_info_section_list_from_params(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeParams *params);
 
@@ -1510,6 +1521,7 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_string_section_list_from_string_map(RDIM
 
 //- rjf: index runs
 RDI_PROC RDIM_BakeSectionList rdim_bake_idx_run_section_list_from_idx_run_map(RDIM_Arena *arena, RDIM_BakeIdxRunMap *idx_runs);
+#endif
 
 ////////////////////////////////
 //~ rjf: [Serializing] Baked Data Section List -> Serialized Binary Strings
