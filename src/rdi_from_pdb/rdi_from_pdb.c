@@ -2502,8 +2502,46 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
         //- rjf: INLINESITE
         case CV_SymKind_INLINESITE:
         {
+          // rjf: unpack sym
+          CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
+          String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
+          
+          // rjf: extract external info about inline site
+          String8    name      = str8_zero();
+          RDIM_Type *type      = 0;
+          RDIM_Type *owner     = 0;
+          if(in->ipi_leaf != 0 && in->ipi_leaf->itype_first <= sym->inlinee && sym->inlinee < in->ipi_leaf->itype_opl)
+          {
+            CV_RecRange rec_range = in->ipi_leaf->leaf_ranges.ranges[sym->inlinee - in->ipi_leaf->itype_first];
+            String8     rec_data  = str8_substr(in->ipi_leaf->data, rng_1u64(rec_range.off, rec_range.off + rec_range.hdr.size));
+            void       *raw_leaf  = rec_data.str + sizeof(U16);
+            
+            // rjf: extract method inline info
+            if(rec_range.hdr.kind == CV_LeafIDKind_MFUNC_ID &&
+               rec_range.hdr.size >= sizeof(CV_LeafMFuncId))
+            {
+              CV_LeafMFuncId *mfunc_id = (CV_LeafMFuncId*)raw_leaf;
+              name  = str8_cstring_capped(mfunc_id + 1, rec_data.str + rec_data.size);
+              type  = p2r_type_ptr_from_itype(mfunc_id->itype);
+              owner = mfunc_id->owner_itype != 0 ? p2r_type_ptr_from_itype(mfunc_id->owner_itype) : 0;
+            }
+            
+            // rjf: extract non-method function inline info
+            else if(rec_range.hdr.kind == CV_LeafIDKind_FUNC_ID &&
+                    rec_range.hdr.size >= sizeof(CV_LeafFuncId))
+            {
+              CV_LeafFuncId *func_id = (CV_LeafFuncId*)raw_leaf;
+              name  = str8_cstring_capped(func_id + 1, rec_data.str + rec_data.size);
+              type  = p2r_type_ptr_from_itype(func_id->itype);
+              owner = func_id->scope_string_id != 0 ? p2r_type_ptr_from_itype(func_id->scope_string_id) : 0;
+            }
+          }
+          
           // rjf: build inline site
           RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &sym_inline_sites, sym_inline_sites_chunk_cap);
+          inline_site->name = name;
+          inline_site->type = type;
+          inline_site->owner= owner;
           
           // rjf: build scope
           RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
@@ -3523,6 +3561,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
         tasks_inputs[idx].coff_sections   = coff_sections;
         tasks_inputs[idx].tpi_hash        = tpi_hash;
         tasks_inputs[idx].tpi_leaf        = tpi_leaf;
+        tasks_inputs[idx].ipi_leaf        = ipi_leaf;
         tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
         tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
         tasks_inputs[idx].link_name_map   = link_name_map;

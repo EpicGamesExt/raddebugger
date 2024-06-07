@@ -56,7 +56,7 @@ commands =
   },
   .rjf_f2 =
   {
-    .win = "build rdi_from_pdb rdi_dump && pushd build && rdi_from_pdb --pdb:mule_main.pdb --out:mule_main_1.rdi && rdi_dump mule_main_1.rdi > mule_main_1.dump && rdi_from_pdb --pdb:mule_main.pdb --out:mule_main_2.rdi && rdi_dump mule_main_2.rdi > mule_main_2.dump && diff mule_main_1.dump mule_main_2.dump && popd",
+    .win = "build rdi_from_pdb rdi_dump && pushd build && rdi_from_pdb --pdb:mule_main.pdb --out:mule_main.rdi && rdi_dump mule_main.rdi > mule_main.dump",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
