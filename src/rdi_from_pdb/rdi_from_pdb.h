@@ -251,6 +251,7 @@ struct P2R_SymbolStreamConvertIn
   CV_LeafParsed *tpi_leaf;
   CV_LeafParsed *ipi_leaf;
   CV_SymParsed *sym;
+  CV_C13Parsed *c13;
   U64 sym_ranges_first;
   U64 sym_ranges_opl;
   CV_TypeId *itype_fwd_map;
