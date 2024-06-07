@@ -249,6 +249,7 @@ struct P2R_SymbolStreamConvertIn
   PDB_CoffSectionArray *coff_sections;
   PDB_TpiHashParsed *tpi_hash;
   CV_LeafParsed *tpi_leaf;
+  CV_LeafParsed *ipi_leaf;
   CV_SymParsed *sym;
   U64 sym_ranges_first;
   U64 sym_ranges_opl;
