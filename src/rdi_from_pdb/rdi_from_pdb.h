@@ -55,7 +55,13 @@ struct P2R_Convert2Bake
 typedef struct P2R_Bake2Serialize P2R_Bake2Serialize;
 struct P2R_Bake2Serialize
 {
-  RDIM_SerializeParams serialize_params;
+  RDIM_BakeResults bake_results;
+};
+
+typedef struct P2R_Serialize2File P2R_Serialize2File;
+struct P2R_Serialize2File
+{
+  RDIM_SerializedSectionBundle bundle;
 };
 
 ////////////////////////////////
@@ -269,7 +275,7 @@ struct P2R_SymbolStreamConvertOut
 typedef struct P2R_BakeLineTablesIn P2R_BakeLineTablesIn;
 struct P2R_BakeLineTablesIn
 {
-  RDIM_BakeParams *params;
+  RDIM_LineTableChunkList *line_tables;
 };
 
 //- rjf: string map baking task types
@@ -419,54 +425,54 @@ struct P2R_BakeSrcFilesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_BakePathTree *path_tree;
-  RDIM_BakeParams *params;
+  RDIM_SrcFileChunkList *src_files;
 };
 
 typedef struct P2R_BakeUDTsIn P2R_BakeUDTsIn;
 struct P2R_BakeUDTsIn
 {
   RDIM_BakeStringMapTight *strings;
-  RDIM_BakeParams *params;
+  RDIM_UDTChunkList *udts;
 };
 
 typedef struct P2R_BakeGlobalVariablesIn P2R_BakeGlobalVariablesIn;
 struct P2R_BakeGlobalVariablesIn
 {
   RDIM_BakeStringMapTight *strings;
-  RDIM_BakeParams *params;
+  RDIM_SymbolChunkList *global_variables;
 };
 
 typedef struct P2R_BakeGlobalVMapIn P2R_BakeGlobalVMapIn;
 struct P2R_BakeGlobalVMapIn
 {
-  RDIM_BakeParams *params;
+  RDIM_SymbolChunkList *global_variables;
 };
 
 typedef struct P2R_BakeThreadVariablesIn P2R_BakeThreadVariablesIn;
 struct P2R_BakeThreadVariablesIn
 {
   RDIM_BakeStringMapTight *strings;
-  RDIM_BakeParams *params;
+  RDIM_SymbolChunkList *thread_variables;
 };
 
 typedef struct P2R_BakeProceduresIn P2R_BakeProceduresIn;
 struct P2R_BakeProceduresIn
 {
   RDIM_BakeStringMapTight *strings;
-  RDIM_BakeParams *params;
+  RDIM_SymbolChunkList *procedures;
 };
 
 typedef struct P2R_BakeScopesIn P2R_BakeScopesIn;
 struct P2R_BakeScopesIn
 {
   RDIM_BakeStringMapTight *strings;
-  RDIM_BakeParams *params;
+  RDIM_ScopeChunkList *scopes;
 };
 
 typedef struct P2R_BakeScopeVMapIn P2R_BakeScopeVMapIn;
 struct P2R_BakeScopeVMapIn
 {
-  RDIM_BakeParams *params;
+  RDIM_ScopeChunkList *scopes;
 };
 
 typedef struct P2R_BakeFilePathsIn P2R_BakeFilePathsIn;
@@ -487,7 +493,7 @@ struct P2R_BakeTypeNodesIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_BakeIdxRunMap *idx_runs;
-  RDIM_BakeParams *params;
+  RDIM_TypeChunkList *types;
 };
 
 typedef struct P2R_BakeNameMapIn P2R_BakeNameMapIn;
@@ -495,9 +501,9 @@ struct P2R_BakeNameMapIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_BakeIdxRunMap *idx_runs;
-  RDIM_BakeParams *params;
-  RDI_NameMapKind kind;
   RDIM_BakeNameMap *map;
+  U64 base_node_idx;
+  RDI_NameMapKind kind;
 };
 
 typedef struct P2R_BakeIdxRunsIn P2R_BakeIdxRunsIn;
@@ -628,6 +634,6 @@ internal P2R_Bake2Serialize *p2r_bake(Arena *arena, P2R_Convert2Bake *in);
 ////////////////////////////////
 //~ rjf: Top-Level Compression Entry Point
 
-internal P2R_Bake2Serialize *p2r_compress(Arena *arena, P2R_Bake2Serialize *in);
+internal P2R_Serialize2File *p2r_compress(Arena *arena, P2R_Serialize2File *in);
 
 #endif // RDI_FROM_PDB_H
