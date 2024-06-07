@@ -26,7 +26,7 @@
 #include "base/base_inc.h"
 #include "os/os_inc.h"
 #include "task_system/task_system.h"
-#include "rdi_make_local/rdi_make_local.h"
+#include "rdi_make/rdi_make_local.h"
 #include "coff/coff.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_stringize.h"
@@ -39,7 +39,7 @@
 #include "base/base_inc.c"
 #include "os/os_inc.c"
 #include "task_system/task_system.c"
-#include "rdi_make_local/rdi_make_local.c"
+#include "rdi_make/rdi_make_local.c"
 #include "coff/coff.c"
 #include "codeview/codeview.c"
 #include "codeview/codeview_stringize.c"
@@ -56,7 +56,7 @@
 typedef struct P2B_BakeUnitVMapIn P2B_BakeUnitVMapIn;
 struct P2B_BakeUnitVMapIn
 {
-  RDIM_BakeParams *params;
+  RDIM_UnitChunkList *units;
 };
 
 typedef struct P2B_BakeUnitVMapOut P2B_BakeUnitVMapOut;
@@ -70,21 +70,9 @@ internal TS_TASK_FUNCTION_DEF(p2b_bake_unit_vmap_task__entry_point)
 {
   P2B_BakeUnitVMapIn *in = (P2B_BakeUnitVMapIn *)p;
   P2B_BakeUnitVMapOut *out = push_array(arena, P2B_BakeUnitVMapOut, 1);
-  RDIM_BakeSectionList sections = rdim_bake_unit_vmap_section_list_from_params(arena, in->params);
-  RDIM_BakeSection *vmap_section = 0;
-  for(RDIM_BakeSectionNode *n = sections.first; n != 0 && vmap_section == 0; n = n->next)
-  {
-    switch(n->v.tag)
-    {
-      default:{}break;
-      case RDI_SectionKind_UnitVmap:{vmap_section = &n->v;}break;
-    }
-  }
-  if(vmap_section != 0)
-  {
-    out->vmap_entries = (RDI_VMapEntry *)vmap_section->data;
-    out->vmap_entries_count = vmap_section->unpacked_size/sizeof(RDI_VMapEntry);
-  }
+  RDIM_UnitVMapBakeResult bake = rdim_bake_unit_vmap(arena, in->units);
+  out->vmap_entries = bake.vmap.vmap;
+  out->vmap_entries_count = bake.vmap.count+1;
   return out;
 }
 
@@ -251,7 +239,7 @@ entry_point(CmdLine *cmdline)
     P2B_BakeUnitVMapIn bake_unit_vmap_in = {params};
     TS_Ticket bake_unit_vmap_ticket = ts_kickoff(p2b_bake_unit_vmap_task__entry_point, 0, &bake_unit_vmap_in);
     
-    //- rjf: kick off per-unit baking
+    //- rjf: kick off per-line-table baking
     P2B_BakeUnitIn *bake_units_in = push_array(arena, P2B_BakeUnitIn, params->units.total_count+1);
     TS_Ticket *bake_units_tickets = push_array(arena, TS_Ticket, params->units.total_count+1);
     {

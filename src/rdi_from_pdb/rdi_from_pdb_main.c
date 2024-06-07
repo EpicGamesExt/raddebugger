@@ -98,22 +98,31 @@ entry_point(CmdLine *cmdline)
     bake2srlz = p2r_bake(arena, convert2bake);
   }
   
+  //- rjf: serialize
+  P2R_Serialize2File *srlz2file = 0;
+  ProfScope("serialize")
+  {
+    srlz2file = push_array(arena, P2R_Serialize2File, 1);
+    srlz2file->bundle = rdim_serialized_section_bundle_from_bake_results(&bake2srlz->bake_results);
+  }
+  
   //- rjf: compress
-  P2R_Bake2Serialize *bake2srlz_compressed = bake2srlz;
+  P2R_Serialize2File *srlz2file_compressed = srlz2file;
   if(cmd_line_has_flag(cmdline, str8_lit("compress"))) ProfScope("compress")
   {
-    bake2srlz_compressed = p2r_compress(arena, bake2srlz);
+    srlz2file_compressed = push_array(arena, P2R_Serialize2File, 1);
+    srlz2file_compressed = p2r_compress(arena, srlz2file);
   }
   
   //- rjf: serialize
-  String8List serialize_out = rdim_serialized_strings_from_params_bake_section_list(arena, &convert2bake->bake_params, &bake2srlz_compressed->sections);
+  String8List blobs = rdim_file_blobs_from_section_bundle(arena, &srlz2file_compressed->bundle);
   
   //- rjf: write
   ProfScope("write")
   {
     OS_Handle output_file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Write, user2convert->output_name);
     U64 off = 0;
-    for(String8Node *n = serialize_out.first; n != 0; n = n->next)
+    for(String8Node *n = blobs.first; n != 0; n = n->next)
     {
       os_file_write(output_file, r1u64(off, off+n->string.size), n->string.str);
       off += n->string.size;

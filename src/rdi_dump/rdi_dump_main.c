@@ -74,9 +74,9 @@ entry_point(CmdLine *cmd_line)
     // rjf: extract input file path
     input_name = str8_list_first(&cmd_line->inputs);
     
-    // rjf: extract dump options
+    // rjf: extract "only" options
     {
-      String8List dump_options = cmd_line_strings(cmd_line, str8_lit("dump"));
+      String8List dump_options = cmd_line_strings(cmd_line, str8_lit("only"));
       if(dump_options.first != 0)
       {
         dump_flags = 0;
@@ -101,6 +101,7 @@ entry_point(CmdLine *cmd_line)
           else if(str8_match(n->string, str8_lit("scopes"),                  StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Scopes; }
           else if(str8_match(n->string, str8_lit("scope_vmap"),              StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_ScopeVMap; }
           else if(str8_match(n->string, str8_lit("name_maps"),               StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_NameMaps; }
+          else if(str8_match(n->string, str8_lit("strings"),                 StringMatchFlag_CaseInsensitive)) { dump_flags |= DumpFlag_Strings; }
         }
       }
     }

@@ -2292,6 +2292,44 @@ rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_Bak
   return result;
 }
 
+//- rjf: partial bakes -> final bake functions
+
+RDI_PROC RDIM_NameMapBakeResult
+rdim_name_map_bake_results_combine(RDIM_Arena *arena, RDIM_NameMapBakeResult *results, RDI_U64 results_count)
+{
+  RDIM_NameMapBakeResult result = {0};
+  {
+    //- rjf: count needed # of buckets/nodes
+    RDI_U64 all_buckets_count = 0;
+    RDI_U64 all_nodes_count = 0;
+    for(RDI_U64 idx = 0; idx < results_count; idx += 1)
+    {
+      all_buckets_count += results[idx].buckets_count;
+      all_nodes_count   += results[idx].nodes_count;
+    }
+    
+    //- rjf: allocate outputs
+    result.buckets_count = all_buckets_count;
+    result.buckets       = rdim_push_array_no_zero(arena, RDI_NameMapBucket, result.buckets_count);
+    result.nodes_count   = all_nodes_count;
+    result.nodes         = rdim_push_array_no_zero(arena, RDI_NameMapNode, result.nodes_count);
+    
+    //- rjf: fill outputs
+    {
+      RDI_U64 buckets_off = 0;
+      RDI_U64 nodes_off = 0;
+      for(RDI_U64 idx = 0; idx < results_count; idx += 1)
+      {
+        rdim_memcpy(result.buckets + buckets_off, results[idx].buckets, sizeof(result.buckets[0])*results[idx].buckets_count);
+        rdim_memcpy(result.nodes + nodes_off, results[idx].nodes, sizeof(result.nodes[0])*results[idx].nodes_count);
+        buckets_off += results[idx].buckets_count;
+        nodes_off   += results[idx].nodes_count;
+      }
+    }
+  }
+  return result;
+}
+
 //- rjf: independent (top-level, global) baking functions
 
 RDI_PROC RDIM_TopLevelInfoBakeResult
@@ -3516,7 +3554,112 @@ rdim_bake_index_runs(RDIM_Arena *arena, RDIM_BakeIdxRunMap *idx_runs)
 }
 
 ////////////////////////////////
+//~ rjf: [Serializing] Bake Results -> String Blobs
+
+RDI_PROC RDIM_SerializedSection
+rdim_serialized_section_make_unpacked(void *data, RDI_U64 size)
+{
+  RDIM_SerializedSection s;
+  rdim_memzero_struct(&s);
+  s.data = data;
+  s.encoded_size = s.unpacked_size = size;
+  s.encoding = RDI_SectionEncoding_Unpacked;
+  return s;
+}
+
+RDI_PROC RDIM_SerializedSectionBundle
+rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results)
+{
+  RDIM_SerializedSectionBundle bundle;
+  rdim_memzero_struct(&bundle);
+  bundle.sections[RDI_SectionKind_TopLevelInfo]         = rdim_serialized_section_make_unpacked_struct(results->top_level_info.top_level_info);
+  bundle.sections[RDI_SectionKind_StringData]           = rdim_serialized_section_make_unpacked_array(results->strings.string_data, results->strings.string_data_size);
+  bundle.sections[RDI_SectionKind_StringTable]          = rdim_serialized_section_make_unpacked_array(results->strings.string_offs, results->strings.string_offs_count);
+  bundle.sections[RDI_SectionKind_IndexRuns]            = rdim_serialized_section_make_unpacked_array(results->idx_runs.idx_runs, results->idx_runs.idx_count);
+  bundle.sections[RDI_SectionKind_BinarySections]       = rdim_serialized_section_make_unpacked_array(results->binary_sections.binary_sections, results->binary_sections.binary_sections_count);
+  bundle.sections[RDI_SectionKind_FilePathNodes]        = rdim_serialized_section_make_unpacked_array(results->file_paths.nodes, results->file_paths.nodes_count);
+  bundle.sections[RDI_SectionKind_SourceFiles]          = rdim_serialized_section_make_unpacked_array(results->src_files.source_files, results->src_files.source_files_count);
+  bundle.sections[RDI_SectionKind_LineTables]           = rdim_serialized_section_make_unpacked_array(results->line_tables.line_tables, results->line_tables.line_tables_count);
+  bundle.sections[RDI_SectionKind_LineInfoVOffs]        = rdim_serialized_section_make_unpacked_array(results->line_tables.line_table_voffs, results->line_tables.line_table_voffs_count);
+  bundle.sections[RDI_SectionKind_LineInfoLines]        = rdim_serialized_section_make_unpacked_array(results->line_tables.line_table_lines, results->line_tables.line_table_lines_count);
+  bundle.sections[RDI_SectionKind_LineInfoColumns]      = rdim_serialized_section_make_unpacked_array(results->line_tables.line_table_columns, results->line_tables.line_table_columns_count);
+  bundle.sections[RDI_SectionKind_SourceLineMaps]       = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_maps, results->src_files.source_line_maps_count);
+  bundle.sections[RDI_SectionKind_SourceLineMapNumbers] = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_map_nums, results->src_files.source_line_map_nums_count);
+  bundle.sections[RDI_SectionKind_SourceLineMapRanges]  = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_map_rngs, results->src_files.source_line_map_rngs_count);
+  bundle.sections[RDI_SectionKind_SourceLineMapVOffs]   = rdim_serialized_section_make_unpacked_array(results->src_files.source_line_map_voffs, results->src_files.source_line_map_voffs_count);
+  bundle.sections[RDI_SectionKind_Units]                = rdim_serialized_section_make_unpacked_array(results->units.units, results->units.units_count);
+  bundle.sections[RDI_SectionKind_UnitVMap]             = rdim_serialized_section_make_unpacked_array(results->unit_vmap.vmap.vmap, results->unit_vmap.vmap.count+1);
+  bundle.sections[RDI_SectionKind_TypeNodes]            = rdim_serialized_section_make_unpacked_array(results->type_nodes.type_nodes, results->type_nodes.type_nodes_count);
+  bundle.sections[RDI_SectionKind_UDTs]                 = rdim_serialized_section_make_unpacked_array(results->udts.udts, results->udts.udts_count);
+  bundle.sections[RDI_SectionKind_Members]              = rdim_serialized_section_make_unpacked_array(results->udts.members, results->udts.members_count);
+  bundle.sections[RDI_SectionKind_EnumMembers]          = rdim_serialized_section_make_unpacked_array(results->udts.enum_members, results->udts.enum_members_count);
+  bundle.sections[RDI_SectionKind_GlobalVariables]      = rdim_serialized_section_make_unpacked_array(results->global_variables.global_variables, results->global_variables.global_variables_count);
+  bundle.sections[RDI_SectionKind_GlobalVMap]           = rdim_serialized_section_make_unpacked_array(results->global_vmap.vmap.vmap, results->global_vmap.vmap.count+1);
+  bundle.sections[RDI_SectionKind_ThreadVariables]      = rdim_serialized_section_make_unpacked_array(results->thread_variables.thread_variables, results->thread_variables.thread_variables_count);
+  bundle.sections[RDI_SectionKind_Procedures]           = rdim_serialized_section_make_unpacked_array(results->procedures.procedures, results->procedures.procedures_count);
+  bundle.sections[RDI_SectionKind_Scopes]               = rdim_serialized_section_make_unpacked_array(results->scopes.scopes, results->scopes.scopes_count);
+  bundle.sections[RDI_SectionKind_ScopeVOffData]        = rdim_serialized_section_make_unpacked_array(results->scopes.scope_voffs, results->scopes.scope_voffs_count);
+  bundle.sections[RDI_SectionKind_ScopeVMap]            = rdim_serialized_section_make_unpacked_array(results->scope_vmap.vmap.vmap, results->scope_vmap.vmap.count+1);
+  bundle.sections[RDI_SectionKind_InlineSites]          = rdim_serialized_section_make_unpacked(0, 0);
+  bundle.sections[RDI_SectionKind_Locals]               = rdim_serialized_section_make_unpacked_array(results->scopes.locals, results->scopes.locals_count);
+  bundle.sections[RDI_SectionKind_LocationBlocks]       = rdim_serialized_section_make_unpacked_array(results->scopes.location_blocks, results->scopes.location_blocks_count);
+  bundle.sections[RDI_SectionKind_LocationData]         = rdim_serialized_section_make_unpacked_array(results->scopes.location_data, results->scopes.location_data_size);
+  bundle.sections[RDI_SectionKind_NameMaps]             = rdim_serialized_section_make_unpacked_array(results->top_level_name_maps.name_maps, results->top_level_name_maps.name_maps_count);
+  bundle.sections[RDI_SectionKind_NameMapBuckets]       = rdim_serialized_section_make_unpacked_array(results->name_maps.buckets, results->name_maps.buckets_count);
+  bundle.sections[RDI_SectionKind_NameMapNodes]         = rdim_serialized_section_make_unpacked_array(results->name_maps.nodes, results->name_maps.nodes_count);
+  return bundle;
+}
+
+RDI_PROC RDIM_String8List
+rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle)
+{
+  RDIM_String8List strings;
+  rdim_memzero_struct(&strings);
+  {
+    RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
+    
+    // rjf: push empty header & data section table
+    RDI_Header *rdi_header = rdim_push_array(arena, RDI_Header, 1);
+    RDI_Section *rdi_sections = rdim_push_array(arena, RDI_Section, RDI_SectionKind_COUNT);
+    rdim_str8_list_push(arena, &strings, rdim_str8_struct(rdi_header));
+    rdim_str8_list_push_align(arena, &strings, 8);
+    U32 data_section_off = (U32)strings.total_size;
+    rdim_str8_list_push(arena, &strings, rdim_str8((RDI_U8 *)rdi_sections, sizeof(RDI_Section)*RDI_SectionKind_COUNT));
+    
+    // rjf: fill baked header
+    {
+      rdi_header->magic              = RDI_MAGIC_CONSTANT;
+      rdi_header->encoding_version   = RDI_ENCODING_VERSION;
+      rdi_header->data_section_off   = data_section_off;
+      rdi_header->data_section_count = RDI_SectionKind_COUNT;
+    }
+    
+    // rjf: fill baked data section table
+    for(RDI_SectionKind k = RDI_SectionKind_NULL; k < RDI_SectionKind_COUNT; k += 1)
+    {
+      RDI_Section *dst = rdi_sections+k;
+      U64 data_section_off = 0;
+      if(bundle->sections[k].encoded_size != 0)
+      {
+        rdim_str8_list_push_align(arena, &strings, 8);
+        data_section_off = strings.total_size;
+        rdim_str8_list_push(arena, &strings, rdim_str8((RDI_U8 *)bundle->sections[k].data, bundle->sections[k].encoded_size));
+      }
+      dst->encoding      = bundle->sections[k].encoding;
+      dst->off           = data_section_off;
+      dst->encoded_size  = bundle->sections[k].encoded_size;
+      dst->unpacked_size = bundle->sections[k].unpacked_size;
+    }
+    
+    rdim_scratch_end(scratch);
+  }
+  return strings;
+}
+
+////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
+
+#if 0
 
 //- rjf: top-level info
 
@@ -4876,9 +5019,12 @@ rdim_bake_idx_run_section_list_from_idx_run_map(RDIM_Arena *arena, RDIM_BakeIdxR
   return sections;
 }
 
+#endif
+
 ////////////////////////////////
 //~ rjf: [Serializing] Baked Data Section List -> Serialized Binary Strings
 
+#if 0
 RDI_PROC RDIM_String8List
 rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeParams *params, RDIM_BakeSectionList *sections)
 {
@@ -4947,3 +5093,4 @@ rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_Ba
   }
   return strings;
 }
+#endif

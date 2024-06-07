@@ -1219,13 +1219,46 @@ struct RDIM_IndexRunBakeResult
   RDI_U64 idx_count;
 };
 
-////////////////////////////////
-//~ rjf: Serializing Types
-
-typedef struct RDIM_SerializeParams RDIM_SerializeParams;
-struct RDIM_SerializeParams
+typedef struct RDIM_BakeResults RDIM_BakeResults;
+struct RDIM_BakeResults
 {
-  RDIM_String8 section_data[RDI_SectionKind_COUNT];
+  RDIM_TopLevelInfoBakeResult top_level_info;
+  RDIM_BinarySectionBakeResult binary_sections;
+  RDIM_UnitBakeResult units;
+  RDIM_UnitVMapBakeResult unit_vmap;
+  RDIM_SrcFileBakeResult src_files;
+  RDIM_LineTableBakeResult line_tables;
+  RDIM_TypeNodeBakeResult type_nodes;
+  RDIM_UDTBakeResult udts;
+  RDIM_GlobalVariableBakeResult global_variables;
+  RDIM_GlobalVMapBakeResult global_vmap;
+  RDIM_ThreadVariableBakeResult thread_variables;
+  RDIM_ProcedureBakeResult procedures;
+  RDIM_ScopeBakeResult scopes;
+  RDIM_ScopeVMapBakeResult scope_vmap;
+  RDIM_TopLevelNameMapBakeResult top_level_name_maps;
+  RDIM_NameMapBakeResult name_maps;
+  RDIM_FilePathBakeResult file_paths;
+  RDIM_StringBakeResult strings;
+  RDIM_IndexRunBakeResult idx_runs;
+};
+
+////////////////////////////////
+//~ rjf: Serialization Types
+
+typedef struct RDIM_SerializedSection RDIM_SerializedSection;
+struct RDIM_SerializedSection
+{
+  void *data;
+  RDI_U64 encoded_size;
+  RDI_U64 unpacked_size;
+  RDI_SectionEncoding encoding;
+};
+
+typedef struct RDIM_SerializedSectionBundle RDIM_SerializedSectionBundle;
+struct RDIM_SerializedSectionBundle
+{
+  RDIM_SerializedSection sections[RDI_SectionKind_COUNT];
 };
 
 ////////////////////////////////
@@ -1443,6 +1476,9 @@ RDI_PROC RDIM_BakePathTree *rdim_bake_path_tree_from_params(RDIM_Arena *arena, R
 //- rjf: partial/joinable baking functions
 RDI_PROC RDIM_NameMapBakeResult         rdim_bake_name_map(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakeIdxRunMap *idx_runs, RDIM_BakeNameMap *src, RDI_U64 base_node_idx);
 
+//- rjf: partial bakes -> final bake functions
+RDI_PROC RDIM_NameMapBakeResult         rdim_name_map_bake_results_combine(RDIM_Arena *arena, RDIM_NameMapBakeResult *results, RDI_U64 results_count);
+
 //- rjf: independent (top-level, global) baking functions
 RDI_PROC RDIM_TopLevelInfoBakeResult    rdim_bake_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_TopLevelInfo *src);
 RDI_PROC RDIM_BinarySectionBakeResult   rdim_bake_binary_sections(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BinarySectionList *src);
@@ -1462,6 +1498,15 @@ RDI_PROC RDIM_TopLevelNameMapBakeResult rdim_bake_name_maps_top_level(RDIM_Arena
 RDI_PROC RDIM_FilePathBakeResult        rdim_bake_file_paths(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_BakePathTree *path_tree);
 RDI_PROC RDIM_StringBakeResult          rdim_bake_strings(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings);
 RDI_PROC RDIM_IndexRunBakeResult        rdim_bake_index_runs(RDIM_Arena *arena, RDIM_BakeIdxRunMap *idx_runs);
+
+////////////////////////////////
+//~ rjf: [Serializing] Bake Results -> String Blobs
+
+RDI_PROC RDIM_SerializedSection rdim_serialized_section_make_unpacked(void *data, RDI_U64 size);
+#define rdim_serialized_section_make_unpacked_struct(ptr) rdim_serialized_section_make_unpacked((ptr), sizeof(*(ptr)))
+#define rdim_serialized_section_make_unpacked_array(ptr, count) rdim_serialized_section_make_unpacked((ptr), sizeof(*(ptr))*(count))
+RDI_PROC RDIM_SerializedSectionBundle rdim_serialized_section_bundle_from_bake_results(RDIM_BakeResults *results);
+RDI_PROC RDIM_String8List rdim_file_blobs_from_section_bundle(RDIM_Arena *arena, RDIM_SerializedSectionBundle *bundle);
 
 ////////////////////////////////
 //~ rjf: [Baking] Build Artifacts -> Data Section Lists
@@ -1526,6 +1571,8 @@ RDI_PROC RDIM_BakeSectionList rdim_bake_idx_run_section_list_from_idx_run_map(RD
 ////////////////////////////////
 //~ rjf: [Serializing] Baked Data Section List -> Serialized Binary Strings
 
+#if 0
 RDI_PROC RDIM_String8List rdim_serialized_strings_from_params_bake_section_list(RDIM_Arena *arena, RDIM_BakeParams *params, RDIM_BakeSectionList *sections);
+#endif
 
 #endif // RDI_MAKE_H
