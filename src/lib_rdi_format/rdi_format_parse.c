@@ -500,15 +500,158 @@ rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node, RDI_U32 *n_out)
 
 //- procedures
 
+RDI_PROC RDI_Procedure *
+rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size)
+{
+  RDI_NameMap *map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
+  RDI_ParsedNameMap map_parsed = {0};
+  rdi_parsed_from_name_map(rdi, map, &map_parsed);
+  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map_parsed, name, name_size);
+  RDI_U32 id_count = 0;
+  RDI_U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+  RDI_U32 procedure_idx = 0;
+  if(id_count > 0)
+  {
+    procedure_idx = ids[0];
+  }
+  RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_idx);
+  return procedure;
+}
+
+RDI_PROC RDI_Procedure *
+rdi_procedure_from_name_cstr(RDI_Parsed *rdi, char *cstr)
+{
+  RDI_Procedure *result = rdi_procedure_from_name(rdi, (RDI_U8 *)cstr, rdi_cstring_length(cstr));
+  return result;
+}
+
+RDI_PROC RDI_Scope *
+rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+{
+  RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
+  return scope;
+}
+
 RDI_PROC RDI_U64
-rdi_first_voff_from_proc_idx(RDI_Parsed *rdi, RDI_U32 proc_idx)
+rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+{
+  RDI_Scope *scope = rdi_root_scope_from_procedure(rdi, procedure);
+  RDI_U64 result = rdi_first_voff_from_scope(rdi, scope);
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure)
+{
+  RDI_Scope *scope = rdi_root_scope_from_procedure(rdi, procedure);
+  RDI_U64 result = rdi_opl_voff_from_scope(rdi, scope);
+  return result;
+}
+
+//- scopes
+
+RDI_PROC RDI_U64
+rdi_first_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
+{
+  RDI_U64 *voffs = rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
+  RDI_U64 result = *voffs;
+  return result;
+}
+
+RDI_PROC RDI_U64
+rdi_opl_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
+{
+  RDI_U64 *voffs = rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_opl);
+  RDI_U64 result = *voffs;
+  return result;
+}
+
+//- units
+
+RDI_PROC RDI_Unit *
+rdi_unit_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
+{
+  RDI_U32 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, voff);
+  RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+  return unit;
+}
+
+RDI_PROC RDI_LineTable *
+rdi_line_table_from_unit(RDI_Parsed *rdi, RDI_Unit *unit)
+{
+  RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
+  return line_table;
+}
+
+//- line info
+
+RDI_PROC RDI_Line
+rdi_line_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
+{
+  RDI_Unit *unit = rdi_unit_from_voff(rdi, voff);
+  RDI_LineTable *line_table = rdi_line_table_from_unit(rdi, unit);
+  RDI_Line line = rdi_line_from_line_table_voff(rdi, line_table, voff);
+  return line;
+}
+
+RDI_PROC RDI_Line
+rdi_line_from_line_table_voff(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_U64 voff)
+{
+  RDI_ParsedLineTable parsed = {0};
+  rdi_parsed_from_line_table(rdi, line_table, &parsed);
+  RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&parsed, voff);
+  RDI_Line result = {0};
+  if(line_info_idx < parsed.count)
+  {
+    result = parsed.lines[line_info_idx];
+  }
+  return result;
+}
+
+RDI_PROC RDI_SourceFile *
+rdi_source_file_from_line(RDI_Parsed *rdi, RDI_Line *line)
+{
+  RDI_SourceFile *result = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
+  return result;
+}
+
+//- source files
+
+RDI_PROC RDI_U8 *
+rdi_normal_path_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file, RDI_U64 *len_out)
+{
+  return rdi_string_from_idx(rdi, src_file->normal_full_path_string_idx, len_out);
+}
+
+RDI_PROC RDI_FilePathNode *
+rdi_file_path_node_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file)
+{
+  RDI_FilePathNode *result = rdi_element_from_name_idx(rdi, FilePathNodes, src_file->file_path_node_idx);
+  return result;
+}
+
+//- file path nodes
+
+RDI_PROC RDI_FilePathNode *
+rdi_parent_from_file_path_node(RDI_Parsed *rdi, RDI_FilePathNode *node)
+{
+  RDI_FilePathNode *result = rdi_element_from_name_idx(rdi, FilePathNodes, node->parent_path_node);
+  return result;
+}
+
+RDI_PROC RDI_U8 *
+rdi_name_from_file_path_node(RDI_Parsed *rdi, RDI_FilePathNode *node, RDI_U64 *len_out)
+{
+  return rdi_string_from_idx(rdi, node->name_string_idx, len_out);
+}
+
+////////////////////////////////
+//~ Parser Helpers
+
+RDI_PROC RDI_U64
+rdi_cstring_length(char *cstr)
 {
   RDI_U64 result = 0;
-  {
-    RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-    RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
-    RDI_U64 *voffs = rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
-    result = *voffs;
-  }
+  for(;cstr[result] != 0; result += 1){}
   return result;
 }
