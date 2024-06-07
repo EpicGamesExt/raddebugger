@@ -2994,7 +2994,8 @@ ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_MachineID m
           U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
           for(U32 match_i = 0; match_i < id_count; match_i += 1)
           {
-            U64 proc_voff = rdi_first_voff_from_proc_idx(rdi, ids[match_i]);
+            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, ids[match_i]);
+            U64 proc_voff = rdi_first_voff_from_procedure(rdi, procedure);
             U64 proc_vaddr = proc_voff + base_vaddr;
             DMN_Trap trap = {process, proc_vaddr + voff, (U64)bp};
             dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
@@ -4262,7 +4263,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
+            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {
               entries_found = 1;
@@ -4290,7 +4292,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   procedure_id = ids[0];
                 }
               }
-              U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
+              RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+              U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
               if(voff != 0)
               {
                 entries_found = 1;
@@ -4317,7 +4320,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
+            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {
               DMN_Trap trap = {process->handle, module_base_vaddr + voff};
@@ -4350,7 +4354,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
+            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {
               entries_found = 1;
@@ -4394,7 +4399,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 procedure_id = ids[0];
               }
             }
-            U64 voff = rdi_first_voff_from_proc_idx(rdi, procedure_id);
+            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, procedure_id);
+            U64 voff = rdi_first_voff_from_procedure(rdi, procedure);
             if(voff != 0)
             {
               entries_found = 1;

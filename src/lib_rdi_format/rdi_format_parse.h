@@ -145,11 +145,37 @@ RDI_PROC RDI_U32 *rdi_matches_from_map_node(RDI_Parsed *p, RDI_NameMapNode *node
 //~ High-Level Composite Lookup Functions
 
 //- procedures
-RDI_PROC RDI_U64 rdi_first_voff_from_proc_idx(RDI_Parsed *rdi, RDI_U32 proc_idx);
+RDI_PROC RDI_Procedure *rdi_procedure_from_name(RDI_Parsed *rdi, RDI_U8 *name, RDI_U64 name_size);
+RDI_PROC RDI_Procedure *rdi_procedure_from_name_cstr(RDI_Parsed *rdi, char *cstr);
+RDI_PROC RDI_Scope *rdi_root_scope_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
+RDI_PROC RDI_U64 rdi_first_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
+RDI_PROC RDI_U64 rdi_opl_voff_from_procedure(RDI_Parsed *rdi, RDI_Procedure *procedure);
+
+//- scopes
+RDI_PROC RDI_U64 rdi_first_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
+RDI_PROC RDI_U64 rdi_opl_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
+
+//- units
+RDI_PROC RDI_Unit *rdi_unit_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+RDI_PROC RDI_LineTable *rdi_line_table_from_unit(RDI_Parsed *rdi, RDI_Unit *unit);
+
+//- line info
+RDI_PROC RDI_Line rdi_line_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+RDI_PROC RDI_Line rdi_line_from_line_table_voff(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_U64 voff);
+RDI_PROC RDI_SourceFile *rdi_source_file_from_line(RDI_Parsed *rdi, RDI_Line *line);
+
+//- source files
+RDI_PROC RDI_U8 *rdi_normal_path_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file, RDI_U64 *len_out);
+RDI_PROC RDI_FilePathNode *rdi_file_path_node_from_source_file(RDI_Parsed *rdi, RDI_SourceFile *src_file);
+
+//- file path nodes
+RDI_PROC RDI_FilePathNode *rdi_parent_from_file_path_node(RDI_Parsed *rdi, RDI_FilePathNode *node);
+RDI_PROC RDI_U8 *rdi_name_from_file_path_node(RDI_Parsed *rdi, RDI_FilePathNode *node, RDI_U64 *len_out);
 
 ////////////////////////////////
 //~ Parser Helpers
 
 #define rdi_parse__min(a,b) (((a)<(b))?(a):(b))
+RDI_PROC RDI_U64 rdi_cstring_length(char *cstr);
 
 #endif // RDI_FORMAT_PARSE_H
