@@ -3704,18 +3704,18 @@ internal TS_TASK_FUNCTION_DEF(p2r_build_bake_name_map_task__entry_point)
 
 internal TS_TASK_FUNCTION_DEF(p2r_bake_units_task__entry_point)
 {
-  P2R_BakeUnitsTopLevelIn *in = (P2R_BakeUnitsTopLevelIn *)p;
-  RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake units") *s = rdim_bake_unit_section_list_from_params(arena, in->strings, in->path_tree, in->params);
-  return s;
+  P2R_BakeUnitsIn *in = (P2R_BakeUnitsIn *)p;
+  RDIM_UnitBakeResult *out = push_array(arena, RDIM_UnitBakeResult, 1);
+  ProfScope("bake units") *out = rdim_bake_units(arena, in->strings, in->path_tree, in->units);
+  return out;
 }
 
 internal TS_TASK_FUNCTION_DEF(p2r_bake_unit_vmap_task__entry_point)
 {
   P2R_BakeUnitVMapIn *in = (P2R_BakeUnitVMapIn *)p;
-  RDIM_BakeSectionList *s = push_array(arena, RDIM_BakeSectionList, 1);
-  ProfScope("bake unit vmap") *s = rdim_bake_unit_vmap_section_list_from_params(arena, in->params);
-  return s;
+  RDIM_UnitVMapBakeResult *out = push_array(arena, RDIM_UnitVMapBakeResult, 1);
+  ProfScope("bake unit vmap") *out = rdim_bake_unit_vmap(arena, in->units);
+  return out;
 }
 
 internal TS_TASK_FUNCTION_DEF(p2r_bake_src_files_task__entry_point)
@@ -3831,14 +3831,15 @@ internal P2R_Bake2Serialize *
 p2r_bake(Arena *arena, P2R_Convert2Bake *in)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  RDIM_BakeParams *params = &in->bake_params;
-  RDIM_BakeSectionList sections = {0};
+  RDIM_BakeParams *in_params = &in->bake_params;
+  P2R_Bake2Serialize *out = push_array(arena, P2R_Bake2Serialize, 1);
+  RDIM_SerializeParams *out_params = &out->serialize_params;
   
   //- rjf: kick off line tables baking
   TS_Ticket bake_line_tables_ticket = {0};
   {
     P2R_BakeLineTablesIn *in = push_array(scratch.arena, P2R_BakeLineTablesIn, 1);
-    in->params = params;
+    in->params = in_params;
     bake_line_tables_ticket = ts_kickoff(p2r_bake_line_tables_task__entry_point, 0, in);
   }
   
@@ -3846,14 +3847,14 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   RDIM_BakePathTree *path_tree = 0;
   ProfScope("build interned path tree")
   {
-    path_tree = rdim_bake_path_tree_from_params(arena, params);
+    path_tree = rdim_bake_path_tree_from_params(arena, in_params);
   }
   
   //- rjf: kick off string map building tasks
-  RDIM_BakeStringMapTopology bake_string_map_topology = {(params->procedures.total_count*1 +
-                                                          params->global_variables.total_count*1 +
-                                                          params->thread_variables.total_count*1 +
-                                                          params->types.total_count/2)};
+  RDIM_BakeStringMapTopology bake_string_map_topology = {(in_params->procedures.total_count*1 +
+                                                          in_params->global_variables.total_count*1 +
+                                                          in_params->thread_variables.total_count*1 +
+                                                          in_params->types.total_count/2)};
   RDIM_BakeStringMapLoose **bake_string_maps__in_progress = push_array(scratch.arena, RDIM_BakeStringMapLoose *, ts_thread_count());
   TS_TicketList bake_string_map_build_tickets = {0};
   {
@@ -3863,7 +3864,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       P2R_BakeSrcFilesStringsIn *in = push_array(scratch.arena, P2R_BakeSrcFilesStringsIn, 1);
       in->top = &bake_string_map_topology;
       in->maps = bake_string_maps__in_progress;
-      in->list = &params->src_files;
+      in->list = &in_params->src_files;
       ts_ticket_list_push(scratch.arena, &bake_string_map_build_tickets, ts_kickoff(p2r_bake_src_files_strings_task__entry_point, 0, in));
     }
     
@@ -3873,14 +3874,14 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       P2R_BakeUnitsStringsIn *in = push_array(scratch.arena, P2R_BakeUnitsStringsIn, 1);
       in->top = &bake_string_map_topology;
       in->maps = bake_string_maps__in_progress;
-      in->list = &params->units;
+      in->list = &in_params->units;
       ts_ticket_list_push(scratch.arena, &bake_string_map_build_tickets, ts_kickoff(p2r_bake_units_strings_task__entry_point, 0, in));
     }
     
     // rjf: types
     ProfScope("kick off types string map build tasks")
     {
-      for(RDIM_TypeChunkNode *chunk = params->types.first; chunk != 0; chunk = chunk->next)
+      for(RDIM_TypeChunkNode *chunk = in_params->types.first; chunk != 0; chunk = chunk->next)
       {
         U64 items_per_task = Min(4096, chunk->count);
         U64 tasks_per_this_chunk = (chunk->count+items_per_task-1)/items_per_task;
@@ -3901,7 +3902,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     // rjf: UDTs
     ProfScope("kick off udts string map build tasks")
     {
-      for(RDIM_UDTChunkNode *chunk = params->udts.first; chunk != 0; chunk = chunk->next)
+      for(RDIM_UDTChunkNode *chunk = in_params->udts.first; chunk != 0; chunk = chunk->next)
       {
         U64 items_per_task = Min(4096, chunk->count);
         U64 tasks_per_this_chunk = (chunk->count+items_per_task-1)/items_per_task;
@@ -3924,9 +3925,9 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     {
       RDIM_SymbolChunkList *symbol_lists[] =
       {
-        &params->global_variables,
-        &params->thread_variables,
-        &params->procedures,
+        &in_params->global_variables,
+        &in_params->thread_variables,
+        &in_params->procedures,
       };
       for(U64 list_idx = 0; list_idx < ArrayCount(symbol_lists); list_idx += 1)
       {
@@ -3952,7 +3953,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     // rjf: scope chunks
     ProfScope("kick off scope chunks string map build tasks")
     {
-      for(RDIM_ScopeChunkNode *chunk = params->scopes.first; chunk != 0; chunk = chunk->next)
+      for(RDIM_ScopeChunkNode *chunk = in_params->scopes.first; chunk != 0; chunk = chunk->next)
       {
         U64 items_per_task = Min(4096, chunk->count);
         U64 tasks_per_this_chunk = (chunk->count+items_per_task-1)/items_per_task;
@@ -3979,7 +3980,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       k = (RDI_NameMapKind)(k+1))
   {
     build_bake_name_map_in[k].k = k;
-    build_bake_name_map_in[k].params = params;
+    build_bake_name_map_in[k].params = in_params;
     build_bake_name_map_ticket[k] = ts_kickoff(p2r_build_bake_name_map_task__entry_point, 0, &build_bake_name_map_in[k]);
   }
   
@@ -4020,8 +4021,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
     
     // rjf: insert small top-level stuff
-    rdim_bake_string_map_loose_push_top_level_info(arena, &bake_string_map_topology, unsorted_bake_string_map, &params->top_level_info);
-    rdim_bake_string_map_loose_push_binary_sections(arena, &bake_string_map_topology, unsorted_bake_string_map, &params->binary_sections);
+    rdim_bake_string_map_loose_push_top_level_info(arena, &bake_string_map_topology, unsorted_bake_string_map, &in_params->top_level_info);
+    rdim_bake_string_map_loose_push_binary_sections(arena, &bake_string_map_topology, unsorted_bake_string_map, &in_params->binary_sections);
     rdim_bake_string_map_loose_push_path_tree(arena, &bake_string_map_topology, unsorted_bake_string_map, path_tree);
   }
   
@@ -4068,25 +4069,25 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   ProfEnd();
   
   //- rjf: kick off pass 2 tasks
-  P2R_BakeUnitsTopLevelIn bake_units_top_level_in = {&bake_strings, path_tree, params};
-  TS_Ticket bake_units_top_level_ticket = ts_kickoff(p2r_bake_units_task__entry_point, 0, &bake_units_top_level_in);
-  P2R_BakeUnitVMapIn bake_unit_vmap_in = {params};
+  P2R_BakeUnitsIn bake_units_top_level_in = {&bake_strings, path_tree, &in_params->units};
+  TS_Ticket bake_units_ticket = ts_kickoff(p2r_bake_units_task__entry_point, 0, &bake_units_top_level_in);
+  P2R_BakeUnitVMapIn bake_unit_vmap_in = {&in_params->units};
   TS_Ticket bake_unit_vmap_ticket = ts_kickoff(p2r_bake_unit_vmap_task__entry_point, 0, &bake_unit_vmap_in);
-  P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, params};
+  P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, in_params};
   TS_Ticket bake_src_files_ticket = ts_kickoff(p2r_bake_src_files_task__entry_point, 0, &bake_src_files_in);
-  P2R_BakeUDTsIn bake_udts_in = {&bake_strings, params};
+  P2R_BakeUDTsIn bake_udts_in = {&bake_strings, in_params};
   TS_Ticket bake_udts_ticket = ts_kickoff(p2r_bake_udts_task__entry_point, 0, &bake_udts_in);
-  P2R_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, params};
+  P2R_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, in_params};
   TS_Ticket bake_global_variables_ticket = ts_kickoff(p2r_bake_global_variables_task__entry_point, 0, &bake_global_variables_in);
-  P2R_BakeGlobalVMapIn bake_global_vmap_in = {params};
+  P2R_BakeGlobalVMapIn bake_global_vmap_in = {in_params};
   TS_Ticket bake_global_vmap_ticket = ts_kickoff(p2r_bake_global_vmap_task__entry_point, 0, &bake_global_vmap_in);
-  P2R_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, params};
+  P2R_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, in_params};
   TS_Ticket bake_thread_variables_ticket = ts_kickoff(p2r_bake_thread_variables_task__entry_point, 0, &bake_thread_variables_in);
-  P2R_BakeProceduresIn bake_procedures_in = {&bake_strings, params};
+  P2R_BakeProceduresIn bake_procedures_in = {&bake_strings, in_params};
   TS_Ticket bake_procedures_ticket = ts_kickoff(p2r_bake_procedures_task__entry_point, 0, &bake_procedures_in);
-  P2R_BakeScopesIn bake_scopes_in = {&bake_strings, params};
+  P2R_BakeScopesIn bake_scopes_in = {&bake_strings, in_params};
   TS_Ticket bake_scopes_ticket = ts_kickoff(p2r_bake_scopes_task__entry_point, 0, &bake_scopes_in);
-  P2R_BakeScopeVMapIn bake_scope_vmap_in = {params};
+  P2R_BakeScopeVMapIn bake_scope_vmap_in = {in_params};
   TS_Ticket bake_scope_vmap_ticket = ts_kickoff(p2r_bake_scope_vmap_task__entry_point, 0, &bake_scope_vmap_in);
   P2R_BakeFilePathsIn bake_file_paths_in = {&bake_strings, path_tree};
   TS_Ticket bake_file_paths_ticket = ts_kickoff(p2r_bake_file_paths_task__entry_point, 0, &bake_file_paths_in);
@@ -4096,15 +4097,15 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: top-level info
   ProfScope("top level info")
   {
-    RDIM_BakeSectionList s = rdim_bake_top_level_info_section_list_from_params(arena, &bake_strings, params);
-    rdim_bake_section_list_concat_in_place(&sections, &s);
+    RDIM_TopLevelInfoBakeResult bake = rdim_bake_top_level_info(arena, &bake_strings, &in_params->top_level_info);
+    out_params->section_data[RDI_SectionKind_TopLevelInfo] = rdim_str8_struct(bake.top_level_info);
   }
   
   //- rjf: binary sections
   ProfScope("binary sections")
   {
-    RDIM_BakeSectionList s = rdim_bake_binary_section_section_list_from_params(arena, &bake_strings, params);
-    rdim_bake_section_list_concat_in_place(&sections, &s);
+    RDIM_BinarySectionBakeResult bake = rdim_bake_binary_sections(arena, &bake_strings, &in_params->binary_sections);
+    out_params->section_data[RDI_SectionKind_BinarySections] = rdim_str8_struct_array(bake.binary_sections, bake.binary_sections_count);
   }
   
   //- rjf: join name map building tasks
@@ -4123,11 +4124,11 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   RDIM_BakeIdxRunMap *idx_runs = 0;
   ProfScope("build interned idx run map")
   {
-    idx_runs = rdim_bake_idx_run_map_from_params(arena, name_maps, params);
+    idx_runs = rdim_bake_idx_run_map_from_params(arena, name_maps, in_params);
   }
   
   //- rjf: kick off pass 3 tasks
-  P2R_BakeTypeNodesIn bake_type_nodes_in = {&bake_strings, idx_runs, params};
+  P2R_BakeTypeNodesIn bake_type_nodes_in = {&bake_strings, idx_runs, in_params};
   TS_Ticket bake_type_nodes_ticket = ts_kickoff(p2r_bake_type_nodes_task__entry_point, 0, &bake_type_nodes_in);
   TS_TicketList bake_name_maps_tickets = {0};
   for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
@@ -4141,7 +4142,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     P2R_BakeNameMapIn *in = push_array(scratch.arena, P2R_BakeNameMapIn, 1);
     in->strings  = &bake_strings;
     in->idx_runs = idx_runs;
-    in->params   = params;
+    in->params   = in_params;
     in->kind     = k;
     in->map      = name_maps[k];
     ts_ticket_list_push(scratch.arena, &bake_name_maps_tickets, ts_kickoff(p2r_bake_name_map_task__entry_point, 0, in));
@@ -4152,22 +4153,22 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: bake top-level name maps section
   ProfScope("top level name maps section")
   {
-    RDIM_BakeSectionList s = rdim_bake_top_level_name_map_section_list_from_params_maps(arena, &bake_strings, idx_runs, params, name_maps);
-    rdim_bake_section_list_concat_in_place(&sections, &s);
+    RDIM_TopLevelNameMapBakeResult bake = rdim_bake_name_maps_top_level(arena, &bake_strings, idx_runs, name_maps);
+    out_params->section_data[RDI_SectionKind_NameMaps] = rdim_str8_struct_array(bake.name_maps, bake.name_maps_count);
   }
   
   //- rjf: join top-level units info
   ProfScope("top-level units info")
   {
-    RDIM_BakeSectionList *s = ts_join_struct(bake_units_top_level_ticket, max_U64, RDIM_BakeSectionList);
-    rdim_bake_section_list_concat_in_place(&sections, s);
+    RDIM_UnitBakeResult *bake = ts_join_struct(bake_units_ticket, max_U64, RDIM_UnitBakeResult);
+    out_params->section_data[RDI_SectionKind_Units] = rdim_str8_struct_array(bake->units, bake->units_count);
   }
   
   //- rjf: join unit vmap
   ProfScope("unit vmap")
   {
-    RDIM_BakeSectionList *s = ts_join_struct(bake_unit_vmap_ticket, max_U64, RDIM_BakeSectionList);
-    rdim_bake_section_list_concat_in_place(&sections, s);
+    RDIM_UnitVMapBakeResult *bake = ts_join_struct(bake_unit_vmap_ticket, max_U64, RDIM_UnitVMapBakeResult);
+    out_params->section_data[RDI_SectionKind_UnitVMap] = rdim_str8_struct_array(bake->vmap.vmap, bake->vmap.count+1);
   }
   
   //- rjf: join source files
@@ -4272,8 +4273,6 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   }
   
   //- rjf: fill & return
-  P2R_Bake2Serialize *out = push_array(arena, P2R_Bake2Serialize, 1);
-  out->sections = sections;
   scratch_end(scratch);
   return out;
 }

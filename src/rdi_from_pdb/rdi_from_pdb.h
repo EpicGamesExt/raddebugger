@@ -55,7 +55,7 @@ struct P2R_Convert2Bake
 typedef struct P2R_Bake2Serialize P2R_Bake2Serialize;
 struct P2R_Bake2Serialize
 {
-  RDIM_BakeSectionList sections;
+  RDIM_SerializeParams serialize_params;
 };
 
 ////////////////////////////////
@@ -400,24 +400,18 @@ struct P2R_BuildBakeNameMapIn
 
 //- rjf: debug info baking task types
 
-typedef struct P2R_BakeUnitsTopLevelIn P2R_BakeUnitsTopLevelIn;
-struct P2R_BakeUnitsTopLevelIn
+typedef struct P2R_BakeUnitsIn P2R_BakeUnitsIn;
+struct P2R_BakeUnitsIn
 {
   RDIM_BakeStringMapTight *strings;
   RDIM_BakePathTree *path_tree;
-  RDIM_BakeParams *params;
-};
-
-typedef struct P2R_BakeUnitIn P2R_BakeUnitIn;
-struct P2R_BakeUnitIn
-{
-  RDIM_Unit *unit;
+  RDIM_UnitChunkList *units;
 };
 
 typedef struct P2R_BakeUnitVMapIn P2R_BakeUnitVMapIn;
 struct P2R_BakeUnitVMapIn
 {
-  RDIM_BakeParams *params;
+  RDIM_UnitChunkList *units;
 };
 
 typedef struct P2R_BakeSrcFilesIn P2R_BakeSrcFilesIn;
