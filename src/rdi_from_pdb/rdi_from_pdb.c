@@ -580,7 +580,9 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     src_file_map.slots_count = 65536;
     src_file_map.slots = push_array(scratch.arena, P2R_SrcFileNode *, src_file_map.slots_count);
     
+    ////////////////////////////
     //- rjf: pass 1: build per-unit info & per-unit line tables
+    //
     for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
       PDB_CompUnit *pdb_unit     = in->comp_units->units[comp_unit_idx];
@@ -658,17 +660,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
         }
       }
       
-      //- rjf: build all inlinee line tables within this unit
-      for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
-          node != 0;
-          node = node->next)
-      {
-        if(node->kind == CV_C13SubSectionKind_InlineeLines)
-        {
-          
-        }
-      }
-      
       //- rjf: build unit
       RDIM_Unit *dst_unit = rdim_unit_chunk_list_push(arena, &out->units, units_chunk_cap);
       dst_unit->unit_name     = unit_name;
@@ -679,7 +670,9 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
       dst_unit->line_table    = line_table;
     }
     
+    ////////////////////////////
     //- rjf: pass 2: build per-unit voff ranges from comp unit contributions table
+    //
     PDB_CompUnitContribution *contrib_ptr = in->comp_unit_contributions->contributions;
     PDB_CompUnitContribution *contrib_opl = contrib_ptr + in->comp_unit_contributions->count;
     for(;contrib_ptr < contrib_opl; contrib_ptr += 1)
@@ -689,6 +682,73 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
         RDIM_Unit *unit = &out->units.first->v[contrib_ptr->mod];
         RDIM_Rng1U64 range = {contrib_ptr->voff_first, contrib_ptr->voff_opl};
         rdim_rng1u64_list_push(arena, &unit->voff_ranges, range);
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: pass 3: parse all inlinee line tables
+    //
+    for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
+    {
+      CV_SymParsed *unit_sym = in->comp_unit_syms[comp_unit_idx];
+      CV_C13Parsed *unit_c13 = in->comp_unit_c13s[comp_unit_idx];
+      CV_RecRange *rec_ranges_first = unit_sym->sym_ranges.ranges;
+      CV_RecRange *rec_ranges_opl   = rec_ranges_first+unit_sym->sym_ranges.count;
+      for(CV_RecRange *rec_range = rec_ranges_first;
+          rec_range < rec_ranges_opl;
+          rec_range += 1)
+      {
+        //- rjf: rec range -> symbol info range
+        U64 sym_off_first = rec_range->off + 2;
+        U64 sym_off_opl   = rec_range->off + rec_range->hdr.size;
+        
+        //- rjf: skip invalid ranges
+        if(sym_off_opl > unit_sym->data.size || sym_off_first > unit_sym->data.size || sym_off_first > sym_off_opl)
+        {
+          continue;
+        }
+        
+        //- rjf: unpack symbol info
+        CV_SymKind kind = rec_range->hdr.kind;
+        U64 sym_header_struct_size = cv_header_struct_size_from_sym_kind(kind);
+        void *sym_header_struct_base = unit_sym->data.str + sym_off_first;
+        void *sym_data_opl = unit_sym->data.str + sym_off_opl;
+        
+        //- rjf: skip bad sizes
+        if(sym_off_first + sym_header_struct_size > sym_off_opl)
+        {
+          continue;
+        }
+        
+        //- rjf: process symbol
+        switch(kind)
+        {
+          default:{}break;
+          case CV_SymKind_INLINESITE:
+          {
+            // rjf: unpack sym
+            CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
+            String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
+            
+            // rjf: map inlinee -> parsed cv c13 inlinee line info
+            CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
+            {
+              U64 hash = cv_hash_from_item_id(sym->inlinee);
+              U64 slot_idx = unit_c13->inlinee_lines_parsed_slots_count;
+              for(CV_C13InlineeLinesParsedNode *n = unit_c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
+              {
+                if(n->v.inlinee == sym->inlinee)
+                {
+                  inlinee_lines_parsed = &n->v;
+                  break;
+                }
+              }
+            }
+            
+            // rjf: build line table
+            RDIM_LineTable *line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 4096);
+          }break;
+        }
       }
     }
   }
@@ -2514,22 +2574,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
           String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
           
-          // rjf: map inlinee -> parsed cv c13 inlinee line info
-          CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
-          if(in->c13 != 0)
-          {
-            U64 hash = cv_hash_from_item_id(sym->inlinee);
-            U64 slot_idx = in->c13->inlinee_lines_parsed_slots_count;
-            for(CV_C13InlineeLinesParsedNode *n = in->c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
-            {
-              if(n->v.inlinee == sym->inlinee)
-              {
-                inlinee_lines_parsed = &n->v;
-                break;
-              }
-            }
-          }
-          
           // rjf: extract external info about inline site
           String8    name      = str8_zero();
           RDIM_Type *type      = 0;
@@ -3601,7 +3645,6 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           tasks_inputs[idx].sym             = sym_for_unit[idx-global_stream_subdivision_tasks_count];
           tasks_inputs[idx].sym_ranges_first= 0;
           tasks_inputs[idx].sym_ranges_opl  = sym_for_unit[idx-global_stream_subdivision_tasks_count]->sym_ranges.count;
-          tasks_inputs[idx].c13             = c13_for_unit[idx-global_stream_subdivision_tasks_count];
         }
         tasks_tickets[idx] = ts_kickoff(p2r_symbol_stream_convert_task__entry_point, 0, &tasks_inputs[idx]);
       }
