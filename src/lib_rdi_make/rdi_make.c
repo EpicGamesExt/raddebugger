@@ -2803,7 +2803,6 @@ rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src)
           
           //- rjf: sort
           RDIM_SortKey *sorted_line_keys = 0;
-          RDIM_ProfScope("sort")
           {
             sorted_line_keys = rdim_sort_key_array(scratch.arena, line_keys, key_count);
           }
@@ -2815,7 +2814,6 @@ rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src)
           //- rjf: arrange output
           RDI_U64 *arranged_voffs = dst_line_voffs + dst_voff_idx;
           RDI_Line *arranged_lines = dst_lines + dst_line_idx;
-          RDIM_ProfScope("arrange output")
           {
             for(RDI_U64 i = 0; i < key_count; i += 1)
             {
