@@ -237,6 +237,21 @@ cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value)
   return read_size;
 }
 
+internal S32
+cv_inline_annot_signed_from_unsigned_operand(U32 value)
+{
+  if(value & 1)
+  {
+    value = -(value >> 1);
+  }
+  else
+  {
+    value = value >> 1;
+  }
+  S32 result = (S32)value;
+  return result;
+}
+
 ////////////////////////////////
 //~ CodeView Parsing Functions
 
@@ -611,6 +626,7 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, PDB_Strtbl *strtbl, PDB_
   //- rjf: fill output
   //
   CV_C13Parsed *result = push_array(arena, CV_C13Parsed, 1);
+  result->data = c13_data;
   result->first_sub_section = first;
   result->last_sub_section = last;
   result->sub_section_count = count;
