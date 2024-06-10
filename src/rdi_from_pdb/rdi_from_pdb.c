@@ -732,6 +732,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
             // rjf: unpack sym
             CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
             String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
+            U64               base_voff = 0;
             
             // rjf: map inlinee -> parsed cv c13 inlinee line info
             CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
@@ -759,15 +760,28 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
               CV_InlineRangeKind range_kind             = 0;
               U32                code_length            = 0;
               U32                code_offset            = 0;
+              U32                last_code_offset       = code_offset;
               String8            file_name              = inlinee_lines_parsed->file_name;
+              String8            last_file_name         = file_name;
               S32                line                   = (S32)inlinee_lines_parsed->first_source_ln;
+              S32                last_line              = line;
               S32                column                 = 1;
-              U64                code_offset_lo         = 0;
-              B32                code_offset_changed    = 0;
-              B32                code_offset_lo_changed = 0;
-              B32                code_length_changed    = 0;
-              B32                ln_changed             = 1;
-              B32                file_off_changed       = 0;
+              S32                last_column            = column;
+              
+              // rjf: gathered lines
+              typedef struct LineChunk LineChunk;
+              struct LineChunk
+              {
+                LineChunk *next;
+                U64 cap;
+                U64 count;
+                U64 *voffs;     // [line_count + 1] (sorted)
+                U32 *line_nums; // [line_count]
+                U16 *col_nums;  // [2*line_count]
+              };
+              LineChunk *first_line_chunk = 0;
+              LineChunk *last_line_chunk = 0;
+              U64 total_line_chunk_line_count = 0;
               
               // rjf: grab checksums sub-section
               CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
@@ -787,6 +801,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
                   default:{good = 0;}break;
                   case CV_InlineBinaryAnnotation_Null:
                   {
+                    good = 0;
                   }break;
                   case CV_InlineBinaryAnnotation_CodeOffset:
                   {
@@ -890,6 +905,91 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
                     // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &column_end);
                   }break;
                 }
+                
+                // rjf: gather new lines
+                if(line != last_line || code_offset != last_code_offset)
+                {
+                  LineChunk *chunk = last_line_chunk;
+                  if(chunk == 0 || chunk->count+1 >= chunk->cap)
+                  {
+                    chunk = push_array(scratch.arena, LineChunk, 1);
+                    SLLQueuePush(first_line_chunk, last_line_chunk, chunk);
+                    chunk->cap = 256;
+                    chunk->voffs = push_array_no_zero(scratch.arena, U64, chunk->cap);
+                    chunk->line_nums = push_array_no_zero(scratch.arena, U32, chunk->cap);
+                  }
+                  chunk->voffs[chunk->count] = base_voff + code_offset;
+                  chunk->voffs[chunk->count+1] = 0xffffffffffffffffull;
+                  chunk->line_nums[chunk->count] = (U32)line;
+                  chunk->count += 1;
+                  total_line_chunk_line_count += 1;
+                }
+                
+                // rjf: push line sequence to line table & source file
+                if(!good || (op == CV_InlineBinaryAnnotation_ChangeFile && !str8_match(last_file_name, file_name, 0)))
+                {
+                  String8 seq_file_name = last_file_name; // NOTE(rjf): `file_name` is possibly changed to the next sequence, so use previous
+                  
+                  // rjf: file name -> normalized file path
+                  String8 file_path = seq_file_name;
+                  String8 file_path_normalized = lower_from_str8(scratch.arena, str8_skip_chop_whitespace(file_path));
+                  for(U64 idx = 0; idx < file_path_normalized.size; idx += 1)
+                  {
+                    if(file_path_normalized.str[idx] == '\\')
+                    {
+                      file_path_normalized.str[idx] = '/';
+                    }
+                  }
+                  
+                  // rjf: normalized file path -> source file node
+                  U64 file_path_normalized_hash = rdi_hash(file_path_normalized.str, file_path_normalized.size);
+                  U64 src_file_slot = file_path_normalized_hash%src_file_map.slots_count;
+                  P2R_SrcFileNode *src_file_node = 0;
+                  for(P2R_SrcFileNode *n = src_file_map.slots[src_file_slot]; n != 0; n = n->next)
+                  {
+                    if(str8_match(n->src_file->normal_full_path, file_path_normalized, 0))
+                    {
+                      src_file_node = n;
+                      break;
+                    }
+                  }
+                  if(src_file_node == 0)
+                  {
+                    src_file_node = push_array(scratch.arena, P2R_SrcFileNode, 1);
+                    SLLStackPush(src_file_map.slots[src_file_slot], src_file_node);
+                    src_file_node->src_file = rdim_src_file_chunk_list_push(arena, &out->src_files, 4096);
+                    src_file_node->src_file->normal_full_path = push_str8_copy(arena, file_path_normalized);
+                  }
+                  
+                  // rjf: gather all lines
+                  RDI_U64 *voffs = push_array_no_zero(arena, RDI_U64, total_line_chunk_line_count+1);
+                  RDI_U32 *line_nums = push_array_no_zero(arena, RDI_U32, total_line_chunk_line_count);
+                  RDI_U64 line_count = total_line_chunk_line_count;
+                  {
+                    U64 dst_idx = 0;
+                    for(LineChunk *chunk = first_line_chunk; chunk != 0; chunk = chunk->next)
+                    {
+                      MemoryCopy(voffs+dst_idx, chunk->voffs, sizeof(U64)*chunk->count);
+                      MemoryCopy(line_nums+dst_idx, chunk->line_nums, sizeof(U32)*chunk->count);
+                      dst_idx += chunk->count;
+                    }
+                    voffs[dst_idx] = 0xffffffffffffffffull;
+                  }
+                  
+                  // rjf: push
+                  RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, voffs, line_nums, 0, line_count);
+                  rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
+                  
+                  // rjf: clear line chunks for subsequent sequences
+                  first_line_chunk = last_line_chunk = 0;
+                  total_line_chunk_line_count = 0;
+                }
+                
+                // rjf: update prev/current states
+                last_file_name   = file_name;
+                last_line        = line;
+                last_column      = column;
+                last_code_offset = code_offset;
               }
             }
             
