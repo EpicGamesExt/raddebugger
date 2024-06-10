@@ -2946,6 +2946,9 @@ struct CV_C13SubSectionNode
 typedef struct CV_C13Parsed CV_C13Parsed;
 struct CV_C13Parsed
 {
+  // rjf: source data
+  String8 data;
+  
   // rjf: full sub-section list
   CV_C13SubSectionNode *first_sub_section;
   CV_C13SubSectionNode *last_sub_section;
@@ -2987,6 +2990,9 @@ internal F64 cv_f64_from_numeric(CV_NumericParsed *num);
 
 internal U64 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value);
 internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value);
+
+internal S32 cv_inline_annot_signed_from_unsigned_operand(U32 value);
+
 
 ////////////////////////////////
 //~ CodeView Parsing Functions

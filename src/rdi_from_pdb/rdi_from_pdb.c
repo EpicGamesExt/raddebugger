@@ -583,7 +583,8 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     ////////////////////////////
     //- rjf: pass 1: build per-unit info & per-unit line tables
     //
-    for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
+    ProfScope("pass 1: build per-unit info & per-unit line tables")
+      for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
       PDB_CompUnit *pdb_unit     = in->comp_units->units[comp_unit_idx];
       CV_SymParsed *pdb_unit_sym = in->comp_unit_syms[comp_unit_idx];
@@ -675,7 +676,8 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     //
     PDB_CompUnitContribution *contrib_ptr = in->comp_unit_contributions->contributions;
     PDB_CompUnitContribution *contrib_opl = contrib_ptr + in->comp_unit_contributions->count;
-    for(;contrib_ptr < contrib_opl; contrib_ptr += 1)
+    ProfScope("pass 2: build per-unit voff ranges from comp unit contributions table")
+      for(;contrib_ptr < contrib_opl; contrib_ptr += 1)
     {
       if(contrib_ptr->mod < in->comp_units->count)
       {
@@ -688,7 +690,8 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     ////////////////////////////
     //- rjf: pass 3: parse all inlinee line tables
     //
-    for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
+    ProfScope("pass 3: parse all inlinee line tables")
+      for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
       CV_SymParsed *unit_sym = in->comp_unit_syms[comp_unit_idx];
       CV_C13Parsed *unit_c13 = in->comp_unit_c13s[comp_unit_idx];
@@ -745,8 +748,155 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
               }
             }
             
-            // rjf: build line table
-            RDIM_LineTable *line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 4096);
+            // rjf: build line table, fill with parsed binary annotations
+            RDIM_LineTable *line_table = 0;
+            if(inlinee_lines_parsed != 0)
+            {
+              // rjf: build line table
+              line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 4096);
+              
+              // rjf: state machine registers
+              CV_InlineRangeKind range_kind             = 0;
+              U32                code_length            = 0;
+              U32                code_offset            = 0;
+              String8            file_name              = inlinee_lines_parsed->file_name;
+              S32                line                   = (S32)inlinee_lines_parsed->first_source_ln;
+              S32                column                 = 1;
+              U64                code_offset_lo         = 0;
+              B32                code_offset_changed    = 0;
+              B32                code_offset_lo_changed = 0;
+              B32                code_length_changed    = 0;
+              B32                ln_changed             = 1;
+              B32                file_off_changed       = 0;
+              
+              // rjf: grab checksums sub-section
+              CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
+              
+              // rjf: decode loop
+              U64 read_off = 0;
+              U64 read_off_opl = binary_annots.size;
+              for(B32 good = 1; read_off < read_off_opl && good;)
+              {
+                // rjf: decode next annotation op
+                U32 op = CV_InlineBinaryAnnotation_Null;
+                read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &op);
+                
+                // rjf: apply op
+                switch(op)
+                {
+                  default:{good = 0;}break;
+                  case CV_InlineBinaryAnnotation_Null:
+                  {
+                  }break;
+                  case CV_InlineBinaryAnnotation_CodeOffset:
+                  {
+                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset);
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase:
+                  {
+                    good = 0;
+                    // TODO(rjf): currently untested/unknown - first guess below:
+                    //
+                    // U32 delta = 0;
+                    // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
+                    // code_offset_base = code_offset;
+                    // code_offset_end  = code_offset + delta;
+                    // code_offset += delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeCodeOffset:
+                  {
+                    U32 delta = 0;
+                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
+                    code_offset += delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeCodeLength:
+                  {
+                    code_length = 0;
+                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeFile:
+                  {
+                    U32 new_file_off = 0;
+                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &new_file_off);
+                    String8 new_file_name = {0};
+                    if(new_file_off + sizeof(CV_C13Checksum) <= file_chksms->size)
+                    {
+                      CV_C13Checksum *checksum = (CV_C13Checksum*)(unit_c13->data.str + file_chksms->off + new_file_off);
+                      U32 name_off = checksum->name_off;
+                      new_file_name = pdb_strtbl_string_from_off(in->pdb_strtbl, name_off);
+                    }
+                    file_name = new_file_name;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeLineOffset:
+                  {
+                    S32 delta = 0;
+                    read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &delta);
+                    line += delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeLineEndDelta:
+                  {
+                    good = 0;
+                    // TODO(rjf): currently untested/unknown - first guess below:
+                    //
+                    // S32 end_delta = 1;
+                    // read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &end_delta);
+                    // line += end_delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeRangeKind:
+                  {
+                    good = 0;
+                    // TODO(rjf): currently untested/unknown - first guess below:
+                    //
+                    // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &range_kind);
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeColumnStart:
+                  {
+                    good = 0;
+                    // TODO(rjf): currently untested/unknown - first guess below:
+                    //
+                    // S32 delta = 0;
+                    // read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &delta);
+                    // column += delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeColumnEndDelta:
+                  {
+                    // TODO(rjf): currently untested/unknown - first guess below:
+                    //
+                    // S32 end_delta = 0;
+                    // read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &end_delta);
+                    // column += end_delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset:
+                  {
+                    U32 code_offset_and_line_offset = 0;
+                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset_and_line_offset);
+                    U32 code_delta = (code_offset_and_line_offset & 0xf);
+                    S32 line_delta = cv_inline_annot_signed_from_unsigned_operand(code_offset_and_line_offset >> 4);
+                    code_offset += code_delta;
+                    line        += line_delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset:
+                  {
+                    U32 offset_delta = 0;
+                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
+                    read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &offset_delta); 
+                    code_offset += offset_delta;
+                  }break;
+                  case CV_InlineBinaryAnnotation_ChangeColumnEnd:
+                  {
+                    // TODO(rjf): currently untested/unknown - first guess below:
+                    //
+                    // U32 column_end = 0;
+                    // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &column_end);
+                  }break;
+                }
+              }
+            }
+            
+            // rjf: insert line table to map, for later lookups
+            {
+              // TODO(rjf)
+            }
           }break;
         }
       }
@@ -2981,7 +3131,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //////////////////////////////////////////////////////////////
   //- rjf: kick off unit conversion & source file collection
   //
-  P2R_UnitConvertIn unit_convert_in = {comp_units, comp_unit_contributions, sym_for_unit, c13_for_unit};
+  P2R_UnitConvertIn unit_convert_in = {strtbl, comp_units, comp_unit_contributions, sym_for_unit, c13_for_unit};
   TS_Ticket unit_convert_ticket = ts_kickoff(p2r_units_convert_task__entry_point, 0, &unit_convert_in);
   
   //////////////////////////////////////////////////////////////
