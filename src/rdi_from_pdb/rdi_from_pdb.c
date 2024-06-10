@@ -4766,7 +4766,11 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   {
     for(EachNonZeroEnumVal(RDI_NameMapKind, k))
     {
-      name_map_bakes[k] = *ts_join_struct(bake_name_maps_tickets[k], max_U64, RDIM_NameMapBakeResult);
+      RDIM_NameMapBakeResult *bake = ts_join_struct(bake_name_maps_tickets[k], max_U64, RDIM_NameMapBakeResult);
+      if(bake != 0)
+      {
+        name_map_bakes[k] = *bake;
+      }
     }
   }
   
