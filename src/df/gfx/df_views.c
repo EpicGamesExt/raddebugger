@@ -4842,6 +4842,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   DI_Scope *scope = di_scope_open();
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+  Architecture arch = df_architecture_from_entity(thread);
   U64 selected_unwind_count = ctrl_ctx.unwind_count;
   DF_Entity *process = thread->parent;
   Vec4F32 thread_color = df_rgba_from_theme_color(DF_ThemeColor_PlainText);
@@ -4850,6 +4851,73 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
     thread_color = df_rgba_from_entity(thread);
   }
   CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+  
+  //- rjf: compute full call stack, including concrete & inline frames
+  typedef struct DF_CallStackFrame DF_CallStackFrame;
+  struct DF_CallStackFrame
+  {
+    void *regs;
+    B32 is_inline_frame;
+    String8 name;
+    String8 type_string;
+  };
+  typedef struct DF_CallStackFrameNode DF_CallStackFrameNode;
+  struct DF_CallStackFrameNode
+  {
+    DF_CallStackFrameNode *next;
+    DF_CallStackFrame v;
+  };
+  DF_CallStackFrame *frames = 0;
+  U64 frames_count = 0;
+  {
+    TG_Graph *graph = tg_graph_begin(bit_size_from_arch(arch)/8, 256);
+    DF_CallStackFrameNode *first_frame = 0;
+    DF_CallStackFrameNode *last_frame = 0;
+    for(U64 unwind_idx = 0; unwind_idx < unwind.frames.count; unwind_idx += 1)
+    {
+      CTRL_UnwindFrame *unwind_f = &unwind.frames.v[unwind_idx];
+      U64 rip_vaddr = regs_rip_from_arch_block(arch, unwind_f->regs);
+      DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
+      DI_Key dbgi_key = df_dbgi_key_from_module(module);
+      RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+      RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
+      RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
+      RDI_TypeNode *procedure_type = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
+      
+      // rjf: add frame for inlines
+      for(RDI_Scope *s = scope; s->inline_site_idx != 0; s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
+      {
+        RDI_InlineSite *site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
+        RDI_TypeNode *site_type = rdi_element_from_name_idx(rdi, TypeNodes, site->type_idx);
+        DF_CallStackFrameNode *n = push_array(scratch.arena, DF_CallStackFrameNode, 1);
+        SLLQueuePush(first_frame, last_frame, n);
+        n->v.regs = unwind_f->regs;
+        n->v.is_inline_frame = 1;
+        n->v.name.str = rdi_string_from_idx(rdi, site->name_string_idx, &n->v.name.size);
+        n->v.type_string = tg_string_from_key(scratch.arena, graph, rdi, tg_key_ext(tg_kind_from_rdi_type_kind(site_type->kind), (U64)site->type_idx));
+        frames_count += 1;
+      }
+      
+      // rjf: add frame for concrete frame
+      DF_CallStackFrameNode *n = push_array(scratch.arena, DF_CallStackFrameNode, 1);
+      SLLQueuePush(first_frame, last_frame, n);
+      n->v.regs = unwind_f->regs;
+      n->v.is_inline_frame = 0;
+      n->v.name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &n->v.name.size);
+      n->v.type_string = tg_string_from_key(scratch.arena, graph, rdi, tg_key_ext(tg_kind_from_rdi_type_kind(procedure_type->kind), (U64)procedure->type_idx));
+      frames_count += 1;
+    }
+    frames = push_array(scratch.arena, DF_CallStackFrame, frames_count);
+    {
+      U64 idx = 0;
+      for(DF_CallStackFrameNode *f = first_frame; f != 0; f = f->next)
+      {
+        MemoryCopyStruct(&frames[idx], &f->v);
+        idx += 1;
+      }
+    }
+  }
   
   //- rjf: grab state
   typedef struct DF_CallStackViewState DF_CallStackViewState;
@@ -4880,8 +4948,8 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
     scroll_list_params.flags         = UI_ScrollListFlag_All;
     scroll_list_params.row_height_px = floor_f32(ui_top_font_size()*2.5f);
     scroll_list_params.dim_px        = dim_2f32(rect);
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, unwind.frames.count));
-    scroll_list_params.item_range    = r1s64(0, unwind.frames.count+1);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, frames_count));
+    scroll_list_params.item_range    = r1s64(0, frames_count+1);
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
@@ -4914,7 +4982,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
       }
       
       //- rjf: frame rows
-      for(S64 row_num = visible_row_range.min; row_num <= visible_row_range.max && row_num <= unwind.frames.count; row_num += 1)
+      for(S64 row_num = visible_row_range.min; row_num <= visible_row_range.max && row_num <= frames_count; row_num += 1)
       {
         if(row_num == 0)
         {
@@ -4924,29 +4992,12 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         
         // rjf: unpack frame
         U64 frame_idx = row_num-1;
-        CTRL_UnwindFrame *frame = &unwind.frames.v[frame_idx];
+        DF_CallStackFrame *frame = &frames[frame_idx];
         U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, frame->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         B32 frame_valid = (rip_vaddr != 0);
-        U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-        DI_Key dbgi_key = df_dbgi_key_from_module(module);
-        RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
-        String8 symbol_name = {0};
-        String8 symbol_type_string = {0};
-        {
-          U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, rip_voff);
-          RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
-          U64 proc_idx = scope->proc_idx;
-          RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-          RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
-          TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
-          U64 name_size = 0;
-          U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-          RDI_TopLevelInfo *top_level_info = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
-          TG_Graph *graph = tg_graph_begin(rdi_addr_size_from_arch(top_level_info->arch), 256);
-          symbol_name = str8(name_ptr, name_size);
-          symbol_type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
-        }
+        String8 symbol_name = frame->name;
+        String8 symbol_type_string = frame->type_string;
         
         // rjf: build row
         if(frame_valid) UI_NamedTableVectorF("###callstack_%p_%I64x", view, frame_idx)
@@ -5007,6 +5058,14 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_Clip, "frame_%I64x", frame_idx);
             UI_Parent(box)
             {
+              if(frame->is_inline_frame)
+              {
+                UI_PrefWidth(ui_text_dim(10, 1))
+                {
+                  ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
+                  ui_label(str8_lit("[inlined]"));
+                }
+              }
               if(symbol_name.size == 0)
               {
                 ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
