@@ -920,7 +920,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
                 }
                 
                 // rjf: gather new lines
-                if(line != last_line || code_offset != last_code_offset)
+                if(!good || line != last_line || code_offset != last_code_offset)
                 {
                   LineChunk *chunk = last_line_chunk;
                   if(chunk == 0 || chunk->count+1 >= chunk->cap)
@@ -932,7 +932,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
                     chunk->line_nums = push_array_no_zero(scratch.arena, U32, chunk->cap);
                   }
                   chunk->voffs[chunk->count] = base_voff + code_offset;
-                  chunk->voffs[chunk->count+1] = 0xffffffffffffffffull;
+                  chunk->voffs[chunk->count+1] = base_voff + code_offset + code_length;
                   chunk->line_nums[chunk->count] = (U32)line;
                   chunk->count += 1;
                   total_line_chunk_line_count += 1;
