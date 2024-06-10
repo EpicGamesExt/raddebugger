@@ -460,7 +460,7 @@ dasm_parse_thread__entry_point(void *p)
                 RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
                 RDI_ParsedLineTable unit_line_info = {0};
                 rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
-                U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
+                U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff, 0);
                 if(line_info_idx < unit_line_info.count)
                 {
                   RDI_Line *line = &unit_line_info.lines[line_info_idx];

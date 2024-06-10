@@ -47,7 +47,7 @@ commands =
 {
   .rjf_f1 =
   {
-    .win = "build ryan_scratch no_meta && pushd build && ryan_scratch.exe && popd",
+    .win = "build raddbg telemetry",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
