@@ -3278,7 +3278,7 @@ df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entit
             RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
             RDI_ParsedLineTable unit_line_info = {0};
             rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
-            U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff, 0);
+            U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
             if(unit_line_info.voffs != 0)
             {
               Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
@@ -3322,7 +3322,7 @@ df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
     RDI_ParsedLineTable unit_line_info = {0};
     rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
-    U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff, 0);
+    U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, voff);
     if(line_info_idx < unit_line_info.count)
     {
       RDI_Line *line = &unit_line_info.lines[line_info_idx];
@@ -3957,7 +3957,7 @@ df_eval_parse_ctx_from_src_loc(DI_Scope *scope, DF_Entity *file, TxtPt pt)
           RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
           RDI_ParsedLineTable unit_line_info = {0};
           rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
-          U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff, 0);
+          U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
           Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
           S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;
           DF_TextLineSrc2DasmInfoNode *src2dasm_n = push_array(scratch.arena, DF_TextLineSrc2DasmInfoNode, 1);
