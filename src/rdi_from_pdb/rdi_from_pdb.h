@@ -191,6 +191,7 @@ typedef struct P2R_UnitConvertIn P2R_UnitConvertIn;
 struct P2R_UnitConvertIn
 {
   PDB_Strtbl *pdb_strtbl;
+  PDB_CoffSectionArray *coff_sections;
   PDB_CompUnitArray *comp_units;
   PDB_CompUnitContributionArray *comp_unit_contributions;
   CV_SymParsed **comp_unit_syms;

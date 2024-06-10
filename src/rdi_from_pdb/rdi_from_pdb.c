@@ -699,6 +699,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
       CV_C13Parsed *unit_c13 = in->comp_unit_c13s[comp_unit_idx];
       CV_RecRange *rec_ranges_first = unit_sym->sym_ranges.ranges;
       CV_RecRange *rec_ranges_opl   = rec_ranges_first+unit_sym->sym_ranges.count;
+      U64 base_voff = 0;
       for(CV_RecRange *rec_range = rec_ranges_first;
           rec_range < rec_ranges_opl;
           rec_range += 1)
@@ -729,12 +730,25 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
         switch(kind)
         {
           default:{}break;
+          
+          //- rjf: LPROC32/GPROC32 (gather base address)
+          case CV_SymKind_LPROC32:
+          case CV_SymKind_GPROC32:
+          {
+            CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
+            COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[proc32->sec-1] : 0;
+            if(section != 0)
+            {
+              base_voff = section->voff + proc32->off;
+            }
+          }break;
+          
+          //- rjf: INLINESITE
           case CV_SymKind_INLINESITE:
           {
             // rjf: unpack sym
             CV_SymInlineSite *sym           = (CV_SymInlineSite *)sym_header_struct_base;
             String8           binary_annots = str8((U8 *)(sym+1), rec_range->hdr.size - sizeof(rec_range->hdr.kind) - sizeof(*sym));
-            U64               base_voff = 0;
             
             // rjf: map inlinee -> parsed cv c13 inlinee line info
             CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
@@ -3230,7 +3244,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //////////////////////////////////////////////////////////////
   //- rjf: kick off unit conversion & source file collection
   //
-  P2R_UnitConvertIn unit_convert_in = {strtbl, comp_units, comp_unit_contributions, sym_for_unit, c13_for_unit};
+  P2R_UnitConvertIn unit_convert_in = {strtbl, coff_sections, comp_units, comp_unit_contributions, sym_for_unit, c13_for_unit};
   TS_Ticket unit_convert_ticket = ts_kickoff(p2r_units_convert_task__entry_point, 0, &unit_convert_in);
   
   //////////////////////////////////////////////////////////////
