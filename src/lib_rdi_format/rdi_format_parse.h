@@ -159,7 +159,8 @@ RDI_PROC RDI_U32 *rdi_idx_run_from_first_count(RDI_Parsed *rdi, RDI_U32 raw_firs
 
 //- line info
 RDI_PROC void rdi_parsed_from_line_table(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_ParsedLineTable *out);
-RDI_PROC RDI_U64 rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff, RDI_U64 depth);
+RDI_PROC RDI_U64 rdi_line_info_idx_range_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff, RDI_U64 *n_out);
+RDI_PROC RDI_U64 rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff);
 RDI_PROC void rdi_parsed_from_source_line_map(RDI_Parsed *rdi, RDI_SourceLineMap *map, RDI_ParsedSourceLineMap *out);
 RDI_PROC RDI_U64 *rdi_line_voffs_from_num(RDI_ParsedSourceLineMap *map, RDI_U32 linenum, RDI_U32 *n_out);
 
@@ -195,8 +196,8 @@ RDI_PROC RDI_Unit *rdi_unit_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 RDI_PROC RDI_LineTable *rdi_line_table_from_unit(RDI_Parsed *rdi, RDI_Unit *unit);
 
 //- line tables
-RDI_PROC RDI_Line rdi_line_from_voff(RDI_Parsed *rdi, RDI_U64 voff, RDI_U64 depth);
-RDI_PROC RDI_Line rdi_line_from_line_table_voff(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_U64 voff, RDI_U64 depth);
+RDI_PROC RDI_Line rdi_line_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+RDI_PROC RDI_Line rdi_line_from_line_table_voff(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_U64 voff);
 RDI_PROC RDI_SourceFile *rdi_source_file_from_line(RDI_Parsed *rdi, RDI_Line *line);
 
 //- source files
