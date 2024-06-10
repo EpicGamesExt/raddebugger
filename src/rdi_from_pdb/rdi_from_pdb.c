@@ -2229,6 +2229,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
     RDIM_LocationSet *defrange_target = 0;
     B32 defrange_target_is_param = 0;
     U64 procedure_num = 0;
+    U64 procedure_base_voff = 0;
     CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges + in->sym_ranges_first;
     CV_RecRange *rec_ranges_opl   = in->sym->sym_ranges.ranges + in->sym_ranges_opl;
     typedef struct P2R_ScopeNode P2R_ScopeNode;
@@ -2420,6 +2421,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
               U64 voff_last = voff_first + proc32->len;
               RDIM_Rng1U64 voff_range = {voff_first, voff_last};
               rdim_scope_push_voff_range(arena, &sym_scopes, procedure_root_scope, voff_range);
+              procedure_base_voff = voff_first;
             }
           }
           
@@ -2896,6 +2898,103 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
             else { node = push_array_no_zero(scratch.arena, P2R_ScopeNode, 1); }
             node->scope = scope;
             SLLStackPush(top_scope_node, node);
+          }
+          
+          // rjf: parse offset ranges of this inline site - attach to scope
+          {
+            U32 code_length      = 0;
+            U32 code_offset      = 0;
+            U32 last_code_offset = code_offset;
+            U32 last_code_length = code_length;
+            U64 read_off = 0;
+            U64 read_off_opl = binary_annots.size;
+            for(B32 good = 1; read_off < read_off_opl && good;)
+            {
+              // rjf: decode next annotation op
+              U32 op = CV_InlineBinaryAnnotation_Null;
+              read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &op);
+              
+              // rjf: apply op
+              switch(op)
+              {
+                default:{good = 1;}break;
+                case CV_InlineBinaryAnnotation_Null:
+                {
+                  good = 0;
+                }break;
+                case CV_InlineBinaryAnnotation_CodeOffset:
+                {
+                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset);
+                }break;
+                case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase:
+                {
+                  good = 0;
+                  // TODO(rjf): currently untested/unknown - first guess below:
+                  //
+                  // U32 delta = 0;
+                  // read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
+                  // code_offset_base = code_offset;
+                  // code_offset_end  = code_offset + delta;
+                  // code_offset += delta;
+                }break;
+                case CV_InlineBinaryAnnotation_ChangeCodeOffset:
+                {
+                  U32 delta = 0;
+                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
+                  code_offset += delta;
+                }break;
+                case CV_InlineBinaryAnnotation_ChangeCodeLength:
+                {
+                  code_length = 0;
+                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
+                }break;
+                case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset:
+                {
+                  U32 code_offset_and_line_offset = 0;
+                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset_and_line_offset);
+                  U32 code_delta = (code_offset_and_line_offset & 0xf);
+                  code_offset += code_delta;
+                }break;
+                case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset:
+                {
+                  U32 offset_delta = 0;
+                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
+                  read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &offset_delta); 
+                  code_offset += offset_delta;
+                }break;
+              }
+              
+              // rjf: gather new ranges
+              if(last_code_length != code_length)
+              {
+                // rjf: convert current state machine state to [first_voff, opl_voff)  range
+                RDIM_Rng1U64 voff_range =
+                {
+                  procedure_base_voff + code_offset,
+                  procedure_base_voff + code_offset + code_length,
+                };
+                
+                // rjf: attempt to extend last-added range to cover this range, if possible
+                if(scope->voff_ranges.last != 0 && scope->voff_ranges.last->v.max == voff_range.min)
+                {
+                  scope->voff_ranges.last->v.max = voff_range.max;
+                }
+                
+                // rjf: cannot add to previous range? -> build new range & add to scope
+                else
+                {
+                  rdim_scope_push_voff_range(arena, &sym_scopes, scope, voff_range);
+                }
+                
+                // rjf: advance
+                code_offset += code_length;
+                code_length = 0;
+              }
+              
+              // rjf: update prev/current states
+              last_code_offset = code_offset;
+              last_code_length = code_length;
+            }
           }
         }break;
         
