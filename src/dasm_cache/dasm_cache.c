@@ -73,7 +73,10 @@ dasm_inst_array_idx_from_code_off__linear_scan(DASM_InstArray *array, U64 off)
     if(array->v[idx].code_off <= off && off < next_off)
     {
       result = idx;
-      break;
+      if(!(array->v[idx].flags & DASM_InstFlag_Decorative))
+      {
+        break;
+      }
     }
   }
   return result;
@@ -472,15 +475,19 @@ dasm_parse_thread__entry_point(void *p)
                     if(params.style_flags & DASM_StyleFlag_SourceFilesNames &&
                        file->normal_full_path_string_idx != 0 && file_normalized_full_path.size != 0)
                     {
-                      DASM_Inst inst = {0};
+                      String8 inst_string = push_str8f(scratch.arena, "> %S", file_normalized_full_path);
+                      DASM_Inst inst = {u32_from_u64_saturate(off), DASM_InstFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                                       inst_strings.total_size + inst_strings.node_count + inst_string.size)};
                       dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
-                      str8_list_pushf(scratch.arena, &inst_strings, "> %S", file_normalized_full_path);
+                      str8_list_push(scratch.arena, &inst_strings, inst_string);
                     }
                     if(params.style_flags & DASM_StyleFlag_SourceFilesNames && file->normal_full_path_string_idx == 0)
                     {
-                      DASM_Inst inst = {0};
+                      String8 inst_string = str8_lit(">");
+                      DASM_Inst inst = {u32_from_u64_saturate(off), DASM_InstFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                                       inst_strings.total_size + inst_strings.node_count + inst_string.size)};
                       dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
-                      str8_list_pushf(scratch.arena, &inst_strings, ">");
+                      str8_list_push(scratch.arena, &inst_strings, inst_string);
                     }
                     last_file = file;
                   }
@@ -512,9 +519,11 @@ dasm_parse_thread__entry_point(void *p)
                         String8 line_text = str8_skip_chop_whitespace(str8_substr(data, text_info.lines_ranges[line->line_num-1]));
                         if(line_text.size != 0)
                         {
-                          DASM_Inst inst = {0};
+                          String8 inst_string = push_str8f(scratch.arena, "> %S", line_text);
+                          DASM_Inst inst = {u32_from_u64_saturate(off), DASM_InstFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                                           inst_strings.total_size + inst_strings.node_count + inst_string.size)};
                           dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
-                          str8_list_pushf(scratch.arena, &inst_strings, "> %S", line_text);
+                          str8_list_push(scratch.arena, &inst_strings, inst_string);
                         }
                       }
                     }
@@ -567,8 +576,8 @@ dasm_parse_thread__entry_point(void *p)
               }
             }
             String8 inst_string = push_str8f(scratch.arena, "%S%S%s%S", addr_part, code_bytes_part, udc.asm_buf, symbol_part);
-            DASM_Inst inst = {off, rel_voff, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                   inst_strings.total_size + inst_strings.node_count + inst_string.size)};
+            DASM_Inst inst = {u32_from_u64_saturate(off), 0, rel_voff, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                             inst_strings.total_size + inst_strings.node_count + inst_string.size)};
             dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
             str8_list_push(scratch.arena, &inst_strings, inst_string);
             

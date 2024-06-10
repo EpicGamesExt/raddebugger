@@ -12034,7 +12034,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             {
               for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
               {
-                if(n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
+                if(n->v.voff_range.min <= hovered_line_voff &&
+                   hovered_line_voff < n->v.voff_range.max)
                 {
                   line_info_line_num = n->v.pt.line;
                   matches = 1;

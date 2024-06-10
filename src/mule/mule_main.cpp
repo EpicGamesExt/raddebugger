@@ -1526,7 +1526,7 @@ extern "C"{
 #endif
 
 static FORCE_INLINE void
-basic_inlinee(void)
+basic_inlinee(int inlinee_param_x, int inlinee_param_y, int inlinee_param_z)
 {
   OutputDebugStringA("A\n");
   OutputDebugStringA("B\n");
@@ -1538,7 +1538,7 @@ static void
 basic_inline_tests(void)
 {
   OutputDebugStringA("{\n");
-  basic_inlinee();
+  basic_inlinee(12, 34, 56);
   OutputDebugStringA("}\n");
 }
 

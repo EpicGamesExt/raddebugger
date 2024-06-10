@@ -42,10 +42,17 @@ struct DASM_Params
 ////////////////////////////////
 //~ rjf: Instruction Types
 
+typedef U32 DASM_InstFlags;
+enum
+{
+  DASM_InstFlag_Decorative = (1<<0),
+};
+
 typedef struct DASM_Inst DASM_Inst;
 struct DASM_Inst
 {
-  U64 code_off;
+  U32 code_off;
+  DASM_InstFlags flags;
   U64 addr;
   Rng1U64 text_range;
 };
