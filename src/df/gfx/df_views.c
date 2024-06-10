@@ -3467,8 +3467,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Target)
   {
     DF_Cmd *cmd = &n->cmd;
     
-    // rjf: mismatched view => skip
-    if(df_panel_from_handle(cmd->params.panel) != panel)
+    // rjf: mismatched window/panel => skip
+    if(df_window_from_handle(cmd->params.window) != ws ||
+       df_panel_from_handle(cmd->params.panel) != panel)
     {
       continue;
     }

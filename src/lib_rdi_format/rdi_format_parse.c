@@ -231,13 +231,13 @@ rdi_parsed_from_line_table(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_Parse
 }
 
 RDI_PROC RDI_U64
-rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff)
+rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff, RDI_U64 depth)
 {
   RDI_U64 result = 0;
   if(line_info->count > 0 && line_info->voffs[0] <= voff && voff < line_info->voffs[line_info->count - 1])
   {
+    //- rjf: find i such that: (vmap[i].voff <= voff) && (voff < vmap[i + 1].voff)
     // assuming: (i < j) -> (vmap[i].voff < vmap[j].voff)
-    // find i such that: (vmap[i].voff <= voff) && (voff < vmap[i + 1].voff)
     RDI_U32 first = 0;
     RDI_U32 opl   = line_info->count;
     for(;;)
@@ -262,6 +262,32 @@ rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff)
       }
     }
     result = (RDI_U64)first;
+    
+    //- rjf: scan leftward, to find shallowest line info matching this voff
+    for(;result != 0;)
+    {
+      if(line_info->voffs[result-1] == voff)
+      {
+        result -= 1;
+      }
+      else
+      {
+        break;
+      }
+    }
+    
+    //- rjf: scan rightward, to match depth parameter
+    for(U64 idx = 0; idx < depth && result+1 < line_info->count; idx += 1)
+    {
+      if(line_info->voffs[result+1] == voff)
+      {
+        result += 1;
+      }
+      else
+      {
+        break;
+      }
+    }
   }
   return result;
 }
@@ -615,20 +641,20 @@ rdi_line_table_from_unit(RDI_Parsed *rdi, RDI_Unit *unit)
 //- line info
 
 RDI_PROC RDI_Line
-rdi_line_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
+rdi_line_from_voff(RDI_Parsed *rdi, RDI_U64 voff, RDI_U64 depth)
 {
   RDI_Unit *unit = rdi_unit_from_voff(rdi, voff);
   RDI_LineTable *line_table = rdi_line_table_from_unit(rdi, unit);
-  RDI_Line line = rdi_line_from_line_table_voff(rdi, line_table, voff);
+  RDI_Line line = rdi_line_from_line_table_voff(rdi, line_table, voff, depth);
   return line;
 }
 
 RDI_PROC RDI_Line
-rdi_line_from_line_table_voff(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_U64 voff)
+rdi_line_from_line_table_voff(RDI_Parsed *rdi, RDI_LineTable *line_table, RDI_U64 voff, RDI_U64 depth)
 {
   RDI_ParsedLineTable parsed = {0};
   rdi_parsed_from_line_table(rdi, line_table, &parsed);
-  RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&parsed, voff);
+  RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&parsed, voff, depth);
   RDI_Line result = {0};
   if(line_info_idx < parsed.count)
   {
