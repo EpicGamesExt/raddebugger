@@ -152,23 +152,6 @@ struct P2R_LinkNameMap
   U64 link_name_count;
 };
 
-//- rjf: inlinee line table map (item id -> line table)
-
-typedef struct P2R_InlineeLineTableMapNode P2R_InlineeLineTableMapNode;
-struct P2R_InlineeLineTableMapNode
-{
-  P2R_InlineeLineTableMapNode *next;
-  CV_ItemId id;
-  RDIM_LineTable *line_table;
-};
-
-typedef struct P2R_InlineeLineTableMap P2R_InlineeLineTableMap;
-struct P2R_InlineeLineTableMap
-{
-  P2R_InlineeLineTableMapNode **slots;
-  U64 slots_count;
-};
-
 //- rjf: normalized file path -> source file map
 
 typedef struct P2R_SrcFileNode P2R_SrcFileNode;
