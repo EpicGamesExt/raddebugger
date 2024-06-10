@@ -754,7 +754,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
             CV_C13InlineeLinesParsed *inlinee_lines_parsed = 0;
             {
               U64 hash = cv_hash_from_item_id(sym->inlinee);
-              U64 slot_idx = unit_c13->inlinee_lines_parsed_slots_count;
+              U64 slot_idx = hash%unit_c13->inlinee_lines_parsed_slots_count;
               for(CV_C13InlineeLinesParsedNode *n = unit_c13->inlinee_lines_parsed_slots[slot_idx]; n != 0; n = n->hash_next)
               {
                 if(n->v.inlinee == sym->inlinee)
