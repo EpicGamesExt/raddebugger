@@ -583,6 +583,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     ////////////////////////////
     //- rjf: pass 1: build per-unit info & per-unit line tables
     //
+    RDIM_LineTable **unit_line_tables = push_array(scratch.arena, RDIM_LineTable *, in->comp_units->count);
     ProfScope("pass 1: build per-unit info & per-unit line tables")
       for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
@@ -609,8 +610,9 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
         MemoryZeroStruct(&obj_name);
       }
       
-      //- rjf: build this unit's line table
+      //- rjf: build this unit's line table, fill out primary line info (inline info added after)
       RDIM_LineTable *line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 256);
+      unit_line_tables[comp_unit_idx] = line_table;
       for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
           node != 0;
           node = node->next)
@@ -753,9 +755,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
             RDIM_LineTable *line_table = 0;
             if(inlinee_lines_parsed != 0)
             {
-              // rjf: build line table
-              line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 4096);
-              
               // rjf: state machine registers
               CV_InlineRangeKind range_kind             = 0;
               U32                code_length            = 0;
@@ -977,7 +976,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
                   }
                   
                   // rjf: push
-                  RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, voffs, line_nums, 0, line_count);
+                  RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, unit_line_tables[comp_unit_idx], src_file_node->src_file, voffs, line_nums, 0, line_count);
                   rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
                   
                   // rjf: clear line chunks for subsequent sequences
