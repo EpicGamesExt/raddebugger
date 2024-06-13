@@ -2297,6 +2297,14 @@ debug_string_tests(void)
   {
     OutputDebugStringA("Hello, World!\n");
   }
+  char message[65409+1];
+	memset(&message[0], '=', sizeof(message));
+	for(int i = 1; i < sizeof(message); i += 128)
+	{
+		message[i] = '\n';
+	}
+	message[sizeof(message) - 1] = 0;
+  OutputDebugStringA(message);
 #endif
 }
 

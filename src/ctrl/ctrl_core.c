@@ -418,11 +418,11 @@ ctrl_event_list_concat_in_place(CTRL_EventList *dst, CTRL_EventList *to_push)
 //- rjf: serialization
 
 internal String8
-ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event)
+ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event, U64 max)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List srl = {0};
-  str8_serial_begin(scratch.arena, &srl);;
+  str8_serial_begin(scratch.arena, &srl);
   {
     str8_serial_push_struct(scratch.arena, &srl, &event->kind);
     str8_serial_push_struct(scratch.arena, &srl, &event->cause);
@@ -440,8 +440,10 @@ ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event)
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_root);
     str8_serial_push_struct(scratch.arena, &srl, &event->timestamp);
     str8_serial_push_struct(scratch.arena, &srl, &event->exception_code);
-    str8_serial_push_struct(scratch.arena, &srl, &event->string.size);
-    str8_serial_push_data(scratch.arena, &srl, event->string.str, event->string.size);
+    String8 string = event->string;
+    string.size = Min(string.size, max-srl.total_size);
+    str8_serial_push_struct(scratch.arena, &srl, &string.size);
+    str8_serial_push_data(scratch.arena, &srl, string.str, string.size);
   }
   String8 string = str8_serial_end(arena, &srl);
   scratch_end(scratch);
@@ -913,6 +915,7 @@ ctrl_init(void)
   ctrl_state->u2c_ring_mutex = os_mutex_alloc();
   ctrl_state->u2c_ring_cv = os_condition_variable_alloc();
   ctrl_state->c2u_ring_size = KB(64);
+  ctrl_state->c2u_ring_max_string_size = ctrl_state->c2u_ring_size/2;
   ctrl_state->c2u_ring_base = push_array_no_zero(arena, U8, ctrl_state->c2u_ring_size);
   ctrl_state->c2u_ring_mutex = os_mutex_alloc();
   ctrl_state->c2u_ring_cv = os_condition_variable_alloc();
@@ -2757,7 +2760,7 @@ ctrl_c2u_push_events(CTRL_EventList *events)
     for(CTRL_EventNode *n = events->first; n != 0; n = n ->next)
     {
       Temp scratch = scratch_begin(0, 0);
-      String8 event_srlzed = ctrl_serialized_string_from_event(scratch.arena, &n->v);
+      String8 event_srlzed = ctrl_serialized_string_from_event(scratch.arena, &n->v, ctrl_state->c2u_ring_size-sizeof(U64));
       OS_MutexScope(ctrl_state->c2u_ring_mutex) for(;;)
       {
         U64 unconsumed_size = (ctrl_state->c2u_ring_write_pos-ctrl_state->c2u_ring_read_pos);
@@ -3667,13 +3670,17 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     }break;
     case DMN_EventKind_DebugString:
     {
-      CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
-      out_evt->kind       = CTRL_EventKind_DebugString;
-      out_evt->msg_id     = msg->msg_id;
-      out_evt->machine_id = CTRL_MachineID_Local;
-      out_evt->entity     = event->thread;
-      out_evt->parent     = event->process;
-      out_evt->string     = event->string;
+      U64 num_strings = (event->string.size + ctrl_state->c2u_ring_max_string_size-1) / ctrl_state->c2u_ring_max_string_size;
+      for(U64 string_idx = 0; string_idx < num_strings; string_idx += 1)
+      {
+        CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
+        out_evt->kind       = CTRL_EventKind_DebugString;
+        out_evt->msg_id     = msg->msg_id;
+        out_evt->machine_id = CTRL_MachineID_Local;
+        out_evt->entity     = event->thread;
+        out_evt->parent     = event->process;
+        out_evt->string     = str8_substr(event->string, r1u64(string_idx*ctrl_state->c2u_ring_max_string_size, (string_idx+1)*ctrl_state->c2u_ring_max_string_size));
+      }
     }break;
     case DMN_EventKind_SetThreadName:
     {

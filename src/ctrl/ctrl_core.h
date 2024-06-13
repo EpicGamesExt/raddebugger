@@ -579,6 +579,7 @@ struct CTRL_State
   
   // rjf: ctrl -> user event ring buffer
   U64 c2u_ring_size;
+  U64 c2u_ring_max_string_size;
   U8 *c2u_ring_base;
   U64 c2u_ring_write_pos;
   U64 c2u_ring_read_pos;
@@ -677,7 +678,7 @@ internal CTRL_Event *ctrl_event_list_push(Arena *arena, CTRL_EventList *list);
 internal void ctrl_event_list_concat_in_place(CTRL_EventList *dst, CTRL_EventList *to_push);
 
 //- rjf: serialization
-internal String8 ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event);
+internal String8 ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event, U64 max);
 internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 string);
 
 ////////////////////////////////
