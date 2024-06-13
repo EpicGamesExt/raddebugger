@@ -81,7 +81,6 @@ DF_CoreCmdKind_SelectThread,
 DF_CoreCmdKind_SelectThreadWindow,
 DF_CoreCmdKind_SelectThreadView,
 DF_CoreCmdKind_SelectUnwind,
-DF_CoreCmdKind_SelectInlineUnwind,
 DF_CoreCmdKind_UpOneFrame,
 DF_CoreCmdKind_DownOneFrame,
 DF_CoreCmdKind_FreezeThread,
@@ -393,6 +392,8 @@ DF_CmdParamSlot_ID,
 DF_CmdParamSlot_PreferDisassembly,
 DF_CmdParamSlot_ForceConfirm,
 DF_CmdParamSlot_Dir2,
+DF_CmdParamSlot_BaseUnwindIndex,
+DF_CmdParamSlot_InlineUnwindIndex,
 DF_CmdParamSlot_COUNT,
 } DF_CmdParamSlot;
 
@@ -421,6 +422,8 @@ U64 id;
 B32 prefer_dasm;
 B32 force_confirm;
 Dir2 dir2;
+U64 base_unwind_index;
+U64 inline_unwind_index;
 };
 
 DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array);
@@ -1531,7 +1534,7 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 C_LINKAGE_BEGIN
-extern Rng1U64 df_g_cmd_param_slot_range_table[22];
+extern Rng1U64 df_g_cmd_param_slot_range_table[24];
 extern DF_IconKind df_g_entity_kind_icon_kind_table[26];
 extern String8 df_g_entity_kind_display_string_table[26];
 extern String8 df_g_entity_kind_name_label_table[26];

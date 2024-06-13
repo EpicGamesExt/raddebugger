@@ -283,6 +283,19 @@ struct DF_DragDropPayload
 };
 
 ////////////////////////////////
+//~ rjf: Rich Hover Types
+
+typedef struct DF_RichHoverInfo DF_RichHoverInfo;
+struct DF_RichHoverInfo
+{
+  DF_Handle process;
+  Rng1U64 vaddr_range;
+  DF_Handle module;
+  Rng1U64 voff_range;
+  DI_Key dbgi_key;
+};
+
+////////////////////////////////
 //~ rjf: View Rule Spec Types
 
 typedef U32 DF_GfxViewRuleSpecInfoFlags; // NOTE(rjf): see @view_rule_info
@@ -719,11 +732,11 @@ struct DF_GfxState
   // rjf: drag/drop state machine
   DF_DragDropState drag_drop_state;
   
-  // rjf: hover line info correllation state
-  Arena *hover_line_arena;
-  DI_Key hover_line_dbgi_key;
-  U64 hover_line_voff;
-  B32 hover_line_set_this_frame;
+  // rjf: rich hover info
+  Arena *rich_hover_info_next_arena;
+  Arena *rich_hover_info_current_arena;
+  DF_RichHoverInfo rich_hover_info_next;
+  DF_RichHoverInfo rich_hover_info_current;
   
   // rjf: running theme state
   DF_Theme cfg_theme_target;
@@ -880,9 +893,8 @@ internal B32 df_drag_drop(DF_DragDropPayload *out_payload);
 internal void df_drag_kill(void);
 internal void df_queue_drag_drop(void);
 
-internal void df_set_hovered_line_info(DI_Key *dbgi_key, U64 voff);
-internal DI_Key df_get_hovered_line_info_dbgi_key(void);
-internal U64 df_get_hovered_line_info_voff(void);
+internal void df_set_rich_hover_info(DF_RichHoverInfo *info);
+internal DF_RichHoverInfo df_get_rich_hover_info(void);
 
 ////////////////////////////////
 //~ rjf: View Spec State Functions
