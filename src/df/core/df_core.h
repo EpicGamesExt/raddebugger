@@ -77,6 +77,7 @@ struct DF_CtrlCtx
 {
   DF_Handle thread;
   U64 unwind_count;
+  U64 inline_unwind_count;
 };
 
 ////////////////////////////////
@@ -514,6 +515,46 @@ struct DF_EntityFuzzyItemArray
 {
   DF_EntityFuzzyItem *v;
   U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Rich (Including Inline) Unwind Types
+
+typedef struct DF_UnwindFrame DF_UnwindFrame;
+struct DF_UnwindFrame
+{
+  void *regs;
+  RDI_Parsed *rdi;
+  RDI_Procedure *procedure;
+  RDI_InlineSite *inline_site;
+};
+
+typedef struct DF_UnwindFrameNode DF_UnwindFrameNode;
+struct DF_UnwindFrameNode
+{
+  DF_UnwindFrameNode *next;
+  DF_UnwindFrame v;
+};
+
+typedef struct DF_UnwindFrameList DF_UnwindFrameList;
+struct DF_UnwindFrameList
+{
+  DF_UnwindFrameNode *first;
+  DF_UnwindFrameNode *last;
+  U64 count;
+};
+
+typedef struct DF_UnwindFrameArray DF_UnwindFrameArray;
+struct DF_UnwindFrameArray
+{
+  DF_UnwindFrame *v;
+  U64 count;
+};
+
+typedef struct DF_Unwind DF_Unwind;
+struct DF_Unwind
+{
+  DF_UnwindFrameArray frames;
 };
 
 ////////////////////////////////
@@ -1562,6 +1603,7 @@ internal EVAL_String2NumMap *df_push_locals_map_from_dbgi_key_voff(Arena *arena,
 internal EVAL_String2NumMap *df_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal B32 df_set_thread_rip(DF_Entity *thread, U64 vaddr);
 internal DF_Entity *df_module_from_thread_candidates(DF_Entity *thread, DF_EntityList *candidates);
+internal DF_Unwind df_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, DF_Entity *process, CTRL_Unwind *base_unwind);
 
 ////////////////////////////////
 //~ rjf: Entity -> Log Entities
