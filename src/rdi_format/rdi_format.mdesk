@@ -1016,9 +1016,6 @@ RDI_ScopeMemberTable:
 RDI_InlineSiteMemberTable:
 {
   {name_string_idx     RDI_U32              ""}
-  {call_src_file_idx   RDI_U32              ""}
-  {call_line_num       RDI_U32              ""}
-  {call_col_num        RDI_U32              ""}
   {type_idx            RDI_U32              ""}
   {owner_type_idx      RDI_U32              ""}
   {line_table_idx      RDI_U32              ""}

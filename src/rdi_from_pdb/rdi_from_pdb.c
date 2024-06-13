@@ -583,7 +583,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     ////////////////////////////
     //- rjf: pass 1: build per-unit info & per-unit line tables
     //
-    RDIM_LineTable **unit_line_tables = push_array(scratch.arena, RDIM_LineTable *, in->comp_units->count);
     ProfScope("pass 1: build per-unit info & per-unit line tables")
       for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
@@ -611,8 +610,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
       }
       
       //- rjf: build this unit's line table, fill out primary line info (inline info added after)
-      RDIM_LineTable *line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 256);
-      unit_line_tables[comp_unit_idx] = line_table;
+      RDIM_LineTable *line_table = 0;
       for(CV_C13SubSectionNode *node = pdb_unit_c13->first_sub_section;
           node != 0;
           node = node->next)
@@ -657,8 +655,15 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
             }
             
             // rjf: push sequence into both line table & source file's line map
-            RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, lines->voffs, lines->line_nums, lines->col_nums, lines->line_count);
-            rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
+            if(lines->line_count != 0)
+            {
+              if(line_table == 0)
+              {
+                line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 256);
+              }
+              RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, lines->voffs, lines->line_nums, lines->col_nums, lines->line_count);
+              rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
+            }
           }
         }
       }
@@ -692,6 +697,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
     ////////////////////////////
     //- rjf: pass 3: parse all inlinee line tables
     //
+    out->units_first_inline_site_line_tables = push_array(arena, RDIM_LineTable *, in->comp_units->count);
     ProfScope("pass 3: parse all inlinee line tables")
       for(U64 comp_unit_idx = 0; comp_unit_idx < in->comp_units->count; comp_unit_idx += 1)
     {
@@ -990,8 +996,19 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
                   }
                   
                   // rjf: push
-                  RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, unit_line_tables[comp_unit_idx], src_file_node->src_file, voffs, line_nums, 0, line_count);
-                  rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
+                  if(line_count != 0)
+                  {
+                    if(line_table == 0)
+                    {
+                      line_table = rdim_line_table_chunk_list_push(arena, &out->line_tables, 256);
+                      if(out->units_first_inline_site_line_tables[comp_unit_idx] == 0)
+                      {
+                        out->units_first_inline_site_line_tables[comp_unit_idx] = line_table;
+                      }
+                    }
+                    RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, &out->line_tables, line_table, src_file_node->src_file, voffs, line_nums, 0, line_count);
+                    rdim_src_file_push_line_sequence(arena, &out->src_files, src_file_node->src_file, seq);
+                  }
                   
                   // rjf: clear line chunks for subsequent sequences
                   first_line_chunk = last_line_chunk = 0;
@@ -1004,11 +1021,6 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
                 last_column      = column;
                 last_code_offset = code_offset;
               }
-            }
-            
-            // rjf: insert line table to map, for later lookups
-            {
-              // TODO(rjf)
             }
           }break;
         }
@@ -2240,6 +2252,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
     };
     P2R_ScopeNode *top_scope_node = 0;
     P2R_ScopeNode *free_scope_node = 0;
+    RDIM_LineTable *inline_site_line_table = in->first_inline_site_line_table;
     for(CV_RecRange *rec_range = rec_ranges_first;
         rec_range < rec_ranges_opl;
         rec_range += 1)
@@ -2872,9 +2885,30 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           
           // rjf: build inline site
           RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &sym_inline_sites, sym_inline_sites_chunk_cap);
-          inline_site->name = name;
-          inline_site->type = type;
-          inline_site->owner= owner;
+          inline_site->name       = name;
+          inline_site->type       = type;
+          inline_site->owner      = owner;
+          inline_site->line_table = inline_site_line_table;
+          
+          // rjf: increment to next inline site line table in this unit
+          if(inline_site_line_table != 0 && inline_site_line_table->chunk != 0)
+          {
+            RDIM_LineTableChunkNode *chunk = inline_site_line_table->chunk;
+            U64 current_idx = (U64)(inline_site_line_table - chunk->v);
+            if(current_idx+1 < chunk->count)
+            {
+              inline_site_line_table += 1;
+            }
+            else
+            {
+              chunk = chunk->next;
+              inline_site_line_table = 0;
+              if(chunk != 0)
+              {
+                inline_site_line_table = chunk->v;
+              }
+            }
+          }
           
           // rjf: build scope
           RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
@@ -3957,12 +3991,14 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   RDIM_UnitChunkList all_units = {0};
   RDIM_SrcFileChunkList all_src_files = {0};
   RDIM_LineTableChunkList all_line_tables = {0};
+  RDIM_LineTable **units_first_inline_site_line_tables = 0;
   ProfScope("join unit conversion & src file tasks")
   {
     P2R_UnitConvertOut *out = ts_join_struct(unit_convert_ticket, max_U64, P2R_UnitConvertOut);
     all_units = out->units;
     all_src_files = out->src_files;
     all_line_tables = out->line_tables;
+    units_first_inline_site_line_tables = out->units_first_inline_site_line_tables;
   }
   
   //////////////////////////////////////////////////////////////
@@ -3987,14 +4023,14 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     {
       for(U64 idx = 0; idx < tasks_count; idx += 1)
       {
-        tasks_inputs[idx].arch            = arch;
-        tasks_inputs[idx].coff_sections   = coff_sections;
-        tasks_inputs[idx].tpi_hash        = tpi_hash;
-        tasks_inputs[idx].tpi_leaf        = tpi_leaf;
-        tasks_inputs[idx].ipi_leaf        = ipi_leaf;
-        tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
-        tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
-        tasks_inputs[idx].link_name_map   = link_name_map;
+        tasks_inputs[idx].arch                         = arch;
+        tasks_inputs[idx].coff_sections                = coff_sections;
+        tasks_inputs[idx].tpi_hash                     = tpi_hash;
+        tasks_inputs[idx].tpi_leaf                     = tpi_leaf;
+        tasks_inputs[idx].ipi_leaf                     = ipi_leaf;
+        tasks_inputs[idx].itype_fwd_map                = itype_fwd_map;
+        tasks_inputs[idx].itype_type_ptrs              = itype_type_ptrs;
+        tasks_inputs[idx].link_name_map                = link_name_map;
         if(idx < global_stream_subdivision_tasks_count)
         {
           tasks_inputs[idx].sym             = sym;
@@ -4007,6 +4043,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           tasks_inputs[idx].sym             = sym_for_unit[idx-global_stream_subdivision_tasks_count];
           tasks_inputs[idx].sym_ranges_first= 0;
           tasks_inputs[idx].sym_ranges_opl  = sym_for_unit[idx-global_stream_subdivision_tasks_count]->sym_ranges.count;
+          tasks_inputs[idx].first_inline_site_line_table = units_first_inline_site_line_tables[idx-global_stream_subdivision_tasks_count];
         }
         tasks_tickets[idx] = ts_kickoff(p2r_symbol_stream_convert_task__entry_point, 0, &tasks_inputs[idx]);
       }

@@ -15,7 +15,7 @@
 typedef struct DMN_CtrlCtx DMN_CtrlCtx;
 struct DMN_CtrlCtx
 {
-  U64 u64 [1];
+  U64 u64[1];
 };
 
 ////////////////////////////////

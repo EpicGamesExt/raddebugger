@@ -783,9 +783,6 @@ X(RDI_U32, inline_site_idx)\
 
 #define RDI_InlineSite_XList \
 X(RDI_U32, name_string_idx)\
-X(RDI_U32, call_src_file_idx)\
-X(RDI_U32, call_line_num)\
-X(RDI_U32, call_col_num)\
 X(RDI_U32, type_idx)\
 X(RDI_U32, owner_type_idx)\
 X(RDI_U32, line_table_idx)\
@@ -1218,9 +1215,6 @@ typedef struct RDI_InlineSite RDI_InlineSite;
 struct RDI_InlineSite
 {
 RDI_U32 name_string_idx;
-RDI_U32 call_src_file_idx;
-RDI_U32 call_line_num;
-RDI_U32 call_col_num;
 RDI_U32 type_idx;
 RDI_U32 owner_type_idx;
 RDI_U32 line_table_idx;

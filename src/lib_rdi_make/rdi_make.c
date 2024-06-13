@@ -3435,9 +3435,6 @@ rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM
         RDI_InlineSite *dst = &result.inline_sites[dst_idx];
         RDIM_InlineSite *src = &n->v[chunk_idx];
         dst->name_string_idx   = rdim_bake_idx_from_string(strings, src->name);
-        dst->call_src_file_idx = (RDI_U32)rdim_idx_from_src_file(src->call_src_file); // TODO(rjf): @u64_to_u32
-        dst->call_line_num     = src->call_line_num;
-        dst->call_col_num      = src->call_col_num;
         dst->type_idx          = (RDI_U32)rdim_idx_from_type(src->type); // TODO(rjf): @u64_to_u32
         dst->owner_type_idx    = (RDI_U32)rdim_idx_from_type(src->owner); // TODO(rjf): @u64_to_u32
         dst->line_table_idx    = (RDI_U32)rdim_idx_from_line_table(src->line_table); // TODO(rjf): @u64_to_u32
