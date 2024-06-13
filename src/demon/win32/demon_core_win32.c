@@ -1554,6 +1554,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //
       U64 begin_time = os_now_microseconds();
       String8List debug_strings = {0};
+      DMN_Event *debug_strings_event = 0;
       for(B32 keep_going = 1; keep_going;)
       {
         keep_going = 0;
@@ -2163,6 +2164,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 debug_string.size -= 1;
               }
               
+              // rjf: make debug string event
+              debug_strings_event = dmn_event_list_push(arena, &events);
+              debug_strings_event->kind = DMN_EventKind_DebugString;
+              
               // rjf: push into debug strings
               str8_list_push(scratch.arena, &debug_strings, debug_string);
               keep_going = 1;
@@ -2209,13 +2214,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       ////////////////////////
       //- rjf: send out event for any remaining debug strings
       //
-      if(debug_strings.total_size != 0)
+      if(debug_strings.total_size != 0 && debug_strings_event != 0)
       {
         String8 debug_strings_joined = str8_list_join(arena, &debug_strings, 0);
-        MemoryZeroStruct(&debug_strings);
-        DMN_Event *e = dmn_event_list_push(arena, &events);
-        e->kind = DMN_EventKind_DebugString;
-        e->string = debug_strings_joined;
+        debug_strings_event->string = debug_strings_joined;
       }
       
       ////////////////////////
