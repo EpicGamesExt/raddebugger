@@ -773,9 +773,6 @@ struct RDIM_InlineSite
 {
   struct RDIM_InlineSiteChunkNode *chunk;
   RDIM_String8 name;
-  RDIM_SrcFile *call_src_file;
-  RDI_U32 call_line_num;
-  RDI_U32 call_col_num;
   RDIM_Type *type;
   RDIM_Type *owner;
   RDIM_LineTable *line_table;

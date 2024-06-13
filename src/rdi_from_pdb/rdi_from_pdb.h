@@ -187,6 +187,7 @@ struct P2R_UnitConvertOut
   RDIM_UnitChunkList units;
   RDIM_SrcFileChunkList src_files;
   RDIM_LineTableChunkList line_tables;
+  RDIM_LineTable **units_first_inline_site_line_tables;
 };
 
 //- rjf: link name map building tasks
@@ -258,6 +259,7 @@ struct P2R_SymbolStreamConvertIn
   CV_TypeId *itype_fwd_map;
   RDIM_Type **itype_type_ptrs;
   P2R_LinkNameMap *link_name_map;
+  RDIM_LineTable *first_inline_site_line_table;
 };
 
 typedef struct P2R_SymbolStreamConvertOut P2R_SymbolStreamConvertOut;
