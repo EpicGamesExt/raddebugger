@@ -522,13 +522,15 @@ df_cmd_params_from_window(DF_Window *window)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_PreferDisassembly);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Index);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_BaseUnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineUnwindIndex);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(window->focused_panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
-  p.index  = ctrl_ctx.unwind_count;
+  p.base_unwind_index = ctrl_ctx.unwind_count;
+  p.inline_unwind_index = ctrl_ctx.inline_unwind_count;
   return p;
 }
 
@@ -542,13 +544,15 @@ df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_PreferDisassembly);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Index);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_BaseUnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineUnwindIndex);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
-  p.index  = ctrl_ctx.unwind_count;
+  p.base_unwind_index = ctrl_ctx.unwind_count;
+  p.inline_unwind_index = ctrl_ctx.inline_unwind_count;
   return p;
 }
 
@@ -562,13 +566,15 @@ df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_PreferDisassembly);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Index);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_BaseUnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineUnwindIndex);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(view);
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
-  p.index  = ctrl_ctx.unwind_count;
+  p.base_unwind_index = ctrl_ctx.unwind_count;
+  p.inline_unwind_index = ctrl_ctx.inline_unwind_count;
   return p;
 }
 
@@ -635,24 +641,18 @@ df_queue_drag_drop(void)
 }
 
 internal void
-df_set_hovered_line_info(DI_Key *dbgi_key, U64 voff)
+df_set_rich_hover_info(DF_RichHoverInfo *info)
 {
-  arena_clear(df_gfx_state->hover_line_arena);
-  df_gfx_state->hover_line_dbgi_key = di_key_copy(df_gfx_state->hover_line_arena, dbgi_key);
-  df_gfx_state->hover_line_voff = voff;
-  df_gfx_state->hover_line_set_this_frame = 1;
+  arena_clear(df_gfx_state->rich_hover_info_next_arena);
+  MemoryCopyStruct(&df_gfx_state->rich_hover_info_next, info);
+  df_gfx_state->rich_hover_info_next.dbgi_key = di_key_copy(df_gfx_state->rich_hover_info_next_arena, &info->dbgi_key);
 }
 
-internal DI_Key
-df_get_hovered_line_info_dbgi_key(void)
+internal DF_RichHoverInfo
+df_get_rich_hover_info(void)
 {
-  return df_gfx_state->hover_line_dbgi_key;
-}
-
-internal U64
-df_get_hovered_line_info_voff(void)
-{
-  return df_gfx_state->hover_line_voff;
+  DF_RichHoverInfo info = df_gfx_state->rich_hover_info_current;
+  return info;
 }
 
 ////////////////////////////////
@@ -1264,8 +1264,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         case DF_CoreCmdKind_SelectThread:goto thread_locator;
         case DF_CoreCmdKind_SelectThreadWindow:
         {
+          MemoryZeroStruct(&ws->ctrl_ctx_overrides);
           ws->ctrl_ctx_overrides.thread = params.entity;
-          ws->ctrl_ctx_overrides.unwind_count = 0;
         }goto thread_locator;
         case DF_CoreCmdKind_SelectThreadView:
         {
@@ -1277,8 +1277,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           if(!df_view_is_nil(view))
           {
+            MemoryZeroStruct(&view->ctrl_ctx_overrides);
             view->ctrl_ctx_overrides.thread = params.entity;
-            view->ctrl_ctx_overrides.unwind_count = 0;
           }
         }goto thread_locator;
         case DF_CoreCmdKind_SelectUnwind:
@@ -2598,11 +2598,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         {
           DI_Scope *scope = di_scope_open();
           DF_Entity *thread = df_entity_from_handle(params.entity);
-          U64 unwind_count = params.index;
+          U64 base_unwind_index = params.base_unwind_index;
+          U64 inline_unwind_index = params.inline_unwind_index;
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, base_unwind_index);
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -2610,7 +2611,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             DI_Key dbgi_key = df_dbgi_key_from_module(module);
             RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
             U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff);
+            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff, inline_unwind_index);
             
             // rjf: snap to resolved line
             B32 missing_rip = (rip_vaddr == 0);
@@ -2632,11 +2633,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               params.entity = df_handle_from_entity(thread);
               params.voff = rip_voff;
               params.vaddr = rip_vaddr;
-              params.index = unwind_count;
+              params.base_unwind_index = base_unwind_index;
+              params.inline_unwind_index = inline_unwind_index;
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualOff);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Index);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
@@ -2647,7 +2649,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               params.entity = df_handle_from_entity(thread);
               params.voff = rip_voff;
               params.vaddr = rip_vaddr;
-              params.index = unwind_count;
+              params.base_unwind_index = base_unwind_index;
+              params.inline_unwind_index = inline_unwind_index;
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualOff);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
@@ -2669,9 +2672,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
           DF_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = df_handle_from_entity(selected_thread);
-          params.index = ctrl_ctx.unwind_count;
+          params.base_unwind_index = ctrl_ctx.unwind_count;
+          params.inline_unwind_index = ctrl_ctx.inline_unwind_count;
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Index);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineUnwindIndex);
           df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindThread));
         }break;
         
@@ -2804,7 +2809,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rjf: name resolved to voff * dbg info
             if(name_resolved != 0 && voff != 0)
             {
-              DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&voff_dbgi_key, voff);
+              DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&voff_dbgi_key, voff, 0);
               DF_CmdParams p = params;
               {
                 p.file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
@@ -11566,11 +11571,23 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     if(params->line_src2dasm[line_slice_idx].first != 0 &&
        params->line_src2dasm[line_slice_idx].first->v.remap_line == mouse_pt.line)
     {
-      df_set_hovered_line_info(&params->line_src2dasm[line_slice_idx].first->v.dbgi_key, params->line_src2dasm[line_slice_idx].first->v.voff_range.min);
+      DF_RichHoverInfo info = {0};
+      info.process      = df_handle_from_entity(selected_thread_process);
+      info.vaddr_range  = df_vaddr_range_from_voff_range(selected_thread_module, params->line_src2dasm[line_slice_idx].first->v.voff_range);
+      info.module       = df_handle_from_entity(selected_thread_module);
+      info.dbgi_key     = params->line_src2dasm[line_slice_idx].first->v.dbgi_key;
+      info.voff_range   = params->line_src2dasm[line_slice_idx].first->v.voff_range;
+      df_set_rich_hover_info(&info);
     }
     if(params->line_dasm2src[line_slice_idx].first != 0)
     {
-      df_set_hovered_line_info(&params->line_dasm2src[line_slice_idx].first->v.dbgi_key, params->line_dasm2src[line_slice_idx].first->v.voff_range.min);
+      DF_RichHoverInfo info = {0};
+      info.process      = df_handle_from_entity(selected_thread_process);
+      info.vaddr_range  = df_vaddr_range_from_voff_range(selected_thread_module, params->line_dasm2src[line_slice_idx].first->v.voff_range);
+      info.module       = df_handle_from_entity(selected_thread_module);
+      info.dbgi_key     = params->line_dasm2src[line_slice_idx].first->v.dbgi_key;
+      info.voff_range   = params->line_dasm2src[line_slice_idx].first->v.voff_range;
+      df_set_rich_hover_info(&info);
     }
   }
   
@@ -11734,8 +11751,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //
   UI_Parent(text_container_box) ProfScope("build line text") UI_Focus(UI_FocusKind_Off)
   {
-    DI_Key hovered_line_dbgi_key = df_get_hovered_line_info_dbgi_key();
-    U64 hovered_line_voff = df_get_hovered_line_info_voff();
+    DF_RichHoverInfo rich_hover_info = df_get_rich_hover_info();
+    DI_Key hovered_line_dbgi_key = rich_hover_info.dbgi_key;
+    U64 hovered_line_voff = rich_hover_info.voff_range.min;
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     UI_WidthFill
       UI_Column
@@ -12029,18 +12047,14 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           // rjf: check dasm2src
           if(dasm2src_list->first != 0)
           {
-            DI_Key dbgi_key = dasm2src_list->first->v.dbgi_key;
-            if(di_key_match(&dbgi_key, &dasm2src_list->first->v.dbgi_key))
+            for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
             {
-              for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
+              if(n->v.voff_range.min <= hovered_line_voff &&
+                 hovered_line_voff < n->v.voff_range.max)
               {
-                if(n->v.voff_range.min <= hovered_line_voff &&
-                   hovered_line_voff < n->v.voff_range.max)
-                {
-                  line_info_line_num = n->v.pt.line;
-                  matches = 1;
-                  break;
-                }
+                line_info_line_num = n->v.pt.line;
+                matches = 1;
+                break;
               }
             }
           }
@@ -13129,7 +13143,8 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   df_gfx_state->repaint_hook = window_repaint_entry_point;
   df_gfx_state->cfg_main_font_path_arena = arena_alloc();
   df_gfx_state->cfg_code_font_path_arena = arena_alloc();
-  df_gfx_state->hover_line_arena = arena_alloc();
+  df_gfx_state->rich_hover_info_next_arena = arena_alloc();
+  df_gfx_state->rich_hover_info_current_arena = arena_alloc();
   df_clear_bindings();
   
   // rjf: register gfx layer views
@@ -13236,7 +13251,9 @@ internal void
 df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
 {
   ProfBeginFunction();
-  df_gfx_state->hover_line_set_this_frame = 0;
+  arena_clear(df_gfx_state->rich_hover_info_current_arena);
+  MemoryCopyStruct(&df_gfx_state->rich_hover_info_current, &df_gfx_state->rich_hover_info_next);
+  df_gfx_state->rich_hover_info_current.dbgi_key = di_key_copy(df_gfx_state->rich_hover_info_current_arena, &df_gfx_state->rich_hover_info_current.dbgi_key);
   
   //- rjf: animate confirmation
   {
@@ -14150,13 +14167,6 @@ df_gfx_end_frame(void)
   {
     df_gfx_state->drag_drop_state = DF_DragDropState_Null;
     MemoryZeroStruct(&df_g_drag_drop_payload);
-  }
-  
-  //- rjf: clear hover line info
-  if(df_gfx_state->hover_line_set_this_frame == 0)
-  {
-    MemoryZeroStruct(&df_gfx_state->hover_line_dbgi_key);
-    df_gfx_state->hover_line_voff = 0;
   }
   
   //- rjf: clear frame request state

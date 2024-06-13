@@ -527,6 +527,8 @@ struct DF_UnwindFrame
   RDI_Parsed *rdi;
   RDI_Procedure *procedure;
   RDI_InlineSite *inline_site;
+  U64 base_unwind_idx;
+  U64 inline_unwind_idx;
 };
 
 typedef struct DF_UnwindFrameNode DF_UnwindFrameNode;
@@ -1586,7 +1588,7 @@ internal String8 df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *proc
 internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);
 
 //- rjf: voff -> src lookups
-internal DF_TextLineDasm2SrcInfo df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
+internal DF_TextLineDasm2SrcInfo df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff, U64 inline_unwind_idx);
 
 //- rjf: symbol -> voff lookups
 internal U64 df_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
@@ -1604,6 +1606,7 @@ internal EVAL_String2NumMap *df_push_member_map_from_dbgi_key_voff(Arena *arena,
 internal B32 df_set_thread_rip(DF_Entity *thread, U64 vaddr);
 internal DF_Entity *df_module_from_thread_candidates(DF_Entity *thread, DF_EntityList *candidates);
 internal DF_Unwind df_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, DF_Entity *process, CTRL_Unwind *base_unwind);
+internal DF_UnwindFrame *df_frame_from_unwind_idxs(DF_Unwind *unwind, U64 base_unwind_idx, U64 inline_unwind_idx);
 
 ////////////////////////////////
 //~ rjf: Entity -> Log Entities

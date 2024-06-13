@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 df_g_cmd_param_slot_range_table[22] =
+Rng1U64 df_g_cmd_param_slot_range_table[24] =
 {
 {0},
 {OffsetOf(DF_CmdParams, window), OffsetOf(DF_CmdParams, window) + sizeof(DF_Handle)},
@@ -28,6 +28,8 @@ Rng1U64 df_g_cmd_param_slot_range_table[22] =
 {OffsetOf(DF_CmdParams, prefer_dasm), OffsetOf(DF_CmdParams, prefer_dasm) + sizeof(B32)},
 {OffsetOf(DF_CmdParams, force_confirm), OffsetOf(DF_CmdParams, force_confirm) + sizeof(B32)},
 {OffsetOf(DF_CmdParams, dir2), OffsetOf(DF_CmdParams, dir2) + sizeof(Dir2)},
+{OffsetOf(DF_CmdParams, base_unwind_index), OffsetOf(DF_CmdParams, base_unwind_index) + sizeof(U64)},
+{OffsetOf(DF_CmdParams, inline_unwind_index), OffsetOf(DF_CmdParams, inline_unwind_index) + sizeof(U64)},
 };
 
 DF_IconKind df_g_entity_kind_icon_kind_table[26] =
@@ -212,7 +214,7 @@ DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 
-DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[222] =
+DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[221] =
 {
 { str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp("Exit"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_X},
@@ -247,7 +249,6 @@ DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[222] =
 { str8_lit_comp("select_thread_window"), str8_lit_comp("Selects a thread for the active window, overriding the global selected thread."), str8_lit_comp(""), str8_lit_comp("Select Thread On Window"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Entity, DF_EntityKind_Thread, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Null},
 { str8_lit_comp("select_thread_view"), str8_lit_comp("Selects a thread for the active view, overriding the global and per-window selected threads."), str8_lit_comp(""), str8_lit_comp("Select Thread On View"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Entity, DF_EntityKind_Thread, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Null},
 { str8_lit_comp("select_unwind"), str8_lit_comp("Selects an unwind frame number for the selected thread."), str8_lit_comp(""), str8_lit_comp("Select Unwind"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
-{ str8_lit_comp("select_inline_unwind"), str8_lit_comp("Selects an inline unwind frame number for the selected thread."), str8_lit_comp(""), str8_lit_comp("Select Inline Unwind"), (DF_CmdSpecFlag_OmitFromLists*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("up_one_frame"), str8_lit_comp("Selects the callstack frame above the currently selected."), str8_lit_comp(""), str8_lit_comp("Up One Frame"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_UpArrow},
 { str8_lit_comp("down_one_frame"), str8_lit_comp("Selects the callstack frame below the currently selected."), str8_lit_comp(""), str8_lit_comp("Down One Frame"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_DownArrow},
 { str8_lit_comp("freeze_thread"), str8_lit_comp("Freezes the passed thread."), str8_lit_comp(""), str8_lit_comp("Freeze Thread"), (DF_CmdSpecFlag_OmitFromLists*0), {DF_CmdParamSlot_Entity, DF_EntityKind_Thread, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Locked},
