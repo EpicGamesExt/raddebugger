@@ -3333,7 +3333,7 @@ df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff, U64 in
     {
       U64 idx = 0;
       for(RDI_Scope *s = scope;
-          s->inline_site_idx != 0 && idx < inline_unwind_idx;
+          s->inline_site_idx != 0 && idx <= inline_unwind_idx;
           s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx), idx += 1)
       {
         if(idx == inline_unwind_idx)
