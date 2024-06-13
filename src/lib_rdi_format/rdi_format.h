@@ -52,7 +52,7 @@ typedef int64_t  RDI_S64;
 
 // \"raddbg\0\0\"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 5
+#define RDI_ENCODING_VERSION 6
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -563,6 +563,7 @@ X(RDI_Arch, arch)\
 X(RDI_U32, exe_name_string_idx)\
 X(RDI_U64, exe_hash)\
 X(RDI_U64, voff_max)\
+X(RDI_U32, producer_name_string_idx)\
 
 #define RDI_BinarySectionFlags_XList \
 X(Read)\
@@ -1005,6 +1006,7 @@ RDI_Arch arch;
 RDI_U32 exe_name_string_idx;
 RDI_U64 exe_hash;
 RDI_U64 voff_max;
+RDI_U32 producer_name_string_idx;
 };
 
 typedef struct RDI_BinarySection RDI_BinarySection;

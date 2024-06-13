@@ -153,9 +153,12 @@ rdi_stringize_top_level_info(Arena *arena, String8List *out, RDI_Parsed *rdi, RD
   String8 arch_str = rdi_string_from_arch(tli->arch);
   String8 exe_name = {0};
   exe_name.str = rdi_string_from_idx(rdi, tli->exe_name_string_idx, &exe_name.size);
-  str8_list_pushf(arena, out, "%.*sarch=%.*s\n", indent_level, rdi_stringize_spaces, str8_varg(arch_str));
-  str8_list_pushf(arena, out, "%.*sexe_name='%.*s'\n", indent_level, rdi_stringize_spaces, str8_varg(exe_name));
+  String8 producer_name = {0};
+  producer_name.str = rdi_string_from_idx(rdi, tli->producer_name_string_idx, &producer_name.size);
+  str8_list_pushf(arena, out, "%.*sarch=%S\n", indent_level, rdi_stringize_spaces, arch_str);
+  str8_list_pushf(arena, out, "%.*sexe_name='%S'\n", indent_level, rdi_stringize_spaces, exe_name);
   str8_list_pushf(arena, out, "%.*svoff_max=0x%08llx\n", indent_level, rdi_stringize_spaces, tli->voff_max);
+  str8_list_pushf(arena, out, "%.*sproducer_name='%S'\n", indent_level, rdi_stringize_spaces, producer_name);
 }
 
 internal void

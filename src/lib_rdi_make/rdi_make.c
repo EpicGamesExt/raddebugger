@@ -1833,6 +1833,7 @@ RDI_PROC void
 rdim_bake_string_map_loose_push_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_TopLevelInfo *tli)
 {
   rdim_bake_string_map_loose_insert(arena, top, map, 1, tli->exe_name);
+  rdim_bake_string_map_loose_insert(arena, top, map, 1, tli->producer_name);
 }
 
 RDI_PROC void
@@ -2338,10 +2339,11 @@ rdim_bake_top_level_info(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RD
   RDIM_TopLevelInfoBakeResult result = {0};
   {
     result.top_level_info = rdim_push_array(arena, RDI_TopLevelInfo, 1);
-    result.top_level_info->arch                  = src->arch;
-    result.top_level_info->exe_name_string_idx   = rdim_bake_idx_from_string(strings, src->exe_name);
-    result.top_level_info->exe_hash              = src->exe_hash;
-    result.top_level_info->voff_max              = src->voff_max;
+    result.top_level_info->arch                     = src->arch;
+    result.top_level_info->exe_name_string_idx      = rdim_bake_idx_from_string(strings, src->exe_name);
+    result.top_level_info->exe_hash                 = src->exe_hash;
+    result.top_level_info->voff_max                 = src->voff_max;
+    result.top_level_info->producer_name_string_idx = rdim_bake_idx_from_string(strings, src->producer_name);
   }
   return result;
 }

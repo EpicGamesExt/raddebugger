@@ -62,7 +62,7 @@
   "";
   "// \"raddbg\0\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 5";
+  "#define RDI_ENCODING_VERSION 6";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -441,10 +441,11 @@ RDI_RegCodeX64Table:
 @table(name type desc)
 RDI_TopLevelInfoMemberTable:
 {
-  {arch                RDI_Arch              ""}
-  {exe_name_string_idx RDI_U32               ""}
-  {exe_hash            RDI_U64               ""}
-  {voff_max            RDI_U64               ""}
+  {arch                     RDI_Arch              ""}
+  {exe_name_string_idx      RDI_U32               ""}
+  {exe_hash                 RDI_U64               ""}
+  {voff_max                 RDI_U64               ""}
+  {producer_name_string_idx RDI_U32               ""}
 }
 
 @xlist RDI_TopLevelInfo_XList:
