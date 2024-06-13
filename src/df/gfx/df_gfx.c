@@ -4105,24 +4105,37 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Call Stack")))
               {
+                DI_Scope *di_scope = di_scope_open();
                 DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
-                CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
+                CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(entity);
+                DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
                 String8List lines = {0};
-                for(U64 frame_idx = 0; frame_idx < unwind.frames.count; frame_idx += 1)
+                for(U64 frame_idx = 0; frame_idx < rich_unwind.frames.count; frame_idx += 1)
                 {
-                  U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[frame_idx].regs);
+                  U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[frame_idx].regs);
                   DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-                  DI_Key dbgi_key = df_dbgi_key_from_module(module);
-                  U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-                  String8 symbol = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
-                  if(symbol.size != 0)
+                  RDI_Parsed *rdi = rich_unwind.frames.v[frame_idx].rdi;
+                  RDI_Procedure *procedure = rich_unwind.frames.v[frame_idx].procedure;
+                  RDI_InlineSite *inline_site = rich_unwind.frames.v[frame_idx].inline_site;
+                  if(procedure != 0)
                   {
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: %S", rip_vaddr, symbol);
+                    String8 name = {0};
+                    name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, df_entity_is_nil(module) ? "" : " in ", module->name);
+                  }
+                  else if(inline_site != 0)
+                  {
+                    String8 name = {0};
+                    name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, df_entity_is_nil(module) ? "" : " in ", module->name);
+                  }
+                  else if(!df_entity_is_nil(module))
+                  {
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in %S]", rip_vaddr, module->name);
                   }
                   else
                   {
-                    String8 module_filename = str8_skip_last_slash(module->name);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in %S]", rip_vaddr, module_filename);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in ???]", rip_vaddr);
                   }
                 }
                 StringJoin join = {0};
@@ -4130,6 +4143,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 String8 text = str8_list_join(scratch.arena, &lines, &join);
                 os_set_clipboard_text(text);
                 ui_ctx_menu_close();
+                di_scope_close(di_scope);
               }
             }
             
@@ -10084,29 +10098,51 @@ df_entity_tooltips(DF_Entity *entity)
         UI_PrefWidth(ui_text_dim(10, 1)) ui_label(arch_str);
       }
       ui_spacer(ui_em(1.5f, 1.f));
+      DI_Scope *di_scope = di_scope_open();
       DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
-      CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
-      for(U64 idx = 0; idx < unwind.frames.count; idx += 1)
+      CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(entity);
+      DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+      for(U64 idx = 0; idx < rich_unwind.frames.count; idx += 1)
       {
-        U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, unwind.frames.v[idx].regs);
+        DF_UnwindFrame *f = &rich_unwind.frames.v[idx];
+        RDI_Parsed *rdi = f->rdi;
+        RDI_Procedure *procedure = f->procedure;
+        RDI_InlineSite *inline_site = f->inline_site;
+        U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-        DI_Key dbgi_key = df_dbgi_key_from_module(module);
-        U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-        String8 symbol = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+        String8 module_name = df_entity_is_nil(module) ? str8_lit("???") : str8_skip_last_slash(module->name);
+        String8 name = {0};
+        String8 info = {0};
+        if(procedure != 0)
+        {
+          name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+        }
+        else if(inline_site != 0)
+        {
+          name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+          info = str8_lit("[inlined]");
+        }
         UI_PrefWidth(ui_children_sum(1)) UI_Row
         {
           UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_PrefWidth(ui_em(18.f, 1.f)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_labelf("0x%I64x", rip_vaddr);
-          if(symbol.size != 0)
+          if(info.size != 0)
           {
-            UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_CodeFunction)) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("%S", symbol);
+            UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(info);
+          }
+          if(name.size != 0)
+          {
+            UI_Font(df_font_from_slot(DF_FontSlot_Code))UI_PrefWidth(ui_text_dim(10, 1))
+            {
+              df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
+            }
           }
           else
           {
-            String8 module_filename = str8_skip_last_slash(module->name);
-            UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_filename);
+            UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
           }
         }
       }
+      di_scope_close(di_scope);
     }break;
     case DF_EntityKind_Breakpoint: UI_Flags(0)
       UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
