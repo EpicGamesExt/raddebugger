@@ -13712,7 +13712,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                       DF_CfgNode *project_cfg_node = df_cfg_node_child_from_string(op, str8_lit("project"), StringMatchFlag_CaseInsensitive);
                       if(project_cfg_node != &df_g_nil_cfg_node)
                       {
-                        project_path = project_cfg_node->first->string;
+                        project_path = path_absolute_dst_from_relative_dst_src(scratch.arena, project_cfg_node->first->string, cfg_folder);
                       }
                     }
                     
