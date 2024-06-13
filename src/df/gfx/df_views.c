@@ -5957,13 +5957,14 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         DF_Entity *thread = thread_n->entity;
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
+        U64 base_unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
+        U64 inline_unwind_count = (thread == selected_thread) ? ctrl_ctx.inline_unwind_count : 0;
         U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         DF_Entity *module = df_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
         U64 rip_voff = df_voff_from_vaddr(module, last_inst_on_unwound_rip_vaddr);
         DI_Key dbgi_key = df_dbgi_key_from_module(module);
-        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff, 0);
+        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff, inline_unwind_count);
         if(dasm2src_info.file == entity && visible_line_num_range.min <= dasm2src_info.pt.line && dasm2src_info.pt.line <= visible_line_num_range.max)
         {
           U64 slice_line_idx = dasm2src_info.pt.line-visible_line_num_range.min;
