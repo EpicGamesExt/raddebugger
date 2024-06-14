@@ -1524,6 +1524,18 @@ ctrl_query_cached_rip_from_thread(CTRL_EntityStore *store, CTRL_MachineID machin
   return result;
 }
 
+internal U64
+ctrl_query_cached_rsp_from_thread(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread)
+{
+  Temp scratch = scratch_begin(0, 0);
+  CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
+  Architecture arch = thread_entity->arch;
+  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, store, machine_id, thread);
+  U64 result = regs_rsp_from_arch_block(arch, block);
+  scratch_end(scratch);
+  return result;
+}
+
 //- rjf: thread register writing
 
 internal B32
@@ -3567,13 +3579,12 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   {
     CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->thread);
     Architecture arch = thread->arch;
-    void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_architecture(arch));
-    dmn_thread_read_reg_block(spoof->thread, regs_block);
+    void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->thread);
     U64 spoof_thread_rip = regs_rip_from_arch_block(arch, regs_block);
     if(spoof_thread_rip == spoof->new_ip_value)
     {
       regs_arch_block_write_rip(arch, regs_block, spoof_old_ip_value);
-      dmn_thread_write_reg_block(spoof->thread, regs_block);
+      ctrl_thread_write_reg_block(CTRL_MachineID_Local, spoof->thread, regs_block);
     }
   }
   
@@ -3983,7 +3994,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   // threads, because otherwise, their stack pointer may change, if single-stepping
   // causes e.g. entrance into a function via a call instruction.
   //
-  U64 sp_check_value = dmn_rsp_from_thread(target_thread);
+  U64 sp_check_value = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
   
   //////////////////////////////
   //- rjf: single step "stuck threads"
@@ -4012,7 +4023,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(process->kind != CTRL_EntityKind_Process) { continue; }
         for(CTRL_Entity *thread = process->first; thread != &ctrl_entity_nil; thread = thread->next)
         {
-          U64 rip = dmn_rip_from_thread(thread->handle);
+          U64 rip = ctrl_query_cached_rip_from_thread(ctrl_state->ctrl_thread_entity_store, thread->machine_id, thread->handle);
           
           // rjf: determine if thread is frozen
           B32 thread_is_frozen = !msg->freeze_state_is_frozen;
@@ -4432,7 +4443,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       Architecture arch = thread->arch;
-      U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
+      U64 thread_rip_vaddr = ctrl_query_cached_rip_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       CTRL_Entity *module = &ctrl_entity_nil;
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
@@ -4593,10 +4604,9 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               machine.arch = arch;
               machine.memory_read = ctrl_eval_memory_read;
               machine.reg_size = regs_block_size_from_architecture(arch);
-              machine.reg_data = push_array(scratch.arena, U8, machine.reg_size);
+              machine.reg_data = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
               machine.module_base = &module_base;
               machine.tls_base = &tls_base;
-              dmn_thread_read_reg_block(event->thread, machine.reg_data);
               eval = eval_interpret(&machine, bytecode);
             }
             if(eval.code == EVAL_ResultCode_Good && eval.value.u64 == 0)
@@ -4711,7 +4721,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       B32 stack_pointer_matches = 0;
       if(use_trap_net_logic)
       {
-        U64 sp = dmn_rsp_from_thread(target_thread);
+        U64 sp = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
         stack_pointer_matches = (sp == sp_check_value);
       }
       
@@ -4759,7 +4769,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         {
           // rjf: setup spoof mode
           begin_spoof_mode = 1;
-          U64 spoof_sp = dmn_rsp_from_thread(target_thread);
+          U64 spoof_sp = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
           spoof_mode = 1;
           spoof.process = target_process;
           spoof.thread  = target_thread;
@@ -4777,7 +4787,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           if(stack_pointer_matches)
           {
             save_stack_pointer = 1;
-            sp_check_value = dmn_rsp_from_thread(target_thread);
+            sp_check_value = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
           }
         }
       }

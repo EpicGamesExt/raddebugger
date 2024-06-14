@@ -61,11 +61,11 @@
 #define DMN_W32_CTX_X86       0x00010000
 #define DMN_W32_CTX_X64       0x00100000
 
-#define DMN_W32_CTX_INTEL_CONTROL       0x0001
-#define DMN_W32_CTX_INTEL_INTEGER       0x0002
-#define DMN_W32_CTX_INTEL_SEGMENTS      0x0004
-#define DMN_W32_CTX_INTEL_FLOATS        0x0008
-#define DMN_W32_CTX_INTEL_DEBUG         0x0010
+#define DMN_W32_CTX_INTEL_CONTROL       0x0001    // segss, rsp, segcs, rip, and rflags
+#define DMN_W32_CTX_INTEL_INTEGER       0x0002    // rax, rcx, rdx, rbx, rbp, rsi, rdi, and r8-r15
+#define DMN_W32_CTX_INTEL_SEGMENTS      0x0004    // segds, seges, segfs, and seggs
+#define DMN_W32_CTX_INTEL_FLOATS        0x0008    // xmm0-xmm15
+#define DMN_W32_CTX_INTEL_DEBUG         0x0010    // dr0-dr3 and dr6-dr7
 #define DMN_W32_CTX_INTEL_EXTENDED      0x0020
 #define DMN_W32_CTX_INTEL_XSTATE        0x0040
 
