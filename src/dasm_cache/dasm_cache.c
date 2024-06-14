@@ -537,7 +537,7 @@ dasm_parse_thread__entry_point(void *p)
             String8 addr_part = {0};
             if(params.style_flags & DASM_StyleFlag_Addresses)
             {
-              addr_part = push_str8f(scratch.arena, "%s%016I64X  ", rdi != &di_rdi_parsed_nil ? "  " : "", params.vaddr+off);
+              addr_part = push_str8f(scratch.arena, "%s0x%016I64x  ", rdi != &di_rdi_parsed_nil ? "  " : "", params.vaddr+off);
             }
             String8 code_bytes_part = {0};
             if(params.style_flags & DASM_StyleFlag_CodeBytes)
