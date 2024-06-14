@@ -1342,7 +1342,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     B32 any_processes_live = dmn_w32_shared->new_process_pending;
     if(!any_processes_live)
     {
-      for(DMN_W32_Entity *process = dmn_w32_shared->entities_base->first; process != &dmn_w32_entity_nil; process = process->next)
+      for(DMN_W32_Entity *process = dmn_w32_shared->entities_base->first;
+          process != &dmn_w32_entity_nil;
+          process = process->next)
       {
         if(process->kind == DMN_W32_EntityKind_Process)
         {
@@ -1382,7 +1384,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //////////////////////////
       //- rjf: set single step bit
       //
-      if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero()))
+      if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero())) ProfScope("set single step bit")
       {
         DMN_W32_Entity *thread = dmn_w32_entity_from_handle(ctrls->single_step_thread);
         Architecture arch = thread->arch;

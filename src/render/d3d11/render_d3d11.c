@@ -168,6 +168,7 @@ r_init(CmdLine *cmdln)
   r_d3d11_state->device_rw_mutex = os_rw_mutex_alloc();
   
   //- rjf: create base device
+  ProfBegin("create base device");
   UINT creation_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #if BUILD_DEBUG
   if(cmd_line_has_flag(cmdln, str8_lit("d3d11_debug")))
@@ -199,7 +200,6 @@ r_init(CmdLine *cmdln)
                               D3D11_SDK_VERSION,
                               &r_d3d11_state->base_device, 0, &r_d3d11_state->base_device_ctx);
   }
-  
   if(FAILED(error))
   {
     char buffer[256] = {0};
@@ -207,10 +207,11 @@ r_init(CmdLine *cmdln)
     os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     os_exit_process(1);
   }
+  ProfEnd();
   
   //- rjf: enable break-on-error
 #if BUILD_DEBUG
-  if(cmd_line_has_flag(cmdln, str8_lit("d3d11_debug")))
+  if(cmd_line_has_flag(cmdln, str8_lit("d3d11_debug"))) ProfScope("enable break-on-error")
   {
     ID3D11InfoQueue *info = 0;
     error = r_d3d11_state->base_device->lpVtbl->QueryInterface(r_d3d11_state->base_device, &IID_ID3D11InfoQueue, (void **)(&info));
@@ -224,15 +225,20 @@ r_init(CmdLine *cmdln)
 #endif
   
   //- rjf: get main device
+  ProfBegin("get main device");
   error = r_d3d11_state->base_device->lpVtbl->QueryInterface(r_d3d11_state->base_device, &IID_ID3D11Device1, (void **)(&r_d3d11_state->device));
   error = r_d3d11_state->base_device_ctx->lpVtbl->QueryInterface(r_d3d11_state->base_device_ctx, &IID_ID3D11DeviceContext1, (void **)(&r_d3d11_state->device_ctx));
+  ProfEnd();
   
   //- rjf: get dxgi device/adapter/factory
+  ProfBegin("get dxgi device/adapter/factory");
   error = r_d3d11_state->device->lpVtbl->QueryInterface(r_d3d11_state->device, &IID_IDXGIDevice1, (void **)(&r_d3d11_state->dxgi_device));
   error = r_d3d11_state->dxgi_device->lpVtbl->GetAdapter(r_d3d11_state->dxgi_device, &r_d3d11_state->dxgi_adapter);
   error = r_d3d11_state->dxgi_adapter->lpVtbl->GetParent(r_d3d11_state->dxgi_adapter, &IID_IDXGIFactory2, (void **)(&r_d3d11_state->dxgi_factory));
+  ProfEnd();
   
   //- rjf: create main rasterizer
+  ProfScope("create main rasterizer")
   {
     D3D11_RASTERIZER_DESC1 desc = {D3D11_FILL_SOLID};
     {
@@ -244,6 +250,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: create main blend state
+  ProfScope("create main blend state")
   {
     D3D11_BLEND_DESC desc = {0};
     {
@@ -259,6 +266,8 @@ r_init(CmdLine *cmdln)
     error = r_d3d11_state->device->lpVtbl->CreateBlendState(r_d3d11_state->device, &desc, &r_d3d11_state->main_blend_state);
   }
   
+  //- rjf: create empty blend state
+  ProfScope("create empty blend state")
   {
     D3D11_BLEND_DESC desc = {0};
     {
@@ -269,6 +278,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: create nearest-neighbor sampler
+  ProfScope("create nearest-neighbor sampler")
   {
     D3D11_SAMPLER_DESC desc = zero_struct;
     {
@@ -282,6 +292,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: create bilinear sampler
+  ProfScope("create bilinear sampler")
   {
     D3D11_SAMPLER_DESC desc = zero_struct;
     {
@@ -295,6 +306,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: create noop depth/stencil state
+  ProfScope("create noop depth/stencil state")
   {
     D3D11_DEPTH_STENCIL_DESC desc = {0};
     {
@@ -306,6 +318,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: create plain depth/stencil state
+  ProfScope("create plain depth/stencil state")
   {
     D3D11_DEPTH_STENCIL_DESC desc = {0};
     {
@@ -317,6 +330,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: create buffers
+  ProfScope("create buffers")
   {
     D3D11_BUFFER_DESC desc = {0};
     {
@@ -329,9 +343,10 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: build vertex shaders & input layouts
-  for(R_D3D11_VShadKind kind = (R_D3D11_VShadKind)0;
-      kind < R_D3D11_VShadKind_COUNT;
-      kind = (R_D3D11_VShadKind)(kind+1))
+  ProfScope("build vertex shaders & input layouts")
+    for(R_D3D11_VShadKind kind = (R_D3D11_VShadKind)0;
+        kind < R_D3D11_VShadKind_COUNT;
+        kind = (R_D3D11_VShadKind)(kind+1))
   {
     String8 source = *r_d3d11_g_vshad_kind_source_table[kind];
     String8 source_name = r_d3d11_g_vshad_kind_source_name_table[kind];
@@ -342,6 +357,7 @@ r_init(CmdLine *cmdln)
     ID3DBlob *vshad_source_blob = 0;
     ID3DBlob *vshad_source_errors = 0;
     ID3D11VertexShader *vshad = 0;
+    ProfScope("compile vertex shader")
     {
       error = D3DCompile(source.str,
                          source.size,
@@ -396,6 +412,7 @@ r_init(CmdLine *cmdln)
     ID3DBlob *pshad_source_blob = 0;
     ID3DBlob *pshad_source_errors = 0;
     ID3D11PixelShader *pshad = 0;
+    ProfScope("compile pixel shader")
     {
       error = D3DCompile(source.str,
                          source.size,
@@ -428,9 +445,10 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: build uniform type buffers
-  for(R_D3D11_UniformTypeKind kind = (R_D3D11_UniformTypeKind)0;
-      kind < R_D3D11_UniformTypeKind_COUNT;
-      kind = (R_D3D11_UniformTypeKind)(kind+1))
+  ProfScope("build uniform type buffers")
+    for(R_D3D11_UniformTypeKind kind = (R_D3D11_UniformTypeKind)0;
+        kind < R_D3D11_UniformTypeKind_COUNT;
+        kind = (R_D3D11_UniformTypeKind)(kind+1))
   {
     ID3D11Buffer *buffer = 0;
     {
@@ -449,6 +467,7 @@ r_init(CmdLine *cmdln)
   }
   
   //- rjf: create backup texture
+  ProfScope("create backup texture")
   {
     U32 backup_texture_data[] =
     {

@@ -3368,7 +3368,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       DMN_EventNode *next_event_node = ctrl_state->first_dmn_event_node;
       
       // rjf: log event
-      if(next_event_node != 0) CTRL_CtrlThreadLogScope
+      if(next_event_node != 0)
       {
         DMN_Event *ev = &next_event_node->v;
         log_infof("--- event ---\n");
@@ -3532,9 +3532,9 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       // rjf: run for new events
       ProfScope("run for new events")
       {
-        CTRL_CtrlThreadLogScope log_infof("{dmn_ctrl_run ...");
+        log_infof("{dmn_ctrl_run ...");
         DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
-        CTRL_CtrlThreadLogScope log_infof("}\n");
+        log_infof("}\n");
         for(DMN_EventNode *src_n = events.first; src_n != 0; src_n = src_n->next)
         {
           DMN_EventNode *dst_n = ctrl_state->free_dmn_event_node;
@@ -4184,7 +4184,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       B32 hard_stop = 0;
       CTRL_EventCause hard_stop_cause = ctrl_event_cause_from_dmn_event_kind(event->kind);
       B32 use_stepping_logic = 0;
-      CTRL_CtrlThreadLogScope switch(event->kind)
+      switch(event->kind)
       {
         default:{}break;
         case DMN_EventKind_Error:
@@ -4501,120 +4501,123 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       B32 hit_trap_net_bp = 0;
       B32 hit_conditional_bp_but_filtered = 0;
       CTRL_TrapFlags hit_trap_flags = 0;
-      if(!hard_stop && use_stepping_logic) CTRL_CtrlThreadLogScope
+      if(!hard_stop && use_stepping_logic && event->kind == DMN_EventKind_Breakpoint)
+        ProfScope("for breakpoint events, gather bp info")
       {
-        if(event->kind == DMN_EventKind_Breakpoint)
+        Temp temp = temp_begin(scratch.arena);
+        String8List conditions = {0};
+        
+        // rjf: entry breakpoints
+        for(DMN_TrapChunkNode *n = entry_traps.first; n != 0; n = n->next)
         {
-          Temp temp = temp_begin(scratch.arena);
-          String8List conditions = {0};
-          
-          // rjf: entry breakpoints
-          for(DMN_TrapChunkNode *n = entry_traps.first; n != 0; n = n->next)
+          DMN_Trap *trap = n->v;
+          DMN_Trap *opl = n->v + n->count;
+          for(;trap < opl; trap += 1)
           {
-            DMN_Trap *trap = n->v;
-            DMN_Trap *opl = n->v + n->count;
-            for(;trap < opl; trap += 1)
+            if(dmn_handle_match(trap->process, event->process) && trap->vaddr == event->instruction_pointer)
             {
-              if(dmn_handle_match(trap->process, event->process) && trap->vaddr == event->instruction_pointer)
+              hit_entry = 1;
+            }
+          }
+        }
+        
+        // rjf: user breakpoints
+        for(DMN_TrapChunkNode *n = user_traps.first; n != 0; n = n->next)
+        {
+          DMN_Trap *trap = n->v;
+          DMN_Trap *opl = n->v + n->count;
+          for(;trap < opl; trap += 1)
+          {
+            if(dmn_handle_match(trap->process, event->process) &&
+               trap->vaddr == event->instruction_pointer &&
+               (!dmn_handle_match(event->thread, target_thread) || !target_thread_is_on_user_bp_and_trap_net_trap))
+            {
+              CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)trap->id;
+              hit_user_bp = 1;
+              if(user_bp != 0 && user_bp->condition.size != 0)
               {
-                hit_entry = 1;
+                str8_list_push(temp.arena, &conditions, user_bp->condition);
               }
             }
           }
-          
-          // rjf: user breakpoints
-          for(DMN_TrapChunkNode *n = user_traps.first; n != 0; n = n->next)
+        }
+        
+        // rjf: evaluate hit stop conditions
+        if(conditions.node_count != 0) ProfScope("evaluate hit stop conditions")
+        {
+          DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+          RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
+          for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
           {
-            DMN_Trap *trap = n->v;
-            DMN_Trap *opl = n->v + n->count;
-            for(;trap < opl; trap += 1)
+            ProfBegin("compile expression");
+            String8 string = condition_n->string;
+            EVAL_ParseCtx parse_ctx = zero_struct;
             {
-              if(dmn_handle_match(trap->process, event->process) &&
-                 trap->vaddr == event->instruction_pointer &&
-                 (!dmn_handle_match(event->thread, target_thread) || !target_thread_is_on_user_bp_and_trap_net_trap))
-              {
-                CTRL_UserBreakpoint *user_bp = (CTRL_UserBreakpoint *)trap->id;
-                hit_user_bp = 1;
-                if(user_bp != 0 && user_bp->condition.size != 0)
-                {
-                  str8_list_push(temp.arena, &conditions, user_bp->condition);
-                }
-              }
+              parse_ctx.arch = arch;
+              parse_ctx.ip_voff = thread_rip_voff;
+              parse_ctx.rdi = rdi;
+              parse_ctx.type_graph = tg_graph_begin(bit_size_from_arch(arch)/8, 256);
+              parse_ctx.regs_map = ctrl_string2reg_from_arch(arch);
+              parse_ctx.reg_alias_map = ctrl_string2alias_from_arch(arch);
+              parse_ctx.locals_map = eval_push_locals_map_from_rdi_voff(temp.arena, rdi, thread_rip_voff);
+              parse_ctx.member_map = eval_push_member_map_from_rdi_voff(temp.arena, rdi, thread_rip_voff);
+            }
+            EVAL_TokenArray tokens = eval_token_array_from_text(temp.arena, string);
+            EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(temp.arena, &parse_ctx, string, &tokens);
+            EVAL_ErrorList errors = parse.errors;
+            B32 parse_has_expr = (parse.expr != &eval_expr_nil);
+            B32 parse_is_type = (parse_has_expr && parse.expr->kind == EVAL_ExprKind_TypeIdent);
+            EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
+            if(parse_has_expr && errors.count == 0)
+            {
+              ir_tree_and_type = eval_irtree_and_type_from_expr(temp.arena, parse_ctx.type_graph, rdi, &eval_string2expr_map_nil, parse.expr, &errors);
+            }
+            EVAL_OpList op_list = {0};
+            if(parse_has_expr && ir_tree_and_type.tree != &eval_irtree_nil)
+            {
+              eval_oplist_from_irtree(scratch.arena, ir_tree_and_type.tree, &op_list);
+            }
+            String8 bytecode = {0};
+            if(parse_has_expr && parse_is_type == 0 && op_list.encoded_size != 0)
+            {
+              bytecode = eval_bytecode_from_oplist(scratch.arena, &op_list);
+            }
+            ProfEnd();
+            EVAL_Result eval = {0};
+            if(bytecode.size != 0) ProfScope("evaluate expression")
+            {
+              U64 module_base = module->vaddr_range.min;
+              U64 tls_base = dmn_tls_root_vaddr_from_thread(event->thread);
+              EVAL_Machine machine = {0};
+              machine.u = &event->process;
+              machine.arch = arch;
+              machine.memory_read = ctrl_eval_memory_read;
+              machine.reg_size = regs_block_size_from_architecture(arch);
+              machine.reg_data = push_array(scratch.arena, U8, machine.reg_size);
+              machine.module_base = &module_base;
+              machine.tls_base = &tls_base;
+              dmn_thread_read_reg_block(event->thread, machine.reg_data);
+              eval = eval_interpret(&machine, bytecode);
+            }
+            if(eval.code == EVAL_ResultCode_Good && eval.value.u64 == 0)
+            {
+              hit_user_bp = 0;
+              hit_conditional_bp_but_filtered = 1;
+              log_infof(">>> stepping >>> conditional breakpoint hit, but condition eval'd to 0, and so filtered\n");
+            }
+            else
+            {
+              hit_user_bp = 1;
+              hit_conditional_bp_but_filtered = 0;
+              log_infof(">>> stepping >>> conditional breakpoint hit\n");
+              break;
             }
           }
-          
-          // rjf: evaluate hit stop conditions
-          if(conditions.node_count != 0)
-          {
-            DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
-            for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
-            {
-              String8 string = condition_n->string;
-              EVAL_ParseCtx parse_ctx = zero_struct;
-              {
-                parse_ctx.arch = arch;
-                parse_ctx.ip_voff = thread_rip_voff;
-                parse_ctx.rdi = rdi;
-                parse_ctx.type_graph = tg_graph_begin(bit_size_from_arch(arch)/8, 256);
-                parse_ctx.regs_map = ctrl_string2reg_from_arch(arch);
-                parse_ctx.reg_alias_map = ctrl_string2alias_from_arch(arch);
-                parse_ctx.locals_map = eval_push_locals_map_from_rdi_voff(temp.arena, rdi, thread_rip_voff);
-                parse_ctx.member_map = eval_push_member_map_from_rdi_voff(temp.arena, rdi, thread_rip_voff);
-              }
-              EVAL_TokenArray tokens = eval_token_array_from_text(temp.arena, string);
-              EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(temp.arena, &parse_ctx, string, &tokens);
-              EVAL_ErrorList errors = parse.errors;
-              B32 parse_has_expr = (parse.expr != &eval_expr_nil);
-              B32 parse_is_type = (parse_has_expr && parse.expr->kind == EVAL_ExprKind_TypeIdent);
-              EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
-              if(parse_has_expr && errors.count == 0)
-              {
-                ir_tree_and_type = eval_irtree_and_type_from_expr(temp.arena, parse_ctx.type_graph, rdi, &eval_string2expr_map_nil, parse.expr, &errors);
-              }
-              EVAL_OpList op_list = {0};
-              if(parse_has_expr && ir_tree_and_type.tree != &eval_irtree_nil)
-              {
-                eval_oplist_from_irtree(scratch.arena, ir_tree_and_type.tree, &op_list);
-              }
-              String8 bytecode = {0};
-              if(parse_has_expr && parse_is_type == 0 && op_list.encoded_size != 0)
-              {
-                bytecode = eval_bytecode_from_oplist(scratch.arena, &op_list);
-              }
-              EVAL_Result eval = {0};
-              if(bytecode.size != 0)
-              {
-                U64 module_base = module->vaddr_range.min;
-                U64 tls_base = dmn_tls_root_vaddr_from_thread(event->thread);
-                EVAL_Machine machine = {0};
-                machine.u = &event->process;
-                machine.arch = arch;
-                machine.memory_read = ctrl_eval_memory_read;
-                machine.reg_size = regs_block_size_from_architecture(arch);
-                machine.reg_data = push_array(scratch.arena, U8, machine.reg_size);
-                machine.module_base = &module_base;
-                machine.tls_base = &tls_base;
-                dmn_thread_read_reg_block(event->thread, machine.reg_data);
-                eval = eval_interpret(&machine, bytecode);
-              }
-              if(eval.code == EVAL_ResultCode_Good && eval.value.u64 == 0)
-              {
-                hit_user_bp = 0;
-                hit_conditional_bp_but_filtered = 1;
-                log_infof(">>> stepping >>> conditional breakpoint hit, but condition eval'd to 0, and so filtered\n");
-              }
-              else
-              {
-                hit_user_bp = 1;
-                hit_conditional_bp_but_filtered = 0;
-                log_infof(">>> stepping >>> conditional breakpoint hit\n");
-                break;
-              }
-            }
-          }
-          
-          // rjf: gather trap net hits
+        }
+        
+        // rjf: gather trap net hits
+        ProfScope("gather trap net hits")
+        {
           if(!hit_user_bp && dmn_handle_match(event->process, target_process))
           {
             for(CTRL_TrapNode *node = msg->traps.first;
@@ -4628,11 +4631,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               }
             }
           }
-          
-          log_infof(">>> stepping >>> stepping logic - BP event -> hit_user_bp: %i\n", hit_user_bp);
-          log_infof(">>> stepping >>> stepping logic - BP event -> hit_entry:   %i\n", hit_entry);
-          temp_end(temp);
         }
+        
+        log_infof(">>> stepping >>> stepping logic - BP event -> hit_user_bp: %i\n", hit_user_bp);
+        log_infof(">>> stepping >>> stepping logic - BP event -> hit_entry:   %i\n", hit_entry);
+        temp_end(temp);
       }
       
       //- rjf: hit conditional user bp but filtered -> single step
