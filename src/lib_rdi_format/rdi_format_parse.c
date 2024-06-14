@@ -278,7 +278,7 @@ rdi_line_info_idx_range_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff, 
     }
     
     //- rjf: scan rightward, to count # of line info with this voff
-    for(U64 idx = result; idx < line_info->count; idx += 1)
+    for(RDI_U64 idx = result; idx < line_info->count; idx += 1)
     {
       if(line_info->voffs[idx] == voff)
       {

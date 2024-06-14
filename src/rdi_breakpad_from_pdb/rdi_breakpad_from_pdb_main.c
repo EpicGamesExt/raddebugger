@@ -137,7 +137,7 @@ internal TS_TASK_FUNCTION_DEF(p2b_dump_proc_chunk_task__entry_point)
           for(U64 voff = voff_range.min, last_voff = 0;
               voff < voff_range.max && voff > last_voff;)
           {
-            RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&line_info, voff, 0);
+            RDI_U64 line_info_idx = rdi_line_info_idx_from_voff(&line_info, voff);
             if(line_info_idx < line_info.count)
             {
               RDI_Line *line = &line_info.lines[line_info_idx];
