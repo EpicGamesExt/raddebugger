@@ -2322,6 +2322,7 @@ df_possible_overrides_from_entity(Arena *arena, DF_Entity *entity)
         
         // rjf: descend tree if needed, by the chain names, find override
         DF_Entity *override = link_overridden_sibling;
+        if(!df_entity_is_nil(override))
         {
           DF_Entity *parent = override;
           for(String8Node *path_part_n = p_chain_names_to_entity.first;
