@@ -265,10 +265,10 @@ DF_GfxViewRuleTable:
 }
 
 ////////////////////////////////
-//~ rjf: Theme Color Codes
+//~ rjf: Theme Tables
 
 @table(name                display_name               name_lower)
-DF_ThemeTable:
+DF_ThemeColorTable:
 {
   {Null                     "Null"                     null                          }
   {PlainText                "Plain Text"               plain_text                    }
@@ -424,7 +424,7 @@ DF_ThemePresetColorTable:
 
 @enum DF_ThemeColor:
 {
-  @expand(DF_ThemeTable a) `$(a.name)`,
+  @expand(DF_ThemeColorTable a) `$(a.name)`,
   COUNT,
 }
 
@@ -590,12 +590,12 @@ DF_ThemePresetColorTable:
 
 @data(String8) df_g_theme_color_display_string_table:
 {
-  @expand(DF_ThemeTable a) `str8_lit_comp("$(a.display_name)")`
+  @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.display_name)")`
 }
 
 @data(String8) df_g_theme_color_cfg_string_table:
 {
-  @expand(DF_ThemeTable a) `str8_lit_comp("$(a.name_lower)")`
+  @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
 ////////////////////////////////
