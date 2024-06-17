@@ -851,7 +851,9 @@ os_init(void)
 
 internal void*
 os_reserve(U64 size){
-  void *result = mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  usize *result = map(0, size + sizeof(usize), PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  *result = size;
+  result++
   return(result);
 }
 
@@ -881,8 +883,9 @@ os_decommit(void *ptr, U64 size){
 }
 
 internal void
-os_release(void *ptr, U64 size){
-  munmap(ptr, size);
+os_release(void *ptr){
+  usize *memory = ptr;
+  munmap(--memory, *--memory);
 }
 
 internal void

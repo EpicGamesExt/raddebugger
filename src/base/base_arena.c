@@ -27,7 +27,7 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
     if(!os_commit_large(memory, cmt))
     {
       memory = 0;
-      os_release(memory, res);
+      os_release(memory);
     }
   }
   else
@@ -39,7 +39,7 @@ arena_alloc__sized(U64 init_res, U64 init_cmt)
     if(!os_commit(memory, cmt))
     {
       memory = 0;
-      os_release(memory, res);
+      os_release(memory);
     }
   }
   
@@ -88,7 +88,7 @@ arena_release(Arena *arena)
 {
   for (Arena *node = arena->current, *prev = 0; node != 0; node = prev) {
     prev = node->prev;
-    os_release(node, node->res);
+    os_release(node);
   }
 }
 
@@ -187,7 +187,7 @@ arena_pop_to(Arena *arena, U64 big_pos_unclamped)
   Arena *current = arena->current;
   for (Arena *prev = 0; current->base_pos >= big_pos; current = prev) {
     prev = current->prev;
-    os_release(current, current->res);
+    os_release(current);
   }
   AssertAlways(current);
   arena->current = current;

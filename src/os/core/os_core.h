@@ -211,7 +211,7 @@ internal B32   os_commit(void *ptr, U64 size);
 internal void* os_reserve_large(U64 size);
 internal B32   os_commit_large(void *ptr, U64 size);
 internal void  os_decommit(void *ptr, U64 size);
-internal void  os_release(void *ptr, U64 size);
+internal void  os_release(void *ptr);
 
 internal B32 os_set_large_pages(B32 flag);
 internal B32 os_large_pages_enabled(void);

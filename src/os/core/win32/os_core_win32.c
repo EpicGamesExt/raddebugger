@@ -278,7 +278,7 @@ os_decommit(void *ptr, U64 size){
 }
 
 internal void
-os_release(void *ptr, U64 size){
+os_release(void *ptr){
   // NOTE(rjf): size not used - not necessary on Windows, but necessary for other OSes.
   VirtualFree(ptr, 0, MEM_RELEASE);
 }
