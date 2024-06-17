@@ -2861,7 +2861,7 @@ rdim_bake_line_tables(RDIM_Arena *arena, RDIM_LineTableChunkList *src)
   RDIM_LineTableBakeResult result = {0};
   {
     result.line_tables              = dst_line_tables;
-    result.line_tables_count        = src->total_count;
+    result.line_tables_count        = src->total_count+1;
     result.line_table_voffs         = dst_line_voffs;
     result.line_table_voffs_count   = (src->total_line_count + src->total_seq_count);
     result.line_table_lines         = dst_lines;
