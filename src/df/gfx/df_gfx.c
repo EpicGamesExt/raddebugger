@@ -13290,6 +13290,8 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
   arena_clear(df_gfx_state->rich_hover_info_current_arena);
   MemoryCopyStruct(&df_gfx_state->rich_hover_info_current, &df_gfx_state->rich_hover_info_next);
   df_gfx_state->rich_hover_info_current.dbgi_key = di_key_copy(df_gfx_state->rich_hover_info_current_arena, &df_gfx_state->rich_hover_info_current.dbgi_key);
+  arena_clear(df_gfx_state->rich_hover_info_next_arena);
+  MemoryZeroStruct(&df_gfx_state->rich_hover_info_next);
   
   //- rjf: animate confirmation
   {
