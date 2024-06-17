@@ -2893,6 +2893,7 @@ ctrl_thread__entry_point(void *p)
             di_close(&old_dbgi_key);
             ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, debug_info_path, path);
             U64 new_dbgi_timestamp = os_properties_from_file_path(path).modified;
+            debug_info_path->timestamp = new_dbgi_timestamp;
             DI_Key new_dbgi_key = {debug_info_path->string, new_dbgi_timestamp};
             di_open(&new_dbgi_key);
             CTRL_EventList evts = {0};
@@ -2901,6 +2902,7 @@ ctrl_thread__entry_point(void *p)
             evt->machine_id = msg->machine_id;
             evt->entity     = msg->entity;
             evt->string     = path;
+            evt->timestamp  = new_dbgi_timestamp;
             ctrl_c2u_push_events(&evts);
           }break;
         }
