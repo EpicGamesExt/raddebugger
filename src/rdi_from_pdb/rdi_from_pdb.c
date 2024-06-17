@@ -2696,7 +2696,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           
           // rjf: find current procedure's frameproc
           CV_SymFrameproc *frameproc = 0;
-          if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
+          if(procedure_num != 0 && procedure_num <= procedure_frameprocs_count && procedure_frameprocs[procedure_num-1] != 0)
           {
             frameproc = procedure_frameprocs[procedure_num-1];
           }
@@ -2774,7 +2774,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           
           // rjf: find current procedure's frameproc
           CV_SymFrameproc *frameproc = 0;
-          if(procedure_num != 0 && procedure_frameprocs[procedure_num-1] != 0 && procedure_num < procedure_frameprocs_count)
+          if(procedure_num != 0 && procedure_num <= procedure_frameprocs_count && procedure_frameprocs[procedure_num-1] != 0)
           {
             frameproc = procedure_frameprocs[procedure_num-1];
           }
