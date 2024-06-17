@@ -42,8 +42,7 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] investigate heavy outputdebugstring usage causing major issues
-//     (both in debugger and in target application, apparently)
+// [ ] asan stepping breakage
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!

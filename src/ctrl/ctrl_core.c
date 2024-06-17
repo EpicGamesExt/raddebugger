@@ -2624,7 +2624,8 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
       unwind.flags |= step.flags;
       if(step.flags & CTRL_UnwindFlag_Error ||
          regs_rsp_from_arch_block(arch, regs_block) == 0 ||
-         regs_rip_from_arch_block(arch, regs_block) == 0)
+         regs_rip_from_arch_block(arch, regs_block) == 0 ||
+         regs_rip_from_arch_block(arch, regs_block) == rip)
       {
         break;
       }
