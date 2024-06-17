@@ -6254,8 +6254,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
     }
     
-    //- rjf: dragging? -> contain cursor
-    if(ui_dragging(sig.base) && sig.base.event_flags == 0)
+    //- rjf: dragging & outside region? -> contain cursor
+    if(ui_dragging(sig.base) && !contains_2f32(sig.base.box->rect, ui_mouse()) && sig.base.event_flags == 0)
     {
       tv->contain_cursor = 1;
     }
@@ -7191,8 +7191,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
     }
     
-    //- rjf: dragging? -> contain cursor
-    if(ui_dragging(sig.base) && sig.base.event_flags == 0)
+    //- rjf: dragging & outside region? -> contain cursor
+    if(ui_dragging(sig.base) && !contains_2f32(sig.base.box->rect, ui_mouse()) && sig.base.event_flags == 0)
     {
       dv->contain_cursor = 1;
     }
@@ -8077,8 +8077,8 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
       df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
     }
     
-    //- rjf: dragging? -> contain cursor
-    if(ui_dragging(sig.base))
+    //- rjf: dragging & outside region? -> contain cursor
+    if(ui_dragging(sig.base) && !contains_2f32(sig.base.box->rect, ui_mouse()) && sig.base.event_flags == 0)
     {
       tv->contain_cursor = 1;
     }
