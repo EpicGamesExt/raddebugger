@@ -3319,7 +3319,7 @@ ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Hand
 }
 
 internal void
-ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 path)
+ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module)
 {
   //////////////////////////////
   //- rjf: evict module image info from cache
@@ -3346,19 +3346,6 @@ ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 
         DLLRemove(slot->first, slot->last, node);
         arena_release(node->arena);
       }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: close debug info
-  //
-  {
-    CTRL_Entity *module_ent = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, machine_id, module);
-    CTRL_Entity *debug_info_path_ent = ctrl_entity_child_from_kind(module_ent, CTRL_EntityKind_DebugInfoPath);
-    if(debug_info_path_ent != &ctrl_entity_nil)
-    {
-      DI_Key dbgi_key = {debug_info_path_ent->string, debug_info_path_ent->timestamp};
-      di_close(&dbgi_key);
     }
   }
 }
@@ -3675,12 +3662,19 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     {
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       String8 module_path = event->string;
-      ctrl_thread__module_close(CTRL_MachineID_Local, event->module, module_path);
+      ctrl_thread__module_close(CTRL_MachineID_Local, event->module);
       out_evt->kind       = CTRL_EventKind_EndModule;
       out_evt->msg_id     = msg->msg_id;
       out_evt->machine_id = CTRL_MachineID_Local;
       out_evt->entity     = event->module;
       out_evt->string     = module_path;
+      CTRL_Entity *module_ent = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->module);
+      CTRL_Entity *debug_info_path_ent = ctrl_entity_child_from_kind(module_ent, CTRL_EntityKind_DebugInfoPath);
+      if(debug_info_path_ent != &ctrl_entity_nil)
+      {
+        DI_Key dbgi_key = {debug_info_path_ent->string, debug_info_path_ent->timestamp};
+        di_close(&dbgi_key);
+      }
     }break;
     case DMN_EventKind_DebugString:
     {

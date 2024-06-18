@@ -269,6 +269,7 @@ DF_CoreCmdKind_PickFileOrFolder,
 DF_CoreCmdKind_CompleteQuery,
 DF_CoreCmdKind_CancelQuery,
 DF_CoreCmdKind_ToggleDevMenu,
+DF_CoreCmdKind_LogMarker,
 DF_CoreCmdKind_COUNT,
 } DF_CoreCmdKind;
 

@@ -879,7 +879,7 @@ df_ctrl_flow_info_from_vaddr_code__x64(Arena *arena, DF_InstFlags exit_points_ma
         point.jump_dest_vaddr = (U64)(point.vaddr + (S64)((S32)inst.rel_voff));
       }
       DF_CtrlFlowPointNode *node = push_array(arena, DF_CtrlFlowPointNode, 1);
-      node->point = point;
+      node->v = point;
       SLLQueuePush(info.exit_points.first, info.exit_points.last, node);
       info.exit_points.count += 1;
     }
@@ -2851,6 +2851,7 @@ internal CTRL_TrapList
 df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
 {
   Temp scratch = scratch_begin(&arena, 1);
+  log_infof("step_over_line:\n{\n");
   CTRL_TrapList result = {0};
   
   // rjf: thread => info
@@ -2859,6 +2860,8 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   DI_Key dbgi_key = df_dbgi_key_from_module(module);
   Architecture arch = df_architecture_from_entity(thread);
   U64 ip_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
+  log_infof("  ip_vaddr: 0x%I64x\n", ip_vaddr);
+  log_infof("  dbgi_key: {%S, 0x%I64x}\n", dbgi_key.path, dbgi_key.min_timestamp);
   
   // rjf: ip => line vaddr range
   Rng1U64 line_vaddr_rng = {0};
@@ -2870,6 +2873,8 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     {
       line_vaddr_rng = df_vaddr_range_from_voff_range(module, line_voff_rng);
     }
+    log_infof("  line: {%S:%I64i}\n", line_info.file->name, line_info.pt.line);
+    log_infof("  voff_range: {0x%I64x, 0x%I64x}\n", line_info.voff_range.min, line_info.voff_range.max);
   }
   
   // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
@@ -2894,6 +2899,25 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   {
     CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, os_now_microseconds()+50000);
     machine_code = machine_code_slice.data;
+    log_infof("  machine_code_slice:\n  {\n");
+    log_infof("    stale: %i\n", machine_code_slice.stale);
+    log_infof("    any_byte_bad: %i\n", machine_code_slice.any_byte_bad);
+    log_infof("    any_byte_changed: %i\n", machine_code_slice.any_byte_changed);
+    log_infof("    [\n");
+    for(U64 idx = 0; idx < machine_code_slice.data.size; idx += 1)
+    {
+      if(idx%16 == 0)
+      {
+        log_infof("      ");
+      }
+      log_infof("0x%x,", machine_code_slice.data.str[idx]);
+      if(idx%16 == 15 || idx+1 == machine_code_slice.data.size)
+      {
+        log_infof("\n");
+      }
+    }
+    log_infof("    ]\n");
+    log_infof("  }\n");
   }
   
   // rjf: machine code => ctrl flow analysis
@@ -2909,12 +2933,21 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
                                                             arch,
                                                             line_vaddr_rng.min,
                                                             machine_code);
+    log_infof("  ctrl_flow_info:\n  {\n");
+    log_infof("    flags: %x\n", ctrl_flow_info.flags);
+    log_infof("    exit_points:\n    {\n");
+    for(DF_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+    {
+      log_infof("      {vaddr:0x%I64x, jump_dest_vaddr:0x%I64x, expected_sp_delta:0x%I64x, inst_flags:%x}\n", n->v.vaddr, n->v.jump_dest_vaddr, n->v.expected_sp_delta, n->v.inst_flags);
+    }
+    log_infof("    }\n");
+    log_infof("  }\n");
   }
   
   // rjf: push traps for all exit points
   if(good_line_info) for(DF_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
-    DF_CtrlFlowPoint *point = &n->point;
+    DF_CtrlFlowPoint *point = &n->v;
     CTRL_TrapFlags flags = 0;
     B32 add = 1;
     U64 trap_addr = point->vaddr;
@@ -2969,6 +3002,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   }
   
   scratch_end(scratch);
+  log_infof("}\n\n");
   return result;
 }
 
@@ -3039,7 +3073,7 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   // rjf: push traps for all exit points
   if(good_line_info) for(DF_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
-    DF_CtrlFlowPoint *point = &n->point;
+    DF_CtrlFlowPoint *point = &n->v;
     CTRL_TrapFlags flags = 0;
     B32 add = 1;
     U64 trap_addr = point->vaddr;
@@ -8947,6 +8981,12 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           p.string = str8_lit("Registering as the just-in-time debugger is currently not supported on this system.");
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
 #endif
+        }break;
+        
+        //- rjf: developer commands
+        case DF_CoreCmdKind_LogMarker:
+        {
+          log_infof("\n\n--- #marker ---\n\n");
         }break;
       }
     }

@@ -171,6 +171,9 @@ DF_DefaultBindingTable:
   
   //- rjf: command lister
   { "run_command"                 F1        0        0         0          }
+  
+  //- rjf: developer commands
+  { "log_marker"                  M         ctrl     shift     alt        }
 }
 
 ////////////////////////////////

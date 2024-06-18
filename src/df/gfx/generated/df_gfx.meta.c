@@ -598,7 +598,7 @@ str8_lit_comp("goto_name"),
 str8_lit_comp("function_breakpoint"),
 };
 
-DF_StringBindingPair df_g_default_binding_table[104] =
+DF_StringBindingPair df_g_default_binding_table[105] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_EventFlag_Alt}},
@@ -704,6 +704,7 @@ DF_StringBindingPair df_g_default_binding_table[104] =
 {str8_lit_comp("attach"), {OS_Key_F6, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("filter"), {OS_Key_Slash, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("run_command"), {OS_Key_F1, 0   }},
+{str8_lit_comp("log_marker"), {OS_Key_M, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift |OS_EventFlag_Alt}},
 };
 
 String8 df_g_binding_version_remap_old_name_table[5] =

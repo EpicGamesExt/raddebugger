@@ -412,6 +412,7 @@ DF_CoreCmdTable://               |            |                  |              
   
   //- rjf: developer commands
   {ToggleDevMenu                  0            Null               Nil                0  0  0  0  0  0                                                           Null                  "toggle_dev_menu"             "Toggle Developer Menu"                       "Opens and closes the developer menu."                                                                             ""                               }
+  {LogMarker                      0            Null               Nil                0  0  0  0  0  0                                                           Null                  "log_marker"                  "Log Marker"                                  "Logs a marker in the application log, to denote specific points in time within the log."                          ""                               }
 }
 
 ////////////////////////////////

@@ -223,7 +223,7 @@ typedef struct DF_CtrlFlowPointNode DF_CtrlFlowPointNode;
 struct DF_CtrlFlowPointNode
 {
   DF_CtrlFlowPointNode *next;
-  DF_CtrlFlowPoint point;
+  DF_CtrlFlowPoint v;
 };
 
 typedef struct DF_CtrlFlowPointList DF_CtrlFlowPointList;

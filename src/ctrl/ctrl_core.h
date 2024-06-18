@@ -810,7 +810,7 @@ internal void ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, C
 
 //- rjf: module lifetime open/close work
 internal void ctrl_thread__module_open(CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Rng1U64 vaddr_range, String8 path);
-internal void ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module, String8 path);
+internal void ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle module);
 
 //- rjf: attached process running/event gathering
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);
