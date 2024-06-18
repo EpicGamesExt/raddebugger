@@ -8849,7 +8849,10 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     // rjf: click & drag -> select
     if(ui_dragging(sig) && mouse_hover_byte_num != 0)
     {
-      mv->contain_cursor = 1;
+      if(!contains_2f32(sig.box->rect, ui_mouse()))
+      {
+        mv->contain_cursor = 1;
+      }
       mv->cursor = mouse_hover_byte_num-1;
       if(ui_pressed(sig))
       {
