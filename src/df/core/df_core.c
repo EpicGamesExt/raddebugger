@@ -3001,6 +3001,14 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     ctrl_trap_list_push(arena, &result, &trap);
   }
   
+  // rjf: log
+  for(CTRL_TrapNode *n = result.first; n != 0; n = n->next)
+  {
+    log_infof("  traps:\n  {\n");
+    log_infof("    {flags:0x%x, vaddr:0x%I64x}\n", n->v.flags, n->v.vaddr);
+    log_infof("  }\n");
+  }
+  
   scratch_end(scratch);
   log_infof("}\n\n");
   return result;
