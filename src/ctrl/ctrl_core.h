@@ -637,6 +637,7 @@ read_only global CTRL_Entity ctrl_entity_nil =
 internal U64 ctrl_hash_from_string(String8 string);
 internal U64 ctrl_hash_from_machine_id_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 internal CTRL_EventCause ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind);
+internal String8 ctrl_string_from_event_kind(CTRL_EventKind kind);
 internal String8 ctrl_string_from_msg_kind(CTRL_MsgKind kind);
 
 ////////////////////////////////

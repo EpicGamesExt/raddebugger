@@ -6846,6 +6846,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     for(CTRL_EventNode *event_n = events.first; event_n != 0; event_n = event_n->next)
     {
       CTRL_Event *event = &event_n->v;
+      log_infof("ctrl_event:\n{\n");
+      log_infof("  kind: \"%S\"\n", ctrl_string_from_event_kind(event->kind));
+      log_infof("  entity_id: %u\n", event->entity_id);
       switch(event->kind)
       {
         default:{}break;
@@ -6881,6 +6884,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           // rjf: select & snap to thread causing stop
           if(should_snap && stop_thread->kind == DF_EntityKind_Thread)
           {
+            log_infof("  stop_thread: \"%S\"\n", df_display_string_from_entity(scratch.arena, stop_thread));
             DF_CmdParams params = df_cmd_params_zero();
             params.entity = df_handle_from_entity(stop_thread);
             df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
@@ -7203,6 +7207,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case CTRL_EventKind_MemDecommit:{}break;
         case CTRL_EventKind_MemRelease:{}break;
       }
+      log_infof("}\n");
     }
     
     //- rjf: clear tls base cache

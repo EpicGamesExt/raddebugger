@@ -44,6 +44,34 @@ ctrl_event_cause_from_dmn_event_kind(DMN_EventKind event_kind)
 }
 
 internal String8
+ctrl_string_from_event_kind(CTRL_EventKind kind)
+{
+  String8 result = {0};
+  switch(kind)
+  {
+    default:{}break;
+    case CTRL_EventKind_Null:                              { result = str8_lit("Null");}break;
+    case CTRL_EventKind_Error:                             { result = str8_lit("Error");}break;
+    case CTRL_EventKind_Started:                           { result = str8_lit("Started");}break;
+    case CTRL_EventKind_Stopped:                           { result = str8_lit("Stopped");}break;
+    case CTRL_EventKind_NewProc:                           { result = str8_lit("NewProc");}break;
+    case CTRL_EventKind_NewThread:                         { result = str8_lit("NewThread");}break;
+    case CTRL_EventKind_NewModule:                         { result = str8_lit("NewModule");}break;
+    case CTRL_EventKind_EndProc:                           { result = str8_lit("EndProc");}break;
+    case CTRL_EventKind_EndThread:                         { result = str8_lit("EndThread");}break;
+    case CTRL_EventKind_EndModule:                         { result = str8_lit("EndModule");}break;
+    case CTRL_EventKind_ModuleDebugInfoPathChange:         { result = str8_lit("ModuleDebugInfoPathChange");}break;
+    case CTRL_EventKind_DebugString:                       { result = str8_lit("DebugString");}break;
+    case CTRL_EventKind_ThreadName:                        { result = str8_lit("ThreadName");}break;
+    case CTRL_EventKind_MemReserve:                        { result = str8_lit("MemReserve");}break;
+    case CTRL_EventKind_MemCommit:                         { result = str8_lit("MemCommit");}break;
+    case CTRL_EventKind_MemDecommit:                       { result = str8_lit("MemDecommit");}break;
+    case CTRL_EventKind_MemRelease:                        { result = str8_lit("MemRelease");}break;
+  }
+  return result;
+}
+
+internal String8
 ctrl_string_from_msg_kind(CTRL_MsgKind kind)
 {
   String8 result = {0};
@@ -3569,7 +3597,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   {
     CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->thread);
     Architecture arch = thread->arch;
-    void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->thread);
+    void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_architecture(arch));
+    dmn_thread_read_reg_block(spoof->thread, regs_block);
     U64 spoof_thread_rip = regs_rip_from_arch_block(arch, regs_block);
     if(spoof_thread_rip == spoof->new_ip_value)
     {
@@ -3991,7 +4020,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   // threads, because otherwise, their stack pointer may change, if single-stepping
   // causes e.g. entrance into a function via a call instruction.
   //
-  U64 sp_check_value = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
+  U64 sp_check_value = dmn_rsp_from_thread(target_thread);
   
   //////////////////////////////
   //- rjf: single step "stuck threads"
@@ -4020,7 +4049,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(process->kind != CTRL_EntityKind_Process) { continue; }
         for(CTRL_Entity *thread = process->first; thread != &ctrl_entity_nil; thread = thread->next)
         {
-          U64 rip = ctrl_query_cached_rip_from_thread(ctrl_state->ctrl_thread_entity_store, thread->machine_id, thread->handle);
+          U64 rip = dmn_rip_from_thread(thread->handle);
           
           // rjf: determine if thread is frozen
           B32 thread_is_frozen = !msg->freeze_state_is_frozen;
@@ -4181,7 +4210,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       run_ctrls.traps = *trap_list;
       
       //////////////////////////
-      //- rjf: get next event
+      //- rjf: get next run-related event
       //
       DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, run_spoof);
       
@@ -4440,7 +4469,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       Architecture arch = thread->arch;
-      U64 thread_rip_vaddr = ctrl_query_cached_rip_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
+      U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
       CTRL_Entity *module = &ctrl_entity_nil;
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
@@ -4601,7 +4630,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               machine.arch = arch;
               machine.memory_read = ctrl_eval_memory_read;
               machine.reg_size = regs_block_size_from_architecture(arch);
-              machine.reg_data = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
+              machine.reg_data = push_array(scratch.arena, U8, machine.reg_size);
+              dmn_thread_read_reg_block(event->thread, machine.reg_data);
               machine.module_base = &module_base;
               machine.tls_base = &tls_base;
               eval = eval_interpret(&machine, bytecode);
@@ -4718,7 +4748,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       B32 stack_pointer_matches = 0;
       if(use_trap_net_logic)
       {
-        U64 sp = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
+        U64 sp = dmn_rsp_from_thread(target_thread);
         stack_pointer_matches = (sp == sp_check_value);
       }
       
@@ -4766,7 +4796,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         {
           // rjf: setup spoof mode
           begin_spoof_mode = 1;
-          U64 spoof_sp = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
+          U64 spoof_sp = dmn_rsp_from_thread(target_thread);
           spoof_mode = 1;
           spoof.process = target_process;
           spoof.thread  = target_thread;
@@ -4784,7 +4814,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           if(stack_pointer_matches)
           {
             save_stack_pointer = 1;
-            sp_check_value = ctrl_query_cached_rsp_from_thread(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, target_thread);
+            sp_check_value = dmn_rsp_from_thread(target_thread);
           }
         }
       }
