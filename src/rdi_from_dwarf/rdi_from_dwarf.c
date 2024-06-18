@@ -1,26 +1,40 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+////////////////////////////////
+//~ rjf: Build Options
+
+#define BUILD_VERSION_MAJOR 0
+#define BUILD_VERSION_MINOR 9
+#define BUILD_VERSION_PATCH 10
+#define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
+#define BUILD_TITLE "rdi_from_dwarf"
+#define BUILD_CONSOLE_INTERFACE 1
+
+////////////////////////////////
+//~ rjf: Includes
+
+//- rjf: [lib]
 #include "lib_rdi_format/rdi_format.h"
+#include "lib_rdi_format/rdi_format.c"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.h"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.c"
+
+//- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
-#include "rdi_make_local/rdi_make_local.h"
-
+#include "rdi_make/rdi_make_local.h"
 #include "rdi_elf.h"
 #include "rdi_dwarf.h"
-
 #include "rdi_dwarf_stringize.h"
-
 #include "rdi_from_dwarf.h"
 
-#include "lib_rdi_format/rdi_format.c"
+//- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
-#include "rdi_make_local/rdi_make_local.c"
-
+#include "rdi_make/rdi_make_local.c"
 #include "rdi_elf.c"
 #include "rdi_dwarf.c"
-
 #include "rdi_dwarf_stringize.c"
 
 // TODO(allen): 
@@ -583,7 +597,7 @@ fprintf(stdout, "error(parsing): " fmt "\n", __VA_ARGS__); \
                                 "SECTIONS:\n"));
         
         ELF_Shdr64 *sec = section_array.sections;
-        String8 *sec_name = section_name_array.strings;
+        String8 *sec_name = section_name_array.v;
         U64 count = section_array.count;
         for (U64 i = 0 ; i < count; i += 1, sec += 1, sec_name += 1){
           String8 type_string = elf_string_from_section_type(sec->sh_type);

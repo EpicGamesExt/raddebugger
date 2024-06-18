@@ -387,7 +387,7 @@ static String8Array
 elf_section_name_array_from_elf(ELF_Parsed *elf){
   String8Array result = {0};
   if (elf != 0){
-    result.strings = elf->section_names;
+    result.v = elf->section_names;
     result.count = elf->section_count;
   }
   return(result);
