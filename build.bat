@@ -33,7 +33,8 @@ if "%debug%"=="1"   set release=0 && echo [debug mode]
 if "%release%"=="1" set debug=0 && echo [release mode]
 if "%msvc%"=="1"    set clang=0 && echo [msvc compile]
 if "%clang%"=="1"   set msvc=0 && echo [clang compile]
-if "%~1"==""        echo [default mode, assuming `raddbg` build] && set raddbg=1
+if "%~1"==""                     echo [default mode, assuming `raddbg` build] && set raddbg=1
+if "%~1"=="release" if "%~2"=="" echo [default mode, assuming `raddbg` build] && set raddbg=1
 
 :: --- Unpack Command Line Build Arguments ------------------------------------
 set auto_compile_flags=
@@ -98,18 +99,19 @@ if not "%no_meta%"=="1" (
 
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
-if "%raddbg%"=="1"                     %compile%             ..\src\raddbg\raddbg_main.c                                                  %compile_link% %out%raddbg.exe || exit /b 1
-if "%rdi_from_pdb%"=="1"               %compile%             ..\src\rdi_from_pdb\rdi_from_pdb_main.c                                      %compile_link% %out%rdi_from_pdb.exe || exit /b 1
-if "%rdi_from_dwarf%"=="1"             %compile%             ..\src\rdi_from_dwarf\rdi_from_dwarf.c                                       %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
-if "%rdi_dump%"=="1"                   %compile%             ..\src\rdi_dump\rdi_dump_main.c                                              %compile_link% %out%rdi_dump.exe || exit /b 1
-if "%rdi_breakpad_from_pdb%"=="1"      %compile%             ..\src\rdi_breakpad_from_pdb\rdi_breakpad_from_pdb_main.c                    %compile_link% %out%rdi_breakpad_from_pdb.exe || exit /b 1
-if "%ryan_scratch%"=="1"               %compile%             ..\src\scratch\ryan_scratch.c                                                %compile_link% %out%ryan_scratch.exe || exit /b 1
-if "%cpp_tests%"=="1"                  %compile%             ..\src\scratch\i_hate_c_plus_plus.cpp                                        %compile_link% %out%cpp_tests.exe || exit /b 1
-if "%look_at_raddbg%"=="1"             %compile%             ..\src\scratch\look_at_raddbg.c                                              %compile_link% %out%look_at_raddbg.exe || exit /b 1
-if "%mule_main%"=="1"                  del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
-if "%mule_module%"=="1"                %compile%             ..\src\mule\mule_module.cpp                                                  %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
-if "%mule_hotload%"=="1"               %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
+if "%raddbg%"=="1"                     set didbuild=1 && %compile%             ..\src\raddbg\raddbg_main.c                                                  %compile_link% %out%raddbg.exe || exit /b 1
+if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile%             ..\src\rdi_from_pdb\rdi_from_pdb_main.c                                      %compile_link% %out%rdi_from_pdb.exe || exit /b 1
+if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile%             ..\src\rdi_from_dwarf\rdi_from_dwarf.c                                       %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
+if "%rdi_dump%"=="1"                   set didbuild=1 && %compile%             ..\src\rdi_dump\rdi_dump_main.c                                              %compile_link% %out%rdi_dump.exe || exit /b 1
+if "%rdi_breakpad_from_pdb%"=="1"      set didbuild=1 && %compile%             ..\src\rdi_breakpad_from_pdb\rdi_breakpad_from_pdb_main.c                    %compile_link% %out%rdi_breakpad_from_pdb.exe || exit /b 1
+if "%ryan_scratch%"=="1"               set didbuild=1 && %compile%             ..\src\scratch\ryan_scratch.c                                                %compile_link% %out%ryan_scratch.exe || exit /b 1
+if "%cpp_tests%"=="1"                  set didbuild=1 && %compile%             ..\src\scratch\i_hate_c_plus_plus.cpp                                        %compile_link% %out%cpp_tests.exe || exit /b 1
+if "%look_at_raddbg%"=="1"             set didbuild=1 && %compile%             ..\src\scratch\look_at_raddbg.c                                              %compile_link% %out%look_at_raddbg.exe || exit /b 1
+if "%mule_main%"=="1"                  set didbuild=1 && del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
+if "%mule_module%"=="1"                set didbuild=1 && %compile%             ..\src\mule\mule_module.cpp                                                  %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
+if "%mule_hotload%"=="1"               set didbuild=1 && %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1
 if "%mule_peb_trample%"=="1" (
+  set didbuild=1
   if exist mule_peb_trample.exe move mule_peb_trample.exe mule_peb_trample_old_%random%.exe
   if exist mule_peb_trample_new.pdb move mule_peb_trample_new.pdb mule_peb_trample_old_%random%.pdb
   if exist mule_peb_trample_new.rdi move mule_peb_trample_new.rdi mule_peb_trample_old_%random%.rdi
@@ -126,3 +128,10 @@ set compile_link=
 set out=
 set msvc=
 set debug=
+set release=
+
+:: --- Warn On No Builds ------------------------------------------------------
+if "%didbuild%"=="" (
+  echo [WARNING] no valid build target specified; must use build target names as arguments to this script, like `build raddbg` or `build rdi_from_pdb`.
+  exit /b 1
+)
