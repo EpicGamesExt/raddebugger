@@ -3562,9 +3562,15 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       // rjf: run for new events
       ProfScope("run for new events")
       {
-        log_infof("{dmn_ctrl_run ...");
-        DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
+        log_infof("dmn_ctrl_run:\n{\n");
+        log_infof("  single_step_thread:         [0x%I64x]\n", run_ctrls->single_step_thread);
+        log_infof("  ignore_previous_exception:  %i\n", !!run_ctrls->ignore_previous_exception);
+        log_infof("  run_entities_are_unfrozen:  %i\n", !!run_ctrls->run_entities_are_unfrozen);
+        log_infof("  run_entities_are_processes: %i\n", !!run_ctrls->run_entities_are_processes);
+        log_infof("  run_entity_count:           %I64u\n", run_ctrls->run_entity_count);
+        log_infof("  trap_count:                 %I64u\n", run_ctrls->traps.trap_count);
         log_infof("}\n");
+        DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
         for(DMN_EventNode *src_n = events.first; src_n != 0; src_n = src_n->next)
         {
           DMN_EventNode *dst_n = ctrl_state->free_dmn_event_node;
@@ -4105,11 +4111,21 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         node != 0;
         node = node->next)
     {
-      DMN_RunCtrls run_ctrls = {0};
-      run_ctrls.single_step_thread = node->v;
-      for(B32 done = 0; done == 0;)
+      DMN_Handle thread = node->v;
+      U64 thread_pre_rip = dmn_rip_from_thread(thread);
+      U64 thread_post_rip = thread_pre_rip;
+      for(B32 done = 0; !done;)
       {
+        DMN_RunCtrls run_ctrls = {0};
+        run_ctrls.run_entities_are_unfrozen = 1;
+        run_ctrls.run_entities = &thread;
+        run_ctrls.run_entity_count = 1;
+        if(thread_post_rip == thread_pre_rip)
+        {
+          run_ctrls.single_step_thread = thread;
+        }
         DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
+        thread_post_rip = dmn_rip_from_thread(thread);
         switch(event->kind)
         {
           default:{}break;
@@ -4124,7 +4140,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           }break;
           case DMN_EventKind_SingleStep:
           {
-            done = 1;
+            done = dmn_handle_match(node->v, event->thread);
           }break;
         }
       }
@@ -4212,6 +4228,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //////////////////////////
       //- rjf: get next run-related event
       //
+      log_infof(">>> stepping >>> getting next event\n");
       DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, run_spoof);
       
       //////////////////////////
@@ -4680,11 +4697,21 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       CTRL_EventCause cond_bp_single_step_stop_cause = CTRL_EventCause_Null;
       if(hit_conditional_bp_but_filtered)
       {
-        DMN_RunCtrls single_step_ctrls = {0};
-        single_step_ctrls.single_step_thread = event->thread;
-        for(B32 single_step_done = 0; single_step_done == 0;)
+        DMN_Handle thread = event->thread;
+        U64 thread_pre_rip = dmn_rip_from_thread(thread);
+        U64 thread_post_rip = thread_pre_rip;
+        for(B32 single_step_done = 0; !single_step_done;)
         {
+          DMN_RunCtrls single_step_ctrls = {0};
+          single_step_ctrls.run_entities_are_unfrozen = 1;
+          single_step_ctrls.run_entities = &thread;
+          single_step_ctrls.run_entity_count = 1;
+          if(thread_post_rip == thread_pre_rip)
+          {
+            single_step_ctrls.single_step_thread = thread;
+          }
           DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
+          thread_post_rip = dmn_rip_from_thread(thread);
           switch(event->kind)
           {
             default:{}break;
@@ -4700,7 +4727,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             }break;
             case DMN_EventKind_SingleStep:
             {
-              single_step_done = 1;
+              single_step_done = dmn_handle_match(event->thread, thread);
               cond_bp_single_step_stop_cause = ctrl_event_cause_from_dmn_event_kind(event->kind);
             }break;
           }
@@ -4759,11 +4786,21 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       {
         if(hit_trap_flags & CTRL_TrapFlag_SingleStepAfterHit)
         {
-          DMN_RunCtrls single_step_ctrls = {0};
-          single_step_ctrls.single_step_thread = target_thread;
+          log_infof(">>> stepping >>> trap net logic: single step after hit\n");
+          U64 thread_pre_rip = dmn_rip_from_thread(target_thread);
+          U64 thread_post_rip = thread_pre_rip;
           for(B32 single_step_done = 0; single_step_done == 0;)
           {
+            DMN_RunCtrls single_step_ctrls = {0};
+            single_step_ctrls.run_entities_are_unfrozen = 1;
+            single_step_ctrls.run_entities = &target_thread;
+            single_step_ctrls.run_entity_count = 1;
+            if(thread_post_rip == thread_pre_rip)
+            {
+              single_step_ctrls.single_step_thread = target_thread;
+            }
             DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
+            thread_post_rip = dmn_rip_from_thread(target_thread);
             switch(event->kind)
             {
               default:{}break;
@@ -4780,7 +4817,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               }break;
               case DMN_EventKind_SingleStep:
               {
-                single_step_done = 1;
+                single_step_done = dmn_handle_match(event->thread, target_thread);;
                 single_step_stop_cause = ctrl_event_cause_from_dmn_event_kind(event->kind);
               }break;
             }
@@ -4795,6 +4832,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(hit_trap_flags & CTRL_TrapFlag_BeginSpoofMode)
         {
           // rjf: setup spoof mode
+          log_infof(">>> stepping >>> trap net logic: begin spoof mode\n");
           begin_spoof_mode = 1;
           U64 spoof_sp = dmn_rsp_from_thread(target_thread);
           spoof_mode = 1;
@@ -4815,6 +4853,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           {
             save_stack_pointer = 1;
             sp_check_value = dmn_rsp_from_thread(target_thread);
+            log_infof(">>> stepping >>> trap net logic: save stack pointer (0x%I64x)\n", sp_check_value);
           }
         }
       }
@@ -4828,6 +4867,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           if((hit_trap_flags & CTRL_TrapFlag_IgnoreStackPointerCheck) ||
              stack_pointer_matches)
           {
+            log_infof(">>> stepping >>> trap net logic: end stepping\n");
             trap_net_stop = 1;
             use_trap_net_logic = 0;
           }
@@ -4844,11 +4884,22 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       CTRL_EventCause step_past_trap_net_stop_cause = CTRL_EventCause_Null;
       if(step_past_trap_net)
       {
-        DMN_RunCtrls single_step_ctrls = {0};
-        single_step_ctrls.single_step_thread = event->thread;
+        log_infof(">>> stepping >>> trap net logic: single-step non-target-thread (%I64x) past trap net\n", event->thread.u64[0]);
+        DMN_Handle thread = event->thread;
+        U64 thread_pre_rip = dmn_rip_from_thread(thread);
+        U64 thread_post_rip = thread_pre_rip;
         for(B32 single_step_done = 0; single_step_done == 0;)
         {
+          DMN_RunCtrls single_step_ctrls = {0};
+          single_step_ctrls.run_entities_are_unfrozen = 1;
+          single_step_ctrls.run_entities = &thread;
+          single_step_ctrls.run_entity_count = 1;
+          if(thread_post_rip == thread_pre_rip)
+          {
+            single_step_ctrls.single_step_thread = thread;
+          }
           DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &single_step_ctrls, 0);
+          thread_post_rip = dmn_rip_from_thread(thread);
           switch(event->kind)
           {
             default:{}break;
@@ -4863,7 +4914,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             }break;
             case DMN_EventKind_SingleStep:
             {
-              single_step_done = 1;
+              single_step_done = dmn_handle_match(event->thread, thread);
               step_past_trap_net_stop_cause = ctrl_event_cause_from_dmn_event_kind(event->kind);
             }break;
           }
@@ -4955,11 +5006,21 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   DMN_Event *stop_event = 0;
   CTRL_EventCause stop_cause = CTRL_EventCause_Null;
   {
-    DMN_RunCtrls run_ctrls = {0};
-    run_ctrls.single_step_thread = msg->entity;
+    DMN_Handle thread = msg->entity;
+    U64 thread_pre_rip = dmn_rip_from_thread(thread);
+    U64 thread_post_rip = thread_pre_rip;
     for(B32 done = 0; done == 0;)
     {
+      DMN_RunCtrls run_ctrls = {0};
+      run_ctrls.run_entities_are_unfrozen = 1;
+      run_ctrls.run_entities = &thread;
+      run_ctrls.run_entity_count = 1;
+      if(thread_post_rip == thread_pre_rip)
+      {
+        run_ctrls.single_step_thread = msg->entity;
+      }
       DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
+      thread_post_rip = dmn_rip_from_thread(msg->entity);
       switch(event->kind)
       {
         default:{}break;
@@ -4967,8 +5028,8 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         case DMN_EventKind_Exception:  {stop_cause = CTRL_EventCause_InterruptedByException;}goto end_single_step;
         case DMN_EventKind_Halt:       {stop_cause = CTRL_EventCause_InterruptedByHalt;}goto end_single_step;
         case DMN_EventKind_Trap:       {stop_cause = CTRL_EventCause_InterruptedByTrap;}goto end_single_step;
-        case DMN_EventKind_SingleStep: {stop_cause = CTRL_EventCause_Finished;}goto end_single_step;
         case DMN_EventKind_Breakpoint: {stop_cause = CTRL_EventCause_UserBreakpoint;}goto end_single_step;
+        case DMN_EventKind_SingleStep: {stop_cause = CTRL_EventCause_Finished;}goto end_single_step;
         end_single_step:
         {
           stop_event = event;

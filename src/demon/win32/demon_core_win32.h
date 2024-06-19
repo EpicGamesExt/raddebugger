@@ -54,6 +54,8 @@
 #define DMN_W32_EXCEPTION_NO_MEMORY                0xC0000017u
 #define DMN_W32_EXCEPTION_THROW                    0xE06D7363u
 #define DMN_W32_EXCEPTION_SET_THREAD_NAME          0x406d1388u
+#define DMN_w32_EXCEPTION_CLRDBG_NOTIFICATION      0x04242420u
+#define DMN_w32_EXCEPTION_CLR                      0xE0434352u
 
 ////////////////////////////////
 //~ rjf: Win32 Register Codes

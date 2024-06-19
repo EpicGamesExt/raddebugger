@@ -1449,7 +1449,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             if(single_step_thread_ctx != 0)
             {
               U64 rflags = single_step_thread_ctx->EFlags|0x2;
-              U64 new_rflags = rflags |= 0x100;
+              U64 new_rflags = rflags | 0x100;
               single_step_thread_ctx->EFlags = new_rflags;
               SetThreadContext(thread->handle, single_step_thread_ctx);
               ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
@@ -1517,10 +1517,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             B32 is_frozen = 0;
             {
               // rjf: single-step? freeze if not the single-step thread.
-              if(!dmn_handle_match(dmn_handle_zero(), ctrls->single_step_thread) &&
-                 !dmn_handle_match(dmn_w32_handle_from_entity(thread), ctrls->single_step_thread))
+              if(!dmn_handle_match(dmn_handle_zero(), ctrls->single_step_thread))
               {
-                is_frozen = 1;
+                is_frozen = !dmn_handle_match(dmn_w32_handle_from_entity(thread), ctrls->single_step_thread);
               }
               
               // rjf: not single-stepping? determine based on run controls freezing info
@@ -2430,7 +2429,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             if(ctx != 0)
             {
               U64 rflags = single_step_thread_ctx->EFlags|0x2;
-              U64 new_rflags = rflags &= ~0x100;
+              U64 new_rflags = rflags & ~0x100;
               single_step_thread_ctx->EFlags = new_rflags;
               SetThreadContext(thread->handle, single_step_thread_ctx);
               ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
