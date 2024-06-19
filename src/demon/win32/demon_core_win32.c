@@ -1609,9 +1609,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         {
           if(dmn_w32_shared->exception_not_handled && !ctrls->ignore_previous_exception)
           {
-            dmn_w32_shared->exception_not_handled = 0;
             resume_code = DBG_EXCEPTION_NOT_HANDLED;
           }
+          dmn_w32_shared->exception_not_handled = 0;
         }
         
         ////////////////////////

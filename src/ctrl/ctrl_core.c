@@ -2,46 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Bug Hunt Behavior Enabling (2024/06/19)
-//
-// NOTE(rjf): For one reason or another, our approach of "spoofs" -
-// overwriting a return address in a thread's stack to get a debug
-// event when the thread returns from a particular frame - seemed
-// to cause issues in particular cases. We previously would overwrite
-// a return address on the stack to 911, and we'd get an invalid memory
-// execution debug event whenever the thread moved there. Then, we'd
-// simply move the thread back to where it was before, and continue.
-//
-// It seemed like, possibly, some code was seeing this event and/or
-// other adjacent effects (e.g. a thread attempting to execute at an
-// invalid address), and was freaking out, but it is very difficult
-// to know exactly what is going on, since from the debugger's
-// perspective, everything was fine, but upon resuming (after this
-// memory-execution exception was caught), the process would
-// immediately exit. So some external code must be doing something
-// that we have not accounted for.
-//
-// To address this unknown, I've moved the "spoofs" back to being
-// implemented by allocating an extra code page in target processes,
-// and writing over them with int3s, and then instead of writing 911
-// into the stack, just writing the base address of that page. Hitting
-// an unexpected int3 is a much more expected debugger pattern, and
-// so my theory was that this would be less suspect to code which
-// could be doing e.g. validation checks over code. The spoof still
-// works the same way beyond that; we simply check that the int3 is
-// within the "spoof page", and if it is, we return the thread back
-// to the correct address.
-//
-// But, given my uncertainty about the exact cause/effect situation,
-// I have left this comment, and a #define below to toggle the old
-// behavior, so that we can investigate in the future.
-//
-// @nick - this is what you'd want to change from `0` to `1` if you
-// want to take a look at this.
-
-#define CTRL_ENABLE_MEMORY_EXECUTE_EXCEPTION_SPOOFS 0
-
-////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/ctrl.meta.c"
@@ -860,7 +820,6 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *machine = ctrl_entity_from_machine_id_handle(store, event->machine_id, dmn_handle_zero());
         CTRL_Entity *process = ctrl_entity_alloc(store, machine, CTRL_EntityKind_Process, event->arch, event->machine_id, event->entity, (U64)event->entity_id);
-        process->vaddr_range = event->vaddr_rng;
       }break;
       case CTRL_EventKind_EndProc:
       {
@@ -3661,19 +3620,11 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_architecture(arch));
     dmn_thread_read_reg_block(spoof->thread, regs_block);
     U64 spoof_thread_rip = regs_rip_from_arch_block(arch, regs_block);
-#if CTRL_ENABLE_MEMORY_EXECUTE_EXCEPTION_SPOOFS
     if(spoof_thread_rip == spoof->new_ip_value)
     {
       regs_arch_block_write_rip(arch, regs_block, spoof_old_ip_value);
       ctrl_thread_write_reg_block(CTRL_MachineID_Local, spoof->thread, regs_block);
     }
-#else
-    if(spoof_thread_rip == spoof->new_ip_value+1)
-    {
-      regs_arch_block_write_rip(arch, regs_block, spoof_old_ip_value);
-      ctrl_thread_write_reg_block(CTRL_MachineID_Local, spoof->thread, regs_block);
-    }
-#endif
   }
   
   //- rjf: push ctrl events associated with this demon event
@@ -3683,12 +3634,6 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     default:{}break;
     case DMN_EventKind_CreateProcess:
     {
-      U64 spoof_space_size = KB(4);
-      U64 spoof_space_vaddr = dmn_process_memory_reserve(event->process, 0, spoof_space_size);
-      U64 spoof_space_code = 0xcccccccc;
-      dmn_process_memory_commit(event->process, spoof_space_vaddr, spoof_space_size);
-      dmn_process_memory_protect(event->process, spoof_space_vaddr, spoof_space_size, OS_AccessFlag_Read|OS_AccessFlag_Write|OS_AccessFlag_Execute);
-      dmn_process_write(event->process, r1u64(spoof_space_vaddr, spoof_space_vaddr+sizeof(spoof_space_code)), &spoof_space_code);
       CTRL_Event *out_evt = ctrl_event_list_push(scratch.arena, &evts);
       out_evt->kind       = CTRL_EventKind_NewProc;
       out_evt->msg_id     = msg->msg_id;
@@ -3696,7 +3641,6 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       out_evt->entity     = event->process;
       out_evt->arch       = event->arch;
       out_evt->entity_id  = event->code;
-      out_evt->vaddr_rng  = r1u64(spoof_space_vaddr, spoof_space_vaddr+spoof_space_size);
       ctrl_state->process_counter += 1;
     }break;
     case DMN_EventKind_CreateThread:
@@ -4063,11 +4007,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   DMN_Handle target_thread = msg->entity;
   DMN_Handle target_process = msg->parent;
   CTRL_Entity *target_process_entity = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, msg->machine_id, target_process);
-#if CTRL_ENABLE_MEMORY_EXECUTE_EXCEPTION_SPOOFS
   U64 spoof_ip_vaddr = 911;
-#else
-  U64 spoof_ip_vaddr = target_process_entity->vaddr_range.min;
-#endif
   log_infof("ctrl_thread__run:\n{\n");
   
   //////////////////////////////
@@ -4323,22 +4263,10 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         case DMN_EventKind_Error:
         case DMN_EventKind_Halt:
         case DMN_EventKind_SingleStep:
+        case DMN_EventKind_Trap:
         {
           hard_stop = 1;
           log_infof("step_rule: unexpected -> hard_stop\n");
-        }break;
-        case DMN_EventKind_Trap:
-        {
-          if(event->instruction_pointer == spoof_ip_vaddr)
-          {
-            use_stepping_logic = 1;
-            log_infof("step_rule: spoof trap -> stepping_logic\n");
-          }
-          else
-          {
-            hard_stop = 1;
-            log_infof("step_rule: unexpected trap -> hard_stop\n");
-          }
         }break;
         case DMN_EventKind_Exception:
         case DMN_EventKind_Breakpoint:
@@ -4614,7 +4542,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //
       //{
       
-#if CTRL_ENABLE_MEMORY_EXECUTE_EXCEPTION_SPOOFS
       //////////////////////////
       //- rjf: handle if hitting a spoof
       //
@@ -4636,33 +4563,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           use_stepping_logic = 0;
         }
       }
-#else
-      //////////////////////////
-      //- rjf: handle if hitting an exception
-      //
-      B32 exception_stop = 0;
-      if(!hard_stop && use_stepping_logic && event->kind == DMN_EventKind_Exception)
-      {
-        exception_stop = 1;
-        use_stepping_logic = 0;
-      }
-      
-      //////////////////////////
-      //- rjf: handle if hitting a spoof
-      //
-      B32 hit_spoof = 0;
-      if(!hard_stop && use_stepping_logic && event->kind == DMN_EventKind_Trap)
-      {
-        if(spoof_mode &&
-           dmn_handle_match(target_process, event->process) &&
-           dmn_handle_match(target_thread, event->thread) &&
-           spoof.new_ip_value == event->instruction_pointer)
-        {
-          hit_spoof = 1;
-          log_infof("hit_spoof\n");
-        }
-      }
-#endif
       
       //- rjf: handle spoof hit
       if(hit_spoof)
