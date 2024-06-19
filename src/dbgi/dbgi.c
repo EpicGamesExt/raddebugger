@@ -294,7 +294,7 @@ di_open(DI_Key *key)
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    log_infof("opening debug info: %S [0x%I64x]\n", key_normalized.path, key_normalized.min_timestamp);
+    log_infof("open_debug_info: {\"%S\", 0x%I64x}\n", key_normalized.path, key_normalized.min_timestamp);
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node
@@ -350,7 +350,7 @@ di_close(DI_Key *key)
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    log_infof("closing debug info: %S [0x%I64x]\n", key_normalized.path, key_normalized.min_timestamp);
+    log_infof("close_debug_info: {\"%S\", 0x%I64x}\n", key_normalized.path, key_normalized.min_timestamp);
     OS_MutexScopeW(stripe->rw_mutex)
     {
       //- rjf: find existing node

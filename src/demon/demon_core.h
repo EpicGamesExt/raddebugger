@@ -217,6 +217,11 @@ internal void dmn_access_close(void);
 #define DMN_AccessScope DeferLoopChecked(dmn_access_open(), dmn_access_close())
 
 //- rjf: processes
+internal U64 dmn_process_memory_reserve(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_commit(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_decommit(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_release(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, OS_AccessFlags flags);
 internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
 internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 #define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)

@@ -1566,7 +1566,45 @@ string_from_elapsed_time(Arena *arena, DateTime dt){
 }
 
 ////////////////////////////////
-//~ rjf: Textual String Wrapping
+//~ rjf: Basic Text Indentation
+
+internal String8
+indented_from_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  read_only local_persist U8 indentation_bytes[] = "                                                                                                                                ";
+  String8List indented_strings = {0};
+  S64 depth = 0;
+  S64 next_depth = 0;
+  U64 line_begin_off = 0;
+  for(U64 off = 0; off <= string.size; off += 1)
+  {
+    U8 byte = off<string.size ? string.str[off] : 0;
+    switch(byte)
+    {
+      default:{}break;
+      case '{':case '[':case '(':{next_depth += 1; next_depth = Max(0, next_depth);}break;
+      case '}':case ']':case ')':{next_depth -= 1; next_depth = Max(0, next_depth); depth = next_depth;}break;
+      case '\n':
+      case 0:
+      {
+        String8 line = str8_skip_chop_whitespace(str8_substr(string, r1u64(line_begin_off, off)));
+        if(line.size != 0)
+        {
+          str8_list_pushf(scratch.arena, &indented_strings, "%.*s%S\n", (int)depth*2, indentation_bytes, line);
+        }
+        line_begin_off = off+1;
+        depth = next_depth;
+      }break;
+    }
+  }
+  String8 result = str8_list_join(arena, &indented_strings, 0);
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Text Wrapping
 
 internal String8List
 wrapped_lines_from_string(Arena *arena, String8 string, U64 first_line_max_width, U64 max_width, U64 wrap_indent)

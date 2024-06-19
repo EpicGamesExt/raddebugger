@@ -90,7 +90,10 @@ log_scope_end(Arena *arena)
       {
         for(EachEnumVal(LogMsgKind, kind))
         {
-          result.strings[kind] = str8_list_join(arena, &scope->strings[kind], 0);
+          Temp scratch = scratch_begin(&arena, 1);
+          String8 result_unindented = str8_list_join(scratch.arena, &scope->strings[kind], 0);
+          result.strings[kind] = indented_from_string(arena, result_unindented);
+          scratch_end(scratch);
         }
       }
       arena_pop_to(log_active->arena, scope->pos);

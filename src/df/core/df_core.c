@@ -1814,7 +1814,11 @@ df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kin
   df_entity_notify_mutation(entity);
   
   // rjf: log
-  log_infof("new entity: %S $%I64d\n", df_g_entity_kind_display_string_table[kind], entity->id);
+  LogInfoNamedBlockF("new_entity")
+  {
+    log_infof("kind: \"%S\"\n", df_g_entity_kind_display_string_table[kind]);
+    log_infof("id: $0x%I64x\n", entity->id);
+  }
   
   return entity;
 }
@@ -1859,7 +1863,13 @@ df_entity_release(DF_StateDeltaHistory *hist, DF_Entity *entity)
       t->e = child;
       SLLQueuePush(first_task, last_task, t);
     }
-    log_infof("end entity: %S $%I64d\n", df_g_entity_kind_display_string_table[task->e->kind], task->e->id);
+    LogInfoNamedBlockF("end_entity")
+    {
+      String8 name = df_display_string_from_entity(scratch.arena, task->e);
+      log_infof("kind: \"%S\"\n", df_g_entity_kind_display_string_table[task->e->kind]);
+      log_infof("id: $0x%I64x\n", task->e->id);
+      log_infof("display_string: \"%S\"\n", name);
+    }
     df_state_delta_history_push_struct_delta(hist, &task->e->first);
     df_state_delta_history_push_struct_delta(hist, &task->e->last);
     df_state_delta_history_push_struct_delta(hist, &task->e->next);
@@ -2860,8 +2870,8 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   DI_Key dbgi_key = df_dbgi_key_from_module(module);
   Architecture arch = df_architecture_from_entity(thread);
   U64 ip_vaddr = ctrl_query_cached_rip_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
-  log_infof("  ip_vaddr: 0x%I64x\n", ip_vaddr);
-  log_infof("  dbgi_key: {%S, 0x%I64x}\n", dbgi_key.path, dbgi_key.min_timestamp);
+  log_infof("ip_vaddr: 0x%I64x\n", ip_vaddr);
+  log_infof("dbgi_key: {%S, 0x%I64x}\n", dbgi_key.path, dbgi_key.min_timestamp);
   
   // rjf: ip => line vaddr range
   Rng1U64 line_vaddr_rng = {0};
@@ -2873,8 +2883,8 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     {
       line_vaddr_rng = df_vaddr_range_from_voff_range(module, line_voff_rng);
     }
-    log_infof("  line: {%S:%I64i}\n", line_info.file->name, line_info.pt.line);
-    log_infof("  voff_range: {0x%I64x, 0x%I64x}\n", line_info.voff_range.min, line_info.voff_range.max);
+    log_infof("line: {%S:%I64i}\n", line_info.file->name, line_info.pt.line);
+    log_infof("voff_range: {0x%I64x, 0x%I64x}\n", line_info.voff_range.min, line_info.voff_range.max);
   }
   
   // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
@@ -2899,25 +2909,22 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   {
     CTRL_ProcessMemorySlice machine_code_slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, line_vaddr_rng, os_now_microseconds()+50000);
     machine_code = machine_code_slice.data;
-    log_infof("  machine_code_slice:\n  {\n");
-    log_infof("    stale: %i\n", machine_code_slice.stale);
-    log_infof("    any_byte_bad: %i\n", machine_code_slice.any_byte_bad);
-    log_infof("    any_byte_changed: %i\n", machine_code_slice.any_byte_changed);
-    log_infof("    [\n");
-    for(U64 idx = 0; idx < machine_code_slice.data.size; idx += 1)
+    LogInfoNamedBlockF("machine_code_slice")
     {
-      if(idx%16 == 0)
+      log_infof("stale: %i\n", machine_code_slice.stale);
+      log_infof("any_byte_bad: %i\n", machine_code_slice.any_byte_bad);
+      log_infof("any_byte_changed: %i\n", machine_code_slice.any_byte_changed);
+      log_infof("bytes:\n[\n");
+      for(U64 idx = 0; idx < machine_code_slice.data.size; idx += 1)
       {
-        log_infof("      ");
+        log_infof("0x%x,", machine_code_slice.data.str[idx]);
+        if(idx%16 == 15 || idx+1 == machine_code_slice.data.size)
+        {
+          log_infof("\n");
+        }
       }
-      log_infof("0x%x,", machine_code_slice.data.str[idx]);
-      if(idx%16 == 15 || idx+1 == machine_code_slice.data.size)
-      {
-        log_infof("\n");
-      }
+      log_infof("]\n");
     }
-    log_infof("    ]\n");
-    log_infof("  }\n");
   }
   
   // rjf: machine code => ctrl flow analysis
@@ -2933,15 +2940,14 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
                                                             arch,
                                                             line_vaddr_rng.min,
                                                             machine_code);
-    log_infof("  ctrl_flow_info:\n  {\n");
-    log_infof("    flags: %x\n", ctrl_flow_info.flags);
-    log_infof("    exit_points:\n    {\n");
-    for(DF_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+    LogInfoNamedBlockF("ctrl_flow_info")
     {
-      log_infof("      {vaddr:0x%I64x, jump_dest_vaddr:0x%I64x, expected_sp_delta:0x%I64x, inst_flags:%x}\n", n->v.vaddr, n->v.jump_dest_vaddr, n->v.expected_sp_delta, n->v.inst_flags);
+      log_infof("flags: %x\n", ctrl_flow_info.flags);
+      LogInfoNamedBlockF("exit_points") for(DF_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+      {
+        log_infof("{vaddr:0x%I64x, jump_dest_vaddr:0x%I64x, expected_sp_delta:0x%I64x, inst_flags:%x}\n", n->v.vaddr, n->v.jump_dest_vaddr, n->v.expected_sp_delta, n->v.inst_flags);
+      }
     }
-    log_infof("    }\n");
-    log_infof("  }\n");
   }
   
   // rjf: push traps for all exit points
@@ -3002,12 +3008,10 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   }
   
   // rjf: log
-  log_infof("  traps:\n  {\n");
-  for(CTRL_TrapNode *n = result.first; n != 0; n = n->next)
+  LogInfoNamedBlockF("traps") for(CTRL_TrapNode *n = result.first; n != 0; n = n->next)
   {
-    log_infof("    {flags:0x%x, vaddr:0x%I64x}\n", n->v.flags, n->v.vaddr);
+    log_infof("{flags:0x%x, vaddr:0x%I64x}\n", n->v.flags, n->v.vaddr);
   }
-  log_infof("  }\n");
   
   scratch_end(scratch);
   log_infof("}\n\n");
@@ -6600,8 +6604,9 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
   {
     Temp scratch = scratch_begin(0, 0);
     DF_Entity *entity = df_entity_from_handle(params->entity);
-    log_infof("debug frontend command pushed: \"%S\"\n", spec->info.string);
-#define HandleParamPrint(mem_name) if(!df_handle_match(df_handle_zero(), params->mem_name)) { log_infof("| %s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
+    log_infof("df_cmd:\n{\n", spec->info.string);
+    log_infof("spec: \"%S\"\n", spec->info.string);
+#define HandleParamPrint(mem_name) if(!df_handle_match(df_handle_zero(), params->mem_name)) { log_infof("%s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
     HandleParamPrint(window);
     HandleParamPrint(panel);
     HandleParamPrint(dest_panel);
@@ -6610,7 +6615,7 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
     if(!df_entity_is_nil(entity))
     {
       String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
-      log_infof("| entity: \"%S\"\n", entity_name);
+      log_infof("entity: \"%S\"\n", entity_name);
     }
     U64 idx = 0;
     for(DF_HandleNode *n = params->entity_list.first; n != 0; n = n->next, idx += 1)
@@ -6619,22 +6624,22 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
       if(!df_entity_is_nil(entity))
       {
         String8 entity_name = df_display_string_from_entity(scratch.arena, entity);
-        log_infof("| entity_list[%I64u]: \"%S\"\n", idx, entity_name);
+        log_infof("entity_list[%I64u]: \"%S\"\n", idx, entity_name);
       }
     }
     if(!df_cmd_spec_is_nil(params->cmd_spec))
     {
-      log_infof("| cmd_spec: \"%S\"\n", params->cmd_spec->info.string);
+      log_infof("cmd_spec: \"%S\"\n", params->cmd_spec->info.string);
     }
-    if(params->string.size != 0)        { log_infof("| string: \"%S\"\n", params->string); }
-    if(params->file_path.size != 0)     { log_infof("| file_path: \"%S\"\n", params->file_path); }
-    if(params->text_point.line != 0)    { log_infof("| text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
-    if(params->vaddr != 0)              { log_infof("| vaddr: 0x%I64x\n", params->vaddr); }
-    if(params->voff != 0)               { log_infof("| voff: 0x%I64x\n", params->voff); }
-    if(params->index != 0)              { log_infof("| index: 0x%I64x\n", params->index); }
-    if(params->base_unwind_index != 0)  { log_infof("| base_unwind_index: 0x%I64x\n", params->base_unwind_index); }
-    if(params->inline_unwind_index != 0){ log_infof("| inline_unwind_index: 0x%I64x\n", params->inline_unwind_index); }
-    if(params->id != 0)                 { log_infof("| id: 0x%I64x\n", params->id); }
+    if(params->string.size != 0)        { log_infof("string: \"%S\"\n", params->string); }
+    if(params->file_path.size != 0)     { log_infof("file_path: \"%S\"\n", params->file_path); }
+    if(params->text_point.line != 0)    { log_infof("text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
+    if(params->vaddr != 0)              { log_infof("vaddr: 0x%I64x\n", params->vaddr); }
+    if(params->voff != 0)               { log_infof("voff: 0x%I64x\n", params->voff); }
+    if(params->index != 0)              { log_infof("index: 0x%I64x\n", params->index); }
+    if(params->base_unwind_index != 0)  { log_infof("base_unwind_index: 0x%I64x\n", params->base_unwind_index); }
+    if(params->inline_unwind_index != 0){ log_infof("inline_unwind_index: 0x%I64x\n", params->inline_unwind_index); }
+    if(params->id != 0)                 { log_infof("id: 0x%I64x\n", params->id); }
     if(params->os_event != 0)
     {
       String8 kind_string = str8_lit("<unknown>");
@@ -6651,10 +6656,10 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
         case OS_EventKind_FileDrop:       {kind_string = str8_lit("filedrop");}break;
         case OS_EventKind_Wakeup:         {kind_string = str8_lit("wakeup");}break;
       }
-      log_infof("| os_event->kind: %S\n", kind_string);
+      log_infof("os_event->kind: %S\n", kind_string);
     }
 #undef HandleParamPrint
-    log_infof("--------------------------------\n");
+    log_infof("}\n\n");
     scratch_end(scratch);
   }
   df_cmd_list_push(df_state->root_cmd_arena, &df_state->root_cmds, params, spec);
@@ -6847,8 +6852,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     {
       CTRL_Event *event = &event_n->v;
       log_infof("ctrl_event:\n{\n");
-      log_infof("  kind: \"%S\"\n", ctrl_string_from_event_kind(event->kind));
-      log_infof("  entity_id: %u\n", event->entity_id);
+      log_infof("kind: \"%S\"\n", ctrl_string_from_event_kind(event->kind));
+      log_infof("entity_id: %u\n", event->entity_id);
       switch(event->kind)
       {
         default:{}break;
@@ -6884,7 +6889,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           // rjf: select & snap to thread causing stop
           if(should_snap && stop_thread->kind == DF_EntityKind_Thread)
           {
-            log_infof("  stop_thread: \"%S\"\n", df_display_string_from_entity(scratch.arena, stop_thread));
+            log_infof("stop_thread: \"%S\"\n", df_display_string_from_entity(scratch.arena, stop_thread));
             DF_CmdParams params = df_cmd_params_zero();
             params.entity = df_handle_from_entity(stop_thread);
             df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
@@ -7207,7 +7212,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case CTRL_EventKind_MemDecommit:{}break;
         case CTRL_EventKind_MemRelease:{}break;
       }
-      log_infof("}\n");
+      log_infof("}\n\n");
     }
     
     //- rjf: clear tls base cache
@@ -8999,7 +9004,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         //- rjf: developer commands
         case DF_CoreCmdKind_LogMarker:
         {
-          log_infof("\n\n--- #marker ---\n\n");
+          log_infof("\"#MARKER\"");
         }break;
       }
     }

@@ -2582,6 +2582,73 @@ dmn_access_close(void)
 //- rjf: processes
 
 internal U64
+dmn_process_memory_reserve(DMN_Handle process, U64 vaddr, U64 size)
+{
+  U64 result = 0;
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+    result = (U64)VirtualAllocEx(process_entity->handle, (void *)vaddr, size, MEM_RESERVE, PAGE_READWRITE);
+    if(result == 0)
+    {
+      result = (U64)VirtualAllocEx(process_entity->handle, 0, size, MEM_RESERVE, PAGE_READWRITE);
+    }
+  }
+  return result;
+}
+
+internal void
+dmn_process_memory_commit(DMN_Handle process, U64 vaddr, U64 size)
+{
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+    (U64)VirtualAllocEx(process_entity->handle, (void *)vaddr, size, MEM_COMMIT, PAGE_READWRITE);
+  }
+}
+
+internal void
+dmn_process_memory_decommit(DMN_Handle process, U64 vaddr, U64 size)
+{
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+    VirtualFreeEx(process_entity->handle, (void *)vaddr, size, MEM_DECOMMIT);
+  }
+}
+
+internal void
+dmn_process_memory_release(DMN_Handle process, U64 vaddr, U64 size)
+{
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+    VirtualFreeEx(process_entity->handle, (void *)vaddr, 0, MEM_RELEASE);
+  }
+}
+
+internal void
+dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, OS_AccessFlags flags)
+{
+  DMN_AccessScope
+  {
+    DMN_W32_Entity *process_entity = dmn_w32_entity_from_handle(process);
+    DWORD old_flags = 0;
+    DWORD new_flags = PAGE_NOACCESS;
+    switch(flags)
+    {
+      default:{}break;
+      case OS_AccessFlag_Execute:{new_flags = PAGE_EXECUTE;}break;
+      case OS_AccessFlag_Execute|OS_AccessFlag_Read:{new_flags = PAGE_EXECUTE_READ;}break;
+      case OS_AccessFlag_Execute|OS_AccessFlag_Read|OS_AccessFlag_Write:{new_flags = PAGE_EXECUTE_READWRITE;}break;
+      case OS_AccessFlag_Read:{new_flags = PAGE_READONLY;}break;
+      case OS_AccessFlag_Read|OS_AccessFlag_Write:{new_flags = PAGE_READWRITE;}break;
+    }
+    VirtualProtectEx(process_entity->handle, (void *)vaddr, size, new_flags, &old_flags);
+  }
+}
+
+internal U64
 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst)
 {
   U64 result = 0;

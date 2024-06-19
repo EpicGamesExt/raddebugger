@@ -240,14 +240,16 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
         }
         if(node == 0)
         {
-          log_infof("[dasm] cache miss, creating node...\n");
-          log_infof(" hash:        [0x%I64x 0x%I64x]\n", hash.u64[0], hash.u64[1]);
-          log_infof(" vaddr:       0x%I64x\n", params->vaddr);
-          log_infof(" arch:        %S\n", string_from_architecture(params->arch));
-          log_infof(" style_flags: 0x%x\n", params->style_flags);
-          log_infof(" syntax:      %i\n",   params->syntax);
-          log_infof(" base_vaddr:  0x%I64x\n", params->base_vaddr);
-          log_infof(" dbgi_key:    [%S 0x%I64x]\n", params->dbgi_key.path, params->dbgi_key.min_timestamp);
+          LogInfoNamedBlockF("dasm_new_node")
+          {
+            log_infof("hash:        [0x%I64x 0x%I64x]\n", hash.u64[0], hash.u64[1]);
+            log_infof("vaddr:       0x%I64x\n", params->vaddr);
+            log_infof("arch:        %S\n", string_from_architecture(params->arch));
+            log_infof("style_flags: 0x%x\n", params->style_flags);
+            log_infof("syntax:      %i\n",   params->syntax);
+            log_infof("base_vaddr:  0x%I64x\n", params->base_vaddr);
+            log_infof("dbgi_key:    [%S 0x%I64x]\n", params->dbgi_key.path, params->dbgi_key.min_timestamp);
+          }
           node = stripe->free_node;
           if(node)
           {

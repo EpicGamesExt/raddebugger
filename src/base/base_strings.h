@@ -327,7 +327,12 @@ internal String8 push_file_name_date_time_string(Arena *arena, DateTime *date_ti
 internal String8 string_from_elapsed_time(Arena *arena, DateTime dt);
 
 ////////////////////////////////
-//~ rjf: Textual String Wrapping
+//~ rjf: Basic Text Indentation
+
+internal String8 indented_from_string(Arena *arena, String8 string);
+
+////////////////////////////////
+//~ rjf: Text Wrapping
 
 internal String8List wrapped_lines_from_string(Arena *arena, String8 string, U64 first_line_max_width, U64 max_width, U64 wrap_indent);
 

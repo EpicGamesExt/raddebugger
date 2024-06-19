@@ -338,7 +338,7 @@ entry_point(CmdLine *cmd_line)
             }
             if(msg.size != 0)
             {
-              log_infof("IPC message received: \"%S\"", msg);
+              log_infof("ipc_msg: \"%S\"", msg);
               DF_Window *dst_window = df_gfx_state->first_window;
               for(DF_Window *window = dst_window; window != 0; window = window->next)
               {
