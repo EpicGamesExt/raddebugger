@@ -35,13 +35,10 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] asan stepping breakage
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
-//
-// [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 //
 // [ ] Setting the code_font/main_font values to a font name doesn't work.
 //     Should probably make note that you have to set it to a path to a TTF,
@@ -227,6 +224,7 @@
 //       disappears if font size gets too large.
 //  [ ]  undo close tab would be nice. If not for everything, then at least
 //       just for source files
+// [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 
 ////////////////////////////////
 //~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
@@ -385,6 +383,7 @@
 // query completion
 //  [x]  it would be nice to have "show in explorer" for right click on source
 //       file tab (opens explorer & selects the file)
+// [x] asan stepping breakage
 
 #ifndef RADDBG_H
 #define RADDBG_H
