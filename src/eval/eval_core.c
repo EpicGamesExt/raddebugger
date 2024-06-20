@@ -93,6 +93,7 @@ eval_string2num_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string
     SLLQueuePush_N(map->first, map->last, node, order_next);
     node->string = push_str8_copy(arena, string);
     node->num = num;
+    map->node_count += 1;
   }
 }
 
@@ -119,6 +120,41 @@ eval_num_from_string(EVAL_String2NumMap *map, String8 string)
     }
   }
   return num;
+}
+
+internal EVAL_String2NumMapNodeArray
+eval_string2num_map_node_array_from_map(Arena *arena, EVAL_String2NumMap *map)
+{
+  EVAL_String2NumMapNodeArray result = {0};
+  result.count = map->node_count;
+  result.v = push_array(arena, EVAL_String2NumMapNode *, result.count);
+  U64 idx = 0;
+  for(EVAL_String2NumMapNode *n = map->first; n != 0; n = n->order_next, idx += 1)
+  {
+    result.v[idx] = n;
+  }
+  return result;
+}
+
+internal int
+eval_string2num_map_node_qsort_compare__num_ascending(EVAL_String2NumMapNode **a, EVAL_String2NumMapNode **b)
+{
+  int result = 0;
+  if(a[0]->num < b[0]->num)
+  {
+    result = -1;
+  }
+  else if(a[0]->num > b[0]->num)
+  {
+    result = +1;
+  }
+  return result;
+}
+
+internal void
+eval_string2num_map_node_array_sort__in_place(EVAL_String2NumMapNodeArray *array)
+{
+  quick_sort(array->v, array->count, sizeof(array->v[0]), eval_string2num_map_node_qsort_compare__num_ascending);
 }
 
 //- rjf: string -> expr

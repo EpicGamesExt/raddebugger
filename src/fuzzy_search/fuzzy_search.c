@@ -517,7 +517,7 @@ fzy_search_thread__entry_point(void *p)
     //- rjf: sort item array
     if(items.count != 0 && query.size != 0)
     {
-      qsort(items.v, items.count, sizeof(FZY_Item), (int (*)(const void *, const void *))fzy_qsort_compare_items);
+      quick_sort(items.v, items.count, sizeof(FZY_Item), fzy_qsort_compare_items);
     }
     
     //- rjf: commit to cache - busyloop on scope touches

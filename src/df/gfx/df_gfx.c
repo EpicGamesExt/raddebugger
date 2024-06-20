@@ -8966,7 +8966,7 @@ df_autocomp_lister_item_qsort_compare(DF_AutoCompListerItem *a, DF_AutoCompListe
 internal void
 df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItemArray *array)
 {
-  qsort(array->v, array->count, sizeof(array->v[0]), (int (*)(const void*, const void*))df_autocomp_lister_item_qsort_compare);
+  quick_sort(array->v, array->count, sizeof(array->v[0]), df_autocomp_lister_item_qsort_compare);
 }
 
 internal String8
@@ -9568,7 +9568,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
         string_binding_pair_count += 1;
       }
     }
-    qsort(string_binding_pairs, string_binding_pair_count, sizeof(DF_StringBindingPair), (int (*)(const void *, const void *))df_qsort_compare__cfg_string_bindings);
+    quick_sort(string_binding_pairs, string_binding_pair_count, sizeof(DF_StringBindingPair), df_qsort_compare__cfg_string_bindings);
     if(string_binding_pair_count != 0)
     {
       str8_list_push(arena, &strs, str8_lit("/// keybindings ///////////////////////////////////////////////////////////////\n"));

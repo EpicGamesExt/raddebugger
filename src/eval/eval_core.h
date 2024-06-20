@@ -144,6 +144,13 @@ struct EVAL_String2NumMapNode
   U64 num;
 };
 
+typedef struct EVAL_String2NumMapNodeArray EVAL_String2NumMapNodeArray;
+struct EVAL_String2NumMapNodeArray
+{
+  EVAL_String2NumMapNode **v;
+  U64 count;
+};
+
 typedef struct EVAL_String2NumMapSlot EVAL_String2NumMapSlot;
 struct EVAL_String2NumMapSlot
 {
@@ -155,6 +162,7 @@ typedef struct EVAL_String2NumMap EVAL_String2NumMap;
 struct EVAL_String2NumMap
 {
   U64 slots_count;
+  U64 node_count;
   EVAL_String2NumMapSlot *slots;
   EVAL_String2NumMapNode *first;
   EVAL_String2NumMapNode *last;
@@ -210,6 +218,9 @@ internal void eval_error_list_concat_in_place(EVAL_ErrorList *dst, EVAL_ErrorLis
 internal EVAL_String2NumMap eval_string2num_map_make(Arena *arena, U64 slot_count);
 internal void eval_string2num_map_insert(Arena *arena, EVAL_String2NumMap *map, String8 string, U64 num);
 internal U64 eval_num_from_string(EVAL_String2NumMap *map, String8 string);
+internal EVAL_String2NumMapNodeArray eval_string2num_map_node_array_from_map(Arena *arena, EVAL_String2NumMap *map);
+internal int eval_string2num_map_node_qsort_compare__num_ascending(EVAL_String2NumMapNode **a, EVAL_String2NumMapNode **b);
+internal void eval_string2num_map_node_array_sort__in_place(EVAL_String2NumMapNodeArray *array);
 
 //- rjf: string -> expr
 internal EVAL_String2ExprMap eval_string2expr_map_make(Arena *arena, U64 slot_count);

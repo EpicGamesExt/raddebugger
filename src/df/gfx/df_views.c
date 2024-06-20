@@ -211,7 +211,7 @@ df_cmd_lister_item_array_from_list(Arena *arena, DF_CmdListerItemList list)
 internal void
 df_cmd_lister_item_array_sort_by_strength__in_place(DF_CmdListerItemArray array)
 {
-  qsort(array.v, array.count, sizeof(DF_CmdListerItem), (int (*)(const void *, const void *))df_qsort_compare_cmd_lister__strength);
+  quick_sort(array.v, array.count, sizeof(DF_CmdListerItem), df_qsort_compare_cmd_lister__strength);
 }
 
 ////////////////////////////////
@@ -314,7 +314,7 @@ df_process_info_array_from_list(Arena *arena, DF_ProcessInfoList list)
 internal void
 df_process_info_array_sort_by_strength__in_place(DF_ProcessInfoArray array)
 {
-  qsort(array.v, array.count, sizeof(DF_ProcessInfo), (int (*)(const void *, const void *))df_qsort_compare_process_info);
+  quick_sort(array.v, array.count, sizeof(DF_ProcessInfo), df_qsort_compare_process_info);
 }
 
 ////////////////////////////////
@@ -366,7 +366,7 @@ df_entity_lister_item_array_from_list(Arena *arena, DF_EntityListerItemList list
 internal void
 df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray array)
 {
-  qsort(array.v, array.count, sizeof(DF_EntityListerItem), (int (*)(const void *, const void *))df_qsort_compare_entity_lister__strength);
+  quick_sort(array.v, array.count, sizeof(DF_EntityListerItem), df_qsort_compare_entity_lister__strength);
 }
 
 ////////////////////////////////
@@ -617,15 +617,17 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
     //
     case DF_WatchViewFillKind_Locals:
     {
-      U64 num = 1;
-      for(EVAL_String2NumMapNode *n = parse_ctx->locals_map->first; n != 0; n = n->order_next, num += 1)
+      EVAL_String2NumMapNodeArray nodes = eval_string2num_map_node_array_from_map(scratch.arena, parse_ctx->locals_map);
+      eval_string2num_map_node_array_sort__in_place(&nodes);
+      for(U64 idx = 0; idx < nodes.count; idx += 1)
       {
+        EVAL_String2NumMapNode *n = nodes.v[idx];
         String8 root_expr_string = n->string;
         FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
         if(matches.count == matches.needle_part_count)
         {
           DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
           DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
@@ -2588,24 +2590,24 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       {
         if(path_query.search.size != 0)
         {
-          qsort(new_files, new_file_count, sizeof(DF_FileInfo), (int (*)(const void *, const void *))df_qsort_compare_file_info__default_filtered);
+          quick_sort(new_files, new_file_count, sizeof(DF_FileInfo), df_qsort_compare_file_info__default_filtered);
         }
         else
         {
-          qsort(new_files, new_file_count, sizeof(DF_FileInfo), (int (*)(const void *, const void *))df_qsort_compare_file_info__default);
+          quick_sort(new_files, new_file_count, sizeof(DF_FileInfo), df_qsort_compare_file_info__default);
         }
       }break;
       case DF_FileSortKind_Filename:
       {
-        qsort(new_files, new_file_count, sizeof(DF_FileInfo), (int (*)(const void *, const void *))df_qsort_compare_file_info__filename);
+        quick_sort(new_files, new_file_count, sizeof(DF_FileInfo), df_qsort_compare_file_info__filename);
       }break;
       case DF_FileSortKind_LastModified:
       {
-        qsort(new_files, new_file_count, sizeof(DF_FileInfo), (int (*)(const void *, const void *))df_qsort_compare_file_info__last_modified);
+        quick_sort(new_files, new_file_count, sizeof(DF_FileInfo), df_qsort_compare_file_info__last_modified);
       }break;
       case DF_FileSortKind_Size:
       {
-        qsort(new_files, new_file_count, sizeof(DF_FileInfo), (int (*)(const void *, const void *))df_qsort_compare_file_info__size);
+        quick_sort(new_files, new_file_count, sizeof(DF_FileInfo), df_qsort_compare_file_info__size);
       }break;
     }
     

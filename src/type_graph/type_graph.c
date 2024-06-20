@@ -1056,7 +1056,7 @@ tg_data_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rd
   //- rjf: sort array by offset if needed
   if(members_need_offset_sort)
   {
-    qsort(members.v, members.count, sizeof(TG_Member), (int (*)(const void *, const void *))tg_qsort_compare_members_offset);
+    quick_sort(members.v, members.count, sizeof(TG_Member), tg_qsort_compare_members_offset);
   }
   
   //- rjf: find all padding instances

@@ -955,7 +955,7 @@ df_qsort_compare_cmd_spec__run_counter(DF_CmdSpec **a, DF_CmdSpec **b)
 internal void
 df_cmd_spec_array_sort_by_run_counter__in_place(DF_CmdSpecArray array)
 {
-  qsort(array.v, array.count, sizeof(DF_CmdSpec *), (int (*)(const void *, const void *))df_qsort_compare_cmd_spec__run_counter);
+  quick_sort(array.v, array.count, sizeof(DF_CmdSpec *), df_qsort_compare_cmd_spec__run_counter);
 }
 
 internal DF_Handle
