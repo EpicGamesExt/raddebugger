@@ -4341,6 +4341,18 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
         }
         
+        // rjf: show in explorer
+        if(entity->kind == DF_EntityKind_File)
+        {
+          UI_Signal sig = df_icon_buttonf(DF_IconKind_FolderClosedFilled, 0, "Show In Explorer");
+          if(ui_clicked(sig))
+          {
+            String8 full_path = df_full_path_from_entity(scratch.arena, entity);
+            os_show_in_filesystem_ui(full_path);
+            ui_ctx_menu_close();
+          }
+        }
+        
         // rjf: filter controls
         if(view->spec->info.flags & DF_ViewSpecFlag_CanFilter)
         {
@@ -5770,6 +5782,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       }
       
       //- rjf: build query text input
+      B32 query_completed = 0;
       UI_Parent(query_container_box)
         UI_WidthFill UI_PrefHeight(ui_px(query_line_edit_height, 1.f))
         UI_Focus(UI_FocusKind_On)
@@ -5807,6 +5820,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               ws->query_view_selected = 1;
             }
           }
+          UI_PrefWidth(ui_em(5.f, 1.f)) UI_Focus(UI_FocusKind_Off)
+          {
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_RightArrow, 0, "##complete_query")))
+            {
+              query_completed = 1;
+            }
+          }
         }
       }
       
@@ -5825,25 +5845,22 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         DF_CmdParams params = df_cmd_params_from_window(ws);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CancelQuery));
       }
-      if(ui_is_focus_active())
+      if((ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept)) || query_completed)
       {
-        if(ui_slot_press(UI_EventActionSlot_Accept))
+        Temp scratch = scratch_begin(&arena, 1);
+        DF_View *view = ws->query_view_stack_top;
+        DF_CmdParams params = df_cmd_params_from_window(ws);
+        DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
+        String8 error = df_cmd_params_apply_spec_query(scratch.arena, &ctrl_ctx, &params, ws->query_cmd_spec, str8(view->query_buffer, view->query_string_size));
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
+        if(error.size != 0)
         {
-          Temp scratch = scratch_begin(&arena, 1);
-          DF_View *view = ws->query_view_stack_top;
-          DF_CmdParams params = df_cmd_params_from_window(ws);
-          DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-          String8 error = df_cmd_params_apply_spec_query(scratch.arena, &ctrl_ctx, &params, ws->query_cmd_spec, str8(view->query_buffer, view->query_string_size));
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
-          if(error.size != 0)
-          {
-            DF_CmdParams p = df_cmd_params_from_window(ws);
-            p.string = error;
-            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
-            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
-          }
-          scratch_end(scratch);
+          DF_CmdParams p = df_cmd_params_from_window(ws);
+          p.string = error;
+          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
         }
+        scratch_end(scratch);
       }
       
       //- rjf: take fallthrough interaction in query view

@@ -1421,7 +1421,7 @@ os_default_refresh_rate(void)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Native Messages & Panics (Implemented Per-OS)
+//~ rjf: @os_hooks Native User-Facing Graphical Messages (Implemented Per-OS)
 
 internal void
 os_graphical_message(B32 error, String8 title, String8 message)
@@ -1430,5 +1430,32 @@ os_graphical_message(B32 error, String8 title, String8 message)
   String16 title16 = str16_from_8(scratch.arena, title);
   String16 message16 = str16_from_8(scratch.arena, message);
   MessageBoxW(0, (WCHAR *)message16.str, (WCHAR *)title16.str, MB_OK|(!!error*MB_ICONERROR));
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: @os_hooks Shell Operations
+
+internal void
+os_show_in_filesystem_ui(String8 path)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 path_copy = push_str8_copy(scratch.arena, path);
+  for(U64 idx = 0; idx < path_copy.size; idx += 1)
+  {
+    if(path_copy.str[idx] == '/')
+    {
+      path_copy.str[idx] = '\\';
+    }
+  }
+  String16 path16 = str16_from_8(scratch.arena, path_copy);
+  SFGAOF flags = 0;
+  PIDLIST_ABSOLUTE list = 0;
+  if(path16.size != 0 && SUCCEEDED(SHParseDisplayName(path16.str, 0, &list, 0, &flags)))
+  {
+    HRESULT hr = SHOpenFolderAndSelectItems(list, 0, 0, 0);
+    CoTaskMemFree(list);
+    (void)hr;
+  }
   scratch_end(scratch);
 }

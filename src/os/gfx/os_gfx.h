@@ -170,8 +170,13 @@ internal F32            os_caret_blink_time(void);
 internal F32            os_default_refresh_rate(void);
 
 ////////////////////////////////
-//~ rjf: @os_hooks Native Messages & Panics (Implemented Per-OS)
+//~ rjf: @os_hooks Native User-Facing Graphical Messages (Implemented Per-OS)
 
 internal void           os_graphical_message(B32 error, String8 title, String8 message);
+
+////////////////////////////////
+//~ rjf: @os_hooks Shell Operations
+
+internal void           os_show_in_filesystem_ui(String8 path);
 
 #endif // OS_GRAPHICAL_H

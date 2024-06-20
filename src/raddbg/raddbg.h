@@ -4,11 +4,6 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
-// [ ] mouse-driven way to complete file/folder selection, or more generally
-// query completion
-// [ ] display threads at their last exception address, rather than current
-// rip, if applicable
-//
 // [ ] editing multiple bindings for commands
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
@@ -16,6 +11,7 @@
 // [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
 // [ ] target/breakpoint/watch-pin reordering
+//
 // [ ] visualize remapped files (via path map)
 // [ ] theme lister -> fonts & font sizes
 // [ ] font lister
@@ -30,9 +26,6 @@
 //     threads you haven't? Or, there could even be a debugger-specific API
 //     that you use to tag them. Just some way that would make it easier to
 //     focus on your own threads.
-//
-//  [ ]  it would be nice to have "show in explorer" for right click on source
-//       file tab (opens explorer & selects the file)
 //
 //  [ ]  what's up with decimal number coloring where every group of 3 are in
 //       different color? can I turn it off? And why sometimes digits in number
@@ -388,6 +381,10 @@
 //     path - must invalidate naturally when new filetime occurs)
 // [x] rdi file regeneration too strict
 // [x] raddbg jai.exe my_file.jai -- foobar -> raddbg consumes `--` incorrectly
+// [x] mouse-driven way to complete file/folder selection, or more generally
+// query completion
+//  [x]  it would be nice to have "show in explorer" for right click on source
+//       file tab (opens explorer & selects the file)
 
 #ifndef RADDBG_H
 #define RADDBG_H
