@@ -120,8 +120,6 @@ typedef struct UI_LineEditDrawData UI_LineEditDrawData;
 struct UI_LineEditDrawData
 {
   String8 edited_string;
-  Vec4F32 cursor_color;
-  Vec4F32 select_color;
   TxtPt cursor;
   TxtPt mark;
 };
@@ -132,9 +130,9 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   F_Tag font = box->font;
   F32 font_size = box->font_size;
   F32 tab_size = box->tab_size;
-  Vec4F32 cursor_color = draw_data->cursor_color;
+  Vec4F32 cursor_color = box->scheme->colors[UI_ColorCode_Cursor];
   cursor_color.w *= box->parent->parent->focus_active_t;
-  Vec4F32 select_color = draw_data->select_color;
+  Vec4F32 select_color = box->scheme->colors[UI_ColorCode_Selection];
   select_color.w *= (box->parent->parent->focus_active_t*0.2f + 0.8f);
   Vec2F32 text_position = ui_box_text_position(box);
   String8 edited_string = draw_data->edited_string;
@@ -261,8 +259,6 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
       draw_data->cursor = *cursor;
       draw_data->mark = *mark;
-      draw_data->cursor_color = ui_top_text_cursor_color();
-      draw_data->select_color = ui_top_text_select_color();
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
@@ -404,37 +400,6 @@ ui_imagef(R_Handle texture, R_Tex2DSampleKind sample_kind, Rng2F32 region, Vec4F
 //~ rjf: Special Buttons
 
 internal UI_Signal
-ui_close_button(String8 string)
-{
-  ui_set_next_background_color(v4f32(0.6f, 0.2f, 0.1f, 1.f));
-  ui_set_next_text_color(v4f32(1, 1, 1, 1));
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-  ui_set_next_text_alignment(UI_TextAlign_Center);
-  UI_Box *box = ui_build_box_from_string(UI_BoxFlag_Clickable|
-                                         UI_BoxFlag_DrawBackground|
-                                         UI_BoxFlag_DrawBorder|
-                                         UI_BoxFlag_DrawText|
-                                         UI_BoxFlag_DrawHotEffects|
-                                         UI_BoxFlag_DrawActiveEffects,
-                                         string);
-  UI_Signal interact = ui_signal_from_box(box);
-  return interact;
-}
-
-internal UI_Signal
-ui_close_buttonf(char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  va_end(args);
-  UI_Signal sig = ui_close_button(string);
-  scratch_end(scratch);
-  return sig;
-}
-
-internal UI_Signal
 ui_expander(B32 is_expanded, String8 string)
 {
   ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -513,7 +478,8 @@ ui_do_color_tooltip_hsv(Vec3F32 hsv)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_BackgroundColor(v4f32(rgb.x, rgb.y, rgb.z, 1)) UI_CornerRadius(4.f)
+      UI_Scheme(ui_fork_top_color_scheme(.background = v4f32(rgb.x, rgb.y, rgb.z, 1.f)))
+        UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
     }
@@ -551,7 +517,8 @@ ui_do_color_tooltip_hsva(Vec4F32 hsva)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_BackgroundColor(rgba) UI_CornerRadius(4.f)
+      UI_Scheme(ui_fork_top_color_scheme(.background = rgba))
+        UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
     }

@@ -1890,8 +1890,7 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clip;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clickable;
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
-    ui_state->ctx_menu_root->background_color = ui_top_background_color();
-    ui_state->ctx_menu_root->border_color = ui_top_border_color();
+    ui_state->ctx_menu_root->scheme = ui_top_scheme();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
   }
   ui_push_pref_width(ui_bottom_pref_width());
@@ -2035,6 +2034,41 @@ ui_set_auto_focus_hot_key(UI_Key key)
       break;
     }
   }
+}
+
+//- rjf: color scheme forming
+
+internal UI_ColorScheme *
+ui_push_color_scheme_(UI_ColorScheme *params)
+{
+  UI_ColorScheme *scheme = push_array(ui_build_arena(), UI_ColorScheme, 1);
+  MemoryCopyStruct(scheme, params);
+  return scheme;
+}
+
+internal UI_ColorScheme *
+ui_fork_color_scheme_(UI_ColorScheme *scheme, UI_ColorScheme *overrides)
+{
+  UI_ColorScheme *fork = push_array(ui_build_arena(), UI_ColorScheme, 1);
+  MemoryCopyStruct(fork, scheme);
+  for(EachEnumVal(UI_ColorCode, code))
+  {
+    if(overrides->colors[code].x != 0 ||
+       overrides->colors[code].y != 0 ||
+       overrides->colors[code].z != 0 ||
+       overrides->colors[code].w != 0)
+    {
+      fork->colors[code] = overrides->colors[code];
+    }
+  }
+  return fork;
+}
+
+internal UI_ColorScheme *
+ui_fork_top_color_scheme_(UI_ColorScheme *params)
+{
+  UI_ColorScheme *scheme = ui_fork_color_scheme_(ui_top_scheme(), params);
+  return scheme;
 }
 
 //- rjf: box node construction
@@ -2181,10 +2215,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     
     box->text_align = ui_state->text_alignment_stack.top->v;
     box->child_layout_axis = ui_state->child_layout_axis_stack.top->v;
-    box->background_color = ui_state->background_color_stack.top->v;
-    box->text_color = ui_state->text_color_stack.top->v;
-    box->border_color = ui_state->border_color_stack.top->v;
-    box->overlay_color = ui_state->overlay_color_stack.top->v;
+    box->scheme = ui_state->scheme_stack.top->v;
     box->font = ui_state->font_stack.top->v;
     box->font_size = ui_state->font_size_stack.top->v;
     box->tab_size = ui_state->tab_size_stack.top->v;
@@ -2274,7 +2305,7 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
-    D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->text_color, box->font_size, 0, 0}};
+    D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->scheme->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
     D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
     box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
   }
@@ -2287,15 +2318,15 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     U64 fpcp_pos = str8_find_needle(display_string, 0, fpcp, StringMatchFlag_CaseInsensitive);
     if(fpcp_pos < display_string.size)
     {
-      D_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->text_color, box->font_size, 0, 0}};
-      D_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->text_color, box->font_size, 4.f, 0}};
-      D_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->text_color, box->font_size, 0, 0}};
+      D_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->scheme->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
+      D_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->scheme->colors[UI_ColorCode_Text], box->font_size, 4.f, 0}};
+      D_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->scheme->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
       box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
     }
     else
     {
-      D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->text_color, box->font_size, 0, 0}};
+      D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->scheme->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
       box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
     }
@@ -2405,63 +2436,6 @@ ui_box_char_pos_from_xy(UI_Box *box, Vec2F32 xy)
 
 ////////////////////////////////
 //~ rjf: Box Interaction
-
-//- rjf: single-line string editing
-
-internal B32
-ui_do_single_line_string_edits(TxtPt *cursor, TxtPt *mark, U64 string_max, String8 *out_string)
-{
-  B32 change = 0;
-  Temp scratch = scratch_begin(0, 0);
-  UI_EventList *events = ui_events();
-  for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
-  {
-    next = n->next;
-    
-    // rjf: do not consume anything that doesn't fit a single-line's operations
-    if((n->v.kind != UI_EventKind_Edit && n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Text) || n->v.delta_2s32.y != 0)
-    {
-      continue;
-    }
-    
-    // rjf: map this action to an op
-    B32 taken = 0;
-    UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, *out_string, *cursor, *mark);
-    
-    // rjf: perform replace range
-    if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
-    {
-      taken = 1;
-      String8 new_string = ui_push_string_replace_range(scratch.arena, *out_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
-      new_string.size = Min(string_max, new_string.size);
-      MemoryCopy(out_string->str, new_string.str, new_string.size);
-      out_string->size = new_string.size;
-    }
-    
-    // rjf: perform copy
-    if(op.flags & UI_TxtOpFlag_Copy)
-    {
-      taken = 1;
-      os_set_clipboard_text(op.copy);
-    }
-    
-    // rjf: commit op's changed cursor & mark to caller-provided state
-    taken = taken || (!txt_pt_match(*cursor, op.cursor) || !txt_pt_match(*mark, op.mark));
-    *cursor = op.cursor;
-    *mark = op.mark;
-    
-    // rjf: consume event
-    if(taken)
-    {
-      ui_eat_event(events, n);
-      change = 1;
-    }
-  }
-  scratch_end(scratch);
-  return change;
-}
-
-//- rjf: general box interaction path
 
 internal UI_Signal
 ui_signal_from_box(UI_Box *box)

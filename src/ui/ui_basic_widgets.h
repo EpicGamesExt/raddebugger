@@ -89,8 +89,6 @@ internal UI_Signal ui_imagef(R_Handle texture, R_Tex2DSampleKind sample_kind, Rn
 ////////////////////////////////
 //~ rjf: Special Buttons
 
-internal UI_Signal ui_close_button(String8 string);
-internal UI_Signal ui_close_buttonf(char *fmt, ...);
 internal UI_Signal ui_expander(B32 is_expanded, String8 string);
 internal UI_Signal ui_expanderf(B32 is_expanded, char *fmt, ...);
 internal UI_Signal ui_sort_header(B32 sorting, B32 ascending, String8 string);

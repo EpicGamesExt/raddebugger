@@ -45,48 +45,77 @@ DF_GfxViewKind_COUNT,
 typedef enum DF_ThemeColor
 {
 DF_ThemeColor_Null,
-DF_ThemeColor_PlainText,
-DF_ThemeColor_PlainBackground,
-DF_ThemeColor_PlainBorder,
-DF_ThemeColor_PlainOverlay,
+DF_ThemeColor_Selection,
+DF_ThemeColor_DropShadow,
+DF_ThemeColor_CursorActive,
+DF_ThemeColor_CursorInactive,
+DF_ThemeColor_FocusActive,
+DF_ThemeColor_FocusInactive,
+DF_ThemeColor_Highlight0,
+DF_ThemeColor_Highlight1,
+DF_ThemeColor_DisabledOverlay,
+DF_ThemeColor_DefaultText,
+DF_ThemeColor_DefaultTextPositive,
+DF_ThemeColor_DefaultTextNegative,
+DF_ThemeColor_DefaultTextWeak,
+DF_ThemeColor_DefaultBackground,
+DF_ThemeColor_DefaultBorder,
+DF_ThemeColor_FloatingText,
+DF_ThemeColor_FloatingTextPositive,
+DF_ThemeColor_FloatingTextNegative,
+DF_ThemeColor_FloatingTextWeak,
+DF_ThemeColor_FloatingBackground,
+DF_ThemeColor_FloatingBorder,
+DF_ThemeColor_SpecialPositiveText,
+DF_ThemeColor_SpecialPositiveTextWeak,
+DF_ThemeColor_SpecialPositiveBackground,
+DF_ThemeColor_SpecialPositiveBorder,
+DF_ThemeColor_SpecialNegativeText,
+DF_ThemeColor_SpecialNegativeTextWeak,
+DF_ThemeColor_SpecialNegativeBackground,
+DF_ThemeColor_SpecialNegativeBorder,
+DF_ThemeColor_SpecialNeutralText,
+DF_ThemeColor_SpecialNeutralTextWeak,
+DF_ThemeColor_SpecialNeutralBackground,
+DF_ThemeColor_SpecialNeutralBorder,
+DF_ThemeColor_MenuBarText,
+DF_ThemeColor_MenuBarTextWeak,
+DF_ThemeColor_MenuBarTextPositive,
+DF_ThemeColor_MenuBarTextNegative,
+DF_ThemeColor_MenuBarBackground,
+DF_ThemeColor_MenuBarBorder,
+DF_ThemeColor_TabActiveText,
+DF_ThemeColor_TabActiveTextWeak,
+DF_ThemeColor_TabActiveBackground,
+DF_ThemeColor_TabActiveBorder,
+DF_ThemeColor_TabInactiveText,
+DF_ThemeColor_TabInactiveTextWeak,
+DF_ThemeColor_TabInactiveBackground,
+DF_ThemeColor_TabInactiveBorder,
+DF_ThemeColor_CodeBackground,
+DF_ThemeColor_CodeBackgroundNegative,
+DF_ThemeColor_CodeLineNumbersActive,
+DF_ThemeColor_CodeLineNumbersInactive,
 DF_ThemeColor_CodeDefault,
-DF_ThemeColor_CodeFunction,
+DF_ThemeColor_CodeProcedure,
 DF_ThemeColor_CodeType,
 DF_ThemeColor_CodeLocal,
 DF_ThemeColor_CodeRegister,
 DF_ThemeColor_CodeKeyword,
-DF_ThemeColor_CodeSymbol,
+DF_ThemeColor_CodeDelimiterOperator,
 DF_ThemeColor_CodeNumeric,
+DF_ThemeColor_CodeNumericAltDigitGroup,
 DF_ThemeColor_CodeString,
 DF_ThemeColor_CodeMeta,
 DF_ThemeColor_CodeComment,
-DF_ThemeColor_LineInfo0,
-DF_ThemeColor_LineInfo1,
-DF_ThemeColor_LineInfo2,
-DF_ThemeColor_LineInfo3,
-DF_ThemeColor_AltText,
-DF_ThemeColor_AltBackground,
-DF_ThemeColor_AltBorder,
-DF_ThemeColor_AltOverlay,
-DF_ThemeColor_TabInactive,
-DF_ThemeColor_TabActive,
-DF_ThemeColor_EntityBackground,
-DF_ThemeColor_QueryBar,
-DF_ThemeColor_WeakText,
-DF_ThemeColor_TextSelection,
-DF_ThemeColor_Cursor,
-DF_ThemeColor_Highlight0,
-DF_ThemeColor_Highlight1,
-DF_ThemeColor_SuccessText,
-DF_ThemeColor_SuccessBackground,
-DF_ThemeColor_SuccessBorder,
-DF_ThemeColor_FailureText,
-DF_ThemeColor_FailureBackground,
-DF_ThemeColor_FailureBorder,
-DF_ThemeColor_ActionText,
-DF_ThemeColor_ActionBackground,
-DF_ThemeColor_ActionBorder,
-DF_ThemeColor_DropSiteOverlay,
+DF_ThemeColor_LineInfoBackground0,
+DF_ThemeColor_LineInfoBackground1,
+DF_ThemeColor_LineInfoBackground2,
+DF_ThemeColor_LineInfoBackground3,
+DF_ThemeColor_LineInfoBackground4,
+DF_ThemeColor_LineInfoBackground5,
+DF_ThemeColor_LineInfoBackground6,
+DF_ThemeColor_LineInfoBackground7,
 DF_ThemeColor_Thread0,
 DF_ThemeColor_Thread1,
 DF_ThemeColor_Thread2,
@@ -96,8 +125,10 @@ DF_ThemeColor_Thread5,
 DF_ThemeColor_Thread6,
 DF_ThemeColor_Thread7,
 DF_ThemeColor_ThreadUnwound,
+DF_ThemeColor_ThreadError,
+DF_ThemeColor_Breakpoint,
+DF_ThemeColor_DropSiteOverlay,
 DF_ThemeColor_InactivePanelOverlay,
-DF_ThemeColor_DropShadow,
 DF_ThemeColor_COUNT,
 } DF_ThemeColor;
 
@@ -275,27 +306,29 @@ DF_VIEW_UI_FUNCTION_DEF(disasm);
 DF_VIEW_UI_FUNCTION_DEF(bitmap);
 DF_VIEW_UI_FUNCTION_DEF(geo);
 C_LINKAGE_BEGIN
-extern String8 df_g_theme_preset_display_string_table[9];
-extern String8 df_g_theme_preset_code_string_table[9];
-extern Vec4F32 df_g_theme_preset_colors__default_dark[54];
-extern Vec4F32 df_g_theme_preset_colors__default_light[54];
-extern Vec4F32 df_g_theme_preset_colors__vs_dark[54];
-extern Vec4F32 df_g_theme_preset_colors__vs_light[54];
-extern Vec4F32 df_g_theme_preset_colors__solarized_dark[54];
-extern Vec4F32 df_g_theme_preset_colors__solarized_light[54];
-extern Vec4F32 df_g_theme_preset_colors__handmade_hero[54];
-extern Vec4F32 df_g_theme_preset_colors__four_coder[54];
-extern Vec4F32 df_g_theme_preset_colors__far_manager[54];
-extern Vec4F32* df_g_theme_preset_colors_table[9];
-extern DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
-extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
-extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];
 extern DF_StringBindingPair df_g_default_binding_table[105];
 extern String8 df_g_binding_version_remap_old_name_table[5];
 extern String8 df_g_binding_version_remap_new_name_table[5];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[31];
-extern String8 df_g_theme_color_display_string_table[54];
-extern String8 df_g_theme_color_cfg_string_table[54];
+extern DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
+extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
+extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];
+extern String8 df_g_theme_preset_display_string_table[9];
+extern String8 df_g_theme_preset_code_string_table[9];
+extern String8 df_g_theme_color_version_remap_old_name_table[30];
+extern String8 df_g_theme_color_version_remap_new_name_table[30];
+extern Vec4F32 df_g_theme_preset_colors__default_dark[85];
+extern Vec4F32 df_g_theme_preset_colors__default_light[85];
+extern Vec4F32 df_g_theme_preset_colors__vs_dark[85];
+extern Vec4F32 df_g_theme_preset_colors__vs_light[85];
+extern Vec4F32 df_g_theme_preset_colors__solarized_dark[85];
+extern Vec4F32 df_g_theme_preset_colors__solarized_light[85];
+extern Vec4F32 df_g_theme_preset_colors__handmade_hero[85];
+extern Vec4F32 df_g_theme_preset_colors__four_coder[85];
+extern Vec4F32 df_g_theme_preset_colors__far_manager[85];
+extern Vec4F32* df_g_theme_preset_colors_table[9];
+extern String8 df_g_theme_color_display_string_table[85];
+extern String8 df_g_theme_color_cfg_string_table[85];
 read_only global U8 df_g_icon_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x80,0x00,0x03,0x00,0x70,0x47,0x53,0x55,0x42,0x20,0x8b,0x25,0x7a,0x00,0x00,0x00,0xfc,0x00,0x00,0x00,0x54,0x4f,0x53,0x2f,0x32,0x56,0x44,0x49,0xa0,0x00,0x00,0x01,0x50,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0x2a,0x09,0xe2,0xc2,0x00,0x00,0x01,0xb0,0x00,0x00,0x05,0xec,0x63,0x76,0x74,0x20,

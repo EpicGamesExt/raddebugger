@@ -176,6 +176,11 @@ DF_DefaultBindingTable:
   { "log_marker"                  M         ctrl     shift     alt        }
 }
 
+@data(DF_StringBindingPair) df_g_default_binding_table:
+{
+  @expand(DF_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_EventFlag_Ctrl`) $(a.shift != 0 -> `|OS_EventFlag_Shift`) $(a.alt != 0 -> `|OS_EventFlag_Alt`)}}```;
+}
+
 ////////////////////////////////
 //~ rjf: Binding Version Remap Table
 
@@ -187,6 +192,16 @@ DF_BindingVersionRemapTable:
   {"load_profile" "open_profile"}
   {"load_project" "open_project"}
   {"open_profile" "open_project"}
+}
+
+@data(String8) df_g_binding_version_remap_old_name_table:
+{
+  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
+}
+
+@data(String8) df_g_binding_version_remap_new_name_table:
+{
+  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
 }
 
 ////////////////////////////////
@@ -228,6 +243,25 @@ DF_GfxViewTable:
   { Theme                  "theme"                  "Theme"                        Null                 Palette         0 0 1 0 0 0 0      1 "An interface for modifying the colors used in the debugger's UI. Allows selecting a theme preset, loading a theme from a file, and modifying individual colors within a theme."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
 }
 
+@enum DF_GfxViewKind:
+{
+  @expand(DF_GfxViewTable a) `$(a.name)`,
+  COUNT,
+}
+
+@gen
+{
+  @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF($(a.name));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name));`;
+}
+
+@data(DF_ViewSpecInfo) df_g_gfx_view_kind_spec_info_table:
+{
+  @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_serialize_entity_path)*DF_ViewSpecFlag_CanSerializeEntityPath|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_NameKind_$(a.name_kind), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name)), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME($(a.name)), DF_VIEW_CMD_FUNCTION_NAME($(a.name)), DF_VIEW_UI_FUNCTION_NAME($(a.name))}```;
+}
+
 ////////////////////////////////
 //~ rjf: Command Parameter Slot -> View
 
@@ -241,6 +275,21 @@ DF_CmdParamSlot2ViewSpecMap:
   {ID                "system_processes"         ""                    }
   {String            "symbol_lister"            "goto_name"           }
   {String            "symbol_lister"            "function_breakpoint" }
+}
+
+@data(DF_CmdParamSlot) df_g_cmd_param_slot_2_view_spec_src_map:
+{
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `DF_CmdParamSlot_$(a.slot)`
+}
+
+@data(String8) df_g_cmd_param_slot_2_view_spec_dst_map:
+{
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)")`
+}
+
+@data(String8) df_g_cmd_param_slot_2_view_spec_cmd_map:
+{
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)")`
 }
 
 ////////////////////////////////
@@ -267,79 +316,41 @@ DF_GfxViewRuleTable:
   {"geo"           -   -   x   x   x   "Geometry"                      }
 }
 
+@gen
+{
+  ``;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_SETUP_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_CMD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+}
+
+@data(DF_ViewSpecInfo) @c_file df_g_gfx_view_rule_tab_view_spec_info_table:
+{
+  @expand(DF_GfxViewRuleTable a)
+    ```$(a.tu == "x" -> '{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("' .. a.string .. '_view_rule"), str8_lit_comp("' .. a.tab_display_string .. '"), DF_NameKind_Null, DF_IconKind_Binoculars, ' .. 'DF_VIEW_SETUP_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_CMD_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_UI_FUNCTION_NAME(' .. a.string .. ') }')```;
+}
+
+@data(DF_GfxViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
+{
+  @expand(DF_GfxViewRuleTable a)
+    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_BlockUI*$(a.bu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0), $(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME("..a.name_lower..")") $(a.bu != "x" -> 0), str8_lit_comp("$(a.tu == 'x' -> a.string..'_view_rule')") }```;
+}
+
 ////////////////////////////////
 //~ rjf: Theme Tables
-
-@table(name                display_name               name_lower)
-DF_ThemeColorTable:
-{
-  {Null                     "Null"                     null                          }
-  {PlainText                "Plain Text"               plain_text                    }
-  {PlainBackground          "Plain Background"         plain_background              }
-  {PlainBorder              "Plain Border"             plain_border                  }
-  {PlainOverlay             "Plain Overlay"            plain_overlay                 }
-  {CodeDefault              "Code (Default)"           code_default                  }
-  {CodeFunction             "Code (Function)"          code_function                 }
-  {CodeType                 "Code (Type)"              code_type                     }
-  {CodeLocal                "Code (Local)"             code_local                    }
-  {CodeRegister             "Code (Register)"          code_register                 }
-  {CodeKeyword              "Code (Keyword)"           code_keyword                  }
-  {CodeSymbol               "Code (Symbol)"            code_symbol                   }
-  {CodeNumeric              "Code (Numeric)"           code_numeric                  }
-  {CodeString               "Code (String)"            code_string                   }
-  {CodeMeta                 "Code (Meta)"              code_meta                     }
-  {CodeComment              "Code (Comment)"           code_comment                  }
-  {LineInfo0                "Line Info (0)"            line_info_0                   }
-  {LineInfo1                "Line Info (1)"            line_info_1                   }
-  {LineInfo2                "Line Info (2)"            line_info_2                   }
-  {LineInfo3                "Line Info (3)"            line_info_3                   }
-  {AltText                  "Alt Text"                 alt_text                      }
-  {AltBackground            "Alt Background"           alt_background                }
-  {AltBorder                "Alt Border"               alt_border                    }
-  {AltOverlay               "Alt Overlay"              alt_overlay                   }
-  {TabInactive              "Inactive Tab"             tab_inactive                  }
-  {TabActive                "Active Tab"               tab_active                    }
-  {EntityBackground         "Entity Background"        entity_background             }
-  {QueryBar                 "Query Bar"                query_bar                     }
-  {WeakText                 "Weak Text"                weak_text                     }
-  {TextSelection            "Text Selection"           text_selection                }
-  {Cursor                   "Cursor"                   cursor                        }
-  {Highlight0               "Highlight (0)"            highlight_0                   }
-  {Highlight1               "Highlight (1)"            highlight_1                   }
-  {SuccessText              "Success Text"             success_text                  }
-  {SuccessBackground        "Success Background"       success_background            }
-  {SuccessBorder            "Success Border"           success_border                }
-  {FailureText              "Failure Text"             failure_text                  }
-  {FailureBackground        "Failure Background"       failure_background            }
-  {FailureBorder            "Failure Border"           failure_border                }
-  {ActionText               "Action Text"              action_text                   }
-  {ActionBackground         "Action Background"        action_background             }
-  {ActionBorder             "Action Border"            action_border                 }
-  {DropSiteOverlay          "Drop Site Overlay"        drop_site_overlay             }
-  {Thread0                  "Thread (0)"               thread_0                      }
-  {Thread1                  "Thread (1)"               thread_1                      }
-  {Thread2                  "Thread (2)"               thread_2                      }
-  {Thread3                  "Thread (3)"               thread_3                      }
-  {Thread4                  "Thread (4)"               thread_4                      }
-  {Thread5                  "Thread (5)"               thread_5                      }
-  {Thread6                  "Thread (6)"               thread_6                      }
-  {Thread7                  "Thread (7)"               thread_7                      }
-  {ThreadUnwound            "Thread (Unwound)"         thread_unwound                }
-  {InactivePanelOverlay     "Inactive Panel Overlay"   inactive_panel_overlay        }
-  {DropShadow               "Drop Shadow"              drop_shadow                   }
-}
-
-////////////////////////////////
-//~ rjf: Theme Color Version Remap Table
-
-@table(old_name new_name)
-DF_ThemeColorVersionRemapTable:
-{
-  
-}
-
-////////////////////////////////
-//~ rjf: Theme Presets
 
 @table(name_upper  name_lower  display_string)
 DF_ThemePresetTable:
@@ -355,6 +366,199 @@ DF_ThemePresetTable:
   { FarManager       far_manager      "Far Manager"       }
 }
 
+@table(name                      display_name                        name_lower                             default_dark        default_light        vs_dark             vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager)
+DF_ThemeColorTable:
+{
+  {Null                           "Null"                              null                                   0xff00ffff          0xff00ffff           0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff     }
+  
+  //- rjf: global ui colors
+  {Selection                      "Selection"                         selection                              0x99ccff4c          0x99ccff4c           0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c     }
+  {DropShadow                     "Drop Shadow"                       drop_shadow                            0x0000007f          0x0000007f           0x0000007f          0x0000007f          0x0000007f          0x0000007f          0x0000007f          0x0000007f          0x0000007f     }
+  {CursorActive                   "Cursor"                            cursor_active                          0x66e566e5          0x66e566e5           0x66e566e5          0x66e566e5          0x66e566e5          0x66e566e5          0x66e566e5          0x66e566e5          0x66e566e5     }
+  {CursorInactive                 "Cursor (Inactive)"                 cursor_inactive                        0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {FocusActive                    "Focus"                             focus_active                           0xb27219ff          0xb27219ff           0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff     }
+  {FocusInactive                  "Focus (Inactive)"                  focus_inactive                         0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {Highlight0                     "Highlight 0"                       highlight_0                            0xb27219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {Highlight1                     "Highlight 1"                       highlight_1                            0xb27219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {DisabledOverlay                "Disabled Overlay"                  disabled_overlay                       0x0000003f          0x0000003f           0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f     }
+  
+  //- rjf: default ui colors
+  {DefaultText                    "Default Text"                      default_text                           0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {DefaultTextPositive            "Default Text (Positive)"           default_text_positive                  0x32b219ff          0x32b219ff           0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff     }
+  {DefaultTextNegative            "Default Text (Negative)"           default_text_negative                  0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {DefaultTextWeak                "Default Text (Weak)"               default_text_weak                      0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {DefaultBackground              "Default Background"                default_background                     0x3333337f          0x3333337f           0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f     }
+  {DefaultBorder                  "Default Border"                    default_border                         0xffffff19          0xffffff19           0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19     }
+  
+  //- rjf: floating ui colors
+  {FloatingText                   "Floating Text"                     floating_text                          0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {FloatingTextPositive           "Floating Text (Positive)"          floating_text_positive                 0x32b219ff          0x32b219ff           0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff     }
+  {FloatingTextNegative           "Floating Text (Negative)"          floating_text_negative                 0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {FloatingTextWeak               "Floating Text (Weak)"              floating_text_weak                     0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {FloatingBackground             "Floating Background"               floating_background                    0x3333337f          0x3333337f           0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f     }
+  {FloatingBorder                 "Floating Border"                   floating_border                        0xffffff19          0xffffff19           0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19     }
+  
+  //- rjf: special button colors
+  {SpecialPositiveText            "Special Positive Text"             special_positive_text                  0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {SpecialPositiveTextWeak        "Special Positive Text (Weak)"      special_positive_text_weak             0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {SpecialPositiveBackground      "Special Positive Background"       special_positive_background            0x32b219ff          0x32b219ff           0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff     }
+  {SpecialPositiveBorder          "Special Positive Border"           special_positive_border                0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     }
+  {SpecialNegativeText            "Special Negative Text"             special_negative_text                  0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {SpecialNegativeTextWeak        "Special Negative Text (Weak)"      special_negative_text_weak             0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {SpecialNegativeBackground      "Special Negative Background"       special_negative_background            0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {SpecialNegativeBorder          "Special Negative Border"           special_negative_border                0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     }
+  {SpecialNeutralText             "Special Neutral Text"              special_neutral_text                   0xffffffff          0xffffffff           0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff     }
+  {SpecialNeutralTextWeak         "Special Neutral Text (Weak)"       special_neutral_text_weak              0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {SpecialNeutralBackground       "Special Neutral Background"        special_neutral_background             0x327fb2ff          0x327fb2ff           0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff     }
+  {SpecialNeutralBorder           "Special Neutral Border"            special_neutral_border                 0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     }
+  
+  //- rjf: menu bar colors
+  {MenuBarText                    "Menu Bar Text"                     menu_bar_text                          0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {MenuBarTextWeak                "Menu Bar Text (Weak)"              menu_bar_text_weak                     0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {MenuBarTextPositive            "Menu Bar Text (Positive)"          menu_bar_text_positive                 0x32b219ff          0x32b219ff           0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff     }
+  {MenuBarTextNegative            "Menu Bar Text (Negative)"          menu_bar_text_negative                 0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {MenuBarBackground              "Menu Bar Background"               menu_bar_background                    0x3333337f          0x3333337f           0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f     }
+  {MenuBarBorder                  "Menu Bar Border"                   menu_bar_border                        0xffffff19          0xffffff19           0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19     }
+  
+  //- rjf: tab colors
+  {TabActiveText                  "Tab Text"                          tab_active_text                        0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {TabActiveTextWeak              "Tab Text (Weak)"                   tab_active_text_weak                   0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {TabActiveBackground            "Tab Background"                    tab_active_background                  0xa87a4c99          0xa87a4c99           0xa87a4c99          0xa87a4c99          0xa87a4c99          0xa87a4c99          0xa87a4c99          0xa87a4c99          0xa87a4c99     }
+  {TabActiveBorder                "Tab Border"                        tab_active_border                      0xffffff19          0xffffff19           0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19     }
+  {TabInactiveText                "Tab Text (Inactive)"               tab_inactive_text                      0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {TabInactiveTextWeak            "Tab Text (Inactive, Weak)"         tab_inactive_text_weak                 0xffffff7f          0xffffff7f           0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f          0xffffff7f     }
+  {TabInactiveBackground          "Tab Background (Inactive)"         tab_inactive_background                0x42474c7f          0x42474c7f           0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f     }
+  {TabInactiveBorder              "Tab Border (Inactive)"             tab_inactive_border                    0xffffff19          0xffffff19           0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19     }
+  
+  //- rjf: code ui colors
+  {CodeBackground                 "Code Background"                   code_background                        0x3333337f          0x3333337f           0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f     }
+  {CodeBackgroundNegative         "Code Background (Negative)"        code_background_negative               0x3333337f          0x3333337f           0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f          0x3333337f     }
+  {CodeLineNumbersActive          "Code Line Numbers"                 code_line_numbers_active               0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {CodeLineNumbersInactive        "Code Line Numbers (Inactive)"      code_line_numbers_inactive             0xa5a5a5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  
+  //- rjf: code text colors
+  {CodeDefault                    "Code (Default)"                    code_default                           0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     }
+  {CodeProcedure                  "Code (Procedure)"                  code_procedure                         0x7fcc99ff          0x7fcc99ff           0x7fcc99ff          0x7fcc99ff          0x7fcc99ff          0x7fcc99ff          0x7fcc99ff          0x7fcc99ff          0x7fcc99ff     }
+  {CodeType                       "Code (Type)"                       code_type                              0x66b2e5ff          0x66b2e5ff           0x66b2e5ff          0x66b2e5ff          0x66b2e5ff          0x66b2e5ff          0x66b2e5ff          0x66b2e5ff          0x66b2e5ff     }
+  {CodeLocal                      "Code (Local)"                      code_local                             0xfe9548ff          0xfe9548ff           0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff     }
+  {CodeRegister                   "Code (Register)"                   code_register                          0xd45d90ff          0xd45d90ff           0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff     }
+  {CodeKeyword                    "Code (Keyword)"                    code_keyword                           0xf7bf5eff          0xf7bf5eff           0xf7bf5eff          0xf7bf5eff          0xf7bf5eff          0xf7bf5eff          0xf7bf5eff          0xf7bf5eff          0xf7bf5eff     }
+  {CodeDelimiterOperator          "Code (Delimiters/Operators)"       code_delimiter_operator                0x994c32ff          0x994c32ff           0x994c32ff          0x994c32ff          0x994c32ff          0x994c32ff          0x994c32ff          0x994c32ff          0x994c32ff     }
+  {CodeNumeric                    "Code (Numeric)"                    code_numeric                           0x4ce54cff          0x4ce54cff           0x4ce54cff          0x4ce54cff          0x4ce54cff          0x4ce54cff          0x4ce54cff          0x4ce54cff          0x4ce54cff     }
+  {CodeNumericAltDigitGroup       "Code (Numeric, Alt. Digit Group)"  code_numeric_alt_digit_group           0x4ca54cff          0x4ca54cff           0x4ca54cff          0x4ca54cff          0x4ca54cff          0x4ca54cff          0x4ca54cff          0x4ca54cff          0x4ca54cff     }
+  {CodeString                     "Code (String)"                     code_string                            0xe5cc66ff          0xe5cc66ff           0xe5cc66ff          0xe5cc66ff          0xe5cc66ff          0xe5cc66ff          0xe5cc66ff          0xe5cc66ff          0xe5cc66ff     }
+  {CodeMeta                       "Code (Meta)"                       code_meta                              0xe54c4cff          0xe54c4cff           0xe54c4cff          0xe54c4cff          0xe54c4cff          0xe54c4cff          0xe54c4cff          0xe54c4cff          0xe54c4cff     }
+  {CodeComment                    "Code (Comment)"                    code_comment                           0x7f7f7fff          0x7f7f7fff           0x7f7f7fff          0x7f7f7fff          0x7f7f7fff          0x7f7f7fff          0x7f7f7fff          0x7f7f7fff          0x7f7f7fff     }
+  
+  //- rjf: debugging colors
+  {LineInfoBackground0            "Line Info Background 0"            line_info_background_0                 0x99503d3f          0x99503d3f           0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f     }
+  {LineInfoBackground1            "Line Info Background 1"            line_info_background_1                 0xfe82493f          0xfe82493f           0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f     }
+  {LineInfoBackground2            "Line Info Background 2"            line_info_background_2                 0xffba173f          0xffba173f           0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f     }
+  {LineInfoBackground3            "Line Info Background 3"            line_info_background_3                 0xcefd693f          0xcefd693f           0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f     }
+  {LineInfoBackground4            "Line Info Background 4"            line_info_background_4                 0x99503d3f          0x99503d3f           0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f     }
+  {LineInfoBackground5            "Line Info Background 5"            line_info_background_5                 0xfe82493f          0xfe82493f           0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f     }
+  {LineInfoBackground6            "Line Info Background 6"            line_info_background_6                 0xffba173f          0xffba173f           0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f     }
+  {LineInfoBackground7            "Line Info Background 7"            line_info_background_7                 0x99503d3f          0x99503d3f           0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f     }
+  {Thread0                        "Thread 0"                          thread_0                               0xffcb7fff          0xffcb7fff           0xffcb7fff          0xffcb7fff          0xffcb7fff          0xffcb7fff          0xffcb7fff          0xffcb7fff          0xffcb7fff     }
+  {Thread1                        "Thread 1"                          thread_1                               0xb2ff65ff          0xb2ff65ff           0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff     }
+  {Thread2                        "Thread 2"                          thread_2                               0xff99e5ff          0xff99e5ff           0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff     }
+  {Thread3                        "Thread 3"                          thread_3                               0x6598ffff          0x6598ffff           0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff     }
+  {Thread4                        "Thread 4"                          thread_4                               0x65ffcbff          0x65ffcbff           0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff     }
+  {Thread5                        "Thread 5"                          thread_5                               0xff9819ff          0xff9819ff           0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff     }
+  {Thread6                        "Thread 6"                          thread_6                               0x9932ffff          0x9932ffff           0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff     }
+  {Thread7                        "Thread 7"                          thread_7                               0x65ff4cff          0x65ff4cff           0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff     }
+  {ThreadUnwound                  "Thread (Unwound)"                  thread_unwound                         0xb2ccd8ff          0xb2ccd8ff           0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff     }
+  {ThreadError                    "Thread (Error)"                    thread_error                           0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  {Breakpoint                     "Breakpoint"                        breakpoint                             0xb23219ff          0xb23219ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     }
+  
+  //- rjf: behavioral colors
+  {DropSiteOverlay                "Drop Site Overlay"                 drop_site_overlay                      0xffffff0c          0xffffff0c           0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c     }
+  {InactivePanelOverlay           "Inactive Panel Overlay"            inactive_panel_overlay                 0x0000003f          0x0000003f           0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f     }
+}
+
+@table(old_name new_name)
+DF_ThemeColorVersionRemapTable:
+{
+  {plain_text                          default_text}
+  {plain_background                    default_background}
+  {plain_border                        default_border}
+  {plain_overlay                       drop_site_overlay}
+  {code_function                       code_procedure}
+  {code_symbol                         code_delimiter_operator}
+  {code_numeric                        code_numeric_alt_digit_group}
+  {line_info_0                         line_info_background_0}
+  {line_info_1                         line_info_background_1}
+  {line_info_2                         line_info_background_2}
+  {line_info_3                         line_info_background_3}
+  {alt_text                            menu_bar_text}
+  {alt_background                      menu_bar_background}
+  {alt_border                          menu_bar_border}
+  {alt_overlay                         drop_site_overlay}
+  {tab_inactive                        tab_inactive_background}
+  {tab_active                          tab_active_background}
+  {weak_text                           default_text_weak}
+  {text_selection                      selection}
+  {cursor                              cursor_active}
+  {highlight_0                         focus_active}
+  {success_text                        special_positive_text}
+  {success_background                  special_positive_background}
+  {success_border                      special_positive_border}
+  {failure_text                        special_negative_text}
+  {failure_background                  special_negative_background}
+  {failure_border                      special_negative_border}
+  {action_text                         special_neutral_text}
+  {action_background                   special_neutral_background}
+  {action_border                       special_neutral_border}
+}
+
+@enum DF_ThemeColor:
+{
+  @expand(DF_ThemeColorTable a) `$(a.name)`,
+  COUNT,
+}
+
+@enum DF_ThemePreset:
+{
+  @expand(DF_ThemePresetTable a) `$(a.name)`,
+  COUNT,
+}
+
+@data(String8) df_g_theme_preset_display_string_table:
+{
+  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.display_string)")`,
+}
+
+@data(String8) df_g_theme_preset_code_string_table:
+{
+  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.name_lower)")`,
+}
+
+@data(String8) df_g_theme_color_version_remap_old_name_table:
+{
+  @expand(DF_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
+}
+
+@data(String8) df_g_theme_color_version_remap_new_name_table:
+{
+  @expand(DF_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
+}
+
+@data(Vec4F32) df_g_theme_preset_colors__default_dark:   {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_dark))`}
+@data(Vec4F32) df_g_theme_preset_colors__default_light:  {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_light))`}
+@data(Vec4F32) df_g_theme_preset_colors__vs_dark:        {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_dark))`}
+@data(Vec4F32) df_g_theme_preset_colors__vs_light:       {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_light))`}
+@data(Vec4F32) df_g_theme_preset_colors__solarized_dark: {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_dark))`,}
+@data(Vec4F32) df_g_theme_preset_colors__solarized_light:{@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_light))`,}
+@data(Vec4F32) df_g_theme_preset_colors__handmade_hero:  {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.handmade_hero))`,}
+@data(Vec4F32) df_g_theme_preset_colors__four_coder:     {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.four_coder))`,}
+@data(Vec4F32) df_g_theme_preset_colors__far_manager:    {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.far_manager))`;}
+@data(`Vec4F32*`) df_g_theme_preset_colors_table:
+{
+  @expand(DF_ThemePresetTable a) `df_g_theme_preset_colors__$(a.name_lower)`,
+}
+
+
+// TODO(rjf): OLD vvvvvvvvv
 @table(name                     default_dark        default_light        vs_dark             vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager)
 DF_ThemePresetColorTable:
 {
@@ -416,178 +620,6 @@ DF_ThemePresetColorTable:
 
 ////////////////////////////////
 //~ rjf: Generators
-
-//- rjf: enums
-
-@enum DF_GfxViewKind:
-{
-  @expand(DF_GfxViewTable a) `$(a.name)`,
-  COUNT,
-}
-
-@enum DF_ThemeColor:
-{
-  @expand(DF_ThemeColorTable a) `$(a.name)`,
-  COUNT,
-}
-
-@enum DF_ThemePreset:
-{
-  @expand(DF_ThemePresetTable a) `$(a.name)`,
-  COUNT,
-}
-
-//- rjf: theme preset color tables
-
-@data(String8) df_g_theme_preset_display_string_table:
-{
-  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.display_string)")`,
-}
-
-@data(String8) df_g_theme_preset_code_string_table:
-{
-  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.name_lower)")`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__default_dark:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.default_dark))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__default_light:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.default_light))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__vs_dark:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.vs_dark))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__vs_light:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.vs_light))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__solarized_dark:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.solarized_dark))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__solarized_light:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.solarized_light))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__handmade_hero:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.handmade_hero))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__four_coder:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.four_coder))`,
-}
-
-@data(Vec4F32) df_g_theme_preset_colors__far_manager:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.far_manager))`;
-}
-
-@data(`Vec4F32*`) df_g_theme_preset_colors_table:
-{
-  @expand(DF_ThemePresetTable a) `df_g_theme_preset_colors__$(a.name_lower)`,
-}
-
-//- rjf: cmd param slot -> view spec tables
-
-@data(DF_CmdParamSlot) df_g_cmd_param_slot_2_view_spec_src_map:
-{
-  @expand(DF_CmdParamSlot2ViewSpecMap a) `DF_CmdParamSlot_$(a.slot)`
-}
-
-@data(String8) df_g_cmd_param_slot_2_view_spec_dst_map:
-{
-  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)")`
-}
-
-@data(String8) df_g_cmd_param_slot_2_view_spec_cmd_map:
-{
-  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)")`
-}
-
-//- rjf: default bindings table
-
-@data(DF_StringBindingPair) df_g_default_binding_table:
-{
-  @expand(DF_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_EventFlag_Ctrl`) $(a.shift != 0 -> `|OS_EventFlag_Shift`) $(a.alt != 0 -> `|OS_EventFlag_Alt`)}}```;
-}
-
-//- rjf: binding version remap tables
-
-@data(String8) df_g_binding_version_remap_old_name_table:
-{
-  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
-}
-
-@data(String8) df_g_binding_version_remap_new_name_table:
-{
-  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
-}
-
-//- rjf: view hook forward declares
-
-@gen
-{
-  @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name));`;
-}
-
-//- rjf: gfx view rule function forward declares
-
-@gen
-{
-  ``;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.tu == "x" -> "DF_VIEW_SETUP_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.tu == "x" -> "DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.tu == "x" -> "DF_VIEW_CMD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.tu == "x" -> "DF_VIEW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-}
-
-//- rjf: gfx view rule tables
-
-@data(DF_GfxViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
-{
-  @expand(DF_GfxViewRuleTable a)
-    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_BlockUI*$(a.bu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0), $(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME("..a.name_lower..")") $(a.bu != "x" -> 0), str8_lit_comp("$(a.tu == 'x' -> a.string..'_view_rule')") }```;
-}
-
-@data(DF_ViewSpecInfo) @c_file df_g_gfx_view_rule_tab_view_spec_info_table:
-{
-  @expand(DF_GfxViewRuleTable a)
-    ```$(a.tu == "x" -> '{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("' .. a.string .. '_view_rule"), str8_lit_comp("' .. a.tab_display_string .. '"), DF_NameKind_Null, DF_IconKind_Binoculars, ' .. 'DF_VIEW_SETUP_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_CMD_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_UI_FUNCTION_NAME(' .. a.string .. ') }')```;
-}
-
-//- rjf: default view spec info table
-
-@data(DF_ViewSpecInfo) df_g_gfx_view_kind_spec_info_table:
-{
-  @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_serialize_entity_path)*DF_ViewSpecFlag_CanSerializeEntityPath|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_NameKind_$(a.name_kind), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name)), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME($(a.name)), DF_VIEW_CMD_FUNCTION_NAME($(a.name)), DF_VIEW_UI_FUNCTION_NAME($(a.name))}```;
-}
 
 //- rjf: theme color tables
 

@@ -7886,15 +7886,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
           }
         }break;
-        case DF_CoreCmdKind_Reload:
-        {
-          DF_Entity *file = df_entity_from_handle(params.entity);
-          if(file->kind == DF_EntityKind_File)
-          {
-            TXTI_Handle txti_handle = df_txti_handle_from_entity(file);
-            txti_reload(txti_handle, df_full_path_from_entity(scratch.arena, file));
-          }
-        }break;
         
         //- rjf: config path saving/loading/applying
         case DF_CoreCmdKind_OpenRecentProject:

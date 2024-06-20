@@ -187,9 +187,6 @@ struct DF_View
   U64 loading_progress_v;
   U64 loading_progress_v_target;
   
-  // rjf: update flash animation state
-  F32 flash_t;
-  
   // rjf: view state
   UI_ScrollPt2 scroll_pos;
   
@@ -376,6 +373,24 @@ typedef enum DF_FontSlot
   DF_FontSlot_COUNT
 }
 DF_FontSlot;
+
+typedef enum DF_UIColorSchemeCode
+{
+  DF_UIColorSchemeCode_Default,
+  DF_UIColorSchemeCode_DefaultPositive,
+  DF_UIColorSchemeCode_DefaultNegative,
+  DF_UIColorSchemeCode_Floating,
+  DF_UIColorSchemeCode_SpecialPositive,
+  DF_UIColorSchemeCode_SpecialNegative,
+  DF_UIColorSchemeCode_SpecialNeutral,
+  DF_UIColorSchemeCode_MenuBar,
+  DF_UIColorSchemeCode_TabActive,
+  DF_UIColorSchemeCode_TabInactive,
+  DF_UIColorSchemeCode_Code,
+  DF_UIColorSchemeCode_DropSite,
+  DF_UIColorSchemeCode_COUNT
+}
+DF_UIColorSchemeCode;
 
 ////////////////////////////////
 //~ rjf: UI Helper & Widget Types
@@ -746,6 +761,7 @@ struct DF_GfxState
   String8 cfg_main_font_path;
   String8 cfg_code_font_path;
   F_Tag cfg_font_tags[DF_FontSlot_COUNT];
+  UI_ColorScheme cfg_ui_color_schemes[DF_UIColorSchemeCode_COUNT];
   
   // rjf: icon texture
   R_Handle icon_texture;
@@ -779,7 +795,6 @@ read_only global DF_View df_g_nil_view =
 {
   &df_g_nil_view,
   &df_g_nil_view,
-  0,
   0,
   0,
   0,
@@ -992,6 +1007,9 @@ internal DF_CmdSpecList df_cmd_spec_list_from_event_flags(Arena *arena, OS_Event
 internal Vec4F32 df_rgba_from_theme_color(DF_ThemeColor color);
 internal DF_ThemeColor df_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 
+//- rjf: code -> ui color scheme
+internal UI_ColorScheme *df_ui_color_scheme_from_code(DF_UIColorSchemeCode code);
+
 //- rjf: fonts/sizes
 internal F_Tag df_font_from_slot(DF_FontSlot slot);
 internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
@@ -1004,6 +1022,11 @@ internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF
 
 internal String8 df_string_from_exception_code(U32 code);
 internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, DF_IconKind *icon_out);
+
+////////////////////////////////
+//~ rjf: UI Building Helpers
+
+#define DF_UIColorScheme(code) UI_Scheme(df_ui_color_scheme_from_code(code))
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons

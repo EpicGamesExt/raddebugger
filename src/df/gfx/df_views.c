@@ -1545,8 +1545,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "table_header")
   {
+    ////////////////////////////
     //- rjf: build table header
-    if(visible_row_rng.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    //
+    if(visible_row_rng.min == 0) UI_TableVector UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       UI_TableCell ui_label(str8_lit("Expression"));
       UI_TableCell ui_label(str8_lit("Value"));
@@ -1556,57 +1558,63 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         F32 max_width = ui_top_font_size()*35;
         ui_label_multiline(max_width, str8_lit("View rules are used to tweak the way evaluated expressions are visualized. Multiple rules can be specified on each row. They are specified in a key:(value) form. Some examples follow:"));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("array:(N)");
-        ui_label_multiline(max_width, str8_lit("Specifies that a pointer points to N elements, rather than only 1."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("array:(N)");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that a pointer points to N elements, rather than only 1."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("omit:(member_1 ... member_n)");
-        ui_label_multiline(max_width, str8_lit("Omits a list of member names from appearing in struct, union, or class evaluations."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("omit:(member_1 ... member_n)");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Omits a list of member names from appearing in struct, union, or class evaluations."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("only:(member_1 ... member_n)");
-        ui_label_multiline(max_width, str8_lit("Specifies that only the specified members should appear in struct, union, or class evaluations."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("only:(member_1 ... member_n)");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that only the specified members should appear in struct, union, or class evaluations."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("list:(next_link_member_name)");
-        ui_label_multiline(max_width, str8_lit("Specifies that some struct, union, or class forms the top of a linked list, with next_link_member_name being the member which points at the next element in the list."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("list:(next_link_member_name)");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that some struct, union, or class forms the top of a linked list, with next_link_member_name being the member which points at the next element in the list."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("dec");
-        ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-10 form."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("dec");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-10 form."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("hex");
-        ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-16 form."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("hex");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-16 form."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("oct");
-        ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-8 form."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("oct");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-8 form."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("bin");
-        ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-2 form."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("bin");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-2 form."));
         ui_spacer(ui_em(1.5f, 1));
-        UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText)) ui_labelf("no_addr");
-        ui_label_multiline(max_width, str8_lit("Displays only what pointers point to, if possible, without the pointer's address value."));
+        UI_Font(df_font_from_slot(DF_FontSlot_Code)) ui_labelf("no_addr");
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Displays only what pointers point to, if possible, without the pointer's address value."));
         ui_spacer(ui_em(1.5f, 1));
       }
     }
     
+    ////////////////////////////
     //- rjf: viz blocks -> rows
+    //
     DF_EvalVizWindowedRowList rows = {0};
     {
       rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(), r1s64(visible_row_rng.min-1, visible_row_rng.max), &blocks);
     }
     
+    ////////////////////////////
     //- rjf: build table
+    //
     ProfScope("build table")
     {
-      //- rjf: build rows
       U64 semantic_idx = rows.count_before_semantic;
       for(DF_EvalVizRow *row = rows.first; row != 0; row = row->next, semantic_idx += 1)
       {
+        ////////////////////////
         //- rjf: unpack row info
+        //
         U64 row_hash = df_hash_from_expand_key(row->key);
         U64 expr_hash = df_hash_from_string(row->display_expr);
-        df_expand_tree_table_animate(&eval_view->expand_tree_table, df_dt());
         B32 row_selected = (selection_tbl.min.y <= (semantic_idx+1) && (semantic_idx+1) <= selection_tbl.max.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
         
+        ////////////////////////
         //- rjf: determine if row's data is fresh and/or bad
+        //
         B32 row_is_fresh = 0;
         B32 row_is_bad = 0;
         switch(row->eval.mode)
@@ -1632,422 +1640,447 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           }break;
         }
         
-        //- rjf: build canvas row
-        if(row->flags & DF_EvalVizRowFlag_Canvas) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off) ProfScope("canvas row")
-        {
-          DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Expr, row->parent_key, row->key};
-          
-          //- rjf: build
-          ui_set_next_flags(disabled_flags);
-          ui_set_next_pref_width(ui_pct(1, 0));
-          ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->size_in_rows, 1.f));
-          UI_Box *vector = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|UI_BoxFlag_RequireFocusBackground|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
-          UI_Parent(vector)
-          {
-            ui_set_next_fixed_y(-1.f * (row->skipped_size_in_rows) * scroll_list_params.row_height_px);
-            ui_set_next_fixed_height((row->skipped_size_in_rows + row->size_in_rows + row->chopped_size_in_rows) * scroll_list_params.row_height_px);
-            ui_set_next_child_layout_axis(Axis2_X);
-            UI_Box *canvas_box = ui_build_box_from_stringf(UI_BoxFlag_FloatingY, "###canvas_%I64x", row_hash);
-            if(row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->expand_ui_rule_spec->info.block_ui)
-            {
-              UI_Parent(canvas_box) UI_WidthFill UI_HeightFill
-              {
-                Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
-                                           (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px);
-                row->expand_ui_rule_spec->info.block_ui(ws, row->key, row->eval, row->edit_expr, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, row->expand_ui_rule_node, canvas_dim);
-              }
-            }
-          }
-          
-          //- rjf: take interaction 
-          UI_Signal sig = ui_signal_from_box(vector);
-          
-          //- rjf: press -> focus
-          if(ui_pressed(sig))
-          {
-            ewv->next_cursor = ewv->next_mark = pt;
-            pressed = 1;
-          }
-          
-          //- rjf: double clicked -> open dedicated tab
-          if(ui_double_clicked(sig))
-          {
-            DF_CfgNode *cfg = df_cfg_tree_copy(scratch.arena, row->expand_ui_rule_node);
-            DF_CfgNode *cfg_root = push_array(scratch.arena, DF_CfgNode, 1);
-            cfg_root->first = cfg_root->last = cfg;
-            cfg_root->next = cfg_root->parent = &df_g_nil_cfg_node;
-            if(cfg != &df_g_nil_cfg_node)
-            {
-              cfg->parent = cfg_root;
-            }
-            DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-            p.string = row->edit_expr;
-            p.view_spec = df_tab_view_spec_from_gfx_view_rule_spec(row->expand_ui_rule_spec);
-            p.cfg_node = cfg_root;
-            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
-            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
-            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CfgNode);
-            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenTab));
-          }
-        }
-        
-        //- rjf: build normal row
-        if(!(row->flags & DF_EvalVizRowFlag_Canvas)) ProfScope("row")
+        ////////////////////////
+        //- rjf: determine row's color scheme
+        //
+        UI_ColorScheme *scheme = ui_top_scheme();
         {
           if(row_is_fresh)
           {
-            ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
-            ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
+            scheme = ui_fork_top_color_scheme(.background = mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
           }
-          else
+        }
+        
+        ////////////////////////
+        //- rjf: build row box
+        //
+        ui_set_next_flags(disabled_flags);
+        ui_set_next_pref_width(ui_pct(1, 0));
+        ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->size_in_rows, 1.f));
+        ui_set_next_scheme(scheme);
+        UI_Box *row_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|UI_BoxFlag_RequireFocusBackground|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
+        
+        ////////////////////////
+        //- rjf: canvas row -> fill with canvas ui build
+        //
+        if(row->flags & DF_EvalVizRowFlag_Canvas) UI_Parent(row_box) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+        {
+          //- rjf: build canvas row contents
+          ui_set_next_fixed_y(-1.f * (row->skipped_size_in_rows) * scroll_list_params.row_height_px);
+          ui_set_next_fixed_height((row->skipped_size_in_rows + row->size_in_rows + row->chopped_size_in_rows) * scroll_list_params.row_height_px);
+          ui_set_next_child_layout_axis(Axis2_X);
+          UI_Box *canvas_box = ui_build_box_from_stringf(UI_BoxFlag_FloatingY, "###canvas_%I64x", row_hash);
+          if(row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->expand_ui_rule_spec->info.block_ui)
           {
-            ui_set_next_flags(disabled_flags);
+            UI_Parent(canvas_box) UI_WidthFill UI_HeightFill
+            {
+              Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
+                                         (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px);
+              row->expand_ui_rule_spec->info.block_ui(ws, row->key, row->eval, row->edit_expr, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, row->expand_ui_rule_node, canvas_dim);
+            }
           }
-          UI_NamedTableVectorF("row_%I64x_%I64x", row_hash, ewv->root_count)
+          
+          //- rjf: do canvas row interactions
           {
-            //- rjf: draw start of cache lines in expansions
-            if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
-               row->eval.errors.count == 0 &&
-               row->eval.offset%64 == 0 && row->depth > 0 &&
-               !row_expanded)
+            DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Expr, row->parent_key, row->key};
+            UI_Signal sig = ui_signal_from_box(row_box);
+            
+            // rjf: press -> focus
+            if(ui_pressed(sig))
+            {
+              ewv->next_cursor = ewv->next_mark = pt;
+              pressed = 1;
+            }
+            
+            // rjf: double clicked -> open dedicated tab
+            if(ui_double_clicked(sig))
+            {
+              DF_CfgNode *cfg = df_cfg_tree_copy(scratch.arena, row->expand_ui_rule_node);
+              DF_CfgNode *cfg_root = push_array(scratch.arena, DF_CfgNode, 1);
+              cfg_root->first = cfg_root->last = cfg;
+              cfg_root->next = cfg_root->parent = &df_g_nil_cfg_node;
+              if(cfg != &df_g_nil_cfg_node)
+              {
+                cfg->parent = cfg_root;
+              }
+              DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+              p.string = row->edit_expr;
+              p.view_spec = df_tab_view_spec_from_gfx_view_rule_spec(row->expand_ui_rule_spec);
+              p.cfg_node = cfg_root;
+              df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
+              df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
+              df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CfgNode);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_OpenTab));
+            }
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: build non-canvas row contents
+        //
+        if(!(row->flags & DF_EvalVizRowFlag_Canvas))
+        {
+          ////////////////////
+          //- rjf: draw start of cache lines in expansions
+          //
+          if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
+             row->eval.errors.count == 0 &&
+             row->eval.offset%64 == 0 && row->depth > 0 &&
+             !row_expanded)
+          {
+            ui_set_next_fixed_x(0);
+            ui_set_next_fixed_y(0);
+            ui_set_next_fixed_height(ui_top_font_size()*0.1f);
+            ui_set_next_scheme(ui_fork_top_color_scheme(.background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
+            ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+          }
+          
+          ////////////////////
+          //- rjf: draw mid-row cache line boundaries in expansions
+          //
+          if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
+             row->eval.errors.count == 0 &&
+             row->eval.offset%64 != 0 &&
+             row->depth > 0 &&
+             !row_expanded)
+          {
+            U64 next_off = (row->eval.offset + tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdi, row->eval.type_key));
+            if(next_off%64 != 0 && row->eval.offset/64 < next_off/64)
             {
               ui_set_next_fixed_x(0);
-              ui_set_next_fixed_y(0);
-              ui_set_next_fixed_height(ui_top_font_size()*0.1f);
-              ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+              ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
+              ui_set_next_fixed_height(ui_top_font_size()*1.f);
+              Vec4F32 boundary_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+              boundary_color.w *= 0.25f;
+              ui_set_next_scheme(ui_fork_top_color_scheme(.background = boundary_color));
               ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
             }
+          }
+          
+          ////////////////////
+          //- rjf: expression
+          //
+          ProfScope("expr")
+          {
+            DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Expr, row->parent_key, row->key};
+            DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+            B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
+            B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
             
-            //- rjf: draw mid-row cache line boundaries in expansions
-            if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
-               row->eval.errors.count == 0 &&
-               row->eval.offset%64 != 0 &&
-               row->depth > 0 &&
-               !row_expanded)
+            // rjf: unpack scheme
+            UI_ColorScheme *scheme = ui_top_scheme();
             {
-              U64 next_off = (row->eval.offset + tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdi, row->eval.type_key));
-              if(next_off%64 != 0 && row->eval.offset/64 < next_off/64)
-              {
-                ui_set_next_fixed_x(0);
-                ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
-                ui_set_next_fixed_height(ui_top_font_size()*1.f);
-                Vec4F32 boundary_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-                boundary_color.w *= 0.25f;
-                ui_set_next_background_color(boundary_color);
-                ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
-              }
-            }
-            
-            //- rjf: expression
-            ProfScope("expr")
-            {
-              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Expr, row->parent_key, row->key};
-              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
-              B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
-              
-              // rjf: build
-              UI_Signal sig = {0};
-              B32 next_expanded = row_expanded;
               if(row->flags & DF_EvalVizRowFlag_ExprIsSpecial)
               {
-                ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
-                ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground), v4f32(1, 1, 1, 0.2f)));
-              }
-              UI_TableCell
-                UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
-                UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
-              {
-                B32 expr_editing_active = ui_is_focus_active();
-                B32 is_inherited = (row->inherited_type_key_chain.count != 0);
-                UI_Font(code_font) UI_TextColor((row->flags & DF_EvalVizRowFlag_ExprIsSpecial) ?
-                                                df_rgba_from_theme_color(DF_ThemeColor_Highlight0) :
-                                                row->depth > 0 ? df_rgba_from_theme_color(DF_ThemeColor_WeakText) : ui_top_text_color())
-                {
-                  if(is_inherited)
-                  {
-                    Vec4F32 inherited_bg_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
-                    inherited_bg_color.w *= 0.2f;
-                    ui_set_next_background_color(inherited_bg_color);
-                  }
-                  FuzzyMatchRangeList matches = {0};
-                  if(filter.size != 0)
-                  {
-                    matches = fuzzy_match_find(scratch.arena, filter, row->display_expr);
-                  }
-                  sig = df_line_editf((DF_LineEditFlag_CodeContents*(!(row->flags & DF_EvalVizRowFlag_ExprIsSpecial))|
-                                       DF_LineEditFlag_NoBackground*(!is_inherited)|
-                                       DF_LineEditFlag_DisableEdit*(!can_edit_expr)|
-                                       DF_LineEditFlag_Expander*!!(row->flags & DF_EvalVizRowFlag_CanExpand)|
-                                       DF_LineEditFlag_ExpanderPlaceholder*(row->depth==0)|
-                                       DF_LineEditFlag_ExpanderSpace*(row->depth!=0)),
-                                      row->depth,
-                                      filter.size ? &matches : 0,
-                                      &edit_state->cursor, &edit_state->mark, edit_state->input_buffer, sizeof(edit_state->input_buffer), &edit_state->input_size, &next_expanded,
-                                      row->display_expr,
-                                      "###row_%I64x", row_hash);
-                }
-                if(is_inherited && ui_hovering(sig)) UI_Tooltip
-                {
-                  String8List inheritance_chain_type_names = {0};
-                  for(TG_KeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
-                  {
-                    String8 inherited_type_name = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, n->v);
-                    inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
-                    str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
-                  }
-                  StringJoin join = {0};
-                  join.sep = str8_lit("::");
-                  String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
-                  ui_set_next_pref_width(ui_children_sum(1));
-                  UI_Row
-                  {
-                    ui_labelf("Inherited from ");
-                    UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1.f, df_rgba_from_theme_color(DF_ThemeColor_CodeType), inheritance_type);
-                  }
-                }
-                if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Code))
-                {
-                  ui_labelf("Parent Key:   %I64x, %I64x", row->parent_key.parent_hash, row->parent_key.child_num);
-                  ui_labelf("Hover Key:    %I64x, %I64x", row->key.parent_hash, row->key.child_num);
-                  ui_labelf("Cursor Key:   %I64x, %I64x", ewv->cursor.key.parent_hash, ewv->cursor.key.child_num);
-                }
-                if(DEV_eval_compiler_tooltips && row->depth == 0 && ui_hovering(sig)) UI_Tooltip
-                {
-                  Temp scratch = scratch_begin(0, 0);
-                  String8 string = row->display_expr;
-                  
-                  // rjf: lex & parse
-                  EVAL_TokenArray tokens = eval_token_array_from_text(scratch.arena, string);
-                  EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(scratch.arena, &parse_ctx, string, &tokens);
-                  EVAL_ErrorList errors = parse.errors;
-                  ui_labelf("Tokens:");
-                  UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-                    for(U64 idx = 0; idx < tokens.count; idx += 1)
-                  {
-                    EVAL_Token *token = tokens.v+idx;
-                    String8 token_string = str8_substr(string, token->range);
-                    String8 token_kind_name = str8_lit("Token");
-                    switch(token->kind)
-                    {
-                      default:break;
-                      case EVAL_TokenKind_Identifier:   {token_kind_name = str8_lit("Identifier");}break;
-                      case EVAL_TokenKind_Numeric:      {token_kind_name = str8_lit("Numeric");}break;
-                      case EVAL_TokenKind_StringLiteral:{token_kind_name = str8_lit("StringLiteral");}break;
-                      case EVAL_TokenKind_CharLiteral:  {token_kind_name = str8_lit("CharLiteral");}break;
-                      case EVAL_TokenKind_Symbol:       {token_kind_name = str8_lit("Symbol");}break;
-                    }
-                    ui_labelf("%S -> \"%S\"", token_kind_name, token_string);
-                  }
-                  
-                  // rjf: produce IR tree & type
-                  EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
-                  if(parse.expr != &eval_expr_nil && errors.count == 0)
-                  {
-                    ui_labelf("Type:");
-                    ir_tree_and_type = eval_irtree_and_type_from_expr(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, &eval_string2expr_map_nil, parse.expr, &errors);
-                    TG_Key type_key = ir_tree_and_type.type_key;
-                    String8 type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, type_key);
-                    UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
-                      ui_label(type_string);
-                  }
-                  
-                  scratch_end(scratch);
-                }
-                
-                // rjf: autocomplete lister
-                if(expr_editing_active &&
-                   selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
-                   txt_pt_match(edit_state->cursor, edit_state->mark))
-                {
-                  String8 input = str8(edit_state->input_buffer, edit_state->input_size);
-                  DF_AutoCompListerParams params = {DF_AutoCompListerFlag_Locals};
-                  df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, &params, input, edit_state->cursor.column-1);
-                }
-              }
-              
-              // rjf: press -> commit if editing & select
-              if(ui_pressed(sig))
-              {
-                ewv->next_cursor = ewv->next_mark = pt;
-                pressed = 1;
-              }
-              
-              // rjf: double-click -> start editing
-              if(ui_double_clicked(sig) && can_edit_expr)
-              {
-                ui_kill_action();
-                DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
-              }
-              
-              // rjf: commit expansion state
-              if(next_expanded != row_expanded)
-              {
-                df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, next_expanded);
+                scheme = ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
+                                                  .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
               }
             }
             
-            //- rjf: value
-            ProfScope("value")
+            // rjf: build
+            UI_Signal sig = {0};
+            B32 next_expanded = row_expanded;
+            UI_Scheme(scheme) UI_TableCell
+              UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+              UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Value, row->parent_key, row->key};
-              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
-              B32 value_is_error   = (row->eval.errors.count != 0);
-              B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
-              B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
-              B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
-              
-              // rjf: build
-              UI_Signal sig = {0};
-              if(row_is_bad)
+              B32 expr_editing_active = ui_is_focus_active();
+              B32 is_inherited = (row->inherited_type_key_chain.count != 0);
+              UI_Font(code_font) UI_Scheme(scheme) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
               {
-                ui_set_next_flags(disabled_flags|UI_BoxFlag_DrawOverlay);
-                ui_set_next_overlay_color(mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground), v4f32(1, 1, 1, 0.2f)));
-              }
-              UI_TableCell UI_Font(code_font)
-                UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
-                UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
-              {
-                // rjf: errors? -> show errors
-                if(value_is_error) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground)) UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                if(is_inherited)
                 {
-                  String8List strings = {0};
-                  for(EVAL_Error *error = row->eval.errors.first; error != 0; error = error->next)
+                  Vec4F32 inherited_bg_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
+                  inherited_bg_color.w *= 0.2f;
+                  ui_set_next_scheme(ui_fork_top_color_scheme(.background = inherited_bg_color));
+                }
+                FuzzyMatchRangeList matches = {0};
+                if(filter.size != 0)
+                {
+                  matches = fuzzy_match_find(scratch.arena, filter, row->display_expr);
+                }
+                sig = df_line_editf((DF_LineEditFlag_CodeContents*(!(row->flags & DF_EvalVizRowFlag_ExprIsSpecial))|
+                                     DF_LineEditFlag_NoBackground*(!is_inherited)|
+                                     DF_LineEditFlag_DisableEdit*(!can_edit_expr)|
+                                     DF_LineEditFlag_Expander*!!(row->flags & DF_EvalVizRowFlag_CanExpand)|
+                                     DF_LineEditFlag_ExpanderPlaceholder*(row->depth==0)|
+                                     DF_LineEditFlag_ExpanderSpace*(row->depth!=0)),
+                                    row->depth,
+                                    filter.size ? &matches : 0,
+                                    &edit_state->cursor, &edit_state->mark, edit_state->input_buffer, sizeof(edit_state->input_buffer), &edit_state->input_size, &next_expanded,
+                                    row->display_expr,
+                                    "###row_%I64x", row_hash);
+              }
+              if(is_inherited && ui_hovering(sig)) UI_Tooltip
+              {
+                String8List inheritance_chain_type_names = {0};
+                for(TG_KeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
+                {
+                  String8 inherited_type_name = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, n->v);
+                  inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
+                  str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
+                }
+                StringJoin join = {0};
+                join.sep = str8_lit("::");
+                String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
+                ui_set_next_pref_width(ui_children_sum(1));
+                UI_Row
+                {
+                  ui_labelf("Inherited from ");
+                  UI_Font(df_font_from_slot(DF_FontSlot_Code)) df_code_label(1.f, 1.f, df_rgba_from_theme_color(DF_ThemeColor_CodeType), inheritance_type);
+                }
+              }
+              if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip UI_Font(df_font_from_slot(DF_FontSlot_Code))
+              {
+                ui_labelf("Parent Key:   %I64x, %I64x", row->parent_key.parent_hash, row->parent_key.child_num);
+                ui_labelf("Hover Key:    %I64x, %I64x", row->key.parent_hash, row->key.child_num);
+                ui_labelf("Cursor Key:   %I64x, %I64x", ewv->cursor.key.parent_hash, ewv->cursor.key.child_num);
+              }
+              if(DEV_eval_compiler_tooltips && row->depth == 0 && ui_hovering(sig)) UI_Tooltip
+              {
+                Temp scratch = scratch_begin(0, 0);
+                String8 string = row->display_expr;
+                
+                // rjf: lex & parse
+                EVAL_TokenArray tokens = eval_token_array_from_text(scratch.arena, string);
+                EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(scratch.arena, &parse_ctx, string, &tokens);
+                EVAL_ErrorList errors = parse.errors;
+                ui_labelf("Tokens:");
+                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) for(U64 idx = 0; idx < tokens.count; idx += 1)
+                {
+                  EVAL_Token *token = tokens.v+idx;
+                  String8 token_string = str8_substr(string, token->range);
+                  String8 token_kind_name = str8_lit("Token");
+                  switch(token->kind)
                   {
-                    str8_list_push(scratch.arena, &strings, error->text);
+                    default:break;
+                    case EVAL_TokenKind_Identifier:   {token_kind_name = str8_lit("Identifier");}break;
+                    case EVAL_TokenKind_Numeric:      {token_kind_name = str8_lit("Numeric");}break;
+                    case EVAL_TokenKind_StringLiteral:{token_kind_name = str8_lit("StringLiteral");}break;
+                    case EVAL_TokenKind_CharLiteral:  {token_kind_name = str8_lit("CharLiteral");}break;
+                    case EVAL_TokenKind_Symbol:       {token_kind_name = str8_lit("Symbol");}break;
                   }
-                  StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-                  String8 error_string = str8_list_join(scratch.arena, &strings, &join);
-                  sig = df_error_label(error_string);
+                  ui_labelf("%S -> \"%S\"", token_kind_name, token_string);
                 }
                 
-                // rjf: hook -> call hook
-                if(value_is_hook) UI_Font(df_font_from_slot(DF_FontSlot_Main))
+                // rjf: produce IR tree & type
+                EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
+                if(parse.expr != &eval_expr_nil && errors.count == 0)
                 {
-                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
-                  UI_Parent(box)
-                  {
-                    row->value_ui_rule_spec->info.row_ui(row->key, row->eval, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, row->value_ui_rule_node);
-                  }
-                  sig = ui_signal_from_box(box);
+                  ui_labelf("Type:");
+                  ir_tree_and_type = eval_irtree_and_type_from_expr(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, &eval_string2expr_map_nil, parse.expr, &errors);
+                  TG_Key type_key = ir_tree_and_type.type_key;
+                  String8 type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, type_key);
+                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+                    ui_label(type_string);
                 }
                 
-                // rjf: complex values
-                if(value_is_complex)
-                {
-                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
-                  UI_Parent(box)
-                  {
-                    df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
-                  }
-                  sig = ui_signal_from_box(box);
-                }
-                
-                // rjf: simple values (editable)
-                if(value_is_simple)
-                {
-                  sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &edit_state->cursor, &edit_state->mark, edit_state->input_buffer, sizeof(edit_state->input_buffer), &edit_state->input_size, 0, row->display_value, "%S###val_%I64x", row->display_value, row_hash);
-                }
-              }
-              
-              // rjf: bad & hovering -> display
-              if(row_is_bad && ui_hovering(sig)) UI_Tooltip
-              {
-                UI_PrefWidth(ui_children_sum(1)) df_error_label(str8_lit("Could not read process memory successfully."));
-              }
-              
-              // rjf: press -> focus & commit if editing & not selected
-              if(ui_pressed(sig))
-              {
-                ewv->next_cursor = ewv->next_mark = pt;
-                pressed = 1;
-              }
-              
-              // rjf: double-click -> start editing
-              if(ui_double_clicked(sig) && value_is_simple)
-              {
-                ui_kill_action();
-                DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
-              }
-            }
-            
-            //- rjf: type
-            ProfScope("type")
-            {
-              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Type, row->parent_key, row->key};
-              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
-              UI_TableCell UI_Font(code_font)
-                UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
-                UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
-              {
-                TG_Key key = row->eval.type_key;
-                String8 string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, key);
-                string = str8_skip_chop_whitespace(string);
-                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###type_%I64x", row_hash);
-                if(!tg_key_match(key, tg_key_zero())) UI_Parent(box)
-                {
-                  df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeType), string);
-                }
-                UI_Signal sig = ui_signal_from_box(box);
-                if(ui_pressed(sig))
-                {
-                  ewv->next_cursor = ewv->next_mark = pt;
-                  pressed = 1;
-                }
-              }
-            }
-            
-            //- rjf: view rule
-            ProfScope("view rule")
-            {
-              DF_WatchViewPoint pt = {DF_WatchViewColumnKind_ViewRule, row->parent_key, row->key};
-              DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
-              B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
-              String8 view_rule = df_eval_view_rule_from_key(eval_view, row->key);
-              
-              // rjf: build
-              UI_Signal sig = {0};
-              B32 rule_editing_active = 0;
-              UI_TableCell UI_Font(code_font)
-                UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
-                UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
-              {
-                rule_editing_active = ui_is_focus_active();
-                sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &edit_state->cursor, &edit_state->mark, edit_state->input_buffer, sizeof(edit_state->input_buffer), &edit_state->input_size, 0, view_rule, "###view_rule_%I64x", row_hash);
-              }
-              
-              // rjf: press -> commit if not selected, select this cell
-              if(ui_pressed(sig))
-              {
-                ewv->next_cursor = ewv->next_mark = pt;
-                pressed = 1;
+                scratch_end(scratch);
               }
               
               // rjf: autocomplete lister
-              if(rule_editing_active &&
+              if(expr_editing_active &&
                  selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
                  txt_pt_match(edit_state->cursor, edit_state->mark))
               {
                 String8 input = str8(edit_state->input_buffer, edit_state->input_size);
-                DF_AutoCompListerParams params = df_view_rule_autocomp_lister_params_from_input_cursor(scratch.arena, input, edit_state->cursor.column-1);
-                if(params.flags == 0)
-                {
-                  params.flags = DF_AutoCompListerFlag_ViewRules;
-                }
+                DF_AutoCompListerParams params = {DF_AutoCompListerFlag_Locals};
                 df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, &params, input, edit_state->cursor.column-1);
               }
-              
-              // rjf: double-click -> begin editing
-              if(ui_double_clicked(sig) && !ewv->text_editing)
+            }
+            
+            // rjf: press -> commit if editing & select
+            if(ui_pressed(sig))
+            {
+              ewv->next_cursor = ewv->next_mark = pt;
+              pressed = 1;
+            }
+            
+            // rjf: double-click -> start editing
+            if(ui_double_clicked(sig) && can_edit_expr)
+            {
+              ui_kill_action();
+              DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
+            }
+            
+            // rjf: commit expansion state
+            if(next_expanded != row_expanded)
+            {
+              df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, next_expanded);
+            }
+          }
+          
+          ////////////////////
+          //- rjf: value
+          //
+          ProfScope("value")
+          {
+            DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Value, row->parent_key, row->key};
+            DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+            B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
+            B32 value_is_error   = (row->eval.errors.count != 0);
+            B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
+            B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
+            B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
+            
+            // rjf: unpack scheme
+            UI_ColorScheme *scheme = ui_top_scheme();
+            {
+              if(row_is_bad)
               {
-                ui_kill_action();
-                DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-                df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
+                scheme = ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
+                                                  .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
               }
+            }
+            
+            // rjf: build
+            UI_Signal sig = {0};
+            UI_Scheme(scheme) UI_TableCell UI_Font(code_font)
+              UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+              UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
+            {
+              // rjf: errors? -> show errors
+              if(value_is_error) UI_Font(df_font_from_slot(DF_FontSlot_Main))
+              {
+                String8List strings = {0};
+                for(EVAL_Error *error = row->eval.errors.first; error != 0; error = error->next)
+                {
+                  str8_list_push(scratch.arena, &strings, error->text);
+                }
+                StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+                String8 error_string = str8_list_join(scratch.arena, &strings, &join);
+                sig = df_error_label(error_string);
+              }
+              
+              // rjf: hook -> call hook
+              if(value_is_hook) UI_Font(df_font_from_slot(DF_FontSlot_Main))
+              {
+                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
+                UI_Parent(box)
+                {
+                  row->value_ui_rule_spec->info.row_ui(row->key, row->eval, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, row->value_ui_rule_node);
+                }
+                sig = ui_signal_from_box(box);
+              }
+              
+              // rjf: complex values
+              if(value_is_complex)
+              {
+                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
+                UI_Parent(box)
+                {
+                  df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
+                }
+                sig = ui_signal_from_box(box);
+              }
+              
+              // rjf: simple values (editable)
+              if(value_is_simple)
+              {
+                sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &edit_state->cursor, &edit_state->mark, edit_state->input_buffer, sizeof(edit_state->input_buffer), &edit_state->input_size, 0, row->display_value, "%S###val_%I64x", row->display_value, row_hash);
+              }
+            }
+            
+            // rjf: bad & hovering -> display
+            if(row_is_bad && ui_hovering(sig)) UI_Tooltip
+            {
+              UI_PrefWidth(ui_children_sum(1)) df_error_label(str8_lit("Could not read process memory successfully."));
+            }
+            
+            // rjf: press -> focus & commit if editing & not selected
+            if(ui_pressed(sig))
+            {
+              ewv->next_cursor = ewv->next_mark = pt;
+              pressed = 1;
+            }
+            
+            // rjf: double-click -> start editing
+            if(ui_double_clicked(sig) && value_is_simple)
+            {
+              ui_kill_action();
+              DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
+            }
+          }
+          
+          ////////////////////
+          //- rjf: type
+          //
+          ProfScope("type")
+          {
+            DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Type, row->parent_key, row->key};
+            DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+            B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
+            UI_TableCell UI_Font(code_font)
+              UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+              UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
+            {
+              TG_Key key = row->eval.type_key;
+              String8 string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, key);
+              string = str8_skip_chop_whitespace(string);
+              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###type_%I64x", row_hash);
+              if(!tg_key_match(key, tg_key_zero())) UI_Parent(box)
+              {
+                df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeType), string);
+              }
+              UI_Signal sig = ui_signal_from_box(box);
+              if(ui_pressed(sig))
+              {
+                ewv->next_cursor = ewv->next_mark = pt;
+                pressed = 1;
+              }
+            }
+          }
+          
+          ////////////////////
+          //- rjf: view rule
+          //
+          ProfScope("view rule")
+          {
+            DF_WatchViewPoint pt = {DF_WatchViewColumnKind_ViewRule, row->parent_key, row->key};
+            DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
+            B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
+            String8 view_rule = df_eval_view_rule_from_key(eval_view, row->key);
+            
+            // rjf: build
+            UI_Signal sig = {0};
+            B32 rule_editing_active = 0;
+            UI_TableCell UI_Font(code_font)
+              UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+              UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
+            {
+              rule_editing_active = ui_is_focus_active();
+              sig = df_line_editf(DF_LineEditFlag_CodeContents|DF_LineEditFlag_NoBackground, 0, 0, &edit_state->cursor, &edit_state->mark, edit_state->input_buffer, sizeof(edit_state->input_buffer), &edit_state->input_size, 0, view_rule, "###view_rule_%I64x", row_hash);
+            }
+            
+            // rjf: press -> commit if not selected, select this cell
+            if(ui_pressed(sig))
+            {
+              ewv->next_cursor = ewv->next_mark = pt;
+              pressed = 1;
+            }
+            
+            // rjf: autocomplete lister
+            if(rule_editing_active &&
+               selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
+               txt_pt_match(edit_state->cursor, edit_state->mark))
+            {
+              String8 input = str8(edit_state->input_buffer, edit_state->input_size);
+              DF_AutoCompListerParams params = df_view_rule_autocomp_lister_params_from_input_cursor(scratch.arena, input, edit_state->cursor.column-1);
+              if(params.flags == 0)
+              {
+                params.flags = DF_AutoCompListerFlag_ViewRules;
+              }
+              df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, &params, input, edit_state->cursor.column-1);
+            }
+            
+            // rjf: double-click -> begin editing
+            if(ui_double_clicked(sig) && !ewv->text_editing)
+            {
+              ui_kill_action();
+              DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
             }
           }
         }
@@ -2087,7 +2120,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Empty) {}
 DF_VIEW_UI_FUNCTION_DEF(Empty)
 {
   ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
   {
     UI_PrefHeight(ui_em(3.f, 1.f))
@@ -2096,9 +2129,7 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_em(15.f, 1.f))
       UI_CornerRadius(ui_top_font_size()/2.f)
-      UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
-      UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBorder))
-      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureText))
+      DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
     {
       if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Panel")))
       {
@@ -2120,7 +2151,8 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view"))
+    UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
   {
     DF_EntityList targets = df_push_active_target_list(scratch.arena);
@@ -2171,9 +2203,7 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_PrefWidth(ui_em(22.f, 1.f))
             UI_CornerRadius(ui_top_font_size()/2.f)
-            UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
-            UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
+            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Add, 0, "Add Target")))
           {
             DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2195,9 +2225,7 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_PrefWidth(ui_em(22.f, 1.f))
             UI_CornerRadius(ui_top_font_size()/2.f)
-            UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
-            UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
+            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
           {
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Launch %S", target_name)))
             {
@@ -2244,10 +2272,7 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
     {
       ui_labelf("use");
       DF_CmdSpec *spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand);
-      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_PlainText))
-        UI_Flags(UI_BoxFlag_DrawBorder)
-        UI_TextAlignment(UI_TextAlign_Center)
-        df_cmd_binding_button(spec);
+      UI_Flags(UI_BoxFlag_DrawBorder) UI_TextAlignment(UI_TextAlign_Center) df_cmd_binding_button(spec);
       ui_labelf("to open command menu");
     }
   }
@@ -2347,7 +2372,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_Font(df_font_from_slot(DF_FontSlot_Icons))
             UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             UI_PrefWidth(ui_em(2.25f, 1.f))
           {
             ui_label(df_g_icon_kind_text_table[icon]);
@@ -2364,7 +2389,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
           UI_TextAlignment(UI_TextAlign_Left)
             UI_Font(df_font_from_slot(DF_FontSlot_Code))
             UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Code))
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             ui_label(item->cmd_spec->info.string);
         }
       }
@@ -2390,7 +2415,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
           UI_Column
           UI_Font(df_font_from_slot(DF_FontSlot_Icons))
           UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           UI_HeightFill
           UI_TextAlignment(UI_TextAlign_Center)
         {
@@ -2413,7 +2438,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
           String8 cmd_desc = item->cmd_spec->info.description;
           UI_Box *name_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##name_%p", cmd_display_name, item->cmd_spec);
           UI_Box *desc_box = &ui_g_nil_box;
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefHeight(ui_em(1.8f, 1.f))
+          UI_PrefHeight(ui_em(1.8f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           {
             desc_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##desc_%p", cmd_desc, item->cmd_spec);
           }
@@ -2422,7 +2447,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
         }
         
         //- rjf: binding
-        UI_PrefWidth(ui_pct(0.15f, 1.f)) UI_HeightFill UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+        UI_PrefWidth(ui_pct(0.15f, 1.f)) UI_HeightFill UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         {
           df_cmd_binding_button(item->cmd_spec);
         }
@@ -2707,7 +2732,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
   }
   UI_PrefHeight(ui_px(row_height_px, 1)) UI_Focus(UI_FocusKind_Off) UI_TableF(ArrayCount(fs->col_pcts), col_pcts, "###fs_tbl")
   {
-    UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    UI_TableVector
     {
       struct
       {
@@ -2722,12 +2747,8 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       };
       for(U64 idx = 0; idx < ArrayCount(kinds); idx += 1)
       {
-        B32 sorting = fs->sort_kind == kinds[idx].kind;
-        if(sorting)
-        {
-          ui_push_text_color(df_rgba_from_theme_color(DF_ThemeColor_PlainText));
-        }
-        UI_TableCell
+        B32 sorting = (fs->sort_kind == kinds[idx].kind);
+        UI_TableCell UI_FlagsAdd(sorting ? 0 : UI_BoxFlag_DrawTextWeak)
         {
           UI_Signal sig = ui_sort_header(sorting,
                                          fs->cached_files_sort_side == Side_Min,
@@ -2748,10 +2769,6 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
               fs->sort_kind = DF_FileSortKind_Null;
             }
           }
-        }
-        if(sorting)
-        {
-          ui_pop_text_color();
         }
       }
     }
@@ -2869,7 +2886,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         // rjf: last-modified time
         UI_PrefWidth(ui_pct(fs->col_pcts[1], 1)) UI_Row
           UI_PrefWidth(ui_pct(1, 0))
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         {
           DateTime time = date_time_from_dense_time(file->props.modified);
           DateTime time_local = os_local_time_from_universal_time(&time);
@@ -2883,7 +2900,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         {
           if(file->props.size != 0)
           {
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_label(str8_from_memory_size(scratch.arena, file->props.size));
+            UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(str8_from_memory_size(scratch.arena, file->props.size));
           }
         }
       }
@@ -3038,7 +3055,7 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
         }
         
         // rjf: attached indicator
-        if(is_attached) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_Highlight1)) UI_PrefWidth(ui_text_dim(10, 1))
+        if(is_attached) UI_PrefWidth(ui_text_dim(10, 1)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         {
           UI_Box *attached_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "[attached]##attached_label_%i", (int)info->info.pid);
           ui_box_equip_fuzzy_match_ranges(attached_label, &info->attached_match_ranges);
@@ -3204,7 +3221,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
           UI_TextAlignment(UI_TextAlign_Center)
             UI_Font(df_font_from_slot(DF_FontSlot_Icons))
             UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             UI_PrefWidth(ui_text_dim(10, 1))
             ui_label(df_g_icon_kind_text_table[icon_kind]);
         }
@@ -3212,7 +3229,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
         Vec4F32 color = df_rgba_from_entity(ent);
         if(color.w != 0)
         {
-          ui_set_next_text_color(color);
+          ui_set_next_scheme(ui_fork_top_color_scheme(.text = color));
         }
         UI_Box *name_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##label_%p", display_string, ent);
         ui_box_equip_fuzzy_match_ranges(name_label, &item.name_match_ranges);
@@ -3398,12 +3415,12 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
                                               "###procedure_%I64x", item->idx);
       UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 1))
       {
-        UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
+        UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure), name);
         ui_box_equip_fuzzy_match_ranges(box, &item->match_ranges);
         if(!tg_key_match(tg_key_zero(), type_key) && graph != 0)
         {
           String8 type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
-          df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_WeakText), type_string);
+          df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_DefaultTextWeak), type_string);
         }
       }
       
@@ -3422,17 +3439,17 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, binary_voff, 0);
         String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
         S64 line_num = dasm2src_info.pt.line;
-        df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), name);
-        UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+        df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure), name);
+        UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           ui_labelf("Procedure #%I64u", item->idx);
         if(!df_entity_is_nil(dasm2src_info.file))
         {
-          UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+          UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             ui_labelf("%S:%I64d", file_path, line_num);
         }
         else
         {
-          UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+          UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             ui_label(str8_lit("(No source code location found)"));
         }
       }
@@ -3618,7 +3635,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
         B32 has_browse = kv_info[idx].fill_with_file || kv_info[idx].fill_with_folder;
         
         //- rjf: key (label)
-        UI_TableCell UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+        UI_TableCell UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         {
           if(kv_info[idx].storage_child_kind == DF_EntityKind_EntryPointName)
           {
@@ -3626,7 +3643,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
             {
               ui_label_multiline(ui_top_font_size()*30.f, str8_lit("By default, the debugger attempts to find a target's entry point with a set of default names, such as:"));
               ui_spacer(ui_em(1.5f, 1.f));
-              UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_CodeFunction))
+              UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_Scheme(ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure)))
               {
                 ui_label(str8_lit("WinMain"));
                 ui_label(str8_lit("wWinMain"));
@@ -4084,7 +4101,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
     next_cursor = fpms->cursor;
     
     //- rjf: header
-    if(visible_row_range.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    if(visible_row_range.min == 0) UI_TableVector UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       UI_TableCell if(df_help_label(str8_lit("Source Path"))) UI_Tooltip
       {
@@ -4407,7 +4424,7 @@ DF_VIEW_UI_FUNCTION_DEF(AutoViewRules)
     next_cursor = avrs->cursor;
     
     //- rjf: header
-    if(visible_row_range.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    if(visible_row_range.min == 0) UI_TableVector UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       UI_TableCell ui_label(str8_lit("Type"));
       UI_TableCell ui_label(str8_lit("View Rule"));
@@ -4724,18 +4741,21 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
         {
           B32 frozen_by_solo_mode = (entity->kind == DF_EntityKind_Thread && entity != df_entity_from_handle(ctrl_ctx.thread) && df_state->ctrl_solo_stepping_mode);
           B32 frozen = df_entity_is_frozen(entity);
-          Vec4F32 frozen_color  = df_rgba_from_theme_color(DF_ThemeColor_FailureBackground);
-          Vec4F32 frozen_in_solo_mode_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-          Vec4F32 thawed_color = df_rgba_from_theme_color(DF_ThemeColor_SuccessBackground);
-          UI_Signal sig = {0};
-          UI_BackgroundColor(frozen ? frozen_color : thawed_color)
+          UI_ColorScheme *scheme = ui_top_scheme();
+          if(frozen_by_solo_mode)
           {
-            if(frozen_by_solo_mode)
-            {
-              ui_set_next_background_color(frozen_in_solo_mode_color);
-            }
-            sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, 0, "###lock_%p", entity);
+            scheme = ui_fork_top_color_scheme(.background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
           }
+          else if(frozen)
+          {
+            scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialNegative);
+          }
+          else
+          {
+            scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialPositive);
+          }
+          UI_Signal sig = {0};
+          UI_Scheme(scheme) sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, 0, "###lock_%p", entity);
           if(frozen_by_solo_mode && ui_hovering(sig)) UI_Tooltip
           {
             ui_label(str8_lit("This thread is frozen during stepping operations because it isn't selected, and Solo Stepping Mode is enabled."));
@@ -4789,9 +4809,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
             }
             UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 4) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
-                UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureText))
-                UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBorder))
+              DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
                 if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "###kill")))
               {
                 DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -4846,7 +4864,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   Architecture arch = df_architecture_from_entity(thread);
   DF_Entity *process = thread->parent;
-  Vec4F32 thread_color = df_rgba_from_theme_color(DF_ThemeColor_PlainText);
+  Vec4F32 thread_color = ui_top_scheme()->text;
   if(thread->flags & DF_EntityFlag_HasColor)
   {
     thread_color = df_rgba_from_entity(thread);
@@ -4908,7 +4926,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "###tbl")
     {
       //- rjf: header
-      if(visible_row_range.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+      if(visible_row_range.min == 0) UI_TableVector UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
       {
         UI_TableCell {}
         UI_TableCell ui_label(str8_lit("Module"));
@@ -4956,7 +4974,6 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
           UI_TableCell
             UI_Font(df_font_from_slot(DF_FontSlot_Icons))
             UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-            UI_TextColor(thread_color)
             UI_WidthFill
             UI_TextAlignment(UI_TextAlign_Center)
             UI_FocusHot((row_selected && cs->cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -4966,6 +4983,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
                ctrl_ctx.inline_unwind_count == frame->inline_unwind_idx)
             {
               selected_string = df_g_icon_kind_text_table[DF_IconKind_RightArrow];
+              ui_set_next_scheme(ui_fork_top_color_scheme(.text = thread_color));
             }
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawText, "%S###selection_%i", selected_string,
                                                     (int)frame_idx);
@@ -4990,7 +5008,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
           // rjf: build cell for module
           UI_TableCell UI_FocusHot((row_selected && cs->cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
-            if(df_entity_is_nil(module)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            if(df_entity_is_nil(module)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             {
               UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "(No Module)###moduleless_frame_%I64x", frame_idx);
               UI_Signal sig = ui_signal_from_box(box);
@@ -5017,24 +5035,22 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             {
               if(frame->inline_site != 0)
               {
-                UI_PrefWidth(ui_text_dim(10, 1))
+                UI_PrefWidth(ui_text_dim(10, 1)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
                 {
-                  ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
                   ui_label(str8_lit("[inlined]"));
                 }
               }
               if(symbol_name.size == 0)
               {
-                ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_WeakText));
-                ui_label(str8_lit("[unknown symbol]"));
+                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(str8_lit("[unknown symbol]"));
               }
               else UI_WidthFill
               {
-                D_FancyStringList symbol_name_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeFunction), symbol_name);
+                D_FancyStringList symbol_name_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure), symbol_name);
                 D_FancyStringList symbol_type_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), symbol_type_string);
                 D_FancyStringList fstrs = {0};
                 d_fancy_string_list_concat_in_place(&fstrs, &symbol_name_fstrs);
-                D_FancyString sep = {ui_top_font(), str8_lit(": "), df_rgba_from_theme_color(DF_ThemeColor_WeakText), ui_top_font_size()};
+                D_FancyString sep = {ui_top_font(), str8_lit(": "), ui_top_scheme()->colors[UI_ColorCode_TextWeak], ui_top_font_size()};
                 d_fancy_string_list_push(scratch.arena, &fstrs, &sep);
                 d_fancy_string_list_concat_in_place(&fstrs, &symbol_type_fstrs);
                 UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
@@ -5300,7 +5316,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
           case DF_EntityKind_Module:
           UI_NamedTableVectorF("module_%p", entity)
           {
-            UI_TableCell UI_TextAlignment(UI_TextAlign_Center) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+            UI_TableCell UI_TextAlignment(UI_TextAlign_Center) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             {
               ui_labelf("%I64u", idx_in_process);
             }
@@ -5346,7 +5362,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
                 UI_FocusActive((txt_is_selected && mv->txt_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_WidthFill
               {
-                UI_TextColor(!dbgi_is_valid ? df_rgba_from_theme_color(DF_ThemeColor_FailureBackground) : ui_top_text_color())
+                DF_UIColorScheme(dbgi_is_valid ? DF_UIColorSchemeCode_DefaultPositive : DF_UIColorSchemeCode_Default)
                   sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &mv->txt_cursor, &mv->txt_mark, mv->txt_buffer, sizeof(mv->txt_buffer), &mv->txt_size, 0, dbgi_path, "###dbg_path_%p", entity);
                 edit_commit = (edit_commit || ui_committed(sig));
               }
@@ -6013,7 +6029,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
         UI_PrefWidth(ui_text_dim(10, 1))
-        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureBackground))
+        DF_UIColorScheme(DF_UIColorSchemeCode_DefaultNegative)
       {
         UI_Font(ui_icon_font()) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
         ui_labelf("Could not find \"%S\".", full_path);
@@ -6021,12 +6037,10 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
         UI_PrefWidth(ui_text_dim(10, 1))
-        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_ActionText))
-        UI_BackgroundColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBackground))
-        UI_BorderColor(df_rgba_from_theme_color(DF_ThemeColor_ActionBorder))
         UI_CornerRadius(ui_top_font_size()/3)
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_Focus(UI_FocusKind_On)
+        DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -6556,12 +6570,11 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     ui_set_next_fixed_y(code_area_dim.y + scroll_bar_dim);
     ui_set_next_pref_width(ui_px(bottom_bar_dim.x, 1));
     ui_set_next_pref_height(ui_px(bottom_bar_dim.y, 1));
-    ui_set_next_background_color(df_rgba_from_theme_color(file_is_out_of_date ? DF_ThemeColor_FailureBackground : DF_ThemeColor_AltBackground));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
     UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
-      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       String8 full_path = df_full_path_from_entity(scratch.arena, entity);
       TXTI_Handle handle = txti_handle_from_path(full_path);
@@ -6569,7 +6582,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       if(file_is_out_of_date)
       {
         UI_Box *box = &ui_g_nil_box;
-        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_FailureText))
+        DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
           UI_Font(df_font_from_slot(DF_FontSlot_Icons))
         {
           box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "%S###file_ood_warning", df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
@@ -6580,7 +6593,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
           {
             ui_labelf("This file has changed since ", out_of_date_dbgi_name);
-            UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_Highlight0)) ui_label(out_of_date_dbgi_name);
+            UI_Scheme(ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_Highlight0))) ui_label(out_of_date_dbgi_name);
             ui_labelf(" was produced.");
           }
         }
@@ -7433,12 +7446,11 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     ui_set_next_fixed_y(code_area_dim.y + scroll_bar_dim);
     ui_set_next_pref_width(ui_px(bottom_bar_dim.x, 1));
     ui_set_next_pref_height(ui_px(bottom_bar_dim.y, 1));
-    ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_AltBackground));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
     UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
-      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
       UI_Font(code_font)
     {
       DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
@@ -8235,12 +8247,11 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     ui_set_next_fixed_y(code_area_dim.y + scroll_bar_dim);
     ui_set_next_pref_width(ui_px(bottom_bar_dim.x, 1));
     ui_set_next_pref_height(ui_px(bottom_bar_dim.y, 1));
-    ui_set_next_background_color(df_rgba_from_theme_color(DF_ThemeColor_AltBackground));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
     UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
-      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
       UI_Font(code_font)
     {
       ui_labelf("Line: %I64d, Column: %I64d", tv->cursor.line, tv->cursor.column);
@@ -8505,8 +8516,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //
   D_FancyStringList byte_fancy_strings[256] = {0};
   {
-    Vec4F32 full_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
-    Vec4F32 zero_color = df_rgba_from_theme_color(DF_ThemeColor_WeakText);
+    Vec4F32 full_color = df_rgba_from_theme_color(DF_ThemeColor_DefaultTextPositive);
+    Vec4F32 zero_color = df_rgba_from_theme_color(DF_ThemeColor_DefaultTextWeak);
     for(U64 idx = 0; idx < ArrayCount(byte_fancy_strings); idx += 1)
     {
       U8 byte = (U8)idx;
@@ -8628,7 +8639,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");
-          annotation->color = symbol_name.size != 0 ? df_rgba_from_theme_color(DF_ThemeColor_CodeFunction) : df_rgba_from_theme_color(DF_ThemeColor_WeakText);
+          annotation->color = symbol_name.size != 0 ? df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure) : df_rgba_from_theme_color(DF_ThemeColor_DefaultTextWeak);
           annotation->vaddr_range = frame_vaddr_range;
           for(U64 vaddr = frame_vaddr_range_in_viz.min; vaddr < frame_vaddr_range_in_viz.max; vaddr += 1)
           {
@@ -8651,7 +8662,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         Annotation *annotation = push_array(scratch.arena, Annotation, 1);
         annotation->name_string = df_display_string_from_entity(scratch.arena, thread);
         annotation->kind_string = str8_lit("Stack");
-        annotation->color = thread->flags & DF_EntityFlag_HasColor ? df_rgba_from_entity(thread) : df_rgba_from_theme_color(DF_ThemeColor_PlainText);
+        annotation->color = thread->flags & DF_EntityFlag_HasColor ? df_rgba_from_entity(thread) : df_rgba_from_theme_color(DF_ThemeColor_DefaultText);
         annotation->vaddr_range = stack_vaddr_range;
         for(U64 vaddr = stack_vaddr_range_in_viz.min; vaddr < stack_vaddr_range_in_viz.max; vaddr += 1)
         {
@@ -8732,7 +8743,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     UI_Parent(header_box)
       UI_Font(font)
       UI_FontSize(font_size)
-      UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       UI_PrefWidth(ui_px(big_glyph_advance*18.f, 1.f)) ui_labelf("Address");
       UI_PrefWidth(ui_px(cell_width_px, 1.f))
@@ -8741,9 +8752,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         Rng1U64 col_selection_rng = r1u64(mv->cursor%mv->num_columns, mv->mark%mv->num_columns);
         for(U64 row_off = 0; row_off < mv->num_columns*mv->bytes_per_cell; row_off += mv->bytes_per_cell)
         {
-          if(col_selection_rng.min <= row_off && row_off <= col_selection_rng.max)
+          if(!(col_selection_rng.min <= row_off && row_off <= col_selection_rng.max))
           {
-            ui_set_next_text_color(df_rgba_from_theme_color(DF_ThemeColor_PlainText));
+            ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
           }
           ui_labelf("%I64X", row_off);
         }
@@ -8906,23 +8917,21 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         row_is_boundary = 1;
         row_boundary_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
       }
-      ui_set_next_border_color(row_boundary_color);
       UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_DrawSideTop*!!row_is_boundary, "row_%I64x", row_range_bytes.min);
       UI_Parent(row)
       {
         UI_PrefWidth(ui_px(big_glyph_advance*18.f, 1.f))
         {
-          ui_set_next_text_color((selection.max >= row_range_bytes.min && selection.min < row_range_bytes.max)
-                                 ? df_rgba_from_theme_color(DF_ThemeColor_PlainText)
-                                 : df_rgba_from_theme_color(DF_ThemeColor_WeakText));
+          if(!(selection.max >= row_range_bytes.min && selection.min < row_range_bytes.max))
+          {
+            ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
+          }
           ui_labelf("%016I64X", row_range_bytes.min);
         }
         UI_PrefWidth(ui_px(cell_width_px, 1.f))
           UI_TextAlignment(UI_TextAlign_Center)
           UI_CornerRadius(0)
         {
-          Vec4F32 full_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
-          Vec4F32 zero_color = df_rgba_from_theme_color(DF_ThemeColor_WeakText);
           for(U64 col_idx = 0; col_idx < mv->num_columns; col_idx += 1)
           {
             U64 visible_byte_idx = (row_idx-viz_range_rows.min)*mv->num_columns + col_idx;
@@ -8954,15 +8963,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             if(selection.min <= global_byte_idx && global_byte_idx <= selection.max)
             {
               cell_flags |= UI_BoxFlag_DrawBackground;
-              cell_bg_rgba = df_rgba_from_theme_color(DF_ThemeColor_TextSelection);
-            }
-            if(cell_flags & (UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideBottom))
-            {
-              ui_set_next_border_color(cell_border_rgba);
-            }
-            if(cell_flags & UI_BoxFlag_DrawBackground)
-            {
-              ui_set_next_background_color(cell_bg_rgba);
+              cell_bg_rgba = df_rgba_from_theme_color(DF_ThemeColor_Selection);
             }
             UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
             ui_box_equip_display_fancy_strings(cell_box, 0, &byte_fancy_strings[byte_value]);
@@ -8972,7 +8973,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
               {
                 if(global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
                 {
-                  ui_set_next_background_color(annotation->color);
+                  ui_set_next_scheme(ui_fork_top_color_scheme(.background = annotation->color));
                   ui_set_next_fixed_x(big_glyph_advance*18.f + col_idx*cell_width_px + -cell_width_px/8.f + off);
                   ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -cell_width_px/8.f);
                   ui_set_next_fixed_width(cell_width_px/4.f);
@@ -8992,14 +8993,14 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
               {
                 UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(10, 1))
                 {
-                  UI_TextColor(a->color) UI_Font(font) ui_label(a->name_string);
-                  UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_label(a->kind_string);
+                  UI_Font(font) ui_label(a->name_string);
+                  UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(a->kind_string);
                 }
                 if(a->type_string.size != 0)
                 {
                   df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeType), a->type_string);
                 }
-                UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_label(str8_from_memory_size(scratch.arena, dim_1u64(a->vaddr_range)));
+                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(str8_from_memory_size(scratch.arena, dim_1u64(a->vaddr_range)));
                 if(a->next != 0)
                 {
                   ui_spacer(ui_em(1.5f, 1.f));
@@ -9034,7 +9035,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
                             ascii_box->rect.y0,
                             text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
                             ascii_box->rect.y1),
-                     df_rgba_from_theme_color(DF_ThemeColor_TextSelection),
+                     df_rgba_from_theme_color(DF_ThemeColor_Selection),
                      0, 0, 1.f);
             }
             ui_box_equip_draw_bucket(ascii_box, bucket);
@@ -9073,7 +9074,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     footer_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, "footer");
     UI_Parent(footer_box) UI_Font(font) UI_FontSize(font_size)
     {
-      UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+      UI_PrefWidth(ui_em(7.5f, 1.f)) UI_HeightFill UI_Column UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         UI_PrefHeight(ui_px(row_height_px, 0.f))
       {
         ui_labelf("Address:");
@@ -9082,7 +9083,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         ui_labelf("U32:");
         ui_labelf("U64:");
       }
-      UI_PrefWidth(ui_em(45.f, 1.f)) UI_HeightFill UI_Column UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_CodeNumeric))
+      UI_PrefWidth(ui_em(45.f, 1.f)) UI_HeightFill UI_Column
         UI_PrefHeight(ui_px(row_height_px, 0.f))
       {
         B32 cursor_in_range = (viz_range_bytes.min <= mv->cursor && mv->cursor+8 <= viz_range_bytes.max);
@@ -9198,7 +9199,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "breakpoints_table")
   {
-    if(visible_row_range.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    if(visible_row_range.min == 0) UI_TableVector UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       UI_TableCell{}
       UI_TableCell{ui_labelf("Name");}
@@ -9373,7 +9374,7 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
     UI_Focus(UI_FocusKind_Null)
     UI_TableF(ArrayCount(col_pcts), col_pcts, "pins_table")
   {
-    if(visible_row_range.min == 0) UI_TableVector UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText))
+    if(visible_row_range.min == 0) UI_TableVector UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       UI_TableCell{ui_labelf("Name");}
       UI_TableCell{ui_labelf("Location");}
@@ -9674,12 +9675,12 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         preset = (DF_ThemePreset)(preset+1))
     {
       Vec4F32 *colors = df_g_theme_preset_colors_table[preset];
-      Vec4F32 bg_color = colors[DF_ThemeColor_PlainBackground];
-      Vec4F32 tx_color = colors[DF_ThemeColor_PlainText];
-      Vec4F32 bd_color = colors[DF_ThemeColor_PlainBorder];
-      ui_set_next_background_color(bg_color);
-      ui_set_next_text_color(tx_color);
-      ui_set_next_border_color(bd_color);
+      Vec4F32 bg_color = colors[DF_ThemeColor_DefaultBackground];
+      Vec4F32 tx_color = colors[DF_ThemeColor_DefaultText];
+      Vec4F32 bd_color = colors[DF_ThemeColor_DefaultBorder];
+      ui_set_next_scheme(ui_fork_top_color_scheme(.text = tx_color,
+                                                  .border = bd_color,
+                                                  .background = bg_color));
       if(ui_clicked(ui_buttonf("%S", df_g_theme_preset_display_string_table[preset])))
       {
         MemoryCopy(df_gfx_state->cfg_theme_target.colors, colors, sizeof(df_gfx_state->cfg_theme_target.colors));
@@ -9710,7 +9711,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
       UI_Row
       {
         ui_spacer(ui_em(1.5f, 1.f));
-        UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) ui_label(df_g_theme_color_display_string_table[color]);
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(df_g_theme_color_display_string_table[color]);
       }
       
       ui_spacer(ui_em(1.5f, 1.f));
@@ -9760,7 +9761,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         String8 a_string = push_str8f(scratch.arena, "%.2f", rgba.w);
         UI_Row UI_Font(df_font_from_slot(DF_FontSlot_Code))
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("Hex");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("Hex");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, hex_string, "###hex_edit");
           if(ui_committed(sig))
           {
@@ -9773,7 +9774,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         ui_spacer(ui_em(0.75f, 1.f));
         UI_Row
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("R");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("R");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, r_string, "###r_edit");
           if(ui_committed(sig))
           {
@@ -9785,7 +9786,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         }
         UI_Row
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("G");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("G");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, g_string, "###g_edit");
           if(ui_committed(sig))
           {
@@ -9797,7 +9798,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         }
         UI_Row
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("B");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("B");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, b_string, "###b_edit");
           if(ui_committed(sig))
           {
@@ -9810,7 +9811,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         ui_spacer(ui_em(0.75f, 1.f));
         UI_Row
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("H");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("H");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, h_string, "###h_edit");
           if(ui_committed(sig))
           {
@@ -9821,7 +9822,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         }
         UI_Row
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("S");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("S");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, s_string, "###s_edit");
           if(ui_committed(sig))
           {
@@ -9832,7 +9833,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         }
         UI_Row
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("V");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("V");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, v_string, "###v_edit");
           if(ui_committed(sig))
           {
@@ -9844,7 +9845,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         ui_spacer(ui_em(0.75f, 1.f));
         UI_Row
         {
-          UI_TextColor(df_rgba_from_theme_color(DF_ThemeColor_WeakText)) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("A");
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("A");
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, a_string, "###a_edit");
           if(ui_committed(sig))
           {
@@ -9923,7 +9924,6 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         Vec3F32 hsv = hsv_from_rgb(rgb);
         Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
         ui_set_next_pref_width(ui_pct(1, 0));
-        ui_set_next_background_color(v4f32(0, 0, 0, 0));
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *color_row = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|
                                                       UI_BoxFlag_DrawBackground|
@@ -9933,15 +9933,15 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
                                                       "###color_%I64x", (U64)color);
         UI_Parent(color_row)
         {
-          Vec4F32 bg_color = ui_top_background_color();
-          Vec4F32 default_text_color = ui_top_text_color();
+          Vec4F32 bg_color = ui_top_scheme()->background;
+          Vec4F32 default_text_color = ui_top_scheme()->text;
           F32 default_fallback_factor = clamp_1f32(r1f32(0.3f, 1), dot_4f32(normalize_4f32(rgba), normalize_4f32(bg_color))) - 0.3f;
           Vec4F32 text_rgba = mix_4f32(rgba, default_text_color, default_fallback_factor);
-          UI_WidthFill UI_TextColor(text_rgba) ui_label(df_g_theme_color_display_string_table[color]);
+          UI_WidthFill UI_Scheme(ui_fork_top_color_scheme(.text = text_rgba)) ui_label(df_g_theme_color_display_string_table[color]);
           ui_set_next_pref_width(ui_top_pref_height());
           UI_HeightFill UI_Column UI_Padding(ui_em(0.3f, 1))
           {
-            ui_set_next_background_color(rgba);
+            ui_set_next_scheme(ui_fork_top_color_scheme(.background = rgba));
             ui_set_next_corner_radius_00(ui_top_font_size()/4.f);
             ui_set_next_corner_radius_01(ui_top_font_size()/4.f);
             ui_set_next_corner_radius_10(ui_top_font_size()/4.f);

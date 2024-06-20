@@ -7,59 +7,54 @@
 UI_StackTable:
 {
   //- rjf: parents
-  { Parent                             parent                       `UI_Box *`      `&ui_g_nil_box`    }
+  { Parent                             parent                       `UI_Box *`             `&ui_g_nil_box`                    }
   
   //- rjf: layout params
-  { ChildLayoutAxis                    child_layout_axis             Axis2          `Axis2_X`          }
+  { ChildLayoutAxis                    child_layout_axis             Axis2                 `Axis2_X`                          }
   
   //- rjf: size/position
-  { FixedX                             fixed_x                       F32            0                  }
-  { FixedY                             fixed_y                       F32            0                  }
-  { FixedWidth                         fixed_width                   F32            0                  }
-  { FixedHeight                        fixed_height                  F32            0                  }
-  { PrefWidth                          pref_width                    UI_Size        `ui_px(250.f, 1.f)`}
-  { PrefHeight                         pref_height                   UI_Size        `ui_px(30.f, 1.f)` }
+  { FixedX                             fixed_x                       F32                   0                                  }
+  { FixedY                             fixed_y                       F32                   0                                  }
+  { FixedWidth                         fixed_width                   F32                   0                                  }
+  { FixedHeight                        fixed_height                  F32                   0                                  }
+  { PrefWidth                          pref_width                    UI_Size               `ui_px(250.f, 1.f)`                }
+  { PrefHeight                         pref_height                   UI_Size               `ui_px(30.f, 1.f)`                 }
   
   //- rjf: flags
-  { Flags                              flags                         UI_BoxFlags    0                  }
+  { Flags                              flags                         UI_BoxFlags           0                                  }
   
   //- rjf: interaction
-  { FocusHot                           focus_hot                     UI_FocusKind   UI_FocusKind_Null  }
-  { FocusActive                        focus_active                  UI_FocusKind   UI_FocusKind_Null  }
-  { FastpathCodepoint                  fastpath_codepoint            U32            0                  }
+  { FocusHot                           focus_hot                     UI_FocusKind          UI_FocusKind_Null                  }
+  { FocusActive                        focus_active                  UI_FocusKind          UI_FocusKind_Null                  }
+  { FastpathCodepoint                  fastpath_codepoint            U32                   0                                  }
   
   //- rjf: colors
-  { Transparency                       transparency                  F32            0                  }
-  { BackgroundColor                    background_color              Vec4F32        `v4f32(1, 0, 1, 1)`}
-  { TextColor                          text_color                    Vec4F32        `v4f32(1, 0, 1, 1)`}
-  { BorderColor                        border_color                  Vec4F32        `v4f32(1, 0, 1, 1)`}
-  { OverlayColor                       overlay_color                 Vec4F32        `v4f32(1, 0, 1, 1)`}
-  { TextSelectColor                    text_select_color             Vec4F32        `v4f32(1, 0, 1, 1)`}
-  { TextCursorColor                    text_cursor_color             Vec4F32        `v4f32(1, 0, 1, 1)`}
+  { Transparency                       transparency                  F32                   0                                  }
+  { Scheme                             scheme                       `UI_ColorScheme*`     `&ui_g_nil_color_scheme`            }
   
   //- rjf: squish
-  { Squish                             squish                        F32            0                  }
+  { Squish                             squish                        F32                   0                                  }
   
   //- rjf: hover cursor
-  { HoverCursor                        hover_cursor                  OS_Cursor      OS_Cursor_Pointer  }
+  { HoverCursor                        hover_cursor                  OS_Cursor             OS_Cursor_Pointer                  }
   
   //- rjf: font
-  { Font                               font                          F_Tag          `f_tag_zero()`     }
-  { FontSize                           font_size                     F32            24.f               }
-  { TabSize                            tab_size                      F32            `24.f*4.f`         }
+  { Font                               font                          F_Tag                 `f_tag_zero()`                     }
+  { FontSize                           font_size                     F32                   24.f                               }
+  { TabSize                            tab_size                      F32                   `24.f*4.f`                         }
   
   //- rjf: corner radii
-  { CornerRadius00                     corner_radius_00              F32            0                  }
-  { CornerRadius01                     corner_radius_01              F32            0                  }
-  { CornerRadius10                     corner_radius_10              F32            0                  }
-  { CornerRadius11                     corner_radius_11              F32            0                  }
+  { CornerRadius00                     corner_radius_00              F32                   0                                  }
+  { CornerRadius01                     corner_radius_01              F32                   0                                  }
+  { CornerRadius10                     corner_radius_10              F32                   0                                  }
+  { CornerRadius11                     corner_radius_11              F32                   0                                  }
   
   //- rjf: blur size
-  { BlurSize                           blur_size                     F32            0                  }
+  { BlurSize                           blur_size                     F32                   0                                  }
   
   //- rjf: text parameters
-  { TextPadding                        text_padding                  F32            2                  }
-  { TextAlignment                      text_alignment                UI_TextAlign   UI_TextAlign_Left  }
+  { TextPadding                        text_padding                  F32                   2                                  }
+  { TextAlignment                      text_alignment                UI_TextAlign          UI_TextAlign_Left                  }
 }
 
 //- rjf: declaring stack node types
