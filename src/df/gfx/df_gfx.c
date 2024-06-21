@@ -3457,7 +3457,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       ui_push_font_size(main_font_size);
       ui_push_pref_width(ui_em(20.f, 1));
       ui_push_pref_height(ui_em(2.5f, 1.f));
-      ui_push_scheme(df_ui_color_scheme_from_code(DF_UIColorSchemeCode_Default));
+      ui_push_palette(df_palette_from_code(DF_PaletteCode_Default));
       ui_push_blur_size(10.f);
     }
     
@@ -3503,7 +3503,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           UI_Size main_width = ui_top_pref_width();
           UI_Size main_height = ui_top_pref_height();
           UI_TextAlign main_text_align = ui_top_text_alignment();
-          DF_UIColorScheme(DF_UIColorSchemeCode_TabActive)
+          DF_Palette(DF_PaletteCode_TabActive)
             UI_Tooltip
             UI_PrefWidth(main_width)
             UI_PrefHeight(main_height)
@@ -3564,7 +3564,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     //- rjf: entity drop completion ctx menu
     //
     {
-      DF_UIColorScheme(DF_UIColorSchemeCode_Floating)
+      DF_Palette(DF_PaletteCode_Floating)
         UI_CtxMenu(ws->drop_completion_ctx_menu_key)
         UI_PrefWidth(ui_em(30.f, 1.f))
       {
@@ -3715,7 +3715,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     ////////////////////////////
     //- rjf: universal ctx menus
     //
-    DF_UIColorScheme(DF_UIColorSchemeCode_Floating)
+    DF_Palette(DF_PaletteCode_Floating)
     {
       Temp scratch = scratch_begin(&arena, 1);
       
@@ -3752,12 +3752,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Flags(UI_BoxFlag_DrawTextWeak)
             ui_label(df_g_entity_kind_display_string_table[entity->kind]);
           {
-            UI_ColorScheme *scheme = ui_top_scheme();
+            UI_Palette *palette = ui_top_palette();
             if(entity->flags & DF_EntityFlag_HasColor)
             {
-              scheme = ui_fork_top_color_scheme(.text = df_rgba_from_entity(entity));
+              palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_entity(entity));
             }
-            UI_Scheme(scheme)
+            UI_Palette(palette)
               UI_PrefWidth(ui_text_dim(10, 1))
               UI_Font((kind_flags & DF_EntityKindFlag_NameIsCode) ? df_font_from_slot(DF_FontSlot_Code) : ui_top_font())
               ui_label(display_name);
@@ -3933,7 +3933,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         if(op_flags & DF_EntityOpFlag_Freeze)
         {
           B32 is_frozen = df_entity_is_frozen(entity);
-          ui_set_next_scheme(df_ui_color_scheme_from_code(is_frozen ? DF_UIColorSchemeCode_SpecialNegative : DF_UIColorSchemeCode_SpecialPositive));
+          ui_set_next_palette(df_palette_from_code(is_frozen ? DF_PaletteCode_SpecialNegative : DF_PaletteCode_SpecialPositive));
           if(is_frozen && ui_clicked(df_icon_buttonf(DF_IconKind_Locked, 0, "Thaw###freeze_thaw")))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
@@ -4203,7 +4203,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     for(U64 preset_idx = 0; preset_idx < ArrayCount(presets); preset_idx += 1)
                   {
                     ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-                    ui_set_next_scheme(ui_fork_top_color_scheme(.background = presets[preset_idx]));
+                    ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = presets[preset_idx]));
                     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|
                                                             UI_BoxFlag_DrawBorder|
                                                             UI_BoxFlag_Clickable|
@@ -4369,15 +4369,17 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         Vec2F32 window_dim = dim_2f32(window_rect);
         UI_Box *bg_box = &ui_g_nil_box;
+        UI_Palette *palette = ui_build_palette(df_palette_from_code(DF_PaletteCode_Floating));
+        palette->background.w *= df_gfx_state->confirm_t;
         UI_Rect(window_rect)
           UI_ChildLayoutAxis(Axis2_X)
           UI_Focus(UI_FocusKind_On)
           UI_BlurSize(10*df_gfx_state->confirm_t)
-          DF_UIColorScheme(DF_UIColorSchemeCode_Floating)
+          UI_Palette(palette)
         {
           bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|UI_BoxFlag_Floating|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll|UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawBackground, "###confirm_popup_%p", ws);
         }
-        if(df_gfx_state->confirm_active) UI_Parent(bg_box)
+        if(df_gfx_state->confirm_active) UI_Parent(bg_box) UI_Transparency(1-df_gfx_state->confirm_t)
         {
           ui_ctx_menu_close();
           UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
@@ -4389,7 +4391,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               UI_CornerRadius00(ui_top_font_size()*0.25f)
                 UI_CornerRadius01(ui_top_font_size()*0.25f)
-                DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+                DF_Palette(DF_PaletteCode_SpecialNeutral)
                 if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
               {
                 DF_CmdParams p = df_cmd_params_zero();
@@ -4707,7 +4709,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       os_window_push_custom_edges(ws->os, window_edge_px);
       os_window_push_custom_title_bar(ws->os, dim_2f32(top_bar_rect).y);
       ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-      DF_UIColorScheme(DF_UIColorSchemeCode_MenuBar)
+      DF_Palette(DF_PaletteCode_MenuBar)
         UI_Focus((ws->menu_bar_focused && window_is_focused && !ui_any_ctx_menu_is_open() && !hover_eval_is_open) ? UI_FocusKind_On : UI_FocusKind_Null)
         UI_Pane(top_bar_rect, str8_lit("###top_bar"))
         UI_WidthFill UI_Row
@@ -4892,14 +4894,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               for(DF_EntityNode *n = targets_list.first; n != 0; n = n->next)
               {
                 DF_Entity *target = n->entity;
-                UI_ColorScheme *scheme = ui_top_scheme();
+                UI_Palette *palette = ui_top_palette();
                 if(target->flags & DF_EntityFlag_HasColor)
                 {
-                  scheme = ui_fork_top_color_scheme(.text = df_rgba_from_entity(target));
+                  palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_entity(target));
                 }
                 String8 target_name = df_display_string_from_entity(scratch.arena, target);
                 UI_Signal sig = {0};
-                UI_Scheme(scheme) sig = df_icon_buttonf(DF_IconKind_Target, 0, "%S##%p", target_name, target);
+                UI_Palette(palette) sig = df_icon_buttonf(DF_IconKind_Target, 0, "%S##%p", target_name, target);
                 if(ui_clicked(sig))
                 {
                   DF_CmdParams params = df_cmd_params_from_window(ws);
@@ -5093,7 +5095,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           // rjf: conversion task visualization
           UI_PrefWidth(ui_text_dim(10, 1)) UI_HeightFill
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+            DF_Palette(DF_PaletteCode_SpecialNeutral)
           {
             Temp scratch = scratch_begin(&arena, 1);
             DF_EntityList tasks = df_query_cached_entity_list_with_kind(DF_EntityKind_ConversionTask);
@@ -5140,7 +5142,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           if(can_play || !have_targets || processes.count == 0)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialPositive)
+            DF_Palette(DF_PaletteCode_SpecialPositive)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Play]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -5181,7 +5183,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           //- rjf: restart button
           if(!can_play && processes.count != 0) UI_TextAlignment(UI_TextAlign_Center)
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialPositive)
+            DF_Palette(DF_PaletteCode_SpecialPositive)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Redo]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -5216,7 +5218,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           //- rjf: pause button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+            DF_Palette(DF_PaletteCode_SpecialNeutral)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Pause]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -5243,7 +5245,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           //- rjf: stop button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_stop ? 0 : UI_BoxFlag_Disabled)
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
+            DF_Palette(DF_PaletteCode_SpecialNegative)
           {
             UI_Signal sig = {0};
             {
@@ -5381,7 +5383,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           ui_spacer(ui_pct(1, 0));
           
           // rjf: loaded user viz
-          if(do_user_prof) DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+          if(do_user_prof) DF_Palette(DF_PaletteCode_SpecialNeutral)
           {
             ui_set_next_pref_width(ui_children_sum(1));
             ui_set_next_child_layout_axis(Axis2_X);
@@ -5416,7 +5418,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           // rjf: loaded project viz
-          if(do_user_prof) DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+          if(do_user_prof) DF_Palette(DF_PaletteCode_SpecialNeutral)
           {
             ui_set_next_pref_width(ui_children_sum(1));
             ui_set_next_child_layout_axis(Axis2_X);
@@ -5463,7 +5465,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               max_sig = df_icon_buttonf(DF_IconKind_Window, 0, "##maximize");
             }
             UI_PrefWidth(ui_px(button_dim*2, 1.f))
-              DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
+              DF_Palette(DF_PaletteCode_SpecialNegative)
             {
               cls_sig = df_icon_buttonf(DF_IconKind_X,      0, "##close");
             }
@@ -5495,10 +5497,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     {
       B32 is_running = df_ctrl_targets_running() && df_ctrl_last_run_frame_idx() < df_frame_index();
       CTRL_Event stop_event = df_ctrl_last_stop_event();
-      UI_ColorScheme *positive_scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialPositive);
-      UI_ColorScheme *running_scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialNeutral);
-      UI_ColorScheme *negative_scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialNegative);
-      UI_ColorScheme *scheme = running_scheme;
+      UI_Palette *positive_scheme = df_palette_from_code(DF_PaletteCode_SpecialPositive);
+      UI_Palette *running_scheme = df_palette_from_code(DF_PaletteCode_SpecialNeutral);
+      UI_Palette *negative_scheme = df_palette_from_code(DF_PaletteCode_SpecialNegative);
+      UI_Palette *palette = running_scheme;
       if(!is_running)
       {
         switch(stop_event.cause)
@@ -5506,21 +5508,21 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           default:
           case CTRL_EventCause_Finished:
           {
-            scheme = positive_scheme;
+            palette = positive_scheme;
           }break;
           case CTRL_EventCause_UserBreakpoint:
           case CTRL_EventCause_InterruptedByException:
           case CTRL_EventCause_InterruptedByTrap:
           case CTRL_EventCause_InterruptedByHalt:
           {
-            scheme = negative_scheme;
+            palette = negative_scheme;
           }break;
         }
       }
       if(ws->error_t > 0.01f)
       {
-        UI_ColorScheme *blended_scheme = push_array(ui_build_arena(), UI_ColorScheme, 1);
-        MemoryCopyStruct(blended_scheme, scheme);
+        UI_Palette *blended_scheme = push_array(ui_build_arena(), UI_Palette, 1);
+        MemoryCopyStruct(blended_scheme, palette);
         for(EachEnumVal(UI_ColorCode, code))
         {
           for(U64 idx = 0; idx < 4; idx += 1)
@@ -5528,10 +5530,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             blended_scheme->colors[code].v[idx] += (negative_scheme->colors[code].v[idx] - blended_scheme->colors[code].v[idx]) * ws->error_t;
           }
         }
-        scheme = blended_scheme;
+        palette = blended_scheme;
       }
       UI_Flags(UI_BoxFlag_DrawBackground) UI_CornerRadius(0)
-        UI_Scheme(scheme)
+        UI_Palette(palette)
         UI_Pane(bottom_bar_rect, str8_lit("###bottom_bar")) UI_WidthFill UI_Row
         UI_Flags(0)
       {
@@ -5584,7 +5586,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Flags(UI_BoxFlag_DrawBackground)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_CornerRadius(4)
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+            DF_Palette(DF_PaletteCode_SpecialNeutral)
             ui_labelf("Currently rebinding \"%S\" hotkey", df_gfx_state->bind_change_cmd_spec->info.display_name);
         }
         
@@ -5752,6 +5754,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       
       //- rjf: build query text input
       B32 query_completed = 0;
+      B32 query_cancelled = 0;
       UI_Parent(query_container_box)
         UI_WidthFill UI_PrefHeight(ui_px(query_line_edit_height, 1.f))
         UI_Focus(UI_FocusKind_On)
@@ -5789,11 +5792,18 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               ws->query_view_selected = 1;
             }
           }
-          UI_PrefWidth(ui_em(5.f, 1.f)) UI_Focus(UI_FocusKind_Off)
+          UI_PrefWidth(ui_em(5.f, 1.f)) UI_Focus(UI_FocusKind_Off) DF_Palette(DF_PaletteCode_SpecialPositive)
           {
             if(ui_clicked(df_icon_buttonf(DF_IconKind_RightArrow, 0, "##complete_query")))
             {
               query_completed = 1;
+            }
+          }
+          UI_PrefWidth(ui_em(3.f, 1.f)) UI_Focus(UI_FocusKind_Off) DF_Palette(DF_PaletteCode_Default)
+          {
+            if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "##cancel_query")))
+            {
+              query_cancelled = 1;
             }
           }
         }
@@ -5808,8 +5818,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       }
       
       //- rjf: query submission
-      if((ui_is_focus_active() || (window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && !ws->query_view_selected)) &&
-         ui_slot_press(UI_EventActionSlot_Cancel))
+      if(((ui_is_focus_active() || (window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && !ws->query_view_selected)) &&
+          ui_slot_press(UI_EventActionSlot_Cancel)) || query_cancelled)
       {
         DF_CmdParams params = df_cmd_params_from_window(ws);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CancelQuery));
@@ -5842,7 +5852,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       }
       
       //- rjf: build darkening overlay for rest of screen
-      UI_Scheme(ui_fork_top_color_scheme(.background = mix_4f32(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-ws->query_view_selected_t)))
+      UI_Palette(ui_build_palette(ui_top_palette(), .background = mix_4f32(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-ws->query_view_selected_t)))
         UI_Rect(window_rect)
       {
         ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
@@ -5900,7 +5910,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       if(build_hover_eval && ws->hover_eval_string.size != 0 && hover_eval_is_open)
         UI_Font(df_font_from_slot(DF_FontSlot_Code))
         UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Main))
-        DF_UIColorScheme(DF_UIColorSchemeCode_Floating)
+        DF_Palette(DF_PaletteCode_Floating)
       {
         Temp scratch = scratch_begin(&arena, 1);
         DI_Scope *scope = di_scope_open();
@@ -6060,7 +6070,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     {
                       Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
                       rgba.w *= 0.2f;
-                      ui_set_next_scheme(ui_fork_top_color_scheme(.background = rgba));
+                      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rgba));
                     }
                     UI_Signal sig = df_line_editf(DF_LineEditFlag_CodeContents|
                                                   DF_LineEditFlag_DisplayStringIsCode|
@@ -6087,7 +6097,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     {
                       Vec4F32 rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
                       rgba.w *= 0.2f;
-                      ui_set_next_scheme(ui_fork_top_color_scheme(.background = rgba));
+                      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rgba));
                       ui_set_next_flags(UI_BoxFlag_DrawBackground);
                     }
                     df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_value);
@@ -6243,7 +6253,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                   ui_set_next_child_layout_axis(axis2_flip(axis));
                   if(ui_key_match(key, ui_drop_hot_key()))
                   {
-                    ui_set_next_scheme(ui_fork_top_color_scheme(.border = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
+                    ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
                   }
                   site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                                        UI_BoxFlag_DrawBorder|
@@ -6270,7 +6280,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 future_split_rect.p1.v[axis] += drop_site_major_dim_px;
                 future_split_rect.p0.v[axis2_flip(axis)] = panel_rect.p0.v[axis2_flip(axis)];
                 future_split_rect.p1.v[axis2_flip(axis)] = panel_rect.p1.v[axis2_flip(axis)];
-                UI_Rect(future_split_rect) DF_UIColorScheme(DF_UIColorSchemeCode_DropSite)
+                UI_Rect(future_split_rect) DF_Palette(DF_PaletteCode_DropSite)
                 {
                   ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
                 }
@@ -6328,7 +6338,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 ui_set_next_child_layout_axis(axis2_flip(split_axis));
                 if(ui_key_match(key, ui_drop_hot_key()))
                 {
-                  ui_set_next_scheme(ui_fork_top_color_scheme(.border = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
+                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
                 }
                 site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                                      UI_BoxFlag_DrawBorder|
@@ -6355,7 +6365,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               future_split_rect.p1.v[split_axis] += drop_site_major_dim_px;
               future_split_rect.p0.v[axis2_flip(split_axis)] = child_rect.p0.v[axis2_flip(split_axis)];
               future_split_rect.p1.v[axis2_flip(split_axis)] = child_rect.p1.v[axis2_flip(split_axis)];
-              UI_Rect(future_split_rect) DF_UIColorScheme(DF_UIColorSchemeCode_DropSite)
+              UI_Rect(future_split_rect) DF_Palette(DF_PaletteCode_DropSite)
               {
                 ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
               }
@@ -6631,7 +6641,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                   ui_set_next_child_layout_axis(axis2_flip(split_axis));
                   if(ui_key_match(key, ui_drop_hot_key()))
                   {
-                    ui_set_next_scheme(ui_fork_top_color_scheme(.border = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
+                    ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
                   }
                   site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                                        UI_BoxFlag_DrawBorder|
@@ -6646,10 +6656,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
                     {
                       if(split_side == Side_Min) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
-                      DF_UIColorScheme(DF_UIColorSchemeCode_DropSite) ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      DF_Palette(DF_PaletteCode_DropSite) ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
                       ui_spacer(ui_px(padding, 1.f));
                       if(split_side == Side_Max) { ui_set_next_flags(UI_BoxFlag_DrawBackground); }
-                      DF_UIColorScheme(DF_UIColorSchemeCode_DropSite) ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      DF_Palette(DF_PaletteCode_DropSite) ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
                     }
                   }
                 }
@@ -6659,7 +6669,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                   {
                     ui_set_next_child_layout_axis(split_axis);
                     UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero());
-                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) DF_UIColorScheme(DF_UIColorSchemeCode_DropSite)
+                    UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f)) DF_Palette(DF_PaletteCode_DropSite)
                     {
                       ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, ui_key_zero());
                     }
@@ -6702,7 +6712,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                   Vec2F32 panel_center = center_2f32(panel_rect);
                   future_split_rect.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
                 }
-                UI_Rect(future_split_rect) DF_UIColorScheme(DF_UIColorSchemeCode_DropSite)
+                UI_Rect(future_split_rect) DF_Palette(DF_PaletteCode_DropSite)
                 {
                   ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
                 }
@@ -6849,7 +6859,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 F64 pct_done_f64 = ((F64)view->loading_progress_v/(F64)view->loading_progress_v_target);
                 F32 pct_done = (F32)pct_done_f64;
-                ui_set_next_scheme(ui_fork_top_color_scheme(.background = v4f32(1, 1, 1, 0.2f*view->loading_t)));
+                ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = v4f32(1, 1, 1, 0.2f*view->loading_t)));
                 ui_set_next_fixed_x(indicator_region_rect.x0);
                 ui_set_next_fixed_y(indicator_region_rect.y0);
                 ui_set_next_fixed_width(dim_2f32(indicator_region_rect).x*pct_done);
@@ -6858,7 +6868,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               }
               
               // rjf: fill
-              ui_set_next_scheme(ui_fork_top_color_scheme(.background = hl_color));
+              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = hl_color));
               ui_set_next_fixed_x(indicator_rect.x0);
               ui_set_next_fixed_y(indicator_rect.y0);
               ui_set_next_fixed_width(dim_2f32(indicator_rect).x);
@@ -6866,7 +6876,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
               
               // rjf: animated bar
-              ui_set_next_scheme(ui_fork_top_color_scheme(.border = bd_color, .background = bg_color));
+              ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = bd_color, .background = bg_color));
               ui_set_next_fixed_x(indicator_region_rect.x0);
               ui_set_next_fixed_y(indicator_region_rect.y0);
               ui_set_next_fixed_width(dim_2f32(indicator_region_rect).x);
@@ -6878,7 +6888,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rjf: build background
             UI_WidthFill UI_HeightFill
             {
-              ui_set_next_scheme(ui_fork_top_color_scheme(.background = bg_color));
+              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = bg_color));
               ui_set_next_blur_size(10.f*view->loading_t);
               ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
             }
@@ -7030,7 +7040,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     ui_spacer(ui_em(0.2f, 1.f));
                     UI_CornerRadius00(corner_radius)
                       UI_CornerRadius10(corner_radius)
-                      DF_UIColorScheme(DF_UIColorSchemeCode_DropSite)
+                      DF_Palette(DF_PaletteCode_DropSite)
                     {
                       ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
                     }
@@ -7055,7 +7065,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               UI_Box *tab_column_box = ui_build_box_from_stringf(!is_changing_panel_boundaries*UI_BoxFlag_AnimatePosX, "tab_column_%p", view);
               
               // rjf: build tab container box
-              UI_Parent(tab_column_box) UI_PrefHeight(ui_px(tab_bar_vheight, 1)) DF_UIColorScheme(view_is_selected ? DF_UIColorSchemeCode_TabActive : DF_UIColorSchemeCode_TabInactive)
+              UI_Parent(tab_column_box) UI_PrefHeight(ui_px(tab_bar_vheight, 1)) DF_Palette(view_is_selected ? DF_PaletteCode_TabActive : DF_PaletteCode_TabInactive)
               {
                 if((!view_is_selected && panel->tab_side == Side_Min) ||
                    (view_is_selected && panel->tab_side == Side_Max))
@@ -7100,7 +7110,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                           {
                             df_font_from_slot(DF_FontSlot_Main),
                             label,
-                            ui_top_scheme()->colors[UI_ColorCode_Text],
+                            ui_top_palette()->colors[UI_ColorCode_Text],
                             ui_top_font_size(),
                           };
                           d_fancy_string_list_push(scratch.arena, &fstrs, &view_title);
@@ -7120,7 +7130,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                           {
                             df_font_from_slot(DF_FontSlot_Code),
                             str8(view->query_buffer, view->query_string_size),
-                            ui_top_scheme()->colors[UI_ColorCode_TextWeak],
+                            ui_top_palette()->colors[UI_ColorCode_TextWeak],
                             ui_top_font_size(),
                           };
                           d_fancy_string_list_push(scratch.arena, &fstrs, &query);
@@ -7141,6 +7151,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     UI_CornerRadius00(0)
                     UI_CornerRadius01(0)
                   {
+                    UI_Palette *palette = ui_build_palette(ui_top_palette());
+                    palette->background = v4f32(0, 0, 0, 0);
+                    ui_set_next_palette(palette);
                     UI_Signal sig = ui_buttonf("%S###close_view_%p", df_g_icon_kind_text_table[DF_IconKind_X], view);
                     if(ui_clicked(sig) || ui_middle_clicked(sig))
                     {
@@ -7279,8 +7292,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               DF_Panel *drag_panel = df_panel_from_handle(df_g_drag_drop_payload.panel);
               if(!df_view_is_nil(view) && active_drop_site != 0) 
               {
-                UI_Scheme(ui_push_color_scheme(.background = df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay)))
-                  UI_Rect(tab_bar_rect)
+                DF_Palette(DF_PaletteCode_DropSite) UI_Rect(tab_bar_rect)
                   ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
               }
               
@@ -7339,7 +7351,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           {
             // rjf: vis
             {
-              UI_Scheme(ui_push_color_scheme(.background = df_rgba_from_theme_color(DF_ThemeColor_DropSiteOverlay))) UI_Rect(content_rect)
+              DF_Palette(DF_PaletteCode_DropSite) UI_Rect(content_rect)
                 ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
             }
             
@@ -7638,7 +7650,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         // rjf: main rectangle
         {
-          R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, 1.5f), box->scheme->colors[UI_ColorCode_Background], 0, 0, 1.f);
+          R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, 1.5f), box->palette->colors[UI_ColorCode_Background], 0, 0, 1.f);
           MemoryCopyArray(inst->corner_radii, box->corner_radii);
         }
         
@@ -7834,7 +7846,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           // rjf: draw border
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
-            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1), b->scheme->colors[UI_ColorCode_Border], 0, 1.f, 1.f);
+            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1), b->palette->colors[UI_ColorCode_Border], 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
             
             // rjf: hover effect
@@ -7859,19 +7871,19 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             F32 softness = 0.5f;
             if(b->flags & UI_BoxFlag_DrawSideTop)
             {
-              d_rect(r2f32p(r.x0, r.y0-half_thickness, r.x1, r.y0+half_thickness), b->scheme->colors[UI_ColorCode_Border], 0, 0, softness);
+              d_rect(r2f32p(r.x0, r.y0-half_thickness, r.x1, r.y0+half_thickness), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideBottom)
             {
-              d_rect(r2f32p(r.x0, r.y1-half_thickness, r.x1, r.y1+half_thickness), b->scheme->colors[UI_ColorCode_Border], 0, 0, softness);
+              d_rect(r2f32p(r.x0, r.y1-half_thickness, r.x1, r.y1+half_thickness), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideLeft)
             {
-              d_rect(r2f32p(r.x0-half_thickness, r.y0, r.x0+half_thickness, r.y1), b->scheme->colors[UI_ColorCode_Border], 0, 0, softness);
+              d_rect(r2f32p(r.x0-half_thickness, r.y0, r.x0+half_thickness, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideRight)
             {
-              d_rect(r2f32p(r.x1-half_thickness, r.y0, r.x1+half_thickness, r.y1), b->scheme->colors[UI_ColorCode_Border], 0, 0, softness);
+              d_rect(r2f32p(r.x1-half_thickness, r.y0, r.x1+half_thickness, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
           }
           
@@ -9262,12 +9274,12 @@ df_theme_color_from_txt_token_kind(TXT_TokenKind kind)
   return color;
 }
 
-//- rjf: code -> ui color scheme
+//- rjf: code -> palette
 
-internal UI_ColorScheme *
-df_ui_color_scheme_from_code(DF_UIColorSchemeCode code)
+internal UI_Palette *
+df_palette_from_code(DF_PaletteCode code)
 {
-  UI_ColorScheme *result = &df_gfx_state->cfg_ui_color_schemes[code];
+  UI_Palette *result = &df_gfx_state->cfg_palettes[code];
   return result;
 }
 
@@ -9775,28 +9787,28 @@ df_cmd_binding_button(DF_CmdSpec *spec)
     }
   }
   
-  //- rjf: form color scheme
-  UI_ColorScheme *scheme = ui_top_scheme();
+  //- rjf: form color palette
+  UI_Palette *palette = ui_top_palette();
   if(has_conflicts || (df_gfx_state->bind_change_active && df_gfx_state->bind_change_cmd_spec == spec))
   {
-    scheme = push_array(ui_build_arena(), UI_ColorScheme, 1);
-    MemoryCopyStruct(scheme, ui_top_scheme());
+    palette = push_array(ui_build_arena(), UI_Palette, 1);
+    MemoryCopyStruct(palette, ui_top_palette());
     if(has_conflicts)
     {
-      scheme->colors[UI_ColorCode_Text] = df_rgba_from_theme_color(DF_ThemeColor_DefaultTextNegative);
+      palette->colors[UI_ColorCode_Text] = df_rgba_from_theme_color(DF_ThemeColor_DefaultTextNegative);
     }
     if(df_gfx_state->bind_change_active && df_gfx_state->bind_change_cmd_spec == spec)
     {
-      scheme->colors[UI_ColorCode_Border] = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
-      scheme->colors[UI_ColorCode_Background] = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
-      scheme->colors[UI_ColorCode_Background].w *= 0.25f;
+      palette->colors[UI_ColorCode_Border] = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
+      palette->colors[UI_ColorCode_Background] = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
+      palette->colors[UI_ColorCode_Background].w *= 0.25f;
     }
   }
   
   //- rjf: build box
   ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   ui_set_next_text_alignment(UI_TextAlign_Center);
-  ui_set_next_scheme(scheme);
+  ui_set_next_palette(palette);
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                           UI_BoxFlag_Clickable|
                                           UI_BoxFlag_DrawActiveEffects,
@@ -9995,7 +10007,7 @@ df_entity_tooltips(DF_Entity *entity)
       {
         if(entity->flags & DF_EntityFlag_HasColor)
         {
-          ui_set_next_scheme(ui_fork_top_color_scheme(.text = df_rgba_from_entity(entity)));
+          ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_entity(entity)));
         }
         UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
       }
@@ -10009,7 +10021,7 @@ df_entity_tooltips(DF_Entity *entity)
           String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon_kind);
           if(explanation.size != 0)
           {
-            UI_PrefWidth(ui_children_sum(1)) UI_Row DF_UIColorScheme(DF_UIColorSchemeCode_DefaultNegative)
+            UI_PrefWidth(ui_children_sum(1)) UI_Row DF_Palette(DF_PaletteCode_DefaultNegative)
             {
               UI_PrefWidth(ui_em(1.5f, 1.f)) UI_Font(df_font_from_slot(DF_FontSlot_Icons)) ui_label(df_g_icon_kind_text_table[icon_kind]);
               UI_PrefWidth(ui_text_dim(10, 1)) ui_label(explanation);
@@ -10080,7 +10092,7 @@ df_entity_tooltips(DF_Entity *entity)
     {
       if(entity->flags & DF_EntityFlag_HasColor)
       {
-        ui_set_next_scheme(ui_fork_top_color_scheme(.text = df_rgba_from_entity(entity)));
+        ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_entity(entity)));
       }
       String8 display_string = df_display_string_from_entity(scratch.arena, entity);
       UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
@@ -10108,7 +10120,7 @@ df_entity_tooltips(DF_Entity *entity)
     {
       if(entity->flags & DF_EntityFlag_HasColor)
       {
-        ui_set_next_scheme(ui_fork_top_color_scheme(.text = df_rgba_from_entity(entity)));
+        ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_entity(entity)));
       }
       String8 display_string = df_display_string_from_entity(scratch.arena, entity);
       UI_PrefWidth(ui_text_dim(10, 1)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), display_string);
@@ -10122,7 +10134,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  UI_ColorScheme *scheme = ui_top_scheme();
+  UI_Palette *palette = ui_top_palette();
   if(entity->kind == DF_EntityKind_Thread)
   {
     DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_window(ws);
@@ -10131,7 +10143,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
     if(selected_thread == entity)
     {
-      scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialNeutral);
+      palette = df_palette_from_code(DF_PaletteCode_SpecialNeutral);
     }
     if(stopped_thread == entity &&
        (stop_event.cause == CTRL_EventCause_UserBreakpoint ||
@@ -10139,19 +10151,19 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
         stop_event.cause == CTRL_EventCause_InterruptedByTrap ||
         stop_event.cause == CTRL_EventCause_InterruptedByHalt))
     {
-      scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialNegative);
+      palette = df_palette_from_code(DF_PaletteCode_SpecialNegative);
     }
   }
   if(entity->cfg_src == DF_CfgSrc_CommandLine)
   {
-    scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialNeutral);
+    palette = df_palette_from_code(DF_PaletteCode_SpecialNeutral);
   }
   else if(entity->kind == DF_EntityKind_Target && entity->b32 != 0)
   {
-    scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_DefaultPositive);
+    palette = df_palette_from_code(DF_PaletteCode_DefaultPositive);
   }
   ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-  ui_set_next_scheme(scheme);
+  ui_set_next_palette(palette);
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                           UI_BoxFlag_DrawBorder|
                                           UI_BoxFlag_DrawBackground|
@@ -10165,8 +10177,8 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     DF_EntityKindFlags kind_flags = df_g_entity_kind_flags_table[entity->kind];
     DF_EntityOpFlags op_flags = df_g_entity_kind_op_flags_table[entity->kind];
     DF_IconKind icon = df_g_entity_kind_icon_kind_table[entity->kind];
-    Vec4F32 entity_color = scheme->colors[UI_ColorCode_Text];
-    Vec4F32 entity_color_weak = scheme->colors[UI_ColorCode_TextWeak];
+    Vec4F32 entity_color = palette->colors[UI_ColorCode_Text];
+    Vec4F32 entity_color_weak = palette->colors[UI_ColorCode_TextWeak];
     if(entity->flags & DF_EntityFlag_HasColor)
     {
       entity_color = df_rgba_from_entity(entity);
@@ -10198,8 +10210,9 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
       }
     }
     String8 label = df_display_string_from_entity(scratch.arena, entity);
-    UI_Scheme(ui_fork_top_color_scheme(.text = entity_color))
+    UI_Palette(ui_build_palette(ui_top_palette(), .text = entity_color))
       UI_Font(kind_flags&DF_EntityKindFlag_NameIsCode ? df_font_from_slot(DF_FontSlot_Code) : ui_top_font())
+      UI_Flags(entity->kind == DF_EntityKind_Thread ? UI_BoxFlag_DisableTruncatedHover : 0)
     {
       UI_Signal label_sig = ui_label(label);
       if(name_matches != 0)
@@ -10219,7 +10232,8 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     if(entity->kind == DF_EntityKind_Thread)
       UI_FontSize(ui_top_font_size()*0.75f)
       UI_Font(df_font_from_slot(DF_FontSlot_Code))
-      UI_Scheme(ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure)))
+      UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure)))
+      UI_Flags(UI_BoxFlag_DisableTruncatedHover)
     {
       CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
       DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
@@ -10710,7 +10724,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_font_size(params->font_size);
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_pct(1, 0));
-            ui_set_next_scheme(ui_fork_top_color_scheme(.text = color));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
@@ -10874,7 +10888,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_font_size(params->font_size);
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_pct(1, 0));
-            ui_set_next_scheme(ui_fork_top_color_scheme(.text = color));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
@@ -10997,7 +11011,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
             ui_set_next_font_size(params->font_size * 1.f);
             ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-            ui_set_next_scheme(ui_fork_top_color_scheme(.text = bp_color));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = bp_color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Box *bp_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                                        UI_BoxFlag_DrawActiveEffects|
@@ -11064,7 +11078,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
             ui_set_next_font_size(params->font_size * 1.f);
             ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-            ui_set_next_scheme(ui_fork_top_color_scheme(.text = color));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Box *pin_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                                         UI_BoxFlag_DrawActiveEffects|
@@ -11245,7 +11259,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             UI_PrefWidth(ui_em(1.5f, 1.f))
               UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-              UI_Scheme(ui_fork_top_color_scheme(.text = pin_color))
+              UI_Palette(ui_build_palette(ui_top_palette(), .text = pin_color))
               UI_TextAlignment(UI_TextAlign_Center)
               UI_Flags(UI_BoxFlag_DisableTextTrunc)
             {
@@ -11563,7 +11577,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     {
       TxtRngColorPairNode *n = push_array(scratch.arena, TxtRngColorPairNode, 1);
       n->rng = txt_rng(*cursor, *mark);
-      n->color = ui_top_scheme()->colors[DF_ThemeColor_Selection];
+      n->color = ui_top_palette()->colors[DF_ThemeColor_Selection];
       SLLQueuePush(first_txt_rng_color_pair, last_txt_rng_color_pair, n);
     }
     
@@ -11670,7 +11684,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         }
         
         // rjf: build line num box
-        ui_set_next_scheme(ui_fork_top_color_scheme(.text = text_color, .background = bg_color));
+        ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = text_color, .background = bg_color));
         ui_build_box_from_stringf(UI_BoxFlag_DrawText|(UI_BoxFlag_DrawBackground*!!has_line_info), "%I64u##line_num", line_num);
       }
     }
@@ -11691,7 +11705,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       UI_Font(params->font)
       UI_FontSize(params->font_size)
       UI_CornerRadius(0)
-      DF_UIColorScheme(DF_UIColorSchemeCode_Code)
+      DF_Palette(DF_PaletteCode_Code)
     {
       U64 line_idx = 0;
       for(S64 line_num = params->line_num_range.min;
@@ -11706,7 +11720,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         if(line_bg_color.w != 0)
         {
           ui_set_next_flags(UI_BoxFlag_DrawBackground);
-          ui_set_next_scheme(ui_fork_top_color_scheme(.background = line_bg_color));
+          ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = line_bg_color));
         }
         UI_Box *line_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|UI_BoxFlag_DrawText|UI_BoxFlag_DisableIDString, line_key);
         D_Bucket *line_bucket = d_bucket_make();
@@ -11947,7 +11961,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_box_text_position(line_box).x+cursor_off_pixels+cursor_thickness,
             line_box->rect.y1+params->font_size*0.25f,
           };
-          d_rect(cursor_rect, ui_top_scheme()->colors[UI_ColorCode_Cursor], 1.f, 0, 1.f);
+          d_rect(cursor_rect, ui_top_palette()->colors[UI_ColorCode_Cursor], 1.f, 0, 1.f);
         }
         
         // rjf: extra rendering for lines with line-info that match the hovered
@@ -12827,7 +12841,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       if(!(flags & DF_LineEditFlag_PreferDisplayString) && pre_edit_value.size != 0)
       {
         display_string = pre_edit_value;
-        UI_Box *box = df_code_label(1.f, 1, ui_top_scheme()->text, display_string);
+        UI_Box *box = df_code_label(1.f, 1, ui_top_palette()->text, display_string);
         if(matches != 0)
         {
           ui_box_equip_fuzzy_match_ranges(box, matches);
@@ -12835,7 +12849,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       }
       else if(flags & DF_LineEditFlag_DisplayStringIsCode)
       {
-        UI_Box *box = df_code_label(1.f, 1, ui_top_scheme()->text, display_string);
+        UI_Box *box = df_code_label(1.f, 1, ui_top_palette()->text, display_string);
         if(matches != 0)
         {
           ui_box_equip_fuzzy_match_ranges(box, matches);
@@ -12876,7 +12890,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
-      D_FancyStringList code_fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_scheme()->text, edit_string);
+      D_FancyStringList code_fancy_strings = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_palette()->text, edit_string);
       if(autocomplete_hint_string.size != 0)
       {
         String8 query_word = df_autocomp_query_word_from_input_string_off(edit_string, cursor->column-1);
@@ -12898,7 +12912,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
           D_FancyString *fstr = &autocomp_fstr_n->v;
           fstr->font = ui_top_font();
           fstr->string = autocomplete_append_string;
-          fstr->color = ui_top_scheme()->text;
+          fstr->color = ui_top_palette()->text;
           fstr->color.w *= 0.5f;
           fstr->size = ui_top_font_size();
           autocomp_fstr_n->next = prev_n ? prev_n->next : 0;
@@ -14066,60 +14080,60 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
   //- rjf: compute ui color schemes from theme
   {
     DF_Theme *current = &df_gfx_state->cfg_theme;
-    for(EachEnumVal(DF_UIColorSchemeCode, code))
+    for(EachEnumVal(DF_PaletteCode, code))
     {
-      df_gfx_state->cfg_ui_color_schemes[code].null       = v4f32(1, 0, 1, 1);
-      df_gfx_state->cfg_ui_color_schemes[code].cursor     = current->colors[DF_ThemeColor_CursorActive];
-      df_gfx_state->cfg_ui_color_schemes[code].selection  = current->colors[DF_ThemeColor_Selection];
+      df_gfx_state->cfg_palettes[code].null       = v4f32(1, 0, 1, 1);
+      df_gfx_state->cfg_palettes[code].cursor     = current->colors[DF_ThemeColor_CursorActive];
+      df_gfx_state->cfg_palettes[code].selection  = current->colors[DF_ThemeColor_Selection];
     }
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Default].background = current->colors[DF_ThemeColor_DefaultBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Default].text       = current->colors[DF_ThemeColor_DefaultText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Default].text_weak  = current->colors[DF_ThemeColor_DefaultTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Default].border     = current->colors[DF_ThemeColor_DefaultBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultPositive].background = current->colors[DF_ThemeColor_DefaultBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultPositive].text       = current->colors[DF_ThemeColor_DefaultTextPositive];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultPositive].text_weak  = current->colors[DF_ThemeColor_DefaultTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultPositive].border     = current->colors[DF_ThemeColor_DefaultBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultNegative].background = current->colors[DF_ThemeColor_DefaultBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultNegative].text       = current->colors[DF_ThemeColor_DefaultTextNegative];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultNegative].text_weak  = current->colors[DF_ThemeColor_DefaultTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DefaultNegative].border     = current->colors[DF_ThemeColor_DefaultBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Floating].background = current->colors[DF_ThemeColor_FloatingBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Floating].text       = current->colors[DF_ThemeColor_FloatingText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Floating].text_weak  = current->colors[DF_ThemeColor_FloatingTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Floating].border     = current->colors[DF_ThemeColor_FloatingBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialPositive].background = current->colors[DF_ThemeColor_SpecialPositiveBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialPositive].text       = current->colors[DF_ThemeColor_SpecialPositiveText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialPositive].text_weak  = current->colors[DF_ThemeColor_SpecialPositiveTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialPositive].border     = current->colors[DF_ThemeColor_SpecialPositiveBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNegative].background = current->colors[DF_ThemeColor_SpecialNegativeBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNegative].text       = current->colors[DF_ThemeColor_SpecialNegativeText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNegative].text_weak  = current->colors[DF_ThemeColor_SpecialNegativeTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNegative].border     = current->colors[DF_ThemeColor_SpecialNegativeBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNeutral].background = current->colors[DF_ThemeColor_SpecialNeutralBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNeutral].text       = current->colors[DF_ThemeColor_SpecialNeutralText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNeutral].text_weak  = current->colors[DF_ThemeColor_SpecialNeutralTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_SpecialNeutral].border     = current->colors[DF_ThemeColor_SpecialNeutralBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_MenuBar].background = current->colors[DF_ThemeColor_MenuBarBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_MenuBar].text       = current->colors[DF_ThemeColor_MenuBarText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_MenuBar].text_weak  = current->colors[DF_ThemeColor_MenuBarTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_MenuBar].border     = current->colors[DF_ThemeColor_MenuBarBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabActive].background = current->colors[DF_ThemeColor_TabActiveBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabActive].text       = current->colors[DF_ThemeColor_TabActiveText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabActive].text_weak  = current->colors[DF_ThemeColor_TabActiveTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabActive].border     = current->colors[DF_ThemeColor_TabActiveBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabInactive].background = current->colors[DF_ThemeColor_TabInactiveBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabInactive].text       = current->colors[DF_ThemeColor_TabInactiveText];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabInactive].text_weak  = current->colors[DF_ThemeColor_TabInactiveTextWeak];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_TabInactive].border     = current->colors[DF_ThemeColor_TabInactiveBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Code].background = current->colors[DF_ThemeColor_CodeBackground];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Code].text       = current->colors[DF_ThemeColor_CodeDefault];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Code].text_weak  = current->colors[DF_ThemeColor_CodeDefault];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_Code].border     = current->colors[DF_ThemeColor_DefaultBorder];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DropSite].background = current->colors[DF_ThemeColor_DropSiteOverlay];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DropSite].text       = current->colors[DF_ThemeColor_DropSiteOverlay];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DropSite].text_weak  = current->colors[DF_ThemeColor_DropSiteOverlay];
-    df_gfx_state->cfg_ui_color_schemes[DF_UIColorSchemeCode_DropSite].border     = current->colors[DF_ThemeColor_DropSiteOverlay];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Default].background = current->colors[DF_ThemeColor_DefaultBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Default].text       = current->colors[DF_ThemeColor_DefaultText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Default].text_weak  = current->colors[DF_ThemeColor_DefaultTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Default].border     = current->colors[DF_ThemeColor_DefaultBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultPositive].background = current->colors[DF_ThemeColor_DefaultBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultPositive].text       = current->colors[DF_ThemeColor_DefaultTextPositive];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultPositive].text_weak  = current->colors[DF_ThemeColor_DefaultTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultPositive].border     = current->colors[DF_ThemeColor_DefaultBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultNegative].background = current->colors[DF_ThemeColor_DefaultBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultNegative].text       = current->colors[DF_ThemeColor_DefaultTextNegative];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultNegative].text_weak  = current->colors[DF_ThemeColor_DefaultTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DefaultNegative].border     = current->colors[DF_ThemeColor_DefaultBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Floating].background = current->colors[DF_ThemeColor_FloatingBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Floating].text       = current->colors[DF_ThemeColor_FloatingText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Floating].text_weak  = current->colors[DF_ThemeColor_FloatingTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Floating].border     = current->colors[DF_ThemeColor_FloatingBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialPositive].background = current->colors[DF_ThemeColor_SpecialPositiveBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialPositive].text       = current->colors[DF_ThemeColor_SpecialPositiveText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialPositive].text_weak  = current->colors[DF_ThemeColor_SpecialPositiveTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialPositive].border     = current->colors[DF_ThemeColor_SpecialPositiveBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNegative].background = current->colors[DF_ThemeColor_SpecialNegativeBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNegative].text       = current->colors[DF_ThemeColor_SpecialNegativeText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNegative].text_weak  = current->colors[DF_ThemeColor_SpecialNegativeTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNegative].border     = current->colors[DF_ThemeColor_SpecialNegativeBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNeutral].background = current->colors[DF_ThemeColor_SpecialNeutralBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNeutral].text       = current->colors[DF_ThemeColor_SpecialNeutralText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNeutral].text_weak  = current->colors[DF_ThemeColor_SpecialNeutralTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_SpecialNeutral].border     = current->colors[DF_ThemeColor_SpecialNeutralBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBar].background = current->colors[DF_ThemeColor_MenuBarBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBar].text       = current->colors[DF_ThemeColor_MenuBarText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBar].text_weak  = current->colors[DF_ThemeColor_MenuBarTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBar].border     = current->colors[DF_ThemeColor_MenuBarBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabActive].background = current->colors[DF_ThemeColor_TabActiveBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabActive].text       = current->colors[DF_ThemeColor_TabActiveText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabActive].text_weak  = current->colors[DF_ThemeColor_TabActiveTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabActive].border     = current->colors[DF_ThemeColor_TabActiveBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabInactive].background = current->colors[DF_ThemeColor_TabInactiveBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabInactive].text       = current->colors[DF_ThemeColor_TabInactiveText];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabInactive].text_weak  = current->colors[DF_ThemeColor_TabInactiveTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_TabInactive].border     = current->colors[DF_ThemeColor_TabInactiveBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Code].background = current->colors[DF_ThemeColor_CodeBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Code].text       = current->colors[DF_ThemeColor_CodeDefault];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Code].text_weak  = current->colors[DF_ThemeColor_CodeDefault];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_Code].border     = current->colors[DF_ThemeColor_DefaultBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DropSite].background = current->colors[DF_ThemeColor_DropSiteOverlay];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DropSite].text       = current->colors[DF_ThemeColor_DropSiteOverlay];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DropSite].text_weak  = current->colors[DF_ThemeColor_DropSiteOverlay];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_DropSite].border     = current->colors[DF_ThemeColor_DropSiteOverlay];
   }
   
   //- rjf: animate alive-transitions for entities

@@ -5708,10 +5708,11 @@ df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalViz
   rows->count += 1;
   
   // rjf: fill basics
-  row->depth      = block->depth;
-  row->parent_key = block->parent_key;
-  row->key        = key;
-  row->eval       = eval;
+  row->depth        = block->depth;
+  row->parent_key   = block->parent_key;
+  row->key          = key;
+  row->eval         = eval;
+  row->size_in_rows = 1;
   
   // rjf: determine exandability, editability
   if(tg_kind_from_key(eval.type_key) != TG_Kind_Null)

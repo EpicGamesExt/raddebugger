@@ -30,7 +30,7 @@ UI_StackTable:
   
   //- rjf: colors
   { Transparency                       transparency                  F32                   0                                  }
-  { Scheme                             scheme                       `UI_ColorScheme*`     `&ui_g_nil_color_scheme`            }
+  { Palette                            palette                      `UI_Palette*    `     `&ui_g_nil_palette`                 }
   
   //- rjf: squish
   { Squish                             squish                        F32                   0                                  }
@@ -41,6 +41,7 @@ UI_StackTable:
   //- rjf: font
   { Font                               font                          F_Tag                 `f_tag_zero()`                     }
   { FontSize                           font_size                     F32                   24.f                               }
+  { RunFlags                           run_flags                     F_RunFlags            0                                  }
   { TabSize                            tab_size                      F32                   `24.f*4.f`                         }
   
   //- rjf: corner radii

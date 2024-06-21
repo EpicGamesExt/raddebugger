@@ -130,9 +130,9 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   F_Tag font = box->font;
   F32 font_size = box->font_size;
   F32 tab_size = box->tab_size;
-  Vec4F32 cursor_color = box->scheme->colors[UI_ColorCode_Cursor];
+  Vec4F32 cursor_color = box->palette->colors[UI_ColorCode_Cursor];
   cursor_color.w *= box->parent->parent->focus_active_t;
-  Vec4F32 select_color = box->scheme->colors[UI_ColorCode_Selection];
+  Vec4F32 select_color = box->palette->colors[UI_ColorCode_Selection];
   select_color.w *= (box->parent->parent->focus_active_t*0.2f + 0.8f);
   Vec2F32 text_position = ui_box_text_position(box);
   String8 edited_string = draw_data->edited_string;
@@ -478,7 +478,7 @@ ui_do_color_tooltip_hsv(Vec3F32 hsv)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_Scheme(ui_fork_top_color_scheme(.background = v4f32(rgb.x, rgb.y, rgb.z, 1.f)))
+      UI_Palette(ui_build_palette(ui_top_palette(), .background = v4f32(rgb.x, rgb.y, rgb.z, 1.f)))
         UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
@@ -517,7 +517,7 @@ ui_do_color_tooltip_hsva(Vec4F32 hsva)
   {
     UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0))
     {
-      UI_Scheme(ui_fork_top_color_scheme(.background = rgba))
+      UI_Palette(ui_build_palette(ui_top_palette(), .background = rgba))
         UI_CornerRadius(4.f)
         UI_PrefWidth(ui_em(6.f, 1.f)) UI_PrefHeight(ui_em(6.f, 1.f))
         ui_build_box_from_string(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground, str8_lit(""));
@@ -1064,7 +1064,6 @@ ui_table_vector_end(void)
 internal UI_Box *
 ui_table_cell_begin(void)
 {
-  UI_Box *vector = ui_top_parent();
   U64 column_idx = ui_ts_cell_idx;
   F32 width_pct = column_idx < ui_ts_col_pct_count ? ui_ts_col_pcts_stable[column_idx] : 1.f;
   return ui_table_cell_sized_begin(ui_pct(width_pct, 0));

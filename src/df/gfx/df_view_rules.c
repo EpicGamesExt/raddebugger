@@ -340,13 +340,13 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
     text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
     D_FancyStringList fancy_strings = {0};
     {
-      D_FancyString open_paren = {ui_top_font(), str8_lit("("), ui_top_scheme()->text, ui_top_font_size(), 0, 0};
-      D_FancyString comma = {ui_top_font(), str8_lit(", "), ui_top_scheme()->text, ui_top_font_size(), 0, 0};
+      D_FancyString open_paren = {ui_top_font(), str8_lit("("), ui_top_palette()->text, ui_top_font_size(), 0, 0};
+      D_FancyString comma = {ui_top_font(), str8_lit(", "), ui_top_palette()->text, ui_top_font_size(), 0, 0};
       D_FancyString r_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.x), v4f32(1.f, 0.25f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
       D_FancyString g_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.y), v4f32(0.25f, 1.f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
       D_FancyString b_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.z), v4f32(0.25f, 0.25f, 1.f, 1.f), ui_top_font_size(), 4.f, 0};
       D_FancyString a_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.w), v4f32(1.f,   1.f,   1.f, 1.f), ui_top_font_size(), 4.f, 0};
-      D_FancyString clse_paren = {ui_top_font(), str8_lit(")"), ui_top_scheme()->text, ui_top_font_size(), 0, 0};
+      D_FancyString clse_paren = {ui_top_font(), str8_lit(")"), ui_top_palette()->text, ui_top_font_size(), 0, 0};
       d_fancy_string_list_push(scratch.arena, &fancy_strings, &open_paren);
       d_fancy_string_list_push(scratch.arena, &fancy_strings, &r_fstr);
       d_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
@@ -367,7 +367,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
     color_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "color_box");
     UI_Parent(color_box) UI_PrefHeight(ui_em(1.875f, 1.f)) UI_Padding(ui_pct(1, 0))
     {
-      UI_Scheme(ui_fork_top_color_scheme(.background = rgba)) UI_CornerRadius(ui_top_font_size()*0.5f)
+      UI_Palette(ui_build_palette(ui_top_palette(), .background = rgba)) UI_CornerRadius(ui_top_font_size()*0.5f)
         ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
     }
   }
@@ -872,7 +872,7 @@ df_vr_bitmap_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_
 internal UI_BOX_CUSTOM_DRAW(df_vr_bitmap_box_draw)
 {
   DF_VR_BitmapBoxDrawData *draw_data = (DF_VR_BitmapBoxDrawData *)user_data;
-  Vec4F32 bg_color = box->scheme->background;
+  Vec4F32 bg_color = box->palette->background;
   d_img(box->rect, draw_data->src, draw_data->texture, v4f32(1, 1, 1, 1), 0, 0, 0);
   if(draw_data->loaded_t < 0.98f)
   {

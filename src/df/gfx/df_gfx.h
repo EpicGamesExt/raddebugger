@@ -374,23 +374,23 @@ typedef enum DF_FontSlot
 }
 DF_FontSlot;
 
-typedef enum DF_UIColorSchemeCode
+typedef enum DF_PaletteCode
 {
-  DF_UIColorSchemeCode_Default,
-  DF_UIColorSchemeCode_DefaultPositive,
-  DF_UIColorSchemeCode_DefaultNegative,
-  DF_UIColorSchemeCode_Floating,
-  DF_UIColorSchemeCode_SpecialPositive,
-  DF_UIColorSchemeCode_SpecialNegative,
-  DF_UIColorSchemeCode_SpecialNeutral,
-  DF_UIColorSchemeCode_MenuBar,
-  DF_UIColorSchemeCode_TabActive,
-  DF_UIColorSchemeCode_TabInactive,
-  DF_UIColorSchemeCode_Code,
-  DF_UIColorSchemeCode_DropSite,
-  DF_UIColorSchemeCode_COUNT
+  DF_PaletteCode_Default,
+  DF_PaletteCode_DefaultPositive,
+  DF_PaletteCode_DefaultNegative,
+  DF_PaletteCode_Floating,
+  DF_PaletteCode_SpecialPositive,
+  DF_PaletteCode_SpecialNegative,
+  DF_PaletteCode_SpecialNeutral,
+  DF_PaletteCode_MenuBar,
+  DF_PaletteCode_TabActive,
+  DF_PaletteCode_TabInactive,
+  DF_PaletteCode_Code,
+  DF_PaletteCode_DropSite,
+  DF_PaletteCode_COUNT
 }
-DF_UIColorSchemeCode;
+DF_PaletteCode;
 
 ////////////////////////////////
 //~ rjf: UI Helper & Widget Types
@@ -760,8 +760,8 @@ struct DF_GfxState
   Arena *cfg_code_font_path_arena;
   String8 cfg_main_font_path;
   String8 cfg_code_font_path;
-  F_Tag cfg_font_tags[DF_FontSlot_COUNT];
-  UI_ColorScheme cfg_ui_color_schemes[DF_UIColorSchemeCode_COUNT];
+  F_Tag cfg_font_tags[DF_FontSlot_COUNT];        // derivative from font paths
+  UI_Palette cfg_palettes[DF_PaletteCode_COUNT]; // derivative from theme
   
   // rjf: icon texture
   R_Handle icon_texture;
@@ -1007,8 +1007,8 @@ internal DF_CmdSpecList df_cmd_spec_list_from_event_flags(Arena *arena, OS_Event
 internal Vec4F32 df_rgba_from_theme_color(DF_ThemeColor color);
 internal DF_ThemeColor df_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 
-//- rjf: code -> ui color scheme
-internal UI_ColorScheme *df_ui_color_scheme_from_code(DF_UIColorSchemeCode code);
+//- rjf: code -> palette
+internal UI_Palette *df_palette_from_code(DF_PaletteCode code);
 
 //- rjf: fonts/sizes
 internal F_Tag df_font_from_slot(DF_FontSlot slot);
@@ -1026,7 +1026,7 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 ////////////////////////////////
 //~ rjf: UI Building Helpers
 
-#define DF_UIColorScheme(code) UI_Scheme(df_ui_color_scheme_from_code(code))
+#define DF_Palette(code) UI_Palette(df_palette_from_code(code))
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons

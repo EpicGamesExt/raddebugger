@@ -1641,23 +1641,23 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         }
         
         ////////////////////////
-        //- rjf: determine row's color scheme
+        //- rjf: determine row's color palette
         //
-        UI_ColorScheme *scheme = ui_top_scheme();
+        UI_Palette *palette = ui_top_palette();
         {
           if(row_is_fresh)
           {
-            scheme = ui_fork_top_color_scheme(.background = mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
+            palette = ui_build_palette(ui_top_palette(), .background = mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
           }
         }
         
         ////////////////////////
         //- rjf: build row box
         //
+        ui_set_next_palette(palette);
         ui_set_next_flags(disabled_flags);
         ui_set_next_pref_width(ui_pct(1, 0));
         ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->size_in_rows, 1.f));
-        ui_set_next_scheme(scheme);
         UI_Box *row_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|UI_BoxFlag_RequireFocusBackground|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
         
         ////////////////////////
@@ -1718,7 +1718,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ////////////////////////
         //- rjf: build non-canvas row contents
         //
-        if(!(row->flags & DF_EvalVizRowFlag_Canvas))
+        if(!(row->flags & DF_EvalVizRowFlag_Canvas)) UI_Parent(row_box) UI_HeightFill
         {
           ////////////////////
           //- rjf: draw start of cache lines in expansions
@@ -1731,7 +1731,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             ui_set_next_fixed_x(0);
             ui_set_next_fixed_y(0);
             ui_set_next_fixed_height(ui_top_font_size()*0.1f);
-            ui_set_next_scheme(ui_fork_top_color_scheme(.background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
             ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
           }
           
@@ -1752,7 +1752,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               ui_set_next_fixed_height(ui_top_font_size()*1.f);
               Vec4F32 boundary_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
               boundary_color.w *= 0.25f;
-              ui_set_next_scheme(ui_fork_top_color_scheme(.background = boundary_color));
+              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = boundary_color));
               ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
             }
           }
@@ -1767,32 +1767,32 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
             B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
             
-            // rjf: unpack scheme
-            UI_ColorScheme *scheme = ui_top_scheme();
+            // rjf: unpack palette
+            UI_Palette *palette = ui_top_palette();
             {
               if(row->flags & DF_EvalVizRowFlag_ExprIsSpecial)
               {
-                scheme = ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
-                                                  .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
+                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
+                                           .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
               }
             }
             
             // rjf: build
             UI_Signal sig = {0};
             B32 next_expanded = row_expanded;
-            UI_Scheme(scheme) UI_TableCell
+            UI_Palette(palette) UI_TableCell
               UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
               UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
               B32 expr_editing_active = ui_is_focus_active();
               B32 is_inherited = (row->inherited_type_key_chain.count != 0);
-              UI_Font(code_font) UI_Scheme(scheme) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
+              UI_Font(code_font) UI_Palette(palette) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
               {
                 if(is_inherited)
                 {
                   Vec4F32 inherited_bg_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
                   inherited_bg_color.w *= 0.2f;
-                  ui_set_next_scheme(ui_fork_top_color_scheme(.background = inherited_bg_color));
+                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = inherited_bg_color));
                 }
                 FuzzyMatchRangeList matches = {0};
                 if(filter.size != 0)
@@ -1924,19 +1924,19 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
             B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
             
-            // rjf: unpack scheme
-            UI_ColorScheme *scheme = ui_top_scheme();
+            // rjf: unpack palette
+            UI_Palette *palette = ui_top_palette();
             {
               if(row_is_bad)
               {
-                scheme = ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
-                                                  .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
+                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
+                                           .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
               }
             }
             
             // rjf: build
             UI_Signal sig = {0};
-            UI_Scheme(scheme) UI_TableCell UI_Font(code_font)
+            UI_Palette(palette) UI_TableCell UI_Font(code_font)
               UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
               UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
@@ -2129,7 +2129,7 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_em(15.f, 1.f))
       UI_CornerRadius(ui_top_font_size()/2.f)
-      DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
+      DF_Palette(DF_PaletteCode_SpecialNegative)
     {
       if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Panel")))
       {
@@ -2203,7 +2203,7 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_PrefWidth(ui_em(22.f, 1.f))
             UI_CornerRadius(ui_top_font_size()/2.f)
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+            DF_Palette(DF_PaletteCode_SpecialNeutral)
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Add, 0, "Add Target")))
           {
             DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2225,7 +2225,7 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_PrefWidth(ui_em(22.f, 1.f))
             UI_CornerRadius(ui_top_font_size()/2.f)
-            DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+            DF_Palette(DF_PaletteCode_SpecialNeutral)
           {
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Launch %S", target_name)))
             {
@@ -3229,7 +3229,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
         Vec4F32 color = df_rgba_from_entity(ent);
         if(color.w != 0)
         {
-          ui_set_next_scheme(ui_fork_top_color_scheme(.text = color));
+          ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
         }
         UI_Box *name_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##label_%p", display_string, ent);
         ui_box_equip_fuzzy_match_ranges(name_label, &item.name_match_ranges);
@@ -3643,7 +3643,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
             {
               ui_label_multiline(ui_top_font_size()*30.f, str8_lit("By default, the debugger attempts to find a target's entry point with a set of default names, such as:"));
               ui_spacer(ui_em(1.5f, 1.f));
-              UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_Scheme(ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure)))
+              UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure)))
               {
                 ui_label(str8_lit("WinMain"));
                 ui_label(str8_lit("wWinMain"));
@@ -4741,21 +4741,21 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
         {
           B32 frozen_by_solo_mode = (entity->kind == DF_EntityKind_Thread && entity != df_entity_from_handle(ctrl_ctx.thread) && df_state->ctrl_solo_stepping_mode);
           B32 frozen = df_entity_is_frozen(entity);
-          UI_ColorScheme *scheme = ui_top_scheme();
+          UI_Palette *palette = ui_top_palette();
           if(frozen_by_solo_mode)
           {
-            scheme = ui_fork_top_color_scheme(.background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
+            palette = ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
           }
           else if(frozen)
           {
-            scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialNegative);
+            palette = df_palette_from_code(DF_PaletteCode_SpecialNegative);
           }
           else
           {
-            scheme = df_ui_color_scheme_from_code(DF_UIColorSchemeCode_SpecialPositive);
+            palette = df_palette_from_code(DF_PaletteCode_SpecialPositive);
           }
           UI_Signal sig = {0};
-          UI_Scheme(scheme) sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, 0, "###lock_%p", entity);
+          UI_Palette(palette) sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, 0, "###lock_%p", entity);
           if(frozen_by_solo_mode && ui_hovering(sig)) UI_Tooltip
           {
             ui_label(str8_lit("This thread is frozen during stepping operations because it isn't selected, and Solo Stepping Mode is enabled."));
@@ -4809,7 +4809,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
             }
             UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 4) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
+              DF_Palette(DF_PaletteCode_SpecialNegative)
                 if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "###kill")))
               {
                 DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -4864,7 +4864,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
   Architecture arch = df_architecture_from_entity(thread);
   DF_Entity *process = thread->parent;
-  Vec4F32 thread_color = ui_top_scheme()->text;
+  Vec4F32 thread_color = ui_top_palette()->text;
   if(thread->flags & DF_EntityFlag_HasColor)
   {
     thread_color = df_rgba_from_entity(thread);
@@ -4983,7 +4983,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
                ctrl_ctx.inline_unwind_count == frame->inline_unwind_idx)
             {
               selected_string = df_g_icon_kind_text_table[DF_IconKind_RightArrow];
-              ui_set_next_scheme(ui_fork_top_color_scheme(.text = thread_color));
+              ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = thread_color));
             }
             UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawText, "%S###selection_%i", selected_string,
                                                     (int)frame_idx);
@@ -5050,7 +5050,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
                 D_FancyStringList symbol_type_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), symbol_type_string);
                 D_FancyStringList fstrs = {0};
                 d_fancy_string_list_concat_in_place(&fstrs, &symbol_name_fstrs);
-                D_FancyString sep = {ui_top_font(), str8_lit(": "), ui_top_scheme()->colors[UI_ColorCode_TextWeak], ui_top_font_size()};
+                D_FancyString sep = {ui_top_font(), str8_lit(": "), ui_top_palette()->colors[UI_ColorCode_TextWeak], ui_top_font_size()};
                 d_fancy_string_list_push(scratch.arena, &fstrs, &sep);
                 d_fancy_string_list_concat_in_place(&fstrs, &symbol_type_fstrs);
                 UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
@@ -5362,7 +5362,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
                 UI_FocusActive((txt_is_selected && mv->txt_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_WidthFill
               {
-                DF_UIColorScheme(dbgi_is_valid ? DF_UIColorSchemeCode_DefaultPositive : DF_UIColorSchemeCode_Default)
+                DF_Palette(dbgi_is_valid ? DF_PaletteCode_DefaultPositive : DF_PaletteCode_Default)
                   sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &mv->txt_cursor, &mv->txt_mark, mv->txt_buffer, sizeof(mv->txt_buffer), &mv->txt_size, 0, dbgi_path, "###dbg_path_%p", entity);
                 edit_commit = (edit_commit || ui_committed(sig));
               }
@@ -6029,7 +6029,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
         UI_PrefWidth(ui_text_dim(10, 1))
-        DF_UIColorScheme(DF_UIColorSchemeCode_DefaultNegative)
+        DF_Palette(DF_PaletteCode_DefaultNegative)
       {
         UI_Font(ui_icon_font()) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
         ui_labelf("Could not find \"%S\".", full_path);
@@ -6040,7 +6040,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         UI_CornerRadius(ui_top_font_size()/3)
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_Focus(UI_FocusKind_On)
-        DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNeutral)
+        DF_Palette(DF_PaletteCode_SpecialNeutral)
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -6582,7 +6582,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       if(file_is_out_of_date)
       {
         UI_Box *box = &ui_g_nil_box;
-        DF_UIColorScheme(DF_UIColorSchemeCode_SpecialNegative)
+        DF_Palette(DF_PaletteCode_SpecialNegative)
           UI_Font(df_font_from_slot(DF_FontSlot_Icons))
         {
           box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "%S###file_ood_warning", df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
@@ -6593,7 +6593,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
           {
             ui_labelf("This file has changed since ", out_of_date_dbgi_name);
-            UI_Scheme(ui_fork_top_color_scheme(.text = df_rgba_from_theme_color(DF_ThemeColor_Highlight0))) ui_label(out_of_date_dbgi_name);
+            UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_Highlight0))) ui_label(out_of_date_dbgi_name);
             ui_labelf(" was produced.");
           }
         }
@@ -8973,7 +8973,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
               {
                 if(global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
                 {
-                  ui_set_next_scheme(ui_fork_top_color_scheme(.background = annotation->color));
+                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = annotation->color));
                   ui_set_next_fixed_x(big_glyph_advance*18.f + col_idx*cell_width_px + -cell_width_px/8.f + off);
                   ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -cell_width_px/8.f);
                   ui_set_next_fixed_width(cell_width_px/4.f);
@@ -9678,9 +9678,9 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
       Vec4F32 bg_color = colors[DF_ThemeColor_DefaultBackground];
       Vec4F32 tx_color = colors[DF_ThemeColor_DefaultText];
       Vec4F32 bd_color = colors[DF_ThemeColor_DefaultBorder];
-      ui_set_next_scheme(ui_fork_top_color_scheme(.text = tx_color,
-                                                  .border = bd_color,
-                                                  .background = bg_color));
+      ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = tx_color,
+                                           .border = bd_color,
+                                           .background = bg_color));
       if(ui_clicked(ui_buttonf("%S", df_g_theme_preset_display_string_table[preset])))
       {
         MemoryCopy(df_gfx_state->cfg_theme_target.colors, colors, sizeof(df_gfx_state->cfg_theme_target.colors));
@@ -9933,15 +9933,15 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
                                                       "###color_%I64x", (U64)color);
         UI_Parent(color_row)
         {
-          Vec4F32 bg_color = ui_top_scheme()->background;
-          Vec4F32 default_text_color = ui_top_scheme()->text;
+          Vec4F32 bg_color = ui_top_palette()->background;
+          Vec4F32 default_text_color = ui_top_palette()->text;
           F32 default_fallback_factor = clamp_1f32(r1f32(0.3f, 1), dot_4f32(normalize_4f32(rgba), normalize_4f32(bg_color))) - 0.3f;
           Vec4F32 text_rgba = mix_4f32(rgba, default_text_color, default_fallback_factor);
-          UI_WidthFill UI_Scheme(ui_fork_top_color_scheme(.text = text_rgba)) ui_label(df_g_theme_color_display_string_table[color]);
+          UI_WidthFill UI_Palette(ui_build_palette(ui_top_palette(), .text = text_rgba)) ui_label(df_g_theme_color_display_string_table[color]);
           ui_set_next_pref_width(ui_top_pref_height());
           UI_HeightFill UI_Column UI_Padding(ui_em(0.3f, 1))
           {
-            ui_set_next_scheme(ui_fork_top_color_scheme(.background = rgba));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rgba));
             ui_set_next_corner_radius_00(ui_top_font_size()/4.f);
             ui_set_next_corner_radius_01(ui_top_font_size()/4.f);
             ui_set_next_corner_radius_10(ui_top_font_size()/4.f);
