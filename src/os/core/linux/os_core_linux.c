@@ -923,42 +923,28 @@ os_free_ring_buffer(void *ring_buffer, U64 actual_size)
 
 internal String8
 os_machine_name(void){
-  local_persist B32 first = true;
+  local_persist B32 invalid = true;
   local_persist String8 name = {0};
-  
-  // TODO(allen): let's just pre-compute this at init and skip the complexity
-  pthread_mutex_lock(&lnx_mutex);
-  if (first){
+  const U32 hostname_limit = 255;     // Max reasonable size for hostname
+
+  // NOTE(mallchad): There was a lot of complicated code here but I could not
+  // figure out what the purpose was for such a simple syscall
+  if (invalid){
+    pthread_mutex_lock(&lnx_mutex);
+
     Temp scratch = scratch_begin(0, 0);
-    first = false;
-    
-    // get name
-    B32 got_final_result = false;
-    U8 *buffer = 0;
-    int size = 0;
-    for (S64 cap = 4096, r = 0;
-         r < 4;
-         cap *= 2, r += 1){
-      scratch.restore();
-      buffer = push_array_no_zero(scratch.arena, U8, cap);
-      size = gethostname((char*)buffer, cap);
-      if (size < cap){
-        got_final_result = true;
-        break;
-      }
+    U8 *tmp = push_array_no_zero(scratch.arena, U8, hostname_limit);
+    S32 error = gethostname((char*)tmp, hostname_limit);
+
+    // No Errors
+    if (error == 0){
+      String8 tmp_string = str8_cstring(tmp);
+      name = push_str8_copy(lnx_perm_arena, tmp_string);
+      invalid = false;
     }
-    
-    // save string
-    if (got_final_result && size > 0){
-      name.size = size;
-      name.str = push_array_no_zero(lnx_perm_arena, U8, name.size + 1);
-      MemoryCopy(name.str, buffer, name.size);
-      name.str[name.size] = 0;
-    }
-    
     scratch_end(scratch);
+    pthread_mutex_unlock(&lnx_mutex);
   }
-  pthread_mutex_unlock(&lnx_mutex);
   
   return(name);
 }
@@ -1052,7 +1038,7 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
         // save string
         if (got_final_result && size > 0){
           String8 full_name = str8(buffer, size);
-          String8 name_chopped = string_path_chop_last_slash(full_name);
+          String8 name_chopped = str8_chop_last_slash(full_name);
           name = push_str8_copy(lnx_perm_arena, name_chopped);
         }
         
