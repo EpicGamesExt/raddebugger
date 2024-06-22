@@ -1114,7 +1114,7 @@ tg_data_members_from_graph_rdi_key(Arena *arena, TG_Graph *graph, RDI_Parsed *rd
       padding_member->kind = TG_MemberKind_Padding;
       padding_member->type_key = tg_cons_type_make(graph, TG_Kind_Array, tg_key_basic(TG_Kind_U8), n->size);
       padding_member->off = n->off;
-      padding_member->name = str8_lit("[padding]");
+      padding_member->name = str8_lit("padding");
       padding_idx += 1;
     }
     members = new_members;

@@ -379,7 +379,9 @@ typedef enum DF_PaletteCode
   DF_PaletteCode_Default,
   DF_PaletteCode_DefaultPositive,
   DF_PaletteCode_DefaultNegative,
+  DF_PaletteCode_DefaultNeutral,
   DF_PaletteCode_Floating,
+  DF_PaletteCode_ImplicitContents,
   DF_PaletteCode_SpecialPositive,
   DF_PaletteCode_SpecialNegative,
   DF_PaletteCode_SpecialNeutral,
@@ -551,21 +553,24 @@ struct DF_Window
   // rjf: view state delta history
   DF_StateDeltaHistory *view_state_hist;
   
-  // rjf: context menu info
+  // rjf: dev interface state
   B32 dev_menu_is_open;
+  
+  // rjf: menu bar state
   B32 menu_bar_focused;
   B32 menu_bar_focused_on_press;
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
-  UI_Key drop_completion_ctx_menu_key;
-  DF_Handle drop_completion_entity;
-  DF_Handle drop_completion_panel;
+  
+  // rjf: entity context menu state
   UI_Key entity_ctx_menu_key;
   DF_Handle entity_ctx_menu_entity;
   U8 entity_ctx_menu_input_buffer[1024];
   U64 entity_ctx_menu_input_size;
   TxtPt entity_ctx_menu_input_cursor;
   TxtPt entity_ctx_menu_input_mark;
+  
+  // rjf: tab context menu state
   UI_Key tab_ctx_menu_key;
   DF_Handle tab_ctx_menu_view;
   

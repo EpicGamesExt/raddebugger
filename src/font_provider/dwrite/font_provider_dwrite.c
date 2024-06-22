@@ -414,7 +414,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
     // rjf: fill basics
     result.atlas_dim    = atlas_dim;
     result.atlas        = push_array_no_zero(arena, U8, atlas_dim.x*atlas_dim.y*4);
-    result.advance      = advance;
+    result.advance      = floor_f32(advance);
     result.height       = bounding_box.bottom + 1.f;
     
     // rjf: fill atlas

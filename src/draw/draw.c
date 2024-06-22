@@ -87,7 +87,7 @@ d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list)
 }
 
 internal D_FancyRunList
-d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, D_FancyStringList *strs)
+d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, F_RunFlags flags, D_FancyStringList *strs)
 {
   ProfBeginFunction();
   D_FancyRunList run_list = {0};
@@ -95,7 +95,7 @@ d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, D_FancySt
   for(D_FancyStringNode *n = strs->first; n != 0; n = n->next)
   {
     D_FancyRunNode *dst_n = push_array(arena, D_FancyRunNode, 1);
-    dst_n->v.run = f_push_run_from_string(arena, n->v.font, n->v.size, base_align_px, tab_size_px, 0, n->v.string);
+    dst_n->v.run = f_push_run_from_string(arena, n->v.font, n->v.size, base_align_px, tab_size_px, flags, n->v.string);
     dst_n->v.color = n->v.color;
     dst_n->v.underline_thickness = n->v.underline_thickness;
     dst_n->v.strikethrough_thickness = n->v.strikethrough_thickness;
@@ -469,9 +469,15 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
   for(D_FancyRunNode *n = list->first; n != 0; n = n->next)
   {
     D_FancyRun *fr = &n->v;
+    Rng1F32 pixel_range = {0};
+    {
+      pixel_range.min = 100000;
+      pixel_range.max = 0;
+    }
     F_Piece *piece_first = fr->run.pieces.v;
     F_Piece *piece_opl = piece_first + fr->run.pieces.count;
     F32 pre_advance = advance;
+    F32 last_piece_end_pad = 0;
     last_color = fr->color;
     for(F_Piece *piece = piece_first;
         piece < piece_opl;
@@ -499,14 +505,17 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
         //d_rect(dst, v4f32(1, 0, 0, 1), 0, 1.f, 0.f);
       }
       advance += piece->advance;
+      last_piece_end_pad = ((F32)piece->offset.x+(F32)dim_2s16(piece->subrect).x) - piece->advance;
+      pixel_range.min = Min(pre_advance, pixel_range.min);
+      pixel_range.max = Max(advance, pixel_range.max);
     }
     if(fr->underline_thickness > 0)
     {
-      d_rect(r2f32p(p.x+pre_advance,
+      d_rect(r2f32p(p.x + pixel_range.min + 1.f,
                     p.y+fr->run.descent+fr->run.descent/8,
-                    p.x+advance + (advance-pre_advance)/8,
+                    p.x + pixel_range.max + last_piece_end_pad/2,
                     p.y+fr->run.descent+fr->run.descent/8+fr->underline_thickness),
-             fr->color, 0, 0, 1.f);
+             fr->color, 0, 0, 0.8f);
     }
     if(fr->strikethrough_thickness > 0)
     {
@@ -722,44 +731,44 @@ d_truncated_text_run(Vec2F32 p, Vec4F32 color, F32 max_x, F_Run text_run, F_Run 
 }
 
 internal void
-d_text(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, Vec2F32 p, Vec4F32 color, String8 string)
+d_text(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, F_RunFlags flags, Vec2F32 p, Vec4F32 color, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
-  F_Run run = f_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, 0, string);
+  F_Run run = f_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, flags, string);
   d_text_run(p, color, run);
   scratch_end(scratch);
 }
 
 internal void
-d_textf(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, Vec2F32 p, Vec4F32 color, char *fmt, ...)
+d_textf(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, F_RunFlags flags, Vec2F32 p, Vec4F32 color, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
   va_end(args);
-  d_text(font, size, base_align_px, tab_size_px, p, color, string);
+  d_text(font, size, base_align_px, tab_size_px, flags, p, color, string);
   scratch_end(scratch);
 }
 
 internal void
-d_truncated_text(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, Vec2F32 p, Vec4F32 color, F32 max_x, String8 string)
+d_truncated_text(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, F_RunFlags flags, Vec2F32 p, Vec4F32 color, F32 max_x, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
-  F_Run run = f_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, 0, string);
+  F_Run run = f_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, flags, string);
   F_Run ellipses_run = f_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, 0, str8_lit("..."));
   d_truncated_text_run(p, color, max_x, run, ellipses_run);
   scratch_end(scratch);
 }
 
 internal void
-d_truncated_textf(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, Vec2F32 p, Vec4F32 color, F32 max_x, char *fmt, ...)
+d_truncated_textf(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, F_RunFlags flags, Vec2F32 p, Vec4F32 color, F32 max_x, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8f(scratch.arena, fmt, args);
-  d_truncated_text(font, size, base_align_px, tab_size_px, p, color, max_x, string);
+  d_truncated_text(font, size, base_align_px, tab_size_px, flags, p, color, max_x, string);
   va_end(args);
   scratch_end(scratch);
 }

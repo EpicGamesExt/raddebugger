@@ -9,9 +9,23 @@ ui_spacer(UI_Size size)
 {
   UI_Box *parent = ui_top_parent();
   ui_set_next_pref_size(parent->child_layout_axis, size);
-  UI_Box *box = ui_build_box_from_string(0, str8_lit(""));
+  UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
   UI_Signal interact = ui_signal_from_box(box);
   return interact;
+}
+
+internal void
+ui_divider(UI_Size size)
+{
+  UI_Box *parent = ui_top_parent();
+  ui_set_next_pref_size(parent->child_layout_axis, size);
+  ui_set_next_child_layout_axis(parent->child_layout_axis);
+  UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
+  UI_Parent(box) UI_PrefSize(parent->child_layout_axis, ui_pct(1, 0))
+  {
+    ui_build_box_from_key(UI_BoxFlag_DrawSideBottom, ui_key_zero());
+    ui_build_box_from_key(0, ui_key_zero());
+  }
 }
 
 internal UI_Signal

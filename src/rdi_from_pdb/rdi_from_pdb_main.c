@@ -6,7 +6,7 @@
 
 #define BUILD_VERSION_MAJOR 0
 #define BUILD_VERSION_MINOR 9
-#define BUILD_VERSION_PATCH 10
+#define BUILD_VERSION_PATCH 11
 #define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
 #define BUILD_TITLE "rdi_from_pdb"
 #define BUILD_CONSOLE_INTERFACE 1
@@ -64,7 +64,7 @@ entry_point(CmdLine *cmdline)
   {
     fprintf(stderr, "--- rdi_from_pdb --------------------------------------------------------------\n\n");
     
-    fprintf(stderr, "This utility converts debug information from PDBs into the RAD Debug Info.\n");
+    fprintf(stderr, "This utility converts debug information from PDBs into the RAD Debug Info\n");
     fprintf(stderr, "format. The following arguments are accepted:\n\n");
     
     fprintf(stderr, "--exe:<path> [optional] Specifies the path of the executable file for which the\n");

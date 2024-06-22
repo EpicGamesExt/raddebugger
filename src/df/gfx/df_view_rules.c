@@ -357,7 +357,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
       d_fancy_string_list_push(scratch.arena, &fancy_strings, &a_fstr);
       d_fancy_string_list_push(scratch.arena, &fancy_strings, &clse_paren);
     }
-    ui_box_equip_display_fancy_strings(text_box, 0, &fancy_strings);
+    ui_box_equip_display_fancy_strings(text_box, &fancy_strings);
   }
   
   //- rjf: build color box

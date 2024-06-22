@@ -521,11 +521,12 @@ f_hash2style_from_tag_size(F_Tag tag, F32 size)
   //- rjf: tag * size -> style hash
   U64 style_hash = {0};
   {
+    F64 size_f64 = size;
     U64 buffer[] =
     {
       tag.u64[0],
       tag.u64[1],
-      (U64)round_f32(size),
+      *(U64 *)(&size_f64),
     };
     style_hash = f_little_hash_from_string(str8((U8 *)buffer, sizeof(buffer)));
   }
@@ -682,7 +683,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
       }
       
       // rjf: call into font provider to rasterize this substring
-      FP_RasterResult raster = fp_raster(scratch.arena, font_handle, round_f32(size), FP_RasterMode_Sharp, piece_substring);
+      FP_RasterResult raster = fp_raster(scratch.arena, font_handle, floor_f32(size), FP_RasterMode_Sharp, piece_substring);
       
       // rjf: allocate portion of an atlas to upload the rasterization
       S16 chosen_atlas_num = 0;
@@ -1022,10 +1023,10 @@ f_metrics_from_tag_size(F_Tag tag, F32 size)
   FP_Metrics metrics = f_fp_metrics_from_tag(tag);
   F_Metrics result = {0};
   {
-    result.ascent   = size * metrics.ascent / metrics.design_units_per_em;
-    result.descent  = size * metrics.descent / metrics.design_units_per_em;
-    result.line_gap = size * metrics.line_gap / metrics.design_units_per_em;
-    result.capital_height = size * metrics.capital_height / metrics.design_units_per_em;
+    result.ascent   = floor_f32(size) * metrics.ascent / metrics.design_units_per_em;
+    result.descent  = floor_f32(size) * metrics.descent / metrics.design_units_per_em;
+    result.line_gap = floor_f32(size) * metrics.line_gap / metrics.design_units_per_em;
+    result.capital_height = floor_f32(size) * metrics.capital_height / metrics.design_units_per_em;
   }
   ProfEnd();
   return result;

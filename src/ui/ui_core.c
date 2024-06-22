@@ -963,26 +963,6 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F
             }
           }
         }
-        
-        //- rjf: some child has the active focus -> detect events which will cause an external focus commit
-        // (e.g. clicking outside of a line edit)
-        if(!ui_key_match(ui_key_zero(), nav_root->default_nav_focus_active_key))
-        {
-          UI_Box *active_box = ui_box_from_key(nav_root->default_nav_focus_active_key);
-          if(!ui_box_is_nil(active_box))
-          {
-            for(UI_EventNode *n = events->first; n != 0; n = n->next)
-            {
-              UI_Event *event = &n->v;
-              if(event->kind == UI_EventKind_Press &&
-                 event->key == OS_Key_LeftMouseButton &&
-                 !contains_2f32(active_box->rect, ui_mouse()))
-              {
-                ui_state->external_focus_commit = 1;
-              }
-            }
-          }
-        }
       }
     }
     ui_state->default_nav_root_key = ui_key_zero();
@@ -1822,11 +1802,11 @@ ui_tooltip_begin(void)
     UI_PrefHeight(ui_children_sum(1))
     UI_CornerRadius(ui_top_font_size()*0.25f)
     ui_column_begin();
-  UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   UI_PrefWidth(ui_children_sum(1))
     UI_PrefHeight(ui_children_sum(1))
     ui_row_begin();
-  UI_PrefHeight(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  UI_PrefHeight(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   UI_PrefWidth(ui_children_sum(1))
     UI_PrefHeight(ui_children_sum(1))
     ui_column_begin();
@@ -1842,9 +1822,9 @@ ui_tooltip_end(void)
   ui_pop_pref_width();
   ui_pop_pref_height();
   ui_column_end();
-  UI_PrefHeight(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  UI_PrefHeight(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   ui_row_end();
-  UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(0.5f, 1.f));
+  UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   ui_column_end();
   ui_tooltip_end_base();
 }
@@ -1879,8 +1859,12 @@ ui_begin_ctx_menu(UI_Key key)
 {
   ui_push_parent(ui_root_from_state(ui_state));
   ui_push_parent(ui_state->ctx_menu_root);
-  B32 result = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
-  if(result != 0)
+  ui_push_pref_width(ui_bottom_pref_width());
+  ui_push_pref_height(ui_bottom_pref_height());
+  ui_push_focus_hot(UI_FocusKind_Root);
+  ui_push_focus_active(UI_FocusKind_Root);
+  B32 is_open = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
+  if(is_open != 0)
   {
     ui_state->ctx_menu_touched_this_frame = 1;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_RoundChildrenByParent;
@@ -1892,17 +1876,20 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->corner_radii[Corner_00] = ui_state->ctx_menu_root->corner_radii[Corner_01] = ui_state->ctx_menu_root->corner_radii[Corner_10] = ui_state->ctx_menu_root->corner_radii[Corner_11] = ui_top_font_size()*0.25f;
     ui_state->ctx_menu_root->palette = ui_top_palette();
     ui_state->ctx_menu_root->blur_size = ui_top_blur_size();
+    ui_spacer(ui_em(1.f, 1.f));
   }
-  ui_push_pref_width(ui_bottom_pref_width());
-  ui_push_pref_height(ui_bottom_pref_height());
-  ui_push_focus_hot(UI_FocusKind_Root);
-  ui_push_focus_active(UI_FocusKind_Root);
-  return result;
+  ui_state->is_in_open_ctx_menu = is_open;
+  return is_open;
 }
 
 internal void
 ui_end_ctx_menu(void)
 {
+  if(ui_state->is_in_open_ctx_menu)
+  {
+    ui_state->is_in_open_ctx_menu = 0;
+    ui_spacer(ui_em(1.f, 1.f));
+  }
   ui_pop_focus_active();
   ui_pop_focus_hot();
   ui_pop_pref_width();
@@ -2207,6 +2194,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->font = ui_state->font_stack.top->v;
     box->font_size = ui_state->font_size_stack.top->v;
     box->tab_size = ui_state->tab_size_stack.top->v;
+    box->run_flags = ui_state->run_flags_stack.top->v;
     box->corner_radii[Corner_00] = ui_state->corner_radius_00_stack.top->v;
     box->corner_radii[Corner_01] = ui_state->corner_radius_01_stack.top->v;
     box->corner_radii[Corner_10] = ui_state->corner_radius_10_stack.top->v;
@@ -2296,7 +2284,7 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     String8 display_string = ui_box_display_string(box);
     D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
     D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
+    box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, &fancy_strings);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2308,16 +2296,16 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     if(fpcp_pos < display_string.size)
     {
       D_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      D_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 4.f, 0}};
+      D_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
       D_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
+      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, &fancy_strings);
     }
     else
     {
       D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, &fancy_strings);
+      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, &fancy_strings);
     }
     scratch_end(scratch);
   }
@@ -2325,11 +2313,11 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
 }
 
 internal void
-ui_box_equip_display_fancy_strings(UI_Box *box, F32 tab_size, D_FancyStringList *strings)
+ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
   box->string = d_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), tab_size, strings);
+  box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, strings);
 }
 
 internal inline void

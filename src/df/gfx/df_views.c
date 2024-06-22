@@ -2359,41 +2359,6 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
     {
       DF_CmdListerItem *item = &cmd_array.v[row_idx];
       
-      //- rjf: build context menu for this command
-      UI_Key item_ctx_menu_key = ui_key_from_stringf(ui_key_zero(), "###%p_cmd_ctx_%p", view, item->cmd_spec);
-      UI_CtxMenu(item_ctx_menu_key) UI_PrefWidth(ui_em(33, 1))
-      {
-        // rjf: row with icon & name
-        UI_Row UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_pct(1, 0))
-        {
-          // rjf: icon
-          DF_IconKind icon = item->cmd_spec->info.canonical_icon_kind;
-          if(icon != DF_IconKind_Null)
-            UI_TextAlignment(UI_TextAlign_Center)
-            UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-            UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
-            UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-            UI_PrefWidth(ui_em(2.25f, 1.f))
-          {
-            ui_label(df_g_icon_kind_text_table[icon]);
-          }
-          
-          // rjf: display name
-          ui_label(item->cmd_spec->info.display_name);
-        }
-        
-        // rjf: row with ipc syntax
-        UI_Row UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_pct(1, 0))
-        {
-          // rjf: name
-          UI_TextAlignment(UI_TextAlign_Left)
-            UI_Font(df_font_from_slot(DF_FontSlot_Code))
-            UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Code))
-            UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-            ui_label(item->cmd_spec->info.string);
-        }
-      }
-      
       //- rjf: build row contents
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       ui_set_next_child_layout_axis(Axis2_X);
@@ -2415,6 +2380,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
           UI_Column
           UI_Font(df_font_from_slot(DF_FontSlot_Icons))
           UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+          UI_RunFlags(F_RunFlag_Smooth)
           UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           UI_HeightFill
           UI_TextAlignment(UI_TextAlign_Center)
@@ -2461,10 +2427,6 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
         params.cmd_spec = item->cmd_spec;
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CompleteQuery));
-      }
-      if(ui_right_clicked(sig))
-      {
-        ui_ctx_menu_open(item_ctx_menu_key, ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)));
       }
     }
   }
@@ -2812,6 +2774,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         // rjf: icons
         UI_Font(df_font_from_slot(DF_FontSlot_Icons))
           UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+          UI_RunFlags(F_RunFlag_Smooth)
           UI_PrefWidth(ui_em(3.f, 1.f))
           UI_TextAlignment(UI_TextAlign_Center)
         {
@@ -2860,6 +2823,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
           // rjf: icon to signify directory
           UI_Font(df_font_from_slot(DF_FontSlot_Icons))
             UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+            UI_RunFlags(F_RunFlag_Smooth)
             UI_PrefWidth(ui_em(3.f, 1.f))
             UI_TextAlignment(UI_TextAlign_Center)
           {
@@ -3048,6 +3012,7 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
         // rjf: icon
         UI_Font(df_font_from_slot(DF_FontSlot_Icons))
           UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+          UI_RunFlags(F_RunFlag_Smooth)
           UI_PrefWidth(ui_em(3.f, 1.f))
           UI_TextAlignment(UI_TextAlign_Center)
         {
@@ -3221,6 +3186,7 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
           UI_TextAlignment(UI_TextAlign_Center)
             UI_Font(df_font_from_slot(DF_FontSlot_Icons))
             UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+            UI_RunFlags(F_RunFlag_Smooth)
             UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             UI_PrefWidth(ui_text_dim(10, 1))
             ui_label(df_g_icon_kind_text_table[icon_kind]);
@@ -4974,6 +4940,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
           UI_TableCell
             UI_Font(df_font_from_slot(DF_FontSlot_Icons))
             UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
+            UI_RunFlags(F_RunFlag_Smooth)
             UI_WidthFill
             UI_TextAlignment(UI_TextAlign_Center)
             UI_FocusHot((row_selected && cs->cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -5054,7 +5021,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
                 d_fancy_string_list_push(scratch.arena, &fstrs, &sep);
                 d_fancy_string_list_concat_in_place(&fstrs, &symbol_type_fstrs);
                 UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                ui_box_equip_display_fancy_strings(label, 0, &fstrs);
+                ui_box_equip_display_fancy_strings(label, &fstrs);
               }
             }
             UI_Signal sig = ui_signal_from_box(box);
@@ -6031,7 +5998,9 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         UI_PrefWidth(ui_text_dim(10, 1))
         DF_Palette(DF_PaletteCode_DefaultNegative)
       {
-        UI_Font(ui_icon_font()) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
+        UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+          UI_RunFlags(F_RunFlag_Smooth)
+          ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
         ui_labelf("Could not find \"%S\".", full_path);
       }
       UI_PrefHeight(ui_em(3, 1))
@@ -6584,6 +6553,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         UI_Box *box = &ui_g_nil_box;
         DF_Palette(DF_PaletteCode_SpecialNegative)
           UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+          UI_RunFlags(F_RunFlag_Smooth)
         {
           box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "%S###file_ood_warning", df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
         }
@@ -8966,7 +8936,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
               cell_bg_rgba = df_rgba_from_theme_color(DF_ThemeColor_Selection);
             }
             UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
-            ui_box_equip_display_fancy_strings(cell_box, 0, &byte_fancy_strings[byte_value]);
+            ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
             {
               F32 off = 0;
               for(Annotation *a = annotation; a != 0; a = a->next)
@@ -9668,7 +9638,7 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
   
   //- rjf: build preset ctx menu
   UI_Key preset_ctx_menu_key = ui_key_from_stringf(ui_key_zero(), "%p_preset_ctx_menu", view);
-  UI_CtxMenu(preset_ctx_menu_key) UI_PrefWidth(ui_em(30.f, 1.f))
+  DF_Palette(DF_PaletteCode_Floating) UI_CtxMenu(preset_ctx_menu_key) UI_PrefWidth(ui_em(30.f, 1.f))
   {
     for(DF_ThemePreset preset = (DF_ThemePreset)0;
         preset < DF_ThemePreset_COUNT;
@@ -9704,7 +9674,9 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
       color < DF_ThemeColor_COUNT;
       color = (DF_ThemeColor)(color+1))
   {
-    UI_CtxMenu(color_ctx_menu_keys[color]) UI_Padding(ui_em(1.5f, 1.f))
+    DF_Palette(DF_PaletteCode_Floating)
+      UI_CtxMenu(color_ctx_menu_keys[color])
+      UI_Padding(ui_em(1.5f, 1.f))
       UI_PrefWidth(ui_em(28.5f, 1)) UI_PrefHeight(ui_children_sum(1.f))
     {
       // rjf: build title

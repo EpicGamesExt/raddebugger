@@ -373,6 +373,7 @@ struct UI_Box
   F_Tag font;
   F32 font_size;
   F32 tab_size;
+  F_RunFlags run_flags;
   F32 corner_radii[Corner_COUNT];
   F32 blur_size;
   F32 transparency;
@@ -548,6 +549,9 @@ struct UI_State
   U64 box_table_size;
   UI_BoxHashSlot *box_table;
   
+  //- rjf: build state machine state
+  B32 is_in_open_ctx_menu;
+  
   //- rjf: build phase output
   UI_Box *root;
   UI_Box *tooltip_root;
@@ -564,7 +568,6 @@ struct UI_State
   UI_EventList *events;
   Vec2F32 mouse;
   F32 animation_dt;
-  B32 external_focus_commit;
   
   //- rjf: user interaction state
   UI_Key hot_box_key;
@@ -773,7 +776,7 @@ internal UI_Box *          ui_build_box_from_stringf(UI_BoxFlags flags, char *fm
 
 //- rjf: box node equipment
 internal inline void       ui_box_equip_display_string(UI_Box *box, String8 string);
-internal inline void       ui_box_equip_display_fancy_strings(UI_Box *box, F32 tab_size, D_FancyStringList *strings);
+internal inline void       ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings);
 internal inline void       ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, D_FancyRunList *runs);
 internal inline void       ui_box_equip_fuzzy_match_ranges(UI_Box *box, FuzzyMatchRangeList *matches);
 internal inline void       ui_box_equip_draw_bucket(UI_Box *box, D_Bucket *bucket);
