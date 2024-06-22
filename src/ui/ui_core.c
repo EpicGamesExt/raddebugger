@@ -1870,6 +1870,7 @@ ui_begin_ctx_menu(UI_Key key)
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_RoundChildrenByParent;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_DrawBackgroundBlur;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_DrawBackground;
+    ui_state->ctx_menu_root->flags |= UI_BoxFlag_DisableFocusOverlay;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_DrawBorder;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clip;
     ui_state->ctx_menu_root->flags |= UI_BoxFlag_Clickable;
@@ -2376,7 +2377,7 @@ ui_box_text_position(UI_Box *box)
   F_Tag font = box->font;
   F32 font_size = box->font_size;
   F_Metrics font_metrics = f_metrics_from_tag_size(font, font_size);
-  result.y = ceil_f32((box->rect.p0.y + box->rect.p1.y)/2.f + (font_metrics.capital_height/2) - font_metrics.line_gap/2);
+  result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f + (font_metrics.capital_height/2) - font_metrics.line_gap/2);
   switch(box->text_align)
   {
     default:
@@ -2386,14 +2387,14 @@ ui_box_text_position(UI_Box *box)
     }break;
     case UI_TextAlign_Center:
     {
-      Vec2F32 advance = box->display_string_runs.dim;
-      result.x = floor_f32((box->rect.p0.x + box->rect.p1.x)/2 - advance.x/2 - 1.f);
+      Vec2F32 text_dim = box->display_string_runs.dim;
+      result.x = round_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2) - 1.f;
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
     case UI_TextAlign_Right:
     {
-      Vec2F32 advance = box->display_string_runs.dim;
-      result.x = (box->rect.p1.x) - 1.f - advance.x;
+      Vec2F32 text_dim = box->display_string_runs.dim;
+      result.x = round_f32((box->rect.p1.x) - text_dim.x);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
   }

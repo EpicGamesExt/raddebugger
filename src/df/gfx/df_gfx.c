@@ -4339,14 +4339,21 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           UI_BlurSize(10*df_gfx_state->confirm_t)
           UI_Palette(palette)
         {
-          bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|UI_BoxFlag_Floating|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll|UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawBackground, "###confirm_popup_%p", ws);
+          bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|
+                                             UI_BoxFlag_Floating|
+                                             UI_BoxFlag_Clickable|
+                                             UI_BoxFlag_Scroll|
+                                             UI_BoxFlag_DefaultFocusNav|
+                                             UI_BoxFlag_DisableFocusOverlay|
+                                             UI_BoxFlag_DrawBackgroundBlur|
+                                             UI_BoxFlag_DrawBackground, "###confirm_popup_%p", ws);
         }
         if(df_gfx_state->confirm_active) UI_Parent(bg_box) UI_Transparency(1-df_gfx_state->confirm_t)
         {
           ui_ctx_menu_close();
           UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
           {
-            UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(df_gfx_state->confirm_title);
+            UI_RunFlags(F_RunFlag_Smooth) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(df_gfx_state->confirm_title);
             UI_PrefHeight(ui_em(3.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(df_gfx_state->confirm_msg);
             ui_spacer(ui_em(1.5f, 1.f));
             UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_WidthFill UI_PrefHeight(ui_em(5.f, 1.f))
@@ -4597,8 +4604,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
           ui_set_next_fixed_x(autocomp_root_box->rect.x0);
           ui_set_next_fixed_y(autocomp_root_box->rect.y1);
-          ui_set_next_pref_width(ui_em(25.f, 1.f));
-          ui_set_next_pref_height(ui_px(row_height_px*ws->autocomp_num_visible_rows_t, 1.f));
+          ui_set_next_pref_width(ui_em(30.f, 1.f));
+          ui_set_next_pref_height(ui_px(row_height_px*ws->autocomp_num_visible_rows_t + ui_top_font_size()*2.f, 1.f));
           ui_set_next_child_layout_axis(Axis2_Y);
           ui_set_next_corner_radius_01(ui_top_font_size()*0.25f);
           ui_set_next_corner_radius_11(ui_top_font_size()*0.25f);
@@ -4607,15 +4614,30 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Squish(0.25f-0.25f*ws->autocomp_open_t)
             UI_Transparency(1.f-ws->autocomp_open_t)
           {
-            autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_Clickable|UI_BoxFlag_Clip|UI_BoxFlag_RoundChildrenByParent|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBackground, "autocomp_box");
+            autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|
+                                                     UI_BoxFlag_Clickable|
+                                                     UI_BoxFlag_Clip|
+                                                     UI_BoxFlag_RoundChildrenByParent|
+                                                     UI_BoxFlag_DisableFocusOverlay|
+                                                     UI_BoxFlag_DrawBorder|
+                                                     UI_BoxFlag_DrawBackgroundBlur|
+                                                     UI_BoxFlag_DrawDropShadow|
+                                                     UI_BoxFlag_DrawBackground,
+                                                     "autocomp_box");
             if(ws->autocomp_query_dirty)
             {
               ws->autocomp_query_dirty = 0;
               autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
             }
           }
-          UI_Parent(autocomp_box) UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_HoverCursor(OS_Cursor_HandPoint)
+          UI_Parent(autocomp_box)
+            UI_WidthFill
+            UI_PrefHeight(ui_px(row_height_px, 1.f))
+            UI_Font(df_font_from_slot(DF_FontSlot_Code))
+            UI_HoverCursor(OS_Cursor_HandPoint)
             UI_Focus(UI_FocusKind_Null)
+            DF_Palette(DF_PaletteCode_ImplicitContents)
+            UI_Padding(ui_em(1.f, 1.f))
           {
             for(U64 idx = 0; idx < item_array.count; idx += 1)
             {
@@ -4684,11 +4706,17 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         UI_WidthFill UI_NamedRow(str8_lit("###menu_bar"))
         {
           //- rjf: icon
-          UI_Padding(ui_em(0.5f, 1.f)) UI_PrefWidth(ui_px(dim_2f32(top_bar_rect).y, 1.f))
+          UI_Padding(ui_em(0.5f, 1.f))
           {
-            R_Handle texture = df_gfx_state->icon_texture;
-            Vec2S32 texture_dim = r_size_from_tex2d(texture);
-            ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+            UI_PrefWidth(ui_px(dim_2f32(top_bar_rect).y - ui_top_font_size()*0.8f, 1.f))
+              UI_Column
+              UI_Padding(ui_em(0.4f, 1.f))
+              UI_HeightFill
+            {
+              R_Handle texture = df_gfx_state->icon_texture;
+              Vec2S32 texture_dim = r_size_from_tex2d(texture);
+              ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
+            }
           }
           
           //- rjf: menu items
@@ -5127,7 +5155,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           if(can_play || !have_targets || processes.count == 0)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
-            DF_Palette(DF_PaletteCode_DefaultPositive)
+            DF_Palette(DF_PaletteCode_MenuBarPositive)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Play]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -5168,7 +5196,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           //- rjf: restart button
           if(!can_play && processes.count != 0) UI_TextAlignment(UI_TextAlign_Center)
-            DF_Palette(DF_PaletteCode_DefaultPositive)
+            DF_Palette(DF_PaletteCode_MenuBarPositive)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Redo]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -5203,7 +5231,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           //- rjf: pause button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_pause ? 0 : UI_BoxFlag_Disabled)
-            DF_Palette(DF_PaletteCode_DefaultNeutral)
+            DF_Palette(DF_PaletteCode_MenuBarNeutral)
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Pause]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
@@ -5230,7 +5258,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           //- rjf: stop button
           UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_stop ? 0 : UI_BoxFlag_Disabled)
-            DF_Palette(DF_PaletteCode_DefaultNegative)
+            DF_Palette(DF_PaletteCode_MenuBarNegative)
           {
             UI_Signal sig = {0};
             {
@@ -5736,6 +5764,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                                                         UI_BoxFlag_AllowOverflow|
                                                         UI_BoxFlag_Clickable|
                                                         UI_BoxFlag_Clip|
+                                                        UI_BoxFlag_DisableFocusOverlay|
                                                         UI_BoxFlag_DrawBorder|
                                                         UI_BoxFlag_DrawBackground|
                                                         UI_BoxFlag_DrawBackgroundBlur|
@@ -5984,6 +6013,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                                                        UI_BoxFlag_DrawBackground|
                                                        UI_BoxFlag_DrawBackgroundBlur|
                                                        UI_BoxFlag_DrawDropShadow|
+                                                       UI_BoxFlag_DisableFocusOverlay|
                                                        UI_BoxFlag_Clip|
                                                        UI_BoxFlag_AllowOverflowY|
                                                        UI_BoxFlag_ViewScroll|
@@ -6808,7 +6838,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           panel_box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
                                             UI_BoxFlag_Clip|
                                             UI_BoxFlag_DrawBorder|
-                                            ((ws->focused_panel != panel)*UI_BoxFlag_DisableFocusViz)|
+                                            UI_BoxFlag_DisableFocusOverlay|
+                                            ((ws->focused_panel != panel)*UI_BoxFlag_DisableFocusBorder)|
                                             ((ws->focused_panel != panel)*UI_BoxFlag_DrawOverlay),
                                             panel_key);
         }
@@ -7076,7 +7107,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 if((!view_is_selected && panel->tab_side == Side_Min) ||
                    (view_is_selected && panel->tab_side == Side_Max))
                 {
-                  ui_spacer(ui_px(tab_bar_rv_diff, 1.f));
+                  ui_spacer(ui_px(1.f, 1.f));
                 }
                 else
                 {
@@ -7157,6 +7188,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     UI_Font(df_font_from_slot(DF_FontSlot_Icons))
                     UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons)*0.75f)
                     UI_RunFlags(F_RunFlag_Smooth)
+                    UI_Flags(UI_BoxFlag_DrawTextWeak)
                     UI_CornerRadius00(0)
                     UI_CornerRadius01(0)
                   {
@@ -7228,10 +7260,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               ui_spacer(ui_px(tab_bar_rv_diff/2.f, 1.f));
               UI_CornerRadius(tab_bar_vheight/2.f)
                 UI_Font(df_font_from_slot(DF_FontSlot_Icons))
-                UI_FontSize(ui_top_font_size()*0.75f)
+                UI_FontSize(ui_top_font_size())
                 UI_RunFlags(F_RunFlag_Smooth)
                 UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
                 UI_HoverCursor(OS_Cursor_HandPoint)
+                DF_Palette(DF_PaletteCode_ImplicitContents)
               {
                 UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|
                                                                 UI_BoxFlag_DrawText|
@@ -7906,42 +7939,20 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             }
           }
           
-          // rjf: draw focus hot vis
-          if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusViz) && b->focus_hot_t > 0.01f)
+          // rjf: draw focus overlay
+          if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusOverlay) && b->focus_hot_t > 0.01f)
           {
-            Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-            F32 size_factor = 1 - Clamp(0, dim_2f32(b->rect).y / 100.f, 1);
-            if(b->flags & UI_BoxFlag_RequireFocusBackground)
-            {
-              color.w *= 0.2f + b->focus_hot_t * 0.3f * size_factor;
-            }
-            else
-            {
-              color.w *= b->focus_hot_t * 0.5f * size_factor;
-            }
-            R_Rect2DInst *inst = d_rect(pad_2f32(r2f32p(b->rect.x0,
-                                                        b->rect.y0,
-                                                        b->rect.x0 + (b->rect.x1 - b->rect.x0) * 1.f,
-                                                        b->rect.y1),
-                                                 1.f),
-                                        color, 4.f, 0, 1.f);
+            Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_FocusActive);
+            color.w *= 0.2f*b->focus_hot_t;
+            R_Rect2DInst *inst = d_rect(b->rect, color, 0, 0, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
-          // rjf: draw focus active vis
-          if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusViz) && b->focus_active_t > 0.01f)
+          // rjf: draw focus border
+          if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusBorder) && b->focus_active_t > 0.01f)
           {
             Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_FocusActive);
             color.w *= b->focus_active_t;
-            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1.f), color, 0, 1.f, 1.f);
-            MemoryCopyArray(inst->corner_radii, b->corner_radii);
-          }
-          
-          // rjf: draw focus active disabled vis
-          if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusViz) && b->focus_active_disabled_t > 0.01f)
-          {
-            Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_FocusInactive);
-            color.w *= b->focus_active_disabled_t;
             R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1.f), color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
@@ -9827,19 +9838,15 @@ df_cmd_binding_button(DF_CmdSpec *spec)
   ui_set_next_palette(palette);
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                           UI_BoxFlag_Clickable|
-                                          UI_BoxFlag_DrawActiveEffects,
+                                          UI_BoxFlag_DrawActiveEffects|
+                                          UI_BoxFlag_DrawHotEffects|
+                                          UI_BoxFlag_DrawBorder|
+                                          UI_BoxFlag_DrawBackground,
                                           "%S###bind_btn_%p", keybinding_str, spec);
   
   //- rjf: interaction
   UI_Signal sig = ui_signal_from_box(box);
   {
-    // rjf: hover => visualize clickability
-    if(ui_hovering(sig))
-    {
-      box->flags |= UI_BoxFlag_DrawBorder;
-      box->flags |= UI_BoxFlag_DrawBackground;
-    }
-    
     // rjf: click => toggle activity
     if(!df_gfx_state->bind_change_active && ui_clicked(sig))
     {
@@ -10577,7 +10584,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     ui_set_next_child_layout_axis(Axis2_X);
     ui_set_next_pref_width(ui_px(params->line_text_max_width_px, 1));
     ui_set_next_pref_height(ui_children_sum(1));
-    top_container_box = ui_build_box_from_string(UI_BoxFlag_DisableFocusViz|UI_BoxFlag_DrawBorder, string);
+    top_container_box = ui_build_box_from_string(UI_BoxFlag_DisableFocusEffects|UI_BoxFlag_DrawBorder, string);
     clipped_top_container_rect = top_container_box->rect;
     for(UI_Box *b = top_container_box; !ui_box_is_nil(b); b = b->parent)
     {
@@ -14173,6 +14180,18 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
     df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBar].text       = current->colors[DF_ThemeColor_MenuBarText];
     df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBar].text_weak  = current->colors[DF_ThemeColor_MenuBarTextWeak];
     df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBar].border     = current->colors[DF_ThemeColor_MenuBarBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarPositive].background = current->colors[DF_ThemeColor_MenuBarBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarPositive].text       = current->colors[DF_ThemeColor_MenuBarTextPositive];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarPositive].text_weak  = current->colors[DF_ThemeColor_MenuBarTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarPositive].border     = current->colors[DF_ThemeColor_MenuBarBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNegative].background = current->colors[DF_ThemeColor_MenuBarBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNegative].text       = current->colors[DF_ThemeColor_MenuBarTextNegative];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNegative].text_weak  = current->colors[DF_ThemeColor_MenuBarTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNegative].border     = current->colors[DF_ThemeColor_MenuBarBorder];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNeutral].background = current->colors[DF_ThemeColor_MenuBarBackground];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNeutral].text       = current->colors[DF_ThemeColor_DefaultTextNeutral];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNeutral].text_weak  = current->colors[DF_ThemeColor_MenuBarTextWeak];
+    df_gfx_state->cfg_palettes[DF_PaletteCode_MenuBarNeutral].border     = current->colors[DF_ThemeColor_MenuBarBorder];
     df_gfx_state->cfg_palettes[DF_PaletteCode_TabActive].background = current->colors[DF_ThemeColor_TabActiveBackground];
     df_gfx_state->cfg_palettes[DF_PaletteCode_TabActive].text       = current->colors[DF_ThemeColor_TabActiveText];
     df_gfx_state->cfg_palettes[DF_PaletteCode_TabActive].text_weak  = current->colors[DF_ThemeColor_TabActiveTextWeak];

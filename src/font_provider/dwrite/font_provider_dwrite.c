@@ -172,7 +172,15 @@ fp_init(void)
   }
   
   //- rjf: make dwrite factory
-  error = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory, (void **)&fp_dwrite_state->factory);
+  error = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory2, (void **)&fp_dwrite_state->factory);
+  if(error == S_OK)
+  {
+    fp_dwrite_state->dwrite2_is_supported = 1;
+  }
+  else
+  {
+    error = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory, (void **)&fp_dwrite_state->factory);
+  }
   
   //- rjf: register static data font "loader" interface
   error = IDWriteFactory_RegisterFontFileLoader(fp_dwrite_state->factory, (IDWriteFontFileLoader *)&fp_dwrite_static_data_font_file_loader);
@@ -182,28 +190,58 @@ fp_init(void)
   
   //- rjf: make sharp rendering params
   {
-    FLOAT gamma = 1.f;
+    FLOAT gamma = IDWriteRenderingParams_GetGamma(fp_dwrite_state->base_rendering_params);
     FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
-    // FLOAT clear_type_level = fp_dwrite_state->base_rendering_params->GetClearTypeLevel();
-    error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory, gamma,
-                                                       enhanced_contrast,
-                                                       2.f,
-                                                       DWRITE_PIXEL_GEOMETRY_FLAT,
-                                                       DWRITE_RENDERING_MODE_GDI_NATURAL,
-                                                       &fp_dwrite_state->rendering_params[FP_RasterMode_Sharp]);
+    if(fp_dwrite_state->dwrite2_is_supported)
+    {
+      error = IDWriteFactory2_CreateCustomRenderingParams2((IDWriteFactory2 *)fp_dwrite_state->factory,
+                                                           gamma,
+                                                           enhanced_contrast,
+                                                           enhanced_contrast,
+                                                           1.f,
+                                                           DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                           DWRITE_RENDERING_MODE_GDI_NATURAL,
+                                                           DWRITE_GRID_FIT_MODE_ENABLED,
+                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params[FP_RasterMode_Sharp]);
+    }
+    else
+    {
+      error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory,
+                                                         gamma,
+                                                         enhanced_contrast,
+                                                         1.f,
+                                                         DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                         DWRITE_RENDERING_MODE_GDI_NATURAL,
+                                                         &fp_dwrite_state->rendering_params[FP_RasterMode_Sharp]);
+    }
   }
   
   //- rjf: make smooth rendering params
   {
     FLOAT gamma = 1.f;
-    FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
-    // FLOAT clear_type_level = fp_dwrite_state->base_rendering_params->GetClearTypeLevel();
-    error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory, gamma,
-                                                       enhanced_contrast,
-                                                       2.f,
-                                                       DWRITE_PIXEL_GEOMETRY_FLAT,
-                                                       DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
-                                                       &fp_dwrite_state->rendering_params[FP_RasterMode_Smooth]);
+    FLOAT enhanced_contrast = 0.f;
+    if(fp_dwrite_state->dwrite2_is_supported)
+    {
+      error = IDWriteFactory2_CreateCustomRenderingParams2((IDWriteFactory2 *)fp_dwrite_state->factory,
+                                                           gamma,
+                                                           enhanced_contrast,
+                                                           enhanced_contrast,
+                                                           1.f,
+                                                           DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                           DWRITE_RENDERING_MODE_CLEARTYPE_NATURAL_SYMMETRIC,
+                                                           DWRITE_GRID_FIT_MODE_DISABLED,
+                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params[FP_RasterMode_Smooth]);
+    }
+    else
+    {
+      error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory,
+                                                         gamma,
+                                                         enhanced_contrast,
+                                                         0.f,
+                                                         DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                         DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+                                                         &fp_dwrite_state->rendering_params[FP_RasterMode_Smooth]);
+    }
   }
   
   //- rjf: make dwrite gdi interop
@@ -415,7 +453,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
     result.atlas_dim    = atlas_dim;
     result.atlas        = push_array_no_zero(arena, U8, atlas_dim.x*atlas_dim.y*4);
     result.advance      = floor_f32(advance);
-    result.height       = bounding_box.bottom + 1.f;
+    result.bounding_box = r2s16p(bounding_box.left, bounding_box.top, bounding_box.right, bounding_box.bottom);
     
     // rjf: fill atlas
     {

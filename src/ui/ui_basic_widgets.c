@@ -31,7 +31,7 @@ ui_divider(UI_Size size)
 internal UI_Signal
 ui_label(String8 string)
 {
-  UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText, str8_lit(""));
+  UI_Box *box = ui_build_box_from_string(UI_BoxFlag_DrawText, str8_zero());
   ui_box_equip_display_string(box, string);
   UI_Signal interact = ui_signal_from_box(box);
   return interact;

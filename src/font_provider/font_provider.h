@@ -39,7 +39,7 @@ struct FP_RasterResult
   Vec2S16 atlas_dim;
   void *atlas;
   F32 advance;
-  S16 height;
+  Rng2S16 bounding_box;
 };
 
 ////////////////////////////////

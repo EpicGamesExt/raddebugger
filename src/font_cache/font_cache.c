@@ -516,7 +516,7 @@ f_piece_array_copy(Arena *arena, F_PieceArray *src)
 //~ rjf: Rasterization Cache
 
 internal F_Hash2StyleRasterCacheNode *
-f_hash2style_from_tag_size(F_Tag tag, F32 size)
+f_hash2style_from_tag_size_flags(F_Tag tag, F32 size, F_RunFlags flags)
 {
   //- rjf: tag * size -> style hash
   U64 style_hash = {0};
@@ -527,6 +527,7 @@ f_hash2style_from_tag_size(F_Tag tag, F32 size)
       tag.u64[0],
       tag.u64[1],
       *(U64 *)(&size_f64),
+      (U64)flags,
     };
     style_hash = f_little_hash_from_string(str8((U8 *)buffer, sizeof(buffer)));
   }
@@ -571,11 +572,12 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
   ProfBeginFunction();
   
   //- rjf: map tag/size to style node
-  F_Hash2StyleRasterCacheNode *hash2style_node = f_hash2style_from_tag_size(tag, size);
+  F_Hash2StyleRasterCacheNode *hash2style_node = f_hash2style_from_tag_size_flags(tag, size, flags);
   
   //- rjf: decode string & produce run pieces
   F_PieceChunkList piece_chunks = {0};
   Vec2F32 dim = {0};
+  F32 last_piece_end_pad = 0;
   B32 font_handle_mapped_on_miss = 0;
   FP_Handle font_handle = {0};
   U64 piece_substring_start_idx = 0;
@@ -683,7 +685,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
       }
       
       // rjf: call into font provider to rasterize this substring
-      FP_RasterResult raster = fp_raster(scratch.arena, font_handle, floor_f32(size), FP_RasterMode_Sharp, piece_substring);
+      FP_RasterResult raster = fp_raster(scratch.arena, font_handle, floor_f32(size), (flags & F_RunFlag_Smooth) ? FP_RasterMode_Smooth : FP_RasterMode_Sharp, piece_substring);
       
       // rjf: allocate portion of an atlas to upload the rasterization
       S16 chosen_atlas_num = 0;
@@ -759,6 +761,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
         if(info != 0)
         {
           info->subrect = chosen_atlas_region;
+          info->bounding_box = raster.bounding_box;
           info->atlas_num = chosen_atlas_num;
           info->raster_dim = raster.atlas_dim;
           info->advance = raster.advance;
@@ -811,7 +814,8 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
         }
         base_align_px += advance;
         dim.x += piece->advance;
-        dim.y = Max(dim.y, dim_2s16(piece->subrect).y);
+        dim.y = Max(dim.y, info->raster_dim.y);
+        last_piece_end_pad = ((F32)piece->offset.x+(F32)dim_2s16(info->bounding_box).x) - piece->advance;
       }
     }
   }
@@ -829,6 +833,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
       run.pieces = f_piece_array_from_chunk_list(arena, &piece_chunks);
     }
     run.dim = dim;
+    run.dim.x += last_piece_end_pad;
     run.ascent  = hash2style_node->ascent;
     run.descent = hash2style_node->descent;
   }

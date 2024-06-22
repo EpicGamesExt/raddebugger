@@ -323,21 +323,22 @@ typedef U64 UI_BoxFlags;
 # define UI_BoxFlag_AnimatePosY               (UI_BoxFlags)(1ull<<44)
 # define UI_BoxFlag_DisableTextTrunc          (UI_BoxFlags)(1ull<<45)
 # define UI_BoxFlag_DisableIDString           (UI_BoxFlags)(1ull<<46)
-# define UI_BoxFlag_DisableFocusViz           (UI_BoxFlags)(1ull<<47)
-# define UI_BoxFlag_RequireFocusBackground    (UI_BoxFlags)(1ull<<48)
+# define UI_BoxFlag_DisableFocusBorder        (UI_BoxFlags)(1ull<<47)
+# define UI_BoxFlag_DisableFocusOverlay       (UI_BoxFlags)(1ull<<48)
 # define UI_BoxFlag_HasDisplayString          (UI_BoxFlags)(1ull<<49)
 # define UI_BoxFlag_HasFuzzyMatchRanges       (UI_BoxFlags)(1ull<<50)
 # define UI_BoxFlag_RoundChildrenByParent     (UI_BoxFlags)(1ull<<51)
 
 //- rjf: bundles
-# define UI_BoxFlag_Clickable          (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)
-# define UI_BoxFlag_DefaultFocusNav    (UI_BoxFlag_DefaultFocusNavX|UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_DefaultFocusEdit)
-# define UI_BoxFlag_Floating           (UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY)
-# define UI_BoxFlag_FixedSize          (UI_BoxFlag_FixedWidth|UI_BoxFlag_FixedHeight)
-# define UI_BoxFlag_AllowOverflow      (UI_BoxFlag_AllowOverflowX|UI_BoxFlag_AllowOverflowY)
-# define UI_BoxFlag_AnimatePos         (UI_BoxFlag_AnimatePosX|UI_BoxFlag_AnimatePosY)
-# define UI_BoxFlag_ViewScroll         (UI_BoxFlag_ViewScrollX|UI_BoxFlag_ViewScrollY)
-# define UI_BoxFlag_ViewClamp          (UI_BoxFlag_ViewClampX|UI_BoxFlag_ViewClampY)
+# define UI_BoxFlag_Clickable           (UI_BoxFlag_MouseClickable|UI_BoxFlag_KeyboardClickable)
+# define UI_BoxFlag_DefaultFocusNav     (UI_BoxFlag_DefaultFocusNavX|UI_BoxFlag_DefaultFocusNavY|UI_BoxFlag_DefaultFocusEdit)
+# define UI_BoxFlag_Floating            (UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY)
+# define UI_BoxFlag_FixedSize           (UI_BoxFlag_FixedWidth|UI_BoxFlag_FixedHeight)
+# define UI_BoxFlag_AllowOverflow       (UI_BoxFlag_AllowOverflowX|UI_BoxFlag_AllowOverflowY)
+# define UI_BoxFlag_AnimatePos          (UI_BoxFlag_AnimatePosX|UI_BoxFlag_AnimatePosY)
+# define UI_BoxFlag_ViewScroll          (UI_BoxFlag_ViewScrollX|UI_BoxFlag_ViewScrollY)
+# define UI_BoxFlag_ViewClamp           (UI_BoxFlag_ViewClampX|UI_BoxFlag_ViewClampY)
+# define UI_BoxFlag_DisableFocusEffects (UI_BoxFlag_DisableFocusBorder|UI_BoxFlag_DisableFocusOverlay)
 //}
 
 typedef struct UI_Box UI_Box;
