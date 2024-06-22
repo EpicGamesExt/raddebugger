@@ -5474,13 +5474,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Signal max_sig = {0};
             UI_Signal cls_sig = {0};
             Vec2F32 bar_dim = dim_2f32(top_bar_rect);
-            F32 button_dim = bar_dim.y;
+            F32 button_dim = floor_f32(bar_dim.y);
             UI_PrefWidth(ui_px(button_dim, 1.f))
             {
               min_sig = df_icon_buttonf(DF_IconKind_Minus,  0, "##minimize");
               max_sig = df_icon_buttonf(DF_IconKind_Window, 0, "##maximize");
             }
-            UI_PrefWidth(ui_px(button_dim*2, 1.f))
+            UI_PrefWidth(ui_px(button_dim, 1.f))
               DF_Palette(DF_PaletteCode_SpecialNegative)
             {
               cls_sig = df_icon_buttonf(DF_IconKind_X,      0, "##close");
