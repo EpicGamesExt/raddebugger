@@ -839,6 +839,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
     }
     run.dim = dim;
     run.dim.x += last_piece_end_pad;
+    run.end_pad = last_piece_end_pad;
     run.ascent  = hash2style_node->ascent;
     run.descent = hash2style_node->descent;
   }

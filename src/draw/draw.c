@@ -104,6 +104,11 @@ d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, F_RunFlag
     run_list.dim.x += dst_n->v.run.dim.x;
     run_list.dim.y = Max(run_list.dim.y, dst_n->v.run.dim.y);
     base_align_px += dst_n->v.run.dim.x;
+    if(n->next != 0)
+    {
+      run_list.dim.x -= dst_n->v.run.end_pad;
+      base_align_px -= dst_n->v.run.end_pad;
+    }
   }
   ProfEnd();
   return run_list;

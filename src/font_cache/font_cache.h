@@ -71,6 +71,7 @@ struct F_Run
 {
   F_PieceArray pieces;
   Vec2F32 dim;
+  F32 end_pad;
   F32 ascent;
   F32 descent;
 };
