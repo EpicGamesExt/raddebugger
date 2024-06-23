@@ -685,7 +685,11 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
       }
       
       // rjf: call into font provider to rasterize this substring
-      FP_RasterResult raster = fp_raster(scratch.arena, font_handle, floor_f32(size), (flags & F_RunFlag_Smooth) ? FP_RasterMode_Smooth : FP_RasterMode_Sharp, piece_substring);
+      FP_RasterResult raster = {0};
+      if(size > 0)
+      {
+        raster = fp_raster(scratch.arena, font_handle, floor_f32(size), (flags & F_RunFlag_Smooth) ? FP_RasterMode_Smooth : FP_RasterMode_Sharp, piece_substring);
+      }
       
       // rjf: allocate portion of an atlas to upload the rasterization
       S16 chosen_atlas_num = 0;
@@ -816,6 +820,7 @@ f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32
         dim.x += piece->advance;
         dim.y = Max(dim.y, info->raster_dim.y);
         last_piece_end_pad = ((F32)piece->offset.x+(F32)dim_2s16(info->bounding_box).x) - piece->advance;
+        last_piece_end_pad = ClampBot(0, last_piece_end_pad);
       }
     }
   }
@@ -993,29 +998,29 @@ f_column_size_from_tag_size(F_Tag tag, F32 size)
 internal U64
 f_char_pos_from_tag_size_string_p(F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 p)
 {
-  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  U64 result = 0;
-  U64 best_offset = 0;
-  F32 best_distance = -1.f;
-  F32 x = 0;
-  for(U64 char_idx = 0; char_idx <= string.size; char_idx += 1)
+  U64 best_offset_bytes = 0;
+  F32 best_offset_px = inf32();
+  U64 offset_bytes = 0;
+  F32 offset_px = 0.f;
+  F_Run run = f_push_run_from_string(scratch.arena, tag, size, base_align_px, tab_size_px, 0, string);
+  for(U64 idx = 0; idx <= run.pieces.count; idx += 1)
   {
-    F32 this_char_distance = abs_f32(p - x);
-    if(this_char_distance < best_distance || best_distance < 0.f)
+    F32 this_piece_offset_px = abs_f32(offset_px - p);
+    if(this_piece_offset_px < best_offset_px)
     {
-      best_offset = char_idx;
-      best_distance = this_char_distance;
+      best_offset_bytes = offset_bytes;
+      best_offset_px = this_piece_offset_px;
     }
-    if(char_idx < string.size)
+    if(idx < run.pieces.count)
     {
-      x += f_dim_from_tag_size_string(tag, size, base_align_px, tab_size_px, str8_substr(string, r1u64(char_idx, char_idx+1))).x;
+      F_Piece *piece = &run.pieces.v[idx];
+      offset_px += piece->advance;
+      offset_bytes += piece->decode_size;
     }
   }
-  result = best_offset;
   scratch_end(scratch);
-  ProfEnd();
-  return result;
+  return best_offset_bytes;
 }
 
 ////////////////////////////////
