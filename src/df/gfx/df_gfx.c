@@ -9841,6 +9841,7 @@ df_cmd_binding_button(DF_CmdSpec *spec)
   ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   ui_set_next_text_alignment(UI_TextAlign_Center);
   ui_set_next_palette(palette);
+  ui_set_next_group_key(ui_key_zero());
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                           UI_BoxFlag_Clickable|
                                           UI_BoxFlag_DrawActiveEffects|
