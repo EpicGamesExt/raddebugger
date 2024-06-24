@@ -1643,11 +1643,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ////////////////////////
         //- rjf: determine row's color palette
         //
+        UI_BoxFlags row_flags = 0;
         UI_Palette *palette = ui_top_palette();
         {
           if(row_is_fresh)
           {
-            palette = ui_build_palette(ui_top_palette(), .background = mul_4f32(df_rgba_from_theme_color(DF_ThemeColor_Highlight0), v4f32(1, 1, 1, 0.2f)));
+            palette = ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay));
+            row_flags |= UI_BoxFlag_DrawBackground;
           }
         }
         
@@ -1659,7 +1661,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ui_set_next_pref_width(ui_pct(1, 0));
         ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->size_in_rows, 1.f));
         ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
-        UI_Box *row_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideBottom|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
+        UI_Box *row_box = ui_build_box_from_stringf(row_flags|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_Clickable|UI_BoxFlag_DisableFocusOverlay, "row_%I64x", row_hash);
         ui_ts_vector_idx += 1;
         ui_ts_cell_idx = 0;
         
@@ -1734,7 +1736,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             ui_set_next_fixed_x(0);
             ui_set_next_fixed_y(0);
             ui_set_next_fixed_height(ui_top_font_size()*0.1f);
-            ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0)));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay)));
             ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
           }
           
@@ -1753,8 +1755,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               ui_set_next_fixed_x(0);
               ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
               ui_set_next_fixed_height(ui_top_font_size()*1.f);
-              Vec4F32 boundary_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
-              boundary_color.w *= 0.25f;
+              Vec4F32 boundary_color = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay);
               ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = boundary_color));
               ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
             }
@@ -1770,15 +1771,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
             B32 can_edit_expr = !(row->depth > 0 || modifiable == 0);
             
-            // rjf: unpack palette
-            UI_Palette *palette = ui_top_palette();
-            {
-              if(row->flags & DF_EvalVizRowFlag_ExprIsSpecial)
-              {
-                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNeutral));
-              }
-            }
-            
             // rjf: build
             UI_Signal sig = {0};
             B32 next_expanded = row_expanded;
@@ -1788,14 +1780,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             {
               B32 expr_editing_active = ui_is_focus_active();
               B32 is_inherited = (row->inherited_type_key_chain.count != 0);
-              UI_Font(code_font) UI_Palette(palette) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
+              UI_Font(code_font) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
               {
-                if(is_inherited)
-                {
-                  Vec4F32 inherited_bg_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight1);
-                  inherited_bg_color.w *= 0.2f;
-                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = inherited_bg_color));
-                }
                 FuzzyMatchRangeList matches = {0};
                 if(filter.size != 0)
                 {
@@ -1927,16 +1913,19 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
             
             // rjf: unpack palette
+            UI_BoxFlags cell_flags = 0;
             UI_Palette *palette = ui_top_palette();
             {
-              if(row_is_bad)
+              if(row_is_bad || value_is_error)
               {
-                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative));
+                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative), .text_weak = df_rgba_from_theme_color(DF_ThemeColor_TextNegative), .background = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlayError));
+                cell_flags |= UI_BoxFlag_DrawBackground;
               }
             }
             
             // rjf: build
             UI_Signal sig = {0};
+            ui_set_next_flags(cell_flags);
             UI_Palette(palette) UI_TableCell UI_Font(code_font)
               UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
               UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -4706,14 +4695,9 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
         UI_TableCellSized(ui_em(1.5f*depth, 1.f)) {}
         UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          B32 frozen_by_solo_mode = (entity->kind == DF_EntityKind_Thread && entity != df_entity_from_handle(ctrl_ctx.thread) && df_state->ctrl_solo_stepping_mode);
           B32 frozen = df_entity_is_frozen(entity);
           UI_Palette *palette = ui_top_palette();
-          if(frozen_by_solo_mode)
-          {
-            palette = ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_Highlight0));
-          }
-          else if(frozen)
+          if(frozen)
           {
             palette = df_palette_from_code(DF_PaletteCode_NegativePopButton);
           }
@@ -4723,10 +4707,6 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
           }
           UI_Signal sig = {0};
           UI_Palette(palette) sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, 0, "###lock_%p", entity);
-          if(frozen_by_solo_mode && ui_hovering(sig)) UI_Tooltip
-          {
-            ui_label(str8_lit("This thread is frozen during stepping operations because it isn't selected, and Solo Stepping Mode is enabled."));
-          }
           if(ui_clicked(sig))
           {
             DF_CoreCmdKind cmd_kind = frozen ? DF_CoreCmdKind_ThawEntity : DF_CoreCmdKind_FreezeEntity;
@@ -6460,6 +6440,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     ui_set_next_fixed_y(code_area_dim.y);
     ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
     ui_set_next_fixed_height(scroll_bar_dim);
+    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.x = ui_scroll_bar(Axis2_X,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -6478,6 +6459,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     ui_set_next_fixed_y(0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
+    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -6564,7 +6546,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
           {
             ui_labelf("This file has changed since ", out_of_date_dbgi_name);
-            UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_Highlight0))) ui_label(out_of_date_dbgi_name);
+            UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNeutral))) ui_label(out_of_date_dbgi_name);
             ui_labelf(" was produced.");
           }
         }
@@ -7359,6 +7341,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     ui_set_next_fixed_y(code_area_dim.y);
     ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
     ui_set_next_fixed_height(scroll_bar_dim);
+    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.x = ui_scroll_bar(Axis2_X,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -7377,6 +7360,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     ui_set_next_fixed_y(0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
+    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -8160,6 +8144,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     ui_set_next_fixed_y(code_area_dim.y);
     ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
     ui_set_next_fixed_height(scroll_bar_dim);
+    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.x = ui_scroll_bar(Axis2_X,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -8178,6 +8163,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     ui_set_next_fixed_y(0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
+    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -8744,6 +8730,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     ui_set_next_fixed_y(content_rect.y0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(dim_2f32(content_rect).y);
+    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -8886,7 +8873,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       if(row_range_bytes.min%64 == 0)
       {
         row_is_boundary = 1;
-        row_boundary_color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+        row_boundary_color = df_rgba_from_theme_color(DF_ThemeColor_BaseBorder);
       }
       UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_DrawSideTop*!!row_is_boundary, "row_%I64x", row_range_bytes.min);
       UI_Parent(row)
@@ -8916,7 +8903,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             if(global_byte_num == mouse_hover_byte_num)
             {
               cell_flags |= UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight;
-              cell_border_rgba = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+              cell_border_rgba = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay);
             }
             if(annotation != 0)
             {
@@ -8934,7 +8921,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             if(selection.min <= global_byte_idx && global_byte_idx <= selection.max)
             {
               cell_flags |= UI_BoxFlag_DrawBackground;
-              cell_bg_rgba = df_rgba_from_theme_color(DF_ThemeColor_Selection);
+              cell_bg_rgba = df_rgba_from_theme_color(DF_ThemeColor_SelectionOverlay);
             }
             UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
             ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
@@ -9006,7 +8993,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
                             ascii_box->rect.y0,
                             text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.max+1-row_range_bytes.min)).x + font_size/4.f,
                             ascii_box->rect.y1),
-                     df_rgba_from_theme_color(DF_ThemeColor_Selection),
+                     df_rgba_from_theme_color(DF_ThemeColor_SelectionOverlay),
                      0, 0, 1.f);
             }
             ui_box_equip_draw_bucket(ascii_box, bucket);
@@ -9017,7 +9004,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             D_BucketScope(bucket)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
-              Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Highlight0);
+              Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay);
               d_rect(r2f32p(text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num-1-row_range_bytes.min)).x - font_size/8.f,
                             ascii_box->rect.y0,
                             text_pos.x + f_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, mouse_hover_byte_num+0-row_range_bytes.min)).x + font_size/4.f,

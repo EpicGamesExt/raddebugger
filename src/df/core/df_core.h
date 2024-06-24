@@ -1242,7 +1242,6 @@ struct DF_State
   Arena *ctrl_msg_arena;
   CTRL_MsgList ctrl_msgs;
   U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
-  B32 ctrl_solo_stepping_mode;
   
   // rjf: control thread ctrl -> user reading state
   CTRL_EntityStore *ctrl_entity_store;

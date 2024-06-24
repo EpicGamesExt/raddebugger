@@ -3963,25 +3963,16 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_RunFlags flags, CTRL_Tra
         }
       }
     }
-    if(df_state->ctrl_solo_stepping_mode && !df_entity_is_nil(run_thread))
+    for(DF_HandleNode *n = df_state->frozen_threads.first; n != 0; n = n->next)
     {
-      msg.freeze_state_is_frozen = 0;
-      CTRL_MachineIDHandlePair pair = {run_thread->ctrl_machine_id, run_thread->ctrl_handle};
-      ctrl_machine_id_handle_pair_list_push(scratch.arena, &msg.freeze_state_threads, &pair);
-    }
-    else
-    {
-      for(DF_HandleNode *n = df_state->frozen_threads.first; n != 0; n = n->next)
+      DF_Entity *thread = df_entity_from_handle(n->handle);
+      if(!df_entity_is_nil(thread))
       {
-        DF_Entity *thread = df_entity_from_handle(n->handle);
-        if(!df_entity_is_nil(thread))
-        {
-          CTRL_MachineIDHandlePair pair = {thread->ctrl_machine_id, thread->ctrl_handle};
-          ctrl_machine_id_handle_pair_list_push(scratch.arena, &msg.freeze_state_threads, &pair);
-        }
+        CTRL_MachineIDHandlePair pair = {thread->ctrl_machine_id, thread->ctrl_handle};
+        ctrl_machine_id_handle_pair_list_push(scratch.arena, &msg.freeze_state_threads, &pair);
       }
-      msg.freeze_state_is_frozen = 1;
     }
+    msg.freeze_state_is_frozen = 1;
   }
   
   // rjf: push msg
@@ -6192,15 +6183,6 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
     str8_list_push(arena, &strs, str8_lit("}\n\n"));
   }
   
-  //- rjf: write control settings
-  if(source == DF_CfgSrc_Project)
-  {
-    str8_list_push(arena, &strs, str8_lit("/// control settings //////////////////////////////////////////////////////////\n"));
-    str8_list_push(arena, &strs, str8_lit("\n"));
-    str8_list_pushf(arena, &strs, "solo_stepping_mode: %i\n", df_state->ctrl_solo_stepping_mode);
-    str8_list_push(arena, &strs, str8_lit("\n"));
-  }
-  
   //- rjf: write eval view cache
 #if 0
   if(source == DF_CfgSrc_Project)
@@ -7738,16 +7720,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           }
         }break;
         
-        //- rjf: solo-stepping mode
-        case DF_CoreCmdKind_EnableSoloSteppingMode:
-        {
-          df_state->ctrl_solo_stepping_mode = 1;
-        }break;
-        case DF_CoreCmdKind_DisableSoloSteppingMode:
-        {
-          df_state->ctrl_solo_stepping_mode = 0;
-        }break;
-        
         //- rjf: debug control context management operations
         case DF_CoreCmdKind_SelectThread:
         {
@@ -8455,19 +8427,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               }
             }
           }
-          
-          //- rjf: apply control settings
-          {
-            DF_CfgVal *solo_stepping_mode_cfg_val = df_cfg_val_from_string(table, str8_lit("solo_stepping_mode"));
-            if(solo_stepping_mode_cfg_val != &df_g_nil_cfg_val)
-            {
-              DF_CfgNode *value_cfg = solo_stepping_mode_cfg_val->last->first;
-              U64 val = 0;
-              try_u64_from_str8_c_rules(value_cfg->string, &val);
-              df_state->ctrl_solo_stepping_mode = (B32)val;
-            }
-          }
-          
         }break;
         
         //- rjf: writing config changes
