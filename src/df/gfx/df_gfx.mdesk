@@ -386,8 +386,7 @@ DF_ThemeColorTable:
   {DropSiteOverlay                "Drop Site Overlay"                 drop_site_overlay                      0xffffff0c          0xffffff0c           0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c             ""}
   {InactivePanelOverlay           "Inactive Panel Overlay"            inactive_panel_overlay                 0x0000003f          0x0000003f           0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f             ""}
   {SelectionOverlay               "Selection Overlay"                 selection_overlay                      0x99ccff4c          0x99ccff4c           0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c          0x99ccff4c             ""}
-  {HighlightOverlay               "Highlight Overlay"                 highlight_overlay                      0x3b4a515f          
-      0x0000003f           0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f             ""}
+  {HighlightOverlay               "Highlight Overlay"                 highlight_overlay                      0xffffff1e          0x0000003f           0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f             ""}
   {HighlightOverlayError          "Error Highlight Overlay"           error_highlight_overlay                0x5f12005f          0x0000003f           0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f          0x0000003f             ""}
   
   //- rjf: base ui container colors

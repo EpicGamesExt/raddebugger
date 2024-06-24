@@ -7805,8 +7805,8 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.tab_size                  = code_tab_size;
     code_slice_params.line_height_px            = code_line_height;
     code_slice_params.search_query              = search_query;
-    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
-    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
+    code_slice_params.priority_margin_width_px  = 0.f;
+    code_slice_params.catchall_margin_width_px  = 0.f;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
