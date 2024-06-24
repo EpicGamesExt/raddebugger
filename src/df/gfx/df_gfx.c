@@ -10343,15 +10343,8 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
     else if(ui_right_clicked(sig))
     {
       DF_Handle handle = df_handle_from_entity(entity);
-      if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
-      {
-        ui_ctx_menu_close();
-      }
-      else
-      {
-        ui_ctx_menu_open(ws->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
-        ws->entity_ctx_menu_entity = handle;
-      }
+      ui_ctx_menu_open(ws->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
+      ws->entity_ctx_menu_entity = handle;
     }
     
     // rjf: drag+drop
@@ -10837,15 +10830,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             if(ui_right_clicked(thread_sig))
             {
               DF_Handle handle = df_handle_from_entity(thread);
-              if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
-              {
-                ui_ctx_menu_close();
-              }
-              else
-              {
-                ui_ctx_menu_open(ws->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
-                ws->entity_ctx_menu_entity = handle;
-              }
+              ui_ctx_menu_open(ws->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
+              ws->entity_ctx_menu_entity = handle;
             }
             
             // rjf: drag start
@@ -11001,15 +10987,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             if(ui_right_clicked(thread_sig))
             {
               DF_Handle handle = df_handle_from_entity(thread);
-              if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
-              {
-                ui_ctx_menu_close();
-              }
-              else
-              {
-                ui_ctx_menu_open(ws->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
-                ws->entity_ctx_menu_entity = handle;
-              }
+              ui_ctx_menu_open(ws->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
+              ws->entity_ctx_menu_entity = handle;
             }
             
             // rjf: double click => select
@@ -11109,15 +11088,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             if(ui_right_clicked(bp_sig))
             {
               DF_Handle handle = df_handle_from_entity(bp);
-              if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
-              {
-                ui_ctx_menu_close();
-              }
-              else
-              {
-                ui_ctx_menu_open(ws->entity_ctx_menu_key, bp_box->key, v2f32(0, bp_box->rect.y1-bp_box->rect.y0));
-                ws->entity_ctx_menu_entity = handle;
-              }
+              ui_ctx_menu_open(ws->entity_ctx_menu_key, bp_box->key, v2f32(0, bp_box->rect.y1-bp_box->rect.y0));
+              ws->entity_ctx_menu_entity = handle;
             }
           }
           
@@ -11176,15 +11148,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             if(ui_right_clicked(pin_sig))
             {
               DF_Handle handle = df_handle_from_entity(pin);
-              if(ui_ctx_menu_is_open(ws->entity_ctx_menu_key) && df_handle_match(ws->entity_ctx_menu_entity, handle))
-              {
-                ui_ctx_menu_close();
-              }
-              else
-              {
-                ui_ctx_menu_open(ws->entity_ctx_menu_key, pin_box->key, v2f32(0, pin_box->rect.y1-pin_box->rect.y0));
-                ws->entity_ctx_menu_entity = handle;
-              }
+              ui_ctx_menu_open(ws->entity_ctx_menu_key, pin_box->key, v2f32(0, pin_box->rect.y1-pin_box->rect.y0));
+              ws->entity_ctx_menu_entity = handle;
             }
           }
         }
@@ -11417,7 +11382,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                 payload.entity = df_handle_from_entity(pin);
                 df_drag_begin(&payload);
               }
-              if(ui_clicked(sig) || ui_right_clicked(sig))
+              if(ui_right_clicked(sig))
               {
                 ui_ctx_menu_open(ws->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
                 ws->entity_ctx_menu_entity = df_handle_from_entity(pin);

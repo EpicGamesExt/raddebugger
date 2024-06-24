@@ -614,6 +614,18 @@ ui_sat_val_picker(F32 hue, F32 *out_sat, F32 *out_val, String8 string)
     *out_sat = Clamp(0, *out_sat, 1);
     *out_val = Clamp(0, *out_val, 1);
     ui_do_color_tooltip_hsv(v3f32(hue, *out_sat, *out_val));
+    if(ui_pressed(sig))
+    {
+      Vec2F32 data = v2f32(*out_sat, *out_val);
+      ui_store_drag_struct(&data);
+    }
+    if(ui_slot_press(UI_EventActionSlot_Cancel))
+    {
+      Vec2F32 data = *ui_get_drag_struct(Vec2F32);
+      *out_sat = data.x;
+      *out_val = data.y;
+      ui_kill_action();
+    }
   }
   
   // rjf: fill draw data
@@ -709,6 +721,15 @@ ui_hue_picker(F32 *out_hue, F32 sat, F32 val, String8 string)
     *out_hue = (ui_mouse().y - box->rect.y0) / dim.y;
     *out_hue = Clamp(0, *out_hue, 1);
     ui_do_color_tooltip_hsv(v3f32(*out_hue, sat, val));
+    if(ui_pressed(sig))
+    {
+      ui_store_drag_struct(out_hue);
+    }
+    if(ui_slot_press(UI_EventActionSlot_Cancel))
+    {
+      *out_hue = *ui_get_drag_struct(F32);
+      ui_kill_action();
+    }
   }
   
   // rjf: fill draw data
@@ -787,6 +808,15 @@ ui_alpha_picker(F32 *out_alpha, String8 string)
     F32 drag_pct = (ui_mouse().y - box->rect.y0) / dim.y; 
     drag_pct = Clamp(0, drag_pct, 1);
     *out_alpha = 1-drag_pct;
+    if(ui_pressed(sig))
+    {
+      ui_store_drag_struct(out_alpha);
+    }
+    if(ui_slot_press(UI_EventActionSlot_Cancel))
+    {
+      *out_alpha = *ui_get_drag_struct(F32);
+      ui_kill_action();
+    }
   }
   
   // rjf: fill draw data

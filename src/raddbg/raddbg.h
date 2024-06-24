@@ -125,12 +125,6 @@
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
 //
-//  [ ] I found the "context menu" convention to be confusing. For example, if
-//      I left-click on a tab, it selects the tab. If I right-click on a tab,
-//      it opens the context menu. However, if I left-click on a module, it
-//      opens the context window. It seems like maybe menus should be right,
-//      and left should do the default action, more consistently?
-//
 //  [ ] It wasn't clear to me how you save a user or project file. I can see
 //      how to load them, but not how you save them. Obviously I can just copy
 //      the files myself in the shell, but it seemed weird that there was no
@@ -168,16 +162,6 @@
 //  [ ] Clicking on either side of a scroll bar is idiosyncratic. Normally,
 //      that is "page up" / "page down", but here it is "smooth scroll upward"
 //      / "smooth scroll downward" for some reason?
-//
-//  [ ] Hitting ESC during a color picker drag should abort the color picking
-//      and revert to the previous color. Currently, it just accepts the last
-//      drag result as the new color.
-//
-//  [ ] It was not clear to me why a small "tab picker" appeared when I got to
-//      a certain number of tabs. It seemed to appear even if the tabs were
-//      quite large, and there was no need to a drop-down menu to pick them. It
-//      feels like either it should always be there, or it should only show up
-//      if at least one tab gets small enough to have its name cut off?
 //
 //  [ ]  can it ignore stepping into _RTC_CheckStackVars generated functions?
 //  [ ]  mouse back button should make view to go back after I double clicked
@@ -392,6 +376,21 @@
 //  [x] Many of the UI elements, like the menus, would like better if they had
 //      a little bit of margin. Having the text right next to the edges, and
 //      with no line spacing, makes it harder to read things quickly.
+// [x] colors: memory view
+//  [x] Hitting ESC during a color picker drag should abort the color picking
+//      and revert to the previous color. Currently, it just accepts the last
+//      drag result as the new color.
+//  [x] It was not clear to me why a small "tab picker" appeared when I got to
+//      a certain number of tabs. It seemed to appear even if the tabs were
+//      quite large, and there was no need to a drop-down menu to pick them. It
+//      feels like either it should always be there, or it should only show up
+//      if at least one tab gets small enough to have its name cut off?
+//  [x] I found the "context menu" convention to be confusing. For example, if
+//      I left-click on a tab, it selects the tab. If I right-click on a tab,
+//      it opens the context menu. However, if I left-click on a module, it
+//      opens the context window. It seems like maybe menus should be right,
+//      and left should do the default action, more consistently?
+//
 
 #ifndef RADDBG_H
 #define RADDBG_H
