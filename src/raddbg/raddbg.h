@@ -2,15 +2,52 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Frontend/UI Pass Tasks
+//~ rjf: 0.9.11 TODO
+//
+// [ ] user settings (ui & functionality - generally need a story for it)
+//  [ ] hover animations
+//  [ ] press animations
+//  [ ] focus animations
+//  [ ] tooltip animations
+//  [ ] context menu animations
+//  [ ] scrolling animations
+//  [ ] background blur
+//  [ ] tab width
+//  [ ] auto-scroll output window
+//
+// [ ] move breakpoints to being a global thing, not nested to particular files
+//
+// [ ] visualize all breakpoints everywhere - source view should show up in
+//     disasm, disasm should show up in source view, function should show up in
+//     both, etc.
+//  [ ] ** Function breakpoints should show up in the source listing. Without
+//      them being visible, it is confusing when you run and you stop there,
+//      because you're like "wait why did it stop" and then you later remember
+//      that's because there was a function breakpoint there.
+//
+// [ ] inline breakpoint hit_count
+//  [ ] to count hit counts, resolve all bps to addresses, check addresses
+//      against stopper thread's
+//
+// [ ] colors: fill out rest of theme presets for new theme setup
 //
 // [ ] editing multiple bindings for commands
+// [ ] theme lister -> fonts & font sizes
+// [ ] "Browse..." buttons should adopt a more relevant starting search path,
+//     if possible
+//
+//  [ ] highlighted text & ctrl+f -> auto-fill search query
+//  [ ] double click on procedure in procedures tab to jump to source
+//  [ ] double-click any part of frame in callstack view -> snap to function
+
+////////////////////////////////
+//~ rjf: Frontend/UI Pass Tasks
+//
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
 //
 // [ ] target/breakpoint/watch-pin reordering
 //
-// [ ] theme lister -> fonts & font sizes
 // [ ] font lister
 // [ ] per-panel font size overrides
 //
@@ -34,31 +71,26 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] "Browse..." buttons should adopt a more relevant starting search path,
-//     if possible
 // [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
+
+////////////////////////////////
+//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
 // [ ] Setting the code_font/main_font values to a font name doesn't work.
 //     Should probably make note that you have to set it to a path to a TTF,
 //     since that's not normally how Windows fonts work.
-
-////////////////////////////////
-//~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
 // [ ] "root" concept in hash store, which buckets keys & allows usage code to
 //     jettison a collection of keys in retained mode fashion
 //
 // [ ] Jeff Notes
-//  [ ] highlighted text & ctrl+f -> auto-fill search query
-//  [ ] double-click any part of frame in callstack view -> snap to function
 //  [ ] sort locals by appearance in source code (or maybe just debug info)
 //  [ ] sum view rule
 //  [ ] plot view rule
 //  [ ] histogram view rule
 //  [ ] max view rule
 //  [ ] min view rule
-//  [ ] double click on procedure in procedures tab to jump to source
 //
 // [ ] filesystem drag/drop support
 // [ ] double-click vs. single-click for folder navigation, see if we can infer
@@ -78,6 +110,10 @@
 //      sense once I use the debugger more, but I just thought I'd make a note
 //      to say that I was confused about it after reading the manual, so
 //      perhaps you could elaborate a little more on it in there.
+//  [ ] It wasn't clear to me how you save a user or project file. I can see
+//      how to load them, but not how you save them. Obviously I can just copy
+//      the files myself in the shell, but it seemed weird that there was no
+//      "save" option in the menus.
 //
 // [ ] Right-clicking on a thread in the Scheduler window pops up a context
 //     menu, but you can't actually see it because the tooltip for the thread
@@ -88,11 +124,6 @@
 //      it will be clipped to the bottom of the listing instead of showing the
 //      actual items (ie., it doesn't resize the listing based on what's
 //      actually visible)
-//
-//  [ ] ** Function breakpoints should show up in the source listing. Without
-//      them being visible, it is confusing when you run and you stop there,
-//      because you're like "wait why did it stop" and then you later remember
-//      that's because there was a function breakpoint there.
 //
 //  [ ] ** One very nice feature of RemedyBG that I use all the time is the
 //      ability to put "$err, hr" into the watch window, which will just show
@@ -125,14 +156,7 @@
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
 //
-//  [ ] It wasn't clear to me how you save a user or project file. I can see
-//      how to load them, but not how you save them. Obviously I can just copy
-//      the files myself in the shell, but it seemed weird that there was no
-//      "save" option in the menus.
-//
 // [ ] @feature debug info overrides (both path-based AND module-based)
-// [ ] configure tab size
-// [ ] auto-scroll output window
 //
 // [ ] C++ virtual inheritance member visualization in watch window
 
@@ -186,6 +210,12 @@
 
 ////////////////////////////////
 //~ rjf: Hot, Feature Tasks (Not really "low priority" but less urgent than fixes)
+//
+// [ ] @eval_upgrade
+//  [ ] new eval system; support strings, many address spaces, many debug
+//      infos, wide/async transforms (e.g. diff(blob1, blob2))
+//  [ ] collapse frontend visualization systems - source view, disasm view,
+//      callstack, modules, scheduler, should *all* be flavors of watch view
 //
 // [ ] Fancy View Rules
 //  [ ] table column boundaries should be checked against *AFTER* table

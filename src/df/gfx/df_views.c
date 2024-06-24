@@ -1661,7 +1661,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ui_set_next_pref_width(ui_pct(1, 0));
         ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->size_in_rows, 1.f));
         ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
-        UI_Box *row_box = ui_build_box_from_stringf(row_flags|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_Clickable|UI_BoxFlag_DisableFocusOverlay, "row_%I64x", row_hash);
+        UI_Box *row_box = ui_build_box_from_stringf(row_flags|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_Clickable|(!(row->flags & DF_EvalVizRowFlag_Canvas) * UI_BoxFlag_DisableFocusOverlay), "row_%I64x", row_hash);
         ui_ts_vector_idx += 1;
         ui_ts_cell_idx = 0;
         
