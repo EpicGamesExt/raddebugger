@@ -7258,7 +7258,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               UI_Column
             {
               ui_spacer(ui_px(tab_bar_rv_diff/2.f, 1.f));
-              UI_CornerRadius(tab_bar_vheight/2.f)
+              UI_CornerRadius00(corner_radius)
+                UI_CornerRadius10(corner_radius)
                 UI_Font(df_font_from_slot(DF_FontSlot_Icons))
                 UI_FontSize(ui_top_font_size())
                 UI_RunFlags(F_RunFlag_Smooth)
@@ -12543,10 +12544,8 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
       }break;
       case TXT_TokenKind_Numeric:
       {
-        Vec4F32 token_color_rgba_alt = token_color_rgba;
-        token_color_rgba_alt.x *= 0.7f;
-        token_color_rgba_alt.y *= 0.7f;
-        token_color_rgba_alt.z *= 0.7f;
+        Vec4F32 token_color_rgba_alt = df_rgba_from_theme_color(DF_ThemeColor_CodeNumericAltDigitGroup);
+        token_color_rgba_alt.w *= alpha;
         F32 font_size = ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f));
         
         // rjf: unpack string

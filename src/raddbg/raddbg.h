@@ -26,11 +26,6 @@
 //     threads you haven't? Or, there could even be a debugger-specific API
 //     that you use to tag them. Just some way that would make it easier to
 //     focus on your own threads.
-//
-//  [ ]  what's up with decimal number coloring where every group of 3 are in
-//       different color? can I turn it off? And why sometimes digits in number
-//       start with brighter color, but sometimes with darker - shouldn't it
-//       always have the same color ordering?
 
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
@@ -384,6 +379,10 @@
 //  [x]  it would be nice to have "show in explorer" for right click on source
 //       file tab (opens explorer & selects the file)
 // [x] asan stepping breakage
+//  [x]  what's up with decimal number coloring where every group of 3 are in
+//       different color? can I turn it off? And why sometimes digits in number
+//       start with brighter color, but sometimes with darker - shouldn't it
+//       always have the same color ordering?
 
 #ifndef RADDBG_H
 #define RADDBG_H
