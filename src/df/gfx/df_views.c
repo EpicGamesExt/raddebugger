@@ -8885,7 +8885,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             if(global_byte_num == mouse_hover_byte_num)
             {
               cell_flags |= UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight;
-              cell_border_rgba = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay);
+              cell_border_rgba = df_rgba_from_theme_color(DF_ThemeColor_Hover);
             }
             if(annotation != 0)
             {
@@ -8905,6 +8905,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
               cell_flags |= UI_BoxFlag_DrawBackground;
               cell_bg_rgba = df_rgba_from_theme_color(DF_ThemeColor_SelectionOverlay);
             }
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = cell_bg_rgba));
             UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
             ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
             {
