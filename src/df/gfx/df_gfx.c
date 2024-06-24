@@ -11655,7 +11655,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //////////////////////////////
   //- rjf: mouse -> set global frontend hovered line info
   //
-  if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line))
+  if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line) && (ui_mouse().x - text_container_box->rect.x0 < params->line_num_width_px + line_num_padding_px))
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
     if(params->line_src2dasm[line_slice_idx].first != 0 &&
@@ -11756,7 +11756,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //
   if(params->flags & DF_CodeSliceFlag_LineNums) UI_Parent(text_container_box) ProfScope("build line number interaction box") UI_Focus(UI_FocusKind_Off)
   {
-    ui_set_next_pref_width(ui_px(params->line_num_width_px + line_num_padding_px, 1.f));
+    ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     ui_build_box_from_key(0, ui_key_zero());
   }
@@ -11784,7 +11784,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         String8 line_string = params->line_text[line_idx];
         Rng1U64 line_range = params->line_ranges[line_idx];
         TXT_TokenArray *line_tokens = &params->line_tokens[line_idx];
-        ui_set_next_text_padding(-2);
+        ui_set_next_text_padding(line_num_padding_px-2);
         UI_Key line_key = ui_key_from_stringf(top_container_box->key, "ln_%I64x", line_num);
         Vec4F32 line_bg_color = line_bg_colors[line_idx];
         if(line_bg_color.w != 0)
@@ -11942,9 +11942,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               };
               Rng2F32 match_rect =
               {
-                line_box->rect.x0+match_column_pixel_off_range.min,
+                line_box->rect.x0+line_num_padding_px+match_column_pixel_off_range.min,
                 line_box->rect.y0,
-                line_box->rect.x0+match_column_pixel_off_range.max+2.f,
+                line_box->rect.x0+line_num_padding_px+match_column_pixel_off_range.max+2.f,
                 line_box->rect.y1,
               };
               Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay);
@@ -11997,9 +11997,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               };
               Rng2F32 select_rect =
               {
-                line_box->rect.x0+select_column_pixel_off_range.min,
+                line_box->rect.x0+line_num_padding_px+select_column_pixel_off_range.min,
                 floorf(line_box->rect.y0) - 1.f,
-                line_box->rect.x0+select_column_pixel_off_range.max+2.f,
+                line_box->rect.x0+line_num_padding_px+select_column_pixel_off_range.max+2.f,
                 ceilf(line_box->rect.y1) + 1.f,
               };
               Vec4F32 color = n->color;

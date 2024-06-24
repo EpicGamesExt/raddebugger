@@ -8,11 +8,10 @@
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
 //
-// [ ] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
+// [x] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
 //     & scrollbars etc.
 // [ ] target/breakpoint/watch-pin reordering
 //
-// [ ] visualize remapped files (via path map)
 // [ ] theme lister -> fonts & font sizes
 // [ ] font lister
 // [ ] per-panel font size overrides
@@ -26,6 +25,13 @@
 //     threads you haven't? Or, there could even be a debugger-specific API
 //     that you use to tag them. Just some way that would make it easier to
 //     focus on your own threads.
+//
+// [ ] "concept key stack"; basically, any point in UI builder path has a stack
+//     of active "concept keys", which can be used to e.g. build context menus
+//     automatically (could just be a per-box attachment; right-click any
+//     point, search up the tree and see the concept keys)
+// [ ] ui_next_event(...), built-in focus filtering, no need to manually check
+//     if(ui_is_focus_active())
 
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
