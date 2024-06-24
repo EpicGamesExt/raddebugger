@@ -1046,7 +1046,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
   Rng2F32 rect_cvs = df_bitmap_view_state__canvas_from_screen_rect(bvs, rect_scrn, rect_scrn);
   F32 grid_cell_size_cvs = box->font_size*10.f;
   F32 grid_line_thickness_px = Max(2.f, box->font_size*0.1f);
-  Vec4F32 grid_line_color = df_rgba_from_theme_color(DF_ThemeColor_DefaultTextWeak);
+  Vec4F32 grid_line_color = df_rgba_from_theme_color(DF_ThemeColor_TextWeak);
   for(EachEnumVal(Axis2, axis))
   {
     for(F32 v = rect_cvs.p0.v[axis] - mod_f32(rect_cvs.p0.v[axis], grid_cell_size_cvs);

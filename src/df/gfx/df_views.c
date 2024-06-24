@@ -1775,8 +1775,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             {
               if(row->flags & DF_EvalVizRowFlag_ExprIsSpecial)
               {
-                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
-                                           .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
+                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNeutral));
               }
             }
             
@@ -1932,8 +1931,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             {
               if(row_is_bad)
               {
-                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeText),
-                                           .background = df_rgba_from_theme_color(DF_ThemeColor_SpecialNegativeBackground));
+                palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative));
               }
             }
             
@@ -2132,7 +2130,7 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_em(15.f, 1.f))
       UI_CornerRadius(ui_top_font_size()/2.f)
-      DF_Palette(DF_PaletteCode_SpecialNegative)
+      DF_Palette(DF_PaletteCode_NegativePopButton)
     {
       if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Panel")))
       {
@@ -2206,7 +2204,7 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_PrefWidth(ui_em(22.f, 1.f))
             UI_CornerRadius(ui_top_font_size()/2.f)
-            DF_Palette(DF_PaletteCode_SpecialNeutral)
+            DF_Palette(DF_PaletteCode_NeutralPopButton)
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Add, 0, "Add Target")))
           {
             DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -2228,7 +2226,7 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_PrefWidth(ui_em(22.f, 1.f))
             UI_CornerRadius(ui_top_font_size()/2.f)
-            DF_Palette(DF_PaletteCode_SpecialNeutral)
+            DF_Palette(DF_PaletteCode_PositivePopButton)
           {
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Launch %S", target_name)))
             {
@@ -3384,12 +3382,12 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
                                               "###procedure_%I64x", item->idx);
       UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 1))
       {
-        UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure), name);
+        UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
         ui_box_equip_fuzzy_match_ranges(box, &item->match_ranges);
         if(!tg_key_match(tg_key_zero(), type_key) && graph != 0)
         {
           String8 type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
-          df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_DefaultTextWeak), type_string);
+          df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_TextWeak), type_string);
         }
       }
       
@@ -3408,7 +3406,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, binary_voff, 0);
         String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
         S64 line_num = dasm2src_info.pt.line;
-        df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure), name);
+        df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
         UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           ui_labelf("Procedure #%I64u", item->idx);
         if(!df_entity_is_nil(dasm2src_info.file))
@@ -3612,7 +3610,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
             {
               ui_label_multiline(ui_top_font_size()*30.f, str8_lit("By default, the debugger attempts to find a target's entry point with a set of default names, such as:"));
               ui_spacer(ui_em(1.5f, 1.f));
-              UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure)))
+              UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol)))
               {
                 ui_label(str8_lit("WinMain"));
                 ui_label(str8_lit("wWinMain"));
@@ -4717,11 +4715,11 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
           }
           else if(frozen)
           {
-            palette = df_palette_from_code(DF_PaletteCode_SpecialNegative);
+            palette = df_palette_from_code(DF_PaletteCode_NegativePopButton);
           }
           else
           {
-            palette = df_palette_from_code(DF_PaletteCode_SpecialPositive);
+            palette = df_palette_from_code(DF_PaletteCode_PositivePopButton);
           }
           UI_Signal sig = {0};
           UI_Palette(palette) sig = df_icon_buttonf(frozen ? DF_IconKind_Locked : DF_IconKind_Unlocked, 0, "###lock_%p", entity);
@@ -4778,7 +4776,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
             }
             UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 4) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              DF_Palette(DF_PaletteCode_SpecialNegative)
+              DF_Palette(DF_PaletteCode_NegativePopButton)
                 if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "###kill")))
               {
                 DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -5016,7 +5014,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
               }
               else UI_WidthFill
               {
-                D_FancyStringList symbol_name_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure), symbol_name);
+                D_FancyStringList symbol_name_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), symbol_name);
                 D_FancyStringList symbol_type_fstrs = df_fancy_string_list_from_code_string(scratch.arena, 0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), symbol_type_string);
                 D_FancyStringList fstrs = {0};
                 d_fancy_string_list_concat_in_place(&fstrs, &symbol_name_fstrs);
@@ -5332,7 +5330,7 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
                 UI_FocusActive((txt_is_selected && mv->txt_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_WidthFill
               {
-                DF_Palette(dbgi_is_valid ? DF_PaletteCode_DefaultPositive : DF_PaletteCode_Default)
+                UI_Palette(dbgi_is_valid ? ui_top_palette() : ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative)))
                   sig = df_line_editf(DF_LineEditFlag_NoBackground, 0, 0, &mv->txt_cursor, &mv->txt_mark, mv->txt_buffer, sizeof(mv->txt_buffer), &mv->txt_size, 0, dbgi_path, "###dbg_path_%p", entity);
                 edit_commit = (edit_commit || ui_committed(sig));
               }
@@ -5999,7 +5997,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
         UI_PrefWidth(ui_text_dim(10, 1))
-        DF_Palette(DF_PaletteCode_DefaultNegative)
+        UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative)))
       {
         UI_Font(df_font_from_slot(DF_FontSlot_Icons))
           UI_RunFlags(F_RunFlag_Smooth)
@@ -6012,7 +6010,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         UI_CornerRadius(ui_top_font_size()/3)
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_Focus(UI_FocusKind_On)
-        DF_Palette(DF_PaletteCode_SpecialNeutral)
+        DF_Palette(DF_PaletteCode_NeutralPopButton)
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
@@ -6554,7 +6552,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       if(file_is_out_of_date)
       {
         UI_Box *box = &ui_g_nil_box;
-        DF_Palette(DF_PaletteCode_SpecialNegative)
+        UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative)))
           UI_Font(df_font_from_slot(DF_FontSlot_Icons))
           UI_RunFlags(F_RunFlag_Smooth)
         {
@@ -8489,8 +8487,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //
   D_FancyStringList byte_fancy_strings[256] = {0};
   {
-    Vec4F32 full_color = df_rgba_from_theme_color(DF_ThemeColor_DefaultTextPositive);
-    Vec4F32 zero_color = df_rgba_from_theme_color(DF_ThemeColor_DefaultTextWeak);
+    Vec4F32 full_color = df_rgba_from_theme_color(DF_ThemeColor_TextPositive);
+    Vec4F32 zero_color = df_rgba_from_theme_color(DF_ThemeColor_TextWeak);
     for(U64 idx = 0; idx < ArrayCount(byte_fancy_strings); idx += 1)
     {
       U8 byte = (U8)idx;
@@ -8612,7 +8610,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");
-          annotation->color = symbol_name.size != 0 ? df_rgba_from_theme_color(DF_ThemeColor_CodeProcedure) : df_rgba_from_theme_color(DF_ThemeColor_DefaultTextWeak);
+          annotation->color = symbol_name.size != 0 ? df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol) : df_rgba_from_theme_color(DF_ThemeColor_TextWeak);
           annotation->vaddr_range = frame_vaddr_range;
           for(U64 vaddr = frame_vaddr_range_in_viz.min; vaddr < frame_vaddr_range_in_viz.max; vaddr += 1)
           {
@@ -8635,7 +8633,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         Annotation *annotation = push_array(scratch.arena, Annotation, 1);
         annotation->name_string = df_display_string_from_entity(scratch.arena, thread);
         annotation->kind_string = str8_lit("Stack");
-        annotation->color = thread->flags & DF_EntityFlag_HasColor ? df_rgba_from_entity(thread) : df_rgba_from_theme_color(DF_ThemeColor_DefaultText);
+        annotation->color = thread->flags & DF_EntityFlag_HasColor ? df_rgba_from_entity(thread) : df_rgba_from_theme_color(DF_ThemeColor_Text);
         annotation->vaddr_range = stack_vaddr_range;
         for(U64 vaddr = stack_vaddr_range_in_viz.min; vaddr < stack_vaddr_range_in_viz.max; vaddr += 1)
         {
@@ -9648,9 +9646,9 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
         preset = (DF_ThemePreset)(preset+1))
     {
       Vec4F32 *colors = df_g_theme_preset_colors_table[preset];
-      Vec4F32 bg_color = colors[DF_ThemeColor_DefaultBackground];
-      Vec4F32 tx_color = colors[DF_ThemeColor_DefaultText];
-      Vec4F32 bd_color = colors[DF_ThemeColor_DefaultBorder];
+      Vec4F32 bg_color = colors[DF_ThemeColor_BaseBackground];
+      Vec4F32 tx_color = colors[DF_ThemeColor_Text];
+      Vec4F32 bd_color = colors[DF_ThemeColor_BaseBorder];
       ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = tx_color,
                                            .border = bd_color,
                                            .background = bg_color));

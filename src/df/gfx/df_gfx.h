@@ -376,23 +376,18 @@ DF_FontSlot;
 
 typedef enum DF_PaletteCode
 {
-  DF_PaletteCode_Default,
-  DF_PaletteCode_DefaultPositive,
-  DF_PaletteCode_DefaultNegative,
-  DF_PaletteCode_DefaultNeutral,
-  DF_PaletteCode_Floating,
-  DF_PaletteCode_ImplicitContents,
-  DF_PaletteCode_SpecialPositive,
-  DF_PaletteCode_SpecialNegative,
-  DF_PaletteCode_SpecialNeutral,
+  DF_PaletteCode_Base,
   DF_PaletteCode_MenuBar,
-  DF_PaletteCode_MenuBarPositive,
-  DF_PaletteCode_MenuBarNegative,
-  DF_PaletteCode_MenuBarNeutral,
-  DF_PaletteCode_TabActive,
+  DF_PaletteCode_Floating,
+  DF_PaletteCode_ImplicitButton,
+  DF_PaletteCode_PlainButton,
+  DF_PaletteCode_PositivePopButton,
+  DF_PaletteCode_NegativePopButton,
+  DF_PaletteCode_NeutralPopButton,
+  DF_PaletteCode_ScrollBarButton,
+  DF_PaletteCode_Tab,
   DF_PaletteCode_TabInactive,
-  DF_PaletteCode_Code,
-  DF_PaletteCode_DropSite,
+  DF_PaletteCode_DropSiteOverlay,
   DF_PaletteCode_COUNT
 }
 DF_PaletteCode;
