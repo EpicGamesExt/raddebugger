@@ -720,7 +720,7 @@ ui_box_from_key(UI_Key key)
 //~ rjf: Top-Level Building API
 
 internal void
-ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt)
+ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, F32 real_dt, F32 animation_dt)
 {
   //- rjf: reset per-build ui state
   {
@@ -758,6 +758,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F
     {
       ui_state->icon_info.icon_kind_text_map[icon_kind] = push_str8_copy(ui_build_arena(), icon_info->icon_kind_text_map[icon_kind]);
     }
+    MemoryCopyStruct(&ui_state->widget_palette_info, widget_palette_info);
   }
   
   //- rjf: do default navigation
@@ -1724,11 +1725,11 @@ ui_layout_position__in_place_rec(UI_Box *root, Axis2 axis)
       {
         child->fixed_position_animated = child->fixed_position;
       }
-      child->rect.p0.v[axis] = root->rect.p0.v[axis] + child->fixed_position_animated.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*root->view_off.v[axis];
+      child->rect.p0.v[axis] = root->rect.p0.v[axis] + child->fixed_position_animated.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(root->view_off.v[axis]);
     }
     else
     {
-      child->rect.p0.v[axis] = root->rect.p0.v[axis] + child->fixed_position.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*root->view_off.v[axis];
+      child->rect.p0.v[axis] = root->rect.p0.v[axis] + child->fixed_position.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(root->view_off.v[axis]);
     }
     child->rect.p1.v[axis] = child->rect.p0.v[axis] + child->fixed_size.v[axis];
     child->rect.p0.x = floorf(child->rect.p0.x);
@@ -1772,6 +1773,18 @@ ui_layout_root(UI_Box *root, Axis2 axis)
 ////////////////////////////////
 //~ rjf: Box Building API
 
+//- rjf: spacers
+
+internal UI_Signal
+ui_spacer(UI_Size size)
+{
+  UI_Box *parent = ui_top_parent();
+  ui_set_next_pref_size(parent->child_layout_axis, size);
+  UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
+  UI_Signal interact = ui_signal_from_box(box);
+  return interact;
+}
+
 //- rjf: tooltips
 
 internal void
@@ -1781,11 +1794,15 @@ ui_tooltip_begin_base(void)
   ui_push_parent(ui_root_from_state(ui_state));
   ui_push_parent(ui_state->tooltip_root);
   ui_push_flags(0);
+  ui_push_run_flags(0);
+  ui_push_palette(ui_bottom_palette());
 }
 
 internal void
 ui_tooltip_end_base(void)
 {
+  ui_pop_palette();
+  ui_pop_run_flags();
   ui_pop_flags();
   ui_pop_parent();
   ui_pop_parent();
@@ -1795,6 +1812,7 @@ internal void
 ui_tooltip_begin(void)
 {
   ui_tooltip_begin_base();
+  ui_push_palette(ui_state->widget_palette_info.tooltip_palette);
   ui_set_next_squish(0.25f-ui_state->tooltip_open_t*0.25f);
   ui_set_next_transparency(1-ui_state->tooltip_open_t);
   UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawDropShadow)
@@ -1826,6 +1844,7 @@ ui_tooltip_end(void)
   ui_row_end();
   UI_PrefWidth(ui_px(0, 1)) ui_spacer(ui_em(1.f, 1.f));
   ui_column_end();
+  ui_pop_palette();
   ui_tooltip_end_base();
 }
 
@@ -1863,6 +1882,7 @@ ui_begin_ctx_menu(UI_Key key)
   ui_push_pref_height(ui_bottom_pref_height());
   ui_push_focus_hot(UI_FocusKind_Root);
   ui_push_focus_active(UI_FocusKind_Root);
+  ui_push_palette(ui_state->widget_palette_info.ctx_menu_palette);
   B32 is_open = ui_key_match(key, ui_state->ctx_menu_key) && ui_state->ctx_menu_open;
   if(is_open != 0)
   {
@@ -1891,6 +1911,7 @@ ui_end_ctx_menu(void)
     ui_state->is_in_open_ctx_menu = 0;
     ui_spacer(ui_em(1.f, 1.f));
   }
+  ui_pop_palette();
   ui_pop_focus_active();
   ui_pop_focus_hot();
   ui_pop_pref_width();

@@ -4,16 +4,6 @@
 ////////////////////////////////
 //~ rjf: Basic Widgets
 
-internal UI_Signal
-ui_spacer(UI_Size size)
-{
-  UI_Box *parent = ui_top_parent();
-  ui_set_next_pref_size(parent->child_layout_axis, size);
-  UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
-  UI_Signal interact = ui_signal_from_box(box);
-  return interact;
-}
-
 internal void
 ui_divider(UI_Size size)
 {
@@ -1190,6 +1180,8 @@ ui_scroll_list_item_from_row(UI_ScrollListRowBlockArray *blocks, U64 row)
 internal UI_ScrollPt
 ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_range, S64 view_num_indices)
 {
+  ui_push_palette(ui_state->widget_palette_info.scrollbar_palette);
+  
   //- rjf: unpack
   S64 idx_range_dim = Max(dim_1s64(idx_range), 1);
   
@@ -1307,6 +1299,8 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
       ui_scroll_pt_target_idx(&new_pt, new_idx);
     }
   }
+  
+  ui_pop_palette();
   return new_pt;
 }
 

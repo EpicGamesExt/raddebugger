@@ -151,6 +151,7 @@ typedef struct R_PassParams_Blur R_PassParams_Blur;
 struct R_PassParams_Blur
 {
   Rng2F32 rect;
+  Rng2F32 clip;
   F32 blur_size;
   F32 corner_radii[Corner_COUNT];
 };

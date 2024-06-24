@@ -3450,8 +3450,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         icon_info.icon_kind_text_map[UI_IconKind_CheckFilled]    = df_g_icon_kind_text_table[DF_IconKind_CheckFilled];
       }
       
+      // rjf: build widget palette info
+      UI_WidgetPaletteInfo widget_palette_info = {0};
+      {
+        widget_palette_info.tooltip_palette = df_palette_from_code(DF_PaletteCode_Floating);
+        widget_palette_info.ctx_menu_palette = df_palette_from_code(DF_PaletteCode_Floating);
+        widget_palette_info.scrollbar_palette = df_palette_from_code(DF_PaletteCode_ScrollBarButton);
+      }
+      
       // rjf: begin & push initial stack values
-      ui_begin_build(ws->os, &events, &icon_info, df_dt(), df_dt());
+      ui_begin_build(ws->os, &events, &icon_info, &widget_palette_info, df_dt(), df_dt());
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_pref_width(ui_em(20.f, 1));
@@ -10570,6 +10578,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   UI_Palette *margin_palette = df_palette_from_code(DF_PaletteCode_Floating);
   UI_Palette *margin_contents_palette = ui_build_palette(df_palette_from_code(DF_PaletteCode_Floating));
   margin_contents_palette->background = v4f32(0, 0, 0, 0);
+  F32 line_num_padding_px = ui_top_font_size()*1.f;
   
   //////////////////////////////
   //- rjf: build top-level container
@@ -10700,7 +10709,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       ui_set_next_pref_width(ui_px(params->priority_margin_width_px, 1));
       ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
       ui_build_box_from_key(0, ui_key_zero());
-      ui_set_next_fixed_x(params->margin_float_off_px);
+      ui_set_next_fixed_x(floor_f32(params->margin_float_off_px));
     }
     ui_set_next_pref_width(ui_px(params->priority_margin_width_px, 1));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
@@ -10862,7 +10871,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       ui_set_next_pref_width(ui_px(params->catchall_margin_width_px, 1));
       ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
       ui_build_box_from_key(0, ui_key_zero());
-      ui_set_next_fixed_x(params->margin_float_off_px + params->priority_margin_width_px);
+      ui_set_next_fixed_x(floor_f32(params->margin_float_off_px + params->priority_margin_width_px));
     }
     ui_set_next_pref_width(ui_px(params->catchall_margin_width_px, 1));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
@@ -11187,6 +11196,92 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
+  //- rjf: build line numbers
+  //
+  if(params->flags & DF_CodeSliceFlag_LineNums) UI_Parent(top_container_box) ProfScope("build line numbers") UI_Focus(UI_FocusKind_Off)
+  {
+    TxtRng select_rng = txt_rng(*cursor, *mark);
+    Vec4F32 active_color = df_rgba_from_theme_color(DF_ThemeColor_CodeLineNumbersSelected);
+    Vec4F32 inactive_color = df_rgba_from_theme_color(DF_ThemeColor_CodeLineNumbers);
+    ui_set_next_fixed_x(floor_f32(params->margin_float_off_px + params->priority_margin_width_px + params->catchall_margin_width_px));
+    ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
+    ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+    ui_set_next_flags(UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight);
+    UI_Column
+      UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+      UI_Font(params->font)
+      UI_FontSize(params->font_size)
+      UI_CornerRadius(0)
+    {
+      U64 line_idx = 0;
+      for(S64 line_num = params->line_num_range.min;
+          line_num <= params->line_num_range.max;
+          line_num += 1, line_idx += 1)
+      {
+        Vec4F32 text_color = (select_rng.min.line <= line_num && line_num <= select_rng.max.line) ? active_color : inactive_color;
+        Vec4F32 bg_color = v4f32(0, 0, 0, 0);
+        
+        // rjf: line info on this line -> adjust bg color to visualize
+        B32 has_line_info = 0;
+        {
+          S64 line_info_line_num = 0;
+          F32 line_info_t = 0;
+          DF_TextLineSrc2DasmInfoList *src2dasm_list = &params->line_src2dasm[line_idx];
+          DF_TextLineDasm2SrcInfoList *dasm2src_list = &params->line_dasm2src[line_idx];
+          if(src2dasm_list->first != 0)
+          {
+            has_line_info = (src2dasm_list->first->v.remap_line == line_num);
+            line_info_line_num = line_num;
+            line_info_t = selected_thread_module->alive_t;
+          }
+          if(dasm2src_list->first != 0)
+          {
+            DF_TextLineDasm2SrcInfo *dasm2src_info = 0;
+            U64 best_stamp = 0;
+            for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
+            {
+              if(n->v.file->timestamp > best_stamp)
+              {
+                dasm2src_info = &n->v;
+                best_stamp = n->v.file->timestamp;
+              }
+            }
+            if(dasm2src_info != 0)
+            {
+              has_line_info = 1;
+              line_info_line_num = dasm2src_info->pt.line;
+              line_info_t = selected_thread_module->alive_t;
+            }
+          }
+          if(has_line_info)
+          {
+            Vec4F32 color = code_line_bgs[line_info_line_num % ArrayCount(code_line_bgs)];
+            color.w *= line_info_t;
+            bg_color = color;
+          }
+        }
+        
+        // rjf: build line num box
+        ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = text_color, .background = bg_color));
+        ui_build_box_from_stringf(UI_BoxFlag_DrawText|(UI_BoxFlag_DrawBackground*!!has_line_info), "%I64u##line_num", line_num);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build background for line numbers & margins
+  //
+  {
+    UI_Parent(top_container_box) DF_Palette(DF_PaletteCode_Floating)
+    {
+      ui_set_next_pref_width(ui_px(params->priority_margin_width_px + params->catchall_margin_width_px + params->line_num_width_px, 1));
+      ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
+      ui_set_next_fixed_x(floor_f32(params->margin_float_off_px));
+      ui_build_box_from_key(UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, ui_key_zero());
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build main text container box, for mouse interaction on both lines & line numbers
   //
   UI_Box *text_container_box = &ui_g_nil_box;
@@ -11356,7 +11451,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     String8 line_string = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_text[mouse_y_line_idx]) : str8_zero();
     
     // rjf: mouse x * string => column
-    S64 column = f_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px)+1;
+    S64 column = f_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px-line_num_padding_px)+1;
     
     // rjf: bundle
     mouse_pt = txt_pt(line_num, column);
@@ -11657,82 +11752,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   }
   
   //////////////////////////////
-  //- rjf: build line numbers
+  //- rjf: build line numbers region (line number interaction should be basically identical to lines)
   //
-  if(params->flags & DF_CodeSliceFlag_LineNums) UI_Parent(text_container_box) ProfScope("build line numbers") UI_Focus(UI_FocusKind_Off)
+  if(params->flags & DF_CodeSliceFlag_LineNums) UI_Parent(text_container_box) ProfScope("build line number interaction box") UI_Focus(UI_FocusKind_Off)
   {
-    TxtRng select_rng = txt_rng(*cursor, *mark);
-    Vec4F32 active_color = df_rgba_from_theme_color(DF_ThemeColor_CodeLineNumbersSelected);
-    Vec4F32 inactive_color = df_rgba_from_theme_color(DF_ThemeColor_CodeLineNumbers);
-    if(params->margin_float_off_px != 0)
-    {
-      ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
-      ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
-      ui_build_box_from_key(0, ui_key_zero());
-      ui_set_next_fixed_x(params->margin_float_off_px);
-    }
-    ui_set_next_flags(UI_BoxFlag_DrawSideRight|UI_BoxFlag_DrawSideLeft);
-    ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
+    ui_set_next_pref_width(ui_px(params->line_num_width_px + line_num_padding_px, 1.f));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
-    UI_Column
-      UI_PrefHeight(ui_px(params->line_height_px, 1.f))
-      UI_Font(params->font)
-      UI_FontSize(params->font_size)
-      UI_CornerRadius(0)
-    {
-      U64 line_idx = 0;
-      for(S64 line_num = params->line_num_range.min;
-          line_num <= params->line_num_range.max;
-          line_num += 1, line_idx += 1)
-      {
-        Vec4F32 text_color = (select_rng.min.line <= line_num && line_num <= select_rng.max.line) ? active_color : inactive_color;
-        Vec4F32 bg_color = v4f32(0, 0, 0, 0);
-        
-        // rjf: line info on this line -> adjust bg color to visualize
-        B32 has_line_info = 0;
-        {
-          S64 line_info_line_num = 0;
-          F32 line_info_t = 0;
-          DF_TextLineSrc2DasmInfoList *src2dasm_list = &params->line_src2dasm[line_idx];
-          DF_TextLineDasm2SrcInfoList *dasm2src_list = &params->line_dasm2src[line_idx];
-          if(src2dasm_list->first != 0)
-          {
-            has_line_info = (src2dasm_list->first->v.remap_line == line_num);
-            line_info_line_num = line_num;
-            line_info_t = selected_thread_module->alive_t;
-          }
-          if(dasm2src_list->first != 0)
-          {
-            DF_TextLineDasm2SrcInfo *dasm2src_info = 0;
-            U64 best_stamp = 0;
-            for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
-            {
-              if(n->v.file->timestamp > best_stamp)
-              {
-                dasm2src_info = &n->v;
-                best_stamp = n->v.file->timestamp;
-              }
-            }
-            if(dasm2src_info != 0)
-            {
-              has_line_info = 1;
-              line_info_line_num = dasm2src_info->pt.line;
-              line_info_t = selected_thread_module->alive_t;
-            }
-          }
-          if(has_line_info)
-          {
-            Vec4F32 color = code_line_bgs[line_info_line_num % ArrayCount(code_line_bgs)];
-            color.w *= line_info_t;
-            bg_color = color;
-          }
-        }
-        
-        // rjf: build line num box
-        ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = text_color, .background = bg_color));
-        ui_build_box_from_stringf(UI_BoxFlag_DrawText|(UI_BoxFlag_DrawBackground*!!has_line_info), "%I64u##line_num", line_num);
-      }
-    }
+    ui_build_box_from_key(0, ui_key_zero());
   }
   
   //////////////////////////////

@@ -5883,10 +5883,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
     code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    if(code_slice_params.margin_float_off_px < 1)
-    {
-      code_slice_params.margin_float_off_px = 0;
-    }
     
     // rjf: fill text info
     {
@@ -6440,7 +6436,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     ui_set_next_fixed_y(code_area_dim.y);
     ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
     ui_set_next_fixed_height(scroll_bar_dim);
-    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.x = ui_scroll_bar(Axis2_X,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -6459,7 +6454,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     ui_set_next_fixed_y(0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
-    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -6977,10 +6971,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, process, DF_EntityKind_FlashMarker);
     code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    if(code_slice_params.margin_float_off_px < 1)
-    {
-      code_slice_params.margin_float_off_px = 0;
-    }
+    
     di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, &dbgi_key);
     
     // rjf: fill text info
@@ -7341,7 +7332,6 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     ui_set_next_fixed_y(code_area_dim.y);
     ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
     ui_set_next_fixed_height(scroll_bar_dim);
-    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.x = ui_scroll_bar(Axis2_X,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -7360,7 +7350,6 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     ui_set_next_fixed_y(0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
-    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -7822,10 +7811,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
     code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    if(code_slice_params.margin_float_off_px < 1)
-    {
-      code_slice_params.margin_float_off_px = 0;
-    }
   }
   
   //////////////////////////////
@@ -8144,7 +8129,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     ui_set_next_fixed_y(code_area_dim.y);
     ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
     ui_set_next_fixed_height(scroll_bar_dim);
-    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.x = ui_scroll_bar(Axis2_X,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -8163,7 +8147,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     ui_set_next_fixed_y(0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
-    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),
@@ -8730,7 +8713,6 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     ui_set_next_fixed_y(content_rect.y0);
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(dim_2f32(content_rect).y);
-    DF_Palette(DF_PaletteCode_ScrollBarButton)
     {
       view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
                                          ui_px(scroll_bar_dim, 1.f),

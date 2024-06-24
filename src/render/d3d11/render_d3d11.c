@@ -1335,6 +1335,36 @@ r_window_submit(OS_Handle window, R_Handle window_equip, R_PassList *passes)
             { sizeof(R_D3D11_Uniforms_BlurPass) / 16, sizeof(uniforms.kernel) / 16 },
           };
           
+          // rjf: setup scissor rect
+          {
+            Rng2F32 clip = params->clip;
+            D3D11_RECT rect = {0};
+            {
+              if(clip.x0 == 0 && clip.y0 == 0 && clip.x1 == 0 && clip.y1 == 0)
+              {
+                rect.left = 0;
+                rect.right = (LONG)wnd->last_resolution.x;
+                rect.top = 0;
+                rect.bottom = (LONG)wnd->last_resolution.y;
+              }
+              else if(clip.x0 > clip.x1 || clip.y0 > clip.y1)
+              {
+                rect.left = 0;
+                rect.right = 0;
+                rect.top = 0;
+                rect.bottom = 0;
+              }
+              else
+              {
+                rect.left = (LONG)clip.x0;
+                rect.right = (LONG)clip.x1;
+                rect.top = (LONG)clip.y0;
+                rect.bottom = (LONG)clip.y1;
+              }
+            }
+            d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
+          }
+          
           // rjf: for unsetting srv
           ID3D11ShaderResourceView* srv = 0;
           

@@ -312,6 +312,7 @@ d_blur(Rng2F32 rect, F32 blur_size, F32 corner_radius)
   R_Pass *pass = r_pass_from_kind(arena, &bucket->passes, R_PassKind_Blur);
   R_PassParams_Blur *params = pass->params_blur;
   params->rect = rect;
+  params->clip = d_top_clip();
   params->blur_size = blur_size;
   params->corner_radii[Corner_00] = corner_radius;
   params->corner_radii[Corner_01] = corner_radius;

@@ -68,7 +68,6 @@ struct UI_ScrollListSignal
 ////////////////////////////////
 //~ rjf: Basic Widgets
 
-internal UI_Signal ui_spacer(UI_Size size);
 internal void ui_divider(UI_Size size);
 internal UI_Signal ui_label(String8 string);
 internal UI_Signal ui_labelf(char *fmt, ...);

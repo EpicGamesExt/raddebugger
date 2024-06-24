@@ -196,7 +196,7 @@ struct UI_Size
 };
 
 ////////////////////////////////
-//~ rjf: Color Schemes
+//~ rjf: Palettes
 
 typedef enum UI_ColorCode
 {
@@ -230,6 +230,14 @@ struct UI_Palette
       Vec4F32 selection;
     };
   };
+};
+
+typedef struct UI_WidgetPaletteInfo UI_WidgetPaletteInfo;
+struct UI_WidgetPaletteInfo
+{
+  UI_Palette *tooltip_palette;
+  UI_Palette *ctx_menu_palette;
+  UI_Palette *scrollbar_palette;
 };
 
 ////////////////////////////////
@@ -565,6 +573,7 @@ struct UI_State
   
   //- rjf: build parameters
   UI_IconInfo icon_info;
+  UI_WidgetPaletteInfo widget_palette_info;
   OS_Handle window;
   UI_EventList *events;
   Vec2F32 mouse;
@@ -729,7 +738,7 @@ internal UI_Box *          ui_box_from_key(UI_Key key);
 ////////////////////////////////
 //~ rjf: Top-Level Building API
 
-internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, F32 real_dt, F32 animation_dt);
+internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, F32 real_dt, F32 animation_dt);
 internal void ui_end_build(void);
 internal void ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis);
 internal void ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis);
@@ -740,6 +749,9 @@ internal void ui_layout_root(UI_Box *root, Axis2 axis);
 
 ////////////////////////////////
 //~ rjf: Box Tree Building API
+
+//- rjf: spacers
+internal UI_Signal         ui_spacer(UI_Size size);
 
 //- rjf: tooltips
 internal void              ui_tooltip_begin_base(void);
