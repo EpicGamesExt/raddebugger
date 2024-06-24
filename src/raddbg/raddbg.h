@@ -8,8 +8,6 @@
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
 //
-// [x] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
-//     & scrollbars etc.
 // [ ] target/breakpoint/watch-pin reordering
 //
 // [ ] theme lister -> fonts & font sizes
@@ -105,10 +103,6 @@
 //   [ ] lock icon
 //   [ ] "rotation arrow" icon next to executables
 //
-//  [x] Using the word "symbol" in "Code (Symbol)" seems like a bad idea, since
-//      you're referring to non-identifier characters, but in a debugger
-//      "symbol" usually means something defined in the debug information.
-//
 //  [ ] I LOVE ALT-W to add watch under cursor, but I would prefer to have it
 //      add what's under the MOUSE cursor instead of the keyboard cursor. Can
 //      we get a command for that so I can bind ALT-W to that instead?
@@ -117,19 +111,6 @@
 //      it highlights that entry, it might help to temporarily change that
 //      color to white (or the inverse of the background color, or whatever) so
 //      that the user can see what things on the screen use that theme color.
-//
-//  [x] I couldn't figure out how to affect the "dim" color in constants that
-//      have alternating bright/dim letters to show sections of a number. Is
-//      this in the theme colors somewhere?
-//
-//  [x] ** Scrollbars are barely visible for me, for some reason. I could not
-//      find anything in the theme that would fill them with a solid, bright
-//      color. Instead they are just a thin outline and the same color as the
-//      scroll bar background.
-//
-//  [x] Many of the UI elements, like the menus, would like better if they had
-//      a little bit of margin. Having the text right next to the edges, and
-//      with no line spacing, makes it harder to read things quickly.
 //
 //  [ ] Menus take too long to show up. I would prefer it if they were instant.
 //      The animation doesn't really provide any useful cues, since I know
@@ -143,14 +124,6 @@
 //
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
-//
-//  [x] Pressing the left mouse button on the menu bar and dragging does not
-//      move through the menus as expected - instead, it opens the one you
-//      clicked down on, then does nothing until you release, at which point it
-//      opens the menu you released on.
-//  [x] Similarly, pressing the left mouse button on a menu and dragging to an
-//      item, then releasing, does not trigger that item as expected. Instead,
-//      it is a nop, and it waits for you to click again on the item.
 //
 //  [ ] I found the "context menu" convention to be confusing. For example, if
 //      I left-click on a tab, it selects the tab. If I right-click on a tab,
@@ -389,6 +362,36 @@
 //       different color? can I turn it off? And why sometimes digits in number
 //       start with brighter color, but sometimes with darker - shouldn't it
 //       always have the same color ordering?
+// [x] fix tabs-on-bottom positioning
+// [x] colors: consistent tooltip styles (colors, font flags, etc.)
+// [x] colors: scroll bars
+// [x] colors: watch window navigation visuals
+// [x] floating source view margin background/placement
+// [x] "interaction root", or "group" ui_key, or something; used for menu bar interactions
+// [x] theme colors -> more explicit about e.g. opaque backgrounds vs. floating
+//     & scrollbars etc.
+//  [x] Pressing the left mouse button on the menu bar and dragging does not
+//      move through the menus as expected - instead, it opens the one you
+//      clicked down on, then does nothing until you release, at which point it
+//      opens the menu you released on.
+//  [x] Similarly, pressing the left mouse button on a menu and dragging to an
+//      item, then releasing, does not trigger that item as expected. Instead,
+//      it is a nop, and it waits for you to click again on the item.
+//  [x] Using the word "symbol" in "Code (Symbol)" seems like a bad idea, since
+//      you're referring to non-identifier characters, but in a debugger
+//      "symbol" usually means something defined in the debug information.
+//  [x] I couldn't figure out how to affect the "dim" color in constants that
+//      have alternating bright/dim letters to show sections of a number. Is
+//      this in the theme colors somewhere?
+//
+//  [x] ** Scrollbars are barely visible for me, for some reason. I could not
+//      find anything in the theme that would fill them with a solid, bright
+//      color. Instead they are just a thin outline and the same color as the
+//      scroll bar background.
+//
+//  [x] Many of the UI elements, like the menus, would like better if they had
+//      a little bit of margin. Having the text right next to the edges, and
+//      with no line spacing, makes it harder to read things quickly.
 
 #ifndef RADDBG_H
 #define RADDBG_H
