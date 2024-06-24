@@ -105,7 +105,7 @@
 //   [ ] lock icon
 //   [ ] "rotation arrow" icon next to executables
 //
-//  [ ] Using the word "symbol" in "Code (Symbol)" seems like a bad idea, since
+//  [x] Using the word "symbol" in "Code (Symbol)" seems like a bad idea, since
 //      you're referring to non-identifier characters, but in a debugger
 //      "symbol" usually means something defined in the debug information.
 //
@@ -118,16 +118,16 @@
 //      color to white (or the inverse of the background color, or whatever) so
 //      that the user can see what things on the screen use that theme color.
 //
-//  [ ] I couldn't figure out how to affect the "dim" color in constants that
+//  [x] I couldn't figure out how to affect the "dim" color in constants that
 //      have alternating bright/dim letters to show sections of a number. Is
 //      this in the theme colors somewhere?
 //
-//  [ ] ** Scrollbars are barely visible for me, for some reason. I could not
+//  [x] ** Scrollbars are barely visible for me, for some reason. I could not
 //      find anything in the theme that would fill them with a solid, bright
 //      color. Instead they are just a thin outline and the same color as the
 //      scroll bar background.
 //
-//  [ ] Many of the UI elements, like the menus, would like better if they had
+//  [x] Many of the UI elements, like the menus, would like better if they had
 //      a little bit of margin. Having the text right next to the edges, and
 //      with no line spacing, makes it harder to read things quickly.
 //
@@ -144,11 +144,11 @@
 //  [ ] It'd be nice to have a "goto byte" option for source views, for jumping
 //      to error messages that are byte-based instead of line-based.
 //
-//  [ ] Pressing the left mouse button on the menu bar and dragging does not
+//  [x] Pressing the left mouse button on the menu bar and dragging does not
 //      move through the menus as expected - instead, it opens the one you
 //      clicked down on, then does nothing until you release, at which point it
 //      opens the menu you released on.
-//  [ ] Similarly, pressing the left mouse button on a menu and dragging to an
+//  [x] Similarly, pressing the left mouse button on a menu and dragging to an
 //      item, then releasing, does not trigger that item as expected. Instead,
 //      it is a nop, and it waits for you to click again on the item.
 //

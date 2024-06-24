@@ -375,6 +375,7 @@ struct UI_Box
   Axis2 child_layout_axis;
   OS_Cursor hover_cursor;
   U32 fastpath_codepoint;
+  UI_Key group_key;
   D_Bucket *draw_bucket;
   UI_BoxCustomDrawFunctionType *custom_draw;
   void *custom_draw_user_data;
@@ -821,6 +822,7 @@ internal UI_BoxFlags                ui_top_flags(void);
 internal UI_FocusKind               ui_top_focus_hot(void);
 internal UI_FocusKind               ui_top_focus_active(void);
 internal U32                        ui_top_fastpath_codepoint(void);
+internal UI_Key                     ui_top_group_key(void);
 internal F32                        ui_top_transparency(void);
 internal UI_Palette*                ui_top_palette(void);
 internal F32                        ui_top_squish(void);
@@ -848,6 +850,7 @@ internal UI_BoxFlags                ui_bottom_flags(void);
 internal UI_FocusKind               ui_bottom_focus_hot(void);
 internal UI_FocusKind               ui_bottom_focus_active(void);
 internal U32                        ui_bottom_fastpath_codepoint(void);
+internal UI_Key                     ui_bottom_group_key(void);
 internal F32                        ui_bottom_transparency(void);
 internal UI_Palette*                ui_bottom_palette(void);
 internal F32                        ui_bottom_squish(void);
@@ -875,6 +878,7 @@ internal UI_BoxFlags                ui_push_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_push_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_push_focus_active(UI_FocusKind v);
 internal U32                        ui_push_fastpath_codepoint(U32 v);
+internal UI_Key                     ui_push_group_key(UI_Key v);
 internal F32                        ui_push_transparency(F32 v);
 internal UI_Palette*                ui_push_palette(UI_Palette*     v);
 internal F32                        ui_push_squish(F32 v);
@@ -902,6 +906,7 @@ internal UI_BoxFlags                ui_pop_flags(void);
 internal UI_FocusKind               ui_pop_focus_hot(void);
 internal UI_FocusKind               ui_pop_focus_active(void);
 internal U32                        ui_pop_fastpath_codepoint(void);
+internal UI_Key                     ui_pop_group_key(void);
 internal F32                        ui_pop_transparency(void);
 internal UI_Palette*                ui_pop_palette(void);
 internal F32                        ui_pop_squish(void);
@@ -929,6 +934,7 @@ internal UI_BoxFlags                ui_set_next_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_set_next_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_set_next_focus_active(UI_FocusKind v);
 internal U32                        ui_set_next_fastpath_codepoint(U32 v);
+internal UI_Key                     ui_set_next_group_key(UI_Key v);
 internal F32                        ui_set_next_transparency(F32 v);
 internal UI_Palette*                ui_set_next_palette(UI_Palette*     v);
 internal F32                        ui_set_next_squish(F32 v);
@@ -970,6 +976,7 @@ internal void     ui_pop_corner_radius(void);
 #define UI_FocusHot(v) DeferLoop(ui_push_focus_hot(v), ui_pop_focus_hot())
 #define UI_FocusActive(v) DeferLoop(ui_push_focus_active(v), ui_pop_focus_active())
 #define UI_FastpathCodepoint(v) DeferLoop(ui_push_fastpath_codepoint(v), ui_pop_fastpath_codepoint())
+#define UI_GroupKey(v) DeferLoop(ui_push_group_key(v), ui_pop_group_key())
 #define UI_Transparency(v) DeferLoop(ui_push_transparency(v), ui_pop_transparency())
 #define UI_Palette(v) DeferLoop(ui_push_palette(v), ui_pop_palette())
 #define UI_Squish(v) DeferLoop(ui_push_squish(v), ui_pop_squish())

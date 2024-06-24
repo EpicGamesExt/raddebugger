@@ -27,6 +27,7 @@ UI_StackTable:
   { FocusHot                           focus_hot                     UI_FocusKind          UI_FocusKind_Null                  }
   { FocusActive                        focus_active                  UI_FocusKind          UI_FocusKind_Null                  }
   { FastpathCodepoint                  fastpath_codepoint            U32                   0                                  }
+  { GroupKey                           group_key                     UI_Key                `ui_key_zero()`                    }
   
   //- rjf: colors
   { Transparency                       transparency                  F32                   0                                  }

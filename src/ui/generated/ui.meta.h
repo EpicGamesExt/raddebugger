@@ -18,6 +18,7 @@ typedef struct UI_FlagsNode UI_FlagsNode; struct UI_FlagsNode{UI_FlagsNode *next
 typedef struct UI_FocusHotNode UI_FocusHotNode; struct UI_FocusHotNode{UI_FocusHotNode *next; UI_FocusKind v;};
 typedef struct UI_FocusActiveNode UI_FocusActiveNode; struct UI_FocusActiveNode{UI_FocusActiveNode *next; UI_FocusKind v;};
 typedef struct UI_FastpathCodepointNode UI_FastpathCodepointNode; struct UI_FastpathCodepointNode{UI_FastpathCodepointNode *next; U32 v;};
+typedef struct UI_GroupKeyNode UI_GroupKeyNode; struct UI_GroupKeyNode{UI_GroupKeyNode *next; UI_Key v;};
 typedef struct UI_TransparencyNode UI_TransparencyNode; struct UI_TransparencyNode{UI_TransparencyNode *next; F32 v;};
 typedef struct UI_PaletteNode UI_PaletteNode; struct UI_PaletteNode{UI_PaletteNode *next; UI_Palette*     v;};
 typedef struct UI_SquishNode UI_SquishNode; struct UI_SquishNode{UI_SquishNode *next; F32 v;};
@@ -48,6 +49,7 @@ UI_FlagsNode flags_nil_stack_top;\
 UI_FocusHotNode focus_hot_nil_stack_top;\
 UI_FocusActiveNode focus_active_nil_stack_top;\
 UI_FastpathCodepointNode fastpath_codepoint_nil_stack_top;\
+UI_GroupKeyNode group_key_nil_stack_top;\
 UI_TransparencyNode transparency_nil_stack_top;\
 UI_PaletteNode palette_nil_stack_top;\
 UI_SquishNode squish_nil_stack_top;\
@@ -77,6 +79,7 @@ state->flags_nil_stack_top.v = 0;\
 state->focus_hot_nil_stack_top.v = UI_FocusKind_Null;\
 state->focus_active_nil_stack_top.v = UI_FocusKind_Null;\
 state->fastpath_codepoint_nil_stack_top.v = 0;\
+state->group_key_nil_stack_top.v = ui_key_zero();\
 state->transparency_nil_stack_top.v = 0;\
 state->palette_nil_stack_top.v = &ui_g_nil_palette;\
 state->squish_nil_stack_top.v = 0;\
@@ -108,6 +111,7 @@ struct { UI_FlagsNode *top; UI_BoxFlags bottom_val; UI_FlagsNode *free; B32 auto
 struct { UI_FocusHotNode *top; UI_FocusKind bottom_val; UI_FocusHotNode *free; B32 auto_pop; } focus_hot_stack;\
 struct { UI_FocusActiveNode *top; UI_FocusKind bottom_val; UI_FocusActiveNode *free; B32 auto_pop; } focus_active_stack;\
 struct { UI_FastpathCodepointNode *top; U32 bottom_val; UI_FastpathCodepointNode *free; B32 auto_pop; } fastpath_codepoint_stack;\
+struct { UI_GroupKeyNode *top; UI_Key bottom_val; UI_GroupKeyNode *free; B32 auto_pop; } group_key_stack;\
 struct { UI_TransparencyNode *top; F32 bottom_val; UI_TransparencyNode *free; B32 auto_pop; } transparency_stack;\
 struct { UI_PaletteNode *top; UI_Palette*     bottom_val; UI_PaletteNode *free; B32 auto_pop; } palette_stack;\
 struct { UI_SquishNode *top; F32 bottom_val; UI_SquishNode *free; B32 auto_pop; } squish_stack;\
@@ -137,6 +141,7 @@ state->flags_stack.top = &state->flags_nil_stack_top; state->flags_stack.bottom_
 state->focus_hot_stack.top = &state->focus_hot_nil_stack_top; state->focus_hot_stack.bottom_val = UI_FocusKind_Null; state->focus_hot_stack.free = 0; state->focus_hot_stack.auto_pop = 0;\
 state->focus_active_stack.top = &state->focus_active_nil_stack_top; state->focus_active_stack.bottom_val = UI_FocusKind_Null; state->focus_active_stack.free = 0; state->focus_active_stack.auto_pop = 0;\
 state->fastpath_codepoint_stack.top = &state->fastpath_codepoint_nil_stack_top; state->fastpath_codepoint_stack.bottom_val = 0; state->fastpath_codepoint_stack.free = 0; state->fastpath_codepoint_stack.auto_pop = 0;\
+state->group_key_stack.top = &state->group_key_nil_stack_top; state->group_key_stack.bottom_val = ui_key_zero(); state->group_key_stack.free = 0; state->group_key_stack.auto_pop = 0;\
 state->transparency_stack.top = &state->transparency_nil_stack_top; state->transparency_stack.bottom_val = 0; state->transparency_stack.free = 0; state->transparency_stack.auto_pop = 0;\
 state->palette_stack.top = &state->palette_nil_stack_top; state->palette_stack.bottom_val = &ui_g_nil_palette; state->palette_stack.free = 0; state->palette_stack.auto_pop = 0;\
 state->squish_stack.top = &state->squish_nil_stack_top; state->squish_stack.bottom_val = 0; state->squish_stack.free = 0; state->squish_stack.auto_pop = 0;\
@@ -166,6 +171,7 @@ if(state->flags_stack.auto_pop) { ui_pop_flags(); state->flags_stack.auto_pop = 
 if(state->focus_hot_stack.auto_pop) { ui_pop_focus_hot(); state->focus_hot_stack.auto_pop = 0; }\
 if(state->focus_active_stack.auto_pop) { ui_pop_focus_active(); state->focus_active_stack.auto_pop = 0; }\
 if(state->fastpath_codepoint_stack.auto_pop) { ui_pop_fastpath_codepoint(); state->fastpath_codepoint_stack.auto_pop = 0; }\
+if(state->group_key_stack.auto_pop) { ui_pop_group_key(); state->group_key_stack.auto_pop = 0; }\
 if(state->transparency_stack.auto_pop) { ui_pop_transparency(); state->transparency_stack.auto_pop = 0; }\
 if(state->palette_stack.auto_pop) { ui_pop_palette(); state->palette_stack.auto_pop = 0; }\
 if(state->squish_stack.auto_pop) { ui_pop_squish(); state->squish_stack.auto_pop = 0; }\
@@ -194,6 +200,7 @@ internal UI_BoxFlags                ui_top_flags(void);
 internal UI_FocusKind               ui_top_focus_hot(void);
 internal UI_FocusKind               ui_top_focus_active(void);
 internal U32                        ui_top_fastpath_codepoint(void);
+internal UI_Key                     ui_top_group_key(void);
 internal F32                        ui_top_transparency(void);
 internal UI_Palette*                ui_top_palette(void);
 internal F32                        ui_top_squish(void);
@@ -221,6 +228,7 @@ internal UI_BoxFlags                ui_bottom_flags(void);
 internal UI_FocusKind               ui_bottom_focus_hot(void);
 internal UI_FocusKind               ui_bottom_focus_active(void);
 internal U32                        ui_bottom_fastpath_codepoint(void);
+internal UI_Key                     ui_bottom_group_key(void);
 internal F32                        ui_bottom_transparency(void);
 internal UI_Palette*                ui_bottom_palette(void);
 internal F32                        ui_bottom_squish(void);
@@ -248,6 +256,7 @@ internal UI_BoxFlags                ui_push_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_push_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_push_focus_active(UI_FocusKind v);
 internal U32                        ui_push_fastpath_codepoint(U32 v);
+internal UI_Key                     ui_push_group_key(UI_Key v);
 internal F32                        ui_push_transparency(F32 v);
 internal UI_Palette*                ui_push_palette(UI_Palette*     v);
 internal F32                        ui_push_squish(F32 v);
@@ -275,6 +284,7 @@ internal UI_BoxFlags                ui_pop_flags(void);
 internal UI_FocusKind               ui_pop_focus_hot(void);
 internal UI_FocusKind               ui_pop_focus_active(void);
 internal U32                        ui_pop_fastpath_codepoint(void);
+internal UI_Key                     ui_pop_group_key(void);
 internal F32                        ui_pop_transparency(void);
 internal UI_Palette*                ui_pop_palette(void);
 internal F32                        ui_pop_squish(void);
@@ -302,6 +312,7 @@ internal UI_BoxFlags                ui_set_next_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_set_next_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_set_next_focus_active(UI_FocusKind v);
 internal U32                        ui_set_next_fastpath_codepoint(U32 v);
+internal UI_Key                     ui_set_next_group_key(UI_Key v);
 internal F32                        ui_set_next_transparency(F32 v);
 internal UI_Palette*                ui_set_next_palette(UI_Palette*     v);
 internal F32                        ui_set_next_squish(F32 v);

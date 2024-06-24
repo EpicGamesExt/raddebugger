@@ -2142,6 +2142,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->key = key;
     box->flags = flags|ui_state->flags_stack.top->v;
     box->fastpath_codepoint = ui_state->fastpath_codepoint_stack.top->v;
+    box->group_key = ui_state->group_key_stack.top->v;
     
     if(ui_is_focus_active() && (box->flags & UI_BoxFlag_DefaultFocusNav) && ui_key_match(ui_state->default_nav_root_key, ui_key_zero()))
     {
@@ -2768,6 +2769,26 @@ ui_signal_from_box(UI_Box *box)
     {
       ui_state->hot_box_key = box->key;
       sig.f |= UI_SignalFlag_Hovering;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: mouse is over this box's rect, currently-active-key has the same group key? -> set hot/active key
+  //
+  if(box->flags & UI_BoxFlag_MouseClickable &&
+     contains_2f32(rect, ui_state->mouse) &&
+     !contains_2f32(blacklist_rect, ui_state->mouse) &&
+     !ui_key_match(ui_key_zero(), box->group_key))
+  {
+    for(EachEnumVal(UI_MouseButtonKind, k))
+    {
+      UI_Box *active_box = ui_box_from_key(ui_state->active_box_key[k]);
+      if(ui_key_match(box->group_key, active_box->group_key))
+      {
+        ui_state->hot_box_key = box->key;
+        ui_state->active_box_key[k] = box->key;
+        sig.f |= UI_SignalFlag_Hovering|(UI_SignalFlag_Dragging<<k);
+      }
     }
   }
   
