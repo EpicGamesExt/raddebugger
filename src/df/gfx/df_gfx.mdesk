@@ -602,11 +602,6 @@ DF_ThemePresetColorTable:
   (drop_shadow                   0x0000007f          0x0000003b           0x0000007f          0x0000003b          0x0000007f          0x0000003b          0x0000007f          0x0000007f          0x0000007f     )
 }
 
-////////////////////////////////
-//~ rjf: Generators
-
-//- rjf: theme color tables
-
 @data(String8) df_g_theme_color_display_string_table:
 {
   @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.display_name)")`
@@ -615,6 +610,48 @@ DF_ThemePresetColorTable:
 @data(String8) df_g_theme_color_cfg_string_table:
 {
   @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.name_lower)")`
+}
+
+////////////////////////////////
+//~ rjf: Settings
+
+@table(name  name_lower  display_string  default_s32  s32_min  s32_max)
+DF_SettingTable:
+{
+  {HoverAnimations       hover_animations        "Hover Animations"        1    0  1  }
+  {PressAnimations       press_animations        "Press Animations"        1    0  1  }
+  {FocusAnimations       focus_animations        "Focus Animations"        1    0  1  }
+  {TooltipAnimations     tooltip_animations      "Tooltip Animations"      1    0  1  }
+  {MenuAnimations        menu_animations         "Menu Animations"         1    0  1  }
+  {ScrollingAnimations   scrolling_animations    "Scrolling Animations"    1    0  1  }
+  {BackgroundBlur        background_blur         "Background Blur"         1    0  1  }
+  {TabWidth              tab_width               "Tab Width"               4    0  32 }
+}
+
+@enum DF_SettingCode:
+{
+  @expand(DF_SettingTable a) `$(a.name)`,
+  COUNT
+}
+
+@data(String8) df_g_setting_code_display_string_table:
+{
+  @expand(DF_SettingTable a) `str8_lit_comp("$(a.display_string)")`
+}
+
+@data(String8) df_g_setting_code_lower_string_table:
+{
+  @expand(DF_SettingTable a) `str8_lit_comp("$(a.name_lower)")`
+}
+
+@data(DF_SettingVal) df_g_setting_code_default_val_table:
+{
+  @expand(DF_SettingTable a) `{1, $(a.default_s32)}`
+}
+
+@data(Rng1S32) df_g_setting_code_s32_range_table:
+{
+  @expand(DF_SettingTable a) `{$(a.s32_min), $(a.s32_max)}`
 }
 
 ////////////////////////////////

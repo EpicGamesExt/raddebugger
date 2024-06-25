@@ -241,6 +241,27 @@ struct UI_WidgetPaletteInfo
 };
 
 ////////////////////////////////
+//~ rjf: Animation Info
+
+typedef U32 UI_AnimationInfoFlags;
+enum
+{
+  UI_AnimationInfoFlag_HotAnimations          = (1<<0),
+  UI_AnimationInfoFlag_ActiveAnimations       = (1<<1),
+  UI_AnimationInfoFlag_FocusAnimations        = (1<<2),
+  UI_AnimationInfoFlag_TooltipAnimations      = (1<<3),
+  UI_AnimationInfoFlag_ContextMenuAnimations  = (1<<4),
+  UI_AnimationInfoFlag_ScrollingAnimations    = (1<<5),
+  UI_AnimationInfoFlag_All = 0xffffffff,
+};
+
+typedef struct UI_AnimationInfo UI_AnimationInfo;
+struct UI_AnimationInfo
+{
+  UI_AnimationInfoFlags flags;
+};
+
+////////////////////////////////
 //~ rjf: Scroll Positions
 
 typedef struct UI_ScrollPt UI_ScrollPt;
@@ -575,6 +596,7 @@ struct UI_State
   //- rjf: build parameters
   UI_IconInfo icon_info;
   UI_WidgetPaletteInfo widget_palette_info;
+  UI_AnimationInfo animation_info;
   OS_Handle window;
   UI_EventList *events;
   Vec2F32 mouse;
@@ -739,7 +761,7 @@ internal UI_Box *          ui_box_from_key(UI_Key key);
 ////////////////////////////////
 //~ rjf: Top-Level Building API
 
-internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, F32 real_dt, F32 animation_dt);
+internal void ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, UI_WidgetPaletteInfo *widget_palette_info, UI_AnimationInfo *animation_info, F32 real_dt, F32 animation_dt);
 internal void ui_end_build(void);
 internal void ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis);
 internal void ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis);

@@ -3458,8 +3458,19 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         widget_palette_info.scrollbar_palette = df_palette_from_code(DF_PaletteCode_ScrollBarButton);
       }
       
+      // rjf: build animation info
+      UI_AnimationInfo animation_info = {0};
+      {
+        if(df_setting_val_from_code(DF_SettingCode_HoverAnimations).s32)       {animation_info.flags |= UI_AnimationInfoFlag_HotAnimations;}
+        if(df_setting_val_from_code(DF_SettingCode_PressAnimations).s32)       {animation_info.flags |= UI_AnimationInfoFlag_ActiveAnimations;}
+        if(df_setting_val_from_code(DF_SettingCode_FocusAnimations).s32)       {animation_info.flags |= UI_AnimationInfoFlag_FocusAnimations;}
+        if(df_setting_val_from_code(DF_SettingCode_TooltipAnimations).s32)     {animation_info.flags |= UI_AnimationInfoFlag_TooltipAnimations;}
+        if(df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32)        {animation_info.flags |= UI_AnimationInfoFlag_ContextMenuAnimations;}
+        if(df_setting_val_from_code(DF_SettingCode_ScrollingAnimations).s32)   {animation_info.flags |= UI_AnimationInfoFlag_ScrollingAnimations;}
+      }
+      
       // rjf: begin & push initial stack values
-      ui_begin_build(ws->os, &events, &icon_info, &widget_palette_info, df_dt(), df_dt());
+      ui_begin_build(ws->os, &events, &icon_info, &widget_palette_info, &animation_info, df_dt(), df_dt());
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_pref_width(ui_em(20.f, 1));
@@ -4569,7 +4580,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         {
           // rjf: animate target # of rows
           {
-            F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
+            F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? (1 - pow_f32(2, (-60.f * df_dt()))) : 1.f;
             F32 target = Min((F32)item_array.count, 16.f);
             if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
             {
@@ -4584,7 +4595,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           
           // rjf: animate open
           {
-            F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
+            F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_dt())) : 1.f;
             F32 diff = 1.f-ws->autocomp_open_t;
             ws->autocomp_open_t += diff*rate;
             if(abs_f32(diff) < 0.05f)
@@ -5690,7 +5701,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     //- rjf: animate query info
     //
     {
-      F32 rate = 1 - pow_f32(2, (-60.f * df_dt()));
+      F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_dt())) : 1.f;
       
       // rjf: animate query view selection transition
       {
@@ -5965,7 +5976,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           {
             // rjf: animate height
             {
-              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
+              F32 fish_rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_dt())) : 1.f;
               F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
               ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
               if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
@@ -5980,7 +5991,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             
             // rjf: animate open
             {
-              F32 fish_rate = 1 - pow_f32(2, (-60.f * df_dt()));
+              F32 fish_rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_dt())) : 1.f;
               F32 diff = 1.f - ws->hover_eval_open_t;
               ws->hover_eval_open_t += diff*fish_rate;
               if(abs_f32(diff) < 0.01f)
@@ -6495,7 +6506,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     //- rjf: animate panels
     //
     {
-      F32 rate = 1 - pow_f32(2, (-50.f * df_dt()));
+      F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * df_dt())) : 1.f;
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
       for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
       {
@@ -7470,8 +7481,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             }
             view->loading_t += (view->loading_t_target - view->loading_t) * rate;
             view->is_filtering_t += ((F32)!!view->is_filtering - view->is_filtering_t) * fast_rate;
-            view->scroll_pos.x.off -= view->scroll_pos.x.off*fast_rate;
-            view->scroll_pos.y.off -= view->scroll_pos.y.off*fast_rate;
+            view->scroll_pos.x.off -= view->scroll_pos.x.off * (df_setting_val_from_code(DF_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
+            view->scroll_pos.y.off -= view->scroll_pos.y.off * (df_setting_val_from_code(DF_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
             if(abs_f32(view->scroll_pos.x.off) < 0.01f)
             {
               view->scroll_pos.x.off = 0;
@@ -7677,7 +7688,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       }
       
       // rjf: blur background
-      if(box->flags & UI_BoxFlag_DrawBackgroundBlur)
+      if(box->flags & UI_BoxFlag_DrawBackgroundBlur && df_setting_val_from_code(DF_SettingCode_BackgroundBlur).s32)
       {
         R_PassParams_Blur *params = d_blur(box->rect, box->blur_size*(1-box->transparency), 0);
         MemoryCopyArray(params->corner_radii, box->corner_radii);
@@ -9343,6 +9354,23 @@ df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot)
   return result;
 }
 
+//- rjf: settings
+
+internal DF_SettingVal
+df_setting_val_from_code(DF_SettingCode code)
+{
+  DF_SettingVal result = {0};
+  for(EachEnumVal(DF_CfgSrc, src))
+  {
+    if(df_gfx_state->cfg_setting_vals[src][code].set)
+    {
+      result = df_gfx_state->cfg_setting_vals[src][code];
+      break;
+    }
+  }
+  return result;
+}
+
 //- rjf: config serialization
 
 internal int
@@ -9636,6 +9664,29 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
     str8_list_pushf(arena, &strs, "code_font: \"%S\"\n", code_font_path_escaped);
     str8_list_pushf(arena, &strs, "main_font: \"%S\"\n", main_font_path_escaped);
     str8_list_push(arena, &strs, str8_lit("\n"));
+  }
+  
+  //- rjf: serialize settings
+  {
+    B32 first = 1;
+    for(EachEnumVal(DF_SettingCode, code))
+    {
+      DF_SettingVal current = df_gfx_state->cfg_setting_vals[source][code];
+      if(current.set)
+      {
+        if(first)
+        {
+          first = 0;
+          str8_list_push(arena, &strs, str8_lit("/// settings //////////////////////////////////////////////////////////////////\n"));
+          str8_list_push(arena, &strs, str8_lit("\n"));
+        }
+        str8_list_pushf(arena, &strs, "%S: %i\n", df_g_setting_code_lower_string_table[code], current.s32);
+      }
+    }
+    if(!first)
+    {
+      str8_list_push(arena, &strs, str8_lit("\n"));
+    }
   }
   
   ProfEnd();
@@ -13226,7 +13277,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
   
   //- rjf: animate confirmation
   {
-    F32 rate = 1 - pow_f32(2, (-10.f * df_dt()));
+    F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-10.f * df_dt())) : 1.f;
     B32 confirm_open = df_gfx_state->confirm_active;
     df_gfx_state->confirm_t += rate * ((F32)!!confirm_open-df_gfx_state->confirm_t);
     if(abs_f32(df_gfx_state->confirm_t - (F32)!!confirm_open) > 0.005f)
@@ -13977,6 +14028,42 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
             {
               MemoryCopy(df_gfx_state->cfg_theme_target.colors, df_g_theme_preset_colors__default_dark, sizeof(df_g_theme_preset_colors__default_dark));
               MemoryCopy(df_gfx_state->cfg_theme.colors, df_g_theme_preset_colors__default_dark, sizeof(df_g_theme_preset_colors__default_dark));
+            }
+          }
+          
+          //- rjf: apply settings
+          B8 setting_codes_hit[DF_SettingCode_COUNT] = {0};
+          MemoryZero(&df_gfx_state->cfg_setting_vals[src][0], sizeof(DF_SettingVal)*DF_SettingCode_COUNT);
+          for(EachEnumVal(DF_SettingCode, code))
+          {
+            String8 name = df_g_setting_code_lower_string_table[code];
+            DF_CfgVal *code_cfg_val = df_cfg_val_from_string(table, name);
+            DF_CfgNode *root_node = code_cfg_val->last;
+            if(root_node->source == src)
+            {
+              DF_CfgNode *val_node = root_node->first;
+              S64 val = 0;
+              if(try_s64_from_str8_c_rules(val_node->string, &val))
+              {
+                df_gfx_state->cfg_setting_vals[src][code].set = 1;
+                df_gfx_state->cfg_setting_vals[src][code].s32 = (S32)val;
+              }
+              if(val_node != &df_g_nil_cfg_node)
+              {
+                setting_codes_hit[code] = 1;
+              }
+            }
+          }
+          
+          //- rjf: if config applied 0 settings, we need to do some sensible default
+          if(src == DF_CfgSrc_User)
+          {
+            for(EachEnumVal(DF_SettingCode, code))
+            {
+              if(!setting_codes_hit[code])
+              {
+                df_gfx_state->cfg_setting_vals[src][code] = df_g_setting_code_default_val_table[code];
+              }
             }
           }
           

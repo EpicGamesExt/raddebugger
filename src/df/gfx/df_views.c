@@ -5765,7 +5765,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
-  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*df_setting_val_from_code(DF_SettingCode_TabWidth).s32;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
@@ -6837,7 +6837,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
-  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*df_setting_val_from_code(DF_SettingCode_TabWidth).s32;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
@@ -7704,7 +7704,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
-  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*4.f;
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*df_setting_val_from_code(DF_SettingCode_TabWidth).s32;
   F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;

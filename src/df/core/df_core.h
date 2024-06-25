@@ -1363,7 +1363,6 @@ internal B32 df_expand_key_match(DF_ExpandKey a, DF_ExpandKey b);
 
 //- rjf: table
 internal void df_expand_tree_table_init(Arena *arena, DF_ExpandTreeTable *table, U64 slot_count);
-internal void df_expand_tree_table_animate(DF_ExpandTreeTable *table, F32 dt);
 internal DF_ExpandNode *df_expand_node_from_key(DF_ExpandTreeTable *table, DF_ExpandKey key);
 internal B32 df_expand_key_is_set(DF_ExpandTreeTable *table, DF_ExpandKey key);
 internal void df_expand_set_expansion(Arena *arena, DF_ExpandTreeTable *table, DF_ExpandKey parent_key, DF_ExpandKey key, B32 expanded);

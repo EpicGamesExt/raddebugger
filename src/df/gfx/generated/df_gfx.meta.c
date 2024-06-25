@@ -1201,5 +1201,53 @@ str8_lit_comp("thread_error"),
 str8_lit_comp("breakpoint"),
 };
 
+String8 df_g_setting_code_display_string_table[8] =
+{
+str8_lit_comp("Hover Animations"),
+str8_lit_comp("Press Animations"),
+str8_lit_comp("Focus Animations"),
+str8_lit_comp("Tooltip Animations"),
+str8_lit_comp("Menu Animations"),
+str8_lit_comp("Scrolling Animations"),
+str8_lit_comp("Background Blur"),
+str8_lit_comp("Tab Width"),
+};
+
+String8 df_g_setting_code_lower_string_table[8] =
+{
+str8_lit_comp("hover_animations"),
+str8_lit_comp("press_animations"),
+str8_lit_comp("focus_animations"),
+str8_lit_comp("tooltip_animations"),
+str8_lit_comp("menu_animations"),
+str8_lit_comp("scrolling_animations"),
+str8_lit_comp("background_blur"),
+str8_lit_comp("tab_width"),
+};
+
+DF_SettingVal df_g_setting_code_default_val_table[8] =
+{
+{1, 1},
+{1, 1},
+{1, 1},
+{1, 1},
+{1, 1},
+{1, 1},
+{1, 1},
+{1, 4},
+};
+
+Rng1S32 df_g_setting_code_s32_range_table[8] =
+{
+{0, 1},
+{0, 1},
+{0, 1},
+{0, 1},
+{0, 1},
+{0, 1},
+{0, 1},
+{0, 32},
+};
+
 C_LINKAGE_END
 

@@ -67,6 +67,16 @@ struct DF_KeyMapSlot
 };
 
 ////////////////////////////////
+//~ rjf: Setting Types
+
+typedef struct DF_SettingVal DF_SettingVal;
+struct DF_SettingVal
+{
+  B32 set;
+  S32 s32;
+};
+
+////////////////////////////////
 //~ rjf: View Functions
 
 typedef struct DF_View DF_View;
@@ -766,6 +776,9 @@ struct DF_GfxState
   F_Tag cfg_font_tags[DF_FontSlot_COUNT];        // derivative from font paths
   UI_Palette cfg_palettes[DF_PaletteCode_COUNT]; // derivative from theme
   
+  // rjf: settings
+  DF_SettingVal cfg_setting_vals[DF_CfgSrc_COUNT][DF_SettingCode_COUNT];
+  
   // rjf: icon texture
   R_Handle icon_texture;
 };
@@ -1017,7 +1030,11 @@ internal UI_Palette *df_palette_from_code(DF_PaletteCode code);
 internal F_Tag df_font_from_slot(DF_FontSlot slot);
 internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
 
+//- rjf: settings
+internal DF_SettingVal df_setting_val_from_code(DF_SettingCode code);
+
 //- rjf: config serialization
+internal int df_qsort_compare__cfg_string_bindings(DF_StringBindingPair *a, DF_StringBindingPair *b);
 internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source);
 
 ////////////////////////////////

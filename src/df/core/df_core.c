@@ -248,21 +248,6 @@ df_expand_tree_table_init(Arena *arena, DF_ExpandTreeTable *table, U64 slot_coun
   table->slots = push_array(arena, DF_ExpandSlot, table->slots_count);
 }
 
-internal void
-df_expand_tree_table_animate(DF_ExpandTreeTable *table, F32 dt)
-{
-  F32 rate = 1 - pow_f32(2, (-50.f * dt));
-  for(U64 slot_idx = 0; slot_idx < table->slots_count; slot_idx += 1)
-  {
-    for(DF_ExpandNode *node = table->slots[slot_idx].first;
-        node != 0;
-        node = node->hash_next)
-    {
-      node->expanded_t += (((F32)!!node->expanded) - node->expanded_t) * rate;
-    }
-  }
-}
-
 internal DF_ExpandNode *
 df_expand_node_from_key(DF_ExpandTreeTable *table, DF_ExpandKey key)
 {
