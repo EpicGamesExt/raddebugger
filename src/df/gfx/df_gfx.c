@@ -3572,99 +3572,91 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     ////////////////////////////
     //- rjf: developer menu
     //
-    if(ws->dev_menu_is_open)
-      UI_Font(df_font_from_slot(DF_FontSlot_Code))
-      UI_PaneF(r2f32p(30, 30, 30+ui_top_font_size()*100, ui_top_font_size()*150), "###dev_ctx_menu")
+    if(ws->dev_menu_is_open) UI_Font(df_font_from_slot(DF_FontSlot_Code))
     {
-      //- rjf: toggles
-      for(U64 idx = 0; idx < ArrayCount(DEV_toggle_table); idx += 1)
+      ui_set_next_flags(UI_BoxFlag_ViewScrollY|UI_BoxFlag_AllowOverflowY|UI_BoxFlag_ViewClamp);
+      UI_PaneF(r2f32p(30, 30, 30+ui_top_font_size()*100, ui_top_font_size()*150), "###dev_ctx_menu")
       {
-        if(ui_clicked(df_icon_button(*DEV_toggle_table[idx].value_ptr ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, DEV_toggle_table[idx].name)))
+        //- rjf: toggles
+        for(U64 idx = 0; idx < ArrayCount(DEV_toggle_table); idx += 1)
         {
-          *DEV_toggle_table[idx].value_ptr ^= 1;
-        }
-      }
-      
-      //- rjf: stats & info
-      {
-        //- rjf: draw per-window stats
-        for(DF_Window *window = df_gfx_state->first_window; window != 0; window = window->next)
-        {
-          // rjf: calc ui hash chain length
-          F64 avg_ui_hash_chain_length = 0;
+          if(ui_clicked(df_icon_button(*DEV_toggle_table[idx].value_ptr ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, DEV_toggle_table[idx].name)))
           {
-            F64 chain_count = 0;
-            F64 chain_length_sum = 0;
-            for(U64 idx = 0; idx < ws->ui->box_table_size; idx += 1)
-            {
-              F64 chain_length = 0;
-              for(UI_Box *b = ws->ui->box_table[idx].hash_first; !ui_box_is_nil(b); b = b->hash_next)
-              {
-                chain_length += 1;
-              }
-              if(chain_length > 0)
-              {
-                chain_length_sum += chain_length;
-                chain_count += 1;
-              }
-            }
-            avg_ui_hash_chain_length = chain_length_sum / chain_count;
-          }
-          ui_labelf("Target Hz: %.2f", 1.f/df_dt());
-          ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
-          ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
-          ui_labelf("Window %p", window);
-          ui_set_next_pref_width(ui_children_sum(1));
-          ui_set_next_pref_height(ui_children_sum(1));
-          UI_Row
-          {
-            ui_spacer(ui_em(2.f, 1.f));
-            ui_labelf("Box Count: %I64u", window->ui->last_build_box_count);
-          }
-          ui_set_next_pref_width(ui_children_sum(1));
-          ui_set_next_pref_height(ui_children_sum(1));
-          UI_Row
-          {
-            ui_spacer(ui_em(2.f, 1.f));
-            ui_labelf("Average UI Hash Chain Length: %f", avg_ui_hash_chain_length);
+            *DEV_toggle_table[idx].value_ptr ^= 1;
           }
         }
         
-        //- rjf: draw entity file tree
-#if 0
-        DF_EntityRec rec = {0};
-        S32 indent = 0;
-        UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("Entity File Tree:");
-        for(DF_Entity *e = df_entity_root(); !df_entity_is_nil(e); e = rec.next)
+        //- rjf: stats & info
         {
-          switch(e->kind)
+          //- rjf: draw per-window stats
+          for(DF_Window *window = df_gfx_state->first_window; window != 0; window = window->next)
           {
-            default:{}break;
-            case DF_EntityKind_File:
-            case DF_EntityKind_OverrideFileLink:
+            // rjf: calc ui hash chain length
+            F64 avg_ui_hash_chain_length = 0;
             {
-              ui_set_next_pref_width(ui_children_sum(1));
-              ui_set_next_pref_height(ui_children_sum(1));
-              UI_Row
+              F64 chain_count = 0;
+              F64 chain_length_sum = 0;
+              for(U64 idx = 0; idx < ws->ui->box_table_size; idx += 1)
               {
-                ui_spacer(ui_em(2.f*indent, 1.f));
-                if(e->kind == DF_EntityKind_File)
+                F64 chain_length = 0;
+                for(UI_Box *b = ws->ui->box_table[idx].hash_first; !ui_box_is_nil(b); b = b->hash_next)
                 {
-                  ui_label(e->name);
+                  chain_length += 1;
                 }
-                if(e->kind == DF_EntityKind_OverrideFileLink)
+                if(chain_length > 0)
                 {
-                  DF_Entity *dst = df_entity_from_handle(e->entity_handle);
-                  ui_labelf("[link] %S -> %S", e->name, dst->name);
+                  chain_length_sum += chain_length;
+                  chain_count += 1;
                 }
               }
-            }break;
+              avg_ui_hash_chain_length = chain_length_sum / chain_count;
+            }
+            ui_labelf("Target Hz: %.2f", 1.f/df_dt());
+            ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
+            ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
+            ui_labelf("Window %p", window);
+            ui_set_next_pref_width(ui_children_sum(1));
+            ui_set_next_pref_height(ui_children_sum(1));
+            UI_Row
+            {
+              ui_spacer(ui_em(2.f, 1.f));
+              ui_labelf("Box Count: %I64u", window->ui->last_build_box_count);
+            }
+            ui_set_next_pref_width(ui_children_sum(1));
+            ui_set_next_pref_height(ui_children_sum(1));
+            UI_Row
+            {
+              ui_spacer(ui_em(2.f, 1.f));
+              ui_labelf("Average UI Hash Chain Length: %f", avg_ui_hash_chain_length);
+            }
           }
-          rec = df_entity_rec_df_pre(e, df_entity_root());
-          indent += rec.push_count;
-          indent -= rec.pop_count;
+          
+          //- rjf: draw entity tree
+          DF_EntityRec rec = {0};
+          S32 indent = 0;
+          UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("Entity Tree:");
+          for(DF_Entity *e = df_entity_root(); !df_entity_is_nil(e); e = rec.next)
+          {
+            ui_set_next_pref_width(ui_children_sum(1));
+            ui_set_next_pref_height(ui_children_sum(1));
+            UI_Row
+            {
+              ui_spacer(ui_em(2.f*indent, 1.f));
+              if(e->kind == DF_EntityKind_OverrideFileLink)
+              {
+                DF_Entity *dst = df_entity_from_handle(e->entity_handle);
+                ui_labelf("[link] %S -> %S", e->name, dst->name);
+              }
+              else
+              {
+                ui_labelf("%S: %S", df_g_entity_kind_display_string_table[e->kind], e->name);
+              }
+            }
+            rec = df_entity_rec_df_pre(e, df_entity_root());
+            indent += rec.push_count;
+            indent -= rec.pop_count;
+          }
         }
-#endif
       }
     }
     

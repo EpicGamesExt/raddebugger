@@ -130,7 +130,7 @@ internal void ui_named_column_end(void);
 
 internal UI_Box *ui_pane_begin(Rng2F32 rect, String8 string);
 internal UI_Box *ui_pane_beginf(Rng2F32 rect, char *fmt, ...);
-internal void ui_pane_end(void);
+internal UI_Signal ui_pane_end(void);
 
 ////////////////////////////////
 //~ rjf: Tables

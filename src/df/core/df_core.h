@@ -384,8 +384,6 @@ struct DF_CoreViewRuleSpec
 ////////////////////////////////
 //~ rjf: Entity Types
 
-typedef U32 DF_EntitySubKind;
-
 typedef U32 DF_EntityFlags;
 enum
 {
@@ -433,7 +431,6 @@ struct DF_Entity
   
   // rjf: metadata
   DF_EntityKind kind;
-  DF_EntitySubKind subkind;
   DF_EntityFlags flags;
   DF_EntityID id;
   U64 generation;

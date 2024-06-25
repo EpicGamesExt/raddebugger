@@ -36,7 +36,7 @@
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
 //
-//  [ ] highlighted text & ctrl+f -> auto-fill search query
+//  [x] highlighted text & ctrl+f -> auto-fill search query
 //  [ ] double click on procedure in procedures tab to jump to source
 //  [ ] double-click any part of frame in callstack view -> snap to function
 

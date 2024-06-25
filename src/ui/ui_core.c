@@ -1417,7 +1417,7 @@ ui_end_build(void)
             String8 box_display_string = ui_box_display_string(b);
             Vec2F32 text_pos = ui_box_text_position(b);
             Vec2F32 drawn_text_dim = b->display_string_runs.dim;
-            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > rect.x1);
+            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x >= rect.x1);
             B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
                                                          rect.y0,
                                                          Min(text_pos.x+drawn_text_dim.x, rect.x1),

@@ -1264,11 +1264,18 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             String8 cell_string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, parse_ctx.type_graph, parse_ctx.rdi, row, (DF_WatchViewColumnKind)x, 0);
             cell_string = str8_skip_chop_whitespace(cell_string);
             U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
-            str8_list_pushf(scratch.arena, &strs, "%s%S%s%s",
-                            comma_pos < cell_string.size ? "\"" : "",
-                            cell_string,
-                            comma_pos < cell_string.size ? "\"" : "",
-                            x+1 <= selection_tbl.max.x ? "," : "");
+            if(selection_tbl.min.x != selection_tbl.max.x || selection_tbl.min.y != selection_tbl.max.y)
+            {
+              str8_list_pushf(scratch.arena, &strs, "%s%S%s%s",
+                              comma_pos < cell_string.size ? "\"" : "",
+                              cell_string,
+                              comma_pos < cell_string.size ? "\"" : "",
+                              x+1 <= selection_tbl.max.x ? "," : "");
+            }
+            else
+            {
+              str8_list_push(scratch.arena, &strs, cell_string);
+            }
           }
           if(y+1 <= selection_tbl.max.y)
           {
@@ -6296,6 +6303,13 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     {
       String8 text = txt_string_from_info_data_txt_rng(&text_info, data, sig.copy_range);
       os_set_clipboard_text(text);
+    }
+    
+    //- rjf: selected text on single line, no query? -> set search text
+    if(!txt_pt_match(tv->cursor, tv->mark) && tv->cursor.line == tv->mark.line && search_query.size == 0)
+    {
+      String8 text = txt_string_from_info_data_txt_rng(&text_info, data, txt_rng(tv->cursor, tv->mark));
+      df_set_search_string(text);
     }
     
     //- rjf: toggle cursor watch

@@ -908,11 +908,13 @@ ui_pane_beginf(Rng2F32 rect, char *fmt, ...)
   return box;
 }
 
-internal void
+internal UI_Signal
 ui_pane_end(void)
 {
   ui_pop_pref_width();
-  ui_pop_parent();
+  UI_Box *box = ui_pop_parent();
+  UI_Signal sig = ui_signal_from_box(box);
+  return sig;
 }
 
 ////////////////////////////////
