@@ -557,6 +557,41 @@ struct DF_Unwind
 };
 
 ////////////////////////////////
+//~ rjf: Line Info Types
+
+typedef struct DF_Line DF_Line;
+struct DF_Line
+{
+  DF_Handle file;
+  TxtPt pt;
+  Rng1U64 voff_range;
+  DI_Key dbgi_key;
+};
+
+typedef struct DF_LineNode DF_LineNode;
+struct DF_LineNode
+{
+  DF_LineNode *next;
+  DF_Line v;
+};
+
+typedef struct DF_LineList DF_LineList;
+struct DF_LineList
+{
+  DF_LineNode *first;
+  DF_LineNode *last;
+  U64 count;
+};
+
+typedef struct DF_LineListArray DF_LineListArray;
+struct DF_LineListArray
+{
+  DF_LineList *v;
+  U64 count;
+  DI_KeyList dbgi_keys;
+};
+
+////////////////////////////////
 //~ rjf: Source <-> Disasm Types
 
 //- rjf: debug info for mapping src -> disasm
@@ -1392,6 +1427,11 @@ internal DF_Inst df_single_inst_from_machine_code__x64(Arena *arena, U64 start_v
 internal DF_Inst df_single_inst_from_machine_code(Arena *arena, Architecture arch, U64 start_voff, String8 string);
 
 ////////////////////////////////
+//~ rjf: Debug Info Extraction Type Pure Functions
+
+internal DF_LineList df_line_list_copy(Arena *arena, DF_LineList *list);
+
+////////////////////////////////
 //~ rjf: Control Flow Analysis Pure Functions
 
 internal DF_CtrlFlowInfo df_ctrl_flow_info_from_vaddr_code__x64(Arena *arena, DF_InstFlags exit_points_mask, U64 vaddr, String8 code);
@@ -1582,15 +1622,19 @@ internal Rng1U64 df_vaddr_range_from_voff_range(DF_Entity *module, Rng1U64 voff_
 internal String8 df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff);
 internal String8 df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr);
 
-//- rjf: src -> voff lookups
-internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);
-
-//- rjf: voff -> src lookups
-internal DF_TextLineDasm2SrcInfo df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff, U64 inline_unwind_idx);
-
 //- rjf: symbol -> voff lookups
 internal U64 df_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
 internal U64 df_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name);
+
+//- rjf: voff -> line info
+internal DF_LineList df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff);
+
+//- rjf: file:line -> line info
+internal DF_LineListArray df_lines_array_from_file_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);
+internal DF_LineList df_lines_from_file_line_num(Arena *arena, DF_Entity *file, S64 line_num);
+
+//- rjf: src -> voff lookups
+internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);
 
 ////////////////////////////////
 //~ rjf: Process/Thread/Module Info Lookups

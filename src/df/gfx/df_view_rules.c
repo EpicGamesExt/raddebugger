@@ -537,9 +537,10 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
   String8 data = {0};
   TXT_TextInfo info = {0};
   TXT_LineTokensSlice line_tokens_slice = {0};
+  U128 text_key = {0};
   {
     U128 text_hash = {0};
-    U128 text_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1);
+    text_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1);
     info = txt_text_info_from_key_lang(txt_scope, text_key, top.lang, &text_hash);
     data = hs_data_from_hash(hs_scope, text_hash);
     line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &info, data, r1s64(1, info.lines_count));
@@ -558,8 +559,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, info.lines_count);
     code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, info.lines_count);
     code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, info.lines_count);
-    code_slice_params.line_dasm2src = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, info.lines_count);
-    code_slice_params.line_src2dasm = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, info.lines_count);
+    code_slice_params.line_vaddrs = push_array(scratch.arena, U64, info.lines_count);
+    code_slice_params.line_infos = push_array(scratch.arena, DF_LineList, info.lines_count);
     for(U64 line_idx = 0; line_idx < info.lines_count; line_idx += 1)
     {
       code_slice_params.line_text[line_idx] = str8_substr(data, info.lines_ranges[line_idx]);
@@ -591,7 +592,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     //- rjf: build code slice
     UI_WidthFill UI_HeightFill UI_Parent(container)
     {
-      DF_CodeSliceSignal slice_sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###slice"));
+      DF_CodeCtx code_ctx = {&df_g_nil_entity, text_key, top.lang};
+      DF_CodeSliceSignal slice_sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###slice"));
     }
   }
   
@@ -697,11 +699,12 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
     DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &data_hash);
     String8 dasm_text_data = {0};
     TXT_TextInfo dasm_text_info = {0};
+    TXT_LangKind lang_kind = TXT_LangKind_DisasmX64Intel;
     for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
     {
       U128 dasm_text_hash = hs_hash_from_key(dasm_info.text_key, rewind_idx);
       dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
-      dasm_text_info = txt_text_info_from_hash_lang(txt_scope, dasm_text_hash, TXT_LangKind_DisasmX64Intel);
+      dasm_text_info = txt_text_info_from_hash_lang(txt_scope, dasm_text_hash, lang_kind);
       if(dasm_text_info.lines_count != 0)
       {
         break;
@@ -720,8 +723,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
       code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
       code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
       code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
-      code_slice_params.line_dasm2src = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, dasm_text_info.lines_count);
-      code_slice_params.line_src2dasm = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, dasm_text_info.lines_count);
+      code_slice_params.line_vaddrs = push_array(scratch.arena, U64, dasm_text_info.lines_count);
+      code_slice_params.line_infos = push_array(scratch.arena, DF_LineList, dasm_text_info.lines_count);
       for(U64 line_idx = 0; line_idx < dasm_text_info.lines_count; line_idx += 1)
       {
         code_slice_params.line_text[line_idx] = str8_substr(dasm_text_data, dasm_info.insts.v[line_idx].text_range);
@@ -742,7 +745,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
     if(dasm_info.insts.count != 0 && dasm_text_info.lines_count != 0)
       UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_px(dasm_text_info.lines_max_size*ui_top_font_size()*1.2f, 1.f)) UI_Column UI_Padding(ui_pct(1, 0))
     {
-      DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));
+      DF_CodeCtx code_ctx = {&df_g_nil_entity, dasm_info.text_key, lang_kind};
+      DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));
     }
   }
   dasm_scope_close(dasm_scope);

@@ -432,6 +432,14 @@ enum
   DF_CodeSliceFlag_LineNums          = (1<<3),
 };
 
+typedef struct DF_CodeCtx DF_CodeCtx;
+struct DF_CodeCtx
+{
+  DF_Entity *file;        // the source file, if any, from which the code was derived
+  U128 text_key;          // the text info cache key for the backing textual data
+  TXT_LangKind lang_kind; // the language for which the text is parsed/analyzed
+};
+
 typedef struct DF_CodeSliceParams DF_CodeSliceParams;
 struct DF_CodeSliceParams
 {
@@ -444,8 +452,8 @@ struct DF_CodeSliceParams
   DF_EntityList *line_bps;
   DF_EntityList *line_ips;
   DF_EntityList *line_pins;
-  DF_TextLineDasm2SrcInfoList *line_dasm2src;
-  DF_TextLineSrc2DasmInfoList *line_src2dasm;
+  U64 *line_vaddrs;
+  DF_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
   
   // rjf: visual parameters
@@ -570,10 +578,14 @@ struct DF_Window
   B32 menu_bar_focus_press_started;
   
   // rjf: code context menu state
+  Arena *code_ctx_menu_arena;
   UI_Key code_ctx_menu_key;
-  DF_Handle code_ctx_menu_entity;
+  DF_Handle code_ctx_menu_file;
   U128 code_ctx_menu_text_key;
+  TXT_LangKind code_ctx_menu_lang_kind;
   TxtRng code_ctx_menu_range;
+  U64 code_ctx_menu_vaddr;
+  DF_LineList code_ctx_menu_lines;
   
   // rjf: entity context menu state
   UI_Key entity_ctx_menu_key;
@@ -619,6 +631,7 @@ struct DF_Window
   Arena *hover_eval_arena;
   Vec2F32 hover_eval_spawn_pos;
   String8 hover_eval_string;
+  
   
   // rjf: hover eval timer
   U64 hover_eval_first_frame_idx;
@@ -1071,8 +1084,8 @@ internal void df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt p
 
 internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions);
-internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
-internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
+internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
+internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
 
 internal B32 df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 internal B32 df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);

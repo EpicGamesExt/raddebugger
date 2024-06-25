@@ -1029,6 +1029,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->code_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_code_ctx_menu_"));
   window->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   window->tab_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
+  window->code_ctx_menu_arena = arena_alloc();
   window->hover_eval_arena = arena_alloc();
   window->autocomp_lister_params_arena = arena_alloc();
   window->free_panel = &df_g_nil_panel;
@@ -2585,13 +2586,25 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             DI_Key dbgi_key = df_dbgi_key_from_module(module);
             RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
             U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-            DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff, inline_unwind_index);
+            DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+            DF_Line line = {0};
+            {
+              U64 idx = 0;
+              for(DF_LineNode *n = lines.first; n != 0; n = n->next, idx += 1)
+              {
+                line = n->v;
+                if(idx == inline_unwind_index)
+                {
+                  break;
+                }
+              }
+            }
             
             // rjf: snap to resolved line
             B32 missing_rip = (rip_vaddr == 0);
             B32 dbgi_missing = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
             B32 dbgi_pending = !dbgi_missing && rdi == &di_rdi_parsed_nil;
-            B32 has_line_info = (line_info.voff_range.max != line_info.voff_range.min);
+            B32 has_line_info = (line.voff_range.max != line.voff_range.min);
             B32 has_module = !df_entity_is_nil(module);
             B32 has_dbg_info = has_module && !dbgi_missing;
             if(!dbgi_pending && (has_line_info || has_module))
@@ -2599,8 +2612,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               DF_CmdParams params = df_cmd_params_from_window(ws);
               if(has_line_info)
               {
-                params.file_path = df_full_path_from_entity(scratch.arena, line_info.file);
-                params.text_point = line_info.pt;
+                params.file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(line.file));
+                params.text_point = line.pt;
                 df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
                 df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
               }
@@ -2783,28 +2796,31 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             // rjf: name resolved to voff * dbg info
             if(name_resolved != 0 && voff != 0)
             {
-              DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&voff_dbgi_key, voff, 0);
-              DF_CmdParams p = params;
+              DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &voff_dbgi_key, voff);
+              if(lines.first != 0)
               {
-                p.file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
-                p.text_point = dasm2src_info.pt;
-                df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
-                df_cmd_params_mark_slot(&p, DF_CmdParamSlot_TextPoint);
-                if(voff_dbgi_key.path.size != 0)
+                DF_CmdParams p = params;
                 {
-                  DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &voff_dbgi_key);
-                  DF_Entity *module = df_first_entity_from_list(&modules);
-                  DF_Entity *process = df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
-                  if(!df_entity_is_nil(process))
+                  p.file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
+                  p.text_point = lines.first->v.pt;
+                  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
+                  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_TextPoint);
+                  if(voff_dbgi_key.path.size != 0)
                   {
-                    p.entity = df_handle_from_entity(process);
-                    p.vaddr = module->vaddr_rng.min + dasm2src_info.voff_range.min;
-                    df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-                    df_cmd_params_mark_slot(&p, DF_CmdParamSlot_VirtualAddr);
+                    DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &voff_dbgi_key);
+                    DF_Entity *module = df_first_entity_from_list(&modules);
+                    DF_Entity *process = df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
+                    if(!df_entity_is_nil(process))
+                    {
+                      p.entity = df_handle_from_entity(process);
+                      p.vaddr = module->vaddr_rng.min + lines.first->v.voff_range.min;
+                      df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
+                      df_cmd_params_mark_slot(&p, DF_CmdParamSlot_VirtualAddr);
+                    }
                   }
                 }
+                df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
               }
-              df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
             // rjf: name resolved to a file
@@ -3694,9 +3710,154 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         UI_PrefWidth(ui_em(30.f, 1.f))
         DF_Palette(DF_PaletteCode_ImplicitButton)
       {
-        ui_buttonf("Foo");
-        ui_buttonf("Bar");
-        ui_buttonf("Baz");
+        TXT_Scope *txt_scope = txt_scope_open();
+        HS_Scope *hs_scope = hs_scope_open();
+        DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_window(ws);
+        TxtRng range = ws->code_ctx_menu_range;
+        DF_LineList lines = ws->code_ctx_menu_lines;
+        if(!txt_pt_match(range.min, range.max) && ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Copy))))
+        {
+          U128 hash = {0};
+          TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, ws->code_ctx_menu_text_key, ws->code_ctx_menu_lang_kind, &hash);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          String8 copy_data = txt_string_from_info_data_txt_rng(&info, data, ws->code_ctx_menu_range);
+          os_set_clipboard_text(copy_data);
+          ui_ctx_menu_close();
+        }
+        if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_RightArrow, 0, "Move Thread Here")))
+        {
+          DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+          U64 new_rip_vaddr = ws->code_ctx_menu_vaddr;
+          if(!df_entity_is_nil(df_entity_from_handle(ws->code_ctx_menu_file)))
+          {
+            for(DF_LineNode *n = lines.first; n != 0; n = n->next)
+            {
+              DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
+              DF_Entity *module = df_module_from_thread_candidates(thread, &modules);
+              if(!df_entity_is_nil(module))
+              {
+                new_rip_vaddr = df_vaddr_from_voff(module, n->v.voff_range.min);
+                break;
+              }
+            }
+          }
+          DF_CmdParams p = df_cmd_params_from_window(ws);
+          p.entity = df_handle_from_entity(thread);
+          p.vaddr = new_rip_vaddr;
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetThreadIP));
+          ui_ctx_menu_close();
+        }
+        if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Run To Line")))
+        {
+          if(!df_entity_is_nil(df_entity_from_handle(ws->code_ctx_menu_file)))
+          {
+            DF_CmdParams p = df_cmd_params_from_window(ws);
+            p.entity = ws->code_ctx_menu_file;
+            p.text_point = range.min;
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToLine));
+          }
+          else
+          {
+            DF_CmdParams p = df_cmd_params_from_window(ws);
+            p.vaddr = ws->code_ctx_menu_vaddr;
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
+          }
+          ui_ctx_menu_close();
+        }
+        if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_Null, 0, "Go To Name")))
+        {
+          U128 hash = {0};
+          TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, ws->code_ctx_menu_text_key, ws->code_ctx_menu_lang_kind, &hash);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          Rng1U64 expr_off_range = {0};
+          if(range.min.column != range.max.column)
+          {
+            expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
+          }
+          else
+          {
+            expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
+          }
+          String8 expr = str8_substr(data, expr_off_range);
+          DF_CmdParams p = df_cmd_params_from_window(ws);
+          p.string = expr;
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
+          ui_ctx_menu_close();
+        }
+        if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Toggle Breakpoint")))
+        {
+          if(ws->code_ctx_menu_vaddr != 0)
+          {
+            DF_CmdParams p = df_cmd_params_from_window(ws);
+            p.vaddr = ws->code_ctx_menu_vaddr;
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddressBreakpoint));
+          }
+          else
+          {
+            DF_CmdParams p = df_cmd_params_from_window(ws);
+            p.entity = ws->code_ctx_menu_file;
+            p.text_point = range.min;
+            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_TextBreakpoint));
+          }
+          ui_ctx_menu_close();
+        }
+        if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_Binoculars, 0, "Toggle Watch Expression")))
+        {
+          U128 hash = {0};
+          TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, ws->code_ctx_menu_text_key, ws->code_ctx_menu_lang_kind, &hash);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          Rng1U64 expr_off_range = {0};
+          if(range.min.column != range.max.column)
+          {
+            expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
+          }
+          else
+          {
+            expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
+          }
+          String8 expr = str8_substr(data, expr_off_range);
+          DF_CmdParams p = df_cmd_params_from_window(ws);
+          p.string = expr;
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
+          ui_ctx_menu_close();
+        }
+        if(df_entity_is_nil(df_entity_from_handle(ws->code_ctx_menu_file)) && range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Source")))
+        {
+          if(lines.first != 0)
+          {
+            DF_CmdParams params = df_cmd_params_from_window(ws);
+            params.file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
+            params.text_point = lines.first->v.pt;
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+          }
+          ui_ctx_menu_close();
+        }
+        if(!df_entity_is_nil(df_entity_from_handle(ws->code_ctx_menu_file)) && range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Disassembly")))
+        {
+          DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+          U64 vaddr = 0;
+          for(DF_LineNode *n = lines.first; n != 0; n = n->next)
+          {
+            DF_EntityList modules = df_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
+            DF_Entity *module = df_module_from_thread_candidates(thread, &modules);
+            if(!df_entity_is_nil(module))
+            {
+              vaddr = df_vaddr_from_voff(module, n->v.voff_range.min);
+              break;
+            }
+          }
+          DF_CmdParams params = df_cmd_params_from_window(ws);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
+          params.entity = df_handle_from_entity(thread);
+          params.vaddr = vaddr;
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+          ui_ctx_menu_close();
+        }
+        hs_scope_close(hs_scope);
+        txt_scope_close(txt_scope);
       }
       
       //- rjf: entity menu
@@ -10607,7 +10768,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
 }
 
 internal DF_CodeSliceSignal
-df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string)
+df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string)
 {
   DF_CodeSliceSignal result = {0};
   ProfBeginFunction();
@@ -10669,82 +10830,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         if(n->entity == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
         {
           line_bg_colors[line_idx] = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlayError);
-        }
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: build per-line context menus
-  //
-  UI_Key *ctx_menu_keys = push_array(scratch.arena, UI_Key, dim_1s64(params->line_num_range)+1);
-  {
-    U64 line_idx = 0;
-    for(S64 line_num = params->line_num_range.min;
-        line_num < params->line_num_range.max;
-        line_num += 1, line_idx += 1)
-    {
-      ctx_menu_keys[line_idx] = ui_key_from_stringf(top_container_box->key, "line_ctx_%I64d", line_num);
-      DF_Palette(DF_PaletteCode_Floating)
-        UI_CtxMenu(ctx_menu_keys[line_idx])
-        DF_Palette(DF_PaletteCode_ImplicitButton)
-        UI_PrefWidth(ui_em(37.f, 1.f))
-      {
-        DF_TextLineSrc2DasmInfoList *line_src2dasm_list = &params->line_src2dasm[line_idx];
-        DF_TextLineDasm2SrcInfoList *line_dasm2src_list = &params->line_dasm2src[line_idx];
-        
-        //- rjf: copy selection
-        if(!txt_pt_match(*cursor, *mark) && ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Copy))))
-        {
-          result.copy_range = txt_rng(*cursor, *mark);
-          ui_ctx_menu_close();
-        }
-        
-        //- rjf: watch selection
-        if(ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpressionAtCursor))))
-        {
-          result.toggle_cursor_watch = 1;
-          ui_ctx_menu_close();
-        }
-        
-        //- rjf: set-next-statement
-        if(ui_clicked(df_cmd_spec_button(df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetNextStatement))))
-        {
-          result.set_next_statement_line_num = line_num;
-          ui_ctx_menu_close();
-        }
-        
-        //- rjf: run-to-line
-        if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Run To Line")))
-        {
-          result.run_to_line_num = line_num;
-          ui_ctx_menu_close();
-        }
-        
-        //- rjf: breakpoint placing
-        if((params->line_bps[line_idx].count == 0 &&
-            ui_clicked(df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Place Breakpoint"))) ||
-           (params->line_bps[line_idx].count != 0 &&
-            ui_clicked(df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Remove Breakpoint"))))
-        {
-          result.clicked_margin_line_num = line_num;
-          ui_ctx_menu_close();
-        }
-        
-        //- rjf: go from src -> disasm
-        if(line_src2dasm_list->first != 0 &&
-           ui_clicked(df_icon_buttonf(DF_IconKind_Find, 0, "Go To Disassembly")))
-        {
-          result.goto_disasm_line_num = line_num;
-          ui_ctx_menu_close();
-        }
-        
-        //- rjf: go from disasm -> src
-        if(line_dasm2src_list->first != 0 &&
-           ui_clicked(df_icon_buttonf(DF_IconKind_Find, 0, "Go To Source")))
-        {
-          result.goto_src_line_num = line_num;
-          ui_ctx_menu_close();
         }
       }
     }
@@ -10851,23 +10936,21 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               
               // rjf: fill out progress t (progress into range of current line's
               // voff range)
-              if(params->line_src2dasm[line_idx].first != 0)
+              if(params->line_infos[line_idx].first != 0)
               {
-                DF_TextLineSrc2DasmInfoList *line_info_list = &params->line_src2dasm[line_idx];
-                DF_TextLineSrc2DasmInfo *line_info = 0;
-                for(DF_TextLineSrc2DasmInfoNode *n = line_info_list->first;
-                    n != 0;
-                    n = n->next)
+                DF_LineList *lines = &params->line_infos[line_idx];
+                DF_Line *line = 0;
+                for(DF_LineNode *n = lines->first; n != 0; n = n->next)
                 {
                   if(di_key_match(&n->v.dbgi_key, &dbgi_key))
                   {
-                    line_info = &n->v;
+                    line = &n->v;
                     break;
                   }
                 }
-                if(line_info != 0)
+                if(line != 0)
                 {
-                  Rng1U64 line_voff_rng = line_info->voff_range;
+                  Rng1U64 line_voff_rng = line->voff_range;
                   Vec4F32 weak_thread_color = color;
                   weak_thread_color.w *= 0.4f;
                   F32 progress_t = (line_voff_rng.max != line_voff_rng.min) ? ((F32)(thread_rip_voff - line_voff_rng.min) / (F32)(line_voff_rng.max - line_voff_rng.min)) : 0;
@@ -11008,23 +11091,21 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               
               // rjf: fill out progress t (progress into range of current line's
               // voff range)
-              if(params->line_src2dasm[line_idx].first != 0)
+              if(code_ctx->file != &df_g_nil_entity && params->line_infos[line_idx].first != 0)
               {
-                DF_TextLineSrc2DasmInfoList *line_info_list = &params->line_src2dasm[line_idx];
-                DF_TextLineSrc2DasmInfo *line_info = 0;
-                for(DF_TextLineSrc2DasmInfoNode *n = line_info_list->first;
-                    n != 0;
-                    n = n->next)
+                DF_LineList *lines = &params->line_infos[line_idx];
+                DF_Line *line = 0;
+                for(DF_LineNode *n = lines->first; n != 0; n = n->next)
                 {
                   if(di_key_match(&n->v.dbgi_key, &dbgi_key))
                   {
-                    line_info = &n->v;
+                    line = &n->v;
                     break;
                   }
                 }
-                if(line_info != 0)
+                if(line != 0)
                 {
-                  Rng1U64 line_voff_rng = line_info->voff_range;
+                  Rng1U64 line_voff_rng = line->voff_range;
                   Vec4F32 weak_thread_color = color;
                   weak_thread_color.w *= 0.4f;
                   F32 progress_t = (line_voff_rng.max != line_voff_rng.min) ? ((F32)(thread_rip_voff - line_voff_rng.min) / (F32)(line_voff_rng.max - line_voff_rng.min)) : 0;
@@ -11086,17 +11167,20 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             DF_BreakpointBoxDrawExtData *bp_draw = push_array(ui_build_arena(), DF_BreakpointBoxDrawExtData, 1);
             {
               bp_draw->color = bp_color;
-              DF_TextLineSrc2DasmInfoList *src2dasm_list = &params->line_src2dasm[line_idx];
-              for(DF_TextLineSrc2DasmInfoNode *n = src2dasm_list->first; n != 0; n = n->next)
+              bp_draw->alive_t = bp->alive_t;
+              if(code_ctx->file != &df_g_nil_entity)
               {
-                S64 remap_line = (S64)n->v.remap_line;
-                if(remap_line != line_num)
+                DF_LineList *lines = &params->line_infos[line_idx];
+                for(DF_LineNode *n = lines->first; n != 0; n = n->next)
                 {
-                  bp_draw->remap_px_delta = (remap_line - line_num) * params->line_height_px;
-                  break;
+                  S64 remap_line = n->v.pt.line;
+                  if(remap_line != line_num)
+                  {
+                    bp_draw->remap_px_delta = (remap_line - line_num) * params->line_height_px;
+                    break;
+                  }
                 }
               }
-              bp_draw->alive_t = bp->alive_t;
             }
             
             // rjf: build box for breakpoint
@@ -11248,33 +11332,17 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         // rjf: line info on this line -> adjust bg color to visualize
         B32 has_line_info = 0;
         {
+          U64 best_stamp = 0;
           S64 line_info_line_num = 0;
-          F32 line_info_t = 0;
-          DF_TextLineSrc2DasmInfoList *src2dasm_list = &params->line_src2dasm[line_idx];
-          DF_TextLineDasm2SrcInfoList *dasm2src_list = &params->line_dasm2src[line_idx];
-          if(src2dasm_list->first != 0)
+          F32 line_info_t = selected_thread_module->alive_t;
+          DF_LineList *lines = &params->line_infos[line_idx];
+          for(DF_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            has_line_info = (src2dasm_list->first->v.remap_line == line_num);
-            line_info_line_num = line_num;
-            line_info_t = selected_thread_module->alive_t;
-          }
-          if(dasm2src_list->first != 0)
-          {
-            DF_TextLineDasm2SrcInfo *dasm2src_info = 0;
-            U64 best_stamp = 0;
-            for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
+            if(n->v.dbgi_key.min_timestamp >= best_stamp)
             {
-              if(n->v.file->timestamp > best_stamp)
-              {
-                dasm2src_info = &n->v;
-                best_stamp = n->v.file->timestamp;
-              }
-            }
-            if(dasm2src_info != 0)
-            {
-              has_line_info = 1;
-              line_info_line_num = dasm2src_info->pt.line;
-              line_info_t = selected_thread_module->alive_t;
+              has_line_info = (n->v.pt.line == line_num || code_ctx->file == &df_g_nil_entity);
+              line_info_line_num = n->v.pt.line;
+              best_stamp = n->v.dbgi_key.min_timestamp;
             }
           }
           if(has_line_info)
@@ -11575,42 +11643,26 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       *preferred_column = cursor->column;
     }
     
-    //- rjf: right-click => active context menu for line
+    //- rjf: right-click => code context menu
     if(ui_right_clicked(text_container_sig))
     {
-      S64 line_idx = mouse_pt.line-params->line_num_range.min;
-      if(0 <= line_idx && line_idx < dim_1s64(params->line_num_range))
+      if(txt_pt_match(*cursor, *mark))
       {
-        ui_ctx_menu_open(ctx_menu_keys[line_idx], ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)));
-        if(txt_pt_match(*cursor, *mark))
-        {
-          *cursor = *mark = mouse_pt;
-        }
+        *cursor = *mark = mouse_pt;
       }
-    }
-    
-    //- rjf: hovering text container & ctrl+scroll -> change font size
-    if(ui_hovering(text_container_sig))
-    {
-      UI_EventList *events = ui_events();
-      for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+      ui_ctx_menu_open(ws->code_ctx_menu_key, ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)));
+      arena_clear(ws->code_ctx_menu_arena);
+      ws->code_ctx_menu_file = df_handle_from_entity(code_ctx->file);
+      ws->code_ctx_menu_text_key = code_ctx->text_key;
+      ws->code_ctx_menu_lang_kind = code_ctx->lang_kind;
+      ws->code_ctx_menu_range = txt_rng(*cursor, *mark);
+      if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
       {
-        next = n->next;
-        UI_Event *event = &n->v;
-        if(event->kind == UI_EventKind_Scroll && event->modifiers & OS_EventFlag_Ctrl)
-        {
-          ui_eat_event(events, n);
-          if(event->delta_2f32.y < 0)
-          {
-            DF_CmdParams params = df_cmd_params_from_window(ws);
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncCodeFontScale));
-          }
-          else if(event->delta_2f32.y > 0)
-          {
-            DF_CmdParams params = df_cmd_params_from_window(ws);
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecCodeFontScale));
-          }
-        }
+        ws->code_ctx_menu_vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
+      }
+      if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
+      {
+        ws->code_ctx_menu_lines = df_line_list_copy(ws->code_ctx_menu_arena, &params->line_infos[cursor->line - params->line_num_range.min]);
       }
     }
     
@@ -11629,6 +11681,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     }
     
     //- rjf: drop target is dropped -> process
+    // TODO(rjf): @src_collapse
+#if 0
     {
       DF_DragDropPayload payload = {0};
       if(!df_entity_is_nil(line_drag_entity) && df_drag_drop(&payload))
@@ -11637,6 +11691,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         result.dropped_entity_line_num = mouse_pt.line;
       }
     }
+#endif
     
     //- rjf: commit text container signal to main output
     result.base = text_container_sig;
@@ -11645,6 +11700,8 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //////////////////////////////
   //- rjf: mouse -> expression range info
   //
+  TxtRng mouse_expr_rng = {0};
+  Vec2F32 mouse_expr_baseline_pos = {0};
   if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line)) ProfScope("mouse -> expression range")
   {
     TxtRng selected_rng = txt_rng(*cursor, *mark);
@@ -11655,9 +11712,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
       String8 line_text = params->line_text[line_slice_idx];
       F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, selected_rng.min.column-1)).x;
-      result.mouse_expr_rng = selected_rng;
-      result.mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
-                                             text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
+      result.mouse_expr_rng = mouse_expr_rng = selected_rng;
+      result.mouse_expr_baseline_pos = mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
+                                                                       text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
     }
     else
     {
@@ -11670,9 +11727,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       if(expr_off_rng.max != expr_off_rng.min)
       {
         F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
-        result.mouse_expr_rng = txt_rng(txt_pt(mouse_pt.line, 1+(expr_off_rng.min-line_range.min)), txt_pt(mouse_pt.line, 1+(expr_off_rng.max-line_range.min)));
-        result.mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
-                                               text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
+        result.mouse_expr_rng = mouse_expr_rng = txt_rng(txt_pt(mouse_pt.line, 1+(expr_off_rng.min-line_range.min)), txt_pt(mouse_pt.line, 1+(expr_off_rng.max-line_range.min)));
+        result.mouse_expr_baseline_pos = mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
+                                                                         text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
       }
     }
   }
@@ -11683,28 +11740,37 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line) && (ui_mouse().x - text_container_box->rect.x0 < params->line_num_width_px + line_num_padding_px))
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
-    if(params->line_src2dasm[line_slice_idx].first != 0 &&
-       params->line_src2dasm[line_slice_idx].first->v.remap_line == mouse_pt.line)
+    DF_LineList *lines = &params->line_infos[line_slice_idx];
+    if(lines->first != 0 && (code_ctx->file == &df_g_nil_entity || lines->first->v.pt.line == mouse_pt.line))
     {
       DF_RichHoverInfo info = {0};
       info.process      = df_handle_from_entity(selected_thread_process);
-      info.vaddr_range  = df_vaddr_range_from_voff_range(selected_thread_module, params->line_src2dasm[line_slice_idx].first->v.voff_range);
+      info.vaddr_range  = df_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range);
       info.module       = df_handle_from_entity(selected_thread_module);
-      info.dbgi_key     = params->line_src2dasm[line_slice_idx].first->v.dbgi_key;
-      info.voff_range   = params->line_src2dasm[line_slice_idx].first->v.voff_range;
-      df_set_rich_hover_info(&info);
-    }
-    if(params->line_dasm2src[line_slice_idx].first != 0)
-    {
-      DF_RichHoverInfo info = {0};
-      info.process      = df_handle_from_entity(selected_thread_process);
-      info.vaddr_range  = df_vaddr_range_from_voff_range(selected_thread_module, params->line_dasm2src[line_slice_idx].first->v.voff_range);
-      info.module       = df_handle_from_entity(selected_thread_module);
-      info.dbgi_key     = params->line_dasm2src[line_slice_idx].first->v.dbgi_key;
-      info.voff_range   = params->line_dasm2src[line_slice_idx].first->v.voff_range;
+      info.dbgi_key     = lines->first->v.dbgi_key;
+      info.voff_range   = lines->first->v.voff_range;
       df_set_rich_hover_info(&info);
     }
   }
+  
+  //////////////////////////////
+  //- rjf: hover eval
+  //
+#if 0
+  if(!ui_dragging(text_container_sig) && sig.mouse_expr_rng.min.line != 0 && sig.base.event_flags == 0)
+  {
+    TxtRng expr_rng = mouse_expr_rng;
+    String8 expr = txt_string_from_info_data_txt_rng(&text_info, data, expr_rng);
+    if(expr.size != 0)
+    {
+      DF_Eval eval = df_eval_from_string(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
+      if(eval.mode != EVAL_EvalMode_NULL)
+      {
+        df_set_hover_eval(ws, mouse_expr_baseline_pos, ctrl_ctx, entity, sig.mouse_pt, 0, expr);
+      }
+    }
+  }
+#endif
   
   //////////////////////////////
   //- rjf: dragging entity which applies to lines over this slice -> visualize
@@ -12048,37 +12114,16 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         {
           B32 matches = 0;
           S64 line_info_line_num = 0;
-          DF_TextLineSrc2DasmInfoList *src2dasm_list = &params->line_src2dasm[line_idx];
-          DF_TextLineDasm2SrcInfoList *dasm2src_list = &params->line_dasm2src[line_idx];
-          
-          // rjf: check src2dasm
-          if(src2dasm_list->first != 0)
+          DF_LineList *lines = &params->line_infos[line_idx];
+          for(DF_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            for(DF_TextLineSrc2DasmInfoNode *n = src2dasm_list->first; n != 0; n = n->next)
+            if((n->v.pt.line == line_num || code_ctx->file == &df_g_nil_entity) &&
+               di_key_match(&n->v.dbgi_key, &hovered_line_dbgi_key) &&
+               n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
             {
-              if(n->v.remap_line == line_num &&
-                 di_key_match(&n->v.dbgi_key, &hovered_line_dbgi_key) &&
-                 n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
-              {
-                matches = 1;
-                line_info_line_num = line_num;
-                break;
-              }
-            }
-          }
-          
-          // rjf: check dasm2src
-          if(dasm2src_list->first != 0)
-          {
-            for(DF_TextLineDasm2SrcInfoNode *n = dasm2src_list->first; n != 0; n = n->next)
-            {
-              if(n->v.voff_range.min <= hovered_line_voff &&
-                 hovered_line_voff < n->v.voff_range.max)
-              {
-                line_info_line_num = n->v.pt.line;
-                matches = 1;
-                break;
-              }
+              matches = 1;
+              line_info_line_num = n->v.pt.line;
+              break;
             }
           }
           
@@ -12108,13 +12153,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
 }
 
 internal DF_CodeSliceSignal
-df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...)
+df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
-  DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, params, cursor, mark, preferred_column, string);
+  DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, code_ctx, params, cursor, mark, preferred_column, string);
   va_end(args);
   scratch_end(scratch);
   return sig;
@@ -13414,6 +13459,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               r_window_unequip(ws->os, ws->r);
               os_window_close(ws->os);
               arena_release(ws->query_cmd_arena);
+              arena_release(ws->code_ctx_menu_arena);
               arena_release(ws->hover_eval_arena);
               arena_release(ws->autocomp_lister_params_arena);
               arena_release(ws->arena);

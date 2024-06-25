@@ -838,6 +838,24 @@ df_single_inst_from_machine_code(Arena *arena, Architecture arch, U64 start_voff
 }
 
 ////////////////////////////////
+//~ rjf: Debug Info Extraction Type Pure Functions
+
+internal DF_LineList
+df_line_list_copy(Arena *arena, DF_LineList *list)
+{
+  DF_LineList dst = {0};
+  for(DF_LineNode *src_n = list->first; src_n != 0; src_n = src_n->next)
+  {
+    DF_LineNode *dst_n = push_array(arena, DF_LineNode, 1);
+    MemoryCopyStruct(dst_n, src_n);
+    dst_n->v.dbgi_key = di_key_copy(arena, &src_n->v.dbgi_key);
+    SLLQueuePush(dst.first, dst.last, dst_n);
+    dst.count += 1;
+  }
+  return dst;
+}
+
+////////////////////////////////
 //~ rjf: Control Flow Analysis Functions
 
 internal DF_CtrlFlowInfo
@@ -2862,14 +2880,17 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = df_voff_from_vaddr(module, ip_vaddr);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, ip_voff, 0);
-    Rng1U64 line_voff_rng = line_info.voff_range;
-    if(line_voff_rng.max != 0)
+    DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, ip_voff);
+    Rng1U64 line_voff_rng = {0};
+    if(lines.first != 0)
     {
+      line_voff_rng = lines.first->v.voff_range;
       line_vaddr_rng = df_vaddr_range_from_voff_range(module, line_voff_rng);
+      DF_Entity *file = df_entity_from_handle(lines.first->v.file);
+      log_infof("line: {%S:%I64i}\n", file->name, lines.first->v.pt.line);
     }
-    log_infof("line: {%S:%I64i}\n", line_info.file->name, line_info.pt.line);
-    log_infof("voff_range: {0x%I64x, 0x%I64x}\n", line_info.voff_range.min, line_info.voff_range.max);
+    log_infof("voff_range: {0x%I64x, 0x%I64x}\n", line_voff_rng.min, line_voff_rng.max);
+    log_infof("vaddr_range: {0x%I64x, 0x%I64x}\n", line_vaddr_rng.min, line_vaddr_rng.max);
   }
   
   // rjf: opl line_vaddr_rng -> 0xf00f00 or 0xfeefee? => include in line vaddr range
@@ -2878,10 +2899,10 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, opl_line_voff_rng, 0);
-    if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
+    DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, opl_line_voff_rng);
+    if(lines.first != 0 && (lines.first->v.pt.line == 0xf00f00 || lines.first->v.pt.line == 0xfeefee))
     {
-      line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
+      line_vaddr_rng.max = df_vaddr_from_voff(module, lines.first->v.voff_range.max);
     }
   }
   
@@ -3020,10 +3041,11 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = df_voff_from_vaddr(module, ip_vaddr);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, ip_voff, 0);
-    Rng1U64 line_voff_rng = line_info.voff_range;
-    if(line_voff_rng.max != 0)
+    DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, ip_voff);
+    Rng1U64 line_voff_rng = {0};
+    if(lines.first != 0)
     {
+      line_voff_rng = lines.first->v.voff_range;
       line_vaddr_rng = df_vaddr_range_from_voff_range(module, line_voff_rng);
     }
   }
@@ -3034,10 +3056,10 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = df_voff_from_vaddr(module, line_vaddr_rng.max);
-    DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, opl_line_voff_rng, 0);
-    if(line_info.pt.line == 0xf00f00 || line_info.pt.line == 0xfeefee)
+    DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, opl_line_voff_rng);
+    if(lines.first != 0 && (lines.first->v.pt.line == 0xf00f00 || lines.first->v.pt.line == 0xfeefee))
     {
-      line_vaddr_rng.max = df_vaddr_from_voff(module, line_info.voff_range.max);
+      line_vaddr_rng.max = df_vaddr_from_voff(module, lines.first->v.voff_range.max);
     }
   }
   
@@ -3247,186 +3269,6 @@ df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr)
   return result;
 }
 
-//- rjf: src -> voff lookups
-
-internal DF_TextLineSrc2DasmInfoListArray
-df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range)
-{
-  DF_TextLineSrc2DasmInfoListArray src2dasm_array = {0};
-  {
-    src2dasm_array.count = dim_1s64(line_num_range)+1;
-    src2dasm_array.v = push_array(arena, DF_TextLineSrc2DasmInfoList, src2dasm_array.count);
-  }
-  Temp scratch = scratch_begin(&arena, 1);
-  DI_Scope *scope = di_scope_open();
-  DI_KeyList dbgi_keys = df_push_active_dbgi_key_list(scratch.arena);
-  DF_EntityList overrides = df_possible_overrides_from_entity(scratch.arena, file);
-  for(DF_EntityNode *override_n = overrides.first;
-      override_n != 0;
-      override_n = override_n->next)
-  {
-    DF_Entity *override = override_n->entity;
-    String8 file_path = df_full_path_from_entity(scratch.arena, override);
-    String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
-    for(DI_KeyNode *dbgi_key_n = dbgi_keys.first;
-        dbgi_key_n != 0;
-        dbgi_key_n = dbgi_key_n->next)
-    {
-      // rjf: binary -> rdi
-      DI_Key key = dbgi_key_n->v;
-      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 0);
-      
-      // rjf: file_path_normalized * rdi -> src_id
-      B32 good_src_id = 0;
-      U32 src_id = 0;
-      if(rdi != &di_rdi_parsed_nil)
-      {
-        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
-        RDI_ParsedNameMap map = {0};
-        rdi_parsed_from_name_map(rdi, mapptr, &map);
-        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
-        if(node != 0)
-        {
-          U32 id_count = 0;
-          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-          if(id_count > 0)
-          {
-            good_src_id = 1;
-            src_id = ids[0];
-          }
-        }
-      }
-      
-      // rjf: good src-id -> look up line info for visible range
-      if(good_src_id)
-      {
-        RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
-        RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
-        RDI_ParsedSourceLineMap line_map = {0};
-        rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
-        U64 line_idx = 0;
-        for(S64 line_num = line_num_range.min;
-            line_num <= line_num_range.max;
-            line_num += 1, line_idx += 1)
-        {
-          DF_TextLineSrc2DasmInfoList *src2dasm_list = &src2dasm_array.v[line_idx];
-          U32 voff_count = 0;
-          U64 *voffs = rdi_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
-          for(U64 idx = 0; idx < voff_count; idx += 1)
-          {
-            U64 base_voff = voffs[idx];
-            U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
-            RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
-            RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
-            RDI_ParsedLineTable unit_line_info = {0};
-            rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
-            U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
-            if(unit_line_info.voffs != 0)
-            {
-              Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
-              S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;
-              DF_TextLineSrc2DasmInfoNode *src2dasm_n = push_array(arena, DF_TextLineSrc2DasmInfoNode, 1);
-              src2dasm_n->v.voff_range = range;
-              src2dasm_n->v.remap_line = (S64)actual_line;
-              src2dasm_n->v.dbgi_key = key;
-              SLLQueuePush(src2dasm_list->first, src2dasm_list->last, src2dasm_n);
-              src2dasm_list->count += 1;
-            }
-          }
-        }
-      }
-      
-      // rjf: good src id -> push to relevant dbgi keys
-      if(good_src_id)
-      {
-        di_key_list_push(arena, &src2dasm_array.dbgi_keys, &key);
-      }
-    }
-  }
-  di_scope_close(scope);
-  scratch_end(scratch);
-  return src2dasm_array;
-}
-
-//- rjf: voff -> src lookups
-
-internal DF_TextLineDasm2SrcInfo
-df_text_line_dasm2src_info_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff, U64 inline_unwind_idx)
-{
-  Temp scratch = scratch_begin(0, 0);
-  DI_Scope *scope = di_scope_open();
-  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
-  DF_TextLineDasm2SrcInfo result = {0};
-  result.file = &df_g_nil_entity;
-  {
-    RDI_Unit *unit = rdi_unit_from_voff(rdi, voff);
-    RDI_LineTable *unit_line_table = rdi_line_table_from_unit(rdi, unit);
-    typedef struct LineTableNode LineTableNode;
-    struct LineTableNode
-    {
-      LineTableNode *next;
-      RDI_ParsedLineTable parsed_line_table;
-    };
-    LineTableNode start_line_table = {0};
-    rdi_parsed_from_line_table(rdi, unit_line_table, &start_line_table.parsed_line_table);
-    LineTableNode *top_line_table = &start_line_table;
-    RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
-    {
-      U64 idx = 0;
-      for(RDI_Scope *s = scope;
-          s->inline_site_idx != 0 && idx <= inline_unwind_idx;
-          s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx), idx += 1)
-      {
-        if(idx == inline_unwind_idx)
-        {
-          RDI_InlineSite *inline_site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
-          if(inline_site->line_table_idx != 0)
-          {
-            LineTableNode *n = push_array(scratch.arena, LineTableNode, 1);
-            SLLStackPush(top_line_table, n);
-            RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, inline_site->line_table_idx);
-            rdi_parsed_from_line_table(rdi, line_table, &n->parsed_line_table);
-          }
-          break;
-        }
-      }
-    }
-    for(LineTableNode *n = top_line_table; n == top_line_table; n = n->next)
-    {
-      RDI_ParsedLineTable parsed_line_table = n->parsed_line_table;
-      U64 line_info_idx = rdi_line_info_idx_from_voff(&parsed_line_table, voff);
-      if(line_info_idx < parsed_line_table.count)
-      {
-        RDI_Line *line = &parsed_line_table.lines[line_info_idx];
-        RDI_Column *column = (line_info_idx < parsed_line_table.col_count) ? &parsed_line_table.cols[line_info_idx] : 0;
-        RDI_SourceFile *file = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
-        String8 file_normalized_full_path = {0};
-        file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
-        MemoryCopyStruct(&result.dbgi_key, dbgi_key);
-        if(line->file_idx != 0 && file_normalized_full_path.size != 0)
-        {
-          result.file = df_entity_from_path(file_normalized_full_path, DF_EntityFromPathFlag_All);
-        }
-        result.pt = txt_pt(line->line_num, column ? column->col_first : 1);
-        result.voff_range = r1u64(parsed_line_table.voffs[line_info_idx], parsed_line_table.voffs[line_info_idx+1]);
-      }
-    }
-    for(LineTableNode *n = top_line_table->next; n != 0; n = n->next)
-    {
-      RDI_ParsedLineTable parsed_line_table = n->parsed_line_table;
-      U64 line_info_idx = rdi_line_info_idx_from_voff(&parsed_line_table, voff);
-      if(line_info_idx < parsed_line_table.count)
-      {
-        Rng1U64 voff_range = r1u64(parsed_line_table.voffs[line_info_idx], parsed_line_table.voffs[line_info_idx+1]);
-        result.voff_range = intersect_1u64(result.voff_range, voff_range);
-      }
-    }
-  }
-  di_scope_close(scope);
-  scratch_end(scratch);
-  return result;
-}
-
 //- rjf: symbol -> voff lookups
 
 internal U64
@@ -3547,6 +3389,298 @@ df_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name)
   di_scope_close(scope);
   ProfEnd();
   return result;
+}
+
+//- rjf: voff -> line info
+
+internal DF_LineList
+df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DI_Scope *scope = di_scope_open();
+  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+  DF_LineList result = {0};
+  {
+    //- rjf: gather line tables
+    typedef struct LineTableNode LineTableNode;
+    struct LineTableNode
+    {
+      LineTableNode *next;
+      RDI_ParsedLineTable parsed_line_table;
+    };
+    LineTableNode start_line_table = {0};
+    RDI_Unit *unit = rdi_unit_from_voff(rdi, voff);
+    RDI_LineTable *unit_line_table = rdi_line_table_from_unit(rdi, unit);
+    rdi_parsed_from_line_table(rdi, unit_line_table, &start_line_table.parsed_line_table);
+    LineTableNode *top_line_table = &start_line_table;
+    RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
+    {
+      for(RDI_Scope *s = scope;
+          s->inline_site_idx != 0;
+          s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
+      {
+        RDI_InlineSite *inline_site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
+        if(inline_site->line_table_idx != 0)
+        {
+          LineTableNode *n = push_array(scratch.arena, LineTableNode, 1);
+          SLLStackPush(top_line_table, n);
+          RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, inline_site->line_table_idx);
+          rdi_parsed_from_line_table(rdi, line_table, &n->parsed_line_table);
+        }
+      }
+    }
+    
+    //- rjf: gather lines in each line table
+    Rng1U64 shallowest_voff_range = {0};
+    for(LineTableNode *n = top_line_table; n != 0; n = n->next)
+    {
+      RDI_ParsedLineTable parsed_line_table = n->parsed_line_table;
+      U64 line_info_idx = rdi_line_info_idx_from_voff(&parsed_line_table, voff);
+      if(line_info_idx < parsed_line_table.count)
+      {
+        RDI_Line *line = &parsed_line_table.lines[line_info_idx];
+        RDI_Column *column = (line_info_idx < parsed_line_table.col_count) ? &parsed_line_table.cols[line_info_idx] : 0;
+        RDI_SourceFile *file = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
+        String8 file_normalized_full_path = {0};
+        file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
+        DF_LineNode *n = push_array(arena, DF_LineNode, 1);
+        SLLQueuePush(result.first, result.last, n);
+        result.count += 1;
+        if(line->file_idx != 0 && file_normalized_full_path.size != 0)
+        {
+          n->v.file = df_handle_from_entity(df_entity_from_path(file_normalized_full_path, DF_EntityFromPathFlag_All));
+        }
+        n->v.pt = txt_pt(line->line_num, column ? column->col_first : 1);
+        n->v.voff_range = r1u64(parsed_line_table.voffs[line_info_idx], parsed_line_table.voffs[line_info_idx+1]);
+        n->v.dbgi_key = *dbgi_key;
+        shallowest_voff_range = n->v.voff_range;
+      }
+    }
+    
+    //- rjf: clamp all lines from all tables by shallowest (most unwound) range
+    for(DF_LineNode *n = result.first; n != 0; n = n->next)
+    {
+      n->v.voff_range = intersect_1u64(n->v.voff_range, shallowest_voff_range);
+    }
+  }
+  di_scope_close(scope);
+  scratch_end(scratch);
+  return result;
+}
+
+//- rjf: file:line -> line info
+
+internal DF_LineListArray
+df_lines_array_from_file_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range)
+{
+  DF_LineListArray array = {0};
+  {
+    array.count = dim_1s64(line_num_range)+1;
+    array.v = push_array(arena, DF_LineList, array.count);
+  }
+  Temp scratch = scratch_begin(&arena, 1);
+  DI_Scope *scope = di_scope_open();
+  DI_KeyList dbgi_keys = df_push_active_dbgi_key_list(scratch.arena);
+  DF_EntityList overrides = df_possible_overrides_from_entity(scratch.arena, file);
+  for(DF_EntityNode *override_n = overrides.first;
+      override_n != 0;
+      override_n = override_n->next)
+  {
+    DF_Entity *override = override_n->entity;
+    String8 file_path = df_full_path_from_entity(scratch.arena, override);
+    String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
+    for(DI_KeyNode *dbgi_key_n = dbgi_keys.first;
+        dbgi_key_n != 0;
+        dbgi_key_n = dbgi_key_n->next)
+    {
+      // rjf: binary -> rdi
+      DI_Key key = dbgi_key_n->v;
+      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 0);
+      
+      // rjf: file_path_normalized * rdi -> src_id
+      B32 good_src_id = 0;
+      U32 src_id = 0;
+      if(rdi != &di_rdi_parsed_nil)
+      {
+        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+        RDI_ParsedNameMap map = {0};
+        rdi_parsed_from_name_map(rdi, mapptr, &map);
+        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
+        if(node != 0)
+        {
+          U32 id_count = 0;
+          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+          if(id_count > 0)
+          {
+            good_src_id = 1;
+            src_id = ids[0];
+          }
+        }
+      }
+      
+      // rjf: good src-id -> look up line info for visible range
+      if(good_src_id)
+      {
+        RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+        RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
+        RDI_ParsedSourceLineMap line_map = {0};
+        rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
+        U64 line_idx = 0;
+        for(S64 line_num = line_num_range.min;
+            line_num <= line_num_range.max;
+            line_num += 1, line_idx += 1)
+        {
+          DF_LineList *list = &array.v[line_idx];
+          U32 voff_count = 0;
+          U64 *voffs = rdi_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
+          for(U64 idx = 0; idx < voff_count; idx += 1)
+          {
+            U64 base_voff = voffs[idx];
+            U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
+            RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+            RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
+            RDI_ParsedLineTable unit_line_info = {0};
+            rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
+            U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
+            if(unit_line_info.voffs != 0)
+            {
+              Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
+              S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;
+              DF_LineNode *n = push_array(arena, DF_LineNode, 1);
+              n->v.voff_range = range;
+              n->v.pt.line = (S64)actual_line;
+              n->v.pt.column = 1;
+              n->v.dbgi_key = key;
+              SLLQueuePush(list->first, list->last, n);
+              list->count += 1;
+            }
+          }
+        }
+      }
+      
+      // rjf: good src id -> push to relevant dbgi keys
+      if(good_src_id)
+      {
+        di_key_list_push(arena, &array.dbgi_keys, &key);
+      }
+    }
+  }
+  di_scope_close(scope);
+  scratch_end(scratch);
+  return array;
+}
+
+internal DF_LineList
+df_lines_from_file_line_num(Arena *arena, DF_Entity *file, S64 line_num)
+{
+  DF_LineListArray array = df_lines_array_from_file_line_range(arena, file, r1s64(line_num, line_num+1));
+  DF_LineList list = {0};
+  if(array.count != 0)
+  {
+    list = array.v[0];
+  }
+  return list;
+}
+
+//- rjf: src -> voff lookups
+
+internal DF_TextLineSrc2DasmInfoListArray
+df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range)
+{
+  DF_TextLineSrc2DasmInfoListArray src2dasm_array = {0};
+  {
+    src2dasm_array.count = dim_1s64(line_num_range)+1;
+    src2dasm_array.v = push_array(arena, DF_TextLineSrc2DasmInfoList, src2dasm_array.count);
+  }
+  Temp scratch = scratch_begin(&arena, 1);
+  DI_Scope *scope = di_scope_open();
+  DI_KeyList dbgi_keys = df_push_active_dbgi_key_list(scratch.arena);
+  DF_EntityList overrides = df_possible_overrides_from_entity(scratch.arena, file);
+  for(DF_EntityNode *override_n = overrides.first;
+      override_n != 0;
+      override_n = override_n->next)
+  {
+    DF_Entity *override = override_n->entity;
+    String8 file_path = df_full_path_from_entity(scratch.arena, override);
+    String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
+    for(DI_KeyNode *dbgi_key_n = dbgi_keys.first;
+        dbgi_key_n != 0;
+        dbgi_key_n = dbgi_key_n->next)
+    {
+      // rjf: binary -> rdi
+      DI_Key key = dbgi_key_n->v;
+      RDI_Parsed *rdi = di_rdi_from_key(scope, &key, 0);
+      
+      // rjf: file_path_normalized * rdi -> src_id
+      B32 good_src_id = 0;
+      U32 src_id = 0;
+      if(rdi != &di_rdi_parsed_nil)
+      {
+        RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+        RDI_ParsedNameMap map = {0};
+        rdi_parsed_from_name_map(rdi, mapptr, &map);
+        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
+        if(node != 0)
+        {
+          U32 id_count = 0;
+          U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+          if(id_count > 0)
+          {
+            good_src_id = 1;
+            src_id = ids[0];
+          }
+        }
+      }
+      
+      // rjf: good src-id -> look up line info for visible range
+      if(good_src_id)
+      {
+        RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+        RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
+        RDI_ParsedSourceLineMap line_map = {0};
+        rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
+        U64 line_idx = 0;
+        for(S64 line_num = line_num_range.min;
+            line_num <= line_num_range.max;
+            line_num += 1, line_idx += 1)
+        {
+          DF_TextLineSrc2DasmInfoList *src2dasm_list = &src2dasm_array.v[line_idx];
+          U32 voff_count = 0;
+          U64 *voffs = rdi_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
+          for(U64 idx = 0; idx < voff_count; idx += 1)
+          {
+            U64 base_voff = voffs[idx];
+            U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
+            RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+            RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
+            RDI_ParsedLineTable unit_line_info = {0};
+            rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
+            U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
+            if(unit_line_info.voffs != 0)
+            {
+              Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
+              S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;
+              DF_TextLineSrc2DasmInfoNode *src2dasm_n = push_array(arena, DF_TextLineSrc2DasmInfoNode, 1);
+              src2dasm_n->v.voff_range = range;
+              src2dasm_n->v.remap_line = (S64)actual_line;
+              src2dasm_n->v.dbgi_key = key;
+              SLLQueuePush(src2dasm_list->first, src2dasm_list->last, src2dasm_n);
+              src2dasm_list->count += 1;
+            }
+          }
+        }
+      }
+      
+      // rjf: good src id -> push to relevant dbgi keys
+      if(good_src_id)
+      {
+        di_key_list_push(arena, &src2dasm_array.dbgi_keys, &key);
+      }
+    }
+  }
+  di_scope_close(scope);
+  scratch_end(scratch);
+  return src2dasm_array;
 }
 
 ////////////////////////////////
@@ -6886,7 +7020,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_Entity *module = df_module_from_process_vaddr(process, stop_thread_vaddr);
             DI_Key dbgi_key = df_dbgi_key_from_module(module);
             U64 stop_thread_voff = df_voff_from_vaddr(module, stop_thread_vaddr);
-            DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, stop_thread_voff, 0);
             DF_EntityList user_bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
             for(DF_EntityNode *n = user_bps.first; n != 0; n = n->next)
             {
@@ -6898,9 +7031,14 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               if(bp->flags & DF_EntityFlag_HasTextPoint)
               {
                 DF_Entity *bp_file = df_entity_ancestor_from_kind(bp, DF_EntityKind_File);
-                if(bp_file == dasm2src_info.file && bp->text_point.line == dasm2src_info.pt.line)
+                DF_LineList lines = df_lines_from_file_line_num(scratch.arena, bp_file, bp_file->text_point.line);
+                for(DF_LineNode *n = lines.first; n != 0; n = n->next)
                 {
-                  bp->u64 += 1;
+                  if(contains_1u64(n->v.voff_range, stop_thread_voff))
+                  {
+                    bp->u64 += 1;
+                    break;
+                  }
                 }
               }
             }
@@ -7631,6 +7769,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           DF_Entity *bp = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Breakpoint);
           bp->flags |= DF_EntityFlag_DiesOnRunStop;
+          df_entity_equip_b32(bp, 1);
           df_entity_equip_vaddr(bp, params.vaddr);
           df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
           DF_CmdParams p = df_cmd_params_zero();

@@ -387,7 +387,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 }
 
 internal void
-df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info)
+df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info, DF_CodeCtx *code_ctx)
 {
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -499,7 +499,7 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
 }
 
 internal void
-df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info)
+df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info, DF_CodeCtx *code_ctx)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -603,8 +603,8 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, visible_line_count);
-    code_slice_params.line_dasm2src             = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, visible_line_count);
-    code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
+    code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
+    code_slice_params.line_infos                = push_array(scratch.arena, DF_LineList, visible_line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
     code_slice_params.tab_size                  = code_tab_size;
@@ -626,6 +626,73 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         code_slice_params.line_ranges[visible_line_idx] = info->lines_ranges[line_idx];
         code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
       }
+    }
+    
+    // rjf: find visible breakpoints
+    ProfScope("find visible breakpoints")
+    {
+      for(DF_Entity *bp = code_ctx->file->first; !df_entity_is_nil(bp); bp = bp->next)
+      {
+        if(bp->deleted || bp->kind != DF_EntityKind_Breakpoint) { continue; }
+        if(visible_line_num_range.min <= bp->text_point.line && bp->text_point.line <= visible_line_num_range.max)
+        {
+          U64 slice_line_idx = (bp->text_point.line-visible_line_num_range.min);
+          df_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+        }
+      }
+    }
+    
+    // rjf: find live threads mapping to this file
+    ProfScope("find live threads mapping to this file")
+    {
+      DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
+      DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
+      for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
+      {
+        DF_Entity *thread = thread_n->entity;
+        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+        U64 base_unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
+        U64 inline_unwind_count = (thread == selected_thread) ? ctrl_ctx.inline_unwind_count : 0;
+        U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+        U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
+        DF_Entity *module = df_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
+        U64 rip_voff = df_voff_from_vaddr(module, last_inst_on_unwound_rip_vaddr);
+        DI_Key dbgi_key = df_dbgi_key_from_module(module);
+        DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+        for(DF_LineNode *n = lines.first; n != 0; n = n->next)
+        {
+          if(df_entity_from_handle(n->v.file) == code_ctx->file && visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
+          {
+            U64 slice_line_idx = lines.first->v.pt.line-visible_line_num_range.min;
+            df_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
+          }
+        }
+      }
+    }
+    
+    // rjf: find visible watch pins
+    ProfScope("find visible watch pins")
+    {
+      for(DF_Entity *wp = code_ctx->file->first; !df_entity_is_nil(wp); wp = wp->next)
+      {
+        if(wp->deleted || wp->kind != DF_EntityKind_WatchPin) { continue; }
+        if(visible_line_num_range.min <= wp->text_point.line && wp->text_point.line <= visible_line_num_range.max)
+        {
+          U64 slice_line_idx = (wp->text_point.line-visible_line_num_range.min);
+          df_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
+        }
+      }
+    }
+    
+    // rjf: find all src -> dasm info
+    ProfScope("find all src -> dasm info")
+    {
+      DF_LineListArray lines_array = df_lines_array_from_file_line_range(scratch.arena, code_ctx->file, visible_line_num_range);
+      if(lines_array.count != 0)
+      {
+        MemoryCopy(code_slice_params.line_infos, lines_array.v, sizeof(DF_LineList)*lines_array.count);
+      }
+      code_slice_params.relevant_dbgi_keys = lines_array.dbgi_keys;
     }
   }
   
@@ -819,7 +886,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     DF_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &cv->cursor, &cv->mark, &cv->preferred_column, "txt_view_%p", view);
+      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, code_ctx, &code_slice_params, &cv->cursor, &cv->mark, &cv->preferred_column, "txt_view_%p", view);
     }
     
     //- rjf: press code slice? -> focus panel
@@ -852,13 +919,6 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
     }
     
-    //- rjf: copy text
-    if(!txt_pt_match(sig.copy_range.min, sig.copy_range.max))
-    {
-      String8 text = txt_string_from_info_data_txt_rng(info, data, sig.copy_range);
-      os_set_clipboard_text(text);
-    }
-    
     //- rjf: selected text on single line, no query? -> set search text
     if(!txt_pt_match(cv->cursor, cv->mark) && cv->cursor.line == cv->mark.line && search_query.size == 0)
     {
@@ -866,22 +926,9 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       df_set_search_string(text);
     }
     
-    //- rjf: toggle cursor watch
-    if(sig.toggle_cursor_watch)
-    {
-      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpressionAtCursor));
-    }
-    
-    //- rjf: set next statement
-    if(sig.set_next_statement_line_num != 0 && contains_1s64(visible_line_num_range, sig.set_next_statement_line_num))
-    {
-      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      params.text_point = txt_pt(sig.set_next_statement_line_num, 1);
-      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetNextStatement));
-    }
-    
     //- rjf: go to disasm
+    // TODO(rjf): @src_collapse
+#if 0
     if(sig.goto_disasm_line_num != 0 && contains_1s64(visible_line_num_range, sig.goto_disasm_line_num))
     {
       U64 line_idx = (sig.goto_disasm_line_num-visible_line_num_range.min);
@@ -911,6 +958,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         }
       }
     }
+#endif
   }
   
   //////////////////////////////
@@ -1038,6 +1086,29 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     }
     ui_scroll_pt_clamp_idx(&view->scroll_pos.x, scroll_idx_rng[Axis2_X]);
     ui_scroll_pt_clamp_idx(&view->scroll_pos.y, scroll_idx_rng[Axis2_Y]);
+    if(ui_mouse_over(sig))
+    {
+      UI_EventList *events = ui_events();
+      for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+      {
+        next = n->next;
+        UI_Event *event = &n->v;
+        if(event->kind == UI_EventKind_Scroll && event->modifiers & OS_EventFlag_Ctrl)
+        {
+          ui_eat_event(events, n);
+          if(event->delta_2f32.y < 0)
+          {
+            DF_CmdParams params = df_cmd_params_from_window(ws);
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncCodeFontScale));
+          }
+          else if(event->delta_2f32.y > 0)
+          {
+            DF_CmdParams params = df_cmd_params_from_window(ws);
+            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecCodeFontScale));
+          }
+        }
+      }
+    }
   }
   
   txt_scope_close(txt_scope);
@@ -4076,15 +4147,15 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
-        U64 binary_voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, name);
-        DF_TextLineDasm2SrcInfo dasm2src_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, binary_voff, 0);
-        String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src_info.file);
-        S64 line_num = dasm2src_info.pt.line;
         df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
         UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           ui_labelf("Procedure #%I64u", item->idx);
-        if(!df_entity_is_nil(dasm2src_info.file))
+        U64 binary_voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, name);
+        DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, binary_voff);
+        if(lines.first != 0)
         {
+          String8 file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
+          S64 line_num = lines.first->v.pt.line;
           UI_Font(df_font_from_slot(DF_FontSlot_Main)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             ui_labelf("%S:%I64d", file_path, line_num);
         }
@@ -5460,10 +5531,14 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
               DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
               U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
               DI_Key dbgi_key = df_dbgi_key_from_module(module);
-              DF_TextLineDasm2SrcInfo line_info = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, rip_voff, 0);
-              if(!df_entity_is_nil(line_info.file))
+              DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+              if(lines.first != 0)
               {
-                UI_PrefWidth(ui_children_sum(0)) df_entity_src_loc_button(ws, line_info.file, line_info.pt);
+                DF_Entity *file = df_entity_from_handle(lines.first->v.file);
+                if(!df_entity_is_nil(file))
+                {
+                  UI_PrefWidth(ui_children_sum(0)) df_entity_src_loc_button(ws, file, lines.first->v.pt);
+                }
               }
             }
           }break;
@@ -6191,7 +6266,7 @@ DF_VIEW_UI_FUNCTION_DEF(PendingEntity)
 ////////////////////////////////
 //~ rjf: Code @view_hook_impl
 
-#if 0
+#if 1
 DF_VIEW_SETUP_FUNCTION_DEF(Code)
 {
   // rjf: set up state
@@ -6229,13 +6304,15 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
-  String8 path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(view->entity));
+  DF_Entity *entity = df_entity_from_handle(view->entity);
+  String8 path = df_full_path_from_entity(scratch.arena, entity);
   TXT_LangKind lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 key = fs_key_from_path(path);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info);
+  DF_CodeCtx code_ctx = {entity, key, lang_kind};
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, &code_ctx);
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -6321,7 +6398,8 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   if(!entity_is_missing && key_has_data)
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info);
+    DF_CodeCtx code_ctx = {entity, key, lang_kind};
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, &code_ctx);
   }
   
   //////////////////////////////
@@ -6377,9 +6455,9 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
 }
 #endif
 
-//~ TODO(rjf): OLD vvvvvvvv
+//~ TODO(rjf): OLD vvvvvvvv @src_collapse
 
-#if 1
+#if 0
 DF_VIEW_SETUP_FUNCTION_DEF(Code)
 {
   // rjf: set up state
@@ -6744,6 +6822,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, visible_line_count);
+    code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
     code_slice_params.line_dasm2src             = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, visible_line_count);
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
     code_slice_params.font                      = code_font;
@@ -7761,8 +7840,9 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     dasm_params.dbgi_key = dasm_dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
+  TXT_LangKind lang_kind = txt_lang_kind_from_architecture(arch);
   U128 dasm_text_hash = {0};
-  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, txt_lang_kind_from_architecture(arch), &dasm_text_hash);
+  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   B32 has_disasm = (dasm_info.insts.count != 0 && dasm_text_info.lines_count != 0);
   B32 is_loading = (!has_disasm && !df_entity_is_nil(process) && dim_1u64(dasm_vaddr_range) != 0);
@@ -7846,8 +7926,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
     code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, visible_line_count);
-    code_slice_params.line_dasm2src             = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, visible_line_count);
-    code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
+    code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
+    code_slice_params.line_infos                = push_array(scratch.arena, DF_LineList, visible_line_count);
     code_slice_params.font                      = code_font;
     code_slice_params.font_size                 = code_font_size;
     code_slice_params.tab_size                  = code_tab_size;
@@ -7858,7 +7938,6 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    
     di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, &dbgi_key);
     
     // rjf: fill text info
@@ -7947,10 +8026,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
         U64 vaddr = dasm_vaddr_range.min + dasm_inst_array_code_off_from_idx(&dasm_info.insts, line_num-1);
         U64 voff = df_voff_from_vaddr(module, vaddr);
         U64 slice_idx = line_num-visible_line_num_range.min;
-        DF_TextLineDasm2SrcInfoNode *dasm2src_n = push_array(scratch.arena, DF_TextLineDasm2SrcInfoNode, 1);
-        SLLQueuePush(code_slice_params.line_dasm2src[slice_idx].first, code_slice_params.line_dasm2src[slice_idx].last, dasm2src_n);
-        code_slice_params.line_dasm2src[slice_idx].count += 1;
-        dasm2src_n->v = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, voff, 0);
+        code_slice_params.line_vaddrs[slice_idx] = vaddr;
+        code_slice_params.line_infos[slice_idx] = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
       }
     }
   }
@@ -8010,7 +8087,8 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     DF_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &dv->cursor, &dv->mark, &dv->preferred_column, "dasm_slice_%p", view);
+      DF_CodeCtx code_ctx = {&df_g_nil_entity, dasm_info.text_key, lang_kind};
+      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_ctx, &code_slice_params, &dv->cursor, &dv->mark, &dv->preferred_column, "dasm_slice_%p", view);
     }
     
     //- rjf: hover eval
@@ -8129,14 +8207,17 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
       DI_Key dbgi_key = df_dbgi_key_from_module(module);
       U64 voff = df_voff_from_vaddr(module, vaddr);
-      DF_TextLineDasm2SrcInfo dasm2src = df_text_line_dasm2src_info_from_dbgi_key_voff(&dbgi_key, voff, 0);
-      String8 file_path = df_full_path_from_entity(scratch.arena, dasm2src.file);
-      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      params.text_point = dasm2src.pt;
-      params.file_path = file_path;
-      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
-      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
-      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+      DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
+      if(lines.first != 0)
+      {
+        String8 file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
+        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+        params.text_point = lines.first->v.pt;
+        params.file_path = file_path;
+        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
+        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+      }
     }
   }
   
@@ -8485,6 +8566,103 @@ DF_VIEW_UI_FUNCTION_DEF(Procedures)
 ////////////////////////////////
 //~ rjf: Output @view_hook_impl
 
+#if 1
+DF_VIEW_SETUP_FUNCTION_DEF(Output)
+{
+  DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
+  df_code_view_init(cv, view);
+}
+
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Output)
+{
+  return str8_zero();
+}
+
+DF_VIEW_CMD_FUNCTION_DEF(Output)
+{
+  DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
+  Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
+  U128 key = df_state->output_log_key;
+  TXT_LangKind lang_kind = TXT_LangKind_Null;
+  U128 hash = {0};
+  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  String8 data = hs_data_from_hash(hs_scope, hash);
+  DF_CodeCtx code_ctx = {&df_g_nil_entity, key, lang_kind};
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, &code_ctx);
+  txt_scope_close(txt_scope);
+  hs_scope_close(hs_scope);
+  scratch_end(scratch);
+}
+
+DF_VIEW_UI_FUNCTION_DEF(Output)
+{
+  DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
+  Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
+  
+  //////////////////////////////
+  //- rjf: set up invariants
+  //
+  F32 bottom_bar_height = ui_top_font_size()*2.f;
+  Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
+  Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
+  
+  //////////////////////////////
+  //- rjf: unpack text info
+  //
+  U128 key = df_state->output_log_key;
+  TXT_LangKind lang_kind = TXT_LangKind_Null;
+  U128 hash = {0};
+  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  String8 data = hs_data_from_hash(hs_scope, hash);
+  Rng1U64 empty_range = {0};
+  if(info.lines_count == 0)
+  {
+    info.lines_count = 1;
+    info.lines_ranges = &empty_range;
+  }
+  
+  //////////////////////////////
+  //- rjf: build code contents
+  //
+  {
+    DF_CodeCtx code_ctx = {&df_g_nil_entity, key, lang_kind};
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, &code_ctx);
+  }
+  
+  //////////////////////////////
+  //- rjf: build bottom bar
+  //
+  {
+    ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
+    ui_set_next_flags(UI_BoxFlag_DrawBackground);
+    UI_Row
+      UI_TextAlignment(UI_TextAlign_Center)
+      UI_PrefWidth(ui_text_dim(10, 1))
+      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+    {
+      UI_Font(df_font_from_slot(DF_FontSlot_Code))
+      {
+        ui_labelf("(Debug String Output)");
+        ui_spacer(ui_em(1.5f, 1));
+        ui_labelf("Line: %I64d, Column: %I64d", cv->cursor.line, cv->cursor.column);
+        ui_spacer(ui_pct(1, 0));
+        ui_labelf("(read only)");
+      }
+    }
+  }
+  
+  txt_scope_close(txt_scope);
+  hs_scope_close(hs_scope);
+  scratch_end(scratch);
+}
+#endif
+
+//~ TODO(rjf): OLD vvvvvvvvvvvvvvvvvvvv @src_collapse
+#if 0
 DF_VIEW_SETUP_FUNCTION_DEF(Output)
 {
   // rjf: set up state
@@ -8692,6 +8870,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, slice.line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, slice.line_count);
     code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, slice.line_count);
+    code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
     code_slice_params.line_dasm2src             = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, slice.line_count);
     code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, slice.line_count);
     code_slice_params.font                      = code_font;
@@ -9097,6 +9276,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   scratch_end(scratch);
   ProfEnd();
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Memory @view_hook_impl
