@@ -370,6 +370,718 @@ df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray 
 }
 
 ////////////////////////////////
+//~ rjf: Code Views
+
+internal void
+df_code_view_init(DF_CodeViewState *cv, DF_View *view)
+{
+  if(cv->initialized == 0)
+  {
+    cv->initialized = 1;
+    cv->cursor = cv->mark = txt_pt(1, 1);
+    cv->preferred_column = 1;
+    cv->find_text_arena = df_view_push_arena_ext(view);
+  }
+  df_view_equip_loading_info(view, 1, 0, 0);
+  view->loading_t = view->loading_t_target = 1.f;
+}
+
+internal void
+df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, U128 key, TXT_LangKind lang_kind)
+{
+  for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
+  {
+    DF_Cmd *cmd = &n->cmd;
+    
+    // rjf: mismatched window/panel => skip
+    if(df_window_from_handle(cmd->params.window) != ws ||
+       df_panel_from_handle(cmd->params.panel) != panel)
+    {
+      continue;
+    }
+    
+    // rjf: process
+    DF_CoreCmdKind core_cmd_kind = df_core_cmd_kind_from_string(cmd->spec->info.string);
+    switch(core_cmd_kind)
+    {
+      default: break;
+      case DF_CoreCmdKind_GoToLine:
+      {
+        cv->goto_line_num = cmd->params.text_point.line;
+      }break;
+      case DF_CoreCmdKind_CenterCursor:
+      {
+        cv->center_cursor = 1;
+      }break;
+      case DF_CoreCmdKind_ContainCursor:
+      {
+        cv->contain_cursor = 1;
+      }break;
+      case DF_CoreCmdKind_FindTextForward:
+      {
+        arena_clear(cv->find_text_arena);
+        cv->find_text_fwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
+      }break;
+      case DF_CoreCmdKind_FindTextBackward:
+      {
+        arena_clear(cv->find_text_arena);
+        cv->find_text_bwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
+      }break;
+      case DF_CoreCmdKind_GoToNameAtCursor:
+      {
+        Temp scratch = scratch_begin(0, 0);
+        TXT_Scope *txt_scope = txt_scope_open();
+        HS_Scope *hs_scope = hs_scope_open();
+        {
+          // rjf: unpack entity info
+          U128 hash = {0};
+          TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          
+          // rjf: determine expression range
+          Rng1U64 expr_range = {0};
+          {
+            TxtRng selection_range = txt_rng(cv->cursor, cv->mark);
+            if(txt_pt_match(selection_range.min, selection_range.max))
+            {
+              expr_range = txt_expr_off_range_from_info_data_pt(&text_info, data, cv->cursor);
+            }
+            else
+            {
+              expr_range = r1u64(txt_off_from_info_pt(&text_info, selection_range.min), txt_off_from_info_pt(&text_info, selection_range.max));
+            }
+          }
+          
+          // rjf: expression range -> text
+          String8 expr_text = str8_substr(data, expr_range);
+          
+          // rjf: go to name
+          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+          params.string = expr_text;
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
+        }
+        hs_scope_close(hs_scope);
+        txt_scope_close(txt_scope);
+        scratch_end(scratch);
+      }break;
+      case DF_CoreCmdKind_ToggleWatchExpressionAtCursor:
+      {
+        Temp scratch = scratch_begin(0, 0);
+        TXT_Scope *txt_scope = txt_scope_open();
+        HS_Scope *hs_scope = hs_scope_open();
+        {
+          // rjf: unpack entity info
+          U128 hash = {0};
+          TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+          String8 data = hs_data_from_hash(hs_scope, hash);
+          
+          // rjf: determine expression range
+          Rng1U64 expr_range = {0};
+          {
+            TxtRng selection_range = txt_rng(cv->cursor, cv->mark);
+            if(txt_pt_match(selection_range.min, selection_range.max))
+            {
+              expr_range = txt_expr_off_range_from_info_data_pt(&text_info, data, cv->cursor);
+            }
+            else
+            {
+              expr_range = r1u64(txt_off_from_info_pt(&text_info, selection_range.min), txt_off_from_info_pt(&text_info, selection_range.max));
+            }
+          }
+          
+          // rjf: expression range -> text
+          String8 expr_text = str8_substr(data, expr_range);
+          
+          // rjf: toggle watch expr
+          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+          params.string = expr_text;
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
+          scratch_end(scratch);
+        }
+        hs_scope_close(hs_scope);
+        txt_scope_close(txt_scope);
+        scratch_end(scratch);
+      }break;
+    }
+  }
+}
+
+internal void
+df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, U128 key, TXT_LangKind lang_kind)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
+  DI_Scope *di_scope = di_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
+  
+  //////////////////////////////
+  //- rjf: extract invariants
+  //
+  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
+  F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
+  F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
+  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*df_setting_val_from_code(DF_SettingCode_TabWidth).s32;
+  F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
+  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
+  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
+  Vec2F32 panel_box_dim = dim_2f32(rect);
+  Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_em(1.8f, 0).value};
+  F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
+  Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim - bottom_bar_dim.y);
+  S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
+  
+  //////////////////////////////
+  //- rjf: unpack ctrl ctx & make parse ctx
+  //
+  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+  U64 unwind_count = ctrl_ctx.unwind_count;
+  U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, process, rip_vaddr);
+  
+  //////////////////////////////
+  //- rjf: unpack text info
+  //
+  U128 hash = {0};
+  TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  String8 data = hs_data_from_hash(hs_scope, hash);
+  B32 text_info_is_ready = (text_info.lines_count != 0);
+  
+  //////////////////////////////
+  //- rjf: buffer is pending -> equip view with loading information
+  //
+  if(!text_info_is_ready)
+  {
+    df_view_equip_loading_info(view, 1, text_info.bytes_processed, text_info.bytes_to_process);
+  }
+  
+  //////////////////////////////
+  //- rjf: determine visible line range / count
+  //
+  Rng1S64 visible_line_num_range = r1s64(view->scroll_pos.y.idx + (S64)(view->scroll_pos.y.off) + 1 - !!(view->scroll_pos.y.off < 0),
+                                         view->scroll_pos.y.idx + (S64)(view->scroll_pos.y.off) + 1 + num_possible_visible_lines);
+  Rng1S64 target_visible_line_num_range = r1s64(view->scroll_pos.y.idx + 1,
+                                                view->scroll_pos.y.idx + 1 + num_possible_visible_lines);
+  U64 visible_line_count = 0;
+  {
+    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)text_info.lines_count);
+    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)text_info.lines_count);
+    visible_line_num_range.min = Max(1, visible_line_num_range.min);
+    visible_line_num_range.max = Max(1, visible_line_num_range.max);
+    target_visible_line_num_range.min = Clamp(1, target_visible_line_num_range.min, (S64)text_info.lines_count);
+    target_visible_line_num_range.max = Clamp(1, target_visible_line_num_range.max, (S64)text_info.lines_count);
+    target_visible_line_num_range.min = Max(1, target_visible_line_num_range.min);
+    target_visible_line_num_range.max = Max(1, target_visible_line_num_range.max);
+    visible_line_count = (U64)dim_1s64(visible_line_num_range)+1;
+  }
+  
+  //////////////////////////////
+  //- rjf: calculate scroll bounds
+  //
+  S64 line_size_x = 0;
+  Rng1S64 scroll_idx_rng[Axis2_COUNT] = {0};
+  {
+    line_size_x = (text_info.lines_max_size*big_glyph_advance*3)/2;
+    line_size_x = ClampBot(line_size_x, (S64)big_glyph_advance*120);
+    line_size_x = ClampBot(line_size_x, (S64)code_area_dim.x);
+    scroll_idx_rng[Axis2_X] = r1s64(0, line_size_x-(S64)code_area_dim.x);
+    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)text_info.lines_count-1);
+  }
+  
+  //////////////////////////////
+  //- rjf: calculate line-range-dependent info
+  //
+  F32 priority_margin_width_px = big_glyph_advance*3.5f;
+  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
+  F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
+  TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &text_info, data, visible_line_num_range);
+  
+  //////////////////////////////
+  //- rjf: get active search query
+  //
+  String8 search_query = {0};
+  Side search_query_side = Side_Invalid;
+  B32 search_query_is_active = 0;
+  {
+    DF_CoreCmdKind query_cmd_kind = df_core_cmd_kind_from_string(ws->query_cmd_spec->info.string);
+    if(query_cmd_kind == DF_CoreCmdKind_FindTextForward ||
+       query_cmd_kind == DF_CoreCmdKind_FindTextBackward)
+    {
+      search_query = str8(ws->query_view_stack_top->query_buffer, ws->query_view_stack_top->query_string_size);
+      search_query_is_active = 1;
+      search_query_side = (query_cmd_kind == DF_CoreCmdKind_FindTextForward) ? Side_Max : Side_Min;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: prepare code slice info bundle, for the viewable region of text
+  //
+  DF_CodeSliceParams code_slice_params = {0};
+  if(text_info_is_ready)
+  {
+    // rjf: fill basics
+    code_slice_params.flags                     = DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
+    code_slice_params.line_num_range            = visible_line_num_range;
+    code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
+    code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
+    code_slice_params.line_tokens               = push_array(scratch.arena, TXT_TokenArray, visible_line_count);
+    code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
+    code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
+    code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, visible_line_count);
+    code_slice_params.line_dasm2src             = push_array(scratch.arena, DF_TextLineDasm2SrcInfoList, visible_line_count);
+    code_slice_params.line_src2dasm             = push_array(scratch.arena, DF_TextLineSrc2DasmInfoList, visible_line_count);
+    code_slice_params.font                      = code_font;
+    code_slice_params.font_size                 = code_font_size;
+    code_slice_params.tab_size                  = code_tab_size;
+    code_slice_params.line_height_px            = code_line_height;
+    code_slice_params.search_query              = search_query;
+    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
+    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
+    code_slice_params.line_num_width_px         = line_num_width_px;
+    code_slice_params.line_text_max_width_px    = (F32)line_size_x;
+    code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    
+    // rjf: fill text info
+    {
+      S64 line_num = visible_line_num_range.min;
+      U64 line_idx = visible_line_num_range.min-1;
+      for(U64 visible_line_idx = 0; visible_line_idx < visible_line_count; visible_line_idx += 1, line_idx += 1, line_num += 1)
+      {
+        code_slice_params.line_text[visible_line_idx]   = str8_substr(data, text_info.lines_ranges[line_idx]);
+        code_slice_params.line_ranges[visible_line_idx] = text_info.lines_ranges[line_idx];
+        code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build container
+  //
+  UI_Box *container_box = &ui_g_nil_box;
+  if(text_info_is_ready)
+  {
+    ui_set_next_pref_width(ui_px(code_area_dim.x, 1));
+    ui_set_next_pref_height(ui_px(code_area_dim.y, 1));
+    ui_set_next_child_layout_axis(Axis2_Y);
+    container_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|
+                                              UI_BoxFlag_Scroll|
+                                              UI_BoxFlag_AllowOverflowX|
+                                              UI_BoxFlag_AllowOverflowY,
+                                              "###code_area_%p", view);
+  }
+  
+  //////////////////////////////
+  //- rjf: cancelled search query -> center cursor
+  //
+  if(!search_query_is_active && cv->drifted_for_search)
+  {
+    cv->drifted_for_search = 0;
+    cv->center_cursor = 1;
+  }
+  
+  //////////////////////////////
+  //- rjf: do searching operations
+  //
+  if(text_info_is_ready)
+  {
+    //- rjf: find text (forward)
+    if(cv->find_text_fwd.size != 0)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      B32 found = 0;
+      B32 first = 1;
+      S64 line_num_start = cv->cursor.line;
+      S64 line_num_last = (S64)text_info.lines_count;
+      for(S64 line_num = line_num_start;; first = 0)
+      {
+        // rjf: pop scratch
+        temp_end(scratch);
+        
+        // rjf: gather line info
+        String8 line_string = str8_substr(data, text_info.lines_ranges[line_num-1]);
+        U64 search_start = 0;
+        if(cv->cursor.line == line_num && first)
+        {
+          search_start = cv->cursor.column;
+        }
+        
+        // rjf: search string
+        U64 needle_pos = str8_find_needle(line_string, search_start, cv->find_text_fwd, StringMatchFlag_CaseInsensitive);
+        if(needle_pos < line_string.size)
+        {
+          cv->cursor.line = line_num;
+          cv->cursor.column = needle_pos+1;
+          cv->mark = cv->cursor;
+          found = 1;
+          break;
+        }
+        
+        // rjf: break if circled back around to cursor
+        else if(line_num == line_num_start && !first)
+        {
+          break;
+        }
+        
+        // rjf: increment
+        line_num += 1;
+        if(line_num > line_num_last)
+        {
+          line_num = 1;
+        }
+      }
+      cv->center_cursor = found;
+      if(found == 0)
+      {
+        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+        params.string = push_str8f(scratch.arena, "Could not find \"%S\"", cv->find_text_fwd);
+        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+      }
+      scratch_end(scratch);
+    }
+    
+    //- rjf: find text (backward)
+    if(cv->find_text_bwd.size != 0)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      B32 found = 0;
+      B32 first = 1;
+      S64 line_num_start = cv->cursor.line;
+      S64 line_num_last = (S64)text_info.lines_count;
+      for(S64 line_num = line_num_start;; first = 0)
+      {
+        // rjf: pop scratch
+        temp_end(scratch);
+        
+        // rjf: gather line info
+        String8 line_string = str8_substr(data, text_info.lines_ranges[line_num-1]);
+        if(cv->cursor.line == line_num && first)
+        {
+          line_string = str8_prefix(line_string, cv->cursor.column-1);
+        }
+        
+        // rjf: search string
+        U64 next_needle_pos = line_string.size;
+        for(U64 needle_pos = 0; needle_pos < line_string.size;)
+        {
+          needle_pos = str8_find_needle(line_string, needle_pos, cv->find_text_bwd, StringMatchFlag_CaseInsensitive);
+          if(needle_pos < line_string.size)
+          {
+            next_needle_pos = needle_pos;
+            needle_pos += 1;
+          }
+        }
+        if(next_needle_pos < line_string.size)
+        {
+          cv->cursor.line = line_num;
+          cv->cursor.column = next_needle_pos+1;
+          cv->mark = cv->cursor;
+          found = 1;
+          break;
+        }
+        
+        // rjf: break if circled back around to cursor line
+        else if(line_num == line_num_start && !first)
+        {
+          break;
+        }
+        
+        // rjf: increment
+        line_num -= 1;
+        if(line_num == 0)
+        {
+          line_num = line_num_last;
+        }
+      }
+      cv->center_cursor = found;
+      if(found == 0)
+      {
+        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+        params.string = push_str8f(scratch.arena, "Could not find \"%S\"", cv->find_text_bwd);
+        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+      }
+      scratch_end(scratch);
+    }
+    
+    MemoryZeroStruct(&cv->find_text_fwd);
+    MemoryZeroStruct(&cv->find_text_bwd);
+    arena_clear(cv->find_text_arena);
+  }
+  
+  //////////////////////////////
+  //- rjf: do goto line
+  //
+  if(text_info_is_ready) if(cv->goto_line_num != 0)
+  {
+    S64 line_num = cv->goto_line_num;
+    cv->goto_line_num = 0;
+    line_num = Clamp(1, line_num, text_info.lines_count);
+    cv->cursor = cv->mark = txt_pt(line_num, 1);
+    cv->center_cursor = !cv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
+  }
+  
+  //////////////////////////////
+  //- rjf: do keyboard interaction
+  //
+  B32 snap[Axis2_COUNT] = {0};
+  UI_Focus(UI_FocusKind_On)
+  {
+    if(ui_is_focus_active() && text_info_is_ready && visible_line_num_range.max >= visible_line_num_range.min)
+    {
+      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(&text_info, data, ClampBot(num_possible_visible_lines, 10) - 10, &cv->cursor, &cv->mark, &cv->preferred_column);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build container contents
+  //
+  if(text_info_is_ready) UI_Parent(container_box)
+  {
+    //- rjf: build fractional space
+    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    container_box->view_off.y = container_box->view_off_target.y = code_line_height*mod_f32(view->scroll_pos.y.off, 1.f) + code_line_height*(view->scroll_pos.y.off < 0) - code_line_height*(view->scroll_pos.y.off == -1.f && view->scroll_pos.y.idx == 1);
+    
+    //- rjf: build code slice
+    DF_CodeSliceSignal sig = {0};
+    UI_Focus(UI_FocusKind_On)
+    {
+      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &cv->cursor, &cv->mark, &cv->preferred_column, "txt_view_%p", view);
+    }
+    
+    //- rjf: press code slice? -> focus panel
+    if(ui_pressed(sig.base))
+    {
+      DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+    }
+    
+    //- rjf: dragging & outside region? -> contain cursor
+    if(ui_dragging(sig.base) && sig.base.event_flags == 0)
+    {
+      if(!contains_2f32(sig.base.box->rect, ui_mouse()))
+      {
+        cv->contain_cursor = 1;
+      }
+      else
+      {
+        snap[Axis2_X] = 1;
+      }
+    }
+    
+    //- rjf: ctrl+pressed? -> go to name
+    if(ui_pressed(sig.base) && sig.base.event_flags & OS_EventFlag_Ctrl)
+    {
+      ui_kill_action();
+      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+      params.string = txt_string_from_info_data_txt_rng(&text_info, data, sig.mouse_expr_rng);
+      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
+    }
+    
+    //- rjf: copy text
+    if(!txt_pt_match(sig.copy_range.min, sig.copy_range.max))
+    {
+      String8 text = txt_string_from_info_data_txt_rng(&text_info, data, sig.copy_range);
+      os_set_clipboard_text(text);
+    }
+    
+    //- rjf: selected text on single line, no query? -> set search text
+    if(!txt_pt_match(cv->cursor, cv->mark) && cv->cursor.line == cv->mark.line && search_query.size == 0)
+    {
+      String8 text = txt_string_from_info_data_txt_rng(&text_info, data, txt_rng(cv->cursor, cv->mark));
+      df_set_search_string(text);
+    }
+    
+    //- rjf: toggle cursor watch
+    if(sig.toggle_cursor_watch)
+    {
+      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpressionAtCursor));
+    }
+    
+    //- rjf: set next statement
+    if(sig.set_next_statement_line_num != 0 && contains_1s64(visible_line_num_range, sig.set_next_statement_line_num))
+    {
+      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+      params.text_point = txt_pt(sig.set_next_statement_line_num, 1);
+      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetNextStatement));
+    }
+    
+    //- rjf: go to disasm
+    if(sig.goto_disasm_line_num != 0 && contains_1s64(visible_line_num_range, sig.goto_disasm_line_num))
+    {
+      U64 line_idx = (sig.goto_disasm_line_num-visible_line_num_range.min);
+      DF_TextLineSrc2DasmInfoList *src2dasm_list = &code_slice_params.line_src2dasm[line_idx];
+      if(src2dasm_list->first != 0)
+      {
+        Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
+        DI_Key dbgi_key = src2dasm_list->first->v.dbgi_key;
+        DF_EntityList possible_modules = df_modules_from_dbgi_key(scratch.arena, &dbgi_key);
+        DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+        DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
+        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+        DF_Entity *module = thread_dst_module;
+        if(df_entity_is_nil(module))
+        {
+          module = df_first_entity_from_list(&possible_modules);
+        }
+        U64 voff = voff_rng.min;
+        if(!df_entity_is_nil(module) && voff != 0)
+        {
+          DF_CmdParams params = df_cmd_params_from_window(ws);
+          params.entity = df_handle_from_entity(process);
+          params.vaddr = df_vaddr_from_voff(module, voff);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: apply post-build view snapping rules
+  //
+  if(text_info_is_ready)
+  {
+    // rjf: contain => snap
+    if(cv->contain_cursor)
+    {
+      cv->contain_cursor = 0;
+      snap[Axis2_X] = 1;
+      snap[Axis2_Y] = 1;
+    }
+    
+    // rjf: center cursor
+    if(cv->center_cursor)
+    {
+      cv->center_cursor = 0;
+      String8 cursor_line = str8_substr(data, text_info.lines_ranges[cv->cursor.line-1]);
+      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cv->cursor.column-1)).x;
+      
+      // rjf: scroll x
+      {
+        S64 new_idx = (S64)(cursor_advance - code_area_dim.x/2);
+        new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
+        ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
+        snap[Axis2_X] = 0;
+      }
+      
+      // rjf: scroll y
+      {
+        S64 new_idx = (cv->cursor.line-1) - num_possible_visible_lines/2 + 2;
+        new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
+        ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+        snap[Axis2_Y] = 0;
+      }
+    }
+    
+    // rjf: snap in X
+    if(snap[Axis2_X])
+    {
+      String8 cursor_line = str8_substr(data, text_info.lines_ranges[cv->cursor.line-1]);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cv->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
+      Rng1S64 visible_pixel_range =
+      {
+        view->scroll_pos.x.idx,
+        view->scroll_pos.x.idx + (S64)code_area_dim.x,
+      };
+      Rng1S64 cursor_pixel_range =
+      {
+        cursor_off - (S64)(big_glyph_advance*4) - (S64)(priority_margin_width_px + catchall_margin_width_px + line_num_width_px),
+        cursor_off + (S64)(big_glyph_advance*4),
+      };
+      S64 min_delta = Min(0, cursor_pixel_range.min - visible_pixel_range.min);
+      S64 max_delta = Max(0, cursor_pixel_range.max - visible_pixel_range.max);
+      S64 new_idx = view->scroll_pos.x.idx+min_delta+max_delta;
+      new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
+      ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
+    }
+    
+    // rjf: snap in Y
+    if(snap[Axis2_Y])
+    {
+      Rng1S64 cursor_visibility_range = r1s64(cv->cursor.line-4, cv->cursor.line+4);
+      cursor_visibility_range.min = ClampBot(0, cursor_visibility_range.min);
+      cursor_visibility_range.max = ClampBot(0, cursor_visibility_range.max);
+      S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
+      S64 max_delta = Max(0, cursor_visibility_range.max-(target_visible_line_num_range.min+num_possible_visible_lines));
+      S64 new_idx = view->scroll_pos.y.idx+min_delta+max_delta;
+      new_idx = Clamp(0, new_idx, (S64)text_info.lines_count-1);
+      ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build horizontal scroll bar
+  //
+  if(text_info_is_ready)
+  {
+    ui_set_next_fixed_x(0);
+    ui_set_next_fixed_y(code_area_dim.y);
+    ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
+    ui_set_next_fixed_height(scroll_bar_dim);
+    {
+      view->scroll_pos.x = ui_scroll_bar(Axis2_X,
+                                         ui_px(scroll_bar_dim, 1.f),
+                                         view->scroll_pos.x,
+                                         scroll_idx_rng[Axis2_X],
+                                         (S64)code_area_dim.x);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build vertical scroll bar
+  //
+  if(text_info_is_ready)
+  {
+    ui_set_next_fixed_x(code_area_dim.x);
+    ui_set_next_fixed_y(0);
+    ui_set_next_fixed_width(scroll_bar_dim);
+    ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
+    {
+      view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
+                                         ui_px(scroll_bar_dim, 1.f),
+                                         view->scroll_pos.y,
+                                         scroll_idx_rng[Axis2_Y],
+                                         num_possible_visible_lines);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: top-level container interaction (scrolling)
+  //
+  if(text_info_is_ready)
+  {
+    UI_Signal sig = ui_signal_from_box(container_box);
+    if(sig.scroll.x != 0)
+    {
+      S64 new_idx = view->scroll_pos.x.idx+sig.scroll.x*big_glyph_advance;
+      new_idx = clamp_1s64(scroll_idx_rng[Axis2_X], new_idx);
+      ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
+    }
+    if(sig.scroll.y != 0)
+    {
+      S64 new_idx = view->scroll_pos.y.idx + sig.scroll.y;
+      new_idx = clamp_1s64(scroll_idx_rng[Axis2_Y], new_idx);
+      ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+    }
+    ui_scroll_pt_clamp_idx(&view->scroll_pos.x, scroll_idx_rng[Axis2_X]);
+    ui_scroll_pt_clamp_idx(&view->scroll_pos.y, scroll_idx_rng[Axis2_Y]);
+  }
+  
+  txt_scope_close(txt_scope);
+  di_scope_close(di_scope);
+  hs_scope_close(hs_scope);
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+////////////////////////////////
 //~ rjf: Watch Views
 
 //- rjf: eval watch view instance -> eval view key
@@ -5888,7 +6600,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
-    code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
     code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
     
     // rjf: fill text info
@@ -6224,9 +6935,16 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
     }
     
     //- rjf: dragging & outside region? -> contain cursor
-    if(ui_dragging(sig.base) && !contains_2f32(sig.base.box->rect, ui_mouse()) && sig.base.event_flags == 0)
+    if(ui_dragging(sig.base) && sig.base.event_flags == 0)
     {
-      tv->contain_cursor = 1;
+      if(!contains_2f32(sig.base.box->rect, ui_mouse()))
+      {
+        tv->contain_cursor = 1;
+      }
+      else
+      {
+        snap[Axis2_X] = 1;
+      }
     }
     
     //- rjf: ctrl+pressed? -> go to name
@@ -6983,7 +7701,6 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
-    code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, process, DF_EntityKind_FlashMarker);
     code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
     
     di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, &dbgi_key);
@@ -7165,9 +7882,16 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     }
     
     //- rjf: dragging & outside region? -> contain cursor
-    if(ui_dragging(sig.base) && !contains_2f32(sig.base.box->rect, ui_mouse()) && sig.base.event_flags == 0)
+    if(ui_dragging(sig.base) && sig.base.event_flags == 0)
     {
-      dv->contain_cursor = 1;
+      if(!contains_2f32(sig.base.box->rect, ui_mouse()))
+      {
+        dv->contain_cursor = 1;
+      }
+      else
+      {
+        snap[Axis2_X] = 1;
+      }
     }
     
     //- rjf: clicked margin? -> place breakpoint
@@ -7823,7 +8547,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     code_slice_params.catchall_margin_width_px  = 0.f;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
-    code_slice_params.flash_ranges              = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_FlashMarker);
     code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
   }
   

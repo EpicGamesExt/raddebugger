@@ -468,6 +468,13 @@ internal DF_EntityListerItemArray df_entity_lister_item_array_from_list(Arena *a
 internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray array);
 
 ////////////////////////////////
+//~ rjf: Code Views
+
+internal void df_code_view_init(DF_CodeViewState *cv, DF_View *view);
+internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, U128 key, TXT_LangKind lang_kind);
+internal void df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, U128 key, TXT_LangKind lang_kind);
+
+////////////////////////////////
 //~ rjf: Watch Views
 
 //- rjf: eval watch view instance -> eval view key

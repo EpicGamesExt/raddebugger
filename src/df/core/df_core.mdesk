@@ -30,9 +30,6 @@ DF_EntityKindTable:
   //- rjf: auto view rules
   {AutoViewRule       auto_view_rule        0             0               0            0            0               0             0            0                   0                    0                  0                   0             0            0             0            0              1                        "Label"             Binoculars             "Auto View Rule"             }
   
-  //- rjf: text attachments
-  {FlashMarker        flash_marker          0             0               0            0            0               0             0            0                   0                    0                  0                   0             0            0             0            0              0                        "Label"             Null                   "Flash Marker"               }
-  
   //- rjf: watch pins
   {WatchPin           watch_pin             1             0               0            1            0               0             1            0                   0                    0                  0                   0             0            0             0            1              1                        "Expression"        Pin                    "Watch Pin"                  }
   

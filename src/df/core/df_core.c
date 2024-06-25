@@ -7129,6 +7129,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         case CTRL_EventKind_DebugString:
         {
+          //MTX_Op op = {r1u64(max_U64, max_U64), event->string};
+          //mtx_push_op(u128_zero(), op);
+#if 1
           String8 string = event->string;
           DF_Entity *root = df_entity_root();
           DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
@@ -7146,6 +7149,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           txti_append(thread_log_handle, string);
           txti_append(process_log_handle, string);
           txti_append(machine_log_handle, string);
+#endif
         }break;
         
         case CTRL_EventKind_ThreadName:

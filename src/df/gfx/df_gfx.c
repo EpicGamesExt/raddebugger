@@ -11737,21 +11737,6 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       SLLQueuePush(first_txt_rng_color_pair, last_txt_rng_color_pair, n);
     }
     
-    // rjf: push for flash ranges
-    for(DF_EntityNode *n = params->flash_ranges.first; n != 0; n = n->next)
-    {
-      DF_Entity *flash_range = n->entity;
-      if(flash_range->flags & DF_EntityFlag_HasTextPoint &&
-         flash_range->flags & DF_EntityFlag_HasTextPointAlt)
-      {
-        TxtRngColorPairNode *pair = push_array(scratch.arena, TxtRngColorPairNode, 1);
-        pair->rng = txt_rng(flash_range->text_point, flash_range->text_point_alt);
-        pair->color = df_rgba_from_entity(flash_range);
-        pair->color.w *= ClampTop(flash_range->life_left, 1.f);
-        SLLQueuePush(first_txt_rng_color_pair, last_txt_rng_color_pair, pair);
-      }
-    }
-    
     // rjf: push for ctrlified mouse expr
     if(ctrlified && !txt_pt_match(result.mouse_expr_rng.max, result.mouse_expr_rng.min))
     {
@@ -14252,6 +14237,18 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
     df_gfx_state->cfg_palettes[DF_PaletteCode_DropSiteOverlay].text       = current->colors[DF_ThemeColor_DropSiteOverlay];
     df_gfx_state->cfg_palettes[DF_PaletteCode_DropSiteOverlay].text_weak  = current->colors[DF_ThemeColor_DropSiteOverlay];
     df_gfx_state->cfg_palettes[DF_PaletteCode_DropSiteOverlay].border     = current->colors[DF_ThemeColor_DropSiteOverlay];
+    if(df_setting_val_from_code(DF_SettingCode_OpaqueBackgrounds).s32)
+    {
+      for(EachEnumVal(DF_PaletteCode, code))
+      {
+        if(df_gfx_state->cfg_palettes[code].background.x != 0 ||
+           df_gfx_state->cfg_palettes[code].background.y != 0 ||
+           df_gfx_state->cfg_palettes[code].background.z != 0)
+        {
+          df_gfx_state->cfg_palettes[code].background.w = 1;
+        }
+      }
+    }
   }
   
   //- rjf: animate alive-transitions for entities
