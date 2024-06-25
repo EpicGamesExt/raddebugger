@@ -14,7 +14,10 @@ internal U128
 hs_hash_from_data(String8 data)
 {
   U128 u128 = {0};
-  blake2b((U8 *)&u128.u64[0], sizeof(u128), data.str, data.size, 0, 0);
+  if(data.size != 0)
+  {
+    blake2b((U8 *)&u128.u64[0], sizeof(u128), data.str, data.size, 0, 0);
+  }
   return u128;
 }
 

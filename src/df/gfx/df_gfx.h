@@ -569,6 +569,12 @@ struct DF_Window
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
   
+  // rjf: code context menu state
+  UI_Key code_ctx_menu_key;
+  DF_Handle code_ctx_menu_entity;
+  U128 code_ctx_menu_text_key;
+  TxtRng code_ctx_menu_range;
+  
   // rjf: entity context menu state
   UI_Key entity_ctx_menu_key;
   DF_Handle entity_ctx_menu_entity;

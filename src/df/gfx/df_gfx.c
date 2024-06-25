@@ -1026,6 +1026,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
   window->r = r_window_equip(window->os);
   window->ui = ui_state_alloc();
   window->view_state_hist = df_state_delta_history_alloc();
+  window->code_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_code_ctx_menu_"));
   window->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   window->tab_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
   window->hover_eval_arena = arena_alloc();
@@ -3686,6 +3687,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         {
           ui_ctx_menu_close();
         }
+      }
+      
+      //- rjf: code ctx menu
+      UI_CtxMenu(ws->code_ctx_menu_key)
+        UI_PrefWidth(ui_em(30.f, 1.f))
+        DF_Palette(DF_PaletteCode_ImplicitButton)
+      {
+        ui_buttonf("Foo");
+        ui_buttonf("Bar");
+        ui_buttonf("Baz");
       }
       
       //- rjf: entity menu
@@ -7468,16 +7479,19 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_View *list_first = list_firsts[idx];
           for(DF_View *view = list_first; !df_view_is_nil(view); view = view->next)
           {
-            if(abs_f32(view->loading_t_target - view->loading_t) > 0.01f ||
-               abs_f32(view->scroll_pos.x.off) > 0.01f ||
-               abs_f32(view->scroll_pos.y.off) > 0.01f ||
-               abs_f32(view->is_filtering_t - (F32)!!view->is_filtering))
+            if(window_is_focused)
             {
-              df_gfx_request_frame();
-            }
-            if(view->loading_t_target != 0 && view == df_selected_tab_from_panel(panel))
-            {
-              df_gfx_request_frame();
+              if(abs_f32(view->loading_t_target - view->loading_t) > 0.01f ||
+                 abs_f32(view->scroll_pos.x.off) > 0.01f ||
+                 abs_f32(view->scroll_pos.y.off) > 0.01f ||
+                 abs_f32(view->is_filtering_t - (F32)!!view->is_filtering))
+              {
+                df_gfx_request_frame();
+              }
+              if(view->loading_t_target != 0 && view == df_selected_tab_from_panel(panel))
+              {
+                df_gfx_request_frame();
+              }
             }
             view->loading_t += (view->loading_t_target - view->loading_t) * rate;
             view->is_filtering_t += ((F32)!!view->is_filtering - view->is_filtering_t) * fast_rate;

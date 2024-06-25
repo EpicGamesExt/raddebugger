@@ -976,6 +976,7 @@ internal UI_TextAlign               ui_set_next_text_alignment(UI_TextAlign v);
 //- rjf: helpers
 internal Rng2F32  ui_push_rect(Rng2F32 rect);
 internal Rng2F32  ui_pop_rect(void);
+internal void     ui_set_next_rect(Rng2F32 rect);
 internal UI_Size  ui_push_pref_size(Axis2 axis, UI_Size v);
 internal UI_Size  ui_pop_pref_size(Axis2 axis);
 internal UI_Size  ui_set_next_pref_size(Axis2 axis, UI_Size v);

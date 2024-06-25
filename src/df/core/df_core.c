@@ -6643,6 +6643,7 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   df_state = push_array(arena, DF_State, 1);
   df_state->arena = arena;
   df_state->root_cmd_arena = arena_alloc();
+  df_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
   df_state->entities_arena = arena_alloc__sized(GB(64), KB(64));
   df_state->entities_root = &df_g_nil_entity;
   df_state->entities_base = push_array(df_state->entities_arena, DF_Entity, 0);
@@ -7129,9 +7130,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         
         case CTRL_EventKind_DebugString:
         {
-          //MTX_Op op = {r1u64(max_U64, max_U64), event->string};
-          //mtx_push_op(u128_zero(), op);
-#if 1
+          MTX_Op op = {r1u64(max_U64, max_U64), event->string};
+          mtx_push_op(df_state->output_log_key, op);
+#if 0
           String8 string = event->string;
           DF_Entity *root = df_entity_root();
           DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);

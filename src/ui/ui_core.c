@@ -2885,6 +2885,16 @@ ui_pop_rect(void)
   return popped;
 }
 
+internal void
+ui_set_next_rect(Rng2F32 rect)
+{
+  Vec2F32 size = dim_2f32(rect);
+  ui_set_next_fixed_x(rect.x0);
+  ui_set_next_fixed_y(rect.y0);
+  ui_set_next_fixed_width(size.x);
+  ui_set_next_fixed_height(size.y);
+}
+
 internal UI_Size
 ui_push_pref_size(Axis2 axis, UI_Size v)
 {

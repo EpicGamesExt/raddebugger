@@ -1171,6 +1171,9 @@ struct DF_State
   Arena *root_cmd_arena;
   DF_CmdList root_cmds;
   
+  // rjf: output log key
+  U128 output_log_key;
+  
   // rjf: history cache
   DF_StateDeltaHistory *hist;
   
