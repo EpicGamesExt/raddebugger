@@ -6213,7 +6213,46 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
+  
+  //- rjf: process general code-view commands
   df_code_view_cmds(ws, panel, view, cv, cmds, data, &info);
+  
+  //- rjf: process code-file commands
+  for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
+  {
+    DF_Cmd *cmd = &n->cmd;
+    
+    // rjf: mismatched window/panel => skip
+    if(df_window_from_handle(cmd->params.window) != ws ||
+       df_panel_from_handle(cmd->params.panel) != panel)
+    {
+      continue;
+    }
+    
+    // rjf: process
+    DF_CoreCmdKind core_cmd_kind = df_core_cmd_kind_from_string(cmd->spec->info.string);
+    switch(core_cmd_kind)
+    {
+      default:{}break;
+      case DF_CoreCmdKind_PickFile:
+      {
+        DF_Entity *missing_file = df_entity_from_handle(cv->pick_file_override_target);
+        String8 pick_string = cmd->params.file_path;
+        if(!df_entity_is_nil(missing_file) && pick_string.size != 0)
+        {
+          DF_Entity *replacement = df_entity_from_path(pick_string, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
+          view->entity = df_handle_from_entity(replacement);
+          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+          p.entity = df_handle_from_entity(missing_file);
+          p.file_path = pick_string;
+          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
+          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetFileReplacementPath));
+        }
+      }break;
+    }
+  }
+  
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
