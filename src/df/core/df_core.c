@@ -7031,7 +7031,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               if(bp->flags & DF_EntityFlag_HasTextPoint)
               {
                 DF_Entity *bp_file = df_entity_ancestor_from_kind(bp, DF_EntityKind_File);
-                DF_LineList lines = df_lines_from_file_line_num(scratch.arena, bp_file, bp_file->text_point.line);
+                DF_LineList lines = df_lines_from_file_line_num(scratch.arena, bp_file, bp->text_point.line);
                 for(DF_LineNode *n = lines.first; n != 0; n = n->next)
                 {
                   if(contains_1u64(n->v.voff_range, stop_thread_voff))

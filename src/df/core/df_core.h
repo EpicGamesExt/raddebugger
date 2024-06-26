@@ -654,6 +654,34 @@ struct DF_TextLineDasm2SrcInfoList
 };
 
 ////////////////////////////////
+//~ rjf: Interaction Context Register Types
+
+typedef struct DF_InteractRegs DF_InteractRegs;
+struct DF_InteractRegs
+{
+  DF_Handle window;
+  DF_Handle panel;
+  DF_Handle view;
+  DF_Handle thread;
+  DF_Handle file;
+  TxtPt cursor;
+  TxtPt mark;
+  U64 unwind_count;
+  U64 inline_unwind_count;
+  U128 text_key;
+  TXT_LangKind lang_kind;
+  DF_LineList lines;
+  U64 vaddr;
+};
+
+typedef struct DF_InteractRegsNode DF_InteractRegsNode;
+struct DF_InteractRegsNode
+{
+  DF_InteractRegsNode *next;
+  DF_InteractRegs v;
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Visualization Types
 
 //- rjf: expansion key -> view rule table
@@ -1202,6 +1230,11 @@ struct DF_State
   F32 dt;
   F32 seconds_til_autosave;
   
+  // rjf: interaction registers
+  Arena *frame_arenas[2];
+  DF_InteractRegsNode base_interact_regs;
+  DF_InteractRegsNode *top_interact_regs;
+  
   // rjf: top-level command batch
   Arena *root_cmd_arena;
   DF_CmdList root_cmds;
@@ -1733,6 +1766,9 @@ internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCt
 internal F32 df_dt(void);
 internal U64 df_frame_index(void);
 internal F64 df_time_in_seconds(void);
+
+//- rjf: interaction registers
+internal DF_InteractRegs *df_interact_regs(void);
 
 //- rjf: undo/redo history
 internal DF_StateDeltaHistory *df_state_delta_history(void);
