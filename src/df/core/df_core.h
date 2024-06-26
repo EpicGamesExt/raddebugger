@@ -662,6 +662,8 @@ struct DF_InteractRegs
   DF_Handle window;
   DF_Handle panel;
   DF_Handle view;
+  DF_Handle module;
+  DF_Handle process;
   DF_Handle thread;
   DF_Handle file;
   TxtPt cursor;
@@ -670,8 +672,10 @@ struct DF_InteractRegs
   U64 inline_unwind_count;
   U128 text_key;
   TXT_LangKind lang_kind;
+  Rng1U64 vaddr_range;
+  Rng1U64 voff_range;
   DF_LineList lines;
-  U64 vaddr;
+  DI_Key dbgi_key;
 };
 
 typedef struct DF_InteractRegsNode DF_InteractRegsNode;

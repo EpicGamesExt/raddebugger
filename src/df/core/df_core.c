@@ -6981,7 +6981,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   df_state->dt = dt;
   df_state->time_in_seconds += dt;
   df_state->top_interact_regs = &df_state->base_interact_regs;
-  MemoryZeroStruct(df_state->top_interact_regs);
+  df_state->top_interact_regs->v.lines = df_line_list_copy(df_frame_arena(), &df_state->top_interact_regs->v.lines);
+  df_state->top_interact_regs->v.dbgi_key = di_key_copy(df_frame_arena(), &df_state->top_interact_regs->v.dbgi_key);
   
   //- rjf: sync with ctrl thread
   ProfScope("sync with ctrl thread")
@@ -8877,6 +8878,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_TextBreakpoint:
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
+          if(df_entity_is_nil(entity))
+          {
+            entity = df_entity_from_path(params.file_path, 0);
+          }
           if(!df_entity_is_nil(entity))
           {
             S64 line_num = params.text_point.line;
@@ -8950,6 +8955,24 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             {
               df_entity_mark_for_deletion(bp);
             }
+          }
+        }break;
+        case DF_CoreCmdKind_ToggleBreakpointAtCursor:
+        {
+          DF_InteractRegs *regs = df_interact_regs();
+          DF_Entity *file = df_entity_from_handle(regs->file);
+          if(file->kind == DF_EntityKind_File && regs->cursor.line != 0)
+          {
+            DF_CmdParams p = df_cmd_params_zero();
+            p.entity = df_handle_from_entity(file);
+            p.text_point = regs->cursor;
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_TextBreakpoint));
+          }
+          else if(regs->vaddr_range.min != 0)
+          {
+            DF_CmdParams p = df_cmd_params_zero();
+            p.vaddr = regs->vaddr_range.min;
+            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddressBreakpoint));
           }
         }break;
         

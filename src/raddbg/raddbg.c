@@ -343,7 +343,13 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     d_begin_frame();
     for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
     {
+      df_push_interact_regs();
       df_window_update_and_render(scratch.arena, w, &cmds);
+      DF_InteractRegs *window_regs = df_pop_interact_regs();
+      if(os_window_is_focused(w->os))
+      {
+        MemoryCopyStruct(df_interact_regs(), window_regs);
+      }
     }
   }
   

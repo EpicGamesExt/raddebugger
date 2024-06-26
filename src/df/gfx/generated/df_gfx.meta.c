@@ -1201,7 +1201,7 @@ str8_lit_comp("thread_error"),
 str8_lit_comp("breakpoint"),
 };
 
-String8 df_g_setting_code_display_string_table[9] =
+String8 df_g_setting_code_display_string_table[13] =
 {
 str8_lit_comp("Hover Animations"),
 str8_lit_comp("Press Animations"),
@@ -1210,11 +1210,15 @@ str8_lit_comp("Tooltip Animations"),
 str8_lit_comp("Menu Animations"),
 str8_lit_comp("Scrolling Animations"),
 str8_lit_comp("Background Blur"),
+str8_lit_comp("Thread Lines"),
+str8_lit_comp("Breakpoint Lines"),
+str8_lit_comp("Thread Glow"),
+str8_lit_comp("Breakpoint Glow"),
 str8_lit_comp("Opaque Backgrounds"),
 str8_lit_comp("Tab Width"),
 };
 
-String8 df_g_setting_code_lower_string_table[9] =
+String8 df_g_setting_code_lower_string_table[13] =
 {
 str8_lit_comp("hover_animations"),
 str8_lit_comp("press_animations"),
@@ -1223,12 +1227,20 @@ str8_lit_comp("tooltip_animations"),
 str8_lit_comp("menu_animations"),
 str8_lit_comp("scrolling_animations"),
 str8_lit_comp("background_blur"),
+str8_lit_comp("thread_lines"),
+str8_lit_comp("breakpoint_lines"),
+str8_lit_comp("thread_glow"),
+str8_lit_comp("breakpoint_glow"),
 str8_lit_comp("opaque_backgrounds"),
 str8_lit_comp("tab_width"),
 };
 
-DF_SettingVal df_g_setting_code_default_val_table[9] =
+DF_SettingVal df_g_setting_code_default_val_table[13] =
 {
+{1, 1},
+{1, 1},
+{1, 1},
+{1, 1},
 {1, 1},
 {1, 1},
 {1, 1},
@@ -1240,8 +1252,12 @@ DF_SettingVal df_g_setting_code_default_val_table[9] =
 {1, 4},
 };
 
-Rng1S32 df_g_setting_code_s32_range_table[9] =
+Rng1S32 df_g_setting_code_s32_range_table[13] =
 {
+{0, 1},
+{0, 1},
+{0, 1},
+{0, 1},
 {0, 1},
 {0, 1},
 {0, 1},

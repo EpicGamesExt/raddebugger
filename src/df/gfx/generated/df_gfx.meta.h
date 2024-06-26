@@ -145,6 +145,10 @@ DF_SettingCode_TooltipAnimations,
 DF_SettingCode_MenuAnimations,
 DF_SettingCode_ScrollingAnimations,
 DF_SettingCode_BackgroundBlur,
+DF_SettingCode_ThreadLines,
+DF_SettingCode_BreakpointLines,
+DF_SettingCode_ThreadGlow,
+DF_SettingCode_BreakpointGlow,
 DF_SettingCode_OpaqueBackgrounds,
 DF_SettingCode_TabWidth,
 DF_SettingCode_COUNT,
@@ -333,10 +337,10 @@ extern Vec4F32 df_g_theme_preset_colors__far_manager[75];
 extern Vec4F32* df_g_theme_preset_colors_table[9];
 extern String8 df_g_theme_color_display_string_table[75];
 extern String8 df_g_theme_color_cfg_string_table[75];
-extern String8 df_g_setting_code_display_string_table[9];
-extern String8 df_g_setting_code_lower_string_table[9];
-extern DF_SettingVal df_g_setting_code_default_val_table[9];
-extern Rng1S32 df_g_setting_code_s32_range_table[9];
+extern String8 df_g_setting_code_display_string_table[13];
+extern String8 df_g_setting_code_lower_string_table[13];
+extern DF_SettingVal df_g_setting_code_default_val_table[13];
+extern Rng1S32 df_g_setting_code_s32_range_table[13];
 read_only global U8 df_g_icon_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x80,0x00,0x03,0x00,0x70,0x47,0x53,0x55,0x42,0x20,0x8b,0x25,0x7a,0x00,0x00,0x00,0xfc,0x00,0x00,0x00,0x54,0x4f,0x53,0x2f,0x32,0x56,0x44,0x49,0xa0,0x00,0x00,0x01,0x50,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0x2a,0x09,0xe2,0xc2,0x00,0x00,0x01,0xb0,0x00,0x00,0x05,0xec,0x63,0x76,0x74,0x20,

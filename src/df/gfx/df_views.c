@@ -378,9 +378,9 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
   if(cv->initialized == 0)
   {
     cv->initialized = 1;
-    cv->cursor = cv->mark = txt_pt(1, 1);
     cv->preferred_column = 1;
     cv->find_text_arena = df_view_push_arena_ext(view);
+    view->cursor = view->mark = txt_pt(1, 1);
   }
   df_view_equip_loading_info(view, 1, 0, 0);
   view->loading_t = view->loading_t_target = 1.f;
@@ -436,10 +436,10 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
           // rjf: determine expression range
           Rng1U64 expr_range = {0};
           {
-            TxtRng selection_range = txt_rng(cv->cursor, cv->mark);
+            TxtRng selection_range = txt_rng(view->cursor, view->mark);
             if(txt_pt_match(selection_range.min, selection_range.max))
             {
-              expr_range = txt_expr_off_range_from_info_data_pt(info, data, cv->cursor);
+              expr_range = txt_expr_off_range_from_info_data_pt(info, data, view->cursor);
             }
             else
             {
@@ -469,10 +469,10 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
           // rjf: determine expression range
           Rng1U64 expr_range = {0};
           {
-            TxtRng selection_range = txt_rng(cv->cursor, cv->mark);
+            TxtRng selection_range = txt_rng(view->cursor, view->mark);
             if(txt_pt_match(selection_range.min, selection_range.max))
             {
-              expr_range = txt_expr_off_range_from_info_data_pt(info, data, cv->cursor);
+              expr_range = txt_expr_off_range_from_info_data_pt(info, data, view->cursor);
             }
             else
             {
@@ -730,7 +730,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       Temp scratch = scratch_begin(0, 0);
       B32 found = 0;
       B32 first = 1;
-      S64 line_num_start = cv->cursor.line;
+      S64 line_num_start = view->cursor.line;
       S64 line_num_last = (S64)info->lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
@@ -740,18 +740,18 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         // rjf: gather line info
         String8 line_string = str8_substr(data, info->lines_ranges[line_num-1]);
         U64 search_start = 0;
-        if(cv->cursor.line == line_num && first)
+        if(view->cursor.line == line_num && first)
         {
-          search_start = cv->cursor.column;
+          search_start = view->cursor.column;
         }
         
         // rjf: search string
         U64 needle_pos = str8_find_needle(line_string, search_start, cv->find_text_fwd, StringMatchFlag_CaseInsensitive);
         if(needle_pos < line_string.size)
         {
-          cv->cursor.line = line_num;
-          cv->cursor.column = needle_pos+1;
-          cv->mark = cv->cursor;
+          view->cursor.line = line_num;
+          view->cursor.column = needle_pos+1;
+          view->mark = view->cursor;
           found = 1;
           break;
         }
@@ -786,7 +786,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       Temp scratch = scratch_begin(0, 0);
       B32 found = 0;
       B32 first = 1;
-      S64 line_num_start = cv->cursor.line;
+      S64 line_num_start = view->cursor.line;
       S64 line_num_last = (S64)info->lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
@@ -795,9 +795,9 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         
         // rjf: gather line info
         String8 line_string = str8_substr(data, info->lines_ranges[line_num-1]);
-        if(cv->cursor.line == line_num && first)
+        if(view->cursor.line == line_num && first)
         {
-          line_string = str8_prefix(line_string, cv->cursor.column-1);
+          line_string = str8_prefix(line_string, view->cursor.column-1);
         }
         
         // rjf: search string
@@ -813,9 +813,9 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         }
         if(next_needle_pos < line_string.size)
         {
-          cv->cursor.line = line_num;
-          cv->cursor.column = next_needle_pos+1;
-          cv->mark = cv->cursor;
+          view->cursor.line = line_num;
+          view->cursor.column = next_needle_pos+1;
+          view->mark = view->cursor;
           found = 1;
           break;
         }
@@ -857,7 +857,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     S64 line_num = cv->goto_line_num;
     cv->goto_line_num = 0;
     line_num = Clamp(1, line_num, info->lines_count);
-    cv->cursor = cv->mark = txt_pt(line_num, 1);
+    view->cursor = view->mark = txt_pt(line_num, 1);
     cv->center_cursor = !cv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
   }
   
@@ -869,7 +869,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
   {
     if(ui_is_focus_active() && visible_line_num_range.max >= visible_line_num_range.min)
     {
-      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(info, data, ClampBot(num_possible_visible_lines, 10) - 10, &cv->cursor, &cv->mark, &cv->preferred_column);
+      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(info, data, ClampBot(num_possible_visible_lines, 10) - 10, &view->cursor, &view->mark, &cv->preferred_column);
     }
   }
   
@@ -886,7 +886,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     DF_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, code_ctx, &code_slice_params, &cv->cursor, &cv->mark, &cv->preferred_column, "txt_view_%p", view);
+      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, code_ctx, &code_slice_params, &view->cursor, &view->mark, &cv->preferred_column, "txt_view_%p", view);
     }
     
     //- rjf: press code slice? -> focus panel
@@ -920,9 +920,9 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     }
     
     //- rjf: selected text on single line, no query? -> set search text
-    if(!txt_pt_match(cv->cursor, cv->mark) && cv->cursor.line == cv->mark.line && search_query.size == 0)
+    if(!txt_pt_match(view->cursor, view->mark) && view->cursor.line == view->mark.line && search_query.size == 0)
     {
-      String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(cv->cursor, cv->mark));
+      String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(view->cursor, view->mark));
       df_set_search_string(text);
     }
     
@@ -977,8 +977,8 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     if(cv->center_cursor)
     {
       cv->center_cursor = 0;
-      String8 cursor_line = str8_substr(data, info->lines_ranges[cv->cursor.line-1]);
-      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cv->cursor.column-1)).x;
+      String8 cursor_line = str8_substr(data, info->lines_ranges[view->cursor.line-1]);
+      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, view->cursor.column-1)).x;
       
       // rjf: scroll x
       {
@@ -990,7 +990,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       
       // rjf: scroll y
       {
-        S64 new_idx = (cv->cursor.line-1) - num_possible_visible_lines/2 + 2;
+        S64 new_idx = (view->cursor.line-1) - num_possible_visible_lines/2 + 2;
         new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
         ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
         snap[Axis2_Y] = 0;
@@ -1000,8 +1000,8 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     // rjf: snap in X
     if(snap[Axis2_X])
     {
-      String8 cursor_line = str8_substr(data, info->lines_ranges[cv->cursor.line-1]);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cv->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
+      String8 cursor_line = str8_substr(data, info->lines_ranges[view->cursor.line-1]);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, view->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -1022,7 +1022,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     // rjf: snap in Y
     if(snap[Axis2_Y])
     {
-      Rng1S64 cursor_visibility_range = r1s64(cv->cursor.line-4, cv->cursor.line+4);
+      Rng1S64 cursor_visibility_range = r1s64(view->cursor.line-4, view->cursor.line+4);
       cursor_visibility_range.min = ClampBot(0, cursor_visibility_range.min);
       cursor_visibility_range.max = ClampBot(0, cursor_visibility_range.max);
       S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
@@ -6282,8 +6282,8 @@ DF_VIEW_SETUP_FUNCTION_DEF(Code)
     cursor.column = s64_from_str8(cursor_cfg->first->first->string, 10);
     if(cursor.line == 0) { cursor.line = 1; }
     if(cursor.column == 0) { cursor.column = 1; }
-    cv->cursor = cv->mark = cursor;
     cv->center_cursor = 1;
+    view->cursor = view->mark = cursor;
   }
   
   // rjf: default to loading
@@ -6293,8 +6293,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Code)
 
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Code)
 {
-  DF_CodeViewState *tvs = df_view_user_state(view, DF_CodeViewState);
-  String8 string = push_str8f(arena, " cursor:%I64d:%I64d", tvs->cursor.line, tvs->cursor.column);
+  String8 string = push_str8f(arena, " cursor:%I64d:%I64d", view->cursor.line, view->cursor.column);
   return string;
 }
 
@@ -6438,7 +6437,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         ui_label(path);
         ui_spacer(ui_em(1.5f, 1));
-        ui_labelf("Line: %I64d, Column: %I64d", cv->cursor.line, cv->cursor.column);
+        ui_labelf("Line: %I64d, Column: %I64d", view->cursor.line, view->cursor.column);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
         ui_labelf("%s",
@@ -8648,7 +8647,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
       {
         ui_labelf("(Debug String Output)");
         ui_spacer(ui_em(1.5f, 1));
-        ui_labelf("Line: %I64d, Column: %I64d", cv->cursor.line, cv->cursor.column);
+        ui_labelf("Line: %I64d, Column: %I64d", view->cursor.line, view->cursor.column);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
       }

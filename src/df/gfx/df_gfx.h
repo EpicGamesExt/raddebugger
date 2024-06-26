@@ -199,6 +199,8 @@ struct DF_View
   
   // rjf: view state
   UI_ScrollPt2 scroll_pos;
+  TxtPt cursor;
+  TxtPt mark;
   
   // rjf: ctrl context overrides
   DF_CtrlCtx ctrl_ctx_overrides;
@@ -834,6 +836,8 @@ read_only global DF_View df_g_nil_view =
   0,
   0,
   0,
+  {0},
+  {0},
   {0},
   {0},
   0,

@@ -625,6 +625,10 @@ DF_SettingTable:
   {MenuAnimations        menu_animations         "Menu Animations"         1    0  1  }
   {ScrollingAnimations   scrolling_animations    "Scrolling Animations"    1    0  1  }
   {BackgroundBlur        background_blur         "Background Blur"         1    0  1  }
+  {ThreadLines           thread_lines            "Thread Lines"            1    0  1  }
+  {BreakpointLines       breakpoint_lines        "Breakpoint Lines"        1    0  1  }
+  {ThreadGlow            thread_glow             "Thread Glow"             1    0  1  }
+  {BreakpointGlow        breakpoint_glow         "Breakpoint Glow"         1    0  1  }
   {OpaqueBackgrounds     opaque_backgrounds      "Opaque Backgrounds"      0    0  1  }
   {TabWidth              tab_width               "Tab Width"               4    0  32 }
 }

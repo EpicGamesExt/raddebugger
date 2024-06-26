@@ -366,8 +366,6 @@ struct DF_CodeViewState
 {
   // rjf: stable state
   B32 initialized;
-  TxtPt cursor;
-  TxtPt mark;
   S64 preferred_column;
   B32 drifted_for_search;
   DF_Handle pick_file_override_target;
