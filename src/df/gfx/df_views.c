@@ -153,6 +153,29 @@ df_qsort_compare_entity_lister__strength(DF_EntityListerItem *a, DF_EntityLister
   return result;
 }
 
+internal int
+df_qsort_compare_settings_item(DF_SettingsItem *a, DF_SettingsItem *b)
+{
+  int result = 0;
+  if(a->string_matches.count > b->string_matches.count)
+  {
+    result = -1;
+  }
+  else if(a->string_matches.count < b->string_matches.count)
+  {
+    result = +1;
+  }
+  else if(a->kind_string_matches.count > b->kind_string_matches.count)
+  {
+    result = -1;
+  }
+  else if(a->kind_string_matches.count < b->kind_string_matches.count)
+  {
+    result = +1;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Command Lister
 
@@ -607,7 +630,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         {
           if(df_entity_from_handle(n->v.file) == file && visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
           {
-            U64 slice_line_idx = lines.first->v.pt.line-visible_line_num_range.min;
+            U64 slice_line_idx = n->v.pt.line-visible_line_num_range.min;
             df_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
           }
         }
@@ -8379,12 +8402,12 @@ DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
 }
 
 ////////////////////////////////
-//~ rjf: Theme @view_hook_impl
+//~ rjf: Settings @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(Theme) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Theme) {return str8_lit("");}
+DF_VIEW_SETUP_FUNCTION_DEF(Settings) {}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Settings) {return str8_zero();}
 
-DF_VIEW_CMD_FUNCTION_DEF(Theme)
+DF_VIEW_CMD_FUNCTION_DEF(Settings)
 {
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -8397,7 +8420,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Theme)
       continue;
     }
     
-    //rjf: process
+    // rjf: process
     DF_CoreCmdKind core_cmd_kind = df_core_cmd_kind_from_string(cmd->spec->info.string);
     switch(core_cmd_kind)
     {
@@ -8445,8 +8468,430 @@ DF_VIEW_CMD_FUNCTION_DEF(Theme)
   }
 }
 
-DF_VIEW_UI_FUNCTION_DEF(Theme)
+DF_VIEW_UI_FUNCTION_DEF(Settings)
 {
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  String8 query = str8(view->query_buffer, view->query_string_size);
+  
+  //////////////////////////////
+  //- rjf: get state
+  //
+  typedef struct DF_SettingsViewState DF_SettingsViewState;
+  struct DF_SettingsViewState
+  {
+    Vec2S64 cursor;
+    TxtPt txt_cursor;
+    TxtPt txt_mark;
+    U8 txt_buffer[1024];
+    U64 txt_size;
+    DF_ThemeColor color_ctx_menu_color;
+    Vec4F32 color_ctx_menu_color_hsva;
+  };
+  DF_SettingsViewState *sv = df_view_user_state(view, DF_SettingsViewState);
+  
+  //////////////////////////////
+  //- rjf: gather all filtered settings items
+  //
+  DF_SettingsItemArray items = {0};
+  {
+    DF_SettingsItemList items_list = {0};
+    
+    //- rjf: gather all settings
+    for(EachEnumVal(DF_SettingCode, code))
+    {
+      String8 kind_string = str8_lit("Interface");
+      String8 string = df_g_setting_code_display_string_table[code];
+      FuzzyMatchRangeList kind_string_matches = fuzzy_match_find(scratch.arena, query, kind_string);
+      FuzzyMatchRangeList string_matches = fuzzy_match_find(scratch.arena, query, string);
+      if(string_matches.count == string_matches.needle_part_count ||
+         kind_string_matches.count == kind_string_matches.needle_part_count)
+      {
+        DF_SettingsItemNode *n = push_array(scratch.arena, DF_SettingsItemNode, 1);
+        SLLQueuePush(items_list.first, items_list.last, n);
+        items_list.count += 1;
+        n->v.kind = DF_SettingsItemKind_Setting;
+        n->v.kind_string = kind_string;
+        n->v.string = string;
+        n->v.kind_string_matches = kind_string_matches;
+        n->v.string_matches = string_matches;
+        n->v.icon_kind = DF_IconKind_Window;
+        n->v.code = code;
+      }
+    }
+    
+    //- rjf: gather all theme colors
+    for(EachNonZeroEnumVal(DF_ThemeColor, color))
+    {
+      String8 kind_string = str8_lit("Theme Color");
+      String8 string = df_g_theme_color_display_string_table[color];
+      FuzzyMatchRangeList kind_string_matches = fuzzy_match_find(scratch.arena, query, kind_string);
+      FuzzyMatchRangeList string_matches = fuzzy_match_find(scratch.arena, query, string);
+      if(string_matches.count == string_matches.needle_part_count ||
+         kind_string_matches.count == kind_string_matches.needle_part_count)
+      {
+        DF_SettingsItemNode *n = push_array(scratch.arena, DF_SettingsItemNode, 1);
+        SLLQueuePush(items_list.first, items_list.last, n);
+        items_list.count += 1;
+        n->v.kind = DF_SettingsItemKind_ThemeColor;
+        n->v.kind_string = kind_string;
+        n->v.string = string;
+        n->v.kind_string_matches = kind_string_matches;
+        n->v.string_matches = string_matches;
+        n->v.icon_kind = DF_IconKind_Palette;
+        n->v.color = color;
+      }
+    }
+    
+    //- rjf: convert to array
+    items.count = items_list.count;
+    items.v = push_array(scratch.arena, DF_SettingsItem, items.count);
+    {
+      U64 idx = 0;
+      for(DF_SettingsItemNode *n = items_list.first; n != 0; n = n->next, idx += 1)
+      {
+        items.v[idx] = n->v;
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: sort filtered settings item list
+  //
+  if(query.size != 0)
+  {
+    quick_sort(items.v, items.count, sizeof(items.v[0]), df_qsort_compare_settings_item);
+  }
+  
+  //////////////////////////////
+  //- rjf: produce per-color context menu keys
+  //
+  UI_Key *color_ctx_menu_keys = push_array(scratch.arena, UI_Key, DF_ThemeColor_COUNT);
+  {
+    for(DF_ThemeColor color = (DF_ThemeColor)(DF_ThemeColor_Null+1);
+        color < DF_ThemeColor_COUNT;
+        color = (DF_ThemeColor)(color+1))
+    {
+      color_ctx_menu_keys[color] = ui_key_from_stringf(ui_key_zero(), "###settings_color_ctx_menu_%I64x", (U64)color);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build color context menus
+  //
+  for(DF_ThemeColor color = (DF_ThemeColor)(DF_ThemeColor_Null+1);
+      color < DF_ThemeColor_COUNT;
+      color = (DF_ThemeColor)(color+1))
+  {
+    DF_Palette(DF_PaletteCode_Floating)
+      UI_CtxMenu(color_ctx_menu_keys[color])
+      UI_Padding(ui_em(1.5f, 1.f))
+      UI_PrefWidth(ui_em(28.5f, 1)) UI_PrefHeight(ui_children_sum(1.f))
+    {
+      // rjf: build title
+      UI_Row
+      {
+        ui_spacer(ui_em(1.5f, 1.f));
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(df_g_theme_color_display_string_table[color]);
+      }
+      
+      ui_spacer(ui_em(1.5f, 1.f));
+      
+      // rjf: build picker
+      {
+        ui_set_next_pref_height(ui_em(22.f, 1.f));
+        UI_Row UI_Padding(ui_pct(1, 0))
+        {
+          UI_PrefWidth(ui_em(22.f, 1.f)) UI_PrefHeight(ui_em(22.f, 1.f)) UI_Flags(UI_BoxFlag_FocusNavSkip)
+          {
+            ui_sat_val_pickerf(sv->color_ctx_menu_color_hsva.x, &sv->color_ctx_menu_color_hsva.y, &sv->color_ctx_menu_color_hsva.z, "###settings_satval_picker");
+          }
+          
+          ui_spacer(ui_em(0.75f, 1.f));
+          
+          UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(22.f, 1.f)) UI_Flags(UI_BoxFlag_FocusNavSkip)
+            ui_hue_pickerf(&sv->color_ctx_menu_color_hsva.x, sv->color_ctx_menu_color_hsva.y, sv->color_ctx_menu_color_hsva.z, "###settings_hue_picker");
+          
+          UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(22.f, 1.f)) UI_Flags(UI_BoxFlag_FocusNavSkip)
+            ui_alpha_pickerf(&sv->color_ctx_menu_color_hsva.w, "###settings_alpha_picker");
+        }
+      }
+      
+      ui_spacer(ui_em(1.5f, 1.f));
+      
+      // rjf: build line edits
+      UI_Row
+        UI_WidthFill
+        UI_Padding(ui_em(1.5f, 1.f))
+        UI_PrefHeight(ui_children_sum(1.f))
+        UI_Column
+        UI_PrefHeight(ui_em(2.25f, 1.f))
+      {
+        Vec4F32 hsva = sv->color_ctx_menu_color_hsva;
+        Vec3F32 hsv = v3f32(hsva.x, hsva.y, hsva.z);
+        Vec3F32 rgb = rgb_from_hsv(hsv);
+        Vec4F32 rgba = v4f32(rgb.x, rgb.y, rgb.z, sv->color_ctx_menu_color_hsva.w);
+        String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
+        hex_string = push_str8f(scratch.arena, "#%S", hex_string);
+        String8 r_string = push_str8f(scratch.arena, "%.2f", rgba.x);
+        String8 g_string = push_str8f(scratch.arena, "%.2f", rgba.y);
+        String8 b_string = push_str8f(scratch.arena, "%.2f", rgba.z);
+        String8 h_string = push_str8f(scratch.arena, "%.2f", hsva.x);
+        String8 s_string = push_str8f(scratch.arena, "%.2f", hsva.y);
+        String8 v_string = push_str8f(scratch.arena, "%.2f", hsva.z);
+        String8 a_string = push_str8f(scratch.arena, "%.2f", rgba.w);
+        UI_Row UI_Font(df_font_from_slot(DF_FontSlot_Code))
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("Hex");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, hex_string, "###hex_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_rgba = rgba_from_hex_string_4f32(string);
+            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+        ui_spacer(ui_em(0.75f, 1.f));
+        UI_Row
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("R");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, r_string, "###r_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_rgba = v4f32((F32)f64_from_str8(string), rgba.y, rgba.z, rgba.w);
+            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+        UI_Row
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("G");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, g_string, "###g_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_rgba = v4f32(rgba.x, (F32)f64_from_str8(string), rgba.z, rgba.w);
+            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+        UI_Row
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("B");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, b_string, "###b_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_rgba = v4f32(rgba.x, rgba.y, (F32)f64_from_str8(string), rgba.w);
+            Vec4F32 new_hsva = hsva_from_rgba(new_rgba);
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+        ui_spacer(ui_em(0.75f, 1.f));
+        UI_Row
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("H");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, h_string, "###h_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_hsva = v4f32((F32)f64_from_str8(string), hsva.y, hsva.z, hsva.w);
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+        UI_Row
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("S");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, s_string, "###s_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_hsva = v4f32(hsva.x, (F32)f64_from_str8(string), hsva.z, hsva.w);
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+        UI_Row
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("V");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, v_string, "###v_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_hsva = v4f32(hsva.x, hsva.y, (F32)f64_from_str8(string), hsva.w);
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+        ui_spacer(ui_em(0.75f, 1.f));
+        UI_Row
+        {
+          UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(4.5f, 1.f)) ui_labelf("A");
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &sv->txt_cursor, &sv->txt_mark, sv->txt_buffer, sizeof(sv->txt_buffer), &sv->txt_size, 0, a_string, "###a_edit");
+          if(ui_committed(sig))
+          {
+            String8 string = str8(sv->txt_buffer, sv->txt_size);
+            Vec4F32 new_hsva = v4f32(hsva.x, hsva.y, hsva.z, (F32)f64_from_str8(string));
+            sv->color_ctx_menu_color_hsva = new_hsva;
+          }
+        }
+      }
+      
+      // rjf: commit state to theme
+      Vec4F32 hsva = sv->color_ctx_menu_color_hsva;
+      Vec3F32 hsv = v3f32(hsva.x, hsva.y, hsva.z);
+      Vec3F32 rgb = rgb_from_hsv(hsv);
+      Vec4F32 rgba = v4f32(rgb.x, rgb.y, rgb.z, sv->color_ctx_menu_color_hsva.w);
+      df_gfx_state->cfg_theme_target.colors[sv->color_ctx_menu_color] = rgba;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build items list
+  //
+  Rng1S64 visible_row_range = {0};
+  UI_ScrollListParams scroll_list_params = {0};
+  {
+    Vec2F32 rect_dim = dim_2f32(rect);
+    scroll_list_params.flags         = UI_ScrollListFlag_All;
+    scroll_list_params.row_height_px = row_height_px;
+    scroll_list_params.dim_px        = v2f32(rect_dim.x, rect_dim.y);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(0, items.count));
+    scroll_list_params.item_range    = r1s64(0, items.count);
+    scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
+  }
+  UI_ScrollListSignal scroll_list_sig = {0};
+  UI_Focus(UI_FocusKind_On)
+    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &sv->cursor, 0, &visible_row_range, &scroll_list_sig)
+    UI_Focus(UI_FocusKind_Null)
+  {
+    for(S64 row_num = visible_row_range.min; row_num <= visible_row_range.max && row_num < items.count; row_num += 1)
+    {
+      //- rjf: unpack item
+      DF_SettingsItem *item = &items.v[row_num];
+      Vec4F32 rgba = ui_top_palette()->text_weak;
+      OS_Cursor cursor = OS_Cursor_HandPoint;
+      Rng1S32 s32_range = {0};
+      B32 is_toggler = 0;
+      B32 is_toggled = 0;
+      B32 is_slider = 0;
+      S32 slider_s32_val = 0;
+      F32 slider_pct = 0.f;
+      switch(item->kind)
+      {
+        case DF_SettingsItemKind_ThemeColor:
+        {
+          rgba = df_rgba_from_theme_color(item->color);
+        }break;
+        case DF_SettingsItemKind_Setting:
+        {
+          s32_range = df_g_setting_code_s32_range_table[item->code];
+          if(s32_range.min != 0 || s32_range.max != 1)
+          {
+            cursor = OS_Cursor_LeftRight;
+            is_slider = 1;
+            slider_s32_val = df_setting_val_from_code(item->code).s32;
+            slider_pct = (F32)(slider_s32_val - s32_range.min) / dim_1s32(s32_range);
+          }
+          else
+          {
+            is_toggler = 1;
+            is_toggled = !!df_setting_val_from_code(item->code).s32;
+          }
+        }break;
+      }
+      
+      //- rjf: build item widget
+      UI_Box *item_box = &ui_g_nil_box;
+      UI_Focus(row_num+1 == sv->cursor.y ? UI_FocusKind_On : UI_FocusKind_Off)
+      {
+        ui_set_next_hover_cursor(cursor);
+        item_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                             UI_BoxFlag_DrawBackground|
+                                             UI_BoxFlag_DrawBorder|
+                                             UI_BoxFlag_DrawHotEffects|
+                                             UI_BoxFlag_DrawActiveEffects,
+                                             "###option_%S", item->string);
+        UI_Parent(item_box)
+        {
+          ui_spacer(ui_em(1.f, 1.f));
+          UI_PrefWidth(ui_em(2.5f, 1.f))
+            UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+            UI_RunFlags(F_RunFlag_Smooth)
+            UI_Palette(ui_build_palette(ui_top_palette(), .text = rgba))
+            ui_label(df_g_icon_kind_text_table[item->icon_kind]);
+          UI_PrefWidth(ui_text_dim(10, 1))
+          {
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawTextWeak, "%S", item->kind_string);
+            ui_box_equip_fuzzy_match_ranges(box, &item->kind_string_matches);
+          }
+          UI_PrefWidth(ui_text_dim(10, 1))
+          {
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S", item->string);
+            ui_box_equip_fuzzy_match_ranges(box, &item->string_matches);
+          }
+          if(is_slider) UI_PrefWidth(ui_text_dim(10, 1))
+          {
+            UI_Font(df_font_from_slot(DF_FontSlot_Code))
+              UI_RunFlags(F_RunFlag_Smooth)
+              UI_Flags(UI_BoxFlag_DrawTextWeak)
+              ui_labelf("(%i)", slider_s32_val);
+            UI_PrefWidth(ui_pct(slider_pct, 1.f)) UI_HeightFill UI_FixedX(0) UI_FixedY(0)
+              UI_Palette(ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay)))
+              ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+          }
+          if(is_toggler)
+          {
+            ui_spacer(ui_pct(1, 0));
+            UI_PrefWidth(ui_em(2.5f, 1.f))
+              UI_Font(df_font_from_slot(DF_FontSlot_Icons))
+              UI_RunFlags(F_RunFlag_Smooth)
+              UI_Flags(UI_BoxFlag_DrawTextWeak)
+              ui_label(df_g_icon_kind_text_table[is_toggled ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow]);
+          }
+        }
+      }
+      
+      //- rjf: interact
+      UI_Signal sig = ui_signal_from_box(item_box);
+      if(item->kind == DF_SettingsItemKind_ThemeColor && ui_clicked(sig))
+      {
+        Vec3F32 rgb = v3f32(rgba.x, rgba.y, rgba.z);
+        Vec3F32 hsv = hsv_from_rgb(rgb);
+        Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
+        ui_ctx_menu_open(color_ctx_menu_keys[item->color], item_box->key, v2f32(0, dim_2f32(item_box->rect).y));
+        sv->color_ctx_menu_color = item->color;
+        sv->color_ctx_menu_color_hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
+        DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+        df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+      }
+      if(item->kind == DF_SettingsItemKind_Setting && is_toggler && ui_clicked(sig))
+      {
+        df_gfx_state->cfg_setting_vals[DF_CfgSrc_User][item->code].s32 ^= 1;
+        df_gfx_state->cfg_setting_vals[DF_CfgSrc_User][item->code].set = 1;
+      }
+      if(item->kind == DF_SettingsItemKind_Setting && is_slider && ui_dragging(sig))
+      {
+        if(ui_pressed(sig))
+        {
+          ui_store_drag_struct(&slider_s32_val);
+        }
+        S32 pre_drag_val = *ui_get_drag_struct(S32);
+        Vec2F32 delta = ui_drag_delta();
+        S32 pst_drag_val = pre_drag_val + (S32)(delta.x/(ui_top_font_size()*2.f));
+        pst_drag_val = clamp_1s32(s32_range, pst_drag_val);
+        df_gfx_state->cfg_setting_vals[DF_CfgSrc_User][item->code].s32 = pst_drag_val;
+        df_gfx_state->cfg_setting_vals[DF_CfgSrc_User][item->code].set = 1;
+      }
+    }
+  }
+  
+  scratch_end(scratch);
+  ProfEnd();
+  
+  //~ TODO(rjf): OLD vvvvvvvvvvvvvvvvvvvvvvvvvv
+#if 0
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
@@ -8775,4 +9220,5 @@ DF_VIEW_UI_FUNCTION_DEF(Theme)
   
   scratch_end(scratch);
   ProfEnd();
+#endif
 }

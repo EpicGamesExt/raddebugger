@@ -435,6 +435,51 @@ struct DF_MemoryViewState
 };
 
 ////////////////////////////////
+//~ rjf: Settings @view_types
+
+typedef enum DF_SettingsItemKind
+{
+  DF_SettingsItemKind_Setting,
+  DF_SettingsItemKind_ThemeColor,
+}
+DF_SettingsItemKind;
+
+typedef struct DF_SettingsItem DF_SettingsItem;
+struct DF_SettingsItem
+{
+  DF_SettingsItemKind kind;
+  String8 kind_string;
+  String8 string;
+  FuzzyMatchRangeList kind_string_matches;
+  FuzzyMatchRangeList string_matches;
+  DF_IconKind icon_kind;
+  DF_SettingCode code;
+  DF_ThemeColor color;
+};
+
+typedef struct DF_SettingsItemNode DF_SettingsItemNode;
+struct DF_SettingsItemNode
+{
+  DF_SettingsItemNode *next;
+  DF_SettingsItem v;
+};
+
+typedef struct DF_SettingsItemList DF_SettingsItemList;
+struct DF_SettingsItemList
+{
+  DF_SettingsItemNode *first;
+  DF_SettingsItemNode *last;
+  U64 count;
+};
+
+typedef struct DF_SettingsItemArray DF_SettingsItemArray;
+struct DF_SettingsItemArray
+{
+  DF_SettingsItem *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Quick Sort Comparisons
 
 internal int df_qsort_compare_file_info__default(DF_FileInfo *a, DF_FileInfo *b);
@@ -445,6 +490,7 @@ internal int df_qsort_compare_file_info__size(DF_FileInfo *a, DF_FileInfo *b);
 internal int df_qsort_compare_process_info(DF_ProcessInfo *a, DF_ProcessInfo *b);
 internal int df_qsort_compare_cmd_lister__strength(DF_CmdListerItem *a, DF_CmdListerItem *b);
 internal int df_qsort_compare_entity_lister__strength(DF_EntityListerItem *a, DF_EntityListerItem *b);
+internal int df_qsort_compare_settings_item(DF_SettingsItem *a, DF_SettingsItem *b);
 
 ////////////////////////////////
 //~ rjf: Command Lister

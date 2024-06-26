@@ -5064,7 +5064,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 DF_CoreCmdKind_Breakpoints,
                 DF_CoreCmdKind_WatchPins,
                 DF_CoreCmdKind_FilePathMap,
-                DF_CoreCmdKind_Theme,
+                DF_CoreCmdKind_Settings,
                 DF_CoreCmdKind_ExceptionFilters,
                 DF_CoreCmdKind_GettingStarted,
               };
@@ -7013,8 +7013,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 ui_spacer(ui_em(0.5f, 1.f));
                 UI_Font(view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode ? df_font_from_slot(DF_FontSlot_Code) : df_font_from_slot(DF_FontSlot_Main)) UI_Focus(view->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
                 {
-                  UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|
-                                               DF_LineEditFlag_CodeContents*!!(view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode),
+                  UI_Signal sig = df_line_edit(DF_LineEditFlag_CodeContents*!!(view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode),
                                                0,
                                                0,
                                                &view->query_cursor,
@@ -7407,7 +7406,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                         {
                           D_FancyString query =
                           {
-                            df_font_from_slot(DF_FontSlot_Code),
+                            view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode ? df_font_from_slot(DF_FontSlot_Code) : df_font_from_slot(DF_FontSlot_Main),
                             str8(view->query_buffer, view->query_string_size),
                             ui_top_palette()->colors[UI_ColorCode_TextWeak],
                             ui_top_font_size(),
@@ -8196,7 +8195,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           {
             Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Focus);
             color.w *= b->focus_active_t;
-            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 1.f), color, 0, 1.f, 1.f);
+            R_Rect2DInst *inst = d_rect(pad_2f32(b->rect, 0.f), color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
@@ -10989,7 +10988,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_pref_height(ui_pct(1, 0));
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
-            UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
+            UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%I64x_%p", line_num, thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
                                                        UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DrawText,
@@ -11144,7 +11143,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             ui_set_next_pref_height(ui_pct(1, 0));
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
-            UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%p", thread);
+            UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%I64x_catchall_%p", line_num, thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
                                                        UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DrawText,

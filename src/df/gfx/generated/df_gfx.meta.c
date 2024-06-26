@@ -163,7 +163,7 @@ DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[31] =
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath|1*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("breakpoints"), str8_lit_comp("Breakpoints"), DF_NameKind_Null, DF_IconKind_CircleFilled, DF_VIEW_SETUP_FUNCTION_NAME(Breakpoints), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Breakpoints), DF_VIEW_CMD_FUNCTION_NAME(Breakpoints), DF_VIEW_UI_FUNCTION_NAME(Breakpoints)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath|1*DF_ViewSpecFlag_CanFilter|1*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("watch_pins"), str8_lit_comp("Watch Pins"), DF_NameKind_Null, DF_IconKind_Pin, DF_VIEW_SETUP_FUNCTION_NAME(WatchPins), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(WatchPins), DF_VIEW_CMD_FUNCTION_NAME(WatchPins), DF_VIEW_UI_FUNCTION_NAME(WatchPins)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath|1*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("exception_filters"), str8_lit_comp("Exception Filters"), DF_NameKind_Null, DF_IconKind_Gear, DF_VIEW_SETUP_FUNCTION_NAME(ExceptionFilters), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(ExceptionFilters), DF_VIEW_CMD_FUNCTION_NAME(ExceptionFilters), DF_VIEW_UI_FUNCTION_NAME(ExceptionFilters)},
-{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath|0*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("theme"), str8_lit_comp("Theme"), DF_NameKind_Null, DF_IconKind_Palette, DF_VIEW_SETUP_FUNCTION_NAME(Theme), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Theme), DF_VIEW_CMD_FUNCTION_NAME(Theme), DF_VIEW_UI_FUNCTION_NAME(Theme)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanSerializeEntityPath|1*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("settings"), str8_lit_comp("Settings"), DF_NameKind_Null, DF_IconKind_Gear, DF_VIEW_SETUP_FUNCTION_NAME(Settings), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Settings), DF_VIEW_CMD_FUNCTION_NAME(Settings), DF_VIEW_UI_FUNCTION_NAME(Settings)},
 };
 
 DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7] =
@@ -1266,7 +1266,7 @@ Rng1S32 df_g_setting_code_s32_range_table[13] =
 {0, 1},
 {0, 1},
 {0, 1},
-{0, 32},
+{1, 32},
 };
 
 C_LINKAGE_END
