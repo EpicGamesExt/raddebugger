@@ -441,6 +441,7 @@ typedef enum DF_SettingsItemKind
 {
   DF_SettingsItemKind_Setting,
   DF_SettingsItemKind_ThemeColor,
+  DF_SettingsItemKind_ThemePreset,
 }
 DF_SettingsItemKind;
 
@@ -455,6 +456,7 @@ struct DF_SettingsItem
   DF_IconKind icon_kind;
   DF_SettingCode code;
   DF_ThemeColor color;
+  DF_ThemePreset preset;
 };
 
 typedef struct DF_SettingsItemNode DF_SettingsItemNode;

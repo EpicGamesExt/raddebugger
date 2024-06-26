@@ -8481,6 +8481,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
   typedef struct DF_SettingsViewState DF_SettingsViewState;
   struct DF_SettingsViewState
   {
+    B32 initialized;
     Vec2S64 cursor;
     TxtPt txt_cursor;
     TxtPt txt_mark;
@@ -8488,8 +8489,14 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
     U64 txt_size;
     DF_ThemeColor color_ctx_menu_color;
     Vec4F32 color_ctx_menu_color_hsva;
+    DF_ThemePreset preset_apply_confirm;
   };
   DF_SettingsViewState *sv = df_view_user_state(view, DF_SettingsViewState);
+  if(!sv->initialized)
+  {
+    sv->initialized = 1;
+    sv->preset_apply_confirm = DF_ThemePreset_COUNT;
+  }
   
   //////////////////////////////
   //- rjf: gather all filtered settings items
@@ -8518,6 +8525,29 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
         n->v.string_matches = string_matches;
         n->v.icon_kind = DF_IconKind_Window;
         n->v.code = code;
+      }
+    }
+    
+    //- rjf: gather theme presets
+    for(EachEnumVal(DF_ThemePreset, preset))
+    {
+      String8 kind_string = str8_lit("Theme Preset");
+      String8 string = df_g_theme_preset_display_string_table[preset];
+      FuzzyMatchRangeList kind_string_matches = fuzzy_match_find(scratch.arena, query, kind_string);
+      FuzzyMatchRangeList string_matches = fuzzy_match_find(scratch.arena, query, string);
+      if(string_matches.count == string_matches.needle_part_count ||
+         kind_string_matches.count == kind_string_matches.needle_part_count)
+      {
+        DF_SettingsItemNode *n = push_array(scratch.arena, DF_SettingsItemNode, 1);
+        SLLQueuePush(items_list.first, items_list.last, n);
+        items_list.count += 1;
+        n->v.kind = DF_SettingsItemKind_ThemePreset;
+        n->v.kind_string = kind_string;
+        n->v.string = string;
+        n->v.kind_string_matches = kind_string_matches;
+        n->v.string_matches = string_matches;
+        n->v.icon_kind = DF_IconKind_Palette;
+        n->v.preset = preset;
       }
     }
     
@@ -8748,6 +8778,14 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
   }
   
   //////////////////////////////
+  //- rjf: cancels
+  //
+  UI_Focus(UI_FocusKind_On) if(ui_is_focus_active() && sv->preset_apply_confirm < DF_ThemePreset_COUNT && ui_slot_press(UI_EventActionSlot_Cancel))
+  {
+    sv->preset_apply_confirm = DF_ThemePreset_COUNT;
+  }
+  
+  //////////////////////////////
   //- rjf: build items list
   //
   Rng1S64 visible_row_range = {0};
@@ -8770,6 +8808,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
     {
       //- rjf: unpack item
       DF_SettingsItem *item = &items.v[row_num];
+      UI_Palette *palette = ui_top_palette();
       Vec4F32 rgba = ui_top_palette()->text_weak;
       OS_Cursor cursor = OS_Cursor_HandPoint;
       Rng1S32 s32_range = {0};
@@ -8780,6 +8819,19 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       F32 slider_pct = 0.f;
       switch(item->kind)
       {
+        case DF_SettingsItemKind_ThemePreset:
+        {
+          Vec4F32 *colors = df_g_theme_preset_colors_table[item->preset];
+          Vec4F32 bg_color = colors[DF_ThemeColor_BaseBackground];
+          Vec4F32 tx_color = colors[DF_ThemeColor_Text];
+          Vec4F32 tw_color = colors[DF_ThemeColor_TextWeak];
+          Vec4F32 bd_color = colors[DF_ThemeColor_BaseBorder];
+          palette = ui_build_palette(ui_top_palette(),
+                                     .text = tx_color,
+                                     .text_weak = tw_color,
+                                     .border = bd_color,
+                                     .background = bg_color);
+        }break;
         case DF_SettingsItemKind_ThemeColor:
         {
           rgba = df_rgba_from_theme_color(item->color);
@@ -8804,7 +8856,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       
       //- rjf: build item widget
       UI_Box *item_box = &ui_g_nil_box;
-      UI_Focus(row_num+1 == sv->cursor.y ? UI_FocusKind_On : UI_FocusKind_Off)
+      UI_Focus(row_num+1 == sv->cursor.y ? UI_FocusKind_On : UI_FocusKind_Off) UI_Palette(palette)
       {
         ui_set_next_hover_cursor(cursor);
         item_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
@@ -8850,6 +8902,15 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
               UI_Flags(UI_BoxFlag_DrawTextWeak)
               ui_label(df_g_icon_kind_text_table[is_toggled ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow]);
           }
+          if(item->kind == DF_SettingsItemKind_ThemePreset && sv->preset_apply_confirm == item->preset)
+          {
+            ui_spacer(ui_pct(1, 0));
+            UI_PrefWidth(ui_text_dim(10, 1))
+              DF_Palette(DF_PaletteCode_NegativePopButton)
+              UI_CornerRadius(ui_top_font_size()*0.5f)
+              UI_FontSize(ui_top_font_size()*0.9f)
+              ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBackground, "Click Again To Apply");
+          }
         }
       }
       
@@ -8883,6 +8944,23 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
         pst_drag_val = clamp_1s32(s32_range, pst_drag_val);
         df_gfx_state->cfg_setting_vals[DF_CfgSrc_User][item->code].s32 = pst_drag_val;
         df_gfx_state->cfg_setting_vals[DF_CfgSrc_User][item->code].set = 1;
+      }
+      if(item->kind == DF_SettingsItemKind_ThemePreset && ui_clicked(sig))
+      {
+        if(sv->preset_apply_confirm == item->preset)
+        {
+          Vec4F32 *colors = df_g_theme_preset_colors_table[item->preset];
+          MemoryCopy(df_gfx_state->cfg_theme_target.colors, colors, sizeof(df_gfx_state->cfg_theme_target.colors));
+          sv->preset_apply_confirm = DF_ThemePreset_COUNT;
+        }
+        else
+        {
+          sv->preset_apply_confirm = item->preset;
+        }
+      }
+      if(item->kind != DF_SettingsItemKind_ThemePreset && ui_pressed(sig))
+      {
+        sv->preset_apply_confirm = DF_ThemePreset_COUNT;
       }
     }
   }
