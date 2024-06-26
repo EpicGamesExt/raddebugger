@@ -4,15 +4,15 @@
 ////////////////////////////////
 //~ rjf: 0.9.11 TODO
 //
-// [ ] user settings (ui & functionality - generally need a story for it)
-//  [ ] hover animations
-//  [ ] press animations
-//  [ ] focus animations
-//  [ ] tooltip animations
-//  [ ] context menu animations
-//  [ ] scrolling animations
-//  [ ] background blur
-//  [ ] tab width
+// [x] user settings (ui & functionality - generally need a story for it)
+//  [x] hover animations
+//  [x] press animations
+//  [x] focus animations
+//  [x] tooltip animations
+//  [x] context menu animations
+//  [x] scrolling animations
+//  [x] background blur
+//  [x] tab width
 //  [ ] auto-scroll output window
 //
 // [ ] move breakpoints to being a global thing, not nested to particular files

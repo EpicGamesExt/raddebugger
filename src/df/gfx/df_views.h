@@ -439,9 +439,11 @@ struct DF_MemoryViewState
 
 typedef enum DF_SettingsItemKind
 {
+  DF_SettingsItemKind_CategoryHeader,
   DF_SettingsItemKind_Setting,
   DF_SettingsItemKind_ThemeColor,
   DF_SettingsItemKind_ThemePreset,
+  DF_SettingsItemKind_COUNT
 }
 DF_SettingsItemKind;
 
@@ -457,6 +459,7 @@ struct DF_SettingsItem
   DF_SettingCode code;
   DF_ThemeColor color;
   DF_ThemePreset preset;
+  DF_SettingsItemKind category;
 };
 
 typedef struct DF_SettingsItemNode DF_SettingsItemNode;
