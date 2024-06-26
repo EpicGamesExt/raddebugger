@@ -5417,7 +5417,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           
           //- rjf: restart button
-          if(!can_play && processes.count != 0) UI_TextAlignment(UI_TextAlign_Center)
+          else UI_TextAlignment(UI_TextAlign_Center)
             UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextPositive)))
           {
             UI_Signal sig = ui_button(df_g_icon_kind_text_table[DF_IconKind_Redo]);
@@ -10457,8 +10457,8 @@ df_entity_tooltips(DF_Entity *entity)
   scratch_end(scratch);
 }
 
-internal void
-df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query)
+internal UI_Signal
+df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -10490,10 +10490,10 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
   {
     palette = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
   }
-  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   ui_set_next_palette(palette);
+  ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                          UI_BoxFlag_DrawBorder|
+                                          (!is_implicit*UI_BoxFlag_DrawBorder)|
                                           UI_BoxFlag_DrawBackground|
                                           UI_BoxFlag_DrawHotEffects|
                                           UI_BoxFlag_DrawActiveEffects,
@@ -10609,9 +10609,9 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
   }
   
   //- rjf: do interaction on main box
+  UI_Signal sig = ui_signal_from_box(box);
   {
-    UI_Signal sig = ui_signal_from_box(box);
-    if(ui_key_match(box->key, ui_hot_key()))
+    if(ui_hovering(sig) && !df_drag_is_active())
     {
       df_entity_tooltips(entity);
     }
@@ -10644,6 +10644,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
   }
   scratch_end(scratch);
   ProfEnd();
+  return sig;
 }
 
 internal void
@@ -11032,7 +11033,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: hover tooltips
-            if(ui_hovering(thread_sig))
+            if(ui_hovering(thread_sig) && !df_drag_is_active())
             {
               df_entity_tooltips(thread);
             }
@@ -11187,7 +11188,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             }
             
             // rjf: hover tooltips
-            if(ui_hovering(thread_sig))
+            if(ui_hovering(thread_sig) && !df_drag_is_active())
             {
               df_entity_tooltips(thread);
             }
@@ -11274,7 +11275,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             UI_Signal bp_sig = ui_signal_from_box(bp_box);
             
             // rjf: bp hovering
-            if(ui_hovering(bp_sig))
+            if(ui_hovering(bp_sig) && !df_drag_is_active())
             {
               df_entity_tooltips(bp);
             }
@@ -11334,7 +11335,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             UI_Signal pin_sig = ui_signal_from_box(pin_box);
             
             // rjf: watch hovering
-            if(ui_hovering(pin_sig))
+            if(ui_hovering(pin_sig) && !df_drag_is_active())
             {
               df_entity_tooltips(pin);
             }

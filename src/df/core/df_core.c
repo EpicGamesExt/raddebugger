@@ -4054,7 +4054,6 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_RunFlags flags, CTRL_Tra
           {
             ctrl_user_bp_kind = CTRL_UserBreakpointKind_SymbolNameAndOffset;
             ctrl_user_bp_string = symb->name;
-            ctrl_user_bp_u64 = user_bp->u64;
           }
         }
         
@@ -7056,6 +7055,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             for(DF_EntityNode *n = user_bps.first; n != 0; n = n->next)
             {
               DF_Entity *bp = n->entity;
+              DF_Entity *symb = df_entity_child_from_kind(bp, DF_EntityKind_EntryPointName);
               if(bp->flags & DF_EntityFlag_HasVAddr && bp->vaddr == stop_thread_vaddr)
               {
                 bp->u64 += 1;
@@ -7071,6 +7071,14 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                     bp->u64 += 1;
                     break;
                   }
+                }
+              }
+              if(!df_entity_is_nil(symb))
+              {
+                U64 symb_voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, symb->name);
+                if(symb_voff == stop_thread_voff)
+                {
+                  bp->u64 += 1;
                 }
               }
             }

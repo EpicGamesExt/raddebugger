@@ -35,10 +35,6 @@
 // [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
-//
-//  [x] highlighted text & ctrl+f -> auto-fill search query
-//  [ ] double click on procedure in procedures tab to jump to source
-//  [ ] double-click any part of frame in callstack view -> snap to function
 
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
@@ -421,6 +417,9 @@
 //      opens the context window. It seems like maybe menus should be right,
 //      and left should do the default action, more consistently?
 //
+//  [x] double click on procedure in procedures tab to jump to source
+//  [x] highlighted text & ctrl+f -> auto-fill search query
+//  [x] double-click any part of frame in callstack view -> snap to function
 
 #ifndef RADDBG_H
 #define RADDBG_H
