@@ -7045,7 +7045,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             Rng2F32 panel_rect = panel_box->rect;
             
             // rjf: colors
-            Vec4F32 bg_color = v4f32(0.1f, 0.1f, 0.1f, 1);
+            Vec4F32 bg_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBackground);
             Vec4F32 bd_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBorder);
             Vec4F32 hl_color = df_rgba_from_theme_color(DF_ThemeColor_TextNeutral);
             bg_color.w *= view->loading_t;
