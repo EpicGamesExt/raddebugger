@@ -420,10 +420,66 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
               break;
             }
           }
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
         }
         
-        // rjf: push
-        txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        // rjf: split symbols by maximum-munch-rule
+        else if(token.kind == TXT_TokenKind_Symbol)
+        {
+          read_only local_persist String8 c_cpp_multichar_symbol_strings[] =
+          {
+            str8_lit_comp("<<"),
+            str8_lit_comp(">>"),
+            str8_lit_comp("<="),
+            str8_lit_comp(">="),
+            str8_lit_comp("=="),
+            str8_lit_comp("!="),
+            str8_lit_comp("&&"),
+            str8_lit_comp("||"),
+            str8_lit_comp("|="),
+            str8_lit_comp("&="),
+            str8_lit_comp("^="),
+            str8_lit_comp("~="),
+            str8_lit_comp("+="),
+            str8_lit_comp("-="),
+            str8_lit_comp("*="),
+            str8_lit_comp("/="),
+            str8_lit_comp("%="),
+            str8_lit_comp("<<="),
+            str8_lit_comp(">>="),
+            str8_lit_comp("->"),
+          };
+          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
+          for(U64 off = 0, next_off = token_string.size; off < token_string.size; off = next_off)
+          {
+            B32 found = 0;
+            for(U64 idx = 0; idx < ArrayCount(c_cpp_multichar_symbol_strings); idx += 1)
+            {
+              if(str8_match(str8_substr(string, r1u64(off, off+c_cpp_multichar_symbol_strings[idx].size)),
+                            c_cpp_multichar_symbol_strings[idx],
+                            0))
+              {
+                found = 1;
+                next_off = off + c_cpp_multichar_symbol_strings[idx].size;
+                TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+                txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+                break;
+              }
+            }
+            if(!found)
+            {
+              next_off = off+1;
+              TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+              txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+            }
+          }
+        }
+        
+        // rjf: all other tokens
+        else
+        {
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        }
         
         // rjf: increment by ender padding
         idx += ender_pad;
@@ -650,10 +706,66 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
               break;
             }
           }
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
         }
         
-        // rjf: push
-        txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        // rjf: split symbols by maximum-munch-rule
+        else if(token.kind == TXT_TokenKind_Symbol)
+        {
+          read_only local_persist String8 odin_multichar_symbol_strings[] =
+          {
+            str8_lit_comp("<<"),
+            str8_lit_comp(">>"),
+            str8_lit_comp("<="),
+            str8_lit_comp(">="),
+            str8_lit_comp("=="),
+            str8_lit_comp("!="),
+            str8_lit_comp("&&"),
+            str8_lit_comp("||"),
+            str8_lit_comp("|="),
+            str8_lit_comp("&="),
+            str8_lit_comp("^="),
+            str8_lit_comp("~="),
+            str8_lit_comp("+="),
+            str8_lit_comp("-="),
+            str8_lit_comp("*="),
+            str8_lit_comp("/="),
+            str8_lit_comp("%="),
+            str8_lit_comp("<<="),
+            str8_lit_comp(">>="),
+            str8_lit_comp("->"),
+          };
+          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
+          for(U64 off = 0, next_off = token_string.size; off < token_string.size; off = next_off)
+          {
+            B32 found = 0;
+            for(U64 idx = 0; idx < ArrayCount(odin_multichar_symbol_strings); idx += 1)
+            {
+              if(str8_match(str8_substr(string, r1u64(off, off+odin_multichar_symbol_strings[idx].size)),
+                            odin_multichar_symbol_strings[idx],
+                            0))
+              {
+                found = 1;
+                next_off = off + odin_multichar_symbol_strings[idx].size;
+                TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+                txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+                break;
+              }
+            }
+            if(!found)
+            {
+              next_off = off+1;
+              TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+              txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+            }
+          }
+        }
+        
+        // rjf: all other tokens
+        else
+        {
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        }
         
         // rjf: increment by ender padding
         idx += ender_pad;
@@ -879,10 +991,66 @@ txt_token_array_from_string__jai(Arena *arena, U64 *bytes_processed_counter, Str
               break;
             }
           }
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
         }
         
-        // rjf: push
-        txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        // rjf: split symbols by maximum-munch-rule
+        else if(token.kind == TXT_TokenKind_Symbol)
+        {
+          read_only local_persist String8 jai_multichar_symbol_strings[] =
+          {
+            str8_lit_comp("<<"),
+            str8_lit_comp(">>"),
+            str8_lit_comp("<="),
+            str8_lit_comp(">="),
+            str8_lit_comp("=="),
+            str8_lit_comp("!="),
+            str8_lit_comp("&&"),
+            str8_lit_comp("||"),
+            str8_lit_comp("|="),
+            str8_lit_comp("&="),
+            str8_lit_comp("^="),
+            str8_lit_comp("~="),
+            str8_lit_comp("+="),
+            str8_lit_comp("-="),
+            str8_lit_comp("*="),
+            str8_lit_comp("/="),
+            str8_lit_comp("%="),
+            str8_lit_comp("<<="),
+            str8_lit_comp(">>="),
+            str8_lit_comp("->"),
+          };
+          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
+          for(U64 off = 0, next_off = token_string.size; off < token_string.size; off = next_off)
+          {
+            B32 found = 0;
+            for(U64 idx = 0; idx < ArrayCount(jai_multichar_symbol_strings); idx += 1)
+            {
+              if(str8_match(str8_substr(string, r1u64(off, off+jai_multichar_symbol_strings[idx].size)),
+                            jai_multichar_symbol_strings[idx],
+                            0))
+              {
+                found = 1;
+                next_off = off + jai_multichar_symbol_strings[idx].size;
+                TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+                txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+                break;
+              }
+            }
+            if(!found)
+            {
+              next_off = off+1;
+              TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+              txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+            }
+          }
+        }
+        
+        // rjf: all other tokens
+        else
+        {
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        }
         
         // rjf: increment by ender padding
         idx += ender_pad;
@@ -1114,10 +1282,66 @@ txt_token_array_from_string__zig(Arena *arena, U64 *bytes_processed_counter, Str
               break;
             }
           }
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
         }
         
-        // rjf: push
-        txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        // rjf: split symbols by maximum-munch-rule
+        else if(token.kind == TXT_TokenKind_Symbol)
+        {
+          read_only local_persist String8 zig_multichar_symbol_strings[] =
+          {
+            str8_lit_comp("<<"),
+            str8_lit_comp(">>"),
+            str8_lit_comp("<="),
+            str8_lit_comp(">="),
+            str8_lit_comp("=="),
+            str8_lit_comp("!="),
+            str8_lit_comp("&&"),
+            str8_lit_comp("||"),
+            str8_lit_comp("|="),
+            str8_lit_comp("&="),
+            str8_lit_comp("^="),
+            str8_lit_comp("~="),
+            str8_lit_comp("+="),
+            str8_lit_comp("-="),
+            str8_lit_comp("*="),
+            str8_lit_comp("/="),
+            str8_lit_comp("%="),
+            str8_lit_comp("<<="),
+            str8_lit_comp(">>="),
+            str8_lit_comp("->"),
+          };
+          String8 token_string = str8_substr(string, r1u64(active_token_start_idx, idx+ender_pad));
+          for(U64 off = 0, next_off = token_string.size; off < token_string.size; off = next_off)
+          {
+            B32 found = 0;
+            for(U64 idx = 0; idx < ArrayCount(zig_multichar_symbol_strings); idx += 1)
+            {
+              if(str8_match(str8_substr(string, r1u64(off, off+zig_multichar_symbol_strings[idx].size)),
+                            zig_multichar_symbol_strings[idx],
+                            0))
+              {
+                found = 1;
+                next_off = off + zig_multichar_symbol_strings[idx].size;
+                TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+                txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+                break;
+              }
+            }
+            if(!found)
+            {
+              next_off = off+1;
+              TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
+              txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+            }
+          }
+        }
+        
+        // rjf: all other tokens
+        else
+        {
+          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+        }
         
         // rjf: increment by ender padding
         idx += ender_pad;
