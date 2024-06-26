@@ -1762,13 +1762,16 @@ internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCt
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators
 
-//- rjf: frame metadata
+//- rjf: frame data
 internal F32 df_dt(void);
 internal U64 df_frame_index(void);
+internal Arena *df_frame_arena(void);
 internal F64 df_time_in_seconds(void);
 
 //- rjf: interaction registers
 internal DF_InteractRegs *df_interact_regs(void);
+internal DF_InteractRegs *df_push_interact_regs(void);
+internal DF_InteractRegs *df_pop_interact_regs(void);
 
 //- rjf: undo/redo history
 internal DF_StateDeltaHistory *df_state_delta_history(void);

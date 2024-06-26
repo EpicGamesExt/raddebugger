@@ -5870,7 +5870,7 @@ df_eval_viz_row_list_push_new(Arena *arena, EVAL_ParseCtx *parse_ctx, DF_EvalViz
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators
 
-//- rjf: frame metadata
+//- rjf: frame data
 
 internal F32
 df_dt(void)
@@ -5884,10 +5884,47 @@ df_frame_index(void)
   return df_state->frame_index;
 }
 
+internal Arena *
+df_frame_arena(void)
+{
+  return df_state->frame_arenas[df_state->frame_index%ArrayCount(df_state->frame_arenas)];
+}
+
 internal F64
 df_time_in_seconds(void)
 {
   return df_state->time_in_seconds;
+}
+
+//- rjf: interaction registers
+
+internal DF_InteractRegs *
+df_interact_regs(void)
+{
+  DF_InteractRegs *regs = &df_state->top_interact_regs->v;
+  return regs;
+}
+
+internal DF_InteractRegs *
+df_push_interact_regs(void)
+{
+  DF_InteractRegs *top = df_interact_regs();
+  DF_InteractRegsNode *n = push_array(df_frame_arena(), DF_InteractRegsNode, 1);
+  MemoryCopyStruct(&n->v, top);
+  SLLStackPush(df_state->top_interact_regs, n);
+  return &n->v;
+}
+
+internal DF_InteractRegs *
+df_pop_interact_regs(void)
+{
+  DF_InteractRegs *regs = &df_state->top_interact_regs->v;
+  SLLStackPop(df_state->top_interact_regs);
+  if(df_state->top_interact_regs == 0)
+  {
+    df_state->top_interact_regs = &df_state->base_interact_regs;
+  }
+  return regs;
 }
 
 //- rjf: undo/redo history
@@ -6776,6 +6813,10 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   Arena *arena = arena_alloc();
   df_state = push_array(arena, DF_State, 1);
   df_state->arena = arena;
+  for(U64 idx = 0; idx < ArrayCount(df_state->frame_arenas); idx += 1)
+  {
+    df_state->frame_arenas[idx] = arena_alloc();
+  }
   df_state->root_cmd_arena = arena_alloc();
   df_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
   df_state->entities_arena = arena_alloc__sized(GB(64), KB(64));
@@ -6936,8 +6977,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
 {
   ProfBeginFunction();
   df_state->frame_index += 1;
+  arena_clear(df_frame_arena());
   df_state->dt = dt;
   df_state->time_in_seconds += dt;
+  df_state->top_interact_regs = &df_state->base_interact_regs;
+  MemoryZeroStruct(df_state->top_interact_regs);
   
   //- rjf: sync with ctrl thread
   ProfScope("sync with ctrl thread")
