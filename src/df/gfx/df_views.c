@@ -432,7 +432,7 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
 }
 
 internal void
-df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -500,9 +500,14 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
   //////////////////////////////
   //- rjf: calculate line-range-dependent info
   //
-  F32 priority_margin_width_px = big_glyph_advance*3.5f;
-  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
+  F32 priority_margin_width_px = 0;
+  F32 catchall_margin_width_px = 0;
+  if(flags & DF_CodeViewFlag_Margins)
+  {
+    priority_margin_width_px = big_glyph_advance*3.5f;
+    catchall_margin_width_px = big_glyph_advance*3.5f;
+  }
   TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, text_info, text_data, visible_line_num_range);
   
   //////////////////////////////
@@ -528,7 +533,11 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
   DF_CodeSliceParams code_slice_params = {0};
   {
     // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
+    code_slice_params.flags                     = DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
+    if(flags & DF_CodeViewFlag_Margins)
+    {
+      code_slice_params.flags |= DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin;
+    }
     code_slice_params.line_num_range            = visible_line_num_range;
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
@@ -6423,7 +6432,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   if(!entity_is_missing && key_has_data)
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    df_code_view_build(ws, panel, view, cv, DF_CodeViewFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
   }
   
   //////////////////////////////
@@ -6673,7 +6682,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //
   if(!is_loading && has_disasm)
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
+    df_code_view_build(ws, panel, view, cv, DF_CodeViewFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
   }
   
   //////////////////////////////
@@ -6953,7 +6962,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //- rjf: build code contents
   //
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    df_code_view_build(ws, panel, view, cv, 0, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
   }
   
   //////////////////////////////
