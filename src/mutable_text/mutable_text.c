@@ -115,8 +115,8 @@ mtx_mut_thread__entry_point(void *p)
     //- rjf: construct new buffer
     if(op.range.max != op.range.min || op.replace.size != 0)
     {
-      Arena *arena = arena_alloc();
       U64 new_data_size = data.size + op.replace.size - dim_1u64(op.range);
+      Arena *arena = arena_alloc__sized(new_data_size + ARENA_HEADER_SIZE, new_data_size + ARENA_HEADER_SIZE);
       U8 *new_data_base = push_array_no_zero(arena, U8, new_data_size);
       String8 pre_replace_data = str8_substr(data, r1u64(0, op.range.min));
       String8 post_replace_data = str8_substr(data, r1u64(op.range.max, data.size));

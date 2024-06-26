@@ -78,14 +78,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   F32 dt = 1.f/target_hz;
   
   //////////////////////////////
-  //- rjf: last frame before sleep -> disable txti change detection
-  //
-  if(df_gfx_state->num_frames_requested == 0)
-  {
-    txti_set_external_change_detection_enabled(0);
-  }
-  
-  //////////////////////////////
   //- rjf: get events from the OS
   //
   OS_EventList events = {0};
@@ -93,11 +85,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   {
     events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
   }
-  
-  //////////////////////////////
-  //- rjf: enable txti change detection
-  //
-  txti_set_external_change_detection_enabled(1);
   
   //////////////////////////////
   //- rjf: begin measuring actual per-frame work

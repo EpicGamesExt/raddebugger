@@ -1398,19 +1398,6 @@ df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray
   return result;
 }
 
-//- rjf: entity -> text info
-
-internal TXTI_Handle
-df_txti_handle_from_entity(DF_Entity *entity)
-{
-  TXTI_Handle handle = {0};
-  Temp scratch = scratch_begin(0, 0);
-  String8 path = df_full_path_from_entity(scratch.arena, entity);
-  handle = txti_handle_from_path(path);
-  scratch_end(scratch);
-  return handle;
-}
-
 //- rjf: full path building, from file/folder entities
 
 internal String8
@@ -7123,10 +7110,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           DF_EntityList existing_processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
           if(existing_processes.count == 0)
           {
-            Temp scratch = scratch_begin(0, 0);
-            DF_Entity *session_log = df_log_from_entity(df_entity_root());
-            TXTI_Handle session_log_handle = df_txti_handle_from_entity(session_log);
-            txti_reload(session_log_handle, df_full_path_from_entity(scratch.arena, session_log));
+            MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
+            mtx_push_op(df_state->output_log_key, op);
             DF_EntityList bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
             for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
             {
@@ -7315,25 +7300,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           MTX_Op op = {r1u64(max_U64, max_U64), event->string};
           mtx_push_op(df_state->output_log_key, op);
-#if 0
-          String8 string = event->string;
-          DF_Entity *root = df_entity_root();
-          DF_Entity *thread = df_entity_from_ctrl_handle(event->machine_id, event->entity);
-          DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-          DF_Entity *machine = df_entity_ancestor_from_kind(process, DF_EntityKind_Machine);
-          DF_Entity *root_log = df_log_from_entity(root);
-          DF_Entity *thread_log = df_log_from_entity(thread);
-          DF_Entity *process_log = df_log_from_entity(process);
-          DF_Entity *machine_log = df_log_from_entity(machine);
-          TXTI_Handle root_log_handle = df_txti_handle_from_entity(root_log);
-          TXTI_Handle thread_log_handle = df_txti_handle_from_entity(thread_log);
-          TXTI_Handle process_log_handle = df_txti_handle_from_entity(process_log);
-          TXTI_Handle machine_log_handle = df_txti_handle_from_entity(machine_log);
-          txti_append(root_log_handle, string);
-          txti_append(thread_log_handle, string);
-          txti_append(process_log_handle, string);
-          txti_append(machine_log_handle, string);
-#endif
         }break;
         
         case CTRL_EventKind_ThreadName:

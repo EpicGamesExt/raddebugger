@@ -1536,9 +1536,6 @@ internal DF_EntityArray df_entity_array_from_list(Arena *arena, DF_EntityList *l
 internal DF_EntityFuzzyItemArray df_entity_fuzzy_item_array_from_entity_list_needle(Arena *arena, DF_EntityList *list, String8 needle);
 internal DF_EntityFuzzyItemArray df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray *array, String8 needle);
 
-//- rjf: entity -> text info
-internal TXTI_Handle df_txti_handle_from_entity(DF_Entity *entity);
-
 //- rjf: full path building, from file/folder entities
 internal String8 df_full_path_from_entity(Arena *arena, DF_Entity *entity);
 

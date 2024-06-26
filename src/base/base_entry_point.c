@@ -45,9 +45,6 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(FUZZY_SEARCH_H) && !defined(FZY_INIT_MANUAL)
   fzy_init();
 #endif
-#if defined(TXTI_H) && !defined(TXTI_INIT_MANUAL)
-  txti_init();
-#endif
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
 #endif
