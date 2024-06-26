@@ -6367,7 +6367,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
                     }
                   }
-                  if(!df_entity_is_nil(df_entity_from_handle(ws->hover_eval_file)))
+                  if(!df_entity_is_nil(df_entity_from_handle(ws->hover_eval_file)) || ws->hover_eval_vaddr != 0)
                     UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
                     UI_CornerRadius10(corner_radius)
                     UI_CornerRadius11(corner_radius)
@@ -11894,7 +11894,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     DF_Eval eval = df_eval_from_string(scratch.arena, di_scope, ctrl_ctx, parse_ctx, &eval_string2expr_map_nil, mouse_expr);
     if(eval.mode != EVAL_EvalMode_NULL)
     {
-      df_set_hover_eval(ws, mouse_expr_baseline_pos, *ctrl_ctx, df_entity_from_handle(df_interact_regs()->file), mouse_pt, 0, mouse_expr);
+      U64 line_vaddr = 0;
+      if(contains_1s64(params->line_num_range, mouse_pt.line))
+      {
+        U64 line_idx = mouse_pt.line-params->line_num_range.min;
+        line_vaddr = params->line_vaddrs[line_idx];
+      }
+      df_set_hover_eval(ws, mouse_expr_baseline_pos, *ctrl_ctx, df_entity_from_handle(df_interact_regs()->file), mouse_pt, line_vaddr, mouse_expr);
     }
     di_scope_close(di_scope);
   }
@@ -12078,27 +12084,27 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
                         mix_t = selected_thread_module->alive_t;
                       }
                     }
-                    if(!mapped_special)
-                    {
-                      U64 reg_num = eval_num_from_string(parse_ctx->regs_map, token_string);
-                      if(reg_num != 0)
-                      {
-                        mapped_special = 1;
-                        new_color_kind = DF_ThemeColor_CodeRegister;
-                        mix_t = selected_thread_module->alive_t;
-                      }
-                    }
-                    if(!mapped_special)
-                    {
-                      U64 alias_num = eval_num_from_string(parse_ctx->reg_alias_map, token_string);
-                      if(alias_num != 0)
-                      {
-                        mapped_special = 1;
-                        new_color_kind = DF_ThemeColor_CodeRegister;
-                        mix_t = selected_thread_module->alive_t;
-                      }
-                    }
                     break;
+                  }
+                  if(!mapped_special)
+                  {
+                    U64 reg_num = eval_num_from_string(parse_ctx->regs_map, token_string);
+                    if(reg_num != 0)
+                    {
+                      mapped_special = 1;
+                      new_color_kind = DF_ThemeColor_CodeRegister;
+                      mix_t = selected_thread_module->alive_t;
+                    }
+                  }
+                  if(!mapped_special)
+                  {
+                    U64 alias_num = eval_num_from_string(parse_ctx->reg_alias_map, token_string);
+                    if(alias_num != 0)
+                    {
+                      mapped_special = 1;
+                      new_color_kind = DF_ThemeColor_CodeRegister;
+                      mix_t = selected_thread_module->alive_t;
+                    }
                   }
                 }
                 if(new_color_kind != DF_ThemeColor_Null)

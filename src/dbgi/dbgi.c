@@ -22,6 +22,13 @@ di_hash_from_key(DI_Key *k)
   return hash;
 }
 
+internal DI_Key
+di_key_zero(void)
+{
+  DI_Key key = {0};
+  return key;
+}
+
 internal B32
 di_key_match(DI_Key *a, DI_Key *b)
 {

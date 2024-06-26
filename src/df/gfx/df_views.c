@@ -387,7 +387,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 }
 
 internal void
-df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range)
+df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -432,7 +432,7 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
 }
 
 internal void
-df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range)
+df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -710,6 +710,12 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         code_slice_params.line_vaddrs[slice_idx] = vaddr;
         code_slice_params.line_infos[slice_idx] = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
       }
+    }
+    
+    // rjf: add dasm dbgi key to relevant dbgis
+    if(dasm_insts != 0)
+    {
+      di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, &dasm_dbgi_key);
     }
   }
   
@@ -6294,7 +6300,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   String8 data = hs_data_from_hash(hs_scope, hash);
   
   //- rjf: process general code-view commands
-  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, 0, r1u64(0, 0));
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, 0, r1u64(0, 0), di_key_zero());
   
   //- rjf: process code-file commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
@@ -6417,7 +6423,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   if(!entity_is_missing && key_has_data)
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0));
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
   }
   
   //////////////////////////////
@@ -6525,13 +6531,14 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
     dasm_params.dbgi_key = dasm_dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
-  TXT_LangKind lang_kind = txt_lang_kind_from_architecture(arch);
+  df_interact_regs()->text_key = dasm_info.text_key;
+  df_interact_regs()->lang_kind = txt_lang_kind_from_architecture(arch);
   U128 dasm_text_hash = {0};
-  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, lang_kind, &dasm_text_hash);
+  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   
   //- rjf: process general code-view commands
-  df_code_view_cmds(ws, panel, view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range);
+  df_code_view_cmds(ws, panel, view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
   
   //- rjf: process disassembly-specific commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
@@ -6633,9 +6640,10 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     dasm_params.dbgi_key = dasm_dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
-  TXT_LangKind lang_kind = txt_lang_kind_from_architecture(arch);
+  df_interact_regs()->text_key = dasm_info.text_key;
+  df_interact_regs()->lang_kind = txt_lang_kind_from_architecture(arch);
   U128 dasm_text_hash = {0};
-  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, lang_kind, &dasm_text_hash);
+  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   B32 has_disasm = (dasm_info.insts.count != 0 && dasm_text_info.lines_count != 0);
   B32 is_loading = (!has_disasm && !df_entity_is_nil(process) && dim_1u64(dasm_vaddr_range) != 0);
@@ -6665,7 +6673,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //
   if(!is_loading && has_disasm)
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range);
+    df_code_view_build(ws, panel, view, cv, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
   }
   
   //////////////////////////////
@@ -6674,7 +6682,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   if(!is_loading && has_disasm)
   {
     U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, df_interact_regs()->cursor.line-1);
-    df_interact_regs()->vaddr_range = r1u64(dv->base_vaddr+off, dv->base_vaddr+off);
+    df_interact_regs()->vaddr_range = r1u64(dasm_base_vaddr+off, dasm_base_vaddr+off);
     df_interact_regs()->voff_range = df_voff_range_from_vaddr_range(dasm_module, df_interact_regs()->vaddr_range);
     df_interact_regs()->lines = df_lines_from_dbgi_key_voff(df_frame_arena(), &dasm_dbgi_key, df_interact_regs()->voff_range.min);
   }
@@ -6906,7 +6914,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Output)
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, 0, r1u64(0, 0));
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, 0, r1u64(0, 0), di_key_zero());
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -6945,7 +6953,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //- rjf: build code contents
   //
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0));
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
   }
   
   //////////////////////////////

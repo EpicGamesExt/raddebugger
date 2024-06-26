@@ -199,6 +199,7 @@ global RDI_Parsed di_rdi_parsed_nil = {0};
 
 internal U64 di_hash_from_string(String8 string, StringMatchFlags match_flags);
 internal U64 di_hash_from_key(DI_Key *k);
+internal DI_Key di_key_zero(void);
 internal B32 di_key_match(DI_Key *a, DI_Key *b);
 internal DI_Key di_key_copy(Arena *arena, DI_Key *src);
 internal DI_Key di_normalized_key_from_key(Arena *arena, DI_Key *src);
