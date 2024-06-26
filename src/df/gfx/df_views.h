@@ -385,24 +385,12 @@ struct DF_CodeViewState
 typedef struct DF_DisasmViewState DF_DisasmViewState;
 struct DF_DisasmViewState
 {
-  // rjf: stable state
   B32 initialized;
   DF_Handle process;
   U64 base_vaddr;
-  TxtPt cursor;
-  TxtPt mark;
-  S64 preferred_column;
-  B32 drifted_for_search;
   DASM_StyleFlags style_flags;
-  
-  // rjf: per-frame command info
-  S64 goto_line_num;
   U64 goto_vaddr;
-  B32 center_cursor;
-  B32 contain_cursor;
-  Arena *find_text_arena;
-  String8 find_text_fwd;
-  String8 find_text_bwd;
+  DF_CodeViewState cv;
 };
 
 ////////////////////////////////
@@ -469,8 +457,8 @@ internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityLi
 //~ rjf: Code Views
 
 internal void df_code_view_init(DF_CodeViewState *cv, DF_View *view);
-internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info);
-internal void df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info);
+internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range);
+internal void df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range);
 
 ////////////////////////////////
 //~ rjf: Watch Views

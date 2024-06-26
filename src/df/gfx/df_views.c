@@ -387,7 +387,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 }
 
 internal void
-df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info)
+df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range)
 {
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -432,7 +432,7 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
 }
 
 internal void
-df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info)
+df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -473,12 +473,12 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
                                                 view->scroll_pos.y.idx + 1 + num_possible_visible_lines);
   U64 visible_line_count = 0;
   {
-    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)info->lines_count);
-    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)info->lines_count);
+    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)text_info->lines_count);
+    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)text_info->lines_count);
     visible_line_num_range.min = Max(1, visible_line_num_range.min);
     visible_line_num_range.max = Max(1, visible_line_num_range.max);
-    target_visible_line_num_range.min = Clamp(1, target_visible_line_num_range.min, (S64)info->lines_count);
-    target_visible_line_num_range.max = Clamp(1, target_visible_line_num_range.max, (S64)info->lines_count);
+    target_visible_line_num_range.min = Clamp(1, target_visible_line_num_range.min, (S64)text_info->lines_count);
+    target_visible_line_num_range.max = Clamp(1, target_visible_line_num_range.max, (S64)text_info->lines_count);
     target_visible_line_num_range.min = Max(1, target_visible_line_num_range.min);
     target_visible_line_num_range.max = Max(1, target_visible_line_num_range.max);
     visible_line_count = (U64)dim_1s64(visible_line_num_range)+1;
@@ -490,11 +490,11 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
   S64 line_size_x = 0;
   Rng1S64 scroll_idx_rng[Axis2_COUNT] = {0};
   {
-    line_size_x = (info->lines_max_size*big_glyph_advance*3)/2;
+    line_size_x = (text_info->lines_max_size*big_glyph_advance*3)/2;
     line_size_x = ClampBot(line_size_x, (S64)big_glyph_advance*120);
     line_size_x = ClampBot(line_size_x, (S64)code_area_dim.x);
     scroll_idx_rng[Axis2_X] = r1s64(0, line_size_x-(S64)code_area_dim.x);
-    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)info->lines_count-1);
+    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)text_info->lines_count-1);
   }
   
   //////////////////////////////
@@ -503,7 +503,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
   F32 priority_margin_width_px = big_glyph_advance*3.5f;
   F32 catchall_margin_width_px = big_glyph_advance*3.5f;
   F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
-  TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, info, data, visible_line_num_range);
+  TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, text_info, text_data, visible_line_num_range);
   
   //////////////////////////////
   //- rjf: get active search query
@@ -555,13 +555,13 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       U64 line_idx = visible_line_num_range.min-1;
       for(U64 visible_line_idx = 0; visible_line_idx < visible_line_count; visible_line_idx += 1, line_idx += 1, line_num += 1)
       {
-        code_slice_params.line_text[visible_line_idx]   = str8_substr(data, info->lines_ranges[line_idx]);
-        code_slice_params.line_ranges[visible_line_idx] = info->lines_ranges[line_idx];
+        code_slice_params.line_text[visible_line_idx]   = str8_substr(text_data, text_info->lines_ranges[line_idx]);
+        code_slice_params.line_ranges[visible_line_idx] = text_info->lines_ranges[line_idx];
         code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
       }
     }
     
-    // rjf: find visible breakpoints
+    // rjf: find visible breakpoints for source code
     ProfScope("find visible breakpoints")
     {
       DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
@@ -576,7 +576,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       }
     }
     
-    // rjf: find live threads mapping to this file
+    // rjf: find live threads mapping to source code
     ProfScope("find live threads mapping to this file")
     {
       DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
@@ -605,7 +605,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       }
     }
     
-    // rjf: find visible watch pins
+    // rjf: find visible watch pins for source code
     ProfScope("find visible watch pins")
     {
       DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
@@ -630,6 +630,86 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         MemoryCopy(code_slice_params.line_infos, lines_array.v, sizeof(DF_LineList)*lines_array.count);
       }
       code_slice_params.relevant_dbgi_keys = lines_array.dbgi_keys;
+    }
+    
+    // rjf: find live threads mapping to disasm
+    if(dasm_insts) ProfScope("find live threads mapping to this disassembly")
+    {
+      DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
+      DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
+      for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
+      {
+        DF_Entity *thread = thread_n->entity;
+        U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
+        U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+        if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) == process && contains_1u64(dasm_vaddr_range, rip_vaddr))
+        {
+          U64 rip_off = rip_vaddr - dasm_vaddr_range.min;
+          S64 line_num = dasm_inst_array_idx_from_code_off__linear_scan(dasm_insts, rip_off)+1;
+          if(contains_1s64(visible_line_num_range, line_num))
+          {
+            U64 slice_line_idx = (line_num-visible_line_num_range.min);
+            df_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
+          }
+        }
+      }
+    }
+    
+    // rjf: find breakpoints mapping to this disasm
+    if(dasm_insts) ProfScope("find breakpoints mapping to this disassembly")
+    {
+      DF_EntityList bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
+      for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
+      {
+        DF_Entity *bp = n->entity;
+        if(bp->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, bp->vaddr))
+        {
+          U64 off = bp->vaddr-dasm_vaddr_range.min;
+          U64 idx = dasm_inst_array_idx_from_code_off__linear_scan(dasm_insts, off);
+          S64 line_num = (S64)(idx+1);
+          if(contains_1s64(visible_line_num_range, line_num))
+          {
+            U64 slice_line_idx = (line_num-visible_line_num_range.min);
+            df_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+          }
+        }
+      }
+    }
+    
+    // rjf: find watch pins mapping to this disasm
+    if(dasm_insts) ProfScope("find watch pins mapping to this disassembly")
+    {
+      DF_EntityList pins = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
+      for(DF_EntityNode *n = pins.first; n != 0; n = n->next)
+      {
+        DF_Entity *pin = n->entity;
+        if(pin->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, pin->vaddr))
+        {
+          U64 off = pin->vaddr-dasm_vaddr_range.min;
+          U64 idx = dasm_inst_array_idx_from_code_off__linear_scan(dasm_insts, off);
+          S64 line_num = (S64)(idx+1);
+          if(contains_1s64(visible_line_num_range, line_num))
+          {
+            U64 slice_line_idx = (line_num-visible_line_num_range.min);
+            df_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], pin);
+          }
+        }
+      }
+    }
+    
+    // rjf: fill dasm -> src info
+    if(dasm_insts)
+    {
+      DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
+      DI_Key dbgi_key = df_dbgi_key_from_module(module);
+      for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
+      {
+        U64 vaddr = dasm_vaddr_range.min + dasm_inst_array_code_off_from_idx(dasm_insts, line_num-1);
+        U64 voff = df_voff_from_vaddr(module, vaddr);
+        U64 slice_idx = line_num-visible_line_num_range.min;
+        code_slice_params.line_vaddrs[slice_idx] = vaddr;
+        code_slice_params.line_infos[slice_idx] = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
+      }
     }
   }
   
@@ -668,14 +748,14 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       B32 found = 0;
       B32 first = 1;
       S64 line_num_start = view->cursor.line;
-      S64 line_num_last = (S64)info->lines_count;
+      S64 line_num_last = (S64)text_info->lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
         // rjf: pop scratch
         temp_end(scratch);
         
         // rjf: gather line info
-        String8 line_string = str8_substr(data, info->lines_ranges[line_num-1]);
+        String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
         U64 search_start = 0;
         if(view->cursor.line == line_num && first)
         {
@@ -724,14 +804,14 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       B32 found = 0;
       B32 first = 1;
       S64 line_num_start = view->cursor.line;
-      S64 line_num_last = (S64)info->lines_count;
+      S64 line_num_last = (S64)text_info->lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
         // rjf: pop scratch
         temp_end(scratch);
         
         // rjf: gather line info
-        String8 line_string = str8_substr(data, info->lines_ranges[line_num-1]);
+        String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
         if(view->cursor.line == line_num && first)
         {
           line_string = str8_prefix(line_string, view->cursor.column-1);
@@ -793,7 +873,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
   {
     S64 line_num = cv->goto_line_num;
     cv->goto_line_num = 0;
-    line_num = Clamp(1, line_num, info->lines_count);
+    line_num = Clamp(1, line_num, text_info->lines_count);
     view->cursor = view->mark = txt_pt(line_num, 1);
     cv->center_cursor = !cv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
   }
@@ -806,7 +886,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
   {
     if(ui_is_focus_active() && visible_line_num_range.max >= visible_line_num_range.min)
     {
-      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(info, data, ClampBot(num_possible_visible_lines, 10) - 10, &view->cursor, &view->mark, &cv->preferred_column);
+      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(text_info, text_data, ClampBot(num_possible_visible_lines, 10) - 10, &view->cursor, &view->mark, &cv->preferred_column);
     }
   }
   
@@ -851,7 +931,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     {
       ui_kill_action();
       DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      params.string = txt_string_from_info_data_txt_rng(info, data, sig.mouse_expr_rng);
+      params.string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng);
       df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
     }
@@ -859,7 +939,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     //- rjf: selected text on single line, no query? -> set search text
     if(!txt_pt_match(view->cursor, view->mark) && view->cursor.line == view->mark.line && search_query.size == 0)
     {
-      String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(view->cursor, view->mark));
+      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, txt_rng(view->cursor, view->mark));
       df_set_search_string(text);
     }
   }
@@ -880,7 +960,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     if(cv->center_cursor)
     {
       cv->center_cursor = 0;
-      String8 cursor_line = str8_substr(data, info->lines_ranges[view->cursor.line-1]);
+      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[view->cursor.line-1]);
       F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, view->cursor.column-1)).x;
       
       // rjf: scroll x
@@ -903,7 +983,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     // rjf: snap in X
     if(snap[Axis2_X])
     {
-      String8 cursor_line = str8_substr(data, info->lines_ranges[view->cursor.line-1]);
+      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[view->cursor.line-1]);
       S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, view->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
@@ -931,7 +1011,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
       S64 max_delta = Max(0, cursor_visibility_range.max-(target_visible_line_num_range.min+num_possible_visible_lines));
       S64 new_idx = view->scroll_pos.y.idx+min_delta+max_delta;
-      new_idx = Clamp(0, new_idx, (S64)info->lines_count-1);
+      new_idx = Clamp(0, new_idx, (S64)text_info->lines_count-1);
       ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
     }
   }
@@ -6214,7 +6294,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   String8 data = hs_data_from_hash(hs_scope, hash);
   
   //- rjf: process general code-view commands
-  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info);
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, 0, r1u64(0, 0));
   
   //- rjf: process code-file commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
@@ -6337,7 +6417,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   if(!entity_is_missing && key_has_data)
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info);
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0));
   }
   
   //////////////////////////////
@@ -6408,34 +6488,29 @@ DF_VIEW_SETUP_FUNCTION_DEF(Disassembly)
   if(dv->initialized == 0)
   {
     dv->initialized = 1;
-    dv->cursor = txt_pt(1, 1);
-    dv->mark = txt_pt(1, 1);
-    dv->preferred_column = 1;
-    dv->find_text_arena = df_view_push_arena_ext(view);
     dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
+    df_code_view_init(&dv->cv, view);
   }
 }
 
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Disassembly)
 {
-  return str8_lit("");
+  return str8_zero();
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
 {
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  DASM_Scope *dasm_scope = dasm_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
   DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
+  Temp scratch = scratch_begin(0, 0);
+  DASM_Scope *dasm_scope = dasm_scope_open();
+  HS_Scope *hs_scope = hs_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
   
-  //////////////////////////////
-  //- rjf: unpack disassembly info
-  //
+  //- rjf: unpack disasm info
   DF_Entity *process = df_entity_from_handle(dv->process);
   Architecture arch = df_architecture_from_entity(process);
   U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(16));
-  DF_Entity *dasm_module = df_module_from_process_vaddr(process, dasm_base_vaddr);
+  DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
   DI_Key dasm_dbgi_key = df_dbgi_key_from_module(dasm_module);
   Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(16));
   U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
@@ -6450,13 +6525,15 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
     dasm_params.dbgi_key = dasm_dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
+  TXT_LangKind lang_kind = txt_lang_kind_from_architecture(arch);
   U128 dasm_text_hash = {0};
-  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, txt_lang_kind_from_architecture(arch), &dasm_text_hash);
+  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, dasm_info.text_key, lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   
-  //////////////////////////////
-  //- rjf: process commands
-  //
+  //- rjf: process general code-view commands
+  df_code_view_cmds(ws, panel, view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range);
+  
+  //- rjf: process disassembly-specific commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
     DF_Cmd *cmd = &n->cmd;
@@ -6476,210 +6553,61 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
       default: break;
       case DF_CoreCmdKind_GoToAddress:
       {
-        DF_Entity *entity = df_entity_from_handle(params.entity);
-        if(!df_entity_is_nil(entity) &&
-           (entity->kind == DF_EntityKind_Process ||
-            entity->kind == DF_EntityKind_Thread ||
-            entity->kind == DF_EntityKind_Module))
+        DF_Entity *process = &df_g_nil_entity;
         {
-          DF_Entity *process = entity;
-          if(entity->kind == DF_EntityKind_Thread ||
-             entity->kind == DF_EntityKind_Module)
+          DF_Entity *entity = df_entity_from_handle(params.entity);
+          if(!df_entity_is_nil(entity) &&
+             (entity->kind == DF_EntityKind_Process ||
+              entity->kind == DF_EntityKind_Thread ||
+              entity->kind == DF_EntityKind_Module))
           {
-            process = df_entity_ancestor_from_kind(process, DF_EntityKind_Process);
+            process = entity;
+            if(entity->kind == DF_EntityKind_Thread ||
+               entity->kind == DF_EntityKind_Module)
+            {
+              process = df_entity_ancestor_from_kind(process, DF_EntityKind_Process);
+            }
           }
-          dv->process = df_handle_from_entity(process);
         }
+        dv->process = df_handle_from_entity(process);
         dv->base_vaddr = params.vaddr;
         dv->goto_vaddr = params.vaddr;
-        dv->cursor = dv->mark = txt_pt(1, 1);
       }break;
-      case DF_CoreCmdKind_GoToLine:
-      {
-        dv->goto_line_num = cmd->params.text_point.line;
-      }break;
-      case DF_CoreCmdKind_CenterCursor:
-      {
-        dv->center_cursor = 1;
-      }break;
-      case DF_CoreCmdKind_ContainCursor:
-      {
-        dv->contain_cursor = 1;
-      }break;
-      case DF_CoreCmdKind_FindTextForward:
-      {
-        arena_clear(dv->find_text_arena);
-        dv->find_text_fwd = push_str8_copy(dv->find_text_arena, cmd->params.string);
-      }break;
-      case DF_CoreCmdKind_FindTextBackward:
-      {
-        arena_clear(dv->find_text_arena);
-        dv->find_text_bwd = push_str8_copy(dv->find_text_arena, cmd->params.string);
-      }break;
-      case DF_CoreCmdKind_ToggleBreakpointAtCursor:
-      {
-        if(1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count)
-        {
-          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, dv->cursor.line-1);
-          U64 vaddr = dasm_vaddr_range.min+off;
-          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-          params.vaddr = vaddr;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddressBreakpoint));
-          dv->contain_cursor = 1;
-        }
-      }break;
-      case DF_CoreCmdKind_ToggleWatchPinAtCursor:
-      {
-        if(1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count)
-        {
-          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, dv->cursor.line-1);
-          U64 vaddr = dasm_vaddr_range.min+off;
-          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-          p.vaddr = vaddr;
-          p.string = params.string;
-          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_VirtualAddr);
-          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
-          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchPin));
-          dv->contain_cursor = 1;
-        }
-      }break;
-      case DF_CoreCmdKind_RunToCursor:
-      {
-        if(1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count)
-        {
-          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, dv->cursor.line-1);
-          U64 vaddr = dasm_vaddr_range.min+off;
-          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-          params.vaddr = vaddr;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
-        }
-      }break;
-      case DF_CoreCmdKind_SetNextStatement:
-      {
-        S64 line_num = (cmd->params.text_point.line == 0 ? dv->cursor.line : cmd->params.text_point.line);
-        DF_Entity *thread = df_entity_from_handle(params.entity);
-        if(1 <= line_num && line_num <= dasm_info.insts.count)
-        {
-          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, line_num-1);
-          U64 vaddr = dasm_vaddr_range.min+off;
-          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-          params.vaddr = vaddr;
-          params.entity = df_handle_from_entity(thread);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetThreadIP));
-        }
-      }break;
-      case DF_CoreCmdKind_ToggleCodeBytesVisibility:
-      {
-        dv->style_flags ^= DASM_StyleFlag_CodeBytes;
-      }break;
-      case DF_CoreCmdKind_ToggleAddressVisibility:
-      {
-        dv->style_flags ^= DASM_StyleFlag_Addresses;
-      }break;
-      case DF_CoreCmdKind_GoToNameAtCursor:
-      {
-        // rjf: determine expression range
-        Rng1U64 expr_range = {0};
-        {
-          TxtRng selection_range = txt_rng(dv->cursor, dv->mark);
-          if(txt_pt_match(selection_range.min, selection_range.max))
-          {
-            expr_range = txt_expr_off_range_from_info_data_pt(&dasm_text_info, dasm_text_data, dv->cursor);
-          }
-          else
-          {
-            expr_range = r1u64(txt_off_from_info_pt(&dasm_text_info, selection_range.min), txt_off_from_info_pt(&dasm_text_info, selection_range.max));
-          }
-        }
-        
-        // rjf: expression range -> text
-        String8 expr_text = str8_substr(dasm_text_data, expr_range);
-        
-        // rjf: go to name
-        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-        params.string = expr_text;
-        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
-      }break;
-      case DF_CoreCmdKind_ToggleWatchExpressionAtCursor:
-      {
-        // rjf: determine expression range
-        Rng1U64 expr_range = {0};
-        {
-          TxtRng selection_range = txt_rng(dv->cursor, dv->mark);
-          if(txt_pt_match(selection_range.min, selection_range.max))
-          {
-            expr_range = txt_expr_off_range_from_info_data_pt(&dasm_text_info, dasm_text_data, dv->cursor);
-          }
-          else
-          {
-            expr_range = r1u64(txt_off_from_info_pt(&dasm_text_info, selection_range.min), txt_off_from_info_pt(&dasm_text_info, selection_range.max));
-          }
-        }
-        
-        // rjf: expression range -> text
-        String8 expr_text = str8_substr(dasm_text_data, expr_range);
-        
-        // rjf: toggle watch expr
-        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-        params.string = expr_text;
-        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
-      }break;
+      case DF_CoreCmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
+      case DF_CoreCmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
     }
   }
   
+  txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   dasm_scope_close(dasm_scope);
-  txt_scope_close(txt_scope);
   scratch_end(scratch);
 }
 
 DF_VIEW_UI_FUNCTION_DEF(Disassembly)
 {
-  ProfBeginFunction();
+  DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
+  DF_CodeViewState *cv = &dv->cv;
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   DASM_Scope *dasm_scope = dasm_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
-  DI_Scope *di_scope = di_scope_open();
-  DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
   
   //////////////////////////////
-  //- rjf: extract invariants
+  //- rjf: set up invariants
   //
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-  F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
-  F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
-  F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*df_setting_val_from_code(DF_SettingCode_TabWidth).s32;
-  F_Metrics code_font_metrics = f_metrics_from_tag_size(code_font, code_font_size);
-  F32 code_line_height = ceil_f32(f_line_height_from_metrics(&code_font_metrics) * 1.5f);
-  F32 big_glyph_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
-  Vec2F32 panel_box_dim = dim_2f32(rect);
-  Vec2F32 bottom_bar_dim = {panel_box_dim.x, ui_top_font_size()*1.8f};
-  F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
-  Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim - bottom_bar_dim.y);
-  S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
-  
-  //////////////////////////////
-  //- rjf: unpack ctrl ctx & make parse ctx
-  //
-  DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
-  DF_Entity *selected_process = df_entity_ancestor_from_kind(selected_thread, DF_EntityKind_Process);
-  U64 unwind_count = ctrl_ctx.unwind_count;
-  U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(selected_thread, unwind_count);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, selected_process, rip_vaddr);
+  F32 bottom_bar_height = ui_top_font_size()*2.f;
+  Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
+  Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
   
   //////////////////////////////
   //- rjf: no disasm process open? -> snap to selected thread
   //
   if(df_entity_is_nil(df_entity_from_handle(dv->process)))
   {
-    dv->process = df_handle_from_entity(selected_process);
+    DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
+    U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
+    dv->process = df_handle_from_entity(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process));
     dv->base_vaddr = rip_vaddr;
     dv->goto_vaddr = rip_vaddr;
   }
@@ -6713,12 +6641,6 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   B32 is_loading = (!has_disasm && !df_entity_is_nil(process) && dim_1u64(dasm_vaddr_range) != 0);
   
   //////////////////////////////
-  //- rjf: unpack module info for this region
-  //
-  DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-  DI_Key dbgi_key = df_dbgi_key_from_module(module);
-  
-  //////////////////////////////
   //- rjf: is loading -> equip view with loading information
   //
   if(is_loading && !df_ctrl_targets_running())
@@ -6727,532 +6649,64 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   }
   
   //////////////////////////////
-  //- rjf: determine visible line range / count
-  //
-  Rng1S64 visible_line_num_range = r1s64(view->scroll_pos.y.idx + (S64)(view->scroll_pos.y.off) + 1 - !!(view->scroll_pos.y.off < 0),
-                                         view->scroll_pos.y.idx + (S64)(view->scroll_pos.y.off) + 1 + num_possible_visible_lines);
-  U64 visible_line_count = 0;
-  {
-    visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)dasm_info.insts.count);
-    visible_line_num_range.max = Clamp(1, visible_line_num_range.max, (S64)dasm_info.insts.count);
-    visible_line_count = (U64)dim_1s64(visible_line_num_range)+1;
-  }
-  
-  //////////////////////////////
-  //- rjf: calculate line-range-dependent info
-  //
-  F32 priority_margin_width_px = big_glyph_advance*3.5f;
-  F32 catchall_margin_width_px = big_glyph_advance*3.5f;
-  F32 line_num_width_px = big_glyph_advance * (log10(visible_line_num_range.max) + 3);
-  TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &dasm_text_info, dasm_text_data, visible_line_num_range);
-  
-  //////////////////////////////
-  //- rjf: calculate scroll bounds
-  //
-  S64 line_size_x = 0;
-  Rng1S64 scroll_idx_rng[Axis2_COUNT] = {0};
-  {
-    line_size_x = (200*big_glyph_advance);
-    line_size_x = ClampBot(line_size_x, (S64)big_glyph_advance*120);
-    line_size_x = ClampBot(line_size_x, (S64)code_area_dim.x);
-    scroll_idx_rng[Axis2_X] = r1s64(0, line_size_x-(S64)code_area_dim.x);
-    scroll_idx_rng[Axis2_Y] = r1s64(0, (S64)dasm_info.insts.count-1);
-  }
-  
-  //////////////////////////////
-  //- rjf: get active search query
-  //
-  String8 search_query = {0};
-  Side search_query_side = Side_Invalid;
-  B32 search_query_is_active = 0;
-  {
-    DF_CoreCmdKind query_cmd_kind = df_core_cmd_kind_from_string(ws->query_cmd_spec->info.string);
-    if(query_cmd_kind == DF_CoreCmdKind_FindTextForward ||
-       query_cmd_kind == DF_CoreCmdKind_FindTextBackward)
-    {
-      search_query = str8(ws->query_view_stack_top->query_buffer, ws->query_view_stack_top->query_string_size);
-      search_query_is_active = 1;
-      search_query_side = (query_cmd_kind == DF_CoreCmdKind_FindTextForward) ? Side_Max : Side_Min;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: prepare code slice info bundle, for the viewable region of text
-  //
-  DF_CodeSliceParams code_slice_params = {0};
-  if(has_disasm)
-  {
-    // rjf: fill basics
-    code_slice_params.flags                     = DF_CodeSliceFlag_PriorityMargin|DF_CodeSliceFlag_CatchallMargin|DF_CodeSliceFlag_LineNums|DF_CodeSliceFlag_Clickable;
-    code_slice_params.line_num_range            = visible_line_num_range;
-    code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
-    code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
-    code_slice_params.line_tokens               = push_array(scratch.arena, TXT_TokenArray, visible_line_count);
-    code_slice_params.line_bps                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
-    code_slice_params.line_ips                  = push_array(scratch.arena, DF_EntityList, visible_line_count);
-    code_slice_params.line_pins                 = push_array(scratch.arena, DF_EntityList, visible_line_count);
-    code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
-    code_slice_params.line_infos                = push_array(scratch.arena, DF_LineList, visible_line_count);
-    code_slice_params.font                      = code_font;
-    code_slice_params.font_size                 = code_font_size;
-    code_slice_params.tab_size                  = code_tab_size;
-    code_slice_params.line_height_px            = code_line_height;
-    code_slice_params.search_query              = search_query;
-    code_slice_params.priority_margin_width_px  = priority_margin_width_px;
-    code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
-    code_slice_params.line_num_width_px         = line_num_width_px;
-    code_slice_params.line_text_max_width_px    = (F32)line_size_x;
-    code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, &dbgi_key);
-    
-    // rjf: fill text info
-    {
-      S64 line_num = visible_line_num_range.min;
-      U64 line_idx = visible_line_num_range.min-1;
-      for(U64 visible_line_idx = 0; visible_line_idx < visible_line_count; visible_line_idx += 1, line_idx += 1, line_num += 1)
-      {
-        code_slice_params.line_text[visible_line_idx]   = str8_substr(dasm_text_data, dasm_text_info.lines_ranges[line_idx]);
-        code_slice_params.line_ranges[visible_line_idx] = dasm_text_info.lines_ranges[line_idx];
-        code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
-      }
-    }
-    
-    // rjf: find live threads mapping to this disassembly
-    ProfScope("find live threads mapping to this disassembly")
-    {
-      DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
-      DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
-      for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
-      {
-        DF_Entity *thread = thread_n->entity;
-        U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
-        U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
-        if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) == process && contains_1u64(dasm_vaddr_range, rip_vaddr))
-        {
-          U64 rip_off = rip_vaddr - dasm_vaddr_range.min;
-          S64 line_num = dasm_inst_array_idx_from_code_off__linear_scan(&dasm_info.insts, rip_off)+1;
-          if(contains_1s64(visible_line_num_range, line_num))
-          {
-            U64 slice_line_idx = (line_num-visible_line_num_range.min);
-            df_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
-          }
-        }
-      }
-    }
-    
-    // rjf: find breakpoints mapping to this disassembly
-    ProfScope("find breakpoints mapping to this disassembly")
-    {
-      DF_EntityList bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
-      for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
-      {
-        DF_Entity *bp = n->entity;
-        if(bp->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, bp->vaddr))
-        {
-          U64 off = bp->vaddr-dasm_vaddr_range.min;
-          U64 idx = dasm_inst_array_idx_from_code_off__linear_scan(&dasm_info.insts, off);
-          S64 line_num = (S64)(idx+1);
-          if(contains_1s64(visible_line_num_range, line_num))
-          {
-            U64 slice_line_idx = (line_num-visible_line_num_range.min);
-            df_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
-          }
-        }
-      }
-    }
-    
-    // rjf: find watch pins mapping to this disassembly
-    ProfScope("find watch pins mapping to this disassembly")
-    {
-      DF_EntityList pins = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
-      for(DF_EntityNode *n = pins.first; n != 0; n = n->next)
-      {
-        DF_Entity *pin = n->entity;
-        if(pin->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, pin->vaddr))
-        {
-          U64 off = pin->vaddr-dasm_vaddr_range.min;
-          U64 idx = dasm_inst_array_idx_from_code_off__linear_scan(&dasm_info.insts, off);
-          S64 line_num = (S64)(idx+1);
-          if(contains_1s64(visible_line_num_range, line_num))
-          {
-            U64 slice_line_idx = (line_num-visible_line_num_range.min);
-            df_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], pin);
-          }
-        }
-      }
-    }
-    
-    // rjf: fill dasm -> src info
-    {
-      DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      DI_Key dbgi_key = df_dbgi_key_from_module(module);
-      for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
-      {
-        U64 vaddr = dasm_vaddr_range.min + dasm_inst_array_code_off_from_idx(&dasm_info.insts, line_num-1);
-        U64 voff = df_voff_from_vaddr(module, vaddr);
-        U64 slice_idx = line_num-visible_line_num_range.min;
-        code_slice_params.line_vaddrs[slice_idx] = vaddr;
-        code_slice_params.line_infos[slice_idx] = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: do keyboard interaction
-  //
-  B32 snap[Axis2_COUNT] = {0};
-  UI_Focus(UI_FocusKind_On)
-  {
-    if(ui_is_focus_active() && !is_loading && visible_line_num_range.max >= visible_line_num_range.min)
-    {
-      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(&dasm_text_info, dasm_text_data, ClampBot(visible_line_count, 10) - 10, &dv->cursor, &dv->mark, &dv->preferred_column);
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: do goto vaddr
   //
-  if(!is_loading && dv->goto_vaddr != 0)
+  if(!is_loading && has_disasm && dv->goto_vaddr != 0)
   {
     U64 vaddr = dv->goto_vaddr;
     dv->goto_vaddr = 0;
     U64 line_idx = dasm_inst_array_idx_from_code_off__linear_scan(&dasm_info.insts, vaddr-dasm_vaddr_range.min);
     S64 line_num = (S64)(line_idx+1);
-    dv->cursor = dv->mark = txt_pt(line_num, 1);
-    dv->center_cursor = !dv->contain_cursor || (line_num < visible_line_num_range.min+8 || visible_line_num_range.max-8 < line_num);
+    cv->goto_line_num = line_num;
   }
   
   //////////////////////////////
-  //- rjf: build container
+  //- rjf: build code contents
   //
-  UI_Box *container_box = &ui_g_nil_box;
-  if(has_disasm)
+  if(!is_loading && has_disasm)
   {
-    ui_set_next_pref_width(ui_px(code_area_dim.x, 1));
-    ui_set_next_pref_height(ui_px(code_area_dim.y, 1));
-    ui_set_next_child_layout_axis(Axis2_Y);
-    container_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|
-                                              UI_BoxFlag_Scroll|
-                                              UI_BoxFlag_DrawBorder|
-                                              UI_BoxFlag_AllowOverflowX|
-                                              UI_BoxFlag_AllowOverflowY,
-                                              "###code_area_%p", view);
+    df_code_view_build(ws, panel, view, cv, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range);
   }
   
   //////////////////////////////
-  //- rjf: build container contents
+  //- rjf: unpack cursor info
   //
-  if(has_disasm) UI_Parent(container_box)
+  if(!is_loading && has_disasm)
   {
-    //- rjf: build fractional space
-    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    container_box->view_off.y = container_box->view_off_target.y = code_line_height*mod_f32(view->scroll_pos.y.off, 1.f) + code_line_height*(view->scroll_pos.y.off < 0) - code_line_height*(view->scroll_pos.y.off == -1.f && view->scroll_pos.y.idx == 1);
-    
-    //- rjf: build code slice
-    DF_CodeSliceSignal sig = {0};
-    UI_Focus(UI_FocusKind_On)
-    {
-      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &dv->cursor, &dv->mark, &dv->preferred_column, "dasm_slice_%p", view);
-    }
-    
-    //- rjf: hover eval
-    if(!ui_dragging(sig.base) && sig.mouse_expr_rng.min.line != 0 && contains_1s64(visible_line_num_range, sig.mouse_expr_rng.min.line) && sig.mouse_expr_rng.max.line == sig.mouse_expr_rng.min.line && sig.base.event_flags == 0)
-    {
-      U64 line_idx = sig.mouse_expr_rng.min.line-visible_line_num_range.min;
-      String8 expr = str8_substr(code_slice_params.line_text[line_idx], r1u64(sig.mouse_expr_rng.min.column-1, sig.mouse_expr_rng.max.column-1));
-      if(expr.size != 0)
-      {
-        DF_Eval eval = df_eval_from_string(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, expr);
-        if(eval.mode != EVAL_EvalMode_NULL)
-        {
-          U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.mouse_expr_rng.min.line-1);
-          U64 vaddr = dasm_vaddr_range.min+off;
-          df_set_hover_eval(ws, sig.mouse_expr_baseline_pos, ctrl_ctx, process, sig.mouse_pt, vaddr, expr);
-        }
-      }
-    }
-    
-    //- rjf: press code slice? -> focus panel
-    if(ui_pressed(sig.base))
-    {
-      DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
-      df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
-    }
-    
-    //- rjf: dragging & outside region? -> contain cursor
-    if(ui_dragging(sig.base) && sig.base.event_flags == 0)
-    {
-      if(!contains_2f32(sig.base.box->rect, ui_mouse()))
-      {
-        dv->contain_cursor = 1;
-      }
-      else
-      {
-        snap[Axis2_X] = 1;
-      }
-    }
-    
-    //- rjf: clicked margin? -> place breakpoint
-    if(sig.clicked_margin_line_num != 0)
-    {
-      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      params.vaddr = dasm_vaddr_range.min+dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.clicked_margin_line_num-1);
-      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddressBreakpoint));
-    }
-    
-    //- rjf: dropped entity onto line? -> do drop
-    if(sig.dropped_entity_line_num != 0 && !df_entity_is_nil(sig.dropped_entity))
-    {
-      U64 drop_vaddr = dasm_vaddr_range.min+dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.dropped_entity_line_num-1);
-      DF_Entity *dropped_entity = sig.dropped_entity;
-      switch(dropped_entity->kind)
-      {
-        default:{}break;
-        case DF_EntityKind_Breakpoint:
-        case DF_EntityKind_WatchPin:
-        {
-          DF_StateDeltaHistory *hist = df_state_delta_history();
-          df_state_delta_history_push_batch(hist, &dropped_entity->generation);
-          df_state_delta_history_push_struct_delta(hist, &dropped_entity->vaddr);
-          df_entity_change_parent(hist, dropped_entity, dropped_entity->parent, df_entity_root());
-          df_entity_equip_vaddr(dropped_entity, drop_vaddr);
-        }break;
-        case DF_EntityKind_Thread:
-        if(contains_1s64(visible_line_num_range, sig.dropped_entity_line_num))
-        {
-          DF_CmdParams params = df_cmd_params_from_window(ws);
-          params.entity = df_handle_from_entity(dropped_entity);
-          params.vaddr = drop_vaddr;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetThreadIP));
-        }break;
-      }
-    }
-    
-    //- rjf: copy text
-    if(!txt_pt_match(sig.copy_range.min, sig.copy_range.max))
-    {
-      Temp temp = temp_begin(scratch.arena);
-      String8 text = txt_string_from_info_data_txt_rng(&dasm_text_info, dasm_text_data, sig.copy_range);
-      os_set_clipboard_text(text);
-      temp_end(temp);
-    }
-    
-    //- rjf: toggle cursor watch
-    if(sig.toggle_cursor_watch)
-    {
-      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpressionAtCursor));
-    }
-    
-    //- rjf: set next statement
-    if(sig.set_next_statement_line_num != 0 && contains_1s64(visible_line_num_range, sig.set_next_statement_line_num))
-    {
-      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-      params.text_point = txt_pt(sig.set_next_statement_line_num, 1);
-      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetNextStatement));
-    }
-    
-    //- rjf: run-to-line
-    if(sig.run_to_line_num != 0 && contains_1s64(visible_line_num_range, sig.run_to_line_num))
-    {
-      DF_CmdParams params = df_cmd_params_from_window(ws);
-      params.vaddr = dasm_vaddr_range.min+dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.run_to_line_num-1);
-      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunToAddress));
-    }
-    
-    //- rjf: go to source
-    if(sig.goto_src_line_num != 0 && contains_1s64(visible_line_num_range, sig.goto_src_line_num))
-    {
-      U64 vaddr = dasm_vaddr_range.min+dasm_inst_array_code_off_from_idx(&dasm_info.insts, sig.goto_src_line_num-1);
-      DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
-      DI_Key dbgi_key = df_dbgi_key_from_module(module);
-      U64 voff = df_voff_from_vaddr(module, vaddr);
-      DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
-      if(lines.first != 0)
-      {
-        String8 file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
-        DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-        params.text_point = lines.first->v.pt;
-        params.file_path = file_path;
-        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
-        df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
-        df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
-      }
-    }
+    U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, df_interact_regs()->cursor.line-1);
+    df_interact_regs()->vaddr_range = r1u64(dv->base_vaddr+off, dv->base_vaddr+off);
+    df_interact_regs()->voff_range = df_voff_range_from_vaddr_range(dasm_module, df_interact_regs()->vaddr_range);
+    df_interact_regs()->lines = df_lines_from_dbgi_key_voff(df_frame_arena(), &dasm_dbgi_key, df_interact_regs()->voff_range.min);
   }
   
   //////////////////////////////
-  //- rjf: apply post-build view snapping rules
+  //- rjf: build bottom bar
   //
-  if(!is_loading)
+  if(!is_loading && has_disasm)
   {
-    // rjf: contain => snap
-    if(dv->contain_cursor)
-    {
-      dv->contain_cursor = 0;
-      snap[Axis2_X] = 1;
-      snap[Axis2_Y] = 1;
-    }
-    
-    // rjf: center cursor
-    if(dv->center_cursor)
-    {
-      dv->center_cursor = 0;
-      
-      // rjf: scroll x
-#if 0
-      {
-        String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-        F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x;
-        S64 new_idx = (S64)(cursor_advance - code_area_dim.x/2);
-        new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
-        ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
-        snap[Axis2_X] = 0;
-      }
-#endif
-      
-      // rjf: scroll y
-      {
-        S64 new_idx = (dv->cursor.line-1) - num_possible_visible_lines/2 + 2;
-        new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
-        ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
-        snap[Axis2_Y] = 0;
-      }
-    }
-    
-    // rjf: snap in X
-    if(snap[Axis2_X])
-    {
-#if 0
-      String8 cursor_line = txti_string_from_handle_line_num(scratch.arena, txti_handle, tv->cursor.line);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, str8_prefix(cursor_line, tv->cursor.column-1)).x + margin_width_px + line_num_width_px);
-      Rng1S64 visible_pixel_range =
-      {
-        view->scroll_pos.x.idx,
-        view->scroll_pos.x.idx + (S64)code_area_dim.x,
-      };
-      Rng1S64 cursor_pixel_range =
-      {
-        cursor_off - (S64)(big_glyph_advance*4) - (S64)(margin_width_px + line_num_width_px),
-        cursor_off + (S64)(big_glyph_advance*4),
-      };
-      S64 min_delta = Min(0, cursor_pixel_range.min - visible_pixel_range.min);
-      S64 max_delta = Max(0, cursor_pixel_range.max - visible_pixel_range.max);
-      S64 new_idx = view->scroll_pos.x.idx+min_delta+max_delta;
-      new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
-      ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
-#endif
-    }
-    
-    // rjf: snap in Y
-    if(snap[Axis2_Y])
-    {
-      Rng1S64 cursor_visibility_range = r1s64(dv->cursor.line-4, dv->cursor.line+4);
-      cursor_visibility_range.min = Clamp(0, cursor_visibility_range.min, (S64)dasm_info.insts.count);
-      cursor_visibility_range.max = Clamp(0, cursor_visibility_range.max, (S64)dasm_info.insts.count);
-      S64 min_delta = Min(0, cursor_visibility_range.min-visible_line_num_range.min);
-      S64 max_delta = Max(0, cursor_visibility_range.max-visible_line_num_range.max);
-      S64 new_idx = view->scroll_pos.y.idx+min_delta+max_delta;
-      new_idx = Clamp(0, new_idx, (S64)dasm_info.insts.count-1);
-      ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: build horizontal scroll bar
-  //
-  if(has_disasm)
-  {
-    ui_set_next_fixed_x(0);
-    ui_set_next_fixed_y(code_area_dim.y);
-    ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
-    ui_set_next_fixed_height(scroll_bar_dim);
-    {
-      view->scroll_pos.x = ui_scroll_bar(Axis2_X,
-                                         ui_px(scroll_bar_dim, 1.f),
-                                         view->scroll_pos.x,
-                                         scroll_idx_rng[Axis2_X],
-                                         (S64)code_area_dim.x);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: build vertical scroll bar
-  //
-  if(has_disasm)
-  {
-    ui_set_next_fixed_x(code_area_dim.x);
-    ui_set_next_fixed_y(0);
-    ui_set_next_fixed_width(scroll_bar_dim);
-    ui_set_next_fixed_height(panel_box_dim.y - bottom_bar_dim.y - scroll_bar_dim);
-    {
-      view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
-                                         ui_px(scroll_bar_dim, 1.f),
-                                         view->scroll_pos.y,
-                                         scroll_idx_rng[Axis2_Y],
-                                         num_possible_visible_lines);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: top-level container interaction (scrolling)
-  //
-  if(!is_loading)
-  {
-    UI_Signal sig = ui_signal_from_box(container_box);
-    if(sig.scroll.x != 0)
-    {
-      S64 new_idx = view->scroll_pos.x.idx+sig.scroll.x*big_glyph_advance;
-      new_idx = clamp_1s64(scroll_idx_rng[Axis2_X], new_idx);
-      ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
-    }
-    if(sig.scroll.y != 0)
-    {
-      S64 new_idx = view->scroll_pos.y.idx + sig.scroll.y;
-      new_idx = clamp_1s64(scroll_idx_rng[Axis2_Y], new_idx);
-      ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
-    }
-    ui_scroll_pt_clamp_idx(&view->scroll_pos.x, scroll_idx_rng[Axis2_X]);
-    ui_scroll_pt_clamp_idx(&view->scroll_pos.y, scroll_idx_rng[Axis2_Y]);
-  }
-  
-  //////////////////////////////
-  //- rjf: build bottom info bar
-  //
-  if(has_disasm)
-  {
-    ui_set_next_fixed_x(0);
-    ui_set_next_fixed_y(code_area_dim.y + scroll_bar_dim);
-    ui_set_next_pref_width(ui_px(bottom_bar_dim.x, 1));
-    ui_set_next_pref_height(ui_px(bottom_bar_dim.y, 1));
+    ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
     UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
       UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-      UI_Font(code_font)
+      UI_Font(df_font_from_slot(DF_FontSlot_Code))
     {
       DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      U64 cursor_vaddr = (1 <= dv->cursor.line && dv->cursor.line <= dasm_info.insts.count) ? (dasm_vaddr_range.min+dasm_info.insts.v[dv->cursor.line-1].code_off) : 0;
+      U64 cursor_vaddr = (1 <= view->cursor.line && view->cursor.line <= dasm_info.insts.count) ? (dasm_vaddr_range.min+dasm_info.insts.v[view->cursor.line-1].code_off) : 0;
       ui_labelf("%S", path_normalized_from_string(scratch.arena, module->name));
       ui_spacer(ui_em(1.5f, 1));
-      ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, dv->cursor.line, dv->cursor.column);
+      ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, view->cursor.line, view->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
       ui_labelf("bin");
     }
   }
   
-  di_scope_close(di_scope);
   txt_scope_close(txt_scope);
   dasm_scope_close(dasm_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
-  ProfEnd();
 }
 
 ////////////////////////////////
@@ -7452,7 +6906,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Output)
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info);
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, 0, r1u64(0, 0));
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -7491,7 +6945,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //- rjf: build code contents
   //
   {
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info);
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, 0, r1u64(0, 0));
   }
   
   //////////////////////////////
