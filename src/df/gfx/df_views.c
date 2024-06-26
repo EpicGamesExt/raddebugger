@@ -387,7 +387,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 }
 
 internal void
-df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info, DF_CodeCtx *code_ctx)
+df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info)
 {
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -427,79 +427,12 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
         arena_clear(cv->find_text_arena);
         cv->find_text_bwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
       }break;
-      case DF_CoreCmdKind_GoToNameAtCursor:
-      {
-        Temp scratch = scratch_begin(0, 0);
-        TXT_Scope *txt_scope = txt_scope_open();
-        HS_Scope *hs_scope = hs_scope_open();
-        {
-          // rjf: determine expression range
-          Rng1U64 expr_range = {0};
-          {
-            TxtRng selection_range = txt_rng(view->cursor, view->mark);
-            if(txt_pt_match(selection_range.min, selection_range.max))
-            {
-              expr_range = txt_expr_off_range_from_info_data_pt(info, data, view->cursor);
-            }
-            else
-            {
-              expr_range = r1u64(txt_off_from_info_pt(info, selection_range.min), txt_off_from_info_pt(info, selection_range.max));
-            }
-          }
-          
-          // rjf: expression range -> text
-          String8 expr_text = str8_substr(data, expr_range);
-          
-          // rjf: go to name
-          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-          params.string = expr_text;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
-        }
-        hs_scope_close(hs_scope);
-        txt_scope_close(txt_scope);
-        scratch_end(scratch);
-      }break;
-      case DF_CoreCmdKind_ToggleWatchExpressionAtCursor:
-      {
-        Temp scratch = scratch_begin(0, 0);
-        TXT_Scope *txt_scope = txt_scope_open();
-        HS_Scope *hs_scope = hs_scope_open();
-        {
-          // rjf: determine expression range
-          Rng1U64 expr_range = {0};
-          {
-            TxtRng selection_range = txt_rng(view->cursor, view->mark);
-            if(txt_pt_match(selection_range.min, selection_range.max))
-            {
-              expr_range = txt_expr_off_range_from_info_data_pt(info, data, view->cursor);
-            }
-            else
-            {
-              expr_range = r1u64(txt_off_from_info_pt(info, selection_range.min), txt_off_from_info_pt(info, selection_range.max));
-            }
-          }
-          
-          // rjf: expression range -> text
-          String8 expr_text = str8_substr(data, expr_range);
-          
-          // rjf: toggle watch expr
-          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-          params.string = expr_text;
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
-          scratch_end(scratch);
-        }
-        hs_scope_close(hs_scope);
-        txt_scope_close(txt_scope);
-        scratch_end(scratch);
-      }break;
     }
   }
 }
 
 internal void
-df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info, DF_CodeCtx *code_ctx)
+df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -631,7 +564,8 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     // rjf: find visible breakpoints
     ProfScope("find visible breakpoints")
     {
-      for(DF_Entity *bp = code_ctx->file->first; !df_entity_is_nil(bp); bp = bp->next)
+      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
+      for(DF_Entity *bp = file->first; !df_entity_is_nil(bp); bp = bp->next)
       {
         if(bp->deleted || bp->kind != DF_EntityKind_Breakpoint) { continue; }
         if(visible_line_num_range.min <= bp->text_point.line && bp->text_point.line <= visible_line_num_range.max)
@@ -645,6 +579,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     // rjf: find live threads mapping to this file
     ProfScope("find live threads mapping to this file")
     {
+      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
       DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
       DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
       for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
@@ -661,7 +596,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
         DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
         for(DF_LineNode *n = lines.first; n != 0; n = n->next)
         {
-          if(df_entity_from_handle(n->v.file) == code_ctx->file && visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
+          if(df_entity_from_handle(n->v.file) == file && visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
           {
             U64 slice_line_idx = lines.first->v.pt.line-visible_line_num_range.min;
             df_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
@@ -673,7 +608,8 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     // rjf: find visible watch pins
     ProfScope("find visible watch pins")
     {
-      for(DF_Entity *wp = code_ctx->file->first; !df_entity_is_nil(wp); wp = wp->next)
+      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
+      for(DF_Entity *wp = file->first; !df_entity_is_nil(wp); wp = wp->next)
       {
         if(wp->deleted || wp->kind != DF_EntityKind_WatchPin) { continue; }
         if(visible_line_num_range.min <= wp->text_point.line && wp->text_point.line <= visible_line_num_range.max)
@@ -687,7 +623,8 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     // rjf: find all src -> dasm info
     ProfScope("find all src -> dasm info")
     {
-      DF_LineListArray lines_array = df_lines_array_from_file_line_range(scratch.arena, code_ctx->file, visible_line_num_range);
+      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
+      DF_LineListArray lines_array = df_lines_array_from_file_line_range(scratch.arena, file, visible_line_num_range);
       if(lines_array.count != 0)
       {
         MemoryCopy(code_slice_params.line_infos, lines_array.v, sizeof(DF_LineList)*lines_array.count);
@@ -886,7 +823,7 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     DF_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, code_ctx, &code_slice_params, &view->cursor, &view->mark, &cv->preferred_column, "txt_view_%p", view);
+      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &view->cursor, &view->mark, &cv->preferred_column, "txt_view_%p", view);
     }
     
     //- rjf: press code slice? -> focus panel
@@ -925,40 +862,6 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(view->cursor, view->mark));
       df_set_search_string(text);
     }
-    
-    //- rjf: go to disasm
-    // TODO(rjf): @src_collapse
-#if 0
-    if(sig.goto_disasm_line_num != 0 && contains_1s64(visible_line_num_range, sig.goto_disasm_line_num))
-    {
-      U64 line_idx = (sig.goto_disasm_line_num-visible_line_num_range.min);
-      DF_TextLineSrc2DasmInfoList *src2dasm_list = &code_slice_params.line_src2dasm[line_idx];
-      if(src2dasm_list->first != 0)
-      {
-        Rng1U64 voff_rng = src2dasm_list->first->v.voff_range;
-        DI_Key dbgi_key = src2dasm_list->first->v.dbgi_key;
-        DF_EntityList possible_modules = df_modules_from_dbgi_key(scratch.arena, &dbgi_key);
-        DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-        DF_Entity *thread_dst_module = df_module_from_thread_candidates(thread, &possible_modules);
-        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        DF_Entity *module = thread_dst_module;
-        if(df_entity_is_nil(module))
-        {
-          module = df_first_entity_from_list(&possible_modules);
-        }
-        U64 voff = voff_rng.min;
-        if(!df_entity_is_nil(module) && voff != 0)
-        {
-          DF_CmdParams params = df_cmd_params_from_window(ws);
-          params.entity = df_handle_from_entity(process);
-          params.vaddr = df_vaddr_from_voff(module, voff);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
-        }
-      }
-    }
-#endif
   }
   
   //////////////////////////////
@@ -6303,15 +6206,14 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
-  DF_Entity *entity = df_entity_from_handle(view->entity);
+  DF_Entity *entity = df_entity_from_handle(df_interact_regs()->file);
   String8 path = df_full_path_from_entity(scratch.arena, entity);
-  TXT_LangKind lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
-  U128 key = fs_key_from_path(path);
+  df_interact_regs()->text_key = fs_key_from_path(path);
+  df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  DF_CodeCtx code_ctx = {entity, key, lang_kind};
-  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, &code_ctx);
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info);
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -6334,12 +6236,12 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: unpack entity info
   //
-  DF_Entity *entity = df_entity_from_handle(view->entity);
+  DF_Entity *entity = df_entity_from_handle(df_interact_regs()->file);
   String8 path = df_full_path_from_entity(scratch.arena, entity);
-  TXT_LangKind lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
-  U128 key = fs_key_from_path(path);
+  df_interact_regs()->text_key = fs_key_from_path(path);
+  df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
   B32 entity_is_missing = !!(entity->flags & DF_EntityFlag_IsMissing);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
@@ -6397,8 +6299,14 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   if(!entity_is_missing && key_has_data)
   {
-    DF_CodeCtx code_ctx = {entity, key, lang_kind};
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, &code_ctx);
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info);
+  }
+  
+  //////////////////////////////
+  //- rjf: unpack cursor info
+  //
+  {
+    df_interact_regs()->lines = df_lines_from_file_line_num(df_frame_arena(), entity, df_interact_regs()->cursor.line);
   }
   
   //////////////////////////////
@@ -6733,10 +6641,10 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   B32 entity_is_missing = !!(entity->flags & DF_EntityFlag_IsMissing && !(entity->flags & DF_EntityFlag_Output));
   String8 path = df_full_path_from_entity(scratch.arena, entity);
-  U128 key = fs_key_from_path(path);
-  TXT_LangKind lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
+  df_interact_regs()->text_key = fs_key_from_path(path);
+  df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 hash = {0};
-  TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
   B32 text_info_is_ready = (text_info.lines_count != 0);
   
@@ -8086,8 +7994,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
     DF_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      DF_CodeCtx code_ctx = {&df_g_nil_entity, dasm_info.text_key, lang_kind};
-      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_ctx, &code_slice_params, &dv->cursor, &dv->mark, &dv->preferred_column, "dasm_slice_%p", view);
+      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &dv->cursor, &dv->mark, &dv->preferred_column, "dasm_slice_%p", view);
     }
     
     //- rjf: hover eval
@@ -8583,13 +8490,12 @@ DF_VIEW_CMD_FUNCTION_DEF(Output)
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
-  U128 key = df_state->output_log_key;
-  TXT_LangKind lang_kind = TXT_LangKind_Null;
+  df_interact_regs()->text_key = df_state->output_log_key;
+  df_interact_regs()->lang_kind = TXT_LangKind_Null;
   U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
+  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  DF_CodeCtx code_ctx = {&df_g_nil_entity, key, lang_kind};
-  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info, &code_ctx);
+  df_code_view_cmds(ws, panel, view, cv, cmds, data, &info);
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -8628,8 +8534,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //- rjf: build code contents
   //
   {
-    DF_CodeCtx code_ctx = {&df_g_nil_entity, key, lang_kind};
-    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info, &code_ctx);
+    df_code_view_build(ws, panel, view, cv, code_area_rect, data, &info);
   }
   
   //////////////////////////////

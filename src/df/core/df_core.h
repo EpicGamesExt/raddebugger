@@ -659,17 +659,17 @@ struct DF_TextLineDasm2SrcInfoList
 typedef struct DF_InteractRegs DF_InteractRegs;
 struct DF_InteractRegs
 {
-  DF_Handle window;
-  DF_Handle panel;
-  DF_Handle view;
   DF_Handle module;
   DF_Handle process;
   DF_Handle thread;
+  U64 unwind_count;
+  U64 inline_unwind_count;
+  DF_Handle window;
+  DF_Handle panel;
+  DF_Handle view;
   DF_Handle file;
   TxtPt cursor;
   TxtPt mark;
-  U64 unwind_count;
-  U64 inline_unwind_count;
   U128 text_key;
   TXT_LangKind lang_kind;
   Rng1U64 vaddr_range;

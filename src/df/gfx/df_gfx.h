@@ -434,14 +434,6 @@ enum
   DF_CodeSliceFlag_LineNums          = (1<<3),
 };
 
-typedef struct DF_CodeCtx DF_CodeCtx;
-struct DF_CodeCtx
-{
-  DF_Entity *file;        // the source file, if any, from which the code was derived
-  U128 text_key;          // the text info cache key for the backing textual data
-  TXT_LangKind lang_kind; // the language for which the text is parsed/analyzed
-};
-
 typedef struct DF_CodeSliceParams DF_CodeSliceParams;
 struct DF_CodeSliceParams
 {
@@ -1088,8 +1080,8 @@ internal void df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt p
 
 internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions);
-internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
-internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
+internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
+internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
 
 internal B32 df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 internal B32 df_do_txti_controls(TXTI_Handle handle, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);

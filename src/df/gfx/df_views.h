@@ -469,8 +469,8 @@ internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityLi
 //~ rjf: Code Views
 
 internal void df_code_view_init(DF_CodeViewState *cv, DF_View *view);
-internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info, DF_CodeCtx *code_ctx);
-internal void df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info, DF_CodeCtx *code_ctx);
+internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 data, TXT_TextInfo *info);
+internal void df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, Rng2F32 rect, String8 data, TXT_TextInfo *info);
 
 ////////////////////////////////
 //~ rjf: Watch Views

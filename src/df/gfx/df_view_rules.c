@@ -592,8 +592,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
     //- rjf: build code slice
     UI_WidthFill UI_HeightFill UI_Parent(container)
     {
-      DF_CodeCtx code_ctx = {&df_g_nil_entity, text_key, top.lang};
-      DF_CodeSliceSignal slice_sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###slice"));
+      DF_CodeSliceSignal slice_sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###slice"));
     }
   }
   
@@ -745,8 +744,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
     if(dasm_info.insts.count != 0 && dasm_text_info.lines_count != 0)
       UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_px(dasm_text_info.lines_max_size*ui_top_font_size()*1.2f, 1.f)) UI_Column UI_Padding(ui_pct(1, 0))
     {
-      DF_CodeCtx code_ctx = {&df_g_nil_entity, dasm_info.text_key, lang_kind};
-      DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));
+      DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));
     }
   }
   dasm_scope_close(dasm_scope);

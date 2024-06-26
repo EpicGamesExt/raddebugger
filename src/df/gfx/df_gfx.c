@@ -7166,6 +7166,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             DF_Entity *entity = df_entity_from_handle(view->entity);
             df_interact_regs()->cursor = view->cursor;
             df_interact_regs()->mark = view->mark;
+            df_interact_regs()->file = df_handle_zero();
             switch(entity->kind)
             {
               default:{}break;
@@ -10838,7 +10839,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
 }
 
 internal DF_CodeSliceSignal
-df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string)
+df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string)
 {
   DF_CodeSliceSignal result = {0};
   ProfBeginFunction();
@@ -11161,7 +11162,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
               
               // rjf: fill out progress t (progress into range of current line's
               // voff range)
-              if(code_ctx->file != &df_g_nil_entity && params->line_infos[line_idx].first != 0)
+              if(!df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)) && params->line_infos[line_idx].first != 0)
               {
                 DF_LineList *lines = &params->line_infos[line_idx];
                 DF_Line *line = 0;
@@ -11238,7 +11239,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
             {
               bp_draw->color = bp_color;
               bp_draw->alive_t = bp->alive_t;
-              if(code_ctx->file != &df_g_nil_entity)
+              if(!df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)))
               {
                 DF_LineList *lines = &params->line_infos[line_idx];
                 for(DF_LineNode *n = lines->first; n != 0; n = n->next)
@@ -11369,11 +11370,11 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
         UI_Signal line_margin_sig = ui_signal_from_box(line_margin_box);
         if(ui_clicked(line_margin_sig))
         {
-          if(!df_entity_is_nil(code_ctx->file))
+          if(!df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)))
           {
             TxtPt pt = txt_pt(line_num, 1);
             DF_CmdParams p = df_cmd_params_from_window(ws);
-            p.entity = df_handle_from_entity(code_ctx->file);
+            p.entity = df_interact_regs()->file;
             p.text_point = pt;
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_TextBreakpoint));
           }
@@ -11425,7 +11426,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           {
             if(n->v.dbgi_key.min_timestamp >= best_stamp)
             {
-              has_line_info = (n->v.pt.line == line_num || code_ctx->file == &df_g_nil_entity);
+              has_line_info = (n->v.pt.line == line_num || df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)));
               line_info_line_num = n->v.pt.line;
               best_stamp = n->v.dbgi_key.min_timestamp;
             }
@@ -11737,10 +11738,10 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
       }
       ui_ctx_menu_open(ws->code_ctx_menu_key, ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)));
       arena_clear(ws->code_ctx_menu_arena);
-      ws->code_ctx_menu_file = df_handle_from_entity(code_ctx->file);
-      ws->code_ctx_menu_text_key = code_ctx->text_key;
-      ws->code_ctx_menu_lang_kind = code_ctx->lang_kind;
-      ws->code_ctx_menu_range = txt_rng(*cursor, *mark);
+      ws->code_ctx_menu_file      = df_interact_regs()->file;
+      ws->code_ctx_menu_text_key  = df_interact_regs()->text_key;
+      ws->code_ctx_menu_lang_kind = df_interact_regs()->lang_kind;
+      ws->code_ctx_menu_range     = txt_rng(*cursor, *mark);
       if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
       {
         ws->code_ctx_menu_vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
@@ -11780,9 +11781,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           case DF_EntityKind_Breakpoint:
           case DF_EntityKind_WatchPin:
           {
-            if(!df_entity_is_nil(code_ctx->file))
+            if(!df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)))
             {
-              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, code_ctx->file);
+              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, df_entity_from_handle(df_interact_regs()->file));
               df_entity_equip_txt_pt(dropped_entity, txt_pt(line_num, 1));
               if(dropped_entity->flags & DF_EntityFlag_HasVAddr)
               {
@@ -11798,7 +11799,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           case DF_EntityKind_Thread:
           {
             U64 new_rip_vaddr = line_vaddr;
-            if(!df_entity_is_nil(code_ctx->file))
+            if(!df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)))
             {
               DF_LineList *lines = &params->line_infos[line_idx];
               for(DF_LineNode *n = lines->first; n != 0; n = n->next)
@@ -11872,7 +11873,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
     DF_LineList *lines = &params->line_infos[line_slice_idx];
-    if(lines->first != 0 && (code_ctx->file == &df_g_nil_entity || lines->first->v.pt.line == mouse_pt.line))
+    if(lines->first != 0 && (df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)) || lines->first->v.pt.line == mouse_pt.line))
     {
       DF_RichHoverInfo info = {0};
       info.process      = df_handle_from_entity(selected_thread_process);
@@ -11893,7 +11894,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
     DF_Eval eval = df_eval_from_string(scratch.arena, di_scope, ctrl_ctx, parse_ctx, &eval_string2expr_map_nil, mouse_expr);
     if(eval.mode != EVAL_EvalMode_NULL)
     {
-      df_set_hover_eval(ws, mouse_expr_baseline_pos, *ctrl_ctx, code_ctx->file, mouse_pt, 0, mouse_expr);
+      df_set_hover_eval(ws, mouse_expr_baseline_pos, *ctrl_ctx, df_entity_from_handle(df_interact_regs()->file), mouse_pt, 0, mouse_expr);
     }
     di_scope_close(di_scope);
   }
@@ -12243,7 +12244,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           DF_LineList *lines = &params->line_infos[line_idx];
           for(DF_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            if((n->v.pt.line == line_num || code_ctx->file == &df_g_nil_entity) &&
+            if((n->v.pt.line == line_num || df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file))) &&
                di_key_match(&n->v.dbgi_key, &hovered_line_dbgi_key) &&
                n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
             {
@@ -12279,13 +12280,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
 }
 
 internal DF_CodeSliceSignal
-df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeCtx *code_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...)
+df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
-  DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, code_ctx, params, cursor, mark, preferred_column, string);
+  DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, params, cursor, mark, preferred_column, string);
   va_end(args);
   scratch_end(scratch);
   return sig;
