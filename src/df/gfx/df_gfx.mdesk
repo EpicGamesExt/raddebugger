@@ -447,15 +447,15 @@ DF_ThemeColorTable:
   {LineInfoBackground5            "Line Info Background 5"            line_info_background_5                 0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          ""}
   {LineInfoBackground6            "Line Info Background 6"            line_info_background_6                 0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          ""}
   {LineInfoBackground7            "Line Info Background 7"            line_info_background_7                 0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          ""}
-  {Thread0                        "Thread 0"                          thread_0                               0xffcb7fff          0xd07c00ff          0xffcb7fff          0xffcb7fff          0xffcb7fff          0xd29233ff          0xffcb7fff          0xffcb7fff          0xffcb7fff          ""}
-  {Thread1                        "Thread 1"                          thread_1                               0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          ""}
-  {Thread2                        "Thread 2"                          thread_2                               0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          ""}
-  {Thread3                        "Thread 3"                          thread_3                               0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          0x6598ffff          ""}
-  {Thread4                        "Thread 4"                          thread_4                               0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          0x65ffcbff          ""}
-  {Thread5                        "Thread 5"                          thread_5                               0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          0xff9819ff          ""}
-  {Thread6                        "Thread 6"                          thread_6                               0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          0x9932ffff          ""}
-  {Thread7                        "Thread 7"                          thread_7                               0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          0x65ff4cff          ""}
-  {ThreadUnwound                  "Thread (Unwound)"                  thread_unwound                         0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          ""}
+  {Thread0                        "Thread 0"                          thread_0                               0xffcb7fff          0x945800ff          0xffcb7fff          0x945800ff          0xffcb7fff          0x945800ff          0xffcb7fff          0xffcb7fff          0xffcb7fff          ""}
+  {Thread1                        "Thread 1"                          thread_1                               0xb2ff65ff          0x3f5b23ff          0xb2ff65ff          0x3f5b23ff          0xb2ff65ff          0x3f5b23ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          ""}
+  {Thread2                        "Thread 2"                          thread_2                               0xff99e5ff          0x642a55ff          0xff99e5ff          0x642a55ff          0xff99e5ff          0x642a55ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          ""}
+  {Thread3                        "Thread 3"                          thread_3                               0x6598ffff          0x30456fff          0x6598ffff          0x30456fff          0x6598ffff          0x30456fff          0x6598ffff          0x6598ffff          0x6598ffff          ""}
+  {Thread4                        "Thread 4"                          thread_4                               0x65ffcbff          0x264f41ff          0x65ffcbff          0x264f41ff          0x65ffcbff          0x264f41ff          0x65ffcbff          0x65ffcbff          0x65ffcbff          ""}
+  {Thread5                        "Thread 5"                          thread_5                               0xff9819ff          0x736a5fff          0xff9819ff          0x736a5fff          0xff9819ff          0x736a5fff          0xff9819ff          0xff9819ff          0xff9819ff          ""}
+  {Thread6                        "Thread 6"                          thread_6                               0x9932ffff          0x472f5eff          0x9932ffff          0x472f5eff          0x9932ffff          0x472f5eff          0x9932ffff          0x9932ffff          0x9932ffff          ""}
+  {Thread7                        "Thread 7"                          thread_7                               0x65ff4cff          0x405d3bff          0x65ff4cff          0x405d3bff          0x65ff4cff          0x405d3bff          0x65ff4cff          0x65ff4cff          0x65ff4cff          ""}
+  {ThreadUnwound                  "Thread (Unwound)"                  thread_unwound                         0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          ""}
   {ThreadError                    "Thread (Error)"                    thread_error                           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23218ff          0xb23219ff          0xb23219ff          0xb23219ff          ""}
   {Breakpoint                     "Breakpoint"                        breakpoint                             0xa72911ff          0xff2800ff          0xa72911ff          0xa72911ff          0xa72911ff          0xff684bff          0xa72911ff          0xa72911ff          0xff2800ff          ""}
 }
@@ -463,36 +463,28 @@ DF_ThemeColorTable:
 @table(old_name new_name)
 DF_ThemeColorVersionRemapTable:
 {
-  {plain_text                          default_text}
-  {plain_background                    default_background}
-  {plain_border                        default_border}
+  {plain_text                          text}
+  {plain_background                    base_background}
+  {plain_border                        base_border}
   {plain_overlay                       drop_site_overlay}
-  {code_function                       code_procedure}
+  {code_function                       code_symbol}
   {code_symbol                         code_delimiter_operator}
   {code_numeric                        code_numeric_alt_digit_group}
   {line_info_0                         line_info_background_0}
   {line_info_1                         line_info_background_1}
   {line_info_2                         line_info_background_2}
   {line_info_3                         line_info_background_3}
-  {alt_text                            menu_bar_text}
   {alt_background                      menu_bar_background}
   {alt_border                          menu_bar_border}
-  {alt_overlay                         drop_site_overlay}
-  {tab_inactive                        tab_inactive_background}
-  {tab_active                          tab_active_background}
-  {weak_text                           default_text_weak}
+  {tab_inactive                        tab_background_inactive}
+  {tab_active                          tab_background}
+  {weak_text                           text_weak}
   {text_selection                      selection}
-  {cursor                              cursor_active}
-  {highlight_0                         focus_active}
-  {success_text                        special_positive_text}
-  {success_background                  special_positive_background}
-  {success_border                      special_positive_border}
-  {failure_text                        special_negative_text}
-  {failure_background                  special_negative_background}
-  {failure_border                      special_negative_border}
-  {action_text                         special_neutral_text}
-  {action_background                   special_neutral_background}
-  {action_border                       special_neutral_border}
+  {cursor                              cursor}
+  {highlight_0                         focus}
+  {success_background                  positive_pop_button_background}
+  {failure_background                  negative_pop_button_background}
+  {action_background                   neutral_pop_button_background}
 }
 
 @enum DF_ThemeColor:
@@ -539,67 +531,6 @@ DF_ThemeColorVersionRemapTable:
 @data(`Vec4F32*`) df_g_theme_preset_colors_table:
 {
   @expand(DF_ThemePresetTable a) `df_g_theme_preset_colors__$(a.name_lower)`,
-}
-
-
-// TODO(rjf): OLD vvvvvvvvv
-@table(name                     default_dark        default_light        vs_dark             vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager)
-DF_ThemePresetColorTable:
-{
-  (null                          0xff00ffff          0xff00ffff           0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff     )
-  (plain_text                    0xe5e5e5ff          0x383838ff           0xe5e5e5ff          0x1e1e1eff          0xe5e5e5ff          0x1e1e1eff          0xa08563ff          0x90b080ff          0x00ffffff     )
-  (plain_background              0x3333337f          0xedededfe           0x1e1e1eff          0xffffffff          0x002b36ff          0xfcf6e2ff          0x0c0c0cff          0x0c0c0cff          0x000082ff     )
-  (plain_border                  0xffffff19          0x0000001d           0xffffff19          0xcccedb1d          0xffffff19          0xcccedb1d          0xffffff19          0x181818a0          0xffffff19     )
-  (plain_overlay                 0xffffff33          0x00000033           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (code_default                  0xe5e5e5ff          0x282828ff           0xd4d4d4ff          0x000000ff          0x839496ff          0x74878cff          0xa08563ff          0x90b080ff          0x00ffffff     )
-  (code_function                 0x7fcc99ff          0x2a7a45ff           0xdcdcaaff          0x74531fff          0x1c7dd1ff          0xc39d36ff          0xcc5735ff          0x7fcc99ff          0x49b2ffff     )
-  (code_type                     0x66b2e5ff          0x2c688fff           0x4ec9b0ff          0x2b91afff          0x1c7dd1ff          0x66b2e5ff          0xd8a51dff          0x66b2e5ff          0x49b2ffff     )
-  (code_local                    0xfe9548ff          0xfe9548ff           0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff     )
-  (code_register                 0xd45d90ff          0xd45d90ff           0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff          0xd45d90ff     )
-  (code_keyword                  0xf7bf5eff          0xa47729ff           0x569cd6ff          0x0000ffff          0x63980fff          0xc39d36ff          0xac7b0bff          0xd08f20ff          0xff0000ff     )
-  (code_symbol                   0x994c32ff          0x6c2d18ff           0xb4b4b4ff          0x000000ff          0x839496ff          0x2e5256ff          0x994c32ff          0x994c32ff          0xffffffff     )
-  (code_numeric                  0x4ce54cff          0x2c7d2cff           0xb5cea8ff          0x000000ff          0xcb4b20ff          0x657b83ff          0x6b8e23ff          0x50ff30ff          0x2cff50ff     )
-  (code_string                   0xe5cc66ff          0xcc5a0fff           0xd69d85ff          0xc11515ff          0x2aa198ff          0x5ab4a9ff          0x6b8e23ff          0x50ff30ff          0xe5cc66ff     )
-  (code_meta                     0xe54c4cff          0x8a0c0cff           0x9b9b9bff          0x808080ff          0xe54c4cff          0xe54c4cff          0xdab98fff          0x50ff30ff          0xffff00ff     )
-  (code_comment                  0x7f7f7fff          0x7f7f7fff           0x6a9955ff          0x008000ff          0x7f7f7fff          0xadafb2ff          0x686868ff          0x2090f0ff          0x7f7f7fff     )
-  (line_info_0                   0x99503d3f          0x99503d3f           0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f     )
-  (line_info_1                   0xfe82493f          0xfe82493f           0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f     )
-  (line_info_2                   0xffba173f          0xffba173f           0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f     )
-  (line_info_3                   0xcefd693f          0xcefd693f           0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f     )
-  (alt_text                      0xe5e5e5ff          0x535353ff           0xf1f1f1ff          0x535353ff          0xe5e5e5ff          0x535353ff          0xa08563ff          0x90b080ff          0x000000ff     )
-  (alt_background                0x42474c7f          0xfefefebc           0x1b1b1cff          0xfefefebc          0x002b36ff          0xfcf6e2ff          0x0c0c0cff          0x0c0c0cff          0x008184ff     )
-  (alt_border                    0xffffff19          0xffffff19           0x333337ff          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19     )
-  (alt_overlay                   0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (tab_inactive                  0x42474c7f          0x42474c7f           0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f     )
-  (tab_active                    0xa87a4c99          0xc7a27dff           0x007accff          0x007accff          0x28515eff          0xa87a4c99          0xa87a4c99          0xa87a4c99          0xa87a4c99     )
-  (entity_background             0x4293cc99          0x4293cc99           0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99     )
-  (query_bar                     0x8e2d4ccc          0xd76489cc           0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc     )
-  (weak_text                     0xffffff7f          0x0000007f           0xffffff7f          0x0000007f          0xffffff7f          0x0000007f          0xa08563af          0x90b080af          0xffffff7f     )
-  (text_selection                0x99ccff4c          0x7d98b34c           0x99ccff4c          0x7d98b34c          0x99ccff4c          0x7d98b34c          0x99ccff4c          0x99ccff4c          0x99ccff4c     )
-  (cursor                        0x66e566e5          0x101010ff           0x66e566e5          0x101010ff          0x66e566e5          0x101010ff          0x66e566e5          0x66e566e5          0x66e566e5     )
-  (highlight_0                   0xb27219ff          0xb272189b           0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff     )
-  (highlight_1                   0x327f19ff          0x327f19ff           0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff     )
-  (success_text                  0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     )
-  (success_background            0x32b219ff          0x75db61ff           0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff     )
-  (success_border                0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (failure_text                  0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     )
-  (failure_background            0xb23219ff          0xf27961ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     )
-  (failure_border                0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (action_text                   0xffffffff          0xffffffff           0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff     )
-  (action_background             0x327fb2ff          0x327fb2ff           0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff     )
-  (action_border                 0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (drop_site_overlay             0xffffff0c          0xffffff0c           0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c     )
-  (thread_0                      0xffcb7fff          0xad7c34ff           0xffcb7fff          0xad7c34ff          0xffcb7fff          0xad7c34ff          0xffcb7fff          0xffcb7fff          0xffcb7fff     )
-  (thread_1                      0xb2ff65ff          0x639b2aff           0xb2ff65ff          0x639b2aff          0xb2ff65ff          0x639b2aff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff     )
-  (thread_2                      0xff99e5ff          0xa94c91ff           0xff99e5ff          0xa94c91ff          0xff99e5ff          0xa94c91ff          0xff99e5ff          0xff99e5ff          0xff99e5ff     )
-  (thread_3                      0x6598ffff          0x305398ff           0x6598ffff          0x305398ff          0x6598ffff          0x305398ff          0x6598ffff          0x6598ffff          0x6598ffff     )
-  (thread_4                      0x65ffcbff          0x339574ff           0x65ffcbff          0x339574ff          0x65ffcbff          0x339574ff          0x65ffcbff          0x65ffcbff          0x65ffcbff     )
-  (thread_5                      0xff9819ff          0xbf7416ff           0xff9819ff          0xbf7416ff          0xff9819ff          0xbf7416ff          0xff9819ff          0xff9819ff          0xff9819ff     )
-  (thread_6                      0x9932ffff          0x57238bff           0x9932ffff          0x57238bff          0x9932ffff          0x57238bff          0x9932ffff          0x9932ffff          0x9932ffff     )
-  (thread_7                      0x65ff4cff          0x2a7e1cff           0x65ff4cff          0x2a7e1cff          0x65ff4cff          0x2a7e1cff          0x65ff4cff          0x65ff4cff          0x65ff4cff     )
-  (thread_unwound                0xb2ccd8ff          0x236481ff           0xb2ccd8ff          0x236481ff          0xb2ccd8ff          0x236481ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff     )
-  (inactive_panel_overlay        0x0000003f          0x0000000d           0x0000003f          0x0000000d          0x0000003f          0x0000000d          0x0000003f          0x0000003f          0x0000003f     )
-  (drop_shadow                   0x0000007f          0x0000003b           0x0000007f          0x0000003b          0x0000007f          0x0000003b          0x0000007f          0x0000007f          0x0000007f     )
 }
 
 @data(String8) df_g_theme_color_display_string_table:
