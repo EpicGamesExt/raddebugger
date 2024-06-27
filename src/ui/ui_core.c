@@ -1733,10 +1733,10 @@ ui_layout_position__in_place_rec(UI_Box *root, Axis2 axis)
       child->rect.p0.v[axis] = root->rect.p0.v[axis] + child->fixed_position.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(root->view_off.v[axis]);
     }
     child->rect.p1.v[axis] = child->rect.p0.v[axis] + child->fixed_size.v[axis];
-    child->rect.p0.x = floorf(child->rect.p0.x);
-    child->rect.p0.y = floorf(child->rect.p0.y);
-    child->rect.p1.x = floorf(child->rect.p1.x);
-    child->rect.p1.y = floorf(child->rect.p1.y);
+    child->rect.p0.x = floor_f32(child->rect.p0.x);
+    child->rect.p0.y = floor_f32(child->rect.p0.y);
+    child->rect.p1.x = floor_f32(child->rect.p1.x);
+    child->rect.p1.y = floor_f32(child->rect.p1.y);
     
     // rjf: grab new position
     F32 new_position = Min(child->rect.p0.v[axis], child->rect.p1.v[axis]);
@@ -2411,7 +2411,7 @@ ui_box_text_position(UI_Box *box)
     case UI_TextAlign_Center:
     {
       Vec2F32 text_dim = box->display_string_runs.dim;
-      result.x = round_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2) - 1.f;
+      result.x = floor_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
     case UI_TextAlign_Right:

@@ -8490,7 +8490,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
     DF_ThemeColor color_ctx_menu_color;
     Vec4F32 color_ctx_menu_color_hsva;
     DF_ThemePreset preset_apply_confirm;
-    B32 category_collapsed[DF_SettingsItemKind_COUNT];
+    B32 category_opened[DF_SettingsItemKind_COUNT];
   };
   DF_SettingsViewState *sv = df_view_user_state(view, DF_SettingsViewState);
   if(!sv->initialized)
@@ -8514,12 +8514,12 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       items_list.count += 1;
       n->v.kind = DF_SettingsItemKind_CategoryHeader;
       n->v.string = str8_lit("Interface Settings");
-      n->v.icon_kind = sv->category_collapsed[DF_SettingsItemKind_Setting] ? DF_IconKind_RightCaret : DF_IconKind_DownCaret;
+      n->v.icon_kind = sv->category_opened[DF_SettingsItemKind_Setting] ? DF_IconKind_DownCaret : DF_IconKind_RightCaret;
       n->v.category = DF_SettingsItemKind_Setting;
     }
     
     //- rjf: gather all settings
-    if(!sv->category_collapsed[DF_SettingsItemKind_Setting] || query.size != 0)
+    if(sv->category_opened[DF_SettingsItemKind_Setting] || query.size != 0)
     {
       for(EachEnumVal(DF_SettingCode, code))
       {
@@ -8552,12 +8552,12 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       items_list.count += 1;
       n->v.kind = DF_SettingsItemKind_CategoryHeader;
       n->v.string = str8_lit("Theme Presets");
-      n->v.icon_kind = sv->category_collapsed[DF_SettingsItemKind_ThemePreset] ? DF_IconKind_RightCaret : DF_IconKind_DownCaret;
+      n->v.icon_kind = sv->category_opened[DF_SettingsItemKind_Setting] ? DF_IconKind_DownCaret : DF_IconKind_RightCaret;
       n->v.category = DF_SettingsItemKind_ThemePreset;
     }
     
     //- rjf: gather theme presets
-    if(!sv->category_collapsed[DF_SettingsItemKind_ThemePreset] || query.size != 0)
+    if(sv->category_opened[DF_SettingsItemKind_ThemePreset] || query.size != 0)
     {
       for(EachEnumVal(DF_ThemePreset, preset))
       {
@@ -8590,12 +8590,12 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       items_list.count += 1;
       n->v.kind = DF_SettingsItemKind_CategoryHeader;
       n->v.string = str8_lit("Theme Colors");
-      n->v.icon_kind = sv->category_collapsed[DF_SettingsItemKind_ThemeColor] ? DF_IconKind_RightCaret : DF_IconKind_DownCaret;
+      n->v.icon_kind = sv->category_opened[DF_SettingsItemKind_Setting] ? DF_IconKind_DownCaret : DF_IconKind_RightCaret;
       n->v.category = DF_SettingsItemKind_ThemeColor;
     }
     
     //- rjf: gather all theme colors
-    if(!sv->category_collapsed[DF_SettingsItemKind_ThemeColor] || query.size != 0)
+    if(sv->category_opened[DF_SettingsItemKind_ThemeColor] || query.size != 0)
     {
       for(EachNonZeroEnumVal(DF_ThemeColor, color))
       {
@@ -9026,7 +9026,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       }
       if(item->kind == DF_SettingsItemKind_CategoryHeader && ui_pressed(sig))
       {
-        sv->category_collapsed[item->category] ^= 1;
+        sv->category_opened[item->category] ^= 1;
       }
     }
   }
