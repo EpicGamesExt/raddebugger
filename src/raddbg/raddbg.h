@@ -2,24 +2,16 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: 0.9.11 TODO
+//~ rjf: Frontend/UI Pass Tasks
 //
 // [ ] auto-scroll output window
-//
 // [ ] inline breakpoint hit_count
 //  [ ] to count hit counts, resolve all bps to addresses, check addresses
 //      against stopper thread's
-//
-// [ ] colors: fill out rest of theme presets for new theme setup
-//
 // [ ] editing multiple bindings for commands
 // [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
-
-////////////////////////////////
-//~ rjf: Frontend/UI Pass Tasks
-//
 // [ ] move breakpoints to being a global thing, not nested to particular files
 // [ ] visualize all breakpoints everywhere - source view should show up in
 //     disasm, disasm should show up in source view, function should show up in
@@ -417,6 +409,7 @@
 //  [x]  zooming behaves very strangely - sometimes it zooms source code,
 //       sometimes both source code and menu/tab/watch font size, sometimes
 //       just menu/tab/watch font size not source size.
+// [x] colors: fill out rest of theme presets for new theme setup
 
 #ifndef RADDBG_H
 #define RADDBG_H

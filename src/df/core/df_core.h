@@ -1365,7 +1365,6 @@ read_only global DF_Entity df_g_nil_entity =
   0,
   0,
   0,
-  0,
   
   // rjf: allocationless, simple equipment
   {0},
