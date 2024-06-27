@@ -11309,7 +11309,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           for(DF_EntityNode *n = line_pins.first; n != 0; n = n->next)
           {
             DF_Entity *pin = n->entity;
-            Vec4F32 color = v4f32(1, 1, 1, 1);
+            Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Text);
             if(pin->flags & DF_EntityFlag_HasColor)
             {
               color = df_rgba_from_entity(pin);

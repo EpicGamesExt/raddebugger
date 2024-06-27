@@ -802,7 +802,7 @@ internal void              ui_set_auto_focus_hot_key(UI_Key key);
 
 //- rjf: palette forming
 internal UI_Palette *      ui_build_palette_(UI_Palette *base, UI_Palette *overrides);
-#define ui_build_palette(base, ...) ui_build_palette_((base), &(UI_Palette){.text = v4f32(1, 1, 1, 1), __VA_ARGS__})
+#define ui_build_palette(base, ...) ui_build_palette_((base), &(UI_Palette){.text = v4f32(0, 0, 0, 0), __VA_ARGS__})
 
 //- rjf: box node construction
 internal UI_Box *          ui_build_box_from_key(UI_BoxFlags flags, UI_Key key);
