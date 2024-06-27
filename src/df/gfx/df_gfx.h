@@ -591,6 +591,7 @@ struct DF_Window
   
   // rjf: tab context menu state
   UI_Key tab_ctx_menu_key;
+  DF_Handle tab_ctx_menu_panel;
   DF_Handle tab_ctx_menu_view;
   
   // rjf: autocomplete lister state

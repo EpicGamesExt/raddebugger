@@ -4444,6 +4444,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       UI_CtxMenu(ws->tab_ctx_menu_key) UI_PrefWidth(ui_em(25.f, 1.f)) UI_CornerRadius(0)
         DF_Palette(DF_PaletteCode_ImplicitButton)
       {
+        DF_Panel *panel = df_panel_from_handle(ws->tab_ctx_menu_panel);
         DF_View *view = df_view_from_handle(ws->tab_ctx_menu_view);
         DF_IconKind view_icon = df_icon_kind_from_view(view);
         DF_Entity *entity = df_entity_from_handle(view->entity);
@@ -4530,11 +4531,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         // rjf: close tab
         if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Tab")))
         {
-          DF_CmdParams params = df_cmd_params_from_window(ws);
-          {
-            params.view = df_handle_from_view(view);
-            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
-          }
+          DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseTab));
           ui_ctx_menu_close();
         }
@@ -7465,6 +7462,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                   else if(ui_right_clicked(sig))
                   {
                     ui_ctx_menu_open(ws->tab_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
+                    ws->tab_ctx_menu_panel = df_handle_from_panel(panel);
                     ws->tab_ctx_menu_view = df_handle_from_view(view);
                   }
                   else if(ui_middle_clicked(sig))
