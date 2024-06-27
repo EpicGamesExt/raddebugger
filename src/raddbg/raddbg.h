@@ -4,26 +4,7 @@
 ////////////////////////////////
 //~ rjf: 0.9.11 TODO
 //
-// [x] user settings (ui & functionality - generally need a story for it)
-//  [x] hover animations
-//  [x] press animations
-//  [x] focus animations
-//  [x] tooltip animations
-//  [x] context menu animations
-//  [x] scrolling animations
-//  [x] background blur
-//  [x] tab width
-//  [ ] auto-scroll output window
-//
-// [ ] move breakpoints to being a global thing, not nested to particular files
-//
-// [ ] visualize all breakpoints everywhere - source view should show up in
-//     disasm, disasm should show up in source view, function should show up in
-//     both, etc.
-//  [ ] ** Function breakpoints should show up in the source listing. Without
-//      them being visible, it is confusing when you run and you stop there,
-//      because you're like "wait why did it stop" and then you later remember
-//      that's because there was a function breakpoint there.
+// [ ] auto-scroll output window
 //
 // [ ] inline breakpoint hit_count
 //  [ ] to count hit counts, resolve all bps to addresses, check addresses
@@ -38,6 +19,15 @@
 
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
+//
+// [ ] move breakpoints to being a global thing, not nested to particular files
+// [ ] visualize all breakpoints everywhere - source view should show up in
+//     disasm, disasm should show up in source view, function should show up in
+//     both, etc.
+//  [ ] ** Function breakpoints should show up in the source listing. Without
+//      them being visible, it is confusing when you run and you stop there,
+//      because you're like "wait why did it stop" and then you later remember
+//      that's because there was a function breakpoint there.
 //
 // [ ] n-row table selection, in watch window & other UIs, multi-selection
 //     ctrl+C
@@ -139,10 +129,6 @@
 //      color to white (or the inverse of the background color, or whatever) so
 //      that the user can see what things on the screen use that theme color.
 //
-//  [ ] Menus take too long to show up. I would prefer it if they were instant.
-//      The animation doesn't really provide any useful cues, since I know
-//      where the menu came from.
-//
 //  [ ] Theme window should include font scaling. I was able to find the
 //      command for increasing the font scale, but I imagine most people
 //      wouldn't think to look there.
@@ -158,19 +144,6 @@
 
 ////////////////////////////////
 //~ rjf: Hot, Low Priority Tasks (UI Opinions, Less-Serious Jank, Preferences, Cleanup)
-//
-//  [ ] ** In the call stack, I would like to be able to click quickly and move
-//      around the stack. Right now, you can do that with the first and third
-//      column, but the second column drops down a context menu. Since right
-//      click is already for context menus, can it not just be that double-
-//      clicking any column jumps to that stack frame?
-//
-//  [ ] ** I find it really hard to read the code with the heavyweight lines
-//      running through it for breakpoints and stepping and things. Is there a
-//      way to turn the lines off? AFAICT they are based on thread and
-//      breakpoint color, so you can't really control the line drawing? I might
-//      be fine with them, but they would have to be much more light (like
-//      alpha 0.1 or something)
 //
 //  [ ] The hex format for color values in the config file was a real
 //      mindbender. It's prefixed with "0x", so I was assuming it was either
@@ -193,9 +166,6 @@
 //  [ ]  default font size is too small for me - not only source code, but
 //       menus/tab/watch names (which don't resize). Maybe you could query
 //       Windows for initial font size?
-//  [ ]  zooming behaves very strangely - sometimes it zooms source code,
-//       sometimes both source code and menu/tab/watch font size, sometimes
-//       just menu/tab/watch font size not source size.
 //  [ ]  icon fonts glyphs sometimes disappear for specific font size, but they
 //       reappear if you go +1 higher or -1 lower. Mostly red triangle in watch
 //       values for "unknown identifier". But also yellow arrow in call stack
@@ -420,6 +390,33 @@
 //  [x] double click on procedure in procedures tab to jump to source
 //  [x] highlighted text & ctrl+f -> auto-fill search query
 //  [x] double-click any part of frame in callstack view -> snap to function
+//  [x] Menus take too long to show up. I would prefer it if they were instant.
+//      The animation doesn't really provide any useful cues, since I know
+//      where the menu came from.
+// [x] user settings (ui & functionality - generally need a story for it)
+//  [x] hover animations
+//  [x] press animations
+//  [x] focus animations
+//  [x] tooltip animations
+//  [x] context menu animations
+//  [x] scrolling animations
+//  [x] background blur
+//  [x] tab width
+//  [x] ** In the call stack, I would like to be able to click quickly and move
+//      around the stack. Right now, you can do that with the first and third
+//      column, but the second column drops down a context menu. Since right
+//      click is already for context menus, can it not just be that double-
+//      clicking any column jumps to that stack frame?
+//
+//  [x] ** I find it really hard to read the code with the heavyweight lines
+//      running through it for breakpoints and stepping and things. Is there a
+//      way to turn the lines off? AFAICT they are based on thread and
+//      breakpoint color, so you can't really control the line drawing? I might
+//      be fine with them, but they would have to be much more light (like
+//      alpha 0.1 or something)
+//  [x]  zooming behaves very strangely - sometimes it zooms source code,
+//       sometimes both source code and menu/tab/watch font size, sometimes
+//       just menu/tab/watch font size not source size.
 
 #ifndef RADDBG_H
 #define RADDBG_H
