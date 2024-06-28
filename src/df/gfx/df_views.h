@@ -441,7 +441,8 @@ struct DF_MemoryViewState
 typedef enum DF_SettingsItemKind
 {
   DF_SettingsItemKind_CategoryHeader,
-  DF_SettingsItemKind_Setting,
+  DF_SettingsItemKind_GlobalSetting,
+  DF_SettingsItemKind_WindowSetting,
   DF_SettingsItemKind_ThemeColor,
   DF_SettingsItemKind_ThemePreset,
   DF_SettingsItemKind_COUNT

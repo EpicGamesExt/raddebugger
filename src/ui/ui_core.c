@@ -1418,7 +1418,7 @@ ui_end_build(void)
             String8 box_display_string = ui_box_display_string(b);
             Vec2F32 text_pos = ui_box_text_position(b);
             Vec2F32 drawn_text_dim = b->display_string_runs.dim;
-            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x >= rect.x1);
+            B32 text_is_truncated = (drawn_text_dim.x + text_pos.x > rect.x1);
             B32 mouse_is_hovering = contains_2f32(r2f32p(text_pos.x,
                                                          rect.y0,
                                                          Min(text_pos.x+drawn_text_dim.x, rect.x1),
@@ -1484,7 +1484,7 @@ ui_calc_sizes_standalone__in_place_rec(UI_Box *root, Axis2 axis)
     {
       F32 padding = root->pref_size[axis].value;
       F32 text_size = root->display_string_runs.dim.x;
-      root->fixed_size.v[axis] = padding + text_size;
+      root->fixed_size.v[axis] = padding + text_size + root->text_padding*2;
     }break;
   }
   
@@ -1795,7 +1795,7 @@ ui_tooltip_begin_base(void)
   ui_push_parent(ui_root_from_state(ui_state));
   ui_push_parent(ui_state->tooltip_root);
   ui_push_flags(0);
-  ui_push_run_flags(0);
+  ui_push_text_raster_flags(ui_bottom_text_raster_flags());
   ui_push_palette(ui_bottom_palette());
 }
 
@@ -1803,7 +1803,7 @@ internal void
 ui_tooltip_end_base(void)
 {
   ui_pop_palette();
-  ui_pop_run_flags();
+  ui_pop_text_raster_flags();
   ui_pop_flags();
   ui_pop_parent();
   ui_pop_parent();
@@ -2218,7 +2218,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->font = ui_state->font_stack.top->v;
     box->font_size = ui_state->font_size_stack.top->v;
     box->tab_size = ui_state->tab_size_stack.top->v;
-    box->run_flags = ui_state->run_flags_stack.top->v;
+    box->text_raster_flags = ui_state->text_raster_flags_stack.top->v;
     box->corner_radii[Corner_00] = ui_state->corner_radius_00_stack.top->v;
     box->corner_radii[Corner_01] = ui_state->corner_radius_01_stack.top->v;
     box->corner_radii[Corner_10] = ui_state->corner_radius_10_stack.top->v;
@@ -2308,7 +2308,7 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     String8 display_string = ui_box_display_string(box);
     D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
     D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, &fancy_strings);
+    box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2323,13 +2323,13 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
       D_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
       D_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, &fancy_strings);
+      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
     }
     else
     {
       D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
       D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, &fancy_strings);
+      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
     }
     scratch_end(scratch);
   }
@@ -2341,7 +2341,7 @@ ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
   box->string = d_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->run_flags, strings);
+  box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, strings);
 }
 
 internal inline void
@@ -2400,13 +2400,17 @@ ui_box_text_position(UI_Box *box)
   F_Tag font = box->font;
   F32 font_size = box->font_size;
   F_Metrics font_metrics = f_metrics_from_tag_size(font, font_size);
-  result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f + (font_metrics.capital_height/2) - font_metrics.line_gap/2);
+  result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f) + font_metrics.capital_height/2.f;
+  if(!f_tag_match(font, ui_icon_font()))
+  {
+    result.y += font_metrics.descent/2;
+  }
   switch(box->text_align)
   {
     default:
     case UI_TextAlign_Left:
     {
-      result.x = box->rect.p0.x + 2.f + box->text_padding;
+      result.x = box->rect.p0.x + box->text_padding;
     }break;
     case UI_TextAlign_Center:
     {
@@ -2417,11 +2421,11 @@ ui_box_text_position(UI_Box *box)
     case UI_TextAlign_Right:
     {
       Vec2F32 text_dim = box->display_string_runs.dim;
-      result.x = round_f32((box->rect.p1.x) - text_dim.x);
+      result.x = round_f32((box->rect.p1.x) - text_dim.x - box->text_padding);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
   }
-  result.x = floorf(result.x);
+  result.x = floor_f32(result.x);
   return result;
 }
 

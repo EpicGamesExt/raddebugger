@@ -255,7 +255,10 @@ struct FP_DWrite_State
   B32 dwrite2_is_supported;
   IDWriteFactory *factory;
   IDWriteRenderingParams *base_rendering_params;
-  IDWriteRenderingParams *rendering_params[FP_RasterMode_COUNT];
+  IDWriteRenderingParams *rendering_params_sharp_hinted;
+  IDWriteRenderingParams *rendering_params_sharp_unhinted;
+  IDWriteRenderingParams *rendering_params_smooth_hinted;
+  IDWriteRenderingParams *rendering_params_smooth_unhinted;
   IDWriteGdiInterop *gdi_interop;
   Vec2S32 bitmap_render_target_dim;
   IDWriteBitmapRenderTarget *bitmap_render_target;

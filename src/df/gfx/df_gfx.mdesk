@@ -547,22 +547,28 @@ DF_ThemeColorVersionRemapTable:
 ////////////////////////////////
 //~ rjf: Settings
 
-@table(name  name_lower  display_string  default_s32  s32_min  s32_max)
+@table(name  name_lower  display_string  default_per_window  default_s32  s32_min  s32_max)
 DF_SettingTable:
 {
-  {HoverAnimations       hover_animations        "Hover Animations"        1    0  1  }
-  {PressAnimations       press_animations        "Press Animations"        1    0  1  }
-  {FocusAnimations       focus_animations        "Focus Animations"        1    0  1  }
-  {TooltipAnimations     tooltip_animations      "Tooltip Animations"      1    0  1  }
-  {MenuAnimations        menu_animations         "Menu Animations"         1    0  1  }
-  {ScrollingAnimations   scrolling_animations    "Scrolling Animations"    1    0  1  }
-  {BackgroundBlur        background_blur         "Background Blur"         1    0  1  }
-  {ThreadLines           thread_lines            "Thread Lines"            1    0  1  }
-  {BreakpointLines       breakpoint_lines        "Breakpoint Lines"        1    0  1  }
-  {ThreadGlow            thread_glow             "Thread Glow"             1    0  1  }
-  {BreakpointGlow        breakpoint_glow         "Breakpoint Glow"         1    0  1  }
-  {OpaqueBackgrounds     opaque_backgrounds      "Opaque Backgrounds"      0    0  1  }
-  {TabWidth              tab_width               "Tab Width"               4    1  32 }
+  {HoverAnimations       hover_animations        "Hover Animations"        0            1    0  1  }
+  {PressAnimations       press_animations        "Press Animations"        0            1    0  1  }
+  {FocusAnimations       focus_animations        "Focus Animations"        0            1    0  1  }
+  {TooltipAnimations     tooltip_animations      "Tooltip Animations"      0            1    0  1  }
+  {MenuAnimations        menu_animations         "Menu Animations"         0            1    0  1  }
+  {ScrollingAnimations   scrolling_animations    "Scrolling Animations"    0            1    0  1  }
+  {BackgroundBlur        background_blur         "Background Blur"         0            1    0  1  }
+  {ThreadLines           thread_lines            "Thread Lines"            0            1    0  1  }
+  {BreakpointLines       breakpoint_lines        "Breakpoint Lines"        0            1    0  1  }
+  {ThreadGlow            thread_glow             "Thread Glow"             0            1    0  1  }
+  {BreakpointGlow        breakpoint_glow         "Breakpoint Glow"         0            1    0  1  }
+  {OpaqueBackgrounds     opaque_backgrounds      "Opaque Backgrounds"      0            0    0  1  }
+  {TabWidth              tab_width               "Tab Width"               0            4    1  32 }
+  {MainFontSize          main_font_size          "Main Font Size"          1            12   6  72 }
+  {CodeFontSize          code_font_size          "Code Font Size"          1            12   6  72 }
+  {SmoothUIText          smooth_ui_text          "Smooth UI Text"          1            1    0  1  }
+  {SmoothCodeText        smooth_code_text        "Smooth Code Text"        1            0    0  1  }
+  {HintUIText            hint_ui_text            "Hint UI Text"            1            1    0  1  }
+  {HintCodeText          hint_code_text          "Hint Code Text"          1            1    0  1  }
 }
 
 @enum DF_SettingCode:
@@ -579,6 +585,11 @@ DF_SettingTable:
 @data(String8) df_g_setting_code_lower_string_table:
 {
   @expand(DF_SettingTable a) `str8_lit_comp("$(a.name_lower)")`
+}
+
+@data(B8) df_g_setting_code_default_is_per_window_table:
+{
+  @expand(DF_SettingTable a) `$(a.default_per_window)`
 }
 
 @data(DF_SettingVal) df_g_setting_code_default_val_table:

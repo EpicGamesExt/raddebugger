@@ -555,9 +555,12 @@ struct DF_Window
   OS_Handle os;
   R_Handle r;
   UI_State *ui;
-  F32 code_font_size_delta;
-  F32 main_font_size_delta;
+  F32 last_dpi;
   B32 window_temporarily_focused_ipc;
+  
+  // rjf: config/settings
+  DF_SettingVal setting_vals[DF_SettingCode_COUNT];
+  UI_Palette cfg_palettes[DF_PaletteCode_COUNT]; // derivative from theme
   
   // rjf: view state delta history
   DF_StateDeltaHistory *view_state_hist;
@@ -626,7 +629,6 @@ struct DF_Window
   Arena *hover_eval_arena;
   Vec2F32 hover_eval_spawn_pos;
   String8 hover_eval_string;
-  
   
   // rjf: hover eval timer
   U64 hover_eval_first_frame_idx;
@@ -786,10 +788,9 @@ struct DF_GfxState
   Arena *cfg_code_font_path_arena;
   String8 cfg_main_font_path;
   String8 cfg_code_font_path;
-  F_Tag cfg_font_tags[DF_FontSlot_COUNT];        // derivative from font paths
-  UI_Palette cfg_palettes[DF_PaletteCode_COUNT]; // derivative from theme
+  F_Tag cfg_font_tags[DF_FontSlot_COUNT]; // derivative from font paths
   
-  // rjf: settings
+  // rjf: global settings
   DF_SettingVal cfg_setting_vals[DF_CfgSrc_COUNT][DF_SettingCode_COUNT];
   
   // rjf: icon texture
@@ -1039,14 +1040,14 @@ internal Vec4F32 df_rgba_from_theme_color(DF_ThemeColor color);
 internal DF_ThemeColor df_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 
 //- rjf: code -> palette
-internal UI_Palette *df_palette_from_code(DF_PaletteCode code);
+internal UI_Palette *df_palette_from_code(DF_Window *ws, DF_PaletteCode code);
 
 //- rjf: fonts/sizes
 internal F_Tag df_font_from_slot(DF_FontSlot slot);
 internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
 
 //- rjf: settings
-internal DF_SettingVal df_setting_val_from_code(DF_SettingCode code);
+internal DF_SettingVal df_setting_val_from_code(DF_Window *optional_window, DF_SettingCode code);
 
 //- rjf: config serialization
 internal int df_qsort_compare__cfg_string_bindings(DF_StringBindingPair *a, DF_StringBindingPair *b);
@@ -1061,18 +1062,19 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 ////////////////////////////////
 //~ rjf: UI Building Helpers
 
-#define DF_Palette(code) UI_Palette(df_palette_from_code(code))
+#define DF_Palette(ws, code) UI_Palette(df_palette_from_code((ws), (code)))
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
+internal void df_cmd_binding_buttons(DF_CmdSpec *spec);
 internal void df_cmd_binding_button(DF_CmdSpec *spec);
 internal UI_Signal df_menu_bar_button(String8 string);
 internal UI_Signal df_cmd_spec_button(DF_CmdSpec *spec);
 internal void df_cmd_list_menu_buttons(DF_Window *ws, U64 count, DF_CoreCmdKind *cmds, U32 *fastpath_codepoints);
 internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
 internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
-internal void df_entity_tooltips(DF_Entity *entity);
+internal void df_entity_tooltips(DF_Window *ws, DF_Entity *entity);
 internal UI_Signal df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
 internal void df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt point);
 

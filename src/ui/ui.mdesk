@@ -42,7 +42,7 @@ UI_StackTable:
   //- rjf: font
   { Font                               font                          F_Tag                 `f_tag_zero()`                     }
   { FontSize                           font_size                     F32                   24.f                               }
-  { RunFlags                           run_flags                     F_RunFlags            0                                  }
+  { TextRasterFlags                    text_raster_flags             F_RasterFlags         F_RasterFlag_Hinted                }
   { TabSize                            tab_size                      F32                   `24.f*4.f`                         }
   
   //- rjf: corner radii
@@ -55,7 +55,7 @@ UI_StackTable:
   { BlurSize                           blur_size                     F32                   0                                  }
   
   //- rjf: text parameters
-  { TextPadding                        text_padding                  F32                   2                                  }
+  { TextPadding                        text_padding                  F32                   0                                  }
   { TextAlignment                      text_alignment                UI_TextAlign          UI_TextAlign_Left                  }
 }
 

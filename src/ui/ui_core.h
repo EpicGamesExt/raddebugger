@@ -404,7 +404,7 @@ struct UI_Box
   F_Tag font;
   F32 font_size;
   F32 tab_size;
-  F_RunFlags run_flags;
+  F_RasterFlags text_raster_flags;
   F32 corner_radii[Corner_COUNT];
   F32 blur_size;
   F32 transparency;
@@ -851,7 +851,7 @@ internal F32                        ui_top_squish(void);
 internal OS_Cursor                  ui_top_hover_cursor(void);
 internal F_Tag                      ui_top_font(void);
 internal F32                        ui_top_font_size(void);
-internal F_RunFlags                 ui_top_run_flags(void);
+internal F_RasterFlags              ui_top_text_raster_flags(void);
 internal F32                        ui_top_tab_size(void);
 internal F32                        ui_top_corner_radius_00(void);
 internal F32                        ui_top_corner_radius_01(void);
@@ -879,7 +879,7 @@ internal F32                        ui_bottom_squish(void);
 internal OS_Cursor                  ui_bottom_hover_cursor(void);
 internal F_Tag                      ui_bottom_font(void);
 internal F32                        ui_bottom_font_size(void);
-internal F_RunFlags                 ui_bottom_run_flags(void);
+internal F_RasterFlags              ui_bottom_text_raster_flags(void);
 internal F32                        ui_bottom_tab_size(void);
 internal F32                        ui_bottom_corner_radius_00(void);
 internal F32                        ui_bottom_corner_radius_01(void);
@@ -907,7 +907,7 @@ internal F32                        ui_push_squish(F32 v);
 internal OS_Cursor                  ui_push_hover_cursor(OS_Cursor v);
 internal F_Tag                      ui_push_font(F_Tag v);
 internal F32                        ui_push_font_size(F32 v);
-internal F_RunFlags                 ui_push_run_flags(F_RunFlags v);
+internal F_RasterFlags              ui_push_text_raster_flags(F_RasterFlags v);
 internal F32                        ui_push_tab_size(F32 v);
 internal F32                        ui_push_corner_radius_00(F32 v);
 internal F32                        ui_push_corner_radius_01(F32 v);
@@ -935,7 +935,7 @@ internal F32                        ui_pop_squish(void);
 internal OS_Cursor                  ui_pop_hover_cursor(void);
 internal F_Tag                      ui_pop_font(void);
 internal F32                        ui_pop_font_size(void);
-internal F_RunFlags                 ui_pop_run_flags(void);
+internal F_RasterFlags              ui_pop_text_raster_flags(void);
 internal F32                        ui_pop_tab_size(void);
 internal F32                        ui_pop_corner_radius_00(void);
 internal F32                        ui_pop_corner_radius_01(void);
@@ -963,7 +963,7 @@ internal F32                        ui_set_next_squish(F32 v);
 internal OS_Cursor                  ui_set_next_hover_cursor(OS_Cursor v);
 internal F_Tag                      ui_set_next_font(F_Tag v);
 internal F32                        ui_set_next_font_size(F32 v);
-internal F_RunFlags                 ui_set_next_run_flags(F_RunFlags v);
+internal F_RasterFlags              ui_set_next_text_raster_flags(F_RasterFlags v);
 internal F32                        ui_set_next_tab_size(F32 v);
 internal F32                        ui_set_next_corner_radius_00(F32 v);
 internal F32                        ui_set_next_corner_radius_01(F32 v);
@@ -1006,7 +1006,7 @@ internal void     ui_pop_corner_radius(void);
 #define UI_HoverCursor(v) DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
 #define UI_Font(v) DeferLoop(ui_push_font(v), ui_pop_font())
 #define UI_FontSize(v) DeferLoop(ui_push_font_size(v), ui_pop_font_size())
-#define UI_RunFlags(v) DeferLoop(ui_push_run_flags(v), ui_pop_run_flags())
+#define UI_TextRasterFlags(v) DeferLoop(ui_push_text_raster_flags(v), ui_pop_text_raster_flags())
 #define UI_TabSize(v) DeferLoop(ui_push_tab_size(v), ui_pop_tab_size())
 #define UI_CornerRadius00(v) DeferLoop(ui_push_corner_radius_00(v), ui_pop_corner_radius_00())
 #define UI_CornerRadius01(v) DeferLoop(ui_push_corner_radius_01(v), ui_pop_corner_radius_01())

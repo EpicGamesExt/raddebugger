@@ -1186,7 +1186,7 @@ str8_lit_comp("thread_error"),
 str8_lit_comp("breakpoint"),
 };
 
-String8 df_g_setting_code_display_string_table[13] =
+String8 df_g_setting_code_display_string_table[19] =
 {
 str8_lit_comp("Hover Animations"),
 str8_lit_comp("Press Animations"),
@@ -1201,9 +1201,15 @@ str8_lit_comp("Thread Glow"),
 str8_lit_comp("Breakpoint Glow"),
 str8_lit_comp("Opaque Backgrounds"),
 str8_lit_comp("Tab Width"),
+str8_lit_comp("Main Font Size"),
+str8_lit_comp("Code Font Size"),
+str8_lit_comp("Smooth UI Text"),
+str8_lit_comp("Smooth Code Text"),
+str8_lit_comp("Hint UI Text"),
+str8_lit_comp("Hint Code Text"),
 };
 
-String8 df_g_setting_code_lower_string_table[13] =
+String8 df_g_setting_code_lower_string_table[19] =
 {
 str8_lit_comp("hover_animations"),
 str8_lit_comp("press_animations"),
@@ -1218,9 +1224,38 @@ str8_lit_comp("thread_glow"),
 str8_lit_comp("breakpoint_glow"),
 str8_lit_comp("opaque_backgrounds"),
 str8_lit_comp("tab_width"),
+str8_lit_comp("main_font_size"),
+str8_lit_comp("code_font_size"),
+str8_lit_comp("smooth_ui_text"),
+str8_lit_comp("smooth_code_text"),
+str8_lit_comp("hint_ui_text"),
+str8_lit_comp("hint_code_text"),
 };
 
-DF_SettingVal df_g_setting_code_default_val_table[13] =
+B8 df_g_setting_code_default_is_per_window_table[19] =
+{
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+1,
+1,
+1,
+1,
+1,
+1,
+};
+
+DF_SettingVal df_g_setting_code_default_val_table[19] =
 {
 {1, 1},
 {1, 1},
@@ -1235,9 +1270,15 @@ DF_SettingVal df_g_setting_code_default_val_table[13] =
 {1, 1},
 {1, 0},
 {1, 4},
+{1, 12},
+{1, 12},
+{1, 1},
+{1, 0},
+{1, 1},
+{1, 1},
 };
 
-Rng1S32 df_g_setting_code_s32_range_table[13] =
+Rng1S32 df_g_setting_code_s32_range_table[19] =
 {
 {0, 1},
 {0, 1},
@@ -1252,6 +1293,12 @@ Rng1S32 df_g_setting_code_s32_range_table[13] =
 {0, 1},
 {0, 1},
 {1, 32},
+{6, 72},
+{6, 72},
+{0, 1},
+{0, 1},
+{0, 1},
+{0, 1},
 };
 
 C_LINKAGE_END

@@ -116,14 +116,14 @@ internal UI_Signal ui_alpha_pickerf(F32 *out_alpha, char *fmt, ...);
 ////////////////////////////////
 //~ rjf: Simple Layout Widgets
 
-internal UI_Signal ui_row_begin(void);
-internal void ui_row_end(void);
-internal UI_Signal ui_column_begin(void);
-internal void ui_column_end(void);
-internal UI_Signal ui_named_row_begin(String8 string);
-internal void ui_named_row_end(void);
-internal UI_Signal ui_named_column_begin(String8 string);
-internal void ui_named_column_end(void);
+internal UI_Box *ui_row_begin(void);
+internal UI_Signal ui_row_end(void);
+internal UI_Box *ui_column_begin(void);
+internal UI_Signal ui_column_end(void);
+internal UI_Box *ui_named_row_begin(String8 string);
+internal UI_Signal ui_named_row_end(void);
+internal UI_Box *ui_named_column_begin(String8 string);
+internal UI_Signal ui_named_column_end(void);
 
 ////////////////////////////////
 //~ rjf: Floating Panes

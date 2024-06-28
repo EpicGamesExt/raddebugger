@@ -142,21 +142,21 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   String8 edited_string = draw_data->edited_string;
   TxtPt cursor = draw_data->cursor;
   TxtPt mark = draw_data->mark;
-  F32 cursor_pixel_off = f_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor.column-1)).x + font_size/8.f;
-  F32 mark_pixel_off   = f_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark.column-1)).x + font_size/8.f;
+  F32 cursor_pixel_off = f_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor.column-1)).x;
+  F32 mark_pixel_off   = f_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark.column-1)).x;
   F32 cursor_thickness = ClampBot(4.f, font_size/6.f);
   Rng2F32 cursor_rect =
   {
-    text_position.x-cursor_thickness*0.40f + cursor_pixel_off,
+    text_position.x + cursor_pixel_off - cursor_thickness*0.50f,
     box->rect.y0+4.f,
-    text_position.x+cursor_thickness*0.60f + cursor_pixel_off,
+    text_position.x + cursor_pixel_off + cursor_thickness*0.50f,
     box->rect.y1-4.f,
   };
   Rng2F32 mark_rect =
   {
-    text_position.x-cursor_thickness*0.40f + mark_pixel_off,
+    text_position.x + mark_pixel_off - cursor_thickness*0.50f,
     box->rect.y0+2.f,
-    text_position.x+cursor_thickness*0.60f + mark_pixel_off,
+    text_position.x + mark_pixel_off + cursor_thickness*0.50f,
     box->rect.y1-2.f,
   };
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
@@ -843,41 +843,43 @@ ui_alpha_pickerf(F32 *out_alpha, char *fmt, ...)
 ////////////////////////////////
 //~ rjf: Simple Layout Widgets
 
-internal UI_Signal ui_row_begin(void)    { return ui_named_row_begin(str8_lit("")); }
-internal void      ui_row_end(void)      { ui_named_row_end(); }
-internal UI_Signal ui_column_begin(void) { return ui_named_column_begin(str8_lit("")); }
-internal void      ui_column_end(void)   { ui_named_column_end(); }
+internal UI_Box *ui_row_begin(void)    { return ui_named_row_begin(str8_lit("")); }
+internal UI_Signal ui_row_end(void)    { return ui_named_row_end(); }
+internal UI_Box *ui_column_begin(void) { return ui_named_column_begin(str8_lit("")); }
+internal UI_Signal ui_column_end(void) { return ui_named_column_end(); }
 
-internal UI_Signal
+internal UI_Box *
 ui_named_row_begin(String8 string)
 {
   ui_set_next_child_layout_axis(Axis2_X);
   UI_Box *box = ui_build_box_from_string(0, string);
   ui_push_parent(box);
-  UI_Signal result = ui_signal_from_box(box);
-  return result;
-}
-
-internal void
-ui_named_row_end(void)
-{
-  ui_pop_parent();
+  return box;
 }
 
 internal UI_Signal
+ui_named_row_end(void)
+{
+  UI_Box *box = ui_pop_parent();
+  UI_Signal sig = ui_signal_from_box(box);
+  return sig;
+}
+
+internal UI_Box *
 ui_named_column_begin(String8 string)
 {
   ui_set_next_child_layout_axis(Axis2_Y);
   UI_Box *box = ui_build_box_from_string(0, string);
   ui_push_parent(box);
-  UI_Signal result = ui_signal_from_box(box);
-  return result;
+  return box;
 }
 
-internal void
+internal UI_Signal
 ui_named_column_end(void)
 {
-  ui_pop_parent();
+  UI_Box *box = ui_pop_parent();
+  UI_Signal sig = ui_signal_from_box(box);
+  return sig;
 }
 
 ////////////////////////////////

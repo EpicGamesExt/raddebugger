@@ -188,7 +188,7 @@ fp_init(void)
   //- rjf: make base rendering params
   error = IDWriteFactory_CreateRenderingParams(fp_dwrite_state->factory, &fp_dwrite_state->base_rendering_params);
   
-  //- rjf: make sharp rendering params
+  //- rjf: make sharp-hinted rendering params
   {
     FLOAT gamma = IDWriteRenderingParams_GetGamma(fp_dwrite_state->base_rendering_params);
     FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
@@ -202,7 +202,7 @@ fp_init(void)
                                                            DWRITE_PIXEL_GEOMETRY_FLAT,
                                                            DWRITE_RENDERING_MODE_GDI_NATURAL,
                                                            DWRITE_GRID_FIT_MODE_ENABLED,
-                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params[FP_RasterMode_Sharp]);
+                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params_sharp_hinted);
     }
     else
     {
@@ -212,7 +212,63 @@ fp_init(void)
                                                          0.f,
                                                          DWRITE_PIXEL_GEOMETRY_FLAT,
                                                          DWRITE_RENDERING_MODE_GDI_NATURAL,
-                                                         &fp_dwrite_state->rendering_params[FP_RasterMode_Sharp]);
+                                                         &fp_dwrite_state->rendering_params_sharp_hinted);
+    }
+  }
+  
+  //- rjf: make sharp-unhinted rendering params
+  {
+    FLOAT gamma = IDWriteRenderingParams_GetGamma(fp_dwrite_state->base_rendering_params);
+    FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
+    if(fp_dwrite_state->dwrite2_is_supported)
+    {
+      error = IDWriteFactory2_CreateCustomRenderingParams2((IDWriteFactory2 *)fp_dwrite_state->factory,
+                                                           gamma,
+                                                           enhanced_contrast,
+                                                           enhanced_contrast,
+                                                           0.f,
+                                                           DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                           DWRITE_RENDERING_MODE_GDI_NATURAL,
+                                                           DWRITE_GRID_FIT_MODE_DISABLED,
+                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params_sharp_unhinted);
+    }
+    else
+    {
+      error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory,
+                                                         gamma,
+                                                         enhanced_contrast,
+                                                         0.f,
+                                                         DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                         DWRITE_RENDERING_MODE_GDI_NATURAL,
+                                                         &fp_dwrite_state->rendering_params_sharp_unhinted);
+    }
+  }
+  
+  //- rjf: make smooth-hinted rendering params
+  {
+    FLOAT gamma = IDWriteRenderingParams_GetGamma(fp_dwrite_state->base_rendering_params);
+    FLOAT enhanced_contrast = IDWriteRenderingParams_GetEnhancedContrast(fp_dwrite_state->base_rendering_params);
+    if(fp_dwrite_state->dwrite2_is_supported)
+    {
+      error = IDWriteFactory2_CreateCustomRenderingParams2((IDWriteFactory2 *)fp_dwrite_state->factory,
+                                                           gamma,
+                                                           enhanced_contrast,
+                                                           enhanced_contrast,
+                                                           0.f,
+                                                           DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                           DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+                                                           DWRITE_GRID_FIT_MODE_ENABLED,
+                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params_smooth_hinted);
+    }
+    else
+    {
+      error = IDWriteFactory_CreateCustomRenderingParams(fp_dwrite_state->factory,
+                                                         gamma,
+                                                         enhanced_contrast,
+                                                         0.f,
+                                                         DWRITE_PIXEL_GEOMETRY_FLAT,
+                                                         DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+                                                         &fp_dwrite_state->rendering_params_smooth_hinted);
     }
   }
   
@@ -230,7 +286,7 @@ fp_init(void)
                                                            DWRITE_PIXEL_GEOMETRY_FLAT,
                                                            DWRITE_RENDERING_MODE_CLEARTYPE_NATURAL_SYMMETRIC,
                                                            DWRITE_GRID_FIT_MODE_DISABLED,
-                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params[FP_RasterMode_Smooth]);
+                                                           (IDWriteRenderingParams2 **)&fp_dwrite_state->rendering_params_smooth_unhinted);
     }
     else
     {
@@ -240,7 +296,7 @@ fp_init(void)
                                                          0.f,
                                                          DWRITE_PIXEL_GEOMETRY_FLAT,
                                                          DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
-                                                         &fp_dwrite_state->rendering_params[FP_RasterMode_Smooth]);
+                                                         &fp_dwrite_state->rendering_params_smooth_unhinted);
     }
   }
   
@@ -336,7 +392,7 @@ fp_metrics_from_font(FP_Handle handle)
 }
 
 fp_hook NO_ASAN FP_RasterResult
-fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, String8 string)
+fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, String8 string)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -372,21 +428,30 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   //- rjf: derive info from metrics
   F32 advance = 0;
   Vec2S16 atlas_dim = {0};
+  F32 left_side_bearing = 0;
+  F32 right_side_bearing = 0;
   if(font.face != 0)
   {
     atlas_dim.y = (S16)((96.f/72.f) * size * (font_metrics.ascent + font_metrics.descent) / design_units_per_em);
     for(U64 idx = 0; idx < glyphs_count; idx += 1)
     {
       DWRITE_GLYPH_METRICS *glyph_metrics = glyphs_metrics + idx;
-      F32 glyph_advance_width  = (96.f/72.f) * size * glyph_metrics->advanceWidth       / design_units_per_em;
-      F32 glyph_advance_height = (96.f/72.f) * size * glyph_metrics->advanceHeight      / design_units_per_em;
+      F32 glyph_advance_width         = (96.f/72.f) * size * glyph_metrics->advanceWidth       / design_units_per_em;
+      F32 glyph_advance_height        = (96.f/72.f) * size * glyph_metrics->advanceHeight      / design_units_per_em;
       advance += glyph_advance_width;
       atlas_dim.x = Max(atlas_dim.x, (S16)(advance+1));
+      if(idx == 0)
+      {
+        left_side_bearing = (96.f/72.f) * size * glyph_metrics->leftSideBearing    / design_units_per_em;
+      }
+      if(idx+1 == glyphs_count)
+      {
+        right_side_bearing = (96.f/72.f) * size * glyph_metrics->rightSideBearing   / design_units_per_em;
+      }
     }
+    atlas_dim.x -= right_side_bearing;
     atlas_dim.x += 7;
     atlas_dim.x -= atlas_dim.x%8;
-    atlas_dim.x += 4;
-    atlas_dim.y += 4;
   }
   
   //- rjf: make dwrite bitmap for rendering
@@ -411,10 +476,9 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   }
   
   //- rjf: draw glyph run
-  Vec2F32 draw_p = {1, (F32)atlas_dim.y - 2.f};
+  Vec2F32 draw_p = {0, (F32)atlas_dim.y};
   if(font.face != 0)
   {
-    F32 ascent = (96.f/72.f)*size * font_metrics.ascent / design_units_per_em;
     F32 descent = (96.f/72.f)*size * font_metrics.descent / design_units_per_em;
     draw_p.y -= descent;
   }
@@ -429,10 +493,19 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
   RECT bounding_box = {0};
   if(font.face != 0)
   {
+    IDWriteRenderingParams *rendering_params = fp_dwrite_state->rendering_params_sharp_hinted;
+    switch(flags)
+    {
+      default:{}break;
+      case 0:{rendering_params = fp_dwrite_state->rendering_params_sharp_unhinted;}break;
+      case FP_RasterFlag_Hinted:{rendering_params = fp_dwrite_state->rendering_params_sharp_hinted;}break;
+      case FP_RasterFlag_Smooth:{rendering_params = fp_dwrite_state->rendering_params_smooth_unhinted;}break;
+      case FP_RasterFlag_Smooth|FP_RasterFlag_Hinted:{rendering_params = fp_dwrite_state->rendering_params_smooth_hinted;}break;
+    }
     error = IDWriteBitmapRenderTarget_DrawGlyphRun(render_target, draw_p.x, draw_p.y,
                                                    DWRITE_MEASURING_MODE_NATURAL,
                                                    &glyph_run,
-                                                   fp_dwrite_state->rendering_params[mode],
+                                                   rendering_params,
                                                    fg_color,
                                                    &bounding_box);
   }
@@ -453,7 +526,6 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterMode mode, Str
     result.atlas_dim    = atlas_dim;
     result.atlas        = push_array_no_zero(arena, U8, atlas_dim.x*atlas_dim.y*4);
     result.advance      = floor_f32(advance);
-    result.bounding_box = r2s16p(bounding_box.left, bounding_box.top, bounding_box.right, bounding_box.bottom);
     
     // rjf: fill atlas
     {
