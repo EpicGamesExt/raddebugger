@@ -3835,7 +3835,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       
       //- rjf: code ctx menu
       UI_CtxMenu(ws->code_ctx_menu_key)
-        UI_PrefWidth(ui_em(30.f, 1.f))
+        UI_PrefWidth(ui_em(40.f, 1.f))
         DF_Palette(ws, DF_PaletteCode_ImplicitButton)
       {
         TXT_Scope *txt_scope = txt_scope_open();
@@ -3990,7 +3990,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       
       //- rjf: entity menu
       UI_CtxMenu(ws->entity_ctx_menu_key)
-        UI_PrefWidth(ui_em(30.f, 1.f))
+        UI_PrefWidth(ui_em(40.f, 1.f))
         DF_Palette(ws, DF_PaletteCode_ImplicitButton)
       {
         DF_Entity *entity = df_entity_from_handle(ws->entity_ctx_menu_entity);
@@ -4531,7 +4531,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       }
       
       //- rjf: tab menu
-      UI_CtxMenu(ws->tab_ctx_menu_key) UI_PrefWidth(ui_em(25.f, 1.f)) UI_CornerRadius(0)
+      UI_CtxMenu(ws->tab_ctx_menu_key) UI_PrefWidth(ui_em(40.f, 1.f)) UI_CornerRadius(0)
         DF_Palette(ws, DF_PaletteCode_ImplicitButton)
       {
         DF_Panel *panel = df_panel_from_handle(ws->tab_ctx_menu_panel);
@@ -5037,7 +5037,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Key file_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_file_menu_key_"));
             DF_Palette(ws, DF_PaletteCode_Floating)
               UI_CtxMenu(file_menu_key)
-              UI_PrefWidth(ui_em(60.f, 1.f))
+              UI_PrefWidth(ui_em(50.f, 1.f))
               DF_Palette(ws, DF_PaletteCode_ImplicitButton)
             {
               DF_CoreCmdKind cmds[] =
@@ -5064,7 +5064,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Key window_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_window_menu_key_"));
             DF_Palette(ws, DF_PaletteCode_Floating)
               UI_CtxMenu(window_menu_key)
-              UI_PrefWidth(ui_em(60.f, 1.f))
+              UI_PrefWidth(ui_em(50.f, 1.f))
               DF_Palette(ws, DF_PaletteCode_ImplicitButton)
             {
               DF_CoreCmdKind cmds[] =
@@ -5087,7 +5087,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Key panel_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_panel_menu_key_"));
             DF_Palette(ws, DF_PaletteCode_Floating)
               UI_CtxMenu(panel_menu_key)
-              UI_PrefWidth(ui_em(60.f, 1.f))
+              UI_PrefWidth(ui_em(50.f, 1.f))
               DF_Palette(ws, DF_PaletteCode_ImplicitButton)
             {
               DF_CoreCmdKind cmds[] =
@@ -5130,7 +5130,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
             DF_Palette(ws, DF_PaletteCode_Floating)
               UI_CtxMenu(view_menu_key)
-              UI_PrefWidth(ui_em(60.f, 1.f))
+              UI_PrefWidth(ui_em(50.f, 1.f))
               DF_Palette(ws, DF_PaletteCode_ImplicitButton)
             {
               DF_CoreCmdKind cmds[] =
@@ -5187,7 +5187,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Key targets_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_targets_menu_key_"));
             DF_Palette(ws, DF_PaletteCode_Floating)
               UI_CtxMenu(targets_menu_key)
-              UI_PrefWidth(ui_em(60.f, 1.f))
+              UI_PrefWidth(ui_em(50.f, 1.f))
               DF_Palette(ws, DF_PaletteCode_ImplicitButton)
             {
               Temp scratch = scratch_begin(&arena, 1);
@@ -5235,7 +5235,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Key ctrl_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_ctrl_menu_key_"));
             DF_Palette(ws, DF_PaletteCode_Floating)
               UI_CtxMenu(ctrl_menu_key)
-              UI_PrefWidth(ui_em(60.f, 1.f))
+              UI_PrefWidth(ui_em(50.f, 1.f))
               DF_Palette(ws, DF_PaletteCode_ImplicitButton)
             {
               DF_CoreCmdKind cmds[] =
@@ -5270,7 +5270,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_Key help_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_help_menu_key_"));
             DF_Palette(ws, DF_PaletteCode_Floating)
               UI_CtxMenu(help_menu_key)
-              UI_PrefWidth(ui_em(60.f, 1.f))
+              UI_PrefWidth(ui_em(50.f, 1.f))
               DF_Palette(ws, DF_PaletteCode_ImplicitButton)
             {
               UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
@@ -6092,9 +6092,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         ui_set_next_flags(UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBorder);
         UI_Row
         {
-          UI_PrefWidth(ui_text_dim(10.f, 1.f))
+          UI_PrefWidth(ui_text_dim(0.f, 1.f)) UI_Padding(ui_em(1.f, 1.f))
           {
-            ui_spacer(ui_em(0.5f, 1.f));
             DF_IconKind icon_kind = ws->query_cmd_spec->info.canonical_icon_kind;
             if(icon_kind != DF_IconKind_Null)
             {
@@ -6102,7 +6101,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 ui_label(df_g_icon_kind_text_table[icon_kind]);
             }
             ui_labelf("%S", ws->query_cmd_spec->info.display_name);
-            ui_spacer(ui_em(0.5f, 1.f));
           }
           UI_Font((query->flags & DF_CmdQueryFlag_CodeInput) ? df_font_from_slot(DF_FontSlot_Code) : ui_top_font())
           {
@@ -10260,11 +10258,12 @@ df_cmd_binding_buttons(DF_CmdSpec *spec)
       if(has_conflicts)
       {
         palette->colors[UI_ColorCode_Text] = df_rgba_from_theme_color(DF_ThemeColor_TextNegative);
+        palette->colors[UI_ColorCode_TextWeak] = df_rgba_from_theme_color(DF_ThemeColor_TextNegative);
       }
       if(rebinding_active_for_this_binding)
       {
-        palette->colors[UI_ColorCode_Border] = df_rgba_from_theme_color(DF_ThemeColor_Hover);
-        palette->colors[UI_ColorCode_Background] = df_rgba_from_theme_color(DF_ThemeColor_Hover);
+        palette->colors[UI_ColorCode_Border] = df_rgba_from_theme_color(DF_ThemeColor_Focus);
+        palette->colors[UI_ColorCode_Background] = df_rgba_from_theme_color(DF_ThemeColor_Focus);
         palette->colors[UI_ColorCode_Background].w *= 0.25f;
       }
     }
@@ -10274,7 +10273,7 @@ df_cmd_binding_buttons(DF_CmdSpec *spec)
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_palette(palette);
     ui_set_next_group_key(ui_key_zero());
-    ui_set_next_pref_width(ui_text_dim(0, 1));
+    ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.f, 1));
     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                             UI_BoxFlag_Clickable|
                                             UI_BoxFlag_DrawActiveEffects|
@@ -10289,9 +10288,18 @@ df_cmd_binding_buttons(DF_CmdSpec *spec)
       // rjf: click => toggle activity
       if(!df_gfx_state->bind_change_active && ui_clicked(sig))
       {
-        df_gfx_state->bind_change_active = 1;
-        df_gfx_state->bind_change_cmd_spec = spec;
-        df_gfx_state->bind_change_binding = binding;
+        if((binding.key == OS_Key_Esc || binding.key == OS_Key_Delete) && binding.flags == 0)
+        {
+          DF_CmdParams p = df_cmd_params_zero();
+          p.string = str8_lit("Cannot rebind; this command uses a reserved keybinding.");
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+        }
+        else
+        {
+          df_gfx_state->bind_change_active = 1;
+          df_gfx_state->bind_change_cmd_spec = spec;
+          df_gfx_state->bind_change_binding = binding;
+        }
       }
       else if(df_gfx_state->bind_change_active && ui_clicked(sig))
       {
@@ -10301,7 +10309,7 @@ df_cmd_binding_buttons(DF_CmdSpec *spec)
       // rjf: hover w/ conflicts => show conflicts
       if(ui_hovering(sig) && has_conflicts) UI_Tooltip
       {
-        ui_labelf("This binding conflicts with others:");
+        UI_PrefWidth(ui_children_sum(1)) df_error_label(str8_lit("This binding conflicts with those for:"));
         for(DF_CmdSpecNode *n = specs_with_binding.first; n != 0; n = n->next)
         {
           if(n->spec != spec)
@@ -10312,6 +10320,23 @@ df_cmd_binding_buttons(DF_CmdSpec *spec)
       }
     }
     
+    //- rjf: delete button
+    if(rebinding_active_for_this_binding)
+      UI_PrefWidth(ui_em(2.5f, 1.f))
+      UI_Palette(ui_build_palette(ui_top_palette(),
+                                  .background = df_rgba_from_theme_color(DF_ThemeColor_NegativePopButtonBackground),
+                                  .border = df_rgba_from_theme_color(DF_ThemeColor_NegativePopButtonBorder),
+                                  .text = df_rgba_from_theme_color(DF_ThemeColor_Text)))
+    {
+      ui_set_next_group_key(ui_key_zero());
+      UI_Signal sig = df_icon_button(DF_IconKind_X, 0, str8_lit("###delete_binding"));
+      if(ui_clicked(sig))
+      {
+        df_unbind_spec(spec, binding);
+        df_gfx_state->bind_change_active = 0;
+      }
+    }
+    
     //- rjf: space
     ui_spacer(ui_em(1.f, 1.f));
   }
@@ -10319,10 +10344,23 @@ df_cmd_binding_buttons(DF_CmdSpec *spec)
   //- rjf: build "add new binding" button
   UI_Font(df_font_from_slot(DF_FontSlot_Icons))
   {
+    UI_Palette *palette = ui_top_palette();
+    B32 adding_new_binding = (df_gfx_state->bind_change_active &&
+                              df_gfx_state->bind_change_cmd_spec == spec &&
+                              df_gfx_state->bind_change_binding.key == OS_Key_Null &&
+                              df_gfx_state->bind_change_binding.flags == 0);
+    if(adding_new_binding)
+    {
+      palette = ui_build_palette(ui_top_palette());
+      palette->colors[UI_ColorCode_Border] = df_rgba_from_theme_color(DF_ThemeColor_Focus);
+      palette->colors[UI_ColorCode_Background] = df_rgba_from_theme_color(DF_ThemeColor_Focus);
+      palette->colors[UI_ColorCode_Background].w *= 0.25f;
+    }
     ui_set_next_hover_cursor(OS_Cursor_HandPoint);
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_group_key(ui_key_zero());
-    ui_set_next_pref_width(ui_text_dim(10, 1));
+    ui_set_next_pref_width(ui_text_dim(ui_top_font_size()*1.f, 1));
+    ui_set_next_palette(palette);
     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                             UI_BoxFlag_Clickable|
                                             UI_BoxFlag_DrawActiveEffects|
@@ -10330,7 +10368,20 @@ df_cmd_binding_buttons(DF_CmdSpec *spec)
                                             UI_BoxFlag_DrawBorder|
                                             UI_BoxFlag_DrawBackground,
                                             "%S###add_binding", df_g_icon_kind_text_table[DF_IconKind_Add]);
-    ui_signal_from_box(box);
+    UI_Signal sig = ui_signal_from_box(box);
+    if(ui_clicked(sig))
+    {
+      if(!df_gfx_state->bind_change_active && ui_clicked(sig))
+      {
+        df_gfx_state->bind_change_active = 1;
+        df_gfx_state->bind_change_cmd_spec = spec;
+        MemoryZeroStruct(&df_gfx_state->bind_change_binding);
+      }
+      else if(df_gfx_state->bind_change_active && ui_clicked(sig))
+      {
+        df_gfx_state->bind_change_active = 0;
+      }
+    }
   }
   
   scratch_end(scratch);
@@ -10480,7 +10531,11 @@ df_cmd_spec_button(DF_CmdSpec *spec)
         UI_FastpathCodepoint(box->fastpath_codepoint)
         ui_label(spec->info.display_name);
       ui_spacer(ui_pct(1, 0));
-      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      ui_set_next_flags(UI_BoxFlag_Clickable);
+      ui_set_next_group_key(ui_key_zero());
+      UI_PrefWidth(ui_children_sum(1))
+        UI_NamedRow(str8_lit("###bindings"))
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         UI_FastpathCodepoint(0)
       {
         df_cmd_binding_buttons(spec);

@@ -3250,7 +3250,7 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
         
         //- rjf: bindings
         ui_set_next_flags(UI_BoxFlag_Clickable);
-        UI_PrefWidth(ui_children_sum(1.f)) UI_HeightFill UI_NamedColumn(str8_lit("binding_column")) UI_Padding(ui_em(1.f, 1.f))
+        UI_PrefWidth(ui_children_sum(1.f)) UI_HeightFill UI_NamedColumn(str8_lit("binding_column")) UI_Padding(ui_em(1.5f, 1.f))
         {
           ui_set_next_flags(UI_BoxFlag_Clickable);
           UI_NamedRow(str8_lit("binding_row")) UI_Padding(ui_em(1.f, 1.f))
