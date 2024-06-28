@@ -112,10 +112,6 @@
 //   [ ] lock icon
 //   [ ] "rotation arrow" icon next to executables
 //
-//  [ ] I LOVE ALT-W to add watch under cursor, but I would prefer to have it
-//      add what's under the MOUSE cursor instead of the keyboard cursor. Can
-//      we get a command for that so I can bind ALT-W to that instead?
-//
 //  [ ] For theme editing, when you hove the mouse over a theme color entry and
 //      it highlights that entry, it might help to temporarily change that
 //      color to white (or the inverse of the background color, or whatever) so
@@ -410,6 +406,9 @@
 //       sometimes both source code and menu/tab/watch font size, sometimes
 //       just menu/tab/watch font size not source size.
 // [x] colors: fill out rest of theme presets for new theme setup
+//  [x] I LOVE ALT-W to add watch under cursor, but I would prefer to have it
+//      add what's under the MOUSE cursor instead of the keyboard cursor. Can
+//      we get a command for that so I can bind ALT-W to that instead?
 
 #ifndef RADDBG_H
 #define RADDBG_H

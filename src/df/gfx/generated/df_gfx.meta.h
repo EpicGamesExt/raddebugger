@@ -314,7 +314,7 @@ DF_VIEW_UI_FUNCTION_DEF(disasm);
 DF_VIEW_UI_FUNCTION_DEF(bitmap);
 DF_VIEW_UI_FUNCTION_DEF(geo);
 C_LINKAGE_BEGIN
-extern DF_StringBindingPair df_g_default_binding_table[105];
+extern DF_StringBindingPair df_g_default_binding_table[106];
 extern String8 df_g_binding_version_remap_old_name_table[5];
 extern String8 df_g_binding_version_remap_new_name_table[5];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[31];

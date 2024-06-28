@@ -155,6 +155,7 @@ DF_DefaultBindingTable:
   
   //- rjf: watch expressions
   { "toggle_watch_expr_at_cursor" W         0        0         alt        }
+  { "toggle_watch_expr_at_mouse"  D         ctrl     0         0          }
   { "toggle_watch_pin_at_cursor"  F9        ctrl     0         0          }
   
   //- rjf: breakpoints

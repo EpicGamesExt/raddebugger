@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-DF_StringBindingPair df_g_default_binding_table[105] =
+DF_StringBindingPair df_g_default_binding_table[106] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_EventFlag_Alt}},
@@ -104,6 +104,7 @@ DF_StringBindingPair df_g_default_binding_table[105] =
 {str8_lit_comp("goto_name"), {OS_Key_J, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("goto_name_at_cursor"), {OS_Key_F12, 0   }},
 {str8_lit_comp("toggle_watch_expr_at_cursor"), {OS_Key_W, 0   |OS_EventFlag_Alt}},
+{str8_lit_comp("toggle_watch_expr_at_mouse"), {OS_Key_D, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("toggle_watch_pin_at_cursor"), {OS_Key_F9, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("toggle_breakpoint_cursor"), {OS_Key_F9, 0   }},
 {str8_lit_comp("add_target"), {OS_Key_T, 0 |OS_EventFlag_Ctrl  }},

@@ -450,6 +450,10 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
         arena_clear(cv->find_text_arena);
         cv->find_text_bwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
       }break;
+      case DF_CoreCmdKind_ToggleWatchExpressionAtMouse:
+      {
+        cv->watch_expr_at_mouse = 1;
+      }break;
     }
   }
 }
@@ -972,6 +976,16 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
       params.string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng);
       df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
       df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_GoToName));
+    }
+    
+    //- rjf: watch expr at mouse
+    if(cv->watch_expr_at_mouse)
+    {
+      cv->watch_expr_at_mouse = 0;
+      DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
+      params.string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng);
+      df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
+      df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleWatchExpression));
     }
     
     //- rjf: selected text on single line, no query? -> set search text

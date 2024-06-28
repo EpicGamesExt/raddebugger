@@ -388,6 +388,7 @@ struct DF_CodeViewState
   S64 goto_line_num;
   B32 center_cursor;
   B32 contain_cursor;
+  B32 watch_expr_at_mouse;
   Arena *find_text_arena;
   String8 find_text_fwd;
   String8 find_text_bwd;
