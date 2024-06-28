@@ -7344,7 +7344,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 if(panel->tab_side == Side_Max)
                 {
-                  ui_spacer(ui_px(tab_bar_rv_diff, 1.f));
+                  ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
                 }
                 else
                 {
@@ -7494,9 +7494,18 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               UI_PrefHeight(ui_px(tab_bar_vheight, 1.f))
               UI_Column
             {
-              ui_spacer(ui_px(tab_bar_rv_diff/2.f, 1.f));
-              UI_CornerRadius00(corner_radius)
-                UI_CornerRadius10(corner_radius)
+              if(panel->tab_side == Side_Max)
+              {
+                ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
+              }
+              else
+              {
+                ui_spacer(ui_px(1.f, 1.f));
+              }
+              UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
+                UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
+                UI_CornerRadius01(panel->tab_side == Side_Max ? corner_radius : 0)
+                UI_CornerRadius11(panel->tab_side == Side_Max ? corner_radius : 0)
                 UI_Font(df_font_from_slot(DF_FontSlot_Icons))
                 UI_FontSize(ui_top_font_size())
                 UI_RunFlags(F_RunFlag_Smooth)
