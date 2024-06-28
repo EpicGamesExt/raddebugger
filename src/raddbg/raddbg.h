@@ -8,7 +8,6 @@
 // [ ] inline breakpoint hit_count
 //  [ ] to count hit counts, resolve all bps to addresses, check addresses
 //      against stopper thread's
-// [ ] editing multiple bindings for commands
 // [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
@@ -409,6 +408,7 @@
 //  [x] I LOVE ALT-W to add watch under cursor, but I would prefer to have it
 //      add what's under the MOUSE cursor instead of the keyboard cursor. Can
 //      we get a command for that so I can bind ALT-W to that instead?
+// [x] editing multiple bindings for commands
 
 #ifndef RADDBG_H
 #define RADDBG_H
