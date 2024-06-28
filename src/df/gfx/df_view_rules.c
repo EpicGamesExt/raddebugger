@@ -40,6 +40,14 @@ DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
 }
 
 ////////////////////////////////
+//~ rjf: "slice"
+
+DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(slice)
+{
+  return eval;
+}
+
+////////////////////////////////
 //~ rjf: "list"
 
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(list){}

@@ -7807,9 +7807,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
   }
   
   //////////////////////////////
-  //- rjf: attach autocomp box to root
+  //- rjf: attach autocomp box to root, or hide if it has not been renewed
   //
-  if(!ui_box_is_nil(autocomp_box))
+  if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 >= df_frame_index()+1)
   {
     UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
     if(!ui_box_is_nil(autocomp_root_box))
@@ -7825,6 +7825,17 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         ui_layout_enforce_constraints__in_place_rec(autocomp_box, axis);
         ui_layout_position__in_place_rec(autocomp_box, axis);
       }
+    }
+  }
+  else if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 < df_frame_index()+1)
+  {
+    UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
+    if(!ui_box_is_nil(autocomp_root_box))
+    {
+      Vec2F32 size = autocomp_box->fixed_size;
+      Rng2F32 window_rect = os_client_rect_from_window(ws->os);
+      autocomp_box->fixed_position = v2f32(window_rect.x1, window_rect.y1);
+      autocomp_box->rect = r2f32(autocomp_box->fixed_position, add_2f32(autocomp_box->fixed_position, size));
     }
   }
   
