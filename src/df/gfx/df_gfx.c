@@ -4831,6 +4831,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           UI_Focus(UI_FocusKind_On)
             UI_Squish(0.25f-0.25f*ws->autocomp_open_t)
             UI_Transparency(1.f-ws->autocomp_open_t)
+            DF_Palette(DF_PaletteCode_Floating)
           {
             autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|
                                                      UI_BoxFlag_Clickable|
@@ -4861,7 +4862,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               DF_AutoCompListerItem *item = &item_array.v[idx];
               UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_MouseClickable, "autocomp_%I64x", idx);
-              UI_Parent(item_box)
+              UI_Parent(item_box) UI_Padding(ui_em(1.f, 1.f))
               {
                 UI_WidthFill
                 {

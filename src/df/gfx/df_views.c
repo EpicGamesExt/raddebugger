@@ -8566,7 +8566,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       items_list.count += 1;
       n->v.kind = DF_SettingsItemKind_CategoryHeader;
       n->v.string = str8_lit("Theme Presets");
-      n->v.icon_kind = sv->category_opened[DF_SettingsItemKind_Setting] ? DF_IconKind_DownCaret : DF_IconKind_RightCaret;
+      n->v.icon_kind = sv->category_opened[DF_SettingsItemKind_ThemePreset] ? DF_IconKind_DownCaret : DF_IconKind_RightCaret;
       n->v.category = DF_SettingsItemKind_ThemePreset;
     }
     
@@ -8604,7 +8604,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       items_list.count += 1;
       n->v.kind = DF_SettingsItemKind_CategoryHeader;
       n->v.string = str8_lit("Theme Colors");
-      n->v.icon_kind = sv->category_opened[DF_SettingsItemKind_Setting] ? DF_IconKind_DownCaret : DF_IconKind_RightCaret;
+      n->v.icon_kind = sv->category_opened[DF_SettingsItemKind_ThemeColor] ? DF_IconKind_DownCaret : DF_IconKind_RightCaret;
       n->v.category = DF_SettingsItemKind_ThemeColor;
     }
     
@@ -8956,9 +8956,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
             }
             if(is_slider) UI_PrefWidth(ui_text_dim(10, 1))
             {
-              UI_Font(df_font_from_slot(DF_FontSlot_Code))
-                UI_RunFlags(F_RunFlag_Smooth)
-                UI_Flags(UI_BoxFlag_DrawTextWeak)
+              UI_Flags(UI_BoxFlag_DrawTextWeak)
                 ui_labelf("(%i)", slider_s32_val);
               UI_PrefWidth(ui_pct(slider_pct, 1.f)) UI_HeightFill UI_FixedX(0) UI_FixedY(0)
                 UI_Palette(ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlay)))
