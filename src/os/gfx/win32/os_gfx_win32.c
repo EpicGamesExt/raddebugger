@@ -520,7 +520,7 @@ w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       
       case WM_SYSCHAR:
       {
-        result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        result = 0;
       }break;
       
       case WM_CHAR:
