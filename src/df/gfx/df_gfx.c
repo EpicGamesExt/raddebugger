@@ -14004,7 +14004,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                 DF_CfgNode *cfg = df_cfg_node_child_from_string(window_node, df_g_setting_code_lower_string_table[code], StringMatchFlag_CaseInsensitive);
                 if(cfg != &df_g_nil_cfg_node)
                 {
-                  U64 val_s64 = 0;
+                  S64 val_s64 = 0;
                   try_s64_from_str8_c_rules(cfg->first->string, &val_s64);
                   setting_vals[code].set = 1;
                   setting_vals[code].s32 = (S32)val_s64;
@@ -14023,6 +14023,7 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                 setting_vals[code] = df_g_setting_code_default_val_table[code];
               }
             }
+            MemoryCopy(ws->setting_vals, setting_vals, sizeof(setting_vals[0])*ArrayCount(setting_vals));
             
             // rjf: build panel tree
             DF_CfgNode *cfg_panels = df_cfg_node_child_from_string(window_node, str8_lit("panels"), StringMatchFlag_CaseInsensitive);
