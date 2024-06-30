@@ -703,7 +703,7 @@ os_file_set_times(OS_Handle file, DateTime time)
   w32_system_time_from_date_time(&system_time, &time);
   FILETIME file_time = {0};
   result = (SystemTimeToFileTime(&system_time, &file_time) &&
-            SetFileTime(handle, &file_time, &file_time, &file_time));
+            SetFileTime(handle, NULL, &file_time, &file_time));
   return result;
 }
 

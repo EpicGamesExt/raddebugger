@@ -13,13 +13,17 @@ global LNX_Entity lnx_entity_buffer[1024];
 global LNX_Entity *lnx_entity_free = 0;
 global String8 lnx_initial_path = {0};
 thread_static LNX_SafeCallChain *lnx_safe_call_chain = 0;
+global B32 lnx_huge_page_enabled = 1;
+global B32 lnx_huge_page_use_1GB = 0;
+global U16 lnx_ring_buffers_created = 0;
+global U16 lnx_ring_buffers_limit = 65000;
 
 ////////////////////////////////
 //~ rjf: Helpers
 
 internal B32
 lnx_write_list_to_file_descriptor(int fd, String8List list){
-  B32 success = true;
+  B32 success = 1;
   
   String8Node *node = list.first;
   if (node != 0){
@@ -42,7 +46,7 @@ lnx_write_list_to_file_descriptor(int fd, String8List list){
         node = node->next;
         if (node == 0){
           if (p < list.total_size){
-            success = false;
+            success = 0;
           }
           break;
         }
@@ -809,6 +813,17 @@ lnx_safe_call_sig_handler(int _){
   abort();
 }
 
+// Helper function to return a timespec using a adjtime stable high precision clock
+internal timespec
+lnx_now_precision_timespec()
+{
+  timespec result;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &result);
+
+  return result;
+}
+
+
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
@@ -844,6 +859,9 @@ os_init(int argc, char **argv)
   
   // NOTE(rjf): Setup command line args
   lnx_cmd_line_args = os_string_list_from_argcv(lnx_perm_arena, argc, argv);
+
+  // Load Shared Objects
+  os_library_open("pthread.so");
 }
 
 ////////////////////////////////
@@ -857,21 +875,31 @@ os_reserve(U64 size){
 
 internal B32
 os_commit(void *ptr, U64 size){
-  mprotect(ptr, size, PROT_READ|PROT_WRITE);
+  U32 error = mprotect(ptr, size, PROT_READ|PROT_WRITE);
   // TODO(allen): can we test this?
-  return(true);
+  return (error == 0);
 }
 
 internal void*
 os_reserve_large(U64 size){
-  NotImplemented;
-  return 0;
+  F32 huge_threshold = 0.5f;
+  F32 huge_use_1GB = size > (1e9f * huge_threshold);
+  U32 page_size = huge_use_1GB ? MAP_HUGE_1GB : MAP_HUGE_2MB;
+  void *result;
+  if (lnx_huge_page_enabled)
+  {
+    result = mmap(0, size, PROT_NONE,
+                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETBL | page_size,
+                  -1, 0);
+  } else { result os_commit(size); }
+
+  return result;
 }
 
 internal B32
 os_commit_large(void *ptr, U64 size){
-  NotImplemented;
-  return 0;
+  U32 error = mprotect(ptr, size, PROT_READ|PROT_WRITE);
+  return (error == 0);
 }
 
 internal void
@@ -885,37 +913,77 @@ os_release(void *ptr, U64 size){
   munmap(ptr, size);
 }
 
+// Enable huge pages
+// NOTE: Linux has huge pages instead of larges pages but there's no "nice" way to
+// enable them from an unprivillaged application, that is unless you want to
+// spawn a subprocess just for performing privileged actions
 internal void
 os_set_large_pages(B32 flag)
 {
-  NotImplemented;
+  lnx_huge_page_enabled = os_large_pages_enabled();
+  return lnx_huge_page_enabled;
 }
 
 internal B32
 os_large_pages_enabled(void)
 {
-  NotImplemented;
+  // This is aparently the reccomended way to check for hugepage support. Do not ask...
+  OS_Handle meminfo_handle = os_file_open(OS_AccessFlag_Read, str8_cstring("/proc/meminfo/"));
+  String8 meminfo = os_file_map_open();
+  Rng1U64 match = str8_match_substr(str8_cstring("Huge"));
   return 0;
 }
 
+/* NOTE: The size seems to be consistent across Linux systems, it's configurable
+  but the use case seems to be niche enough and the interface weird enough that
+  most people won't do it.  The `/proc/meminfo` virtual file can be queried for
+  hugepage size. */
 internal U64
 os_large_page_size(void)
 {
-  NotImplemented;
-  return 0;
+  U64 size = (lnx_huge_page_use_1GB ? GB(1) ? MB(2));
+  return size;
 }
 
 internal void*
 os_alloc_ring_buffer(U64 size, U64 *actual_size_out)
 {
-  NotImplemented;
-  return 0;
+  Temp scratch = scratch_begin(0, 0);
+  void* result = NULL;
+
+  // Make fle descriptor
+  U8* base = "metagen_ring_xxxx";
+  U8* base_length = cstring8_length(base);
+  U8* filename_anonymous = push_array(scratch.arena, U8, 50);
+  MemoryCopy(filename_anonymous, filename_base, base_length);
+  base16_from_data(filename_anonymous + base_length -4,
+                   lnx_ring_buffers_created,
+                   sizeof(lnx_ring_buffers_created));
+  if (lnx_ring_buffers_created < lnx_ring_buffers_limit)
+  {
+    B32 use_huge = (size > os_large_page_size && lnx_huge_page_enabled);
+    U32 flag_huge1 = (use_huge ? MFD_HUGETLB : 0x0);
+    U32 flag_huge2 = (use_huge ? MAP_HUGETLB : 0x0)
+    U32 flag_prot = PROT_READ | PROT_WRITE;
+
+    /* mmap circular buffer trick, create twice the buffer and double map it
+       with a shared file descriptor.  Make sure to prevent mmap from changing
+       location with MAP_FIXED */
+    S32 fd = memfd_create(filename_anonymous, flag_huge);
+    result = mmap(NULL, 2* size, flag_prot, flag_huge2 | MAP_ANONYMOUS, -1, 0);
+    mmap(result, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
+    mmap(result + size, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
+    // Closing fd doesn't invalidate mapping
+    close(fd);
+  }
+  scratch_end(scratch);
+  return result;
 }
 
 internal void
 os_free_ring_buffer(void *ring_buffer, U64 actual_size)
 {
-  NotImplemented;
+  munmap(2* ring_buffer, actual_size);
 }
 
 ////////////////////////////////
@@ -923,17 +991,17 @@ os_free_ring_buffer(void *ring_buffer, U64 actual_size)
 
 internal String8
 os_machine_name(void){
-  local_persist B32 first = true;
+  local_persist B32 first = 1;
   local_persist String8 name = {0};
   
   // TODO(allen): let's just pre-compute this at init and skip the complexity
   pthread_mutex_lock(&lnx_mutex);
   if (first){
     Temp scratch = scratch_begin(0, 0);
-    first = false;
+    first = 0;
     
     // get name
-    B32 got_final_result = false;
+    B32 got_final_result = 0;
     U8 *buffer = 0;
     int size = 0;
     for (S64 cap = 4096, r = 0;
@@ -944,7 +1012,7 @@ os_machine_name(void){
       buffer = push_array_no_zero(scratch.arena, U8, cap);
       size = gethostname((char*)buffer, cap);
       if (size < cap){
-        got_final_result = true;
+        got_final_result = 1;
         break;
       }
     }
@@ -1025,17 +1093,17 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
   switch (path){
     case OS_SystemPath_Binary:
     {
-      local_persist B32 first = true;
+      local_persist B32 first = 1;
       local_persist String8 name = {0};
       
       // TODO(allen): let's just pre-compute this at init and skip the complexity
       pthread_mutex_lock(&lnx_mutex);
       if (first){
         Temp scratch = scratch_begin(&arena, 1);
-        first = false;
+        first = 0;
         
         // get self string
-        B32 got_final_result = false;
+        B32 got_final_result = 0;
         U8 *buffer = 0;
         int size = 0;
         for (S64 cap = PATH_MAX, r = 0;
@@ -1045,7 +1113,7 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
           buffer = push_array_no_zero(scratch.arena, U8, cap);
           size = readlink("/proc/self/exe", (char*)buffer, cap);
           if (size < cap){
-            got_final_result = true;
+            got_final_result = 1;
             break;
           }
         }
@@ -1117,21 +1185,52 @@ internal OS_Handle
 os_file_open(OS_AccessFlags flags, String8 path)
 {
   OS_Handle file = {0};
-  NotImplemented;
+  // read/write flags are mutually exclusie on Linux `open()`
+  if (flags & OS_AccessFlag_Write & OS_AccessFlag_Read) { access_flags |= O_RDWR | O_CREAT; }
+  else if (flags & OS_AccessFlag_Read) { access_flags |= O_RDONLY; }
+  else if (flags & OS_AccessFlag_Write) { access_flags |= O_WRONLY | O_CREAT; }
+  // Doesn't make any sense on Linux, use os_file_map_open for execute permissions
+  // else if (flags & OS_AccessFlag_Execute) {}
+  // Shared doesn't make sense on Linux, file locking is explicit not set at open
+  // if(flags & OS_AccessFlag_Shared)  {}
+
+  /* NOTE: openat is supposedly meant to help prevent race conditions with file
+     moving or possibly a better way to put it is it helps resist tampering with
+     the referenced through relinks (assumption), ie symlink / mv . Hopefully
+     its more robust- we can close the dirfd it's kernel managed now. */
+  String8 file_dir = str8_chop_last_slash(path);
+  dir_fd = open(file_dir, O_PATH);
+  S32 fd = openat(path.str, access_flags);
+  close(dirfd);
+
+  // No Error
+  if (fd != -1)
+  {
+    *file.u64 = fd;
+  }
   return file;
 }
 
 internal void
 os_file_close(OS_Handle file)
 {
-  NotImplemented;
+  S32 fd = *file.u64;
+  close(fd);
 }
 
+// Aparently there is a race condition in relation to `stat` and `lstat` so
+// using fstat instead https://cwe.mitre.org/data/definitions/367.html
 internal U64
 os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 {
-  NotImplemented;
-  return 0;
+  S32 fd = *file.u64;
+  struct stat file_info;
+  fstat(fd, &file_info)
+  U64 filesize = file_info->st_size;
+  lseek(fd, rng.min, SEEK_SET);
+  U64 read_bytes = read(fd, out_data, ClampTop(filesize, rng.max));
+
+  return read_bytes;
 }
 
 internal void
@@ -1143,7 +1242,13 @@ os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 internal B32
 os_file_set_times(OS_Handle file, DateTime time)
 {
-  NotImplemented;
+  S32 fd = *file.u64;
+  struct timespec access_and_modification[2];
+  access_and_modification[1] = access_and_modification[0];
+  lnx_tm_from_date_time(&time, &access_and_modification);
+  B32 error = futimes( fd, &access_and_modification);
+
+  return (error != -1)
 }
 
 internal FileProperties
@@ -1167,10 +1272,10 @@ internal B32
 os_delete_file_at_path(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  B32 result = false;
+  B32 result = 0;
   String8 name_copy = push_str8_copy(scratch.arena, path);
   if (remove((char*)name_copy.str) != -1){
-    result = true;
+    result = 1;
   }
   scratch_end(scratch);
   return(result);
@@ -1204,8 +1309,14 @@ os_file_path_exists(String8 path)
 internal OS_Handle
 os_file_map_open(OS_AccessFlags flags, OS_Handle file)
 {
-  NotImplemented;
-  OS_Handle handle = {0};
+  S32 fd = *file.u64;
+  struct stat file_info;
+  fstat(fd, &file_info)
+  U64 filesize = file_info->st_size;
+  void *address = mmap(0, filsize, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  OS_Handle result = {0};
+  *handle.u64 = IntFromPtr(address);
+
   return handle;
 }
 
@@ -1256,10 +1367,10 @@ internal B32
 os_make_directory(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  B32 result = false;
+  B32 result = 0;
   String8 name_copy = push_str8_copy(scratch.arena, name);
   if (mkdir((char*)name_copy.str, 0777) != -1){
-    result = true;
+    result = 1;
   }
   scratch_end(scratch);
   return(result);
@@ -1359,7 +1470,10 @@ os_local_time_from_universal_time(DateTime *universal_time){
 internal U64
 os_now_microseconds(void){
   struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
+  // NOTE: pedantic is it acutally worth it to use CLOCK_MONOTONIC_RAW?
+  // CLOCK_MONOTONIC is to occasional adjtime adjustments, the max error appears
+  // to be large.  https://man7.org/linux/man-pages/man3/adjtime.3.html
+  clock_gettime(CLOCK_MONOTONIC_RAW, &t);
   U64 result = t.tv_sec*Million(1) + (t.tv_nsec/Thousand(1));
   return(result);
 }
@@ -1376,7 +1490,7 @@ internal B32
 os_launch_process(OS_LaunchOptions *options){
   // TODO(allen): I want to redo this API before I bother implementing it here
   NotImplemented;
-  return(false);
+  return(0);
 }
 
 ////////////////////////////////
@@ -1538,7 +1652,7 @@ os_condition_variable_release(OS_Handle cv){
 
 internal B32
 os_condition_variable_wait_(OS_Handle cv, OS_Handle mutex, U64 endt_us){
-  B32 result = false;
+  B32 result = 0;
   LNX_Entity *entity_cond = (LNX_Entity*)PtrFromInt(cv.u64[0]);
   LNX_Entity *entity_mutex = (LNX_Entity*)PtrFromInt(mutex.u64[0]);
   // TODO(allen): implement the time control
@@ -1578,41 +1692,73 @@ internal OS_Handle
 os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 {
   OS_Handle result = {0};
-  NotImplemented;
+
+  // create | error if pre-existing , rw-rw----
+  sem_t* semaphore = sem_open(name, O_CREAT | O_EXCL,  660, initial_count);
+  if (semaphore != SEM_FAILED)
+  {
+    LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_Semaphore);
+    entity->semaphore->handle = semaphore;
+    entity->semaphore->max_value = max_count;
+    result.64[0] = IntFromPtr(entity);
+  }
   return result;
 }
 
 internal void
 os_semaphore_release(OS_Handle semaphore)
 {
-  NotImplemented;
+  os_semaphore_close(semaphore);
 }
 
 internal OS_Handle
 os_semaphore_open(String8 name)
 {
   OS_Handle result = {0};
-  NotImplemented;
+  // Same thing as os_semaphore_alloc but reuse the existing shared mem object
+  S64 fd = shm_open(name, O_RDWR );
+  LNX_Entity* handle = lnx_alloc_entity(LNX_EntityKind_Semaphore);
+  B32 init_result = sem_init(semaphore, 1, max_count);
+  handle->semaphore = semaphore;
+  result.64[0] = IntFromPtr(handle);
+
+  if (init_result == -1) (void)0; /* open failed, what now */
   return result;
 }
 
 internal void
 os_semaphore_close(OS_Handle semaphore)
 {
-  NotImplemented;
+  LNX_Entity* entity = (U64*)PtrFromInt(*semaphore.u64);
+  sem_t* semaphore = entity->semaphore->handle;
+  sem_close(semaphore);
 }
 
 internal B32
-os_semaphore_take(OS_Handle semaphore)
+os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 {
-  NotImplemented;
-  return 0;
+  U32 wait_result = 0;
+  struct timespec wait_until = lnx_now_precision_timespec();
+  wait_until->tv_nsec += endt_us;
+
+  LNX_Entity* entity = (U64*)PtrFromInt(*semaphore.u64);
+  struct semaphore = entity->semaphore;
+  // We have to impliment max_count ourselves
+  S32 current_value = 0;
+  sem_getvalue(semaphore->handle, &current_value)
+  if (semaphore->max_value > current_value)
+  {
+    sem_timedwait(handle, wait_until);
+  }
+  return (wait_result != -1);
 }
 
 internal void
 os_semaphore_drop(OS_Handle semaphore)
 {
-  NotImplemented;
+  LNX_Entity* entity (U64*)PtrFromInt(*semaphore.u64);
+  sem_t* _semaphore = entity->semaphore->handle;
+  sem_post(_semaphore);
 }
 
 ////////////////////////////////

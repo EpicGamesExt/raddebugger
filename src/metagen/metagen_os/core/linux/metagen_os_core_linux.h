@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <dlfcn.h>
 #include <sys/sysinfo.h>
+#include <semaphore.h>
 
 ////////////////////////////////
 //~ NOTE(allen): File Iterator
@@ -41,6 +42,7 @@ enum LNX_EntityKind{
   LNX_EntityKind_Thread,
   LNX_EntityKind_Mutex,
   LNX_EntityKind_ConditionVariable,
+  LNX_EntityKind_Semaphore
 };
 
 typedef struct LNX_Entity LNX_Entity;
@@ -54,6 +56,10 @@ struct LNX_Entity{
       void *ptr;
       pthread_t handle;
     } thread;
+    struct{
+      sem_t* handle;
+      U32 max_value;
+    } semaphore;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
   };
