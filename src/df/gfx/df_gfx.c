@@ -6181,7 +6181,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       }
       
       //- rjf: build darkening overlay for rest of screen
-      UI_Palette(ui_build_palette(ui_top_palette(), .background = mix_4f32(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-ws->query_view_selected_t)))
+      UI_Palette(ui_build_palette(0, .background = mix_4f32(df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-ws->query_view_selected_t)))
         UI_Rect(window_rect)
       {
         ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
@@ -7126,7 +7126,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         //
         if(panel != ws->focused_panel)
         {
-          UI_Palette(ui_build_palette(ui_top_palette(), .background = df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay)))
+          UI_Palette(ui_build_palette(0, .background = df_rgba_from_theme_color(DF_ThemeColor_InactivePanelOverlay)))
             UI_Rect(content_rect)
           {
             ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
