@@ -2074,6 +2074,73 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             df_panel_notify_mutation(ws, panel);
           }
         }break;
+        case DF_CoreCmdKind_CloseAllOtherTabs:
+        {
+          DF_Panel *panel = df_panel_from_handle(params.panel);
+          DF_View *view = df_view_from_handle(params.view);
+          if(!df_view_is_nil(view))
+          {
+            for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v);)
+            {
+              DF_View *temp_view = v;
+              v = temp_view->next;
+              if(view != temp_view)
+              {
+                df_panel_remove_tab_view(panel, temp_view);
+                df_view_release(temp_view);
+                df_panel_notify_mutation(ws, panel);
+              }
+            }
+          }
+        }break;
+        case DF_CoreCmdKind_CloseAllLeftTabs:
+        {
+          DF_Panel *panel = df_panel_from_handle(params.panel);
+          DF_View *view = df_view_from_handle(params.view);
+          if(!df_view_is_nil(view))
+          {
+            for(DF_View *v = view->prev; !df_view_is_nil(v);)
+            {
+              DF_View *temp_view = v;
+              v = temp_view->prev;
+              df_panel_remove_tab_view(panel, temp_view);
+              df_view_release(temp_view);
+              df_panel_notify_mutation(ws, panel);
+            }
+          }
+        }break;
+        case DF_CoreCmdKind_CloseAllRightTabs:
+        {
+          DF_Panel *panel = df_panel_from_handle(params.panel);
+          DF_View *view = df_view_from_handle(params.view);
+          if(!df_view_is_nil(view))
+          {
+            for(DF_View *v = view->next; !df_view_is_nil(v);)
+            {
+              DF_View *temp_view = v;
+              v = temp_view->next;
+              df_panel_remove_tab_view(panel, temp_view);
+              df_view_release(temp_view);
+              df_panel_notify_mutation(ws, panel);
+            }
+          }
+        }break;
+        case DF_CoreCmdKind_CloseAllTabs:
+        {
+          DF_Panel *panel = df_panel_from_handle(params.panel);
+          DF_View *view = df_view_from_handle(params.view);
+          if(!df_view_is_nil(view))
+          {
+            for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v);)
+            {
+              DF_View *temp_view = v;
+              v = temp_view->next;
+              df_panel_remove_tab_view(panel, temp_view);
+              df_view_release(temp_view);
+              df_panel_notify_mutation(ws, panel);
+            }
+          }
+        }break;
         case DF_CoreCmdKind_MoveTab:
         {
           DF_Panel *src_panel = df_panel_from_handle(params.panel);
@@ -4626,6 +4693,53 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           ui_ctx_menu_close();
         }
         
+        // close all other tabs
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close All Other Tabs")))
+        {
+          DF_CmdParams params = df_cmd_params_from_window(ws);
+          {
+            params.view = df_handle_from_view(view);
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
+          }
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseAllOtherTabs));
+          ui_ctx_menu_close();
+        }
+
+        // close all (left) tabs
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close All (Left) Tabs")))
+        {
+          DF_CmdParams params = df_cmd_params_from_window(ws);
+          {
+            params.view = df_handle_from_view(view);
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
+          }
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseAllLeftTabs));
+          ui_ctx_menu_close();
+        }
+
+        // close all (right) tabs
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close All (Right) Tabs")))
+        {
+          DF_CmdParams params = df_cmd_params_from_window(ws);
+          {
+            params.view = df_handle_from_view(view);
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
+          }
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseAllRightTabs));
+          ui_ctx_menu_close();
+        }
+
+        // close all tabs
+        if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close All Tabs")))
+        {
+          DF_CmdParams params = df_cmd_params_from_window(ws);
+          {
+            params.view = df_handle_from_view(view);
+            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_View);
+          }
+          df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseAllTabs));
+          ui_ctx_menu_close();
+        }
       }
       
       scratch_end(scratch);
