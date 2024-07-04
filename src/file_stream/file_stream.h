@@ -82,6 +82,7 @@ internal U64 fs_change_gen(void);
 
 internal U128 fs_hash_from_path(String8 path, U64 endt_us);
 internal U128 fs_key_from_path(String8 path);
+internal U64 fs_timestamp_from_path(String8 path);
 
 ////////////////////////////////
 //~ rjf: Streamer Threads

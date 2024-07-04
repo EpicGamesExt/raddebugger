@@ -458,8 +458,8 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
   }
 }
 
-internal void
-df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+internal DF_CodeViewBuildResult
+df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -1146,11 +1146,24 @@ df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewSta
     }
   }
   
+  //////////////////////////////
+  //- rjf: build result
+  //
+  DF_CodeViewBuildResult result = {0};
+  {
+    for(DI_KeyNode *n = code_slice_params.relevant_dbgi_keys.first; n != 0; n = n->next)
+    {
+      DI_Key copy = di_key_copy(arena, &n->v);
+      di_key_list_push(arena, &result.dbgi_keys, &copy);
+    }
+  }
+  
   txt_scope_close(txt_scope);
   di_scope_close(di_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
+  return result;
 }
 
 ////////////////////////////////
@@ -6491,8 +6504,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   String8 data = hs_data_from_hash(hs_scope, hash);
   B32 entity_is_missing = !!(entity->flags & DF_EntityFlag_IsMissing);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
-  B32 file_is_out_of_date = 0;
-  String8 out_of_date_dbgi_name = {0};
   
   //////////////////////////////
   //- rjf: build missing file interface
@@ -6543,9 +6554,11 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: build code contents
   //
+  DI_KeyList dbgi_keys = {0};
   if(!entity_is_missing && key_has_data)
   {
-    df_code_view_build(ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    DF_CodeViewBuildResult result = df_code_view_build(scratch.arena, ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    dbgi_keys = result.dbgi_keys;
   }
   
   //////////////////////////////
@@ -6556,13 +6569,38 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   }
   
   //////////////////////////////
+  //- rjf: determine if file is out-of-date
+  //
+  B32 file_is_out_of_date = 0;
+  String8 out_of_date_dbgi_name = {0};
+  {
+    for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
+    {
+      DI_Key key = n->v;
+      U64 file_timestamp = fs_timestamp_from_path(path);
+      if(key.min_timestamp < file_timestamp)
+      {
+        file_is_out_of_date = 1;
+        out_of_date_dbgi_name = str8_skip_last_slash(key.path);
+        break;
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build bottom bar
   //
   if(!entity_is_missing && key_has_data)
   {
     ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
-    UI_Row
+    UI_Palette *palette = ui_top_palette();
+    if(file_is_out_of_date)
+    {
+      palette = df_palette_from_code(ws, DF_PaletteCode_NegativePopButton);
+    }
+    UI_Palette(palette)
+      UI_Row
       UI_TextAlignment(UI_TextAlign_Center)
       UI_PrefWidth(ui_text_dim(10, 1))
       UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
@@ -6795,7 +6833,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //
   if(!is_loading && has_disasm)
   {
-    df_code_view_build(ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
+    df_code_view_build(scratch.arena, ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
   }
   
   //////////////////////////////
@@ -7075,7 +7113,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
   //- rjf: build code contents
   //
   {
-    df_code_view_build(ws, panel, view, cv, 0, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    df_code_view_build(scratch.arena, ws, panel, view, cv, 0, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
   }
   
   //////////////////////////////

@@ -394,6 +394,12 @@ struct DF_CodeViewState
   String8 find_text_bwd;
 };
 
+typedef struct DF_CodeViewBuildResult DF_CodeViewBuildResult;
+struct DF_CodeViewBuildResult
+{
+  DI_KeyList dbgi_keys;
+};
+
 ////////////////////////////////
 //~ rjf: Disassembly @view_types
 
@@ -525,7 +531,7 @@ internal void df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityLi
 
 internal void df_code_view_init(DF_CodeViewState *cv, DF_View *view);
 internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
-internal void df_code_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
+internal DF_CodeViewBuildResult df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 
 ////////////////////////////////
 //~ rjf: Watch Views
