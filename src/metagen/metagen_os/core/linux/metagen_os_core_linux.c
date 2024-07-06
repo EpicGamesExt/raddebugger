@@ -1,8 +1,7 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#include <stdio.h>
-
+ /* TODO(mallchad): want to add asserts for 'kind' of LNX_Entity */
 ////////////////////////////////
 //~ rjf: Globals
 
@@ -17,6 +16,19 @@ global B32 lnx_huge_page_enabled = 1;
 global B32 lnx_huge_page_use_1GB = 0;
 global U16 lnx_ring_buffers_created = 0;
 global U16 lnx_ring_buffers_limit = 65000;
+global String8List lnx_environment = {0};
+
+////////////////////////////////n
+// Forward Declares
+int
+memfd_create (const char *__name, unsigned int __flags) __THROW;
+ssize_t
+copy_file_range (int __infd, __off64_t *__pinoff,
+                         int __outfd, __off64_t *__poutoff,
+                         size_t __length, unsigned int __flags);
+extern int
+creat(const char *__file, mode_t __mode);
+
 
 ////////////////////////////////
 //~ rjf: Helpers
@@ -81,6 +93,16 @@ lnx_tm_from_date_time(struct tm *out, DateTime *in){
   out->tm_year = in->year - 1900;
 }
 
+internal void LNX_timespec_from_date_time(LNX_timespec* out, DateTime* in)
+{
+  NotImplemented;
+}
+
+internal void LNX_timeval_from_date_time(LNX_timeval* out, DateTime* in)
+{
+  NotImplemented;
+}
+
 internal void
 lnx_dense_time_from_timespec(DenseTime *out, struct timespec *in){
   struct tm tm_time = {0};
@@ -91,6 +113,42 @@ lnx_dense_time_from_timespec(DenseTime *out, struct timespec *in){
 }
 
 internal void
+LNX_timeval_from_dense_time(LNX_timeval* out, DenseTime* in)
+{
+  // Miliseconds to Microseconds, should be U64 to long
+  out->tv_sec = 0;
+  out->tv_usec = 1000* (*in);
+}
+
+internal void
+LNX_timespec_from_dense_time(LNX_timespec* out, DenseTime* in)
+{
+   // Miliseconds to Seconds, should be U64 to long
+  out->tv_sec = (*in / 1000);
+  out->tv_nsec = 0;
+}
+
+void
+LNX_timespec_from_timeval(LNX_timespec* out, LNX_timeval* in )
+{
+  out->tv_sec = in->tv_sec;
+  out->tv_nsec = in->tv_usec / 1000;
+}
+
+void
+LNX_timeval_from_timespec(LNX_timeval* out, LNX_timespec* in )
+{
+  out->tv_sec = in->tv_sec;
+  out->tv_usec = in->tv_nsec * 1000;
+}
+
+/* NOTE: ctime has very little to do with "creation time"- it's more about
+   inode modifications -but for this purpose it's usually considered the closest
+   analogue. Manage your own file-creation data if you actually want that info.
+
+   There's way more info to draw from but leaving for now
+   https://man7.org/linux/man-pages/man3/stat.3type.html */
+internal void
 lnx_file_properties_from_stat(FileProperties *out, struct stat *in){
   MemoryZeroStruct(out);
   out->size = in->st_size;
@@ -99,6 +157,59 @@ lnx_file_properties_from_stat(FileProperties *out, struct stat *in){
   if ((in->st_mode & S_IFDIR) != 0){
     out->flags |= FilePropertyFlag_IsFolder;
   }
+}
+
+internal U32
+lnx_mmap_from_os_flags(OS_AccessFlags flags)
+{
+  U32 result = 0x0;
+  if (flags & OS_AccessFlag_Read) { result |= PROT_READ; }
+  if (flags & OS_AccessFlag_Write) { result |= PROT_WRITE; }
+  return result;
+}
+
+internal U32
+lnx_open_from_os_flags(OS_AccessFlags flags)
+{
+  U32 result = 0x0;
+  // read/write flags are mutually exclusie on Linux `open()`
+  if (flags & OS_AccessFlag_Write & OS_AccessFlag_Read) { result |= O_RDWR | O_CREAT; }
+  else if (flags & OS_AccessFlag_Read) { result |= O_RDONLY; }
+  else if (flags & OS_AccessFlag_Write) { result |= O_WRONLY | O_CREAT; }
+
+    // Doesn't make any sense on Linux, use os_file_map_open for execute permissions
+  // else if (flags & OS_AccessFlag_Execute) {}
+  // Shared doesn't make sense on Linux, file locking is explicit not set at open
+  // if(flags & OS_AccessFlag_Shared)  {}
+
+  return result;
+}
+
+internal U32
+ lnx_fd_from_handle(OS_Handle file)
+{
+  return *file.u64;
+}
+
+internal OS_Handle
+lnx_handle_from_fd(U32 fd)
+{
+  OS_Handle result = {0};
+  *result.u64 = fd;
+  return result;
+}
+
+internal LNX_Entity*
+lnx_entity_from_handle(OS_Handle handle)
+{
+  LNX_Entity* result = (LNX_Entity*)PtrFromInt(*handle.u64);
+  return result;
+}
+internal OS_Handle lnx_handle_from_entity(LNX_Entity* entity)
+{
+  OS_Handle result = {0};
+  *result.u64 = IntFromPtr(entity);
+  return result;
 }
 
 internal String8
@@ -814,12 +925,19 @@ lnx_safe_call_sig_handler(int _){
 }
 
 // Helper function to return a timespec using a adjtime stable high precision clock
-internal timespec
+internal LNX_timespec
 lnx_now_precision_timespec()
 {
-  timespec result;
+  LNX_timespec result;
   clock_gettime(CLOCK_MONOTONIC_RAW, &result);
 
+  return result;
+}
+
+internal LNX_timespec lnx_now_system_timespec()
+{
+  LNX_timespec result;
+  clock_gettime(CLOCK_REALTIME, &result);
   return result;
 }
 
@@ -854,14 +972,44 @@ os_init(int argc, char **argv)
   Arena *perm_arena = arena_alloc();
   lnx_perm_arena = perm_arena;
   
-  // NOTE(allen): Initialize Paths
-  lnx_initial_path = os_get_path(lnx_perm_arena, OS_SystemPath_Current);
-  
+  // Initialize Paths
+  // Don't make assumptions just let the path be as big as it needs to be
+  U8 _initial_path[1000];
+  U8 _initial_size = readlink("/proc/self/exe", (char*)_initial_path, 1000);
+  String8 _initial_tmp = str8_array_fixed(_initial_path);
+  str8_chop_last_slash(_initial_tmp);
+
+  if (_initial_size > 0)
+  { lnx_initial_path = push_str8_copy(lnx_perm_arena, _initial_tmp); }
+  // else - It failed, its a relative path now, have fun.
+
   // NOTE(rjf): Setup command line args
   lnx_cmd_line_args = os_string_list_from_argcv(lnx_perm_arena, argc, argv);
 
   // Load Shared Objects
-  os_library_open("pthread.so");
+  os_library_open( str8_lit("pthread.so") );
+
+  // Environment initialization
+  Temp scratch = scratch_begin(0, 0);
+  String8 env;
+  OS_Handle environ_handle = os_file_open(OS_AccessFlag_Read, str8_lit("/proc/self/environ"));
+  Rng1U64 limit = rng_1u64(0, 100000);
+  U8* environ_buffer = push_array(scratch.arena, U8, 100000);
+  U64 read_success = os_file_read(environ_handle, limit, environ_buffer);
+  os_file_close(environ_handle);
+
+  if (read_success)
+  {
+    for (U8* x_string=(U8*)environ_buffer;
+         (x_string != NULL && x_string<environ_buffer + 100000);
+         ++x_string)
+    {
+      env = str8_cstring((char*)x_string);
+      env = push_str8_copy(lnx_perm_arena, env);
+      if (env.size) { str8_list_push(lnx_perm_arena, &lnx_environment, env); }
+    }
+  }
+  scratch_end(scratch);
 }
 
 ////////////////////////////////
@@ -889,9 +1037,9 @@ os_reserve_large(U64 size){
   if (lnx_huge_page_enabled)
   {
     result = mmap(0, size, PROT_NONE,
-                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETBL | page_size,
+                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | page_size,
                   -1, 0);
-  } else { result os_commit(size); }
+  } else { result = os_reserve(size); }
 
   return result;
 }
@@ -917,7 +1065,7 @@ os_release(void *ptr, U64 size){
 // NOTE: Linux has huge pages instead of larges pages but there's no "nice" way to
 // enable them from an unprivillaged application, that is unless you want to
 // spawn a subprocess just for performing privileged actions
-internal void
+internal B32
 os_set_large_pages(B32 flag)
 {
   lnx_huge_page_enabled = os_large_pages_enabled();
@@ -928,10 +1076,16 @@ internal B32
 os_large_pages_enabled(void)
 {
   // This is aparently the reccomended way to check for hugepage support. Do not ask...
-  OS_Handle meminfo_handle = os_file_open(OS_AccessFlag_Read, str8_cstring("/proc/meminfo/"));
-  String8 meminfo = os_file_map_open();
-  Rng1U64 match = str8_match_substr(str8_cstring("Huge"));
-  return 0;
+  OS_Handle meminfo_handle = os_file_open(OS_AccessFlag_Read, str8_lit("/proc/meminfo/"));
+  U8 buffer[5000];
+  String8 meminfo = {0};
+  meminfo.str = buffer;
+  meminfo.size = os_file_read( meminfo_handle, rng_1u64(0, 5000), buffer );
+  os_file_close(meminfo_handle);
+
+  Rng1U64 match = str8_match_substr( meminfo, str8_cstring("Huge"), 0x0 );
+
+  return (match.max > 0);
 }
 
 /* NOTE: The size seems to be consistent across Linux systems, it's configurable
@@ -941,7 +1095,7 @@ os_large_pages_enabled(void)
 internal U64
 os_large_page_size(void)
 {
-  U64 size = (lnx_huge_page_use_1GB ? GB(1) ? MB(2));
+  U64 size = (lnx_huge_page_use_1GB ? GB(1) : MB(2));
   return size;
 }
 
@@ -952,24 +1106,22 @@ os_alloc_ring_buffer(U64 size, U64 *actual_size_out)
   void* result = NULL;
 
   // Make fle descriptor
-  U8* base = "metagen_ring_xxxx";
-  U8* base_length = cstring8_length(base);
-  U8* filename_anonymous = push_array(scratch.arena, U8, 50);
-  MemoryCopy(filename_anonymous, filename_base, base_length);
-  base16_from_data(filename_anonymous + base_length -4,
-                   lnx_ring_buffers_created,
+  String8 base = str8_lit("metagen_ring_xxxx");
+  String8 filename_anonymous = push_str8_copy(scratch.arena, base);
+  base16_from_data(filename_anonymous.str + filename_anonymous.size -4,
+                   (U8*)&lnx_ring_buffers_created,
                    sizeof(lnx_ring_buffers_created));
   if (lnx_ring_buffers_created < lnx_ring_buffers_limit)
   {
-    B32 use_huge = (size > os_large_page_size && lnx_huge_page_enabled);
+    B32 use_huge = (size > os_large_page_size() && lnx_huge_page_enabled);
     U32 flag_huge1 = (use_huge ? MFD_HUGETLB : 0x0);
-    U32 flag_huge2 = (use_huge ? MAP_HUGETLB : 0x0)
+    U32 flag_huge2 = (use_huge ? MAP_HUGETLB : 0x0);
     U32 flag_prot = PROT_READ | PROT_WRITE;
 
     /* mmap circular buffer trick, create twice the buffer and double map it
        with a shared file descriptor.  Make sure to prevent mmap from changing
        location with MAP_FIXED */
-    S32 fd = memfd_create(filename_anonymous, flag_huge);
+    S32 fd = memfd_create((const char*)filename_anonymous.str, flag_huge1);
     result = mmap(NULL, 2* size, flag_prot, flag_huge2 | MAP_ANONYMOUS, -1, 0);
     mmap(result, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
     mmap(result + size, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
@@ -983,7 +1135,7 @@ os_alloc_ring_buffer(U64 size, U64 *actual_size_out)
 internal void
 os_free_ring_buffer(void *ring_buffer, U64 actual_size)
 {
-  munmap(2* ring_buffer, actual_size);
+  munmap(ring_buffer, 2* actual_size);
 }
 
 ////////////////////////////////
@@ -1007,8 +1159,6 @@ os_machine_name(void){
     for (S64 cap = 4096, r = 0;
          r < 4;
          cap *= 2, r += 1){
-        /* Why? Isn't this redundant? */
-      /* scratch.restore(); */
       buffer = push_array_no_zero(scratch.arena, U8, cap);
       size = gethostname((char*)buffer, cap);
       if (size < cap){
@@ -1043,6 +1193,7 @@ os_allocation_granularity(void)
 {
   // On linux there is no equivalent of "dwAllocationGranularity"
   os_page_size();
+  return os_page_size();
 }
 
 internal U64
@@ -1081,9 +1232,7 @@ os_get_tid(void){
 internal String8List
 os_get_environment(void)
 {
-  NotImplemented;
-  String8List result = {0};
-  return result;
+  return lnx_environment;
 }
 
 internal U64
@@ -1109,7 +1258,6 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
         for (S64 cap = PATH_MAX, r = 0;
              r < 4;
              cap *= 2, r += 1){
-          scratch.restore();
           buffer = push_array_no_zero(scratch.arena, U8, cap);
           size = readlink("/proc/self/exe", (char*)buffer, cap);
           if (size < cap){
@@ -1185,23 +1333,21 @@ internal OS_Handle
 os_file_open(OS_AccessFlags flags, String8 path)
 {
   OS_Handle file = {0};
-  // read/write flags are mutually exclusie on Linux `open()`
-  if (flags & OS_AccessFlag_Write & OS_AccessFlag_Read) { access_flags |= O_RDWR | O_CREAT; }
-  else if (flags & OS_AccessFlag_Read) { access_flags |= O_RDONLY; }
-  else if (flags & OS_AccessFlag_Write) { access_flags |= O_WRONLY | O_CREAT; }
-  // Doesn't make any sense on Linux, use os_file_map_open for execute permissions
-  // else if (flags & OS_AccessFlag_Execute) {}
-  // Shared doesn't make sense on Linux, file locking is explicit not set at open
-  // if(flags & OS_AccessFlag_Shared)  {}
+  U32 access_flags = lnx_open_from_os_flags(flags);
 
-  /* NOTE: openat is supposedly meant to help prevent race conditions with file
-     moving or possibly a better way to put it is it helps resist tampering with
-     the referenced through relinks (assumption), ie symlink / mv . Hopefully
-     its more robust- we can close the dirfd it's kernel managed now. */
-  String8 file_dir = str8_chop_last_slash(path);
-  dir_fd = open(file_dir, O_PATH);
-  S32 fd = openat(path.str, access_flags);
-  close(dirfd);
+  /* NOTE(mallchad): openat is supposedly meant to help prevent race conditions
+     with file moving or possibly a better way to put it is it helps resist
+     tampering with the referenced through relinks (assumption), ie symlink / mv .
+     Hopefully its more robust- we can close the dirfd it's kernel managed
+     now. The working directory can be changed but I don't know how best to
+     utiliez it so leaving it for now*/
+
+  // String8 file_dir = str8_chop_last_slash(path);
+  // S32 dir_fd = open(file_dir, O_PATH);
+  // S32 fd = openat(fle_dir, path.str, access_flags);
+  S32 fd = openat(AT_FDCWD, (char*)path.str, access_flags);
+
+  // close(dirfd);
 
   // No Error
   if (fd != -1)
@@ -1219,18 +1365,24 @@ os_file_close(OS_Handle file)
 }
 
 // Aparently there is a race condition in relation to `stat` and `lstat` so
-// using fstat instead https://cwe.mitre.org/data/definitions/367.html
+// using fstat instead
+// https://cwe.mitre.org/data/definitions/367.html
 internal U64
 os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 {
   S32 fd = *file.u64;
   struct stat file_info;
-  fstat(fd, &file_info)
-  U64 filesize = file_info->st_size;
-  lseek(fd, rng.min, SEEK_SET);
-  U64 read_bytes = read(fd, out_data, ClampTop(filesize, rng.max));
+  fstat(fd, &file_info);
+  U64 filesize = file_info.st_size;
 
-  return read_bytes;
+  // Make sure not to read more than the size of the file
+  Rng1U64 clamped = r1u64(ClampTop(rng.min, filesize), ClampTop(rng.max, filesize));
+  U64 read_amount = clamped.max - clamped.min;
+  lseek(fd, clamped.min, SEEK_SET);
+  S64 read_bytes = read(fd, out_data, read_amount);
+
+  // Return 0 instead of -1 on error
+  return ClampBot(0, read_bytes);
 }
 
 internal void
@@ -1243,29 +1395,45 @@ internal B32
 os_file_set_times(OS_Handle file, DateTime time)
 {
   S32 fd = *file.u64;
-  struct timespec access_and_modification[2];
+  LNX_timeval access_and_modification[2];
+  DenseTime tmp = dense_time_from_date_time(time);
+  LNX_timeval_from_dense_time(access_and_modification, &tmp);
   access_and_modification[1] = access_and_modification[0];
-  lnx_tm_from_date_time(&time, &access_and_modification);
-  B32 error = futimes( fd, &access_and_modification);
+  B32 error = futimes(fd, access_and_modification);
 
-  return (error != -1)
+  return (error != -1);
 }
 
 internal FileProperties
 os_properties_from_file(OS_Handle file)
 {
-  FileProperties props = {0};
-  NotImplemented;
-  return props;
+  FileProperties result = {0};
+  S32 fd = *file.u64;
+  lnx_fstat props = {0};
+  B32 error = fstat(fd, &props);
+
+  if (error == 0)
+  {
+    lnx_file_properties_from_stat(&result, &props);
+  }
+  return result;
 }
 
 internal OS_FileID
 os_id_from_file(OS_Handle file)
 {
-  // TODO(nick): querry struct stat with fstat(2) and use st_dev and st_ino as ids
-  OS_FileID id = {0};
-  NotImplemented;
-  return id;
+  OS_FileID result = {0};
+  U32 fd = *file.u64;
+  lnx_fstat props = {0};
+  B32 error = fstat(fd, &props);
+
+  if (error == 0)
+  {
+    result.v[0] = props.st_dev;
+    result.v[1] = props.st_ino;
+    result.v[2] = 0;
+  }
+  return result;
 }
 
 internal B32
@@ -1284,24 +1452,47 @@ os_delete_file_at_path(String8 path)
 internal B32
 os_copy_file_path(String8 dst, String8 src)
 {
-  NotImplemented;
-  return 0;
+  S32 source_fd = open((char*)src.str, 0x0, O_RDONLY);
+  S32 dest_fd = creat((char*)dst.str, O_WRONLY);
+  lnx_fstat props = {0};
+
+  S32 filesize = 0;
+  S32 bytes_written = 0;
+  B32 success = 0;
+
+  fstat(source_fd, &props);
+  filesize = props.st_size;
+
+  if (source_fd == 0 && dest_fd == 0)
+  {
+    bytes_written = copy_file_range(source_fd, NULL, dest_fd, NULL, filesize, 0x0);
+    success = (bytes_written == filesize);
+  }
+  close(source_fd);
+  close(dest_fd);
+  return success;
 }
 
 internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {
-  // TODO: realpath can be used to resolve full path
-  String8 result = {0};
-  NotImplemented;
-  return result;
+  String8 tmp = {0};
+  char buffer[PATH_MAX+10];
+  MemoryZeroArray(buffer);
+  char* success = realpath((char*)path.str, buffer);
+  if (success)
+  {
+    tmp = str8_cstring(buffer);
+  }
+  return (push_str8_copy(lnx_perm_arena, tmp));
 }
 
 internal B32
 os_file_path_exists(String8 path)
 {
-  NotImplemented;
-  return 0;
+  lnx_fstat _stub;
+  B32 exists = (0 == stat((char*)path.str, &_stub));
+  return exists;
 }
 
 //- rjf: file maps
@@ -1309,15 +1500,16 @@ os_file_path_exists(String8 path)
 internal OS_Handle
 os_file_map_open(OS_AccessFlags flags, OS_Handle file)
 {
+  // TODO: Implement access flags
   S32 fd = *file.u64;
   struct stat file_info;
-  fstat(fd, &file_info)
-  U64 filesize = file_info->st_size;
-  void *address = mmap(0, filsize, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  fstat(fd, &file_info);
+  U64 filesize = file_info.st_size;
+  void *address = mmap(0, filesize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
   OS_Handle result = {0};
-  *handle.u64 = IntFromPtr(address);
+  *result.u64 = IntFromPtr(address);
 
-  return handle;
+  return result;
 }
 
 internal void
@@ -1366,13 +1558,10 @@ os_file_iter_end(OS_FileIter *iter)
 internal B32
 os_make_directory(String8 path)
 {
-  Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
-  String8 name_copy = push_str8_copy(scratch.arena, name);
-  if (mkdir((char*)name_copy.str, 0777) != -1){
+  if (mkdir((char*)path.str, 0777) != -1){
     result = 1;
   }
-  scratch_end(scratch);
   return(result);
 }
 
@@ -1472,7 +1661,8 @@ os_now_microseconds(void){
   struct timespec t;
   // NOTE: pedantic is it acutally worth it to use CLOCK_MONOTONIC_RAW?
   // CLOCK_MONOTONIC is to occasional adjtime adjustments, the max error appears
-  // to be large.  https://man7.org/linux/man-pages/man3/adjtime.3.html
+  // to be large.
+  // https://man7.org/linux/man-pages/man3/adjtime.3.html
   clock_gettime(CLOCK_MONOTONIC_RAW, &t);
   U64 result = t.tv_sec*Million(1) + (t.tv_nsec/Thousand(1));
   return(result);
@@ -1487,7 +1677,8 @@ os_sleep_milliseconds(U32 msec){
 //~ rjf: @os_hooks Child Processes (Implemented Per-OS)
 
 internal B32
-os_launch_process(OS_LaunchOptions *options){
+os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out)
+{
   // TODO(allen): I want to redo this API before I bother implementing it here
   NotImplemented;
   return(0);
@@ -1583,42 +1774,60 @@ os_mutex_drop_(OS_Handle mutex){
 internal OS_Handle
 os_rw_mutex_alloc(void)
 {
-  LNX_Entity *entity = lnx_alloc_entity(LNX_EntityKind_Mutex);
-  // Use default pthread attributes for now
-  pthread_mutex_init(&entity->mutex, NULL);
+  OS_Handle result = {0};
+  LNX_rwlock_attr attr;
+  pthread_rwlockattr_init(&attr);
+  pthread_rwlockattr_setpshared(&attr, PTHREAD_PROCESS_PRIVATE);
+  LNX_rwlock rwlock = {0};
+  int pthread_result = pthread_rwlock_init(&rwlock, &attr);
+  // This can be cleaned up now.
+  pthread_rwlockattr_destroy(&attr);
 
-  OS_Handle result = { IntFromPtr(entity) };
+  if (pthread_result == 0)
+  {
+      LNX_Entity *entity = lnx_alloc_entity(LNX_EntityKind_Rwlock);
+      entity->rwlock = rwlock;
+      *result.u64 = IntFromPtr(entity);
+  }
   return result;
 }
 
 internal void
 os_rw_mutex_release(OS_Handle rw_mutex)
 {
-  NotImplemented;
+  LNX_Entity* entity = lnx_entity_from_handle(rw_mutex);
+  pthread_rwlock_destroy(&entity->rwlock);
 }
 
 internal void
 os_rw_mutex_take_r_(OS_Handle mutex)
 {
-  NotImplemented;
+  // Is blocking varient
+  LNX_Entity* entity = lnx_entity_from_handle(mutex);
+  pthread_rwlock_rdlock(&entity->rwlock);
 }
 
 internal void
 os_rw_mutex_drop_r_(OS_Handle mutex)
 {
-  NotImplemented;
+  // NOTE: Aparently it results in undefined behaviour if there is no pre-existing lock
+  // https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_rwlock_unlock.html
+  LNX_Entity* entity = lnx_entity_from_handle(mutex);
+  pthread_rwlock_unlock(&entity->rwlock);
 }
 
 internal void
 os_rw_mutex_take_w_(OS_Handle mutex)
 {
-  NotImplemented;
+  LNX_Entity* entity = lnx_entity_from_handle(mutex);
+  pthread_rwlock_rdlock(&entity->rwlock);
 }
 
 internal void
 os_rw_mutex_drop_w_(OS_Handle mutex)
 {
-  NotImplemented;
+  // NOTE: Should be the same thing
+  os_rw_mutex_drop_r_(mutex);
 }
 
 //- rjf: condition variables
@@ -1632,6 +1841,8 @@ os_condition_variable_alloc(void){
   pthread_condattr_t attr;
   pthread_condattr_init(&attr);
   int pthread_result = pthread_cond_init(&entity->cond, &attr);
+  // Make sure condition uses CPU clock time
+  pthread_condattr_setclock(&attr, CLOCK_MONOTONIC_RAW);
   pthread_condattr_destroy(&attr);
   if (pthread_result == -1){
     lnx_free_entity(entity);
@@ -1653,10 +1864,13 @@ os_condition_variable_release(OS_Handle cv){
 internal B32
 os_condition_variable_wait_(OS_Handle cv, OS_Handle mutex, U64 endt_us){
   B32 result = 0;
-  LNX_Entity *entity_cond = (LNX_Entity*)PtrFromInt(cv.u64[0]);
-  LNX_Entity *entity_mutex = (LNX_Entity*)PtrFromInt(mutex.u64[0]);
-  // TODO(allen): implement the time control
-  pthread_cond_timedwait(&entity_cond->cond, &entity_mutex->mutex);
+  LNX_Entity *entity_cond = lnx_entity_from_handle(cv);
+  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex);
+  LNX_timespec timeout_stamp = lnx_now_system_timespec();
+  timeout_stamp.tv_nsec += endt_us * 1000;
+
+  // The timeout is received as a system clock timespec of when to stop waiting
+  pthread_cond_timedwait(&entity_cond->cond, &entity_mutex->mutex, &timeout_stamp);
   return(result);
 }
 
@@ -1683,7 +1897,7 @@ os_condition_variable_signal_(OS_Handle cv){
 internal void
 os_condition_variable_broadcast_(OS_Handle cv){
   LNX_Entity *entity = (LNX_Entity*)PtrFromInt(cv.u64[0]);
-  DontCompile;
+  NotImplemented;
 }
 
 //- rjf: cross-process semaphores
@@ -1693,14 +1907,15 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 {
   OS_Handle result = {0};
 
+  // Create the named semaphore
   // create | error if pre-existing , rw-rw----
-  sem_t* semaphore = sem_open(name, O_CREAT | O_EXCL,  660, initial_count);
+  sem_t* semaphore = sem_open((char*)name.str, O_CREAT | O_EXCL,  660, initial_count);
   if (semaphore != SEM_FAILED)
   {
     LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_Semaphore);
-    entity->semaphore->handle = semaphore;
-    entity->semaphore->max_value = max_count;
-    result.64[0] = IntFromPtr(entity);
+    entity->semaphore.handle = semaphore;
+    entity->semaphore.max_value = max_count;
+    result = lnx_handle_from_entity(entity);
   }
   return result;
 }
@@ -1715,40 +1930,39 @@ internal OS_Handle
 os_semaphore_open(String8 name)
 {
   OS_Handle result = {0};
-  // Same thing as os_semaphore_alloc but reuse the existing shared mem object
-  S64 fd = shm_open(name, O_RDWR );
   LNX_Entity* handle = lnx_alloc_entity(LNX_EntityKind_Semaphore);
-  B32 init_result = sem_init(semaphore, 1, max_count);
-  handle->semaphore = semaphore;
-  result.64[0] = IntFromPtr(handle);
+  LNX_semaphore* semaphore;
+  semaphore = sem_open((char*)name.str, 0x0);
+  handle->semaphore.handle = semaphore;
+  Assert("Failed to open POSIX semaphore." || semaphore != SEM_FAILED);
 
-  if (init_result == -1) (void)0; /* open failed, what now */
+  result = lnx_handle_from_entity(handle);
   return result;
 }
 
 internal void
 os_semaphore_close(OS_Handle semaphore)
 {
-  LNX_Entity* entity = (U64*)PtrFromInt(*semaphore.u64);
-  sem_t* semaphore = entity->semaphore->handle;
-  sem_close(semaphore);
+  LNX_Entity* entity = lnx_entity_from_handle(semaphore);
+  LNX_semaphore* _semaphore = entity->semaphore.handle;
+  sem_close(_semaphore);
 }
 
 internal B32
 os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 {
   U32 wait_result = 0;
-  struct timespec wait_until = lnx_now_precision_timespec();
-  wait_until->tv_nsec += endt_us;
+  LNX_timespec wait_until = lnx_now_precision_timespec();
+  wait_until.tv_nsec += endt_us;
 
-  LNX_Entity* entity = (U64*)PtrFromInt(*semaphore.u64);
-  struct semaphore = entity->semaphore;
+  LNX_Entity* entity = lnx_entity_from_handle(semaphore);
+  LNX_semaphore* _semaphore = entity->semaphore.handle;
   // We have to impliment max_count ourselves
   S32 current_value = 0;
-  sem_getvalue(semaphore->handle, &current_value)
-  if (semaphore->max_value > current_value)
+  sem_getvalue(_semaphore, &current_value);
+  if (entity->semaphore.max_value > current_value)
   {
-    sem_timedwait(handle, wait_until);
+    sem_timedwait(_semaphore, &wait_until);
   }
   return (wait_result != -1);
 }
@@ -1756,8 +1970,8 @@ os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 internal void
 os_semaphore_drop(OS_Handle semaphore)
 {
-  LNX_Entity* entity (U64*)PtrFromInt(*semaphore.u64);
-  sem_t* _semaphore = entity->semaphore->handle;
+  LNX_Entity* entity = lnx_entity_from_handle(semaphore);
+  sem_t* _semaphore = entity->semaphore.handle;
   sem_post(_semaphore);
 }
 
