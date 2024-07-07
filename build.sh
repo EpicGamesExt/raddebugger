@@ -24,6 +24,7 @@
 # - `asan`: enable address sanitizer
 # - `telemetry`: enable RAD telemetry profiling support
 # - `gcodeview`: generate codeview symbols instead of DRWARF for clang
+# - `build_all`: don't stop on a succesful compile and build everyting
 
 # --- Random Init -----------------------------------------------------------
 # cd to script directory
@@ -63,7 +64,7 @@ set auto_compile_flags=
 
 # --- Compile/Link Line Definitions ------------------------------------------
     cl_common="/I../src/ /I../local/ /nologo /FC /Z7"
- clang_common="-I../src/ -I../local/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext"
+ clang_common="-I../src/ -I../local/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext -lpthread -ldl -lrt"
      cl_debug="cl /Od /Ob1 /DBUILD_DEBUG=1 ${cl_common} ${auto_compile_flags}"
    cl_release="cl /O2 /DBUILD_DEBUG=0 ${cl_common} ${auto_compile_flags}"
   clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${auto_compile_flags}"
@@ -104,9 +105,9 @@ mkdir -p "build"
 mkdir -p "local"
 
 # --- Produce Logo Icon File -------------------------------------------------
-pushd build
+cd build
 # TODO(mallchad): "Linux cannot embed icons in exes :( build a .desktop file instead
-popd
+cd "${self_directory}"
 
 # --- Get Current Git Commit Id ----------------------------------------------
 # for /f ${}i in ('call git describe --always --dirty') do set compile=${compile} -DBUILD_GIT_HASH=\"${}i\"
@@ -117,11 +118,10 @@ compile="${compile} -DBUILD_GIT_HASH=$(git describe --always --dirty)"
 if [[ -n "${no_meta}" ]] ; then
     echo "[skipping metagen]"
 else
-  pushd build
-  pwd
-  ${compile_debug} "../src/metagen/metagen_main.c" ${compile_link} "${out}metagen" || exit 1
+  cd build
+  ${compile_debug} "../src/metagen/metagen_main.c" ${compile_link} "${out}metagen.exe" || exit 1
   metagen.exe || exit 1
-  popd
+  cd ${self_directory}
 fi
 
 # --- Build Everything (@build_targets) --------------------------------------
@@ -129,7 +129,7 @@ fi
 # Exit if RAD_BUILD_ALL is nonzero length
 function finish()
 {
-    [[ -z "${RAD_BUILD_ALL}" ]] && exit 1
+    [[ -z "${build_all}" ]] && exit 1
 }
 
 # @param $1 - name of file to compile
@@ -149,7 +149,7 @@ function build_dll()
     return $?
 }
 
-pushd build
+cd build
 [[ -n "${raddbg}"                ]] && build_single ../src/raddbg/raddbg_main.c                               raddbg.exe
 [[ -n "${rdi_from_pdb}"          ]] && build_single ../src/rdi_from_pdb/rdi_from_pdb_main.c                   rdi_from_pdb.exe
 [[ -n "${rdi_from_dwarf}"        ]] && build_single ../src/rdi_from_dwarf/rdi_from_dwarf.c                    rdi_from_dwarf.exe
@@ -158,14 +158,15 @@ pushd build
 [[ -n "${ryan_scratch}"          ]] && build_single ../src/scratch/ryan_scratch.c                             ryan_scratch.exe
 [[ -n "${cpp_tests}"             ]] && build_single ../src/scratch/i_hate_c_plus_plus.cpp                     cpp_tests.exe
 [[ -n "${look_at_raddbg}"        ]] && build_single ../src/scratch/look_at_raddbg.c                           look_at_raddbg.exe
+echo ${compile_debug}
 [[ -n "${mule_main}"             ]] &&
     didbuild=1 &&
         rm -v vc*.pdb mule*.pdb &&
         ${compile_release} ${only_compile} ../src/mule/mule_inline.cpp &&
         ${compile_release} ${only_compile} ../src/mule/mule_o2.cpp &&
-        ${compile_debug} ${EHsc} ../src/mule/mule_main.cpp ../src/mule/mule_c.c /
-                         mule_inline.obj mule_o2.obj ${compile_link} ${no_aslr} /
-                         ${out}mule_main.exe || exit 1
+        ${compile_debug} ${EHsc} ../src/mule/mule_main.cpp ../src/mule/mule_c.c \
+                         mule_inline.obj mule_o2.obj ${compile_link} ${no_aslr} \
+                         ${out} mule_main.exe || exit 1
 
 RAD_BUILD_ALL=""
 [[ -n "${mule_module}" ]] &&  build_dll ../src/mule/mule_module.cpp mule_module.dll || exit 1
@@ -180,7 +181,7 @@ if [[ "${mule_peb_trample}"=="1" ]] ; then
   build_single "../src/mule/mule_peb_trample.c" "mule_peb_trample_new.exe"
   mv "mule_peb_trample_new.exe" "mule_peb_trample.exe"
 fi
-popd
+cd "${self_directory}"
 
 # --- Unset ------------------------------------------------------------------
 # NOTE: Shouldn't need to unset, bash variables are volatile, even environment variables
