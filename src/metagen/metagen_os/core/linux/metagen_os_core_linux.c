@@ -93,12 +93,12 @@ lnx_tm_from_date_time(struct tm *out, DateTime *in){
   out->tm_year = in->year - 1900;
 }
 
-internal void LNX_timespec_from_date_time(LNX_timespec* out, DateTime* in)
+internal void lnx_timespec_from_date_time(LNX_timespec* out, DateTime* in)
 {
   NotImplemented;
 }
 
-internal void LNX_timeval_from_date_time(LNX_timeval* out, DateTime* in)
+internal void lnx_timeval_from_date_time(LNX_timeval* out, DateTime* in)
 {
   NotImplemented;
 }
@@ -113,7 +113,7 @@ lnx_dense_time_from_timespec(DenseTime *out, struct timespec *in){
 }
 
 internal void
-LNX_timeval_from_dense_time(LNX_timeval* out, DenseTime* in)
+lnx_timeval_from_dense_time(LNX_timeval* out, DenseTime* in)
 {
   // Miliseconds to Microseconds, should be U64 to long
   out->tv_sec = 0;
@@ -121,7 +121,7 @@ LNX_timeval_from_dense_time(LNX_timeval* out, DenseTime* in)
 }
 
 internal void
-LNX_timespec_from_dense_time(LNX_timespec* out, DenseTime* in)
+lnx_timespec_from_dense_time(LNX_timespec* out, DenseTime* in)
 {
    // Miliseconds to Seconds, should be U64 to long
   out->tv_sec = (*in / 1000);
@@ -129,14 +129,14 @@ LNX_timespec_from_dense_time(LNX_timespec* out, DenseTime* in)
 }
 
 void
-LNX_timespec_from_timeval(LNX_timespec* out, LNX_timeval* in )
+lnx_timespec_from_timeval(LNX_timespec* out, LNX_timeval* in )
 {
   out->tv_sec = in->tv_sec;
   out->tv_nsec = in->tv_usec / 1000;
 }
 
 void
-LNX_timeval_from_timespec(LNX_timeval* out, LNX_timespec* in )
+lnx_timeval_from_timespec(LNX_timeval* out, LNX_timespec* in )
 {
   out->tv_sec = in->tv_sec;
   out->tv_usec = in->tv_nsec * 1000;

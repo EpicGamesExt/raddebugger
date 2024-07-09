@@ -108,13 +108,13 @@ internal LNX_timespec lnx_now_system_timespec();
 // Typecast Functions
 internal void lnx_date_time_from_tm(DateTime *out, struct tm *in, U32 msec);
 internal void lnx_tm_from_date_time(struct tm *out, DateTime *in);
-internal void LNX_timespec_from_date_time(LNX_timespec* out, DateTime* in);
-internal void LNX_timeval_from_date_time(LNX_timeval* out, DateTime* in);
+internal void lnx_timespec_from_date_time(LNX_timespec* out, DateTime* in);
+internal void lnx_timeval_from_date_time(LNX_timeval* out, DateTime* in);
 internal void lnx_dense_time_from_timespec(DenseTime *out, LNX_timespec *in);
-internal void LNX_timeval_from_dense_time(LNX_timeval* out, DenseTime* in);
-internal void LNX_timespec_from_dense_time(LNX_timespec* out, DenseTime* in);
-void LNX_timespec_from_timeval(LNX_timespec* out, LNX_timeval* in);
-void LNX_timeval_from_timespec(LNX_timeval* out, LNX_timespec* in);
+internal void lnx_timeval_from_dense_time(LNX_timeval* out, DenseTime* in);
+internal void lnx_timespec_from_dense_time(LNX_timespec* out, DenseTime* in);
+internal void lnx_timespec_from_timeval(LNX_timespec* out, LNX_timeval* in);
+internal void lnx_timeval_from_timespec(LNX_timeval* out, LNX_timespec* in);
 internal void lnx_file_properties_from_stat(FileProperties *out, struct stat *in);
 
 // Convert OS_AccessFlags to 'mmap' compatible 'PROT_' flags
