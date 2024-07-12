@@ -12,6 +12,8 @@ global LNX_Entity lnx_entity_buffer[1024];
 global LNX_Entity *lnx_entity_free = 0;
 global String8 lnx_initial_path = {0};
 thread_static LNX_SafeCallChain *lnx_safe_call_chain = 0;
+
+global U64 lnx_page_size = 4096;
 global B32 lnx_huge_page_enabled = 1;
 global B32 lnx_huge_page_use_1GB = 0;
 global U16 lnx_ring_buffers_created = 0;
@@ -160,11 +162,12 @@ lnx_file_properties_from_stat(FileProperties *out, struct stat *in){
 }
 
 internal U32
-lnx_mmap_from_os_flags(OS_AccessFlags flags)
+lnx_prot_from_os_flags(OS_AccessFlags flags)
 {
   U32 result = 0x0;
   if (flags & OS_AccessFlag_Read) { result |= PROT_READ; }
   if (flags & OS_AccessFlag_Write) { result |= PROT_WRITE; }
+  if (flags & OS_AccessFlag_Execute) { result |= PROT_EXEC; }
   return result;
 }
 
@@ -1010,6 +1013,8 @@ os_init(int argc, char **argv)
     }
   }
   scratch_end(scratch);
+
+  lnx_page_size = (U64)getpagesize();
 }
 
 ////////////////////////////////
@@ -1182,10 +1187,11 @@ os_machine_name(void){
   return(name);
 }
 
+// Precomptued at init
 internal U64
-os_page_size(void){
-  int size = getpagesize();
-  return((U64)size);
+os_page_size(void)
+{
+  return lnx_page_size;
 }
 
 internal U64
@@ -1388,7 +1394,17 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 internal void
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
-  NotImplemented;
+  S32 fd = lnx_fd_from_handle(file);
+  lnx_fstat file_info;
+  fstat(fd, &file_info);
+  U64 filesize = file_info.st_size;
+  U64 write_size = rng.max - rng.min;
+
+  AssertAlways(write_size > 0);
+  lseek(fd, rng.min, SEEK_SET);
+  // Expands file size if written off file end
+  U64 bytes_written = write(fd, data, write_size);
+  Assert("Zero or less written bytes is usually inticative of a bug" && bytes_written > 0);
 }
 
 internal B32
@@ -1397,7 +1413,7 @@ os_file_set_times(OS_Handle file, DateTime time)
   S32 fd = *file.u64;
   LNX_timeval access_and_modification[2];
   DenseTime tmp = dense_time_from_date_time(time);
-  LNX_timeval_from_dense_time(access_and_modification, &tmp);
+  lnx_timeval_from_dense_time(access_and_modification, &tmp);
   access_and_modification[1] = access_and_modification[0];
   B32 error = futimes(fd, access_and_modification);
 
@@ -1497,38 +1513,84 @@ os_file_path_exists(String8 path)
 
 //- rjf: file maps
 
+/* Does not map a view of the file into memory until a view is opened */
 internal OS_Handle
 os_file_map_open(OS_AccessFlags flags, OS_Handle file)
 {
   // TODO: Implement access flags
+  LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_MemoryMap);
   S32 fd = *file.u64;
+  entity->map.fd = fd;
+  OS_Handle result = {0};
+  *result.u64 = IntFromPtr(entity);
+
+  return result;
+}
+
+/* NOTE(mallchad): munmap needs sizing data and I didn't know how to impliment
+   it without introducing a bunch of unnecesary complexity or changing the API,
+   hopefully it's okay but it doesn't really qualify as "threading entities"
+   anymore :/ */
+internal void
+os_file_map_close(OS_Handle map)
+{
+  LNX_Entity* entity = lnx_entity_from_handle(map);
+  B32 failure = munmap(entity->map.data, entity->map.size);
+  /* NOTE: It shouldn't be that important if filemap fails but it ideally shouldn't
+     happen particularly when dealing with gigabytes of memory. */
+  Assert(failure == 0);
+  lnx_free_entity(entity);
+}
+
+/* NOTE(mallcahd): It looks this was supposed to a way to make a sub-portion of a
+  file, presumably to make very large files reasonably sensible to manage. But right now
+the usage seems to just read from 0 starting point always, so I'm just leaving it that way
+for now. Both the win32 and linux backend will break if you try to use this differently for some reason at time of writing [2024-07-11 Thu 17:22]
+
+If you would like to complete this function to work the way outlined above, then take the first
+page-boundary aligned boundary before offset  */
+internal void *
+os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
+{
+  LNX_Entity* entity = lnx_entity_from_handle(map);
+  S32 fd = entity->map.fd;
   struct stat file_info;
   fstat(fd, &file_info);
   U64 filesize = file_info.st_size;
-  void *address = mmap(0, filesize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-  OS_Handle result = {0};
-  *result.u64 = IntFromPtr(address);
+  U64 range_size = range.max - range.min;
+  /* TODO(mallchad): I can't figure out how to get the exact huge page size, the
+     mmap offset will just error if its not exact
+  B32 use_huge = (size > os_large_page_size() && lnx_huge_page_enabled);
+  F32 huge_threshold = 0.5f;
+  F32 huge_use_1GB = (size > (1e9f * huge_threshold) &&use_huge);
+  U64 page_size = (huge_use_1GB ? huge_size :
+                   use_huge ?lnx_huge_sze : lnx_page_size );
+  U64 page_flag = huge_use_1GB ? MAP_HUGE_1GB : MAP_HUGE_2MB;
+  */
+  U64 page_size = lnx_page_size;
+  U32 page_flag = 0x0;
+  U32 map_flags = page_flag | (flags & OS_AccessFlag_Shared ? MAP_SHARED : MAP_PRIVATE);
+
+  U32 prot_flags = lnx_prot_from_os_flags(flags);
+  U64 aligned_offset = AlignDownPow2(range.min, lnx_page_size);
+  U64 view_start_from_offset = (aligned_offset % lnx_page_size);
+  U64 map_size = (view_start_from_offset + range_size);
+
+  void *address = mmap(NULL, map_size, prot_flags, map_flags, fd, aligned_offset);
+  Assert("Mapping file into memory failed" && address > 0);
+  entity->map.data = address;
+  entity->map.size = map_size;
+  void* result = (address + view_start_from_offset);
 
   return result;
 }
 
 internal void
-os_file_map_close(OS_Handle map)
-{
-  NotImplemented;
-}
-
-internal void *
-os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
-{
-  NotImplemented;
-  return 0;
-}
-
-internal void
 os_file_map_view_close(OS_Handle map, void *ptr)
 {
-  NotImplemented;
+  LNX_Entity* entity = lnx_entity_from_handle(map);
+  AssertAlways( entity->map.data && (entity->map.data != (void*)-1) );
+  munmap(entity->map.data, entity->map.size);
 }
 
 //- rjf: directory iteration
@@ -1572,7 +1634,21 @@ internal OS_Handle
 os_shared_memory_alloc(U64 size, String8 name)
 {
   OS_Handle result = {0};
-  NotImplemented;
+  LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_MemoryMap);
+  // Create, fail if already open, rw-rw----
+  S32 fd = shm_open((char*)name.str, O_RDWR | O_CREAT | O_EXCL, 660);
+  Assert("Failed to alloc shared memory" && fd != -1);
+
+  B32 use_huge = (size > os_large_page_size() && lnx_huge_page_enabled);
+  U32 flag_huge = (use_huge ? MAP_HUGETLB : 0x0);
+  U32 flag_prot = PROT_READ | PROT_WRITE;
+  U32 map_flags = MAP_SHARED | flag_huge;
+  void* mapping = mmap(NULL, size, flag_prot, map_flags, fd, 0);
+  Assert("Failed map memory for shared memory" && mapping != MAP_FAILED);
+
+  entity->map.data = mapping;
+  entity->map.size = size;
+  result = lnx_handle_from_entity(entity);
   return result;
 }
 
@@ -1588,6 +1664,8 @@ internal void
 os_shared_memory_close(OS_Handle handle)
 {
   NotImplemented;
+  LNX_Entity entity = *lnx_entity_from_handle(handle);
+  munmap(entity.map.data, entity.map.size);
 }
 
 internal void *

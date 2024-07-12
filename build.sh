@@ -120,7 +120,7 @@ if [[ -n "${no_meta}" ]] ; then
 else
   cd build
   ${compile_debug} "../src/metagen/metagen_main.c" ${compile_link} "${out}metagen.exe" || exit 1
-  metagen.exe || exit 1
+  ./metagen.exe || exit 1
   cd ${self_directory}
 fi
 

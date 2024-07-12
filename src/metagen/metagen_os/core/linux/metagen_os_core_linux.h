@@ -62,7 +62,8 @@ enum LNX_EntityKind{
   LNX_EntityKind_Mutex,
   LNX_EntityKind_Rwlock,
   LNX_EntityKind_ConditionVariable,
-  LNX_EntityKind_Semaphore
+  LNX_EntityKind_Semaphore,
+  LNX_EntityKind_MemoryMap,
 };
 
 typedef struct LNX_Entity LNX_Entity;
@@ -80,6 +81,12 @@ struct LNX_Entity{
       sem_t* handle;
       U32 max_value;
     } semaphore;
+    struct{
+      S32 fd;
+      U32 flags;
+      void* data;
+      U64 size;
+    } map;
     LNX_mutex mutex;
     LNX_rwlock rwlock;
     pthread_cond_t cond;
@@ -118,7 +125,7 @@ internal void lnx_timeval_from_timespec(LNX_timeval* out, LNX_timespec* in);
 internal void lnx_file_properties_from_stat(FileProperties *out, struct stat *in);
 
 // Convert OS_AccessFlags to 'mmap' compatible 'PROT_' flags
-internal U32 lnx_mmap_from_os_flags(OS_AccessFlags flags);
+internal U32 lnx_prot_from_os_flags(OS_AccessFlags flags);
 // Convert OS_AccessFlags to 'open' compatible 'O_' flags
 internal U32 lnx_open_from_os_flags(OS_AccessFlags flags);
 
