@@ -25,6 +25,7 @@
 #include <dlfcn.h>
 #include <sys/sysinfo.h>
 #include <semaphore.h>
+#include <sys/utsname.h>
 
 //////////////////////////////////
  // Helper Typedefs
@@ -105,6 +106,15 @@ struct LNX_SafeCallChain{
 
 ////////////////////////////////
 //~ NOTE(allen): Helpers
+
+// Helper Structs
+typedef struct LNX_version LNX_version;
+struct  LNX_version {
+  U32 major;
+  U32 minor;
+  U32 patch;
+  String8 string;
+};
 
 internal B32 lnx_write_list_to_file_descriptor(int fd, String8List list);
 // Get high percision CPU clock based timestamp, unaffected by time settings

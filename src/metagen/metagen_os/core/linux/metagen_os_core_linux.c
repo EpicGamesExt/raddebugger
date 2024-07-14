@@ -20,6 +20,11 @@ global U16 lnx_ring_buffers_created = 0;
 global U16 lnx_ring_buffers_limit = 65000;
 global String8List lnx_environment = {0};
 
+global String8 lnx_hostname = {0};
+global LNX_version lnx_kernel_version = {0};
+global String8 lnx_architecture  = {0};
+global String8 lnx_kernel_type = {0};
+
 ////////////////////////////////n
 // Forward Declares
 int
@@ -1015,6 +1020,18 @@ os_init(int argc, char **argv)
   scratch_end(scratch);
 
   lnx_page_size = (U64)getpagesize();
+
+  // Kernel, Hostname and Architecture Info
+  struct utsname kernel = {0};
+  S32 uname_error = uname(&kernel);
+
+  lnx_hostname = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.nodename) );
+  lnx_kernel_type = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.sysname) ) ;
+  lnx_kernel_version.major;
+  lnx_kernel_version.minor;
+  lnx_kernel_version.patch;
+  lnx_kernel_version.string = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.release) );
+  lnx_architecture = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.machine) );
 }
 
 ////////////////////////////////
@@ -1026,13 +1043,19 @@ os_reserve(U64 size){
   return(result);
 }
 
+/* NOTE(mallchad): I wanted to use MADV_POPULATE_READ/WRITE to fault the pages
+   into memory here but my kernel was *just* old enough to not have the headers
+   for this feature so I will use a trick with mlock instead. */
 internal B32
 os_commit(void *ptr, U64 size){
   U32 error = mprotect(ptr, size, PROT_READ|PROT_WRITE);
+  mlock(ptr, size);
+  munlock(ptr, size);
   // TODO(allen): can we test this?
   return (error == 0);
 }
 
+// TODO: Need to check if enough huge pages are available or it will just straight up fail
 internal void*
 os_reserve_large(U64 size){
   F32 huge_threshold = 0.5f;
@@ -1041,6 +1064,9 @@ os_reserve_large(U64 size){
   void *result;
   if (lnx_huge_page_enabled)
   {
+    /* NOTE: Huge pages are permanantly in memory unless paged out under high
+     memory pressure, MAP_POPULATE is probably not relevant, but you can mlock
+     it anyway if you want to be sure */
     result = mmap(0, size, PROT_NONE,
                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | page_size,
                   -1, 0);
@@ -1052,6 +1078,8 @@ os_reserve_large(U64 size){
 internal B32
 os_commit_large(void *ptr, U64 size){
   U32 error = mprotect(ptr, size, PROT_READ|PROT_WRITE);
+  mlock(ptr, size);
+  munlock(ptr, size);
   return (error == 0);
 }
 
@@ -1187,7 +1215,10 @@ os_machine_name(void){
   return(name);
 }
 
-// Precomptued at init
+/* Precomptued at init
+ NOTE: This setting can actually be changed at runtime, its not a super
+important thing but it might be a better user experience if they can fix/improve
+it without restarting. */
 internal U64
 os_page_size(void)
 {
@@ -1197,7 +1228,8 @@ os_page_size(void)
 internal U64
 os_allocation_granularity(void)
 {
-  // On linux there is no equivalent of "dwAllocationGranularity"
+  /* On linux there is no equivalent of "dwAllocationGranularity"
+   NOTE: I suppose you could write into the sysfs but you need root privillages. */
   os_page_size();
   return os_page_size();
 }
