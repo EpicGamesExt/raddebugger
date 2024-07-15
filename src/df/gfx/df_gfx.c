@@ -7282,9 +7282,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             build_view_ui_function(ws, panel, view, content_rect);
           }
           
+          //- rjf: fill with per-view states, after the view has a chance to run
+          {
+            DF_View *view = df_selected_tab_from_panel(panel);
+            df_interact_regs()->cursor = view->cursor;
+            df_interact_regs()->mark = view->mark;
+          }
+          
           //- rjf: pop interaction registers; commit if this is the selected view
           DF_InteractRegs *view_regs = df_pop_interact_regs();
-          if(panel_is_focused)
+          if(ws->focused_panel == panel)
           {
             MemoryCopyStruct(df_interact_regs(), view_regs);
           }

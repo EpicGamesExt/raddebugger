@@ -330,10 +330,15 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     d_begin_frame();
     for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
     {
+      B32 window_is_focused = os_window_is_focused(w->os);
+      if(window_is_focused)
+      {
+        last_focused_window = df_handle_from_window(w);
+      }
       df_push_interact_regs();
       df_window_update_and_render(scratch.arena, w, &cmds);
       DF_InteractRegs *window_regs = df_pop_interact_regs();
-      if(os_window_is_focused(w->os))
+      if(df_window_from_handle(last_focused_window) == w)
       {
         MemoryCopyStruct(df_interact_regs(), window_regs);
       }
