@@ -621,28 +621,24 @@ str8_from_u64(Arena *arena, U64 u64, U32 radix, U8 min_digits, U8 digit_group_se
     {
       U64 u64_reduce = u64;
       U64 digits_until_separator = digit_group_size;
-      for(U64 idx = 0; idx < result.size; idx += 1)
+      for(U64 idx = 0; idx < result.size-prefix.size; idx += 1)
       {
         if(digits_until_separator == 0 && digit_group_separator != 0)
         {
           result.str[result.size - idx - 1] = digit_group_separator;
           digits_until_separator = digit_group_size+1;
         }
-        else
+        else if(u64_reduce != 0)
         {
           result.str[result.size - idx - 1] = char_to_lower(integer_symbols[u64_reduce%radix]);
           u64_reduce /= radix;
         }
-        digits_until_separator -= 1;
-        if(u64_reduce == 0)
+        else
         {
-          break;
+          result.str[result.size - idx - 1] = '0';
         }
-      }
-      for(U64 leading_0_idx = 0; leading_0_idx < needed_leading_0s; leading_0_idx += 1)
-      {
-        result.str[prefix.size + leading_0_idx] = '0';
-      }
+        digits_until_separator -= 1;        
+      }      
     }
     
     // rjf: fill prefix
