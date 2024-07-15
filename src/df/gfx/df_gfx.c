@@ -5003,7 +5003,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       os_window_push_custom_title_bar(ws->os, dim_2f32(top_bar_rect).y);
       ui_set_next_flags(UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DisableFocusOverlay);
       DF_Palette(ws, DF_PaletteCode_MenuBar)
-        UI_Focus((ws->menu_bar_focused && window_is_focused && !ui_any_ctx_menu_is_open() && !hover_eval_is_open) ? UI_FocusKind_On : UI_FocusKind_Null)
+        UI_Focus((ws->menu_bar_focused && window_is_focused && !ui_any_ctx_menu_is_open() && !ws->hover_eval_focused) ? UI_FocusKind_On : UI_FocusKind_Null)
         UI_Pane(top_bar_rect, str8_lit("###top_bar"))
         UI_WidthFill UI_Row
         UI_Focus(UI_FocusKind_Null)
@@ -6254,7 +6254,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         
         //- rjf: build if good
         if(!tg_key_match(eval.type_key, tg_key_zero()) && !ui_any_ctx_menu_is_open())
-          UI_Focus((hover_eval_is_open && !ui_any_ctx_menu_is_open() && (!query_is_open || !ws->query_view_selected)) ? UI_FocusKind_Null : UI_FocusKind_Off)
+          UI_Focus((hover_eval_is_open && !ui_any_ctx_menu_is_open() && ws->hover_eval_focused && (!query_is_open || !ws->query_view_selected)) ? UI_FocusKind_Null : UI_FocusKind_Off)
         {
           //- rjf: eval -> viz artifacts
           F32 row_height = floor_f32(ui_top_font_size()*2.5f);
@@ -6407,6 +6407,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                                                   DF_LineEditFlag_PreferDisplayString|
                                                   DF_LineEditFlag_Border,
                                                   0, 0, &ws->hover_eval_txt_cursor, &ws->hover_eval_txt_mark, ws->hover_eval_txt_buffer, sizeof(ws->hover_eval_txt_buffer), &ws->hover_eval_txt_size, 0, row->edit_value, "%S###val_%I64x", row->display_value, row_hash);
+                    if(ui_pressed(sig))
+                    {
+                      ws->hover_eval_focused = 1;
+                    }
                     if(ui_committed(sig))
                     {
                       String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
@@ -6503,6 +6507,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             else if(ws->hover_eval_last_frame_idx+2 < df_frame_index())
             {
               df_gfx_request_frame();
+            }
+            if(ui_pressed(hover_eval_sig))
+            {
+              ws->hover_eval_focused = 1;
             }
           }
         }
@@ -6842,7 +6850,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                               !ws->menu_bar_focused &&
                               (!query_is_open || !ws->query_view_selected) &&
                               !ui_any_ctx_menu_is_open() &&
-                              !hover_eval_is_open &&
+                              !ws->hover_eval_focused &&
                               ws->focused_panel == panel);
       UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
       {
@@ -9231,6 +9239,7 @@ df_set_hover_eval(DF_Window *ws, Vec2F32 pos, DF_CtrlCtx ctrl_ctx, DF_Entity *fi
       ws->hover_eval_file = df_handle_from_entity(file);
       ws->hover_eval_file_pt = pt;
       ws->hover_eval_vaddr = vaddr;
+      ws->hover_eval_focused = 0;
     }
     ws->hover_eval_ctrl_ctx = ctrl_ctx;
     ws->hover_eval_spawn_pos = pos;

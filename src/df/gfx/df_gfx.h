@@ -622,6 +622,7 @@ struct DF_Window
   F32 query_view_t;
   
   // rjf: hover eval stable state
+  B32 hover_eval_focused;
   TxtPt hover_eval_txt_cursor;
   TxtPt hover_eval_txt_mark;
   U8 hover_eval_txt_buffer[1024];
