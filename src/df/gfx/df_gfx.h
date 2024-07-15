@@ -324,7 +324,7 @@ enum
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_gfx_view_rule_line_stringize__##name
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(DF_ExpandKey key, DF_Eval eval, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg)
+#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, DF_Eval eval, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg)
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
@@ -1046,6 +1046,7 @@ internal UI_Palette *df_palette_from_code(DF_Window *ws, DF_PaletteCode code);
 //- rjf: fonts/sizes
 internal F_Tag df_font_from_slot(DF_FontSlot slot);
 internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
+internal F_RasterFlags df_raster_flags_from_slot(DF_Window *ws, DF_FontSlot slot);
 
 //- rjf: settings
 internal DF_SettingVal df_setting_val_from_code(DF_Window *optional_window, DF_SettingCode code);
@@ -1064,17 +1065,17 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 //~ rjf: UI Building Helpers
 
 #define DF_Palette(ws, code) UI_Palette(df_palette_from_code((ws), (code)))
+#define DF_Font(ws, slot) UI_Font(df_font_from_slot(slot)) UI_TextRasterFlags(df_raster_flags_from_slot((ws), (slot)))
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
-internal void df_cmd_binding_buttons(DF_CmdSpec *spec);
-internal void df_cmd_binding_button(DF_CmdSpec *spec);
+internal void df_cmd_binding_buttons(DF_Window *ws, DF_CmdSpec *spec);
 internal UI_Signal df_menu_bar_button(String8 string);
-internal UI_Signal df_cmd_spec_button(DF_CmdSpec *spec);
+internal UI_Signal df_cmd_spec_button(DF_Window *ws, DF_CmdSpec *spec);
 internal void df_cmd_list_menu_buttons(DF_Window *ws, U64 count, DF_CoreCmdKind *cmds, U32 *fastpath_codepoints);
-internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
-internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
+internal UI_Signal df_icon_button(DF_Window *ws, DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
+internal UI_Signal df_icon_buttonf(DF_Window *ws, DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
 internal void df_entity_tooltips(DF_Window *ws, DF_Entity *entity);
 internal UI_Signal df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
 internal void df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt point);
@@ -1100,8 +1101,8 @@ internal UI_Box *df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 b
 ////////////////////////////////
 //~ rjf: UI Widgets: Line Edit
 
-internal UI_Signal df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
-internal UI_Signal df_line_editf(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
+internal UI_Signal df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
+internal UI_Signal df_line_editf(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests

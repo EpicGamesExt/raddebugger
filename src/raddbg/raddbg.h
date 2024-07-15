@@ -218,6 +218,11 @@
 // [ ] @cleanup naming pass over eval visualization part of the frontend,
 //     "blocks" vs. "canvas" vs. "expansion" - etc.
 // [ ] @cleanup central worker thread pool - eliminate per-layer thread pools
+// [ ] @cleanup in the frontend, we are starting to have to pass down "DF_Window"
+//     everywhere, because of per-window parameters (e.g. font rendering settings).
+//     this is really better solved by implicit thread-local parameters, similar to
+//     interaction registers, so that one window can "pick" all of the implicit
+//     parameters, and then 99% of the UI code does not have to care.
 
 ////////////////////////////////
 //~ rjf: Cold, Unsorted Notes (Deferred Until Existing Lists Mostly Exhausted)

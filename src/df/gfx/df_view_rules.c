@@ -343,7 +343,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
   
   //- rjf: build text box
   UI_Box *text_box = &ui_g_nil_box;
-  UI_WidthFill UI_Font(df_font_from_slot(DF_FontSlot_Code))
+  UI_WidthFill DF_Font(ws, DF_FontSlot_Code)
   {
     text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
     D_FancyStringList fancy_strings = {0};
@@ -433,7 +433,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
       UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
       commit = commit || ui_released(h_sig);
     }
-    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
       ui_labelf("Hex");
       ui_labelf("R");
@@ -444,7 +444,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
       ui_labelf("V");
       ui_labelf("A");
     }
-    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_Font(df_font_from_slot(DF_FontSlot_Code))
+    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) DF_Font(ws, DF_FontSlot_Code)
     {
       String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
       ui_label(hex_string);
@@ -930,7 +930,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(bitmap)
   U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
   DF_BitmapTopologyInfo topology = df_vr_bitmap_topology_info_from_cfg(scope, ctrl_ctx, parse_ctx, macro_map, cfg);
   U64 expected_size = topology.width*topology.height*r_tex2d_format_bytes_per_pixel_table[topology.fmt];
-  UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+  DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     ui_labelf("0x%I64x -> Bitmap (%I64u x %I64u)", base_vaddr, topology.width, topology.height);
 }
 
@@ -1335,7 +1335,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(geo)
 {
   DF_Eval value_eval = df_value_mode_eval_from_eval(parse_ctx->type_graph, parse_ctx->rdi, ctrl_ctx, eval);
   U64 base_vaddr = value_eval.imm_u64 ? value_eval.imm_u64 : value_eval.offset;
-  UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+  DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     ui_labelf("0x%I64x -> Geometry", base_vaddr);
 }
 
