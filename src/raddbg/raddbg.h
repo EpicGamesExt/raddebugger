@@ -223,6 +223,8 @@
 //     this is really better solved by implicit thread-local parameters, similar to
 //     interaction registers, so that one window can "pick" all of the implicit
 //     parameters, and then 99% of the UI code does not have to care.
+// [ ] @cleanup eliminate explicit font parameters in the various ui paths (e.g.
+//     code slice params)
 
 ////////////////////////////////
 //~ rjf: Cold, Unsorted Notes (Deferred Until Existing Lists Mostly Exhausted)
