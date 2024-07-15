@@ -9030,10 +9030,11 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
           {
             if(item->icon_kind != DF_IconKind_Null)
             {
-              UI_PrefWidth(ui_em(2.f, 1.f))
+              UI_PrefWidth(ui_em(3.f, 1.f))
                 UI_Font(df_font_from_slot(DF_FontSlot_Icons))
                 UI_TextRasterFlags(F_RasterFlag_Smooth)
                 UI_Palette(ui_build_palette(ui_top_palette(), .text = rgba))
+                UI_TextAlignment(UI_TextAlign_Center)
                 ui_label(df_g_icon_kind_text_table[item->icon_kind]);
             }
             if(query.size != 0 && item->kind_string.size != 0) UI_PrefWidth(ui_text_dim(10, 1))

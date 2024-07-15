@@ -4030,7 +4030,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         DF_Palette(ws, DF_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
         
         // rjf: name editor
-        if(op_flags & DF_EntityOpFlag_Rename)
+        if(op_flags & DF_EntityOpFlag_Rename) UI_TextPadding(ui_top_font_size()*1.5f)
         {
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, entity->name, "%S###entity_name_edit_%p", df_g_entity_kind_name_label_table[entity->kind], entity);
           if(ui_committed(sig))
@@ -4045,7 +4045,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }
         
         // rjf: condition editor
-        if(op_flags & DF_EntityOpFlag_Condition) UI_Font(df_font_from_slot(DF_FontSlot_Code))
+        if(op_flags & DF_EntityOpFlag_Condition) UI_Font(df_font_from_slot(DF_FontSlot_Code)) UI_TextPadding(ui_top_font_size()*1.5f)
         {
           DF_Entity *condition = df_entity_child_from_kind(entity, DF_EntityKind_Condition);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, condition->name, "Condition###entity_cond_edit_%p", entity);
@@ -4074,7 +4074,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }
         
         // rjf: exe editor
-        if(entity->kind == DF_EntityKind_Target)
+        if(entity->kind == DF_EntityKind_Target) UI_TextPadding(ui_top_font_size()*1.5f)
         {
           DF_Entity *exe = df_entity_child_from_kind(entity, DF_EntityKind_Executable);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, exe->name, "Executable###entity_exe_edit_%p", entity);
@@ -4103,7 +4103,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }
         
         // rjf: arguments editors
-        if(entity->kind == DF_EntityKind_Target)
+        if(entity->kind == DF_EntityKind_Target) UI_TextPadding(ui_top_font_size()*1.5f)
         {
           DF_Entity *args = df_entity_child_from_kind(entity, DF_EntityKind_Arguments);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, args->name, "Arguments###entity_args_edit_%p", entity);
@@ -6103,6 +6103,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             ui_labelf("%S", ws->query_cmd_spec->info.display_name);
           }
           UI_Font((query->flags & DF_CmdQueryFlag_CodeInput) ? df_font_from_slot(DF_FontSlot_Code) : ui_top_font())
+            UI_TextPadding(ui_top_font_size()*0.5f)
           {
             UI_Signal sig = df_line_edit(DF_LineEditFlag_Border|
                                          (DF_LineEditFlag_CodeContents * !!(query->flags & DF_CmdQueryFlag_CodeInput)),
@@ -7095,10 +7096,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               }
               UI_Parent(filter_box) UI_WidthFill UI_HeightFill
               {
-                UI_PrefWidth(ui_em(2.f, 1.f))
+                UI_PrefWidth(ui_em(3.f, 1.f))
                   UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
                   UI_Font(df_font_from_slot(DF_FontSlot_Icons))
                   UI_TextRasterFlags(F_RasterFlag_Smooth)
+                  UI_TextAlignment(UI_TextAlign_Center)
                   ui_label(df_g_icon_kind_text_table[DF_IconKind_Find]);
                 UI_PrefWidth(ui_text_dim(10, 1))
                 {
@@ -7106,6 +7108,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 }
                 ui_spacer(ui_em(0.5f, 1.f));
                 UI_Font(view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode ? df_font_from_slot(DF_FontSlot_Code) : df_font_from_slot(DF_FontSlot_Main)) UI_Focus(view->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
+                  UI_TextPadding(ui_top_font_size()*0.5f)
                 {
                   UI_Signal sig = df_line_edit(DF_LineEditFlag_CodeContents*!!(view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode),
                                                0,
@@ -13061,7 +13064,7 @@ internal UI_Signal
 df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string)
 {
   //- rjf: unpack visual metrics
-  F32 expander_size_px = ui_top_font_size()*1.3f;
+  F32 expander_size_px = ui_top_font_size()*1.5f;
   
   //- rjf: make key
   UI_Key key = ui_key_from_string(ui_active_seed_key(), string);
@@ -13115,6 +13118,7 @@ df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       UI_Flags(UI_BoxFlag_DrawSideLeft)
       UI_Font(df_font_from_slot(DF_FontSlot_Icons))
       UI_TextRasterFlags(F_RasterFlag_Smooth)
+      UI_TextAlignment(UI_TextAlign_Center)
       ui_label(df_g_icon_kind_text_table[DF_IconKind_Dot]);
   }
   
