@@ -932,6 +932,13 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
                            0);
     scratch_end(scratch);
   }
+
+  // hint to create rounded corners
+  {
+    DWORD dwmwa_window_corner_preference_value = 33;
+    int dwmwcp_round_value = 2;
+    DwmSetWindowAttribute(hwnd, dwmwa_window_corner_preference_value, &dwmwcp_round_value, sizeof(dwmwcp_round_value));
+  }
   
   //- rjf- make/fill window
   W32_Window *window = w32_allocate_window();
