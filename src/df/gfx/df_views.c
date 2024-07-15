@@ -462,7 +462,7 @@ internal DF_CodeViewBuildResult
 df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
+  Temp scratch = scratch_begin(&arena, 1);
   HS_Scope *hs_scope = hs_scope_open();
   DI_Scope *di_scope = di_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
