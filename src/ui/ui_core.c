@@ -18,7 +18,7 @@ ui_hash_from_string(U64 seed, String8 string)
   U64 result = seed;
   for(U64 i = 0; i < string.size; i += 1)
   {
-    result = ((result << 5) + result) + string.str[i];
+    result = ((result << 8) + result) + string.str[i];
   }
   return result;
 }
