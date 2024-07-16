@@ -50,6 +50,7 @@ cd build
 if [ "$raddbg" = "1" ];                then didbuild=1 && $compile ../src/raddbg/raddbg_main.c                                    $compile_link $out raddbg || exit 1; fi
 if [ "$rdi_from_pdb" = "1" ];          then didbuild=1 && $compile ../src/rdi_from_pdb/rdi_from_pdb_main.c                        $compile_link $out rdi_from_pdb || exit 1; fi
 if [ "$rdi_from_dwarf" = "1" ];        then didbuild=1 && $compile ../src/rdi_from_dwarf/rdi_from_dwarf.c                         $compile_link $out rdi_from_dwarf || exit 1; fi
+if [ "$rdi_dump" = "1" ];              then didbuild=1 && $compile ../src/rdi_dump/rdi_dump_main.c                                $compile_link $out rdi_dump || exit 1; fi
 if [ "$rdi_breakpad_from_pdb" = "1" ]; then didbuild=1 && $compile ../src/rdi_breakpad_from_pdb/rdi_breakpad_from_pdb_main.c      $compile_link $out rdi_breakpad_from_pdb || exit 1; fi
 cd ..
 
