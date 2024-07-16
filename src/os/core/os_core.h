@@ -187,8 +187,6 @@ internal void  os_decommit(void *ptr, U64 size);
 internal void  os_release(void *ptr, U64 size);
 
 //- rjf: large pages
-internal B32 os_set_large_pages_enabled(B32 flag);
-internal B32 os_large_pages_enabled(void);
 internal void *os_reserve_large(U64 size);
 internal B32 os_commit_large(void *ptr, U64 size);
 
@@ -210,7 +208,7 @@ internal void os_abort(S32 exit_code);
 internal OS_Handle      os_file_open(OS_AccessFlags flags, String8 path);
 internal void           os_file_close(OS_Handle file);
 internal U64            os_file_read(OS_Handle file, Rng1U64 rng, void *out_data);
-internal void           os_file_write(OS_Handle file, Rng1U64 rng, void *data);
+internal U64            os_file_write(OS_Handle file, Rng1U64 rng, void *data);
 internal B32            os_file_set_times(OS_Handle file, DateTime time);
 internal FileProperties os_properties_from_file(OS_Handle file);
 internal OS_FileID      os_id_from_file(OS_Handle file);

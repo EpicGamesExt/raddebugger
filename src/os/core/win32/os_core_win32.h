@@ -82,9 +82,6 @@ struct OS_W32_State
   OS_SystemInfo system_info;
   OS_ProcessInfo process_info;
   
-  // rjf: large pages
-  B32 large_pages_enabled;
-  
   // rjf: entity storage
   CRITICAL_SECTION entity_mutex;
   Arena *entity_arena;

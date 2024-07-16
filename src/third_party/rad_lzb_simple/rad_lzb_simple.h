@@ -66,6 +66,14 @@ typedef S32 RAD_S32;
 # error need force inline for this compiler
 #endif
 
+#if _MSC_VER
+# define RADLZB_TRAP() __debugbreak()
+#elif __clang__ || __GNUC__
+# define RADLZB_TRAP() __builtin_trap()
+#else
+# error Unknown trap intrinsic for this compiler.
+#endif
+
 #define RR_STRING_JOIN(arg1, arg2)              RR_STRING_JOIN_DELAY(arg1, arg2)
 #define RR_STRING_JOIN_DELAY(arg1, arg2)        RR_STRING_JOIN_IMMEDIATE(arg1, arg2)
 #define RR_STRING_JOIN_IMMEDIATE(arg1, arg2)    arg1 ## arg2
@@ -91,7 +99,7 @@ typedef S32 RAD_S32;
 #define RAD_PTRBYTES 8
 #define RR_MIN(a,b)    ( (a) < (b) ? (a) : (b) )
 #define RR_MAX(a,b)    ( (a) > (b) ? (a) : (b) )
-#define RR_ASSERT_ALWAYS(c) do{if(!(c)) {__debugbreak();}}while(0)
+#define RR_ASSERT_ALWAYS(c) do{if(!(c)) {RADLZB_TRAP();}}while(0)
 #define RR_ASSERT(c) RR_ASSERT_ALWAYS(c)
 
 #define RR_PUT16_LE(ptr,val)       *((U16 *)(ptr)) = (U16)(val)

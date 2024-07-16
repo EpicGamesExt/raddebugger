@@ -46,13 +46,5 @@
 internal void
 entry_point(CmdLine *cmdline)
 {
-  Arena *arena = arena_alloc();
-  RDIM_SortKey keys_unsorted[] = {{1, (void *)2}, {2}, {3}, {1, (void *)1}, {2}, {3}, {1, (void *)3}, {2}, {3}, {1, (void *)4}, {2}, {3}, {1, (void *)5}, {2}, {3}};
-  U64 keys_count = ArrayCount(keys_unsorted);
-  RDIM_SortKey *keys_sorted = rdim_sort_key_array(arena, keys_unsorted, keys_count);
-  for(U64 idx = 0; idx < keys_count; idx += 1)
-  {
-    printf("%I64u (%I64u),", keys_sorted[idx].key, (U64)keys_sorted[idx].val);
-  }
-  printf("\n");
+  printf("Hello, World!\n");
 }

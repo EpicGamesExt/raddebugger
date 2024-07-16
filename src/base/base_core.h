@@ -101,7 +101,6 @@
 #elif COMPILER_GCC
 # define AlignOf(T) __alignof__(T)
 #else
-#else
 # error AlignOf not defined for this compiler.
 #endif
 

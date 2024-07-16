@@ -1100,7 +1100,7 @@ static SINTa rr_lzb_simple_encode_fast_sub(rr_lzb_simple_context * fh,
 #endif
 	}
   
-	done:
+	done:;
 	
 	int cur_lrl = rrPtrDiff32(rpEnd - literals_start);
 #if LZB_END_WITH_LITERALS
@@ -1278,7 +1278,7 @@ static SINTa rr_lzb_simple_encode_veryfast_sub(rr_lzb_simple_context * fh,
 		}
 		
 		//-------------------------------
-		found_match:
+		found_match:;
     
 		// found something
     
@@ -1355,7 +1355,7 @@ static SINTa rr_lzb_simple_encode_veryfast_sub(rr_lzb_simple_context * fh,
 			goto done;	
 	}
 	
-	done:
+	done:;
 	
 	int cur_lrl = rrPtrDiff32(rpEnd - literals_start);
 #if LZB_END_WITH_LITERALS

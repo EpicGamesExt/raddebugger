@@ -201,37 +201,6 @@ os_release(void *ptr, U64 size)
 
 //- rjf: large pages
 
-internal B32
-os_set_large_pages_enabled(B32 flag)
-{
-  B32 is_ok = 0;
-  HANDLE token;
-  if(OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
-  {
-    LUID luid;
-    if(LookupPrivilegeValue(0, SE_LOCK_MEMORY_NAME, &luid))
-    {
-      TOKEN_PRIVILEGES priv;
-      priv.PrivilegeCount           = 1;
-      priv.Privileges[0].Luid       = luid;
-      priv.Privileges[0].Attributes = flag ? SE_PRIVILEGE_ENABLED: 0;
-      if(AdjustTokenPrivileges(token, 0, &priv, sizeof(priv), 0, 0))
-      {
-        os_w32_state.large_pages_enabled = flag;
-        is_ok = 1;
-      }
-    }
-    CloseHandle(token);
-  }
-  return is_ok;
-}
-
-internal B32
-os_large_pages_enabled(void)
-{
-  return os_w32_state.large_pages_enabled;
-}
-
 internal void *
 os_reserve_large(U64 size)
 {
@@ -385,14 +354,15 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
   return total_read_size;
 }
 
-internal void
+internal U64
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
-  if(os_handle_match(file, os_handle_zero())) { return; }
+  if(os_handle_match(file, os_handle_zero())) { return 0; }
   HANDLE win_handle = (HANDLE)file.u64[0];
   U64 src_off = 0;
   U64 dst_off = rng.min;
   U64 bytes_to_write_total = rng.max-rng.min;
+  U64 total_bytes_written = 0;
   for(;src_off < bytes_to_write_total;)
   {
     void *bytes_src = (void *)((U8 *)data + src_off);
@@ -409,17 +379,19 @@ os_file_write(OS_Handle file, Rng1U64 rng, void *data)
     }
     src_off += bytes_written;
     dst_off += bytes_written;
+    total_bytes_written += bytes_written;
   }
+  return total_bytes_written;
 }
 
 internal B32
-os_file_set_times(OS_Handle file, DateTime time)
+os_file_set_time(OS_Handle file, DateTime time)
 {
   if(os_handle_match(file, os_handle_zero())) { return 0; }
   B32 result = 0;
   HANDLE handle = (HANDLE)file.u64[0];
   SYSTEMTIME system_time = {0};
-  w32_system_time_from_date_time(&system_time, &time);
+  os_w32_system_time_from_date_time(&system_time, &time);
   FILETIME file_time = {0};
   result = (SystemTimeToFileTime(&system_time, &file_time) &&
             SetFileTime(handle, &file_time, &file_time, &file_time));
@@ -1232,27 +1204,30 @@ os_semaphore_drop(OS_Handle semaphore)
 //~ rjf: @os_hooks Dynamically-Loaded Libraries (Implemented Per-OS)
 
 internal OS_Handle
-os_library_open(String8 path){
+os_library_open(String8 path)
+{
   Temp scratch = scratch_begin(0, 0);
   String16 path16 = str16_from_8(scratch.arena, path);
   HMODULE mod = LoadLibraryW((LPCWSTR)path16.str);
   OS_Handle result = { (U64)mod };
   scratch_end(scratch);
-  return(result);
+  return result;
 }
 
 internal VoidProc*
-os_library_load_proc(OS_Handle lib, String8 name){
+os_library_load_proc(OS_Handle lib, String8 name)
+{
   Temp scratch = scratch_begin(0, 0);
   HMODULE mod = (HMODULE)lib.u64[0];
   name = push_str8_copy(scratch.arena, name);
   VoidProc *result = (VoidProc*)GetProcAddress(mod, (LPCSTR)name.str);
   scratch_end(scratch);
-  return(result);
+  return result;
 }
 
 internal void
-os_library_close(OS_Handle lib){
+os_library_close(OS_Handle lib)
+{
   HMODULE mod = (HMODULE)lib.u64[0];
   FreeLibrary(mod);
 }

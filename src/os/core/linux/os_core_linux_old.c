@@ -1120,7 +1120,7 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
   return 0;
 }
 
-internal void
+internal U64
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
   NotImplemented;

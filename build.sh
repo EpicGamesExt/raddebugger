@@ -16,7 +16,7 @@ auto_compile_flags=''
 clang_common='-I../src/ -I../local/ -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Wno-initializer-overrides -Wno-incompatible-pointer-types-discards-qualifiers -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf'
 clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${auto_compile_flags}"
 clang_release="clang -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${auto_compile_flags}"
-clang_link=""
+clang_link="-lpthread"
 clang_out="-o"
 
 # --- Per-Build Settings ------------------------------------------------------
@@ -46,7 +46,8 @@ fi
 
 # --- Build Everything (@build_targets) ---------------------------------------
 cd build
-if [ "$raddbg" = "1" ]; then didbuild=1 && $compile ../src/raddbg/raddbg_main.c $compile_link $out raddbg || exit 1; fi
+if [ "$raddbg" = "1" ];        then didbuild=1 && $compile ../src/raddbg/raddbg_main.c     $compile_link $out raddbg || exit 1; fi
+if [ "$ryan_scratch" = "1" ];  then didbuild=1 && $compile ../src/scratch/ryan_scratch.c   $compile_link $out ryan_scratch || exit 1; fi
 cd ..
 
 # --- Warn On No Builds -------------------------------------------------------
