@@ -29,6 +29,7 @@ struct CmdLineOptList
 typedef struct CmdLine CmdLine;
 struct CmdLine
 {
+  String8 exe_name;
   CmdLineOptList options;
   String8List inputs;
   U64 option_table_size;

@@ -4,36 +4,22 @@
 #ifndef OS_INC_H
 #define OS_INC_H
 
-#if !defined(OS_FEATURE_SOCKET)
-# define OS_FEATURE_SOCKET 0
-#endif
-
 #if !defined(OS_FEATURE_GRAPHICAL)
 # define OS_FEATURE_GRAPHICAL 0
 #endif
 
-#include "core/metagen_os_core.h"
-
-#if OS_FEATURE_SOCKET
-#include "socket/metagen_os_socket.h"
+#if !defined(OS_GFX_STUB)
+# define OS_GFX_STUB 0
 #endif
 
-#if OS_FEATURE_GRAPHICAL
-#include "gfx/metagen_os_gfx.h"
-#endif
+#include "metagen/metagen_os/core/metagen_os_core.h"
 
 #if OS_WINDOWS
-# include "core/win32/metagen_os_core_win32.h"
-# if OS_FEATURE_SOCKET
-#  include "socket/win32/metagen_os_socket_win32.h"
-# endif
-# if OS_FEATURE_GRAPHICAL
-#  include "gfx/win32/metagen_os_gfx_win32.h"
-# endif
+# include "metagen/metagen_os/core/win32/metagen_os_core_win32.h"
 #elif OS_LINUX
-# include "core/linux/metagen_os_core_linux.h"
+# include "metagen/metagen_os/core/linux/metagen_os_core_linux.h"
 #else
-# error no OS layer setup
+# error OS core layer not implemented for this operating system.
 #endif
 
 #endif // OS_INC_H

@@ -41,18 +41,6 @@ os_handle_array_from_list(Arena *arena, OS_HandleList *list)
 }
 
 ////////////////////////////////
-//~ rjf: System Path Helper (Helper, Implemented Once)
-
-internal String8
-os_string_from_system_path(Arena *arena, OS_SystemPath path)
-{
-  String8List strs = {0};
-  os_string_list_from_system_path(arena, path, &strs);
-  String8 result = str8_list_first(&strs);
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Command Line Argc/Argv Helper (Helper, Implemented Once)
 
 internal String8List
@@ -68,25 +56,12 @@ os_string_list_from_argcv(Arena *arena, int argc, char **argv)
 }
 
 ////////////////////////////////
-//~ rjf: Process Helpers (Helper, Implemented Once)
-
-internal void
-os_relaunch_self(void){
-  Temp scratch = scratch_begin(0, 0);
-  OS_LaunchOptions opts = {0};
-  opts.cmd_line = os_get_command_line_arguments();
-  opts.path = os_string_from_system_path(scratch.arena, OS_SystemPath_Initial);
-  os_launch_process(&opts, 0);
-  scratch_end(scratch);
-}
-
-////////////////////////////////
 //~ rjf: Filesystem Helpers (Helpers, Implemented Once)
 
 internal String8
 os_data_from_file_path(Arena *arena, String8 path)
 {
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, path);
+  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
   FileProperties props = os_properties_from_file(file);
   String8 data = os_string_from_file_range(arena, file, r1u64(0, props.size));
   os_file_close(file);
@@ -126,19 +101,28 @@ os_write_data_list_to_file_path(String8 path, String8List list)
   return good;
 }
 
-internal FileProperties
-os_properties_from_file_path(String8 path)
+internal B32
+os_append_data_to_file_path(String8 path, String8 data)
 {
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, path);
-  FileProperties props = os_properties_from_file(file);
-  os_file_close(file);
-  return props;
+  B32 good = 0;
+  if(data.size != 0)
+  {
+    OS_Handle file = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append, path);
+    if(!os_handle_match(file, os_handle_zero()))
+    {
+      good = 1;
+      U64 pos = os_properties_from_file(file).size;
+      os_file_write(file, r1u64(pos, pos+data.size), data.str);
+      os_file_close(file);
+    }
+  }
+  return good;
 }
 
 internal OS_FileID
 os_id_from_file_path(String8 path)
 {
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, path);
+  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
   OS_FileID id = os_id_from_file(file);
   os_file_close(file);
   return id;
@@ -168,83 +152,7 @@ os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range)
 }
 
 ////////////////////////////////
-//~ rjf: Synchronization Primitive Helpers (Helpers, Implemented Once)
-
-internal void
-os_mutex_take(OS_Handle mutex){
-  ProfBeginLockWait((void *)(mutex.u64[0]), "take mutex");
-  os_mutex_take_(mutex);
-  ProfEndLockWait();
-  ProfLockTake((void *)(mutex.u64[0]), "take mutex");
-}
-
-internal void
-os_mutex_drop(OS_Handle mutex){
-  os_mutex_drop_(mutex);
-  ProfLockDrop((void *)(mutex.u64[0]));
-}
-
-internal void
-os_rw_mutex_take_r(OS_Handle rw_mutex){
-  ProfBeginLockWait((void *)(rw_mutex.u64[0]), "rw mutex take r");
-  os_rw_mutex_take_r_(rw_mutex);
-  ProfEndLockWait();
-  ProfLockTake((void *)(rw_mutex.u64[0]), "rw mutex take r");
-}
-
-internal void
-os_rw_mutex_drop_r(OS_Handle rw_mutex){
-  os_rw_mutex_drop_r_(rw_mutex);
-  ProfLockDrop((void *)(rw_mutex.u64[0]));
-}
-
-internal void
-os_rw_mutex_take_w(OS_Handle rw_mutex){
-  ProfBeginLockWait((void *)(rw_mutex.u64[0]), "rw mutex take rw");
-  os_rw_mutex_take_w_(rw_mutex);
-  ProfEndLockWait();
-  ProfLockTake((void *)(rw_mutex.u64[0]), "rw mutex take rw");
-}
-
-internal void
-os_rw_mutex_drop_w(OS_Handle rw_mutex){
-  os_rw_mutex_drop_w_(rw_mutex);
-  ProfLockDrop((void *)(rw_mutex.u64[0]));
-}
-
-internal B32
-os_condition_variable_wait(OS_Handle cv, OS_Handle mutex, U64 endt_us){
-  ProfLockDrop((void *)(mutex.u64[0]));
-  B32 result = os_condition_variable_wait_(cv, mutex, endt_us);
-  ProfLockTake((void *)(mutex.u64[0]), "wait cv");
-  return(result);
-}
-
-internal B32
-os_condition_variable_wait_rw_r(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us){
-  ProfLockDrop((void *)(mutex_rw.u64[0]));
-  B32 result = os_condition_variable_wait_rw_r_(cv, mutex_rw, endt_us);
-  ProfLockTake((void *)(mutex_rw.u64[0]), "wait cv rw r");
-  return(result);
-}
-
-internal B32
-os_condition_variable_wait_rw_w(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us){
-  ProfLockDrop((void *)(mutex_rw.u64[0]));
-  B32 result = os_condition_variable_wait_rw_w_(cv, mutex_rw, endt_us);
-  ProfLockTake((void *)(mutex_rw.u64[0]), "wait cv rw w");
-  return(result);
-}
-
-internal void
-os_condition_variable_signal(OS_Handle cv){
-  os_condition_variable_signal_(cv);
-}
-
-internal void
-os_condition_variable_broadcast(OS_Handle cv){
-  os_condition_variable_broadcast_(cv);
-}
+//~ rjf: GUID Helpers (Helpers, Implemented Once)
 
 internal String8
 os_string_from_guid(Arena *arena, OS_Guid guid)
