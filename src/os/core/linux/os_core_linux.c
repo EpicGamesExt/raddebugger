@@ -549,7 +549,9 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
     if(good)
     {
       filtered = ((st.st_mode == S_IFDIR && iter->flags & OS_FileIterFlag_SkipFolders) ||
-                  (st.st_mode == S_IFREG && iter->flags & OS_FileIterFlag_SkipFiles));
+                  (st.st_mode == S_IFREG && iter->flags & OS_FileIterFlag_SkipFiles) ||
+                  (lnx_iter->dp->d_name[0] == '.' && lnx_iter->dp->d_name[1] == 0) ||
+                  (lnx_iter->dp->d_name[0] == '.' && lnx_iter->dp->d_name[1] == '.' && lnx_iter->dp->d_name[2] == 0));
     }
     
     // rjf: output & exit, if good & unfiltered

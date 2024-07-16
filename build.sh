@@ -1,4 +1,5 @@
 #!/bin/bash
+cd "$(dirname "$0")"
 
 # --- Unpack Arguments --------------------------------------------------------
 for arg in "$@"; do declare $arg='1'; done
@@ -40,7 +41,7 @@ if [ "$no_meta" = "" ]
 then
   cd build
   $compile_debug ../src/metagen/metagen_main.c $compile_link $out metagen || exit 1
-  metagen || exit 1
+  ./metagen || exit 1
   cd ..
 fi
 
@@ -51,8 +52,8 @@ if [ "$ryan_scratch" = "1" ];  then didbuild=1 && $compile ../src/scratch/ryan_s
 cd ..
 
 # --- Warn On No Builds -------------------------------------------------------
-#if [ "$didbuild" = "" ]
-#then
-#  echo "[WARNING] no valid build target specified; must use build target names as arguments to this script, like `./build.sh raddbg` or `./build.sh rdi_from_pdb`."
-#  exit 1
-#fi
+if [ "$didbuild" = "" ]
+then
+  echo "[WARNING] no valid build target specified; must use build target names as arguments to this script, like \`./build.sh raddbg\` or \`./build.sh rdi_from_pdb\`."
+  exit 1
+fi
