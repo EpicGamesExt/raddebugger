@@ -383,7 +383,7 @@ di_close(DI_Key *key)
             di_string_release__stripe_mutex_w_guarded(stripe, node->key.path);
             if(node->file_base != 0)
             {
-              os_file_map_view_close(node->file_map, node->file_base);
+              os_file_map_view_close(node->file_map, node->file_base, r1u64(0, node->file_props.size));
             }
             if(!os_handle_match(node->file_map, os_handle_zero()))
             {
@@ -671,7 +671,7 @@ di_parse_thread__entry_point(void *p)
           og_is_pe = 1;
         }
       }
-      os_file_map_view_close(file_map, base);
+      os_file_map_view_close(file_map, base, r1u64(0, props.size));
       os_file_map_close(file_map);
       os_file_close(file);
     }
@@ -732,7 +732,7 @@ di_parse_thread__entry_point(void *p)
       {
         rdi_file_is_up_to_date = 0;
       }
-      os_file_map_view_close(file_map, file_base);
+      os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
       os_file_map_close(file_map);
       os_file_close(file);
     }

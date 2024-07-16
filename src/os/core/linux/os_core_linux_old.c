@@ -1217,7 +1217,7 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
 }
 
 internal void
-os_file_map_view_close(OS_Handle map, void *ptr)
+os_file_map_view_close(OS_Handle map, void *ptr, Rng1U64 range)
 {
   NotImplemented;
 }

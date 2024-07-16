@@ -414,25 +414,34 @@ os_properties_from_file_path(String8 path)
 internal OS_Handle
 os_file_map_open(OS_AccessFlags flags, OS_Handle file)
 {
-  NotImplemented;
+  OS_Handle map = file;
+  return map;
 }
 
 internal void
 os_file_map_close(OS_Handle map)
 {
-  NotImplemented;
+  // NOTE(rjf): nothing to do; `map` handles are the same as `file` handles in
+  // the linux implementation (on Windows they require separate handles)
 }
 
 internal void *
 os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
 {
-  NotImplemented;
+  if(os_handle_match(map, os_handle_zero())) { return 0; }
+  int fd = (int)map.u64[0];
+  int prot_flags = 0;
+  if(flags & OS_AccessFlag_Write) { prot_flags |= PROT_WRITE; }
+  if(flags & OS_AccessFlag_Read)  { prot_flags |= PROT_READ; }
+  int map_flags = MAP_PRIVATE;
+  void *base = mmap(0, dim_1u64(range), prot_flags, map_flags, fd, range.min);
+  return base;
 }
 
 internal void
-os_file_map_view_close(OS_Handle map, void *ptr)
+os_file_map_view_close(OS_Handle map, void *ptr, Rng1U64 range)
 {
-  NotImplemented;
+  munmap(ptr, dim_1u64(range));
 }
 
 //- rjf: directory iteration
@@ -440,19 +449,72 @@ os_file_map_view_close(OS_Handle map, void *ptr)
 internal OS_FileIter *
 os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
 {
-  NotImplemented;
+  OS_FileIter *base_iter = push_array(arena, OS_FileIter, 1);
+  base_iter->flags = flags;
+  OS_LNX_FileIter *iter = (OS_LNX_FileIter *)base_iter->memory;
+  {
+    String8 path_copy = push_str8_copy(arena, path);
+    iter->dir = opendir((char *)path_copy.str);
+    iter->path = path_copy;
+  }
+  return base_iter;
 }
 
 internal B32
 os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 {
-  NotImplemented;
+  B32 good = 0;
+  OS_LNX_FileIter *lnx_iter = (OS_LNX_FileIter *)iter->memory;
+  for(;;)
+  {
+    // rjf: get next entry
+    lnx_iter->dp = readdir(lnx_iter->dir);
+    good = (lnx_iter->dp != 0);
+    
+    // rjf: unpack entry info
+    struct stat st = {0};
+    int stat_result = 0;
+    if(good)
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      String8 full_path = push_str8f(scratch.arena, "%S/%s", lnx_iter->path, lnx_iter->dp->d_name);
+      stat_result = stat((char *)full_path.str, &st);
+      scratch_end(scratch);
+    }
+    
+    // rjf: determine if filtered
+    B32 filtered = 0;
+    if(good)
+    {
+      filtered = ((st.st_mode == S_IFDIR && iter->flags & OS_FileIterFlag_SkipFolders) ||
+                  (st.st_mode == S_IFREG && iter->flags & OS_FileIterFlag_SkipFiles));
+    }
+    
+    // rjf: output & exit, if good & unfiltered
+    if(good && !filtered)
+    {
+      info_out->name = push_str8_copy(arena, str8_cstring(lnx_iter->dp->d_name));
+      if(stat_result != -1)
+      {
+        info_out->props = os_lnx_file_properties_from_stat(&st);
+      }
+      break;
+    }
+    
+    // rjf: exit if not good
+    if(!good)
+    {
+      break;
+    }
+  }
+  return good;
 }
 
 internal void
 os_file_iter_end(OS_FileIter *iter)
 {
-  NotImplemented;
+  OS_LNX_FileIter *lnx_iter = (OS_LNX_FileIter *)iter->memory;
+  closedir(lnx_iter->dir);
 }
 
 //- rjf: directory creation
@@ -460,7 +522,15 @@ os_file_iter_end(OS_FileIter *iter)
 internal B32
 os_make_directory(String8 path)
 {
-  NotImplemented;
+  Temp scratch = scratch_begin(0, 0);
+  B32 result = 0;
+  String8 path_copy = push_str8_copy(scratch.arena, path);
+  if(mkdir((char*)path_copy.str, 0777) != -1)
+  {
+    result = 1;
+  }
+  scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////

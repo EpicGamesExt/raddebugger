@@ -32,6 +32,18 @@ typedef struct tm tm;
 typedef struct timespec timespec;
 
 ////////////////////////////////
+//~ rjf: File Iterator
+
+typedef struct OS_LNX_FileIter OS_LNX_FileIter;
+struct OS_LNX_FileIter
+{
+  DIR *dir;
+  struct dirent *dp;
+  String8 path;
+};
+StaticAssert(sizeof(Member(OS_FileIter, memory)) >= sizeof(OS_LNX_FileIter), os_lnx_file_iter_size_check);
+
+////////////////////////////////
 //~ rjf: State
 
 typedef struct OS_LNX_State OS_LNX_State;

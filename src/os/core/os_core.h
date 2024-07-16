@@ -222,7 +222,7 @@ internal FileProperties os_properties_from_file_path(String8 path);
 internal OS_Handle os_file_map_open(OS_AccessFlags flags, OS_Handle file);
 internal void      os_file_map_close(OS_Handle map);
 internal void *    os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range);
-internal void      os_file_map_view_close(OS_Handle map, void *ptr);
+internal void      os_file_map_view_close(OS_Handle map, void *ptr, Rng1U64 range);
 
 //- rjf: directory iteration
 internal OS_FileIter *os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags);
