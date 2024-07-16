@@ -1574,7 +1574,7 @@ txt_init(void)
   txt_shared->arena = arena;
   txt_shared->slots_count = 1024;
   txt_shared->slots = push_array(arena, TXT_Slot, txt_shared->slots_count);
-  txt_shared->stripes_count = Min(txt_shared->slots_count, os_logical_core_count());
+  txt_shared->stripes_count = Min(txt_shared->slots_count, os_get_system_info()->logical_processor_count);
   txt_shared->stripes = push_array(arena, TXT_Stripe, txt_shared->stripes_count);
   txt_shared->stripes_free_nodes = push_array(arena, TXT_Node *, txt_shared->stripes_count);
   for(U64 idx = 0; idx < txt_shared->stripes_count; idx += 1)
@@ -1587,13 +1587,13 @@ txt_init(void)
   txt_shared->u2p_ring_base = push_array_no_zero(arena, U8, txt_shared->u2p_ring_size);
   txt_shared->u2p_ring_cv = os_condition_variable_alloc();
   txt_shared->u2p_ring_mutex = os_mutex_alloc();
-  txt_shared->parse_thread_count = Clamp(1, os_logical_core_count()-1, 4);
+  txt_shared->parse_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
   txt_shared->parse_threads = push_array(arena, OS_Handle, txt_shared->parse_thread_count);
   for(U64 idx = 0; idx < txt_shared->parse_thread_count; idx += 1)
   {
-    txt_shared->parse_threads[idx] = os_launch_thread(txt_parse_thread__entry_point, (void *)idx, 0);
+    txt_shared->parse_threads[idx] = os_thread_launch(txt_parse_thread__entry_point, (void *)idx, 0);
   }
-  txt_shared->evictor_thread = os_launch_thread(txt_evictor_thread__entry_point, 0, 0);
+  txt_shared->evictor_thread = os_thread_launch(txt_evictor_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////

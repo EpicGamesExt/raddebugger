@@ -98,7 +98,7 @@ demon_lnx_executable_path_from_pid(Arena *arena, pid_t pid){
     temp_end(restore_point);
   }
   else{
-    arena_put_back(arena, (cap - size - 1));
+    arena_pop(arena, (cap - size - 1));
     result = str8(buffer, size + 1);
   }
   

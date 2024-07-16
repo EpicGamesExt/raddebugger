@@ -11,7 +11,7 @@ geo_init(void)
   geo_shared = push_array(arena, GEO_Shared, 1);
   geo_shared->arena = arena;
   geo_shared->slots_count = 1024;
-  geo_shared->stripes_count = Min(geo_shared->slots_count, os_logical_core_count());
+  geo_shared->stripes_count = Min(geo_shared->slots_count, os_get_system_info()->logical_processor_count);
   geo_shared->slots = push_array(arena, GEO_Slot, geo_shared->slots_count);
   geo_shared->stripes = push_array(arena, GEO_Stripe, geo_shared->stripes_count);
   geo_shared->stripes_free_nodes = push_array(arena, GEO_Node *, geo_shared->stripes_count);
@@ -25,13 +25,13 @@ geo_init(void)
   geo_shared->u2x_ring_base = push_array_no_zero(arena, U8, geo_shared->u2x_ring_size);
   geo_shared->u2x_ring_cv = os_condition_variable_alloc();
   geo_shared->u2x_ring_mutex = os_mutex_alloc();
-  geo_shared->xfer_thread_count = Clamp(1, os_logical_core_count()-1, 4);
+  geo_shared->xfer_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
   geo_shared->xfer_threads = push_array(arena, OS_Handle, geo_shared->xfer_thread_count);
   for(U64 idx = 0; idx < geo_shared->xfer_thread_count; idx += 1)
   {
-    geo_shared->xfer_threads[idx] = os_launch_thread(geo_xfer_thread__entry_point, (void *)idx, 0);
+    geo_shared->xfer_threads[idx] = os_thread_launch(geo_xfer_thread__entry_point, (void *)idx, 0);
   }
-  geo_shared->evictor_thread = os_launch_thread(geo_evictor_thread__entry_point, 0, 0);
+  geo_shared->evictor_thread = os_thread_launch(geo_evictor_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////

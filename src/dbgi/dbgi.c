@@ -85,7 +85,7 @@ di_init(void)
   di_shared->arena = arena;
   di_shared->slots_count = 1024;
   di_shared->slots = push_array(arena, DI_Slot, di_shared->slots_count);
-  di_shared->stripes_count = Min(di_shared->slots_count, os_logical_core_count());
+  di_shared->stripes_count = Min(di_shared->slots_count, os_get_system_info()->logical_processor_count);
   di_shared->stripes = push_array(arena, DI_Stripe, di_shared->stripes_count);
   for(U64 idx = 0; idx < di_shared->stripes_count; idx += 1)
   {
@@ -101,11 +101,11 @@ di_init(void)
   di_shared->p2u_ring_cv = os_condition_variable_alloc();
   di_shared->p2u_ring_size = KB(64);
   di_shared->p2u_ring_base = push_array_no_zero(arena, U8, di_shared->p2u_ring_size);
-  di_shared->parse_thread_count = Max(2, os_logical_core_count()/2);
+  di_shared->parse_thread_count = Max(2, os_get_system_info()->logical_processor_count/2);
   di_shared->parse_threads = push_array(arena, OS_Handle, di_shared->parse_thread_count);
   for(U64 idx = 0; idx < di_shared->parse_thread_count; idx += 1)
   {
-    di_shared->parse_threads[idx] = os_launch_thread(di_parse_thread__entry_point, (void *)idx, 0);
+    di_shared->parse_threads[idx] = os_thread_launch(di_parse_thread__entry_point, (void *)idx, 0);
   }
 }
 
@@ -765,21 +765,21 @@ di_parse_thread__entry_point(void *p)
         //- rjf: kick off process
         OS_Handle process = {0};
         {
-          OS_LaunchOptions opts = {0};
-          opts.path = os_string_from_system_path(scratch.arena, OS_SystemPath_Binary);
-          opts.inherit_env = 1;
-          opts.consoleless = 1;
-          str8_list_pushf(scratch.arena, &opts.cmd_line, "raddbg");
-          str8_list_pushf(scratch.arena, &opts.cmd_line, "--convert");
-          str8_list_pushf(scratch.arena, &opts.cmd_line, "--quiet");
+          OS_ProcessLaunchParams params = {0};
+          params.path = os_get_process_info()->binary_path;
+          params.inherit_env = 1;
+          params.consoleless = 1;
+          str8_list_pushf(scratch.arena, &params.cmd_line, "raddbg");
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--convert");
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--quiet");
           if(should_compress)
           {
-            str8_list_pushf(scratch.arena, &opts.cmd_line, "--compress");
+            str8_list_pushf(scratch.arena, &params.cmd_line, "--compress");
           }
-          //str8_list_pushf(scratch.arena, &opts.cmd_line, "--capture");
-          str8_list_pushf(scratch.arena, &opts.cmd_line, "--pdb:%S", og_path);
-          str8_list_pushf(scratch.arena, &opts.cmd_line, "--out:%S", rdi_path);
-          os_launch_process(&opts, &process);
+          // str8_list_pushf(scratch.arena, &params.cmd_line, "--capture");
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--pdb:%S", og_path);
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
+          process = os_process_launch(&params);
         }
         
         //- rjf: wait for process to complete
@@ -787,7 +787,7 @@ di_parse_thread__entry_point(void *p)
           U64 start_wait_t = os_now_microseconds();
           for(;;)
           {
-            B32 wait_done = os_process_wait(process, os_now_microseconds()+1000);
+            B32 wait_done = os_process_join(process, os_now_microseconds()+1000);
             if(wait_done)
             {
               rdi_file_is_up_to_date = 1;

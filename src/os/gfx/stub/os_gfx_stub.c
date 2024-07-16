@@ -2,7 +2,7 @@
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
 internal void
-os_graphical_init(void)
+os_gfx_init(void)
 {
 }
 
@@ -210,33 +210,6 @@ os_mouse_from_window(OS_Handle window)
 internal void
 os_set_cursor(OS_Cursor cursor)
 {
-}
-
-////////////////////////////////
-//~ rjf: @os_hooks System Properties (Implemented Per-OS)
-
-internal F32
-os_double_click_time(void)
-{
-  return 1.f;
-}
-
-internal F32
-os_caret_blink_time(void)
-{
-  return 1.f;
-}
-
-internal F32
-os_default_refresh_rate(void)
-{
-  return 60.f;
-}
-
-internal B32
-os_granular_sleep_enabled(void)
-{
-  return 1;
 }
 
 ////////////////////////////////

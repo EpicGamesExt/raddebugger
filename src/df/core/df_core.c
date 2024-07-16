@@ -3936,47 +3936,6 @@ df_frame_from_unwind_idxs(DF_Unwind *unwind, U64 base_unwind_idx, U64 inline_unw
 }
 
 ////////////////////////////////
-//~ rjf: Entity -> Log Entities
-
-internal DF_Entity *
-df_log_from_entity(DF_Entity *entity)
-{
-  Temp scratch = scratch_begin(0, 0);
-  String8 log_name = {0};
-  switch(entity->kind)
-  {
-    default:
-    {
-      log_name = push_str8f(scratch.arena, "id_%I64u", entity->id);
-    }break;
-    case DF_EntityKind_Root:
-    {
-      U32 session_pid = os_get_pid();
-      log_name = push_str8f(scratch.arena, "session_%i", session_pid);
-    }break;
-    case DF_EntityKind_Machine:
-    {
-      log_name = push_str8f(scratch.arena, "machine_%I64u", entity->id);
-    }break;
-    case DF_EntityKind_Process:
-    {
-      log_name = push_str8f(scratch.arena, "pid_%i", entity->ctrl_id);
-    }break;
-    case DF_EntityKind_Thread:
-    {
-      log_name = push_str8f(scratch.arena, "tid_%i", entity->ctrl_id);
-    }break;
-  }
-  String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
-  String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg/logs"));
-  String8 log_path = push_str8f(scratch.arena, "%S/log%s%S.txt", user_data_folder, log_name.size != 0 ? "_" : "", log_name);
-  DF_Entity *log = df_entity_from_path(log_path, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-  log->flags |= DF_EntityFlag_Output;
-  scratch_end(scratch);
-  return log;
-}
-
-////////////////////////////////
 //~ rjf: Target Controls
 
 //- rjf: control message dispatching
@@ -6805,7 +6764,7 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   }
   df_state->root_cmd_arena = arena_alloc();
   df_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
-  df_state->entities_arena = arena_alloc__sized(GB(64), KB(64));
+  df_state->entities_arena = arena_alloc(.reserve_size = GB(64), .commit_size = KB(64));
   df_state->entities_root = &df_g_nil_entity;
   df_state->entities_base = push_array(df_state->entities_arena, DF_Entity, 0);
   df_state->entities_count = 0;
@@ -6883,7 +6842,7 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
       project_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
     }
     {
-      String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
+      String8 user_program_data_path = os_get_process_info()->user_program_data_path;
       String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
       os_make_directory(user_data_folder);
       if(user_cfg_path.size == 0)
@@ -6921,11 +6880,9 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
   // rjf: set up initial browse path
   {
     Temp scratch = scratch_begin(0, 0);
-    String8List current_path_strs = {0};
-    os_string_list_from_system_path(scratch.arena, OS_SystemPath_Current, &current_path_strs);
-    df_state->current_path_arena = arena_alloc();
-    String8 current_path = str8_list_first(&current_path_strs);
+    String8 current_path = os_get_current_path(scratch.arena);
     String8 current_path_with_slash = push_str8f(scratch.arena, "%S/", current_path);
+    df_state->current_path_arena = arena_alloc();
     df_state->current_path = push_str8_copy(df_state->current_path_arena, current_path_with_slash);
     scratch_end(scratch);
   }
@@ -7519,9 +7476,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               entry = str8_skip_chop_whitespace(entry);
               if(path.size == 0)
               {
-                String8List current_path_strs = {0};
-                os_string_list_from_system_path(scratch.arena, OS_SystemPath_Current, &current_path_strs);
-                path = str8_list_first(&current_path_strs);
+                path = os_get_current_path(scratch.arena);
               }
               
               // rjf: build launch options

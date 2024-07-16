@@ -304,7 +304,7 @@ coff_symbol_array_from_data_16(Arena *arena, String8 data, U64 symbol_array_off,
 {
   COFF_Symbol32Array result;
   result.count = symbol_count;
-  result.v = push_array_no_zero(arena, COFF_Symbol32, result.count);
+  result.v = push_array_no_zero_aligned(arena, COFF_Symbol32, result.count, 8);
   
   COFF_Symbol16 *sym16_arr = (COFF_Symbol16 *)(data.str + symbol_array_off);
   for (U64 isymbol = 0; isymbol < symbol_count; isymbol += 1) {

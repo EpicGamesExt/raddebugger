@@ -4,8 +4,6 @@
 #ifndef CODEVIEW_H
 #define CODEVIEW_H
 
-#pragma pack(push, 1)
-
 // https://github.com/microsoft/microsoft-pdb/blob/master/include/cvinfo.h
 
 ////////////////////////////////
@@ -956,6 +954,8 @@ typedef enum CV_LanguageEnum
 #undef X
 }
 CV_LanguageEnum;
+
+#pragma pack(push, 1)
 
 ////////////////////////////////
 //~ rjf: CodeView Format "Sym" and "Leaf" Header Type

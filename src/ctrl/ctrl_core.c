@@ -913,7 +913,7 @@ ctrl_init(void)
   }
   ctrl_state->process_memory_cache.slots_count = 256;
   ctrl_state->process_memory_cache.slots = push_array(arena, CTRL_ProcessMemoryCacheSlot, ctrl_state->process_memory_cache.slots_count);
-  ctrl_state->process_memory_cache.stripes_count = os_logical_core_count();
+  ctrl_state->process_memory_cache.stripes_count = os_get_system_info()->logical_processor_count;
   ctrl_state->process_memory_cache.stripes = push_array(arena, CTRL_ProcessMemoryCacheStripe, ctrl_state->process_memory_cache.stripes_count);
   for(U64 idx = 0; idx < ctrl_state->process_memory_cache.stripes_count; idx += 1)
   {
@@ -922,7 +922,7 @@ ctrl_init(void)
   }
   ctrl_state->thread_reg_cache.slots_count = 1024;
   ctrl_state->thread_reg_cache.slots = push_array(arena, CTRL_ThreadRegCacheSlot, ctrl_state->thread_reg_cache.slots_count);
-  ctrl_state->thread_reg_cache.stripes_count = os_logical_core_count();
+  ctrl_state->thread_reg_cache.stripes_count = os_get_system_info()->logical_processor_count;
   ctrl_state->thread_reg_cache.stripes = push_array(arena, CTRL_ThreadRegCacheStripe, ctrl_state->thread_reg_cache.stripes_count);
   for(U64 idx = 0; idx < ctrl_state->thread_reg_cache.stripes_count; idx += 1)
   {
@@ -931,7 +931,7 @@ ctrl_init(void)
   }
   ctrl_state->module_image_info_cache.slots_count = 1024;
   ctrl_state->module_image_info_cache.slots = push_array(arena, CTRL_ModuleImageInfoCacheSlot, ctrl_state->module_image_info_cache.slots_count);
-  ctrl_state->module_image_info_cache.stripes_count = os_logical_core_count();
+  ctrl_state->module_image_info_cache.stripes_count = os_get_system_info()->logical_processor_count;
   ctrl_state->module_image_info_cache.stripes = push_array(arena, CTRL_ModuleImageInfoCacheStripe, ctrl_state->module_image_info_cache.stripes_count);
   for(U64 idx = 0; idx < ctrl_state->module_image_info_cache.stripes_count; idx += 1)
   {
@@ -949,7 +949,7 @@ ctrl_init(void)
   ctrl_state->c2u_ring_cv = os_condition_variable_alloc();
   {
     Temp scratch = scratch_begin(0, 0);
-    String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
+    String8 user_program_data_path = os_get_process_info()->user_program_data_path;
     String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
     os_make_directory(user_data_folder);
     ctrl_state->ctrl_thread_log_path = push_str8f(ctrl_state->arena, "%S/ctrl_thread.raddbg_log", user_data_folder);
@@ -971,12 +971,12 @@ ctrl_init(void)
   ctrl_state->u2ms_ring_mutex = os_mutex_alloc();
   ctrl_state->u2ms_ring_cv = os_condition_variable_alloc();
   ctrl_state->ctrl_thread_log = log_alloc();
-  ctrl_state->ctrl_thread = os_launch_thread(ctrl_thread__entry_point, 0, 0);
-  ctrl_state->ms_thread_count = Clamp(1, os_logical_core_count()-1, 4);
+  ctrl_state->ctrl_thread = os_thread_launch(ctrl_thread__entry_point, 0, 0);
+  ctrl_state->ms_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
   ctrl_state->ms_threads = push_array(arena, OS_Handle, ctrl_state->ms_thread_count);
   for(U64 idx = 0; idx < ctrl_state->ms_thread_count; idx += 1)
   {
-    ctrl_state->ms_threads[idx] = os_launch_thread(ctrl_mem_stream_thread__entry_point, (void *)idx, 0);
+    ctrl_state->ms_threads[idx] = os_thread_launch(ctrl_mem_stream_thread__entry_point, (void *)idx, 0);
   }
 }
 
@@ -3820,14 +3820,14 @@ internal void
 ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   //- rjf: launch
-  OS_LaunchOptions opts = {0};
+  OS_ProcessLaunchParams params = {0};
   {
-    opts.cmd_line    = msg->cmd_line_string_list;
-    opts.path        = msg->path;
-    opts.env         = msg->env_string_list;
-    opts.inherit_env = msg->env_inherit;
+    params.cmd_line    = msg->cmd_line_string_list;
+    params.path        = msg->path;
+    params.env         = msg->env_string_list;
+    params.inherit_env = msg->env_inherit;
   }
-  U32 id = dmn_ctrl_launch(ctrl_ctx, &opts);
+  U32 id = dmn_ctrl_launch(ctrl_ctx, &params);
   
   //- rjf: record (id -> entry points), so that we know custom entry points for this PID
   for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
@@ -5198,8 +5198,8 @@ ctrl_mem_stream_thread__entry_point(void *p)
     if(got_task && pre_read_mem_gen != preexisting_mem_gen)
     {
       range_size = dim_1u64(vaddr_range_clamped);
-      U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, os_page_size());
-      range_arena = arena_alloc__sized(range_size+ARENA_HEADER_SIZE, range_size+ARENA_HEADER_SIZE);
+      U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, os_get_system_info()->page_size);
+      range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
       if(range_arena == 0)
       {
         range_size = 0;

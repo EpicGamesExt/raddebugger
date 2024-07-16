@@ -12,7 +12,7 @@ fs_init(void)
   fs_shared->arena = arena;
   fs_shared->change_gen = 1;
   fs_shared->slots_count = 1024;
-  fs_shared->stripes_count = os_logical_core_count();
+  fs_shared->stripes_count = os_get_system_info()->logical_processor_count;
   fs_shared->slots = push_array(arena, FS_Slot, fs_shared->slots_count);
   fs_shared->stripes = push_array(arena, FS_Stripe, fs_shared->stripes_count);
   for(U64 idx = 0; idx < fs_shared->stripes_count; idx += 1)
@@ -25,13 +25,13 @@ fs_init(void)
   fs_shared->u2s_ring_base = push_array_no_zero(arena, U8, fs_shared->u2s_ring_size);
   fs_shared->u2s_ring_cv = os_condition_variable_alloc();
   fs_shared->u2s_ring_mutex = os_mutex_alloc();
-  fs_shared->streamer_count = Clamp(1, os_logical_core_count()-1, 4);
+  fs_shared->streamer_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
   fs_shared->streamers = push_array(arena, OS_Handle, 1);
   for(U64 idx = 0; idx < fs_shared->streamer_count; idx += 1)
   {
-    fs_shared->streamers[idx] = os_launch_thread(fs_streamer_thread__entry_point, (void *)idx, 0);
+    fs_shared->streamers[idx] = os_thread_launch(fs_streamer_thread__entry_point, (void *)idx, 0);
   }
-  fs_shared->detector_thread = os_launch_thread(fs_detector_thread__entry_point, 0, 0);
+  fs_shared->detector_thread = os_thread_launch(fs_detector_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////
@@ -214,7 +214,7 @@ fs_streamer_thread__entry_point(void *p)
     data_arena_size += KB(4)-1;
     data_arena_size -= data_arena_size%KB(4);
     ProfBegin("allocate");
-    Arena *data_arena = arena_alloc__sized(data_arena_size, data_arena_size);
+    Arena *data_arena = arena_alloc(.reserve_size = data_arena_size, .commit_size = data_arena_size);
     ProfEnd();
     ProfBegin("read");
     String8 data = os_string_from_file_range(data_arena, file, r1u64(0, pre_props.size));

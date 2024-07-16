@@ -4,10 +4,6 @@
 #ifndef OS_INC_H
 #define OS_INC_H
 
-#if !defined(OS_FEATURE_SOCKET)
-# define OS_FEATURE_SOCKET 0
-#endif
-
 #if !defined(OS_FEATURE_GRAPHICAL)
 # define OS_FEATURE_GRAPHICAL 0
 #endif
@@ -16,32 +12,29 @@
 # define OS_GFX_STUB 0
 #endif
 
-#include "core/os_core.h"
-
-#if OS_FEATURE_SOCKET
-#include "socket/os_socket.h"
-#endif
-
+#include "os/core/os_core.h"
 #if OS_FEATURE_GRAPHICAL
-#include "gfx/os_gfx.h"
+# include "os/gfx/os_gfx.h"
 #endif
 
 #if OS_WINDOWS
-# include "core/win32/os_core_win32.h"
-# if OS_FEATURE_SOCKET
-#  include "socket/win32/os_socket_win32.h"
-# endif
-# if OS_FEATURE_GRAPHICAL && !OS_GFX_STUB
-#  include "gfx/win32/os_gfx_win32.h"
-# endif
+# include "os/core/win32/os_core_win32.h"
 #elif OS_LINUX
-# include "core/linux/os_core_linux.h"
+# include "os/core/linux/os_core_linux.h"
 #else
-# error no OS layer setup
+# error OS core layer not implemented for this operating system.
 #endif
 
-#if OS_GFX_STUB
-#include "gfx/stub/os_gfx_stub.h"
+#if OS_FEATURE_GRAPHICAL
+# if OS_GFX_STUB
+#  include "os/gfx/stub/os_gfx_stub.h"
+# elif OS_WINDOWS
+#  include "os/gfx/win32/os_gfx_win32.h"
+# elif OS_LINUX
+#  include "os/gfx/linux/os_gfx_linux.h"
+# else
+#  error OS graphical layer not implemented for this operating system.
+# endif
 #endif
 
-#endif //OS_SWITCH_H
+#endif // OS_INC_H

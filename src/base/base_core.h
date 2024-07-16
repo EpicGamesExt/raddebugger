@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef BASE_TYPES_H
-#define BASE_TYPES_H
+#ifndef BASE_CORE_H
+#define BASE_CORE_H
 
 ////////////////////////////////
 //~ rjf: Foreign Includes
@@ -90,6 +90,20 @@
 #define ClampTop(A,X) Min(A,X)
 #define ClampBot(X,B) Max(X,B)
 #define Clamp(A,X,B) (((X)<(A))?(A):((X)>(B))?(B):(X))
+
+////////////////////////////////
+//~ rjf: Type -> Alignment
+
+#if COMPILER_MSVC
+# define AlignOf(T) __alignof(T)
+#elif COMPILER_CLANG
+# define AlignOf(T) __alignof(T)
+#elif COMPILER_GCC
+# define AlignOf(T) __alignof__(T)
+#else
+#else
+# error AlignOf not defined for this compiler.
+#endif
 
 ////////////////////////////////
 //~ rjf: Member Offsets

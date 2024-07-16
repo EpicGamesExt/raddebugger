@@ -1358,7 +1358,7 @@ str8_from_16(Arena *arena, String16 in){
     size += utf8_encode(str + size, consume.codepoint);
   }
   str[size] = 0;
-  arena_put_back(arena, (cap - size));
+  arena_pop(arena, (cap - size));
   return(str8(str, size));
 }
 
@@ -1375,7 +1375,7 @@ str16_from_8(Arena *arena, String8 in){
     size += utf16_encode(str + size, consume.codepoint);
   }
   str[size] = 0;
-  arena_put_back(arena, (cap - size)*2);
+  arena_pop(arena, (cap - size)*2);
   return(str16(str, size));
 }
 
@@ -1390,7 +1390,7 @@ str8_from_32(Arena *arena, String32 in){
     size += utf8_encode(str + size, *ptr);
   }
   str[size] = 0;
-  arena_put_back(arena, (cap - size));
+  arena_pop(arena, (cap - size));
   return(str8(str, size));
 }
 
@@ -1408,7 +1408,7 @@ str32_from_8(Arena *arena, String8 in){
     size += 1;
   }
   str[size] = 0;
-  arena_put_back(arena, (cap - size)*4);
+  arena_pop(arena, (cap - size)*4);
   return(str32(str, size));
 }
 

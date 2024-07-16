@@ -3706,7 +3706,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
           UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         {
           DateTime time = date_time_from_dense_time(file->props.modified);
-          DateTime time_local = os_local_time_from_universal_time(&time);
+          DateTime time_local = os_local_time_from_universal(&time);
           String8 string = push_date_time_string(scratch.arena, &time_local);
           ui_label(string);
         }

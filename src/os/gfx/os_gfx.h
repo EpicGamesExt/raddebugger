@@ -5,6 +5,17 @@
 #define OS_GRAPHICAL_H
 
 ////////////////////////////////
+//~ rjf: Graphics System Info
+
+typedef struct OS_GfxInfo OS_GfxInfo;
+struct OS_GfxInfo
+{
+  F32 double_click_time;
+  F32 caret_blink_time;
+  F32 default_refresh_rate;
+};
+
+////////////////////////////////
 //~ rjf: Window Types
 
 typedef U32 OS_WindowFlags;
@@ -107,13 +118,18 @@ internal void os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
-internal void           os_graphical_init(void);
+internal void os_gfx_init(void);
+
+////////////////////////////////
+//~ rjf: @os_hooks Graphics System Info (Implemented Per-OS)
+
+internal OS_GfxInfo *os_get_gfx_info(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Clipboards (Implemented Per-OS)
 
-internal void           os_set_clipboard_text(String8 string);
-internal String8        os_get_clipboard_text(Arena *arena);
+internal void    os_set_clipboard_text(String8 string);
+internal String8 os_get_clipboard_text(Arena *arena);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
@@ -161,13 +177,6 @@ internal Vec2F32        os_mouse_from_window(OS_Handle window);
 //~ rjf: @os_hooks Cursors (Implemented Per-OS)
 
 internal void           os_set_cursor(OS_Cursor cursor);
-
-////////////////////////////////
-//~ rjf: @os_hooks System Properties (Implemented Per-OS)
-
-internal F32            os_double_click_time(void);
-internal F32            os_caret_blink_time(void);
-internal F32            os_default_refresh_rate(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Native User-Facing Graphical Messages (Implemented Per-OS)

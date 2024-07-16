@@ -24,7 +24,7 @@ tex_init(void)
   tex_shared = push_array(arena, TEX_Shared, 1);
   tex_shared->arena = arena;
   tex_shared->slots_count = 1024;
-  tex_shared->stripes_count = Min(tex_shared->slots_count, os_logical_core_count());
+  tex_shared->stripes_count = Min(tex_shared->slots_count, os_get_system_info()->logical_processor_count);
   tex_shared->slots = push_array(arena, TEX_Slot, tex_shared->slots_count);
   tex_shared->stripes = push_array(arena, TEX_Stripe, tex_shared->stripes_count);
   tex_shared->stripes_free_nodes = push_array(arena, TEX_Node *, tex_shared->stripes_count);
@@ -38,13 +38,13 @@ tex_init(void)
   tex_shared->u2x_ring_base = push_array_no_zero(arena, U8, tex_shared->u2x_ring_size);
   tex_shared->u2x_ring_cv = os_condition_variable_alloc();
   tex_shared->u2x_ring_mutex = os_mutex_alloc();
-  tex_shared->xfer_thread_count = Clamp(1, os_logical_core_count()-1, 4);
+  tex_shared->xfer_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
   tex_shared->xfer_threads = push_array(arena, OS_Handle, tex_shared->xfer_thread_count);
   for(U64 idx = 0; idx < tex_shared->xfer_thread_count; idx += 1)
   {
-    tex_shared->xfer_threads[idx] = os_launch_thread(tex_xfer_thread__entry_point, (void *)idx, 0);
+    tex_shared->xfer_threads[idx] = os_thread_launch(tex_xfer_thread__entry_point, (void *)idx, 0);
   }
-  tex_shared->evictor_thread = os_launch_thread(tex_evictor_thread__entry_point, 0, 0);
+  tex_shared->evictor_thread = os_thread_launch(tex_evictor_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////

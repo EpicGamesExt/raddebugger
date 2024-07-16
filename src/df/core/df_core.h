@@ -1684,11 +1684,6 @@ internal DF_Unwind df_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, 
 internal DF_UnwindFrame *df_frame_from_unwind_idxs(DF_Unwind *unwind, U64 base_unwind_idx, U64 inline_unwind_idx);
 
 ////////////////////////////////
-//~ rjf: Entity -> Log Entities
-
-internal DF_Entity *df_log_from_entity(DF_Entity *entity);
-
-////////////////////////////////
 //~ rjf: Target Controls
 
 //- rjf: control message dispatching

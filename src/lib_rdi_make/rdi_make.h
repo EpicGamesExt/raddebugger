@@ -207,6 +207,19 @@ struct RDIM_Temp
 #define RDIM_ProfScope(...) for(int _i_ = ((RDIM_ProfBegin(__VA_ARGS__)), 0); !_i_; _i_ += 1, (RDIM_ProfEnd()))
 
 ////////////////////////////////
+//~ rjf: Alignment Macros
+
+#if _MSC_VER
+# define RDIM_AlignOf(T) __alignof(T)
+#elif __clang__
+# define RDIM_AlignOf(T) __alignof(T)
+#elif __GNUC__
+# define RDIM_AlignOf(T) __alignof__(T)
+#else
+# error [RDIM Build Error] RDIM_AlignOf(T) is not defined for this compiler.
+#endif
+
+////////////////////////////////
 //~ rjf: Linked List Helper Macros
 
 #define RDIM_CheckNil(nil,p) ((p) == 0 || (p) == nil)
@@ -1287,10 +1300,10 @@ RDI_PROC void *rdim_memcpy_fallback(void *dst, void *src, RDI_U64 size);
 RDI_PROC RDIM_Arena *rdim_arena_alloc_fallback(void);
 RDI_PROC void rdim_arena_release_fallback(RDIM_Arena *arena);
 RDI_PROC RDI_U64 rdim_arena_pos_fallback(RDIM_Arena *arena);
-RDI_PROC void *rdim_arena_push_fallback(RDIM_Arena *arena, RDI_U64 size);
+RDI_PROC void *rdim_arena_push_fallback(RDIM_Arena *arena, RDI_U64 align, RDI_U64 size);
 RDI_PROC void rdim_arena_pop_to_fallback(RDIM_Arena *arena, RDI_U64 pos);
 #endif
-#define rdim_push_array_no_zero(a,T,c) (T*)rdim_arena_push((a), sizeof(T)*(c))
+#define rdim_push_array_no_zero(a,T,c) (T*)rdim_arena_push((a), sizeof(T)*(c), RDIM_AlignOf(T))
 #define rdim_push_array(a,T,c) (T*)rdim_memzero(rdim_push_array_no_zero(a,T,c), sizeof(T)*(c))
 
 //- rjf: thread-local scratch arenas

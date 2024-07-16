@@ -4,11 +4,11 @@ cd /D "%~dp0"
 
 :: --- Usage Notes (2024/1/10) ------------------------------------------------
 ::
-:: This is a central build script for the RAD Debugger project. It takes a list
-:: of simple alphanumeric-only arguments which control (a) what is built, (b)
-:: which compiler & linker are used, and (c) extra high-level build options. By
-:: default, if no options are passed, then the main "raddbg" graphical debugger
-:: is built.
+:: This is a central build script for the RAD Debugger project, for use in
+:: Windows development environments. It takes a list of simple alphanumeric-
+:: only arguments which control (a) what is built, (b) which compiler & linker
+:: are used, and (c) extra high-level build options. By default, if no options
+:: are passed, then the main "raddbg" graphical debugger is built.
 ::
 :: Below is a non-exhaustive list of possible ways to use the script:
 :: `build raddbg`

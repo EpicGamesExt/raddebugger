@@ -7,38 +7,41 @@
 ////////////////////////////////
 //~ rjf: Constants
 
-#define ARENA_HEADER_SIZE 128
-
-#ifndef ARENA_RESERVE_SIZE
-# define ARENA_RESERVE_SIZE MB(64)
-#endif
-#ifndef ARENA_COMMIT_SIZE
-# define ARENA_COMMIT_SIZE KB(64)
-#endif
-
-#ifndef ARENA_RESERVE_SIZE_LARGE_PAGES
-# define ARENA_RESERVE_SIZE_LARGE_PAGES MB(8)
-#endif
-#ifndef ARENA_COMMIT_SIZE_LARGE_PAGES
-# define ARENA_COMMIT_SIZE_LARGE_PAGES MB(2)
-#endif
+#define ARENA_HEADER_SIZE 64
 
 ////////////////////////////////
-//~ rjf: Arena Types
+//~ rjf: Types
+
+typedef U32 ArenaFlags;
+enum
+{
+  ArenaFlag_NoChain    = (1<<0),
+  ArenaFlag_LargePages = (1<<1),
+};
+
+typedef struct ArenaParams ArenaParams;
+struct ArenaParams
+{
+  ArenaFlags flags;
+  U64 reserve_size;
+  U64 commit_size;
+  void *optional_backing_buffer;
+};
 
 typedef struct Arena Arena;
 struct Arena
 {
-  struct Arena *prev;
-  struct Arena *current;
+  Arena *prev;    // previous arena in chain
+  Arena *current; // current arena in chain
+  ArenaFlags flags;
+  U32 cmt_size;
+  U64 res_size;
   U64 base_pos;
   U64 pos;
   U64 cmt;
   U64 res;
-  U64 align;
-  B8 grow;
-  B8 large_pages;
 };
+StaticAssert(sizeof(Arena) <= ARENA_HEADER_SIZE, arena_header_size_check);
 
 typedef struct Temp Temp;
 struct Temp
@@ -48,40 +51,30 @@ struct Temp
 };
 
 ////////////////////////////////
-// Implementation
+//~ rjf: Arena Functions
 
-internal Arena* arena_alloc__sized(U64 init_res, U64 init_cmt);
+//- rjf: arena creation/destruction
+internal Arena *arena_alloc_(ArenaParams *params);
+#define arena_alloc(...) arena_alloc_(&(ArenaParams){.reserve_size = MB(64), .commit_size = KB(64), __VA_ARGS__})
+internal void arena_release(Arena *arena);
 
-internal Arena* arena_alloc(void);
-internal void   arena_release(Arena *arena);
+//- rjf: arena push/pop/pos core functions
+internal void *arena_push(Arena *arena, U64 size, U64 align);
+internal U64   arena_pos(Arena *arena);
+internal void  arena_pop_to(Arena *arena, U64 pos);
 
-internal void*  arena_push__impl(Arena *arena, U64 size);
-internal U64    arena_pos(Arena *arena);
-internal void   arena_pop_to(Arena *arena, U64 pos);
+//- rjf: arena push/pop helpers
+internal void arena_clear(Arena *arena);
+internal void arena_pop(Arena *arena, U64 amt);
 
-internal void   arena_absorb(Arena *arena, Arena *sub);
+//- rjf: temporary arena scopes
+internal Temp temp_begin(Arena *arena);
+internal void temp_end(Temp temp);
 
-////////////////////////////////
-// Wrappers
-
-internal void* arena_push(Arena *arena, U64 size);
-internal void* arena_push_contiguous(Arena *arena, U64 size);
-internal void  arena_clear(Arena *arena);
-internal void  arena_push_align(Arena *arena, U64 align);
-internal void  arena_put_back(Arena *arena, U64 amt);
-
-internal Temp  temp_begin(Arena *arena);
-internal void  temp_end(Temp temp);
-
-////////////////////////////////
-//~ NOTE(allen): "Mini-Arena" Helper
-
-internal B32 ensure_commit(void **cmt, void *pos, U64 cmt_block_size);
-
-////////////////////////////////
-//~ NOTE(allen): Main API Macros
-
-#define push_array_no_zero(a,T,c) (T*)arena_push((a), sizeof(T)*(c))
-#define push_array(a,T,c) (T*)MemoryZero(push_array_no_zero(a,T,c), sizeof(T)*(c))
+//- rjf: push helper macros
+#define push_array_no_zero_aligned(a, T, c, align) (T *)arena_push((a), sizeof(T)*(c), (align))
+#define push_array_aligned(a, T, c, align) (T *)MemoryZero(push_array_no_zero_aligned(a, T, c, align), sizeof(T)*(c))
+#define push_array_no_zero(a, T, c) push_array_no_zero_aligned(a, T, c, Max(8, AlignOf(T)))
+#define push_array(a, T, c) push_array_aligned(a, T, c, Max(8, AlignOf(T)))
 
 #endif // BASE_ARENA_H

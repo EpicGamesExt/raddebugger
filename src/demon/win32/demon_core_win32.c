@@ -1083,7 +1083,7 @@ dmn_init(void)
   dmn_w32_shared->arena = arena;
   dmn_w32_shared->access_mutex = os_mutex_alloc();
   dmn_w32_shared->detach_arena = arena_alloc();
-  dmn_w32_shared->entities_arena = arena_alloc__sized(GB(8), KB(64));
+  dmn_w32_shared->entities_arena = arena_alloc(.reserve_size = GB(8), .commit_size = KB(64));
   dmn_w32_shared->entities_base = dmn_w32_entity_alloc(&dmn_w32_entity_nil, DMN_W32_EntityKind_Root, 0);
   dmn_w32_shared->entities_id_hash_slots_count = 4096;
   dmn_w32_shared->entities_id_hash_slots = push_array(arena, DMN_W32_EntityIDHashSlot, dmn_w32_shared->entities_id_hash_slots_count);
@@ -1147,7 +1147,7 @@ dmn_ctrl_exclusive_access_end(void)
 }
 
 internal U32
-dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
+dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
 {
   Temp scratch = scratch_begin(0, 0);
   U32 result = 0;
@@ -1155,12 +1155,12 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
   {
     //- rjf: produce exe / arguments string
     String8 cmd = {0};
-    if(options->cmd_line.first != 0)
+    if(params->cmd_line.first != 0)
     {
       String8List args = {0};
-      String8 exe_path = options->cmd_line.first->string;
+      String8 exe_path = params->cmd_line.first->string;
       str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
-      for(String8Node *n = options->cmd_line.first->next; n != 0; n = n->next)
+      for(String8Node *n = params->cmd_line.first->next; n != 0; n = n->next)
       {
         str8_list_push(scratch.arena, &args, n->string);
       }
@@ -1172,12 +1172,12 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
     //- rjf: produce environment strings
     String8 env = {0};
     {
-      String8List all_opts = options->env;
-      if(options->inherit_env != 0)
+      String8List all_opts = params->env;
+      if(params->inherit_env != 0)
       {
         MemoryZeroStruct(&all_opts);
         str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
-        for(String8Node *n = options->env.first; n != 0; n = n->next)
+        for(String8Node *n = params->env.first; n != 0; n = n->next)
         {
           str8_list_push(scratch.arena, &all_opts, n->string);
         }
@@ -1194,7 +1194,7 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
     
     //- rjf: produce utf-16 strings
     String16 cmd16 = str16_from_8(scratch.arena, cmd);
-    String16 dir16 = str16_from_8(scratch.arena, options->path);
+    String16 dir16 = str16_from_8(scratch.arena, params->path);
     String16 env16 = str16_from_8(scratch.arena, env);
     
     //- rjf: launch

@@ -255,7 +255,7 @@ entry_point(CmdLine *cmd_line)
           }
           
           // rjf: get current path
-          String8 current_path = os_string_from_system_path(scratch.arena, OS_SystemPath_Current);
+          String8 current_path = os_get_current_path(scratch.arena);
           
           // rjf: equip exe
           if(args.first->string.size != 0)
@@ -295,7 +295,7 @@ entry_point(CmdLine *cmd_line)
       //- rjf: set up shared resources for ipc to this instance; launch IPC signaler thread
       {
         Temp scratch = scratch_begin(0, 0);
-        U32 instance_pid = os_get_pid();
+        U32 instance_pid = os_get_process_info()->pid;
         String8 ipc_shared_memory_name = push_str8f(scratch.arena, "_raddbg_ipc_shared_memory_%i_", instance_pid);
         String8 ipc_signal_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_signal_semaphore_%i_", instance_pid);
         String8 ipc_lock_semaphore_name = push_str8f(scratch.arena, "_raddbg_ipc_lock_semaphore_%i_", instance_pid);
@@ -307,7 +307,7 @@ entry_point(CmdLine *cmd_line)
         ipc_s2m_ring_cv = os_condition_variable_alloc();
         IPCInfo *ipc_info = (IPCInfo *)ipc_shared_memory_base;
         MemoryZeroStruct(ipc_info);
-        os_launch_thread(ipc_signaler_thread__entry_point, 0, 0);
+        os_thread_launch(ipc_signaler_thread__entry_point, 0, 0);
         scratch_end(scratch);
       }
       
@@ -446,7 +446,7 @@ entry_point(CmdLine *cmd_line)
       //- rjf: no explicit PID? -> find PID to send message to, by looking for other raddbg instances
       if(dst_pid == 0)
       {
-        U32 this_pid = os_get_pid();
+        U32 this_pid = os_get_process_info()->pid;
         DMN_ProcessIter it = {0};
         dmn_process_iter_begin(&it);
         for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &it, &info);)

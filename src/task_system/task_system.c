@@ -27,7 +27,7 @@ ts_init(void)
   ts_shared = push_array(arena, TS_Shared, 1);
   ts_shared->arena = arena;
   ts_shared->artifact_slots_count = 1024;
-  ts_shared->artifact_stripes_count = Min(ts_shared->artifact_slots_count, os_logical_core_count());
+  ts_shared->artifact_stripes_count = Min(ts_shared->artifact_slots_count, os_get_system_info()->logical_processor_count);
   ts_shared->artifact_slots = push_array(arena, TS_TaskArtifactSlot, ts_shared->artifact_slots_count);
   ts_shared->artifact_stripes = push_array(arena, TS_TaskArtifactStripe, ts_shared->artifact_stripes_count);
   for(U64 idx = 0; idx < ts_shared->artifact_stripes_count; idx += 1)
@@ -40,12 +40,12 @@ ts_init(void)
   ts_shared->u2t_ring_base = push_array_no_zero(arena, U8, ts_shared->u2t_ring_size);
   ts_shared->u2t_ring_mutex = os_mutex_alloc();
   ts_shared->u2t_ring_cv = os_condition_variable_alloc();
-  ts_shared->task_threads_count = os_logical_core_count()-1;
+  ts_shared->task_threads_count = os_get_system_info()->logical_processor_count-1;
   ts_shared->task_threads = push_array(arena, TS_TaskThread, ts_shared->task_threads_count);
   for(U64 idx = 0; idx < ts_shared->task_threads_count; idx += 1)
   {
     ts_shared->task_threads[idx].arena = arena_alloc();
-    ts_shared->task_threads[idx].thread = os_launch_thread(ts_task_thread__entry_point, (void *)idx, 0);
+    ts_shared->task_threads[idx].thread = os_thread_launch(ts_task_thread__entry_point, (void *)idx, 0);
   }
 }
 

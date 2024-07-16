@@ -1,3 +1,6 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 internal void
 main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **arguments, U64 arguments_count)
 {
@@ -7,8 +10,6 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   tmSetMaxThreadCount(256);
   tmInitialize(sizeof(tm_data), (char *)tm_data);
 #endif
-  TCTX tctx;
-  tctx_init_and_equip(&tctx);
   ThreadNameF("[main thread]");
   Temp scratch = scratch_begin(0, 0);
   String8List command_line_argument_strings = os_string_list_from_argcv(scratch.arena, (int)arguments_count, arguments);
@@ -18,9 +19,6 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   {
     ProfBeginCapture(arguments[0]);
   }
-#if defined(OS_CORE_H) && !defined(OS_INIT_MANUAL)
-  os_init();
-#endif
 #if defined(TASK_SYSTEM_H) && !defined(TS_INIT_MANUAL)
   ts_init();
 #endif
@@ -52,7 +50,7 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   ctrl_init();
 #endif
 #if defined(OS_GRAPHICAL_H) && !defined(OS_GFX_INIT_MANUAL)
-  os_graphical_init();
+  os_gfx_init();
 #endif
 #if defined(FONT_PROVIDER_H) && !defined(FP_INIT_MANUAL)
   fp_init();
@@ -82,7 +80,6 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
     ProfEndCapture();
   }
   scratch_end(scratch);
-  tctx_release();
 }
 
 internal void

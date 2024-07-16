@@ -36,4 +36,4 @@
 # error no OS layer setup
 #endif
 
-#endif //OS_SWITCH_H
+#endif // OS_INC_H

@@ -103,7 +103,7 @@ dasm_init(void)
   dasm_shared = push_array(arena, DASM_Shared, 1);
   dasm_shared->arena = arena;
   dasm_shared->slots_count = 1024;
-  dasm_shared->stripes_count = Min(dasm_shared->slots_count, os_logical_core_count());
+  dasm_shared->stripes_count = Min(dasm_shared->slots_count, os_get_system_info()->logical_processor_count);
   dasm_shared->slots = push_array(arena, DASM_Slot, dasm_shared->slots_count);
   dasm_shared->stripes = push_array(arena, DASM_Stripe, dasm_shared->stripes_count);
   for(U64 idx = 0; idx < dasm_shared->stripes_count; idx += 1)
@@ -120,9 +120,9 @@ dasm_init(void)
   dasm_shared->parse_threads = push_array(arena, OS_Handle, dasm_shared->parse_thread_count);
   for(U64 idx = 0; idx < dasm_shared->parse_thread_count; idx += 1)
   {
-    dasm_shared->parse_threads[idx] = os_launch_thread(dasm_parse_thread__entry_point, (void *)idx, 0);
+    dasm_shared->parse_threads[idx] = os_thread_launch(dasm_parse_thread__entry_point, (void *)idx, 0);
   }
-  dasm_shared->evictor_detector_thread = os_launch_thread(dasm_evictor_detector_thread__entry_point, 0, 0);
+  dasm_shared->evictor_detector_thread = os_thread_launch(dasm_evictor_detector_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////

@@ -31,7 +31,7 @@ hs_init(void)
   hs_shared = push_array(arena, HS_Shared, 1);
   hs_shared->arena = arena;
   hs_shared->slots_count = 4096;
-  hs_shared->stripes_count = Min(hs_shared->slots_count, os_logical_core_count());
+  hs_shared->stripes_count = Min(hs_shared->slots_count, os_get_system_info()->logical_processor_count);
   hs_shared->slots = push_array(arena, HS_Slot, hs_shared->slots_count);
   hs_shared->stripes = push_array(arena, HS_Stripe, hs_shared->stripes_count);
   hs_shared->stripes_free_nodes = push_array(arena, HS_Node *, hs_shared->stripes_count);
@@ -43,7 +43,7 @@ hs_init(void)
     stripe->cv = os_condition_variable_alloc();
   }
   hs_shared->key_slots_count = 4096;
-  hs_shared->key_stripes_count = Min(hs_shared->key_slots_count, os_logical_core_count());
+  hs_shared->key_stripes_count = Min(hs_shared->key_slots_count, os_get_system_info()->logical_processor_count);
   hs_shared->key_slots = push_array(arena, HS_KeySlot, hs_shared->key_slots_count);
   hs_shared->key_stripes = push_array(arena, HS_Stripe, hs_shared->key_stripes_count);
   for(U64 idx = 0; idx < hs_shared->key_stripes_count; idx += 1)
@@ -53,7 +53,7 @@ hs_init(void)
     stripe->rw_mutex = os_rw_mutex_alloc();
     stripe->cv = os_condition_variable_alloc();
   }
-  hs_shared->evictor_thread = os_launch_thread(hs_evictor_thread__entry_point, 0, 0);
+  hs_shared->evictor_thread = os_thread_launch(hs_evictor_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////

@@ -2230,7 +2230,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
       }
     }
     U64 scratch_overkill = sizeof(procedure_frameprocs[0])*(procedure_frameprocs_cap-procedure_frameprocs_count);
-    arena_put_back(scratch.arena, scratch_overkill);
+    arena_pop(scratch.arena, scratch_overkill);
   }
   
   //////////////////////////

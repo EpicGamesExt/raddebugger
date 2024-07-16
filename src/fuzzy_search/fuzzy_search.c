@@ -108,7 +108,7 @@ fzy_init(void)
   fzy_shared = push_array(arena, FZY_Shared, 1);
   fzy_shared->arena = arena;
   fzy_shared->slots_count = 256;
-  fzy_shared->stripes_count = os_logical_core_count();
+  fzy_shared->stripes_count = os_get_system_info()->logical_processor_count;
   fzy_shared->slots = push_array(arena, FZY_Slot, fzy_shared->slots_count);
   fzy_shared->stripes = push_array(arena, FZY_Stripe, fzy_shared->stripes_count);
   for(U64 idx = 0; idx < fzy_shared->stripes_count; idx += 1)
@@ -117,7 +117,7 @@ fzy_init(void)
     fzy_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
     fzy_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
-  fzy_shared->thread_count = Min(os_logical_core_count(), 2);
+  fzy_shared->thread_count = Min(os_get_system_info()->logical_processor_count, 2);
   fzy_shared->threads = push_array(arena, FZY_Thread, fzy_shared->thread_count);
   for(U64 idx = 0; idx < fzy_shared->thread_count; idx += 1)
   {
@@ -125,7 +125,7 @@ fzy_init(void)
     fzy_shared->threads[idx].u2f_ring_cv = os_condition_variable_alloc();
     fzy_shared->threads[idx].u2f_ring_size = KB(64);
     fzy_shared->threads[idx].u2f_ring_base = push_array_no_zero(arena, U8, fzy_shared->threads[idx].u2f_ring_size);
-    fzy_shared->threads[idx].thread = os_launch_thread(fzy_search_thread__entry_point, (void *)idx, 0);
+    fzy_shared->threads[idx].thread = os_thread_launch(fzy_search_thread__entry_point, (void *)idx, 0);
   }
 }
 

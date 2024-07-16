@@ -205,7 +205,7 @@ r_init(CmdLine *cmdln)
     char buffer[256] = {0};
     raddbg_snprintf(buffer, sizeof(buffer), "D3D11 device creation failure (%lx). The process is terminating.", error);
     os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-    os_exit_process(1);
+    os_abort(1);
   }
   ProfEnd();
   
@@ -514,8 +514,8 @@ r_window_equip(OS_Handle handle)
     //- rjf: map os window handle -> hwnd
     HWND hwnd = {0};
     {
-      W32_Window *w32_layer_window = w32_window_from_os_window(handle);
-      hwnd = w32_hwnd_from_window(w32_layer_window);
+      OS_W32_Window *w32_layer_window = os_w32_window_from_handle(handle);
+      hwnd = os_w32_hwnd_from_window(w32_layer_window);
     }
     
     //- rjf: create swapchain
@@ -540,7 +540,7 @@ r_window_equip(OS_Handle handle)
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      os_exit_process(1);
+      os_abort(1);
     }
     
     r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -1034,7 +1034,7 @@ r_window_end_frame(OS_Handle window, R_Handle window_equip)
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
       os_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      os_exit_process(1);
+      os_abort(1);
     }
     d_ctx->lpVtbl->ClearState(d_ctx);
   }

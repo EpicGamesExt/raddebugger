@@ -135,7 +135,7 @@ d_begin_frame(void)
 {
   if(d_thread_ctx == 0)
   {
-    Arena *arena = arena_alloc__sized(GB(64), MB(8));
+    Arena *arena = arena_alloc(.reserve_size = GB(64), .commit_size = MB(8));
     d_thread_ctx = push_array(arena, D_ThreadCtx, 1);
     d_thread_ctx->arena = arena;
     d_thread_ctx->arena_frame_start_pos = arena_pos(arena);

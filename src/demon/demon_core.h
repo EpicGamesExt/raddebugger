@@ -192,7 +192,7 @@ internal DMN_CtrlCtx *dmn_ctrl_begin(void);
 internal void dmn_ctrl_exclusive_access_begin(void);
 internal void dmn_ctrl_exclusive_access_end(void);
 #define DMN_CtrlExclusiveAccessScope DeferLoop(dmn_ctrl_exclusive_access_begin(), dmn_ctrl_exclusive_access_end())
-internal U32 dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options);
+internal U32 dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params);
 internal B32 dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid);
 internal B32 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code);
 internal B32 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process);

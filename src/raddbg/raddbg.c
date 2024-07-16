@@ -17,7 +17,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   if(main_thread_log == 0)
   {
     main_thread_log = log_alloc();
-    String8 user_program_data_path = os_string_from_system_path(scratch.arena, OS_SystemPath_UserProgramData);
+    String8 user_program_data_path = os_get_process_info()->user_program_data_path;
     String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
     main_thread_log_path = push_str8f(df_state->arena, "%S/ui_thread.raddbg_log", user_data_folder);
     os_make_directory(user_data_folder);
@@ -38,7 +38,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //- rjf: pick target hz
   //
   // TODO(rjf): maximize target, given all windows and their monitors
-  F32 target_hz = os_default_refresh_rate();
+  F32 target_hz = os_get_gfx_info()->default_refresh_rate;
   if(frame_time_us_history_idx > 32)
   {
     // rjf: calculate average frame time out of the last N

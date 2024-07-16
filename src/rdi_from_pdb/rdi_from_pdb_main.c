@@ -81,7 +81,7 @@ entry_point(CmdLine *cmdline)
         fprintf(stderr, "error(input): %.*s\n", str8_varg(n->string));
       }
     }
-    os_exit_process(0);
+    os_abort(0);
   }
   
   //- rjf: convert
