@@ -63,6 +63,7 @@ typedef enum OS_LNX_EntityKind
   OS_LNX_EntityKind_Thread,
   OS_LNX_EntityKind_Mutex,
   OS_LNX_EntityKind_RWMutex,
+  OS_LNX_EntityKind_ConditionVariable,
 }
 OS_LNX_EntityKind;
 
@@ -81,6 +82,11 @@ struct OS_LNX_Entity
     } thread;
     pthread_mutex_t mutex_handle;
     pthread_rwlock_t rwmutex_handle;
+    struct
+    {
+      pthread_cond_t cond_handle;
+      pthread_mutex_t rwlock_mutex_handle;
+    } cv;
   };
 };
 
