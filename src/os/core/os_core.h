@@ -14,7 +14,6 @@ struct OS_SystemInfo
   U64 page_size;
   U64 large_page_size;
   U64 allocation_granularity;
-  U64 microsecond_resolution;
   String8 machine_name;
 };
 
@@ -239,7 +238,7 @@ internal OS_Handle os_shared_memory_alloc(U64 size, String8 name);
 internal OS_Handle os_shared_memory_open(String8 name);
 internal void      os_shared_memory_close(OS_Handle handle);
 internal void *    os_shared_memory_view_open(OS_Handle handle, Rng1U64 range);
-internal void      os_shared_memory_view_close(OS_Handle handle, void *ptr);
+internal void      os_shared_memory_view_close(OS_Handle handle, void *ptr, Rng1U64 range);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Time (Implemented Per-OS)

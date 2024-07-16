@@ -81,6 +81,7 @@ struct OS_W32_State
   // rjf: info
   OS_SystemInfo system_info;
   OS_ProcessInfo process_info;
+  U64 microsecond_resolution;
   
   // rjf: entity storage
   CRITICAL_SECTION entity_mutex;

@@ -780,7 +780,7 @@ os_shared_memory_view_open(OS_Handle handle, Rng1U64 range)
 }
 
 internal void
-os_shared_memory_view_close(OS_Handle handle, void *ptr)
+os_shared_memory_view_close(OS_Handle handle, void *ptr, Rng1U64 range)
 {
   UnmapViewOfFile(ptr);
 }
@@ -795,7 +795,7 @@ os_now_microseconds(void)
   LARGE_INTEGER large_int_counter;
   if(QueryPerformanceCounter(&large_int_counter))
   {
-    result = (large_int_counter.QuadPart*Million(1))/os_w32_state.system_info.microsecond_resolution;
+    result = (large_int_counter.QuadPart*Million(1))/os_w32_state.microsecond_resolution;
   }
   return result;
 }
@@ -1525,17 +1525,19 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
     // (we need to set up some basics before this layer can supply
     // memory allocation primitives)
     {
+      os_w32_state.microsecond_resolution  = 1;
+      LARGE_INTEGER large_int_resolution;
+      if(QueryPerformanceFrequency(&large_int_resolution))
+      {
+        os_w32_state.microsecond_resolution = large_int_resolution.QuadPart;
+      }
+    }
+    {
       OS_SystemInfo *info = &os_w32_state.system_info;
       info->logical_processor_count = (U64)sysinfo.dwNumberOfProcessors;
       info->page_size               = sysinfo.dwPageSize;
       info->large_page_size         = GetLargePageMinimum();
       info->allocation_granularity  = sysinfo.dwAllocationGranularity;
-      info->microsecond_resolution  = 1;
-      LARGE_INTEGER large_int_resolution;
-      if(QueryPerformanceFrequency(&large_int_resolution))
-      {
-        info->microsecond_resolution = large_int_resolution.QuadPart;
-      }
     }
     {
       OS_ProcessInfo *info = &os_w32_state.process_info;
@@ -1543,7 +1545,7 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
     }
     
     // rjf: set up thread context
-    TCTX tctx;
+    local_persist TCTX tctx;
     tctx_init_and_equip(&tctx);
     
     // rjf: set up dynamically-alloc'd state
