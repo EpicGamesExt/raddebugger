@@ -14,7 +14,7 @@ if [ "$gcc" = "1" ];     then clang=0   && echo "[gcc compile]"; fi
 auto_compile_flags=''
 
 # --- Compile/Link Line Definitions -------------------------------------------
-clang_common='-I../src/ -I../local/ -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Wno-initializer-overrides -Wno-incompatible-pointer-types-discards-qualifiers -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf'
+clang_common='-I../src/ -I../local/ -gcodeview -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Wno-initializer-overrides -Wno-incompatible-pointer-types-discards-qualifiers -Wno-for-loop-analysis -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf'
 clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${auto_compile_flags}"
 clang_release="clang -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${auto_compile_flags}"
 clang_link="-lpthread"
@@ -22,6 +22,7 @@ clang_out="-o"
 
 # --- Per-Build Settings ------------------------------------------------------
 link_dll="-fPIC"
+link_os_gfx="-lX11 -lXext"
 
 # --- Choose Compile/Link Lines -----------------------------------------------
 if [ "$clang" = "1" ];   then compile_debug="$clang_debug"; fi
@@ -47,7 +48,7 @@ fi
 
 # --- Build Everything (@build_targets) ---------------------------------------
 cd build
-if [ "$raddbg" = "1" ];                then didbuild=1 && $compile ../src/raddbg/raddbg_main.c                                    $compile_link $out raddbg || exit 1; fi
+if [ "$raddbg" = "1" ];                then didbuild=1 && $compile ../src/raddbg/raddbg_main.c                                    $compile_link $link_os_gfx $out raddbg || exit 1; fi
 if [ "$rdi_from_pdb" = "1" ];          then didbuild=1 && $compile ../src/rdi_from_pdb/rdi_from_pdb_main.c                        $compile_link $out rdi_from_pdb || exit 1; fi
 if [ "$rdi_from_dwarf" = "1" ];        then didbuild=1 && $compile ../src/rdi_from_dwarf/rdi_from_dwarf.c                         $compile_link $out rdi_from_dwarf || exit 1; fi
 if [ "$rdi_dump" = "1" ];              then didbuild=1 && $compile ../src/rdi_dump/rdi_dump_main.c                                $compile_link $out rdi_dump || exit 1; fi

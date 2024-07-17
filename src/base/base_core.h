@@ -191,7 +191,16 @@
 # endif
 #elif OS_LINUX
 # if ARCH_X64
+#  define ins_atomic_u64_eval(x) __sync_fetch_and_add((volatile U64 *)(x), 0)
 #  define ins_atomic_u64_inc_eval(x) __sync_fetch_and_add((volatile U64 *)(x), 1)
+#  define ins_atomic_u64_dec_eval(x) __sync_fetch_and_sub((volatile U64 *)(x), 1)
+#  define ins_atomic_u64_eval_assign(x,c) __sync_lock_test_and_set((volatile U64 *)(x),(c))
+#  define ins_atomic_u64_add_eval(x,c) __sync_fetch_and_add((volatile U64 *)(x), c)
+#  define ins_atomic_u64_eval_cond_assign(x,k,c) __sync_val_compare_and_swap((volatile U64 *)(x),(c),(k))
+#  define ins_atomic_u32_eval(x,c) __sync_fetch_and_add((volatile U32 *)(x), 0)
+#  define ins_atomic_u32_eval_assign(x,c) __sync_lock_test_and_set((volatile U32 *)(x),(c))
+#  define ins_atomic_u32_eval_cond_assign(x,k,c) __sync_val_compare_and_swap((volatile U32 *)(x),(c),(k))
+#  define ins_atomic_ptr_eval_assign(x,c) (void*)ins_atomic_u64_eval_assign((volatile U64 *)(x), (U64)(c))
 # else
 #  error Atomic intrinsics not defined for this operating system / architecture combination.
 # endif

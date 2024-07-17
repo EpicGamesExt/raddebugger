@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef OS_GRAPHICAL_H
-#define OS_GRAPHICAL_H
+#ifndef OS_GFX_H
+#define OS_GFX_H
 
 ////////////////////////////////
 //~ rjf: Graphics System Info
@@ -188,4 +188,4 @@ internal void           os_graphical_message(B32 error, String8 title, String8 m
 
 internal void           os_show_in_filesystem_ui(String8 path);
 
-#endif // OS_GRAPHICAL_H
+#endif // OS_GFX_H

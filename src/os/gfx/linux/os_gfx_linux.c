@@ -1,9 +1,13 @@
+// Copyright (c) 2024 Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
 internal void
 os_gfx_init(void)
 {
+  
 }
 
 ////////////////////////////////
@@ -12,8 +16,7 @@ os_gfx_init(void)
 internal OS_GfxInfo *
 os_get_gfx_info(void)
 {
-  local_persist OS_GfxInfo g = {0};
-  return &g;
+  return 0;
 }
 
 ////////////////////////////////
@@ -22,12 +25,13 @@ os_get_gfx_info(void)
 internal void
 os_set_clipboard_text(String8 string)
 {
+  
 }
 
 internal String8
 os_get_clipboard_text(Arena *arena)
 {
-  return str8_zero();
+  
 }
 
 ////////////////////////////////
@@ -36,111 +40,121 @@ os_get_clipboard_text(Arena *arena)
 internal OS_Handle
 os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 {
-  OS_Handle handle = {1};
-  return handle;
+  
 }
 
 internal void
-os_window_close(OS_Handle window)
+os_window_close(OS_Handle handle)
 {
+  
 }
 
 internal void
-os_window_first_paint(OS_Handle window)
+os_window_first_paint(OS_Handle window_handle)
 {
+  
 }
 
 internal void
-os_window_equip_repaint(OS_Handle window, OS_WindowRepaintFunctionType *repaint, void *user_data)
+os_window_equip_repaint(OS_Handle handle, OS_WindowRepaintFunctionType *repaint, void *user_data)
 {
+  
 }
 
 internal void
-os_window_focus(OS_Handle window)
+os_window_focus(OS_Handle handle)
 {
+  
 }
 
 internal B32
-os_window_is_focused(OS_Handle window)
+os_window_is_focused(OS_Handle handle)
 {
-  return 0;
+  
 }
 
 internal B32
-os_window_is_fullscreen(OS_Handle window)
+os_window_is_fullscreen(OS_Handle handle)
 {
-  return 0;
+  
 }
 
 internal void
-os_window_set_fullscreen(OS_Handle window, B32 fullscreen)
+os_window_set_fullscreen(OS_Handle handle, B32 fullscreen)
 {
+  
 }
 
 internal B32
-os_window_is_maximized(OS_Handle window)
+os_window_is_maximized(OS_Handle handle)
 {
-  return 0;
+  
 }
 
 internal void
-os_window_set_maximized(OS_Handle window, B32 maximized)
+os_window_set_maximized(OS_Handle handle, B32 maximized)
 {
+  
 }
 
 internal void
-os_window_minimize(OS_Handle window)
+os_window_minimize(OS_Handle handle)
 {
+  
 }
 
 internal void
-os_window_bring_to_front(OS_Handle window)
+os_window_bring_to_front(OS_Handle handle)
 {
+  
 }
 
 internal void
-os_window_set_monitor(OS_Handle window, OS_Handle monitor)
+os_window_set_monitor(OS_Handle window_handle, OS_Handle monitor)
 {
+  
 }
 
 internal void
 os_window_clear_custom_border_data(OS_Handle handle)
 {
+  
 }
 
 internal void
 os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
 {
+  
 }
 
 internal void
 os_window_push_custom_edges(OS_Handle handle, F32 thickness)
 {
+  
 }
 
 internal void
 os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
 {
+  
 }
 
 internal Rng2F32
-os_rect_from_window(OS_Handle window)
+os_rect_from_window(OS_Handle handle)
 {
-  Rng2F32 rect = r2f32(v2f32(0, 0), v2f32(500, 500));
-  return rect;
+  
 }
 
 internal Rng2F32
-os_client_rect_from_window(OS_Handle window)
+os_client_rect_from_window(OS_Handle handle)
 {
-  Rng2F32 rect = r2f32(v2f32(0, 0), v2f32(500, 500));
-  return rect;
+  
 }
 
 internal F32
-os_dpi_from_window(OS_Handle window)
+os_dpi_from_window(OS_Handle handle)
 {
-  return 96.f;
+  
 }
 
 ////////////////////////////////
@@ -149,35 +163,31 @@ os_dpi_from_window(OS_Handle window)
 internal OS_HandleArray
 os_push_monitors_array(Arena *arena)
 {
-  OS_HandleArray arr = {0};
-  return arr;
+  
 }
 
 internal OS_Handle
 os_primary_monitor(void)
 {
-  OS_Handle handle = {1};
-  return handle;
+  
 }
 
 internal OS_Handle
 os_monitor_from_window(OS_Handle window)
 {
-  OS_Handle handle = {1};
-  return handle;
+  
 }
 
 internal String8
 os_name_from_monitor(Arena *arena, OS_Handle monitor)
 {
-  return str8_zero();
+  
 }
 
 internal Vec2F32
 os_dim_from_monitor(OS_Handle monitor)
 {
-  Vec2F32 v = v2f32(1000, 1000);
-  return v;
+  
 }
 
 ////////////////////////////////
@@ -186,32 +196,31 @@ os_dim_from_monitor(OS_Handle monitor)
 internal void
 os_send_wakeup_event(void)
 {
+  
 }
 
 internal OS_EventList
 os_get_events(Arena *arena, B32 wait)
 {
-  OS_EventList evts = {0};
-  return evts;
+  
 }
 
 internal OS_EventFlags
 os_get_event_flags(void)
 {
-  OS_EventFlags f = 0;
-  return f;
+  
 }
 
 internal B32
 os_key_is_down(OS_Key key)
 {
-  return 0;
+  
 }
 
 internal Vec2F32
-os_mouse_from_window(OS_Handle window)
+os_mouse_from_window(OS_Handle handle)
 {
-  return v2f32(0, 0);
+  
 }
 
 ////////////////////////////////
@@ -220,6 +229,7 @@ os_mouse_from_window(OS_Handle window)
 internal void
 os_set_cursor(OS_Cursor cursor)
 {
+  
 }
 
 ////////////////////////////////
@@ -228,6 +238,7 @@ os_set_cursor(OS_Cursor cursor)
 internal void
 os_graphical_message(B32 error, String8 title, String8 message)
 {
+  
 }
 
 ////////////////////////////////
@@ -236,4 +247,5 @@ os_graphical_message(B32 error, String8 title, String8 message)
 internal void
 os_show_in_filesystem_ui(String8 path)
 {
+  
 }
