@@ -162,6 +162,10 @@ internal void *
 os_reserve(U64 size)
 {
   void *result = mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  if(result == MAP_FAILED)
+  {
+    result = 0;
+  }
   return result;
 }
 
@@ -191,6 +195,10 @@ internal void *
 os_reserve_large(U64 size)
 {
   void *result = mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB, -1, 0);
+  if(result == MAP_FAILED)
+  {
+    result = 0;
+  }
   return result;
 }
 
@@ -497,6 +505,10 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
   if(flags & OS_AccessFlag_Read)  { prot_flags |= PROT_READ; }
   int map_flags = MAP_PRIVATE;
   void *base = mmap(0, dim_1u64(range), prot_flags, map_flags, fd, range.min);
+  if(base == MAP_FAILED)
+  {
+    base = 0;
+  }
   return base;
 }
 
@@ -637,6 +649,10 @@ os_shared_memory_view_open(OS_Handle handle, Rng1U64 range)
   if(os_handle_match(handle, os_handle_zero())){return 0;}
   int id = (int)handle.u64[0];
   void *base = mmap(0, dim_1u64(range), PROT_READ|PROT_WRITE, MAP_SHARED, id, range.min);
+  if(base == MAP_FAILED)
+  {
+    base = 0;
+  }
   return base;
 }
 

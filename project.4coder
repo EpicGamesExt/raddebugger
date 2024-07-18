@@ -49,7 +49,8 @@ commands =
   {
     //.win = "build rdi_from_pdb rdi_dump && pushd build && rdi_from_pdb --pdb:mule_main.pdb --out:mule_main.rdi && rdi_dump mule_main.rdi > mule_main.dump && popd",
     //.win = "build raddbg telemetry",
-    .win = "build ryan_scratch",
+    //.win = "build ryan_scratch",
+    .win = "wsl ./build.sh ryan_scratch",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
@@ -69,6 +70,7 @@ commands =
   {
     // .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --project:local_dev.raddbg_project && popd",
     .win = "pushd build && ryan_scratch.exe && popd",
+    .win = "wsl ./build/ryan_scratch",
     .linux = "",
     .out = "*compilation*",
     .footer_panel = true,
