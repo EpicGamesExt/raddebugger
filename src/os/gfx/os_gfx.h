@@ -106,6 +106,7 @@ struct OS_EventList
 ////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
+internal String8 os_string_from_event_kind(OS_EventKind kind);
 internal String8List os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags);
 internal U32 os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key);
 internal void os_eat_event(OS_EventList *events, OS_Event *event);
@@ -114,6 +115,7 @@ internal B32  os_key_release(OS_EventList *events, OS_Handle window, OS_EventFla
 internal B32  os_text(OS_EventList *events, OS_Handle window, U32 character);
 internal OS_EventList os_event_list_copy(Arena *arena, OS_EventList *src);
 internal void os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push);
+internal OS_Event *os_event_list_push_new(Arena *arena, OS_EventList *evts, OS_EventKind kind);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
@@ -170,7 +172,6 @@ internal Vec2F32        os_dim_from_monitor(OS_Handle monitor);
 internal void           os_send_wakeup_event(void);
 internal OS_EventList   os_get_events(Arena *arena, B32 wait);
 internal OS_EventFlags  os_get_event_flags(void);
-internal B32            os_key_is_down(OS_Key key);
 internal Vec2F32        os_mouse_from_window(OS_Handle window);
 
 ////////////////////////////////

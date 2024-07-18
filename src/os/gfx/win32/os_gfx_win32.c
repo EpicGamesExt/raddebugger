@@ -99,13 +99,9 @@ os_w32_window_release(OS_W32_Window *window)
 internal OS_Event *
 os_w32_push_event(OS_EventKind kind, OS_W32_Window *window)
 {
-  OS_Event *result = push_array(os_w32_event_arena, OS_Event, 1);
-  DLLPushBack(os_w32_event_list.first, os_w32_event_list.last, result);
-  result->timestamp_us = os_now_microseconds();
-  result->kind = kind;
+  OS_Event *result = os_event_list_push_new(os_w32_event_arena, &os_w32_event_list, kind);
   result->window = os_w32_handle_from_window(window);
   result->flags = os_get_event_flags();
-  os_w32_event_list.count += 1;
   return result;
 }
 
@@ -1411,18 +1407,6 @@ os_get_event_flags(void)
     flags |= OS_EventFlag_Alt;
   }
   return(flags);
-}
-
-internal B32
-os_key_is_down(OS_Key key)
-{
-  B32 result = 0;
-  {
-    WPARAM vkey_code = os_w32_vkey_from_os_key(key);
-    SHORT state = GetAsyncKeyState(vkey_code);
-    result = !!(state & (0x8000));
-  }
-  return result;
 }
 
 internal Vec2F32

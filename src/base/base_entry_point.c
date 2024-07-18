@@ -49,7 +49,7 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(CTRL_CORE_H) && !defined(CTRL_INIT_MANUAL)
   ctrl_init();
 #endif
-#if defined(OS_GRAPHICAL_H) && !defined(OS_GFX_INIT_MANUAL)
+#if defined(OS_GFX_H) && !defined(OS_GFX_INIT_MANUAL)
   os_gfx_init();
 #endif
 #if defined(FONT_PROVIDER_H) && !defined(FP_INIT_MANUAL)

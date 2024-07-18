@@ -5,7 +5,7 @@
 //~ rjf: Build Options
 
 #define BUILD_TITLE "ryan_scratch"
-#define BUILD_CONSOLE_INTERFACE 1
+#define OS_FEATURE_GRAPHICAL 1
 
 ////////////////////////////////
 //~ rjf: Includes
@@ -46,5 +46,28 @@
 internal void
 entry_point(CmdLine *cmdline)
 {
-  printf("Hello, World!\n");
+  OS_Handle window = os_window_open(v2f32(1280, 720), 0, str8_lit("Window"));
+  os_window_first_paint(window);
+  for(B32 quit = 0; !quit;)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    OS_EventList events = os_get_events(scratch.arena, 0);
+    for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
+    {
+      if(ev->kind != OS_EventKind_MouseMove)
+      {
+        printf("%.*s (%.*s)\n", str8_varg(os_string_from_event_kind(ev->kind)), str8_varg(os_g_key_display_string_table[ev->key]));
+        fflush(stdout);
+      }
+    }
+    for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
+    {
+      if(ev->kind == OS_EventKind_WindowClose)
+      {
+        quit = 1;
+        break;
+      }
+    }
+    scratch_end(scratch);
+  }
 }

@@ -9,6 +9,28 @@
 ////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
+internal String8
+os_string_from_event_kind(OS_EventKind kind)
+{
+  String8 result = {0};
+  switch(kind)
+  {
+    case OS_EventKind_Null:
+    case OS_EventKind_COUNT:
+    {}break;
+    case OS_EventKind_Press:                {result = str8_lit("Press");}break;
+    case OS_EventKind_Release:              {result = str8_lit("Release");}break;
+    case OS_EventKind_MouseMove:            {result = str8_lit("MouseMove");}break;
+    case OS_EventKind_Text:                 {result = str8_lit("Text");}break;
+    case OS_EventKind_Scroll:               {result = str8_lit("Scroll");}break;
+    case OS_EventKind_WindowLoseFocus:      {result = str8_lit("WindowLoseFocus");}break;
+    case OS_EventKind_WindowClose:          {result = str8_lit("WindowClose");}break;
+    case OS_EventKind_FileDrop:             {result = str8_lit("FileDrop");}break;
+    case OS_EventKind_Wakeup:               {result = str8_lit("Wakeup");}break;
+  }
+  return result;
+}
+
 internal String8List
 os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags)
 {
@@ -225,4 +247,15 @@ os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push)
     MemoryCopyStruct(dst, to_push);
   }
   MemoryZeroStruct(to_push);
+}
+
+internal OS_Event *
+os_event_list_push_new(Arena *arena, OS_EventList *evts, OS_EventKind kind)
+{
+  OS_Event *evt = push_array(arena, OS_Event, 1);
+  DLLPushBack(evts->first, evts->last, evt);
+  evts->count += 1;
+  evt->timestamp_us = os_now_microseconds();
+  evt->kind = kind;
+  return evt;
 }
