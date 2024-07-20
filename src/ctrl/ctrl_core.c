@@ -2429,7 +2429,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               }
               
               // rjf: commit to register
-              void *xmm_reg = (&regs->ymm0) + op_info;
+              void *xmm_reg = (&regs->zmm0) + op_info;
               MemoryCopy(xmm_reg, buf, sizeof(buf));
             }break;
             
@@ -2448,7 +2448,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
               }
               
               // rjf: commit to register
-              void *xmm_reg = (&regs->ymm0) + op_info;
+              void *xmm_reg = (&regs->zmm0) + op_info;
               MemoryCopy(xmm_reg, buf, sizeof(buf));
             }break;
             
