@@ -48,7 +48,7 @@ enum
   COFF_MachineType_UNKNOWN             = 0x0,
   COFF_MachineType_X86                 = 0x14c,
   COFF_MachineType_X64                 = 0x8664,
-  COFF_MachineType_ARM33               = 0x1d3,
+  COFF_MachineType_AM33                = 0x1d3,
   COFF_MachineType_ARM                 = 0x1c0,
   COFF_MachineType_ARM64               = 0xaa64,
   COFF_MachineType_ARMNT               = 0x1c4,

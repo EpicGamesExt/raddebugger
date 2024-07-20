@@ -28,7 +28,7 @@ coff_is_obj(String8 data)
     switch (header->machine) {
       case COFF_MachineType_UNKNOWN:
       case COFF_MachineType_X86:    case COFF_MachineType_X64:
-      case COFF_MachineType_ARM33:  case COFF_MachineType_ARM:
+      case COFF_MachineType_AM33:   case COFF_MachineType_ARM:
       case COFF_MachineType_ARM64:  case COFF_MachineType_ARMNT:
       case COFF_MachineType_EBC:    case COFF_MachineType_IA64:
       case COFF_MachineType_M32R:   case COFF_MachineType_MIPS16:
@@ -1014,7 +1014,7 @@ coff_string_from_machine_type(COFF_MachineType machine)
     case COFF_MachineType_UNKNOWN:   result = str8_lit("UNKNOWN");   break;
     case COFF_MachineType_X86:       result = str8_lit("X86");       break;
     case COFF_MachineType_X64:       result = str8_lit("X64");       break;
-    case COFF_MachineType_ARM33:     result = str8_lit("ARM33");     break;
+    case COFF_MachineType_AM33:      result = str8_lit("AM33");      break;
     case COFF_MachineType_ARM:       result = str8_lit("ARM");       break;
     case COFF_MachineType_ARM64:     result = str8_lit("ARM64");     break;
     case COFF_MachineType_ARMNT:     result = str8_lit("ARMNT");     break;
