@@ -72,6 +72,16 @@ union REGS_Reg256
   F64 f64[4];
 };
 
+typedef union REGS_Reg512 REGS_Reg512;
+union REGS_Reg512
+{
+  U8 v[64];
+  U32 u32[16];
+  F32 f32[16];
+  U64 u64[8];
+  F64 f64[8];
+};
+
 ////////////////////////////////
 //~ rjf: Register Slicing Types
 

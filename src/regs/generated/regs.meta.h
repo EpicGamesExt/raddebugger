@@ -69,22 +69,46 @@ REGS_RegCodeX64_ds,
 REGS_RegCodeX64_es,
 REGS_RegCodeX64_fs,
 REGS_RegCodeX64_gs,
-REGS_RegCodeX64_ymm0,
-REGS_RegCodeX64_ymm1,
-REGS_RegCodeX64_ymm2,
-REGS_RegCodeX64_ymm3,
-REGS_RegCodeX64_ymm4,
-REGS_RegCodeX64_ymm5,
-REGS_RegCodeX64_ymm6,
-REGS_RegCodeX64_ymm7,
-REGS_RegCodeX64_ymm8,
-REGS_RegCodeX64_ymm9,
-REGS_RegCodeX64_ymm10,
-REGS_RegCodeX64_ymm11,
-REGS_RegCodeX64_ymm12,
-REGS_RegCodeX64_ymm13,
-REGS_RegCodeX64_ymm14,
-REGS_RegCodeX64_ymm15,
+REGS_RegCodeX64_zmm0,
+REGS_RegCodeX64_zmm1,
+REGS_RegCodeX64_zmm2,
+REGS_RegCodeX64_zmm3,
+REGS_RegCodeX64_zmm4,
+REGS_RegCodeX64_zmm5,
+REGS_RegCodeX64_zmm6,
+REGS_RegCodeX64_zmm7,
+REGS_RegCodeX64_zmm8,
+REGS_RegCodeX64_zmm9,
+REGS_RegCodeX64_zmm10,
+REGS_RegCodeX64_zmm11,
+REGS_RegCodeX64_zmm12,
+REGS_RegCodeX64_zmm13,
+REGS_RegCodeX64_zmm14,
+REGS_RegCodeX64_zmm15,
+REGS_RegCodeX64_zmm16,
+REGS_RegCodeX64_zmm17,
+REGS_RegCodeX64_zmm18,
+REGS_RegCodeX64_zmm19,
+REGS_RegCodeX64_zmm20,
+REGS_RegCodeX64_zmm21,
+REGS_RegCodeX64_zmm22,
+REGS_RegCodeX64_zmm23,
+REGS_RegCodeX64_zmm24,
+REGS_RegCodeX64_zmm25,
+REGS_RegCodeX64_zmm26,
+REGS_RegCodeX64_zmm27,
+REGS_RegCodeX64_zmm28,
+REGS_RegCodeX64_zmm29,
+REGS_RegCodeX64_zmm30,
+REGS_RegCodeX64_zmm31,
+REGS_RegCodeX64_k0,
+REGS_RegCodeX64_k1,
+REGS_RegCodeX64_k2,
+REGS_RegCodeX64_k3,
+REGS_RegCodeX64_k4,
+REGS_RegCodeX64_k5,
+REGS_RegCodeX64_k6,
+REGS_RegCodeX64_k7,
 REGS_RegCodeX64_COUNT,
 } REGS_RegCodeX64;
 
@@ -162,6 +186,22 @@ REGS_AliasCodeX64_xmm12,
 REGS_AliasCodeX64_xmm13,
 REGS_AliasCodeX64_xmm14,
 REGS_AliasCodeX64_xmm15,
+REGS_AliasCodeX64_ymm0,
+REGS_AliasCodeX64_ymm1,
+REGS_AliasCodeX64_ymm2,
+REGS_AliasCodeX64_ymm3,
+REGS_AliasCodeX64_ymm4,
+REGS_AliasCodeX64_ymm5,
+REGS_AliasCodeX64_ymm6,
+REGS_AliasCodeX64_ymm7,
+REGS_AliasCodeX64_ymm8,
+REGS_AliasCodeX64_ymm9,
+REGS_AliasCodeX64_ymm10,
+REGS_AliasCodeX64_ymm11,
+REGS_AliasCodeX64_ymm12,
+REGS_AliasCodeX64_ymm13,
+REGS_AliasCodeX64_ymm14,
+REGS_AliasCodeX64_ymm15,
 REGS_AliasCodeX64_mm0,
 REGS_AliasCodeX64_mm1,
 REGS_AliasCodeX64_mm2,
@@ -343,22 +383,46 @@ REGS_Reg16 ds;
 REGS_Reg16 es;
 REGS_Reg16 fs;
 REGS_Reg16 gs;
-REGS_Reg256 ymm0;
-REGS_Reg256 ymm1;
-REGS_Reg256 ymm2;
-REGS_Reg256 ymm3;
-REGS_Reg256 ymm4;
-REGS_Reg256 ymm5;
-REGS_Reg256 ymm6;
-REGS_Reg256 ymm7;
-REGS_Reg256 ymm8;
-REGS_Reg256 ymm9;
-REGS_Reg256 ymm10;
-REGS_Reg256 ymm11;
-REGS_Reg256 ymm12;
-REGS_Reg256 ymm13;
-REGS_Reg256 ymm14;
-REGS_Reg256 ymm15;
+REGS_Reg512 zmm0;
+REGS_Reg512 zmm1;
+REGS_Reg512 zmm2;
+REGS_Reg512 zmm3;
+REGS_Reg512 zmm4;
+REGS_Reg512 zmm5;
+REGS_Reg512 zmm6;
+REGS_Reg512 zmm7;
+REGS_Reg512 zmm8;
+REGS_Reg512 zmm9;
+REGS_Reg512 zmm10;
+REGS_Reg512 zmm11;
+REGS_Reg512 zmm12;
+REGS_Reg512 zmm13;
+REGS_Reg512 zmm14;
+REGS_Reg512 zmm15;
+REGS_Reg512 zmm16;
+REGS_Reg512 zmm17;
+REGS_Reg512 zmm18;
+REGS_Reg512 zmm19;
+REGS_Reg512 zmm20;
+REGS_Reg512 zmm21;
+REGS_Reg512 zmm22;
+REGS_Reg512 zmm23;
+REGS_Reg512 zmm24;
+REGS_Reg512 zmm25;
+REGS_Reg512 zmm26;
+REGS_Reg512 zmm27;
+REGS_Reg512 zmm28;
+REGS_Reg512 zmm29;
+REGS_Reg512 zmm30;
+REGS_Reg512 zmm31;
+REGS_Reg64 k0;
+REGS_Reg64 k1;
+REGS_Reg64 k2;
+REGS_Reg64 k3;
+REGS_Reg64 k4;
+REGS_Reg64 k5;
+REGS_Reg64 k6;
+REGS_Reg64 k7;
 };
 
 typedef struct REGS_RegBlockX86 REGS_RegBlockX86;
@@ -427,12 +491,12 @@ REGS_Reg256 ymm7;
 };
 
 C_LINKAGE_BEGIN
-extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[77];
-extern REGS_UsageKind regs_g_alias_code_x64_usage_kind_table[80];
-extern String8 regs_g_reg_code_x64_string_table[77];
-extern String8 regs_g_alias_code_x64_string_table[80];
-extern REGS_Rng regs_g_reg_code_x64_rng_table[77];
-extern REGS_Slice regs_g_alias_code_x64_slice_table[80];
+extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[101];
+extern REGS_UsageKind regs_g_alias_code_x64_usage_kind_table[96];
+extern String8 regs_g_reg_code_x64_string_table[101];
+extern String8 regs_g_alias_code_x64_string_table[96];
+extern REGS_Rng regs_g_reg_code_x64_rng_table[101];
+extern REGS_Slice regs_g_alias_code_x64_slice_table[96];
 extern REGS_UsageKind regs_g_reg_code_x86_usage_kind_table[61];
 extern REGS_UsageKind regs_g_alias_code_x86_usage_kind_table[36];
 extern String8 regs_g_reg_code_x86_string_table[61];
