@@ -14,7 +14,8 @@ global String8 lnx_initial_path = {0};
 thread_static LNX_SafeCallChain *lnx_safe_call_chain = 0;
 
 global U64 lnx_page_size = 4096;
-global B32 lnx_huge_page_enabled = 1;
+// TODO: This can't be used until the huge page allocation count is checked
+global B32 lnx_huge_page_enabled = 0;
 global B32 lnx_huge_page_use_1GB = 0;
 global U16 lnx_ring_buffers_created = 0;
 global U16 lnx_ring_buffers_limit = 65000;
@@ -932,7 +933,6 @@ lnx_safe_call_sig_handler(int _){
   abort();
 }
 
-// Helper function to return a timespec using a adjtime stable high precision clock
 internal LNX_timespec
 lnx_now_precision_timespec()
 {
@@ -1025,6 +1025,7 @@ os_init(int argc, char **argv)
   struct utsname kernel = {0};
   S32 uname_error = uname(&kernel);
 
+  // TODO Parse the string
   lnx_hostname = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.nodename) );
   lnx_kernel_type = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.sysname) ) ;
   lnx_kernel_version.major;
@@ -1045,7 +1046,8 @@ os_reserve(U64 size){
 
 /* NOTE(mallchad): I wanted to use MADV_POPULATE_READ/WRITE to fault the pages
    into memory here but my kernel was *just* old enough to not have the headers
-   for this feature so I will use a trick with mlock instead. */
+   for this feature so I will use a trick with mlock instead. Since that will
+   work better for users on very old kernels */
 internal B32
 os_commit(void *ptr, U64 size){
   U32 error = mprotect(ptr, size, PROT_READ|PROT_WRITE);
@@ -1109,6 +1111,7 @@ internal B32
 os_large_pages_enabled(void)
 {
   // This is aparently the reccomended way to check for hugepage support. Do not ask...
+  // TODO(mallchad): This is an annoying way to do it, query for nr_hugepages instead
   OS_Handle meminfo_handle = os_file_open(OS_AccessFlag_Read, str8_lit("/proc/meminfo/"));
   U8 buffer[5000];
   String8 meminfo = {0};
@@ -1118,7 +1121,8 @@ os_large_pages_enabled(void)
 
   Rng1U64 match = str8_match_substr( meminfo, str8_cstring("Huge"), 0x0 );
 
-  return (match.max > 0);
+  // return (match.max > 0);
+  return 0;
 }
 
 /* NOTE: The size seems to be consistent across Linux systems, it's configurable
@@ -1155,7 +1159,7 @@ os_alloc_ring_buffer(U64 size, U64 *actual_size_out)
        with a shared file descriptor.  Make sure to prevent mmap from changing
        location with MAP_FIXED */
     S32 fd = memfd_create((const char*)filename_anonymous.str, flag_huge1);
-    result = mmap(NULL, 2* size, flag_prot, flag_huge2 | MAP_ANONYMOUS, -1, 0);
+    result = mmap(NULL, 2* size, flag_prot, flag_huge2 | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
     mmap(result, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
     mmap(result + size, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
     // Closing fd doesn't invalidate mapping
@@ -1427,7 +1431,7 @@ internal void
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
   S32 fd = lnx_fd_from_handle(file);
-  lnx_fstat file_info;
+  LNX_fstat file_info;
   fstat(fd, &file_info);
   U64 filesize = file_info.st_size;
   U64 write_size = rng.max - rng.min;
@@ -1457,7 +1461,7 @@ os_properties_from_file(OS_Handle file)
 {
   FileProperties result = {0};
   S32 fd = *file.u64;
-  lnx_fstat props = {0};
+  LNX_fstat props = {0};
   B32 error = fstat(fd, &props);
 
   if (error == 0)
@@ -1472,7 +1476,7 @@ os_id_from_file(OS_Handle file)
 {
   OS_FileID result = {0};
   U32 fd = *file.u64;
-  lnx_fstat props = {0};
+  LNX_fstat props = {0};
   B32 error = fstat(fd, &props);
 
   if (error == 0)
@@ -1502,7 +1506,7 @@ os_copy_file_path(String8 dst, String8 src)
 {
   S32 source_fd = open((char*)src.str, 0x0, O_RDONLY);
   S32 dest_fd = creat((char*)dst.str, O_WRONLY);
-  lnx_fstat props = {0};
+  LNX_fstat props = {0};
 
   S32 filesize = 0;
   S32 bytes_written = 0;
@@ -1538,7 +1542,7 @@ os_full_path_from_path(Arena *arena, String8 path)
 internal B32
 os_file_path_exists(String8 path)
 {
-  lnx_fstat _stub;
+  LNX_fstat _stub;
   B32 exists = (0 == stat((char*)path.str, &_stub));
   return exists;
 }
@@ -1567,6 +1571,7 @@ internal void
 os_file_map_close(OS_Handle map)
 {
   LNX_Entity* entity = lnx_entity_from_handle(map);
+  msync(entity->map.data, entity->map.size, MS_SYNC);
   B32 failure = munmap(entity->map.data, entity->map.size);
   /* NOTE: It shouldn't be that important if filemap fails but it ideally shouldn't
      happen particularly when dealing with gigabytes of memory. */
@@ -1601,7 +1606,8 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
   */
   U64 page_size = lnx_page_size;
   U32 page_flag = 0x0;
-  U32 map_flags = page_flag | (flags & OS_AccessFlag_Shared ? MAP_SHARED : MAP_PRIVATE);
+  U32 map_flags = page_flag | (flags & OS_AccessFlag_Shared ? MAP_SHARED : MAP_PRIVATE) |
+    MAP_POPULATE;
 
   U32 prot_flags = lnx_prot_from_os_flags(flags);
   U64 aligned_offset = AlignDownPow2(range.min, lnx_page_size);
@@ -1622,6 +1628,9 @@ os_file_map_view_close(OS_Handle map, void *ptr)
 {
   LNX_Entity* entity = lnx_entity_from_handle(map);
   AssertAlways( entity->map.data && (entity->map.data != (void*)-1) );
+  /* NOTE: Make sure contents are synced with OS on the off chance the backing
+     file isn't POSIX compliant. Use MS_ASYNC if you want performance. */
+  msync(ptr, entity->map.size, MS_SYNC);
   munmap(entity->map.data, entity->map.size);
 }
 
@@ -1630,21 +1639,59 @@ os_file_map_view_close(OS_Handle map, void *ptr)
 internal OS_FileIter *
 os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
 {
-  NotImplemented;
-  return 0;
+  OS_FileIter* result = push_array(arena, OS_FileIter, 1);
+  result->flags = flags;
+  LNX_dir* directory = opendir((char*)path.str);
+  MemoryCopyTyped(result->memory, directory, 1);
+
+  // Never fail, just let the iterator return false.
+  return result;
 }
 
+ /* NOTE(mallchad): I have no idea what the return is for so it always returns true
+  unless the iterator is done */
 internal B32
 os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 {
-  NotImplemented;
-  return 0;
+  if (iter == NULL) { return 0; }
+
+  LNX_dir* directory = (LNX_dir*)iter->memory;
+  LNX_dir_entry* file = NULL;
+  FileProperties props = {0};
+  LNX_fstat stats = {0};
+  B32 no_file = 0;
+  if (directory == NULL) { return 0; }
+
+  // Should hopefully never infinite loop because readdir reaches NULL quickly
+  for (;;)
+  {
+    file = readdir(directory);
+    no_file = (file == NULL);
+    if (no_file) { iter->flags |= OS_FileIterFlag_Done; return 0; }
+
+    if (iter->flags & OS_FileIterFlag_SkipFiles && file->d_type == DT_REG ) { continue; }
+    if (iter->flags & OS_FileIterFlag_SkipFolders && file->d_type == DT_DIR ) { continue; }
+    if (iter->flags & OS_FileIterFlag_SkipHiddenFiles && file->d_name[0] == '.'  ) { continue; }
+    break;
+  }
+
+  S32 fd = open(file->d_name, O_RDONLY, 0x0);
+  Assert(fd == 0);
+  S32 stats_err = fstat(fd, &stats);
+  Assert(stats_err == 0);
+  close(fd);
+  info_out->name = push_str8_copy(arena, str8_cstring(file->d_name));
+  lnx_file_properties_from_stat(&info_out->props, &stats);
+
+  return 1;
 }
 
 internal void
 os_file_iter_end(OS_FileIter *iter)
 {
-  NotImplemented;
+  LNX_dir* directory = (LNX_dir*)iter->memory;
+  int failure = closedir(directory);
+  Assert(failure == 0);
 }
 
 //- rjf: directory creation
@@ -1674,7 +1721,7 @@ os_shared_memory_alloc(U64 size, String8 name)
   B32 use_huge = (size > os_large_page_size() && lnx_huge_page_enabled);
   U32 flag_huge = (use_huge ? MAP_HUGETLB : 0x0);
   U32 flag_prot = PROT_READ | PROT_WRITE;
-  U32 map_flags = MAP_SHARED | flag_huge;
+  U32 map_flags = MAP_SHARED | flag_huge | MAP_POPULATE;
   void* mapping = mmap(NULL, size, flag_prot, map_flags, fd, 0);
   Assert("Failed map memory for shared memory" && mapping != MAP_FAILED);
 
@@ -1950,10 +1997,11 @@ os_condition_variable_alloc(void){
   // pthread
   pthread_condattr_t attr;
   pthread_condattr_init(&attr);
-  int pthread_result = pthread_cond_init(&entity->cond, &attr);
   // Make sure condition uses CPU clock time
   pthread_condattr_setclock(&attr, CLOCK_MONOTONIC_RAW);
+  pthread_condattr_setpshared(&attr, PTHREAD_PROCESS_PRIVATE);
   pthread_condattr_destroy(&attr);
+  int pthread_result = pthread_cond_init(&entity->cond, &attr);
   if (pthread_result == -1){
     lnx_free_entity(entity);
     entity = 0;
@@ -1976,7 +2024,7 @@ os_condition_variable_wait_(OS_Handle cv, OS_Handle mutex, U64 endt_us){
   B32 result = 0;
   LNX_Entity *entity_cond = lnx_entity_from_handle(cv);
   LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex);
-  LNX_timespec timeout_stamp = lnx_now_system_timespec();
+  LNX_timespec timeout_stamp = lnx_now_precision_timespec();
   timeout_stamp.tv_nsec += endt_us * 1000;
 
   // The timeout is received as a system clock timespec of when to stop waiting
@@ -1987,15 +2035,29 @@ os_condition_variable_wait_(OS_Handle cv, OS_Handle mutex, U64 endt_us){
 internal B32
 os_condition_variable_wait_rw_r_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
-  NotImplemented;
-  return 0;
+  B32 result = 0;
+  LNX_Entity *entity_cond = lnx_entity_from_handle(cv);
+  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw);
+  LNX_timespec timeout_stamp = lnx_now_precision_timespec();
+  timeout_stamp.tv_nsec += endt_us * 1000;
+
+  // The timeout is received as a MONOTONIC_RAW clock timespec of when to stop waiting
+  pthread_cond_timedwait(&entity_cond->cond, &entity_mutex->mutex, &timeout_stamp);
+  return (result == 0);
 }
 
 internal B32
 os_condition_variable_wait_rw_w_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
-  NotImplemented;
-  return 0;
+   B32 result = 0;
+  LNX_Entity *entity_cond = lnx_entity_from_handle(cv);
+  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw);
+  LNX_timespec timeout_stamp = lnx_now_precision_timespec();
+  timeout_stamp.tv_nsec += endt_us * 1000;
+
+  // The timeout is received as a MONOTONIC_RAW clock timespec of when to stop waiting
+  result = pthread_cond_timedwait(&entity_cond->cond, &entity_mutex->mutex, &timeout_stamp);
+  return (result == 0);
 }
 
 internal void

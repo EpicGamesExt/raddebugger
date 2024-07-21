@@ -34,6 +34,7 @@ cd "${self_directory}"
 if [[ -n ${RAD_BUILD_DEBUG} ]] ; then
     shellcheck $0
 fi
+# RAD_META_COMPILE_ONLY
 
 # --- Unpack Command Line Build Arguments ------------------------------------
 # NOTE: With this setup you can use environment variables or arguments and
@@ -120,7 +121,8 @@ if [[ -n "${no_meta}" ]] ; then
 else
   cd build
   ${compile_debug} "../src/metagen/metagen_main.c" ${compile_link} "${out}metagen.exe" || exit 1
-  ./metagen.exe || exit 1
+  # Skip if compile only
+  [[ -z "${RAD_META_COMPILE_ONLY}" ]] && ./metagen.exe || exit 1
   cd ${self_directory}
 fi
 
@@ -129,7 +131,7 @@ fi
 # Exit if RAD_BUILD_ALL is nonzero length
 function finish()
 {
-    [[ -z "${build_all}" ]] && exit 1
+    [[ -n "${build_all}" ]] && exit 1
 }
 
 # @param $1 - name of file to compile
@@ -168,7 +170,8 @@ echo ${compile_debug}
                          mule_inline.obj mule_o2.obj ${compile_link} ${no_aslr} \
                          ${out} mule_main.exe || exit 1
 
-RAD_BUILD_ALL=""
+# Continue building the rest line normal
+RAD_BUILD_ALL="1"
 [[ -n "${mule_module}" ]] &&  build_dll ../src/mule/mule_module.cpp mule_module.dll || exit 1
 [[ -n "${mule_hotload}" ]] && build_single ../src/mule/mule_hotload_main.c mule_hotload.exe ;
 build_dll ../src/mule/mule_hotload_module_main.c mule_hotload_module.dll || exit exit 1

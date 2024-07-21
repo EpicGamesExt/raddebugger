@@ -33,9 +33,13 @@
 typedef struct timespec LNX_timespec;
 typedef struct timeval LNX_timeval;
 // Deconstructed Date-Time
-typedef struct tm lnx_date;
+typedef struct tm LNX_date;
 // File Statistics
-typedef struct stat lnx_fstat;
+typedef struct stat LNX_fstat;
+// Opaque directory stream of directory contents
+typedef DIR LNX_dir;
+// Opaque directory entry/file
+typedef struct dirent LNX_dir_entry;
 
 // Syncronization Primitives
 typedef sem_t LNX_semaphore;
@@ -43,6 +47,7 @@ typedef pthread_mutex_t LNX_mutex;
 typedef pthread_mutexattr_t LNX_mutex_attr;
 typedef pthread_rwlock_t LNX_rwlock;
 typedef pthread_rwlockattr_t LNX_rwlock_attr;
+typedef pthread_cond_t LNX_cond;
 
 ////////////////////////////////
 //~ NOTE(allen): File Iterator
@@ -90,7 +95,7 @@ struct LNX_Entity{
     } map;
     LNX_mutex mutex;
     LNX_rwlock rwlock;
-    pthread_cond_t cond;
+    LNX_cond cond;
   };
 };
 
@@ -117,7 +122,8 @@ struct  LNX_version {
 };
 
 internal B32 lnx_write_list_to_file_descriptor(int fd, String8List list);
-// Get high percision CPU clock based timestamp, unaffected by time settings
+ /* Helper function to return a timespec using a adjtime stable high precision clock
+  This should not be affected by setting the system clock or RTC*/
 internal LNX_timespec lnx_now_precision_timespec();
 // Get the current system time that is affected by setting the system clock
 internal LNX_timespec lnx_now_system_timespec();
