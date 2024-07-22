@@ -393,7 +393,7 @@ rdi_line_voffs_from_num(RDI_ParsedSourceLineMap *map, RDI_U32 linenum, RDI_U32 *
   {
     RDI_U32 first = map->ranges[closest_i];
     RDI_U32 opl   = map->ranges[closest_i + 1];
-    if(opl < map->voff_count)
+    if(opl <= map->voff_count)
     {
       result = map->voffs + first;
       *n_out = opl - first;
