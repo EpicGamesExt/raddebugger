@@ -4,6 +4,9 @@
 ////////////////////////////////
 //~ rjf: Third Party Includes
 
+#include "third_party/zydis/zydis.h"
+#include "third_party/zydis/zydis.c"
+
 #include "third_party/udis86/config.h"
 #include "third_party/udis86/udis86.h"
 #include "third_party/udis86/libudis86/decode.c"
@@ -428,14 +431,14 @@ dasm_parse_thread__entry_point(void *p)
         case Architecture_x64:
         case Architecture_x86:
         {
-          // rjf: grab context
-          struct ud udc;
-          ud_init(&udc);
-          ud_set_mode(&udc, bit_size_from_arch(params.arch));
-          ud_set_pc(&udc, params.vaddr);
-          ud_set_input_buffer(&udc, data.str, data.size);
-          ud_set_vendor(&udc, UD_VENDOR_ANY);
-          ud_set_syntax(&udc, params.syntax == DASM_Syntax_Intel ? UD_SYN_INTEL : UD_SYN_ATT);
+          // rjf: determine zydis formatter style
+          ZydisFormatterStyle style = ZYDIS_FORMATTER_STYLE_INTEL;
+          switch(params.syntax)
+          {
+            default:{}break;
+            case DASM_Syntax_Intel:{style = ZYDIS_FORMATTER_STYLE_INTEL;}break;
+            case DASM_Syntax_ATT:  {style = ZYDIS_FORMATTER_STYLE_ATT;}break;
+          }
           
           // rjf: disassemble
           RDI_SourceFile *last_file = &rdi_nil_element_union.source_file;
@@ -443,15 +446,25 @@ dasm_parse_thread__entry_point(void *p)
           for(U64 off = 0; off < data.size;)
           {
             // rjf: disassemble one instruction
-            U64 size = ud_disassemble(&udc);
-            if(size == 0)
+            ZydisDisassembledInstruction zinst = {0};
+            ZyanStatus status = ZydisDisassemble(ZYDIS_MACHINE_MODE_LONG_64,
+                                                 params.vaddr+off,
+                                                 data.str+off,
+                                                 data.size-off,
+                                                 &zinst,
+                                                 style);
+            if(zinst.info.length == 0)
             {
               break;
             }
             
             // rjf: analyze
-            struct ud_operand *first_op = (struct ud_operand *)ud_insn_opr(&udc, 0);
-            U64 rel_voff = (first_op != 0 && first_op->type == UD_OP_JIMM) ? ud_syn_rel_target(&udc, first_op) : 0;
+            ZydisDecodedOperand *first_op = (zinst.info.operand_count_visible > 0 ? &zinst.operands[0] : 0);
+            U64 rel_voff = 0;
+            if(first_op != 0)
+            {
+              ZydisCalcAbsoluteAddress(&zinst.info, first_op, params.vaddr+off, &rel_voff);
+            }
             U64 jump_dst_vaddr = rel_voff;
             
             // rjf: push strings derived from voff -> line info
@@ -546,11 +559,11 @@ dasm_parse_thread__entry_point(void *p)
             {
               String8List code_bytes_strings = {0};
               str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("{"));
-              for(U64 byte_idx = 0; byte_idx < size || byte_idx < 16; byte_idx += 1)
+              for(U64 byte_idx = 0; byte_idx < zinst.info.length || byte_idx < 16; byte_idx += 1)
               {
-                if(byte_idx < size)
+                if(byte_idx < zinst.info.length)
                 {
-                  str8_list_pushf(scratch.arena, &code_bytes_strings, "%02x%s ", (U32)data.str[off+byte_idx], byte_idx == size-1 ? "}" : "");
+                  str8_list_pushf(scratch.arena, &code_bytes_strings, "%02x%s ", (U32)data.str[off+byte_idx], byte_idx == zinst.info.length-1 ? "}" : "");
                 }
                 else if(byte_idx < 8)
                 {
@@ -577,14 +590,14 @@ dasm_parse_thread__entry_point(void *p)
                 }
               }
             }
-            String8 inst_string = push_str8f(scratch.arena, "%S%S%s%S", addr_part, code_bytes_part, udc.asm_buf, symbol_part);
+            String8 inst_string = push_str8f(scratch.arena, "%S%S%s%S", addr_part, code_bytes_part, zinst.text, symbol_part);
             DASM_Inst inst = {u32_from_u64_saturate(off), 0, rel_voff, r1u64(inst_strings.total_size + inst_strings.node_count,
                                                                              inst_strings.total_size + inst_strings.node_count + inst_string.size)};
             dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
             str8_list_push(scratch.arena, &inst_strings, inst_string);
             
             // rjf: increment
-            off += size;
+            off += zinst.info.length;
           }
         }break;
       }
