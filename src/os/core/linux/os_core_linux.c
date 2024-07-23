@@ -150,6 +150,7 @@ os_get_current_path(Arena *arena)
 {
   char *cwdir = getcwd(0, 0);
   String8 string = push_str8_copy(arena, str8_cstring(cwdir));
+  free(cwdir);
   return string;
 }
 
@@ -215,12 +216,7 @@ os_commit_large(void *ptr, U64 size)
 internal U32
 os_tid(void)
 {
-  U32 result = 0;
-#if defined(SYS_gettid)
-  result = syscall(SYS_gettid);
-#else
-  result = gettid();
-#endif
+  U32 result = gettid();
   return result;
 }
 
@@ -270,7 +266,11 @@ os_file_open(OS_AccessFlags flags, String8 path)
   {
     lnx_flags |= O_APPEND;
   }
-  int fd = open((char *)path_copy.str, lnx_flags);
+  if(flags & (OS_AccessFlag_Write|OS_AccessFlag_Append))
+  {
+    lnx_flags |= O_CREAT;
+  }
+  int fd = open((char *)path_copy.str, lnx_flags, 0755);
   OS_Handle handle = {0};
   if(fd != -1)
   {
@@ -293,16 +293,12 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 {
   if(os_handle_match(file, os_handle_zero())) { return 0; }
   int fd = (int)file.u64[0];
-  if(rng.min != 0)
-  {
-    lseek(fd, rng.min, SEEK_SET);
-  }
   U64 total_num_bytes_to_read = dim_1u64(rng);
   U64 total_num_bytes_read = 0;
   U64 total_num_bytes_left_to_read = total_num_bytes_to_read;
   for(;total_num_bytes_left_to_read > 0;)
   {
-    int read_result = read(fd, (U8 *)out_data + total_num_bytes_read, total_num_bytes_left_to_read);
+    int read_result = pread(fd, (U8 *)out_data + total_num_bytes_read, total_num_bytes_left_to_read, rng.min + total_num_bytes_read);
     if(read_result >= 0)
     {
       total_num_bytes_read += read_result;
@@ -321,16 +317,12 @@ os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
   if(os_handle_match(file, os_handle_zero())) { return 0; }
   int fd = (int)file.u64[0];
-  if(rng.min != 0)
-  {
-    lseek(fd, rng.min, SEEK_SET);
-  }
   U64 total_num_bytes_to_write = dim_1u64(rng);
   U64 total_num_bytes_written = 0;
   U64 total_num_bytes_left_to_write = total_num_bytes_to_write;
   for(;total_num_bytes_left_to_write > 0;)
   {
-    int write_result = write(fd, (U8 *)data + total_num_bytes_written, total_num_bytes_left_to_write);
+    int write_result = pwrite(fd, (U8 *)data + total_num_bytes_written, total_num_bytes_left_to_write, rng.min + total_num_bytes_written);
     if(write_result >= 0)
     {
       total_num_bytes_written += write_result;
@@ -410,25 +402,23 @@ os_copy_file_path(String8 dst, String8 src)
   if(!os_handle_match(src_h, os_handle_zero()) &&
      !os_handle_match(dst_h, os_handle_zero()))
   {
+    int src_fd = (int)src_h.u64[0];
+    int dst_fd = (int)dst_h.u64[0];
     FileProperties src_props = os_properties_from_file(src_h);
     U64 size = src_props.size;
     U64 total_bytes_copied = 0;
     U64 bytes_left_to_copy = size;
     for(;bytes_left_to_copy > 0;)
     {
-      Temp scratch = scratch_begin(0, 0);
-      U64 buffer_size = Min(bytes_left_to_copy, MB(8));
-      U8 *buffer = push_array_no_zero(scratch.arena, U8, buffer_size);
-      U64 bytes_read = os_file_read(src_h, r1u64(total_bytes_copied, total_bytes_copied+buffer_size), buffer);
-      U64 bytes_written = os_file_write(dst_h, r1u64(total_bytes_copied, total_bytes_copied+bytes_read), buffer);
-      U64 bytes_copied = Min(bytes_read, bytes_written);
-      bytes_left_to_copy -= bytes_copied;
-      total_bytes_copied += bytes_copied;
-      scratch_end(scratch);
-      if(bytes_copied == 0)
+      off_t sendfile_off = total_bytes_copied;
+      int send_result = sendfile(dst_fd, src_fd, &sendfile_off, bytes_left_to_copy);
+      if(send_result <= 0)
       {
         break;
       }
+      U64 bytes_copied = (U64)send_result;
+      bytes_left_to_copy -= bytes_copied;
+      total_bytes_copied += bytes_copied;
     }
   }
   os_file_close(src_h);
@@ -601,7 +591,7 @@ os_make_directory(String8 path)
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
   String8 path_copy = push_str8_copy(scratch.arena, path);
-  if(mkdir((char*)path_copy.str, 0777) != -1)
+  if(mkdir((char*)path_copy.str, 0755) != -1)
   {
     result = 1;
   }
@@ -760,10 +750,7 @@ os_thread_launch(OS_ThreadFunctionType *func, void *ptr, void *params)
   entity->thread.func = func;
   entity->thread.ptr = ptr;
   {
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    int pthread_result = pthread_create(&entity->thread.handle, &attr, os_lnx_thread_entry_point, entity);
-    pthread_attr_destroy(&attr);
+    int pthread_result = pthread_create(&entity->thread.handle, 0, os_lnx_thread_entry_point, entity);
     if(pthread_result == -1)
     {
       os_lnx_entity_release(entity);
@@ -1082,7 +1069,7 @@ os_library_open(String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
   char *path_cstr = (char *)push_str8_copy(scratch.arena, path).str;
-  void *so = dlopen(path_cstr, RTLD_LAZY);
+  void *so = dlopen(path_cstr, RTLD_LAZY|RTLD_LOCAL);
   OS_Handle lib = { (U64)so };
   scratch_end(scratch);
   return lib;

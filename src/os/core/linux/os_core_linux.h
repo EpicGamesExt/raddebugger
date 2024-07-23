@@ -25,7 +25,9 @@
 #include <dlfcn.h>
 #include <sys/sysinfo.h>
 #include <sys/random.h>
+#include <sys/sendfile.h>
 
+pid_t gettid(void);
 int pthread_setname_np(pthread_t thread, const char *name);
 int pthread_getname_np(pthread_t thread, char *name, size_t size);
 

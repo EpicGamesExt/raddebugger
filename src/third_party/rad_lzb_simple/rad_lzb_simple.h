@@ -60,7 +60,7 @@ typedef S32 RAD_S32;
 
 #if defined(_MSC_VER)
 # define RADFORCEINLINE __forceinline
-#elif defined(__clang__)
+#elif defined(__clang__) || defined(__GNUC__)
 # define RADFORCEINLINE __attribute__((always_inline))
 #else
 # error need force inline for this compiler

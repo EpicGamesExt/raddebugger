@@ -713,7 +713,7 @@ static SINTa rr_lzb_simple_encode_fast_sub(rr_lzb_simple_context * fh,
 	
 	const U8 * rpEndSafe = rpMatchEnd - LZB_MML;
 	
-	if ( rpEndSafe <= raw )
+	if ( rpEndSafe <= (U8 *)raw )
 	{
 		// can't compress
 		return rawLen+1;
@@ -1185,7 +1185,7 @@ static SINTa rr_lzb_simple_encode_veryfast_sub(rr_lzb_simple_context * fh,
 	
 	const U8 * rpEndSafe = rpMatchEnd - LZB_MML;
 	
-	if ( rpEndSafe <= raw )
+	if ( rpEndSafe <= (U8 *)raw )
 	{
 		// can't compress
 		return rawLen+1;

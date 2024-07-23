@@ -278,7 +278,7 @@ CheckNil(nil,p) ? \
 # endif
 # define NO_ASAN __attribute__((no_sanitize("address")))
 #else
-# error "NO_ASAN is not defined for this compiler."
+# define NO_ASAN
 #endif
 
 #if ASAN_ENABLED
