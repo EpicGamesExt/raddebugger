@@ -2,19 +2,137 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Third Party Includes
+//~ rjf: Instruction Decoding/Disassembling Type Functions
 
+#if !defined(ZYDIS_H)
 #include "third_party/zydis/zydis.h"
 #include "third_party/zydis/zydis.c"
+#endif
 
-#include "third_party/udis86/config.h"
-#include "third_party/udis86/udis86.h"
-#include "third_party/udis86/libudis86/decode.c"
-#include "third_party/udis86/libudis86/itab.c"
-#include "third_party/udis86/libudis86/syn-att.c"
-#include "third_party/udis86/libudis86/syn-intel.c"
-#include "third_party/udis86/libudis86/syn.c"
-#include "third_party/udis86/libudis86/udis86.c"
+internal DASM_Inst
+dasm_inst_from_code(Arena *arena, Architecture arch, U64 vaddr, String8 code, DASM_Syntax syntax)
+{
+  DASM_Inst inst = {0};
+  switch(arch)
+  {
+    default:{}break;
+    
+    //- rjf: x86/x64 disassembly
+    case Architecture_x86:
+    case Architecture_x64:
+    {
+      // rjf: determine zydis formatter style
+      ZydisFormatterStyle style = ZYDIS_FORMATTER_STYLE_INTEL;
+      switch(syntax)
+      {
+        default:{}break;
+        case DASM_Syntax_Intel:{style = ZYDIS_FORMATTER_STYLE_INTEL;}break;
+        case DASM_Syntax_ATT:  {style = ZYDIS_FORMATTER_STYLE_ATT;}break;
+      }
+      
+      // rjf: disassemble one instruction
+      ZydisDisassembledInstruction zinst = {0};
+      ZyanStatus status = ZydisDisassemble(ZYDIS_MACHINE_MODE_LONG_64, vaddr, code.str, code.size, &zinst, style);
+      
+      // rjf: analyze
+      DASM_InstFlags flags = 0;
+      U64 jump_dest_vaddr = 0;
+      {
+        ZydisDecodedOperand *first_visible_op = (zinst.info.operand_count_visible > 0 ? &zinst.operands[0] : 0);
+        ZydisDecodedOperand *first_op = (zinst.info.operand_count > 0 ? &zinst.operands[0] : 0);
+        ZydisDecodedOperand *second_op = (zinst.info.operand_count > 1 ? &zinst.operands[1] : 0);
+        if(first_visible_op != 0)
+        {
+          ZydisCalcAbsoluteAddress(&zinst.info, first_visible_op, vaddr, &jump_dest_vaddr);
+        }
+        if(first_op != 0 && second_op != 0 && first_op->type == ZYDIS_OPERAND_TYPE_REGISTER &&
+           (first_op->reg.value == ZYDIS_REGISTER_RSP ||
+            first_op->reg.value == ZYDIS_REGISTER_ESP ||
+            first_op->reg.value == ZYDIS_REGISTER_SP))
+        {
+          flags |= DASM_InstFlag_ChangesStackPointer;
+          if(second_op->type != ZYDIS_OPERAND_TYPE_IMMEDIATE)
+          {
+            flags |= DASM_InstFlag_ChangesStackPointerVariably;
+          }
+        }
+        if(zinst.info.attributes & (ZYDIS_ATTRIB_HAS_REP|
+                                    ZYDIS_ATTRIB_HAS_REPE|
+                                    ZYDIS_ATTRIB_HAS_REPZ|
+                                    ZYDIS_ATTRIB_HAS_REPNZ|
+                                    ZYDIS_ATTRIB_HAS_REPNE))
+        {
+          flags |= DASM_InstFlag_Repeats;
+        }
+        switch(zinst.info.mnemonic)
+        {
+          case ZYDIS_MNEMONIC_CALL:
+          {
+            flags |= DASM_InstFlag_Call;
+          }break;
+          
+          case ZYDIS_MNEMONIC_JB:
+          case ZYDIS_MNEMONIC_JBE:
+          case ZYDIS_MNEMONIC_JCXZ:
+          case ZYDIS_MNEMONIC_JECXZ:
+          case ZYDIS_MNEMONIC_JKNZD:
+          case ZYDIS_MNEMONIC_JKZD:
+          case ZYDIS_MNEMONIC_JL:
+          case ZYDIS_MNEMONIC_JLE:
+          case ZYDIS_MNEMONIC_JNB:
+          case ZYDIS_MNEMONIC_JNBE:
+          case ZYDIS_MNEMONIC_JNL:
+          case ZYDIS_MNEMONIC_JNLE:
+          case ZYDIS_MNEMONIC_JNO:
+          case ZYDIS_MNEMONIC_JNP:
+          case ZYDIS_MNEMONIC_JNS:
+          case ZYDIS_MNEMONIC_JNZ:
+          case ZYDIS_MNEMONIC_JO:
+          case ZYDIS_MNEMONIC_JP:
+          case ZYDIS_MNEMONIC_JRCXZ:
+          case ZYDIS_MNEMONIC_JS:
+          case ZYDIS_MNEMONIC_JZ:
+          case ZYDIS_MNEMONIC_LOOP:
+          case ZYDIS_MNEMONIC_LOOPE:
+          case ZYDIS_MNEMONIC_LOOPNE:
+          {
+            flags |= DASM_InstFlag_Branch;
+          }break;
+          
+          case ZYDIS_MNEMONIC_JMP:
+          {
+            flags |= DASM_InstFlag_UnconditionalJump;
+          }break;
+          
+          case ZYDIS_MNEMONIC_RET:
+          {
+            flags |= DASM_InstFlag_Return;
+          }break;
+          
+          case ZYDIS_MNEMONIC_PUSH:
+          case ZYDIS_MNEMONIC_POP:
+          {
+            flags |= DASM_InstFlag_ChangesStackPointer;
+          }break;
+          
+          default:
+          {
+            flags |= DASM_InstFlag_NonFlow;
+          }break;
+        }
+      }
+      
+      // rjf: convert
+      {
+        inst.flags           = flags;
+        inst.size            = zinst.info.length;
+        inst.string          = push_str8_copy(arena, str8_cstring(zinst.text));
+        inst.jump_dest_vaddr = jump_dest_vaddr;
+      }
+    }break;
+  }
+  return inst;
+}
 
 ////////////////////////////////
 //~ rjf: Parameter Type Functions
@@ -32,42 +150,42 @@ dasm_params_match(DASM_Params *a, DASM_Params *b)
 }
 
 ////////////////////////////////
-//~ rjf: Instruction Type Functions
+//~ rjf: Line Type Functions
 
 internal void
-dasm_inst_chunk_list_push(Arena *arena, DASM_InstChunkList *list, U64 cap, DASM_Inst *inst)
+dasm_line_chunk_list_push(Arena *arena, DASM_LineChunkList *list, U64 cap, DASM_Line *inst)
 {
-  DASM_InstChunkNode *node = list->last;
+  DASM_LineChunkNode *node = list->last;
   if(node == 0 || node->count >= node->cap)
   {
-    node = push_array(arena, DASM_InstChunkNode, 1);
-    node->v = push_array_no_zero(arena, DASM_Inst, cap);
+    node = push_array(arena, DASM_LineChunkNode, 1);
+    node->v = push_array_no_zero(arena, DASM_Line, cap);
     node->cap = cap;
     SLLQueuePush(list->first, list->last, node);
     list->node_count += 1;
   }
   MemoryCopyStruct(&node->v[node->count], inst);
   node->count += 1;
-  list->inst_count += 1;
+  list->line_count += 1;
 }
 
-internal DASM_InstArray
-dasm_inst_array_from_chunk_list(Arena *arena, DASM_InstChunkList *list)
+internal DASM_LineArray
+dasm_line_array_from_chunk_list(Arena *arena, DASM_LineChunkList *list)
 {
-  DASM_InstArray array = {0};
-  array.count = list->inst_count;
-  array.v = push_array_no_zero(arena, DASM_Inst, array.count);
+  DASM_LineArray array = {0};
+  array.count = list->line_count;
+  array.v = push_array_no_zero(arena, DASM_Line, array.count);
   U64 idx = 0;
-  for(DASM_InstChunkNode *n = list->first; n != 0; n = n->next)
+  for(DASM_LineChunkNode *n = list->first; n != 0; n = n->next)
   {
-    MemoryCopy(array.v+idx, n->v, sizeof(DASM_Inst)*n->count);
+    MemoryCopy(array.v+idx, n->v, sizeof(DASM_Line)*n->count);
     idx += n->count;
   }
   return array;
 }
 
 internal U64
-dasm_inst_array_idx_from_code_off__linear_scan(DASM_InstArray *array, U64 off)
+dasm_line_array_idx_from_code_off__linear_scan(DASM_LineArray *array, U64 off)
 {
   U64 result = 0;
   for(U64 idx = 0; idx < array->count; idx += 1)
@@ -76,7 +194,7 @@ dasm_inst_array_idx_from_code_off__linear_scan(DASM_InstArray *array, U64 off)
     if(array->v[idx].code_off <= off && off < next_off)
     {
       result = idx;
-      if(!(array->v[idx].flags & DASM_InstFlag_Decorative))
+      if(!(array->v[idx].flags & DASM_LineFlag_Decorative))
       {
         break;
       }
@@ -86,7 +204,7 @@ dasm_inst_array_idx_from_code_off__linear_scan(DASM_InstArray *array, U64 off)
 }
 
 internal U64
-dasm_inst_array_code_off_from_idx(DASM_InstArray *array, U64 idx)
+dasm_line_array_code_off_from_idx(DASM_LineArray *array, U64 idx)
 {
   U64 off = 0;
   if(idx < array->count)
@@ -288,7 +406,7 @@ dasm_info_from_key_params(DASM_Scope *scope, U128 key, DASM_Params *params, U128
   {
     U128 hash = hs_hash_from_key(key, rewind_idx);
     result = dasm_info_from_hash_params(scope, hash, params);
-    if(result.insts.count != 0)
+    if(result.lines.count != 0)
     {
       if(hash_out)
       {
@@ -419,7 +537,7 @@ dasm_parse_thread__entry_point(void *p)
     }
     
     //- rjf: data * arch * addr * dbg -> decode artifacts
-    DASM_InstChunkList inst_list = {0};
+    DASM_LineChunkList line_list = {0};
     String8List inst_strings = {0};
     if(got_task)
     {
@@ -431,41 +549,17 @@ dasm_parse_thread__entry_point(void *p)
         case Architecture_x64:
         case Architecture_x86:
         {
-          // rjf: determine zydis formatter style
-          ZydisFormatterStyle style = ZYDIS_FORMATTER_STYLE_INTEL;
-          switch(params.syntax)
-          {
-            default:{}break;
-            case DASM_Syntax_Intel:{style = ZYDIS_FORMATTER_STYLE_INTEL;}break;
-            case DASM_Syntax_ATT:  {style = ZYDIS_FORMATTER_STYLE_ATT;}break;
-          }
-          
           // rjf: disassemble
           RDI_SourceFile *last_file = &rdi_nil_element_union.source_file;
           RDI_Line *last_line = 0;
           for(U64 off = 0; off < data.size;)
           {
             // rjf: disassemble one instruction
-            ZydisDisassembledInstruction zinst = {0};
-            ZyanStatus status = ZydisDisassemble(ZYDIS_MACHINE_MODE_LONG_64,
-                                                 params.vaddr+off,
-                                                 data.str+off,
-                                                 data.size-off,
-                                                 &zinst,
-                                                 style);
-            if(zinst.info.length == 0)
+            DASM_Inst inst = dasm_inst_from_code(scratch.arena, params.arch, params.vaddr+off, str8_skip(data, off), params.syntax);
+            if(inst.size == 0)
             {
               break;
             }
-            
-            // rjf: analyze
-            ZydisDecodedOperand *first_op = (zinst.info.operand_count_visible > 0 ? &zinst.operands[0] : 0);
-            U64 rel_voff = 0;
-            if(first_op != 0)
-            {
-              ZydisCalcAbsoluteAddress(&zinst.info, first_op, params.vaddr+off, &rel_voff);
-            }
-            U64 jump_dst_vaddr = rel_voff;
             
             // rjf: push strings derived from voff -> line info
             if(params.style_flags & (DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines))
@@ -491,17 +585,17 @@ dasm_parse_thread__entry_point(void *p)
                        file->normal_full_path_string_idx != 0 && file_normalized_full_path.size != 0)
                     {
                       String8 inst_string = push_str8f(scratch.arena, "> %S", file_normalized_full_path);
-                      DASM_Inst inst = {u32_from_u64_saturate(off), DASM_InstFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                      DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
                                                                                                        inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-                      dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
+                      dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
                       str8_list_push(scratch.arena, &inst_strings, inst_string);
                     }
                     if(params.style_flags & DASM_StyleFlag_SourceFilesNames && file->normal_full_path_string_idx == 0)
                     {
                       String8 inst_string = str8_lit(">");
-                      DASM_Inst inst = {u32_from_u64_saturate(off), DASM_InstFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                      DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
                                                                                                        inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-                      dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
+                      dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
                       str8_list_push(scratch.arena, &inst_strings, inst_string);
                     }
                     last_file = file;
@@ -535,9 +629,9 @@ dasm_parse_thread__entry_point(void *p)
                         if(line_text.size != 0)
                         {
                           String8 inst_string = push_str8f(scratch.arena, "> %S", line_text);
-                          DASM_Inst inst = {u32_from_u64_saturate(off), DASM_InstFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
+                          DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
                                                                                                            inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-                          dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
+                          dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
                           str8_list_push(scratch.arena, &inst_strings, inst_string);
                         }
                       }
@@ -548,7 +642,7 @@ dasm_parse_thread__entry_point(void *p)
               }
             }
             
-            // rjf: push
+            // rjf: push line
             String8 addr_part = {0};
             if(params.style_flags & DASM_StyleFlag_Addresses)
             {
@@ -559,11 +653,11 @@ dasm_parse_thread__entry_point(void *p)
             {
               String8List code_bytes_strings = {0};
               str8_list_push(scratch.arena, &code_bytes_strings, str8_lit("{"));
-              for(U64 byte_idx = 0; byte_idx < zinst.info.length || byte_idx < 16; byte_idx += 1)
+              for(U64 byte_idx = 0; byte_idx < inst.size || byte_idx < 16; byte_idx += 1)
               {
-                if(byte_idx < zinst.info.length)
+                if(byte_idx < inst.size)
                 {
-                  str8_list_pushf(scratch.arena, &code_bytes_strings, "%02x%s ", (U32)data.str[off+byte_idx], byte_idx == zinst.info.length-1 ? "}" : "");
+                  str8_list_pushf(scratch.arena, &code_bytes_strings, "%02x%s ", (U32)data.str[off+byte_idx], byte_idx == inst.size-1 ? "}" : "");
                 }
                 else if(byte_idx < 8)
                 {
@@ -574,9 +668,9 @@ dasm_parse_thread__entry_point(void *p)
               code_bytes_part = str8_list_join(scratch.arena, &code_bytes_strings, 0);
             }
             String8 symbol_part = {0};
-            if(jump_dst_vaddr != 0 && rdi != &di_rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
+            if(inst.jump_dest_vaddr != 0 && rdi != &di_rdi_parsed_nil && params.style_flags & DASM_StyleFlag_SymbolNames)
             {
-              RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, jump_dst_vaddr-params.base_vaddr);
+              RDI_U32 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, inst.jump_dest_vaddr-params.base_vaddr);
               if(scope_idx != 0)
               {
                 RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
@@ -590,14 +684,14 @@ dasm_parse_thread__entry_point(void *p)
                 }
               }
             }
-            String8 inst_string = push_str8f(scratch.arena, "%S%S%s%S", addr_part, code_bytes_part, zinst.text, symbol_part);
-            DASM_Inst inst = {u32_from_u64_saturate(off), 0, rel_voff, r1u64(inst_strings.total_size + inst_strings.node_count,
-                                                                             inst_strings.total_size + inst_strings.node_count + inst_string.size)};
-            dasm_inst_chunk_list_push(scratch.arena, &inst_list, 1024, &inst);
+            String8 inst_string = push_str8f(scratch.arena, "%S%S%S%S", addr_part, code_bytes_part, inst.string, symbol_part);
+            DASM_Line line = {u32_from_u64_saturate(off), 0, inst.jump_dest_vaddr, r1u64(inst_strings.total_size + inst_strings.node_count,
+                                                                                         inst_strings.total_size + inst_strings.node_count + inst_string.size)};
+            dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &line);
             str8_list_push(scratch.arena, &inst_strings, inst_string);
             
             // rjf: increment
-            off += zinst.info.length;
+            off += inst.size;
           }
         }break;
       }
@@ -637,7 +731,7 @@ dasm_parse_thread__entry_point(void *p)
       //- rjf: produce value bundle
       info_arena = arena_alloc();
       info.text_key = text_key;
-      info.insts = dasm_inst_array_from_chunk_list(info_arena, &inst_list);
+      info.lines = dasm_line_array_from_chunk_list(info_arena, &line_list);
     }
     
     //- rjf: commit results to cache

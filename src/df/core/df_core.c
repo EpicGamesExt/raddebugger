@@ -669,175 +669,6 @@ df_string_from_cfg_node_key(DF_CfgNode *node, String8 key, StringMatchFlags flag
 }
 
 ////////////////////////////////
-//~ rjf: Disassembling
-
-#include "third_party/udis86/config.h"
-#include "third_party/udis86/udis86.h"
-#include "third_party/udis86/libudis86/syn.h"
-
-internal DF_Inst
-df_single_inst_from_machine_code__x64(Arena *arena, U64 start_voff, String8 string)
-{
-  Architecture arch = Architecture_x64;
-  
-  //- rjf: prep ud state
-  struct ud ud_ctx_;
-  struct ud *ud_ctx = &ud_ctx_;
-  ud_init(ud_ctx);
-  ud_set_mode(ud_ctx, bit_size_from_arch(arch));
-  ud_set_pc(ud_ctx, start_voff);
-  ud_set_input_buffer(ud_ctx, string.str, string.size);
-  ud_set_vendor(ud_ctx, UD_VENDOR_ANY);
-  ud_set_syntax(ud_ctx, UD_SYN_INTEL);
-  
-  //- rjf: disassembly + get info
-  U32 bytes_disassembled = ud_disassemble(ud_ctx);
-  struct ud_operand *first_op = (struct ud_operand *)ud_insn_opr(ud_ctx, 0);
-  U64 rel_voff = (first_op != 0 && first_op->type == UD_OP_JIMM) ? ud_syn_rel_target(ud_ctx, first_op) : 0;
-  DF_InstFlags flags = 0;
-  enum ud_mnemonic_code code = ud_insn_mnemonic(ud_ctx);
-  switch(code)
-  {
-    case UD_Icall:
-    {
-      flags |= DF_InstFlag_Call;
-    }break;
-    
-    /* TODO(wonchun)
-  case UD_Iiretd:
-  case UD_Iiretw:
-    */
-    
-    case UD_Ija:
-    case UD_Ijae:
-    case UD_Ijb:
-    case UD_Ijbe:
-    case UD_Ijcxz:
-    case UD_Ijecxz:
-    case UD_Ijg:
-    case UD_Ijge:
-    case UD_Ijl:
-    case UD_Ijle:
-    {
-      flags |= DF_InstFlag_Branch;
-    }break;
-    
-    case UD_Ijmp:
-    {
-      flags |= DF_InstFlag_UnconditionalJump;
-    }break;
-    
-    case UD_Ijno:
-    case UD_Ijnp:
-    case UD_Ijns:
-    case UD_Ijnz:
-    case UD_Ijo:
-    case UD_Ijp:
-    case UD_Ijrcxz:
-    case UD_Ijs:
-    case UD_Ijz:
-    case UD_Iloop:
-    case UD_Iloope:
-    case UD_Iloopne:
-    {
-      flags |= DF_InstFlag_Branch;
-    }break;
-    
-    case UD_Iret:
-    case UD_Iretf:
-    {
-      flags |= DF_InstFlag_Return;
-    }break;
-    
-    /* TODO(wonchun)
-  case UD_Isyscall:
-  case UD_Isysenter:
-  case UD_Isysexit:
-  case UD_Isysret:
-  case UD_Ivmcall:
-  case UD_Ivmmcall:
-    */
-    default:
-    {
-      flags |= DF_InstFlag_NonFlow;
-    }break;
-  }
-  
-  //- rjf: check for stack pointer modifications
-  S64 sp_delta = 0;
-  {
-    struct ud_operand *dst_op = (struct ud_operand *)ud_insn_opr(ud_ctx, 0);
-    struct ud_operand *src_op = (struct ud_operand *)ud_insn_opr(ud_ctx, 1);
-    
-    // rjf: direct additions/subtractions to RSP
-    if(dst_op && src_op && dst_op->base == UD_R_RSP && dst_op->type == UD_OP_REG)
-    {
-      flags |= DF_InstFlag_ChangesStackPointer;
-      // TODO(rjf): does the library report constant changes to the stack pointer
-      // as UD_OP_CONST too? what does UD_OP_JIMM refer to?
-      if(src_op->base == UD_NONE && src_op->type == UD_OP_IMM && code == UD_Isub)
-      {
-        S64 sign = -1;
-        sp_delta = sign * src_op->lval.sqword;
-      }
-      else if(src_op->base == UD_NONE && src_op->type == UD_OP_IMM && code == UD_Iadd)
-      {
-        S64 sign = +1;
-        sp_delta = sign * src_op->lval.sqword;
-      }
-      else
-      {
-        flags |= DF_InstFlag_ChangesStackPointerVariably;
-      }
-    }
-    
-    // rjf: push/pop
-    if(code == UD_Ipush)
-    {
-      flags |= DF_InstFlag_ChangesStackPointer;
-      sp_delta = -8;
-    }
-    else if(code == UD_Ipop)
-    {
-      flags |= DF_InstFlag_ChangesStackPointer;
-      sp_delta = +8;
-    }
-    
-    // rjf: mark extra flags
-    if(ud_ctx->pfx_rep != 0 ||
-       ud_ctx->pfx_repe != 0 ||
-       ud_ctx->pfx_repne != 0)
-    {
-      flags |= DF_InstFlag_Repeats;
-    }
-  }
-  
-  //- rjf: fill+return
-  DF_Inst inst = {0};
-  inst.size = bytes_disassembled;
-  inst.string = push_str8_copy(arena, str8_cstring((char *)ud_insn_asm(ud_ctx)));
-  inst.rel_voff = rel_voff;
-  inst.sp_delta = sp_delta;
-  inst.flags = flags;
-  return inst;
-}
-
-internal DF_Inst
-df_single_inst_from_machine_code(Arena *arena, Architecture arch, U64 start_voff, String8 string)
-{
-  DF_Inst result = {0};
-  switch(arch)
-  {
-    default:{}break;
-    case Architecture_x64:
-    {
-      result = df_single_inst_from_machine_code__x64(arena, start_voff, string);
-    }break;
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Debug Info Extraction Type Pure Functions
 
 internal DF_LineList
@@ -859,15 +690,14 @@ df_line_list_copy(Arena *arena, DF_LineList *list)
 //~ rjf: Control Flow Analysis Functions
 
 internal DF_CtrlFlowInfo
-df_ctrl_flow_info_from_vaddr_code__x64(Arena *arena, DF_InstFlags exit_points_mask, U64 vaddr, String8 code)
+df_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code)
 {
   Temp scratch = scratch_begin(&arena, 1);
   DF_CtrlFlowInfo info = {0};
   for(U64 offset = 0; offset < code.size;)
   {
-    DF_Inst inst = df_single_inst_from_machine_code__x64(scratch.arena, 0, str8_skip(code, offset));
+    DASM_Inst inst = dasm_inst_from_code(scratch.arena, arch, vaddr+offset, str8_skip(code, offset), DASM_Syntax_Intel);
     U64 inst_vaddr = vaddr+offset;
-    info.cumulative_sp_delta += inst.sp_delta;
     offset += inst.size;
     info.total_size += inst.size;
     if(inst.flags & exit_points_mask)
@@ -875,12 +705,7 @@ df_ctrl_flow_info_from_vaddr_code__x64(Arena *arena, DF_InstFlags exit_points_ma
       DF_CtrlFlowPoint point = {0};
       point.inst_flags = inst.flags;
       point.vaddr = inst_vaddr;
-      point.jump_dest_vaddr = 0;
-      point.expected_sp_delta = info.cumulative_sp_delta;
-      if(inst.rel_voff != 0)
-      {
-        point.jump_dest_vaddr = (U64)(point.vaddr + (S64)((S32)inst.rel_voff));
-      }
+      point.jump_dest_vaddr = inst.jump_dest_vaddr;
       DF_CtrlFlowPointNode *node = push_array(arena, DF_CtrlFlowPointNode, 1);
       node->v = point;
       SLLQueuePush(info.exit_points.first, info.exit_points.last, node);
@@ -889,21 +714,6 @@ df_ctrl_flow_info_from_vaddr_code__x64(Arena *arena, DF_InstFlags exit_points_ma
   }
   scratch_end(scratch);
   return info;
-}
-
-internal DF_CtrlFlowInfo
-df_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DF_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code)
-{
-  DF_CtrlFlowInfo result = {0};
-  switch(arch)
-  {
-    default:{}break;
-    case Architecture_x64:
-    {
-      result = df_ctrl_flow_info_from_vaddr_code__x64(arena, exit_points_mask, vaddr, code);
-    }break;
-  }
-  return result;
 }
 
 ////////////////////////////////
@@ -2833,10 +2643,10 @@ df_trap_net_from_thread__step_over_inst(Arena *arena, DF_Entity *thread)
   if(machine_code.size != 0)
   {
     // rjf: decode instruction
-    DF_Inst inst = df_single_inst_from_machine_code(scratch.arena, arch, ip_vaddr, machine_code);
+    DASM_Inst inst = dasm_inst_from_code(scratch.arena, arch, ip_vaddr, machine_code, DASM_Syntax_Intel);
     
     // rjf: call => run until call returns
-    if(inst.flags & DF_InstFlag_Call || inst.flags & DF_InstFlag_Repeats)
+    if(inst.flags & DASM_InstFlag_Call || inst.flags & DASM_InstFlag_Repeats)
     {
       CTRL_Trap trap = {CTRL_TrapFlag_EndStepping, ip_vaddr+inst.size};
       ctrl_trap_list_push(arena, &result, &trap);
@@ -2925,11 +2735,11 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
   if(good_line_info)
   {
     ctrl_flow_info = df_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
-                                                            DF_InstFlag_Call|
-                                                            DF_InstFlag_Branch|
-                                                            DF_InstFlag_UnconditionalJump|
-                                                            DF_InstFlag_ChangesStackPointer|
-                                                            DF_InstFlag_Return,
+                                                            DASM_InstFlag_Call|
+                                                            DASM_InstFlag_Branch|
+                                                            DASM_InstFlag_UnconditionalJump|
+                                                            DASM_InstFlag_ChangesStackPointer|
+                                                            DASM_InstFlag_Return,
                                                             arch,
                                                             line_vaddr_rng.min,
                                                             machine_code);
@@ -2938,7 +2748,7 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
       log_infof("flags: %x\n", ctrl_flow_info.flags);
       LogInfoNamedBlockF("exit_points") for(DF_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
       {
-        log_infof("{vaddr:0x%I64x, jump_dest_vaddr:0x%I64x, expected_sp_delta:0x%I64x, inst_flags:%x}\n", n->v.vaddr, n->v.jump_dest_vaddr, n->v.expected_sp_delta, n->v.inst_flags);
+        log_infof("{vaddr:0x%I64x, jump_dest_vaddr:0x%I64x, inst_flags:%x}\n", n->v.vaddr, n->v.jump_dest_vaddr, n->v.inst_flags);
       }
     }
   }
@@ -2952,9 +2762,9 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     U64 trap_addr = point->vaddr;
     
     // rjf: branches/jumps/returns => single-step & end, OR trap @ destination.
-    if(point->inst_flags & (DF_InstFlag_Branch|
-                            DF_InstFlag_UnconditionalJump|
-                            DF_InstFlag_Return))
+    if(point->inst_flags & (DASM_InstFlag_Branch|
+                            DASM_InstFlag_UnconditionalJump|
+                            DASM_InstFlag_Return))
     {
       flags |= (CTRL_TrapFlag_SingleStepAfterHit|CTRL_TrapFlag_EndStepping);
       
@@ -2974,13 +2784,13 @@ df_trap_net_from_thread__step_over_line(Arena *arena, DF_Entity *thread)
     }
     
     // rjf: call => place spoof at return spot in stack, single-step after hitting
-    else if(point->inst_flags & DF_InstFlag_Call)
+    else if(point->inst_flags & DASM_InstFlag_Call)
     {
       flags |= (CTRL_TrapFlag_BeginSpoofMode|CTRL_TrapFlag_SingleStepAfterHit);
     }
     
     // rjf: instruction changes stack pointer => save off the stack pointer, single-step over, keep stepping
-    else if(point->inst_flags & DF_InstFlag_ChangesStackPointer)
+    else if(point->inst_flags & DASM_InstFlag_ChangesStackPointer)
     {
       flags |= (CTRL_TrapFlag_SingleStepAfterHit|CTRL_TrapFlag_SaveStackPointer);
     }
@@ -3066,11 +2876,11 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
   if(good_line_info)
   {
     ctrl_flow_info = df_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
-                                                            DF_InstFlag_Call|
-                                                            DF_InstFlag_Branch|
-                                                            DF_InstFlag_UnconditionalJump|
-                                                            DF_InstFlag_ChangesStackPointer|
-                                                            DF_InstFlag_Return,
+                                                            DASM_InstFlag_Call|
+                                                            DASM_InstFlag_Branch|
+                                                            DASM_InstFlag_UnconditionalJump|
+                                                            DASM_InstFlag_ChangesStackPointer|
+                                                            DASM_InstFlag_Return,
                                                             arch,
                                                             line_vaddr_rng.min,
                                                             machine_code);
@@ -3085,10 +2895,10 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
     U64 trap_addr = point->vaddr;
     
     // rjf: branches/jumps/returns => single-step & end, OR trap @ destination.
-    if(point->inst_flags & (DF_InstFlag_Call|
-                            DF_InstFlag_Branch|
-                            DF_InstFlag_UnconditionalJump|
-                            DF_InstFlag_Return))
+    if(point->inst_flags & (DASM_InstFlag_Call|
+                            DASM_InstFlag_Branch|
+                            DASM_InstFlag_UnconditionalJump|
+                            DASM_InstFlag_Return))
     {
       flags |= (CTRL_TrapFlag_SingleStepAfterHit|CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck);
       
@@ -3107,7 +2917,7 @@ df_trap_net_from_thread__step_into_line(Arena *arena, DF_Entity *thread)
     }
     
     // rjf: instruction changes stack pointer => save off the stack pointer, single-step over, keep stepping
-    else if(point->inst_flags & DF_InstFlag_ChangesStackPointer)
+    else if(point->inst_flags & DASM_InstFlag_ChangesStackPointer)
     {
       flags |= (CTRL_TrapFlag_SingleStepAfterHit|CTRL_TrapFlag_SaveStackPointer);
     }

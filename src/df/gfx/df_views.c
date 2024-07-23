@@ -410,7 +410,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 }
 
 internal void
-df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -459,7 +459,7 @@ df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewStat
 }
 
 internal DF_CodeViewBuildResult
-df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_InstArray *dasm_insts, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -669,7 +669,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     }
     
     // rjf: find live threads mapping to disasm
-    if(dasm_insts) ProfScope("find live threads mapping to this disassembly")
+    if(dasm_lines) ProfScope("find live threads mapping to this disassembly")
     {
       DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
       DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
@@ -681,7 +681,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
         if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) == process && contains_1u64(dasm_vaddr_range, rip_vaddr))
         {
           U64 rip_off = rip_vaddr - dasm_vaddr_range.min;
-          S64 line_num = dasm_inst_array_idx_from_code_off__linear_scan(dasm_insts, rip_off)+1;
+          S64 line_num = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, rip_off)+1;
           if(contains_1s64(visible_line_num_range, line_num))
           {
             U64 slice_line_idx = (line_num-visible_line_num_range.min);
@@ -692,7 +692,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     }
     
     // rjf: find breakpoints mapping to this disasm
-    if(dasm_insts) ProfScope("find breakpoints mapping to this disassembly")
+    if(dasm_lines) ProfScope("find breakpoints mapping to this disassembly")
     {
       DF_EntityList bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
       for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
@@ -701,7 +701,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
         if(bp->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, bp->vaddr))
         {
           U64 off = bp->vaddr-dasm_vaddr_range.min;
-          U64 idx = dasm_inst_array_idx_from_code_off__linear_scan(dasm_insts, off);
+          U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
           S64 line_num = (S64)(idx+1);
           if(contains_1s64(visible_line_num_range, line_num))
           {
@@ -713,7 +713,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     }
     
     // rjf: find watch pins mapping to this disasm
-    if(dasm_insts) ProfScope("find watch pins mapping to this disassembly")
+    if(dasm_lines) ProfScope("find watch pins mapping to this disassembly")
     {
       DF_EntityList pins = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
       for(DF_EntityNode *n = pins.first; n != 0; n = n->next)
@@ -722,7 +722,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
         if(pin->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, pin->vaddr))
         {
           U64 off = pin->vaddr-dasm_vaddr_range.min;
-          U64 idx = dasm_inst_array_idx_from_code_off__linear_scan(dasm_insts, off);
+          U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
           S64 line_num = (S64)(idx+1);
           if(contains_1s64(visible_line_num_range, line_num))
           {
@@ -734,13 +734,13 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     }
     
     // rjf: fill dasm -> src info
-    if(dasm_insts)
+    if(dasm_lines)
     {
       DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
       DI_Key dbgi_key = df_dbgi_key_from_module(module);
       for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
       {
-        U64 vaddr = dasm_vaddr_range.min + dasm_inst_array_code_off_from_idx(dasm_insts, line_num-1);
+        U64 vaddr = dasm_vaddr_range.min + dasm_line_array_code_off_from_idx(dasm_lines, line_num-1);
         U64 voff = df_voff_from_vaddr(module, vaddr);
         U64 slice_idx = line_num-visible_line_num_range.min;
         code_slice_params.line_vaddrs[slice_idx] = vaddr;
@@ -749,7 +749,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     }
     
     // rjf: add dasm dbgi key to relevant dbgis
-    if(dasm_insts != 0)
+    if(dasm_lines != 0)
     {
       di_key_list_push(scratch.arena, &code_slice_params.relevant_dbgi_keys, &dasm_dbgi_key);
     }
@@ -6691,7 +6691,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   
   //- rjf: process general code-view commands
-  df_code_view_cmds(ws, panel, view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
+  df_code_view_cmds(ws, panel, view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.lines, dasm_vaddr_range, dasm_dbgi_key);
   
   //- rjf: process disassembly-specific commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
@@ -6798,7 +6798,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
-  B32 has_disasm = (dasm_info.insts.count != 0 && dasm_text_info.lines_count != 0);
+  B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
   B32 is_loading = (!has_disasm && !df_entity_is_nil(process) && dim_1u64(dasm_vaddr_range) != 0);
   
   //////////////////////////////
@@ -6816,7 +6816,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   {
     U64 vaddr = dv->goto_vaddr;
     dv->goto_vaddr = 0;
-    U64 line_idx = dasm_inst_array_idx_from_code_off__linear_scan(&dasm_info.insts, vaddr-dasm_vaddr_range.min);
+    U64 line_idx = dasm_line_array_idx_from_code_off__linear_scan(&dasm_info.lines, vaddr-dasm_vaddr_range.min);
     S64 line_num = (S64)(line_idx+1);
     cv->goto_line_num = line_num;
   }
@@ -6826,7 +6826,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //
   if(!is_loading && has_disasm)
   {
-    df_code_view_build(scratch.arena, ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.insts, dasm_vaddr_range, dasm_dbgi_key);
+    df_code_view_build(scratch.arena, ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.lines, dasm_vaddr_range, dasm_dbgi_key);
   }
   
   //////////////////////////////
@@ -6834,7 +6834,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //
   if(!is_loading && has_disasm)
   {
-    U64 off = dasm_inst_array_code_off_from_idx(&dasm_info.insts, df_interact_regs()->cursor.line-1);
+    U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, df_interact_regs()->cursor.line-1);
     df_interact_regs()->vaddr_range = r1u64(dasm_base_vaddr+off, dasm_base_vaddr+off);
     df_interact_regs()->voff_range = df_voff_range_from_vaddr_range(dasm_module, df_interact_regs()->vaddr_range);
     df_interact_regs()->lines = df_lines_from_dbgi_key_voff(df_frame_arena(), &dasm_dbgi_key, df_interact_regs()->voff_range.min);
@@ -6854,7 +6854,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       DF_Font(ws, DF_FontSlot_Code)
     {
       DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      U64 cursor_vaddr = (1 <= view->cursor.line && view->cursor.line <= dasm_info.insts.count) ? (dasm_vaddr_range.min+dasm_info.insts.v[view->cursor.line-1].code_off) : 0;
+      U64 cursor_vaddr = (1 <= view->cursor.line && view->cursor.line <= dasm_info.lines.count) ? (dasm_vaddr_range.min+dasm_info.lines.v[view->cursor.line-1].code_off) : 0;
       ui_labelf("%S", path_normalized_from_string(scratch.arena, module->name));
       ui_spacer(ui_em(1.5f, 1));
       ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, view->cursor.line, view->cursor.column);

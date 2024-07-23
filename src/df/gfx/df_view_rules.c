@@ -717,7 +717,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
         break;
       }
     }
-    TXT_LineTokensSlice line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &dasm_text_info, dasm_text_data, r1s64(1, dasm_info.insts.count));
+    TXT_LineTokensSlice line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &dasm_text_info, dasm_text_data, r1s64(1, dasm_info.lines.count));
     
     //- rjf: info -> code slice info
     DF_CodeSliceParams code_slice_params = {0};
@@ -734,8 +734,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
       code_slice_params.line_infos = push_array(scratch.arena, DF_LineList, dasm_text_info.lines_count);
       for(U64 line_idx = 0; line_idx < dasm_text_info.lines_count; line_idx += 1)
       {
-        code_slice_params.line_text[line_idx] = str8_substr(dasm_text_data, dasm_info.insts.v[line_idx].text_range);
-        code_slice_params.line_ranges[line_idx] = dasm_info.insts.v[line_idx].text_range;
+        code_slice_params.line_text[line_idx] = str8_substr(dasm_text_data, dasm_info.lines.v[line_idx].text_range);
+        code_slice_params.line_ranges[line_idx] = dasm_info.lines.v[line_idx].text_range;
         code_slice_params.line_tokens[line_idx] = line_tokens_slice.line_tokens[line_idx];
       }
       code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
@@ -749,7 +749,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
     }
     
     //- rjf: build code slice
-    if(dasm_info.insts.count != 0 && dasm_text_info.lines_count != 0)
+    if(dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0)
       UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_px(dasm_text_info.lines_max_size*ui_top_font_size()*1.2f, 1.f)) UI_Column UI_Padding(ui_pct(1, 0))
     {
       DF_CodeSliceSignal sig = df_code_slice(ws, ctrl_ctx, parse_ctx, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));

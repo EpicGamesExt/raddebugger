@@ -139,69 +139,6 @@ typedef enum DF_RunKind
 DF_RunKind;
 
 ////////////////////////////////
-//~ rjf: Disassembly Types
-
-typedef U32 DF_InstFlags;
-enum
-{
-  DF_InstFlag_Call                        = (1<<0),
-  DF_InstFlag_Branch                      = (1<<1),
-  DF_InstFlag_UnconditionalJump           = (1<<2),
-  DF_InstFlag_Return                      = (1<<3),
-  DF_InstFlag_NonFlow                     = (1<<4),
-  DF_InstFlag_Repeats                     = (1<<5),
-  DF_InstFlag_ChangesStackPointer         = (1<<6),
-  DF_InstFlag_ChangesStackPointerVariably = (1<<7),
-};
-
-typedef struct DF_Inst DF_Inst;
-struct DF_Inst
-{
-  DF_InstFlags flags;
-  U64 size;
-  String8 string;
-  U64 rel_voff;
-  S64 sp_delta;
-};
-
-typedef struct DF_InstNode DF_InstNode;
-struct DF_InstNode
-{
-  DF_InstNode *next;
-  DF_Inst inst;
-};
-
-typedef struct DF_InstList DF_InstList;
-struct DF_InstList
-{
-  DF_InstNode *first;
-  DF_InstNode *last;
-  U64 count;
-};
-
-typedef struct DF_InstArray DF_InstArray;
-struct DF_InstArray
-{
-  DF_InstArray *v;
-  U64 count;
-};
-
-typedef struct DF_InstMemVOffTuple DF_InstMemVOffTuple;
-struct DF_InstMemVOffTuple
-{
-  DF_Inst inst;
-  String8 mem;
-  U64 voff;
-};
-
-typedef struct DF_InstMemVOffTupleArray DF_InstMemVOffTupleArray;
-struct DF_InstMemVOffTupleArray
-{
-  DF_InstMemVOffTuple *v;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Control Flow Analysis Types
 
 typedef U32 DF_CtrlFlowFlags;
@@ -215,8 +152,7 @@ struct DF_CtrlFlowPoint
 {
   U64 vaddr;
   U64 jump_dest_vaddr;
-  S64 expected_sp_delta;
-  DF_InstFlags inst_flags;
+  DASM_InstFlags inst_flags;
 };
 
 typedef struct DF_CtrlFlowPointNode DF_CtrlFlowPointNode;
@@ -240,7 +176,6 @@ struct DF_CtrlFlowInfo
   DF_CtrlFlowFlags flags;
   DF_CtrlFlowPointList exit_points;
   U64 total_size;
-  S64 cumulative_sp_delta;
 };
 
 ////////////////////////////////
@@ -1457,12 +1392,6 @@ internal Vec4F32 df_hsva_from_cfg_node(DF_CfgNode *node);
 internal String8 df_string_from_cfg_node_key(DF_CfgNode *node, String8 key, StringMatchFlags flags);
 
 ////////////////////////////////
-//~ rjf: Disassembly Pure Functions
-
-internal DF_Inst df_single_inst_from_machine_code__x64(Arena *arena, U64 start_voff, String8 string);
-internal DF_Inst df_single_inst_from_machine_code(Arena *arena, Architecture arch, U64 start_voff, String8 string);
-
-////////////////////////////////
 //~ rjf: Debug Info Extraction Type Pure Functions
 
 internal DF_LineList df_line_list_copy(Arena *arena, DF_LineList *list);
@@ -1470,8 +1399,7 @@ internal DF_LineList df_line_list_copy(Arena *arena, DF_LineList *list);
 ////////////////////////////////
 //~ rjf: Control Flow Analysis Pure Functions
 
-internal DF_CtrlFlowInfo df_ctrl_flow_info_from_vaddr_code__x64(Arena *arena, DF_InstFlags exit_points_mask, U64 vaddr, String8 code);
-internal DF_CtrlFlowInfo df_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DF_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code);
+internal DF_CtrlFlowInfo df_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code);
 
 ////////////////////////////////
 //~ rjf: Command Type Pure Functions
