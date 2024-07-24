@@ -1204,6 +1204,17 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
           Vec4F32 hsva = hsva_from_rgba(color);
           ui_do_color_tooltip_hsva(hsva);
         }
+        DF_RichHoverInfo info = {0};
+        {
+          Rng1U64 hover_vaddr_range = r1u64(vaddr_range.min+off_bytes, vaddr_range.min+off_bytes+r_tex2d_format_bytes_per_pixel_table[topology.fmt]);
+          DF_Entity *module = df_module_from_process_vaddr(process, info.vaddr_range.min);
+          info.process     = df_handle_from_entity(process);
+          info.vaddr_range = hover_vaddr_range;
+          info.module      = df_handle_from_entity(module);
+          info.voff_range  = df_voff_range_from_vaddr_range(module, info.vaddr_range);
+          info.dbgi_key    = df_dbgi_key_from_module(module);
+        }
+        df_set_rich_hover_info(&info);
       }
     }
   }

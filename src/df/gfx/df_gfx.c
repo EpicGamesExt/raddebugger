@@ -12232,9 +12232,13 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
   //
   UI_Parent(text_container_box) ProfScope("build line text") UI_Focus(UI_FocusKind_Off)
   {
-    DF_RichHoverInfo rich_hover_info = df_get_rich_hover_info();
-    DI_Key hovered_line_dbgi_key = rich_hover_info.dbgi_key;
-    U64 hovered_line_voff = rich_hover_info.voff_range.min;
+    DF_RichHoverInfo rich_hover = df_get_rich_hover_info();
+    Rng1U64 rich_hover_voff_range = rich_hover.voff_range;
+    if(rich_hover_voff_range.min == 0 && rich_hover_voff_range.max == 0)
+    {
+      DF_Entity *module = df_entity_from_handle(rich_hover.module);
+      rich_hover_voff_range = df_voff_range_from_vaddr_range(module, rich_hover.vaddr_range);
+    }
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     UI_WidthFill
       UI_Column
@@ -12508,8 +12512,9 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           for(DF_LineNode *n = lines->first; n != 0; n = n->next)
           {
             if((n->v.pt.line == line_num || df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file))) &&
-               di_key_match(&n->v.dbgi_key, &hovered_line_dbgi_key) &&
-               n->v.voff_range.min <= hovered_line_voff && hovered_line_voff < n->v.voff_range.max)
+               ((di_key_match(&n->v.dbgi_key, &rich_hover.dbgi_key) &&
+                 n->v.voff_range.min <= rich_hover_voff_range.min && rich_hover_voff_range.min <= n->v.voff_range.max) ||
+                (params->line_vaddrs[line_idx] == rich_hover.vaddr_range.min && rich_hover.vaddr_range.min != 0)))
             {
               matches = 1;
               line_info_line_num = n->v.pt.line;
