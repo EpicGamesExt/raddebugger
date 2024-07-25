@@ -87,7 +87,7 @@ arena_push(Arena *arena, U64 size, U64 align)
   {
     U64 res_size = current->res_size;
     U64 cmt_size = current->cmt_size;
-    if(size > cmt_size)
+    if(size > res_size)
     {
       res_size = size + ARENA_HEADER_SIZE;
       cmt_size = size + ARENA_HEADER_SIZE;
@@ -99,7 +99,7 @@ arena_push(Arena *arena, U64 size, U64 align)
     SLLStackPush_N(arena->current, new_block, prev);
     current = new_block;
     pos_pre = AlignPow2(current->pos, align);
-    pos_pst = pos_pst + size;
+    pos_pst = pos_pre + size;
   }
   
   // rjf: commit new pages, if needed
