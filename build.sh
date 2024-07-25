@@ -122,7 +122,8 @@ else
   cd build
   ${compile_debug} "../src/metagen/metagen_main.c" ${compile_link} "${out}metagen.exe" || exit 1
   # Skip if compile only
-  [[ -z "${RAD_META_COMPILE_ONLY}" ]] && ./metagen.exe || exit 1
+  [[ -z "${RAD_META_COMPILE_ONLY}" ]] && (./metagen.exe || exit 1)
+  exit 0
   cd ${self_directory}
 fi
 
@@ -174,7 +175,7 @@ echo ${compile_debug}
 RAD_BUILD_ALL="1"
 [[ -n "${mule_module}" ]] &&  build_dll ../src/mule/mule_module.cpp mule_module.dll || exit 1
 [[ -n "${mule_hotload}" ]] && build_single ../src/mule/mule_hotload_main.c mule_hotload.exe ;
-build_dll ../src/mule/mule_hotload_module_main.c mule_hotload_module.dll || exit exit 1
+build_dll ../src/mule/mule_hotload_module_main.c mule_hotload_module.dll || exit 1
 
 if [[ "${mule_peb_trample}"=="1" ]] ; then
   didbuild=1

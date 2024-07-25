@@ -7,41 +7,51 @@
 ////////////////////////////////
 //~ NOTE(allen): Get all these linux includes
 
-#include <stdlib.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include <dirent.h>
+#include <dlfcn.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <linux/limits.h>
-#include <linux/mman.h>
 #include <linux/memfd.h>
-#include <sys/time.h>
-#include <dirent.h>
+#include <linux/mman.h>
 #include <pthread.h>
-#include <sys/syscall.h>
-#include <signal.h>
-#include <errno.h>
-#include <dlfcn.h>
-#include <sys/sysinfo.h>
 #include <semaphore.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/sysinfo.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <sys/utsname.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <uuid/uuid.h>
 
 //////////////////////////////////
- // Helper Typedefs
+// Helper Typedefs
+
+// -- Time --
 // Time broken into major and minor parts
 typedef struct timespec LNX_timespec;
 typedef struct timeval LNX_timeval;
 // Deconstructed Date-Time
 typedef struct tm LNX_date;
+
+// -- File --
 // File Statistics
+typedef S32 LNX_fd;
 typedef struct stat LNX_fstat;
 // Opaque directory stream of directory contents
 typedef DIR LNX_dir;
 // Opaque directory entry/file
 typedef struct dirent LNX_dir_entry;
 
-// Syncronization Primitives
+// -- Other --
+typedef uuid_t LNX_uuid;
+
+// -- Syncronization Primitives--
 typedef sem_t LNX_semaphore;
 typedef pthread_mutex_t LNX_mutex;
 typedef pthread_mutexattr_t LNX_mutex_attr;
@@ -89,9 +99,10 @@ struct LNX_Entity{
     } semaphore;
     struct{
       S32 fd;
-      U32 flags;
+      U32 flags;                // TODO: Maybe delete
       void* data;
       U64 size;
+      String8 shm_name;
     } map;
     LNX_mutex mutex;
     LNX_rwlock rwlock;
@@ -119,6 +130,12 @@ struct  LNX_version {
   U32 minor;
   U32 patch;
   String8 string;
+};
+
+typedef struct LNX_file_iter LNX_file_iter;
+struct LNX_file_iter {
+  LNX_dir* dir_stream;
+  S32 dir_fd;
 };
 
 internal B32 lnx_write_list_to_file_descriptor(int fd, String8List list);

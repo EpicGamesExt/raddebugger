@@ -1641,8 +1641,12 @@ os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
 {
   OS_FileIter* result = push_array(arena, OS_FileIter, 1);
   result->flags = flags;
+  // String8 tmp = push_str8_copy(arena, path);
   LNX_dir* directory = opendir((char*)path.str);
-  MemoryCopyTyped(result->memory, directory, 1);
+  LNX_fd dir_fd = open((char*)path.str, 0x0, 0x0);
+  LNX_file_iter* out_iter = (LNX_file_iter*)result->memory;
+  out_iter->dir_stream = directory;
+  out_iter->dir_fd = dir_fd;
 
   // Never fail, just let the iterator return false.
   return result;
@@ -1653,14 +1657,20 @@ os_file_iter_begin(Arena *arena, String8 path, OS_FileIterFlags flags)
 internal B32
 os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 {
+  MemoryZeroStruct(info_out);
   if (iter == NULL) { return 0; }
 
-  LNX_dir* directory = (LNX_dir*)iter->memory;
+  LNX_dir* directory = NULL;
   LNX_dir_entry* file = NULL;
+  LNX_fd working_path = -1;
   FileProperties props = {0};
   LNX_fstat stats = {0};
   B32 no_file = 0;
-  if (directory == NULL) { return 0; }
+
+  LNX_file_iter* iter_data = (LNX_file_iter*)iter->memory;
+  directory = iter_data->dir_stream;
+  working_path = iter_data->dir_fd;
+  if (directory == NULL || working_path == -1) { return 0; }
 
   // Should hopefully never infinite loop because readdir reaches NULL quickly
   for (;;)
@@ -1671,15 +1681,17 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 
     if (iter->flags & OS_FileIterFlag_SkipFiles && file->d_type == DT_REG ) { continue; }
     if (iter->flags & OS_FileIterFlag_SkipFolders && file->d_type == DT_DIR ) { continue; }
-    if (iter->flags & OS_FileIterFlag_SkipHiddenFiles && file->d_name[0] == '.'  ) { continue; }
+    // Aparently this part of the API is in an indeterminate state. So hardcoding the behavior.
+    // if (iter->flags & OS_FileIterFlag_SkipHiddenFiles && file->d_name[0] == '.'  ) { continue; }
+    if (file->d_name[0] == '.') { continue; }
     break;
   }
-
-  S32 fd = open(file->d_name, O_RDONLY, 0x0);
-  Assert(fd == 0);
+  LNX_fd fd = openat(working_path, file->d_name, 0x0, 0x0);
+  Assert(fd != -1); if (fd == -1) { return 0; }
   S32 stats_err = fstat(fd, &stats);
-  Assert(stats_err == 0);
+  Assert(stats_err == 0); if (stats_err != 0) { return 0; }
   close(fd);
+
   info_out->name = push_str8_copy(arena, str8_cstring(file->d_name));
   lnx_file_properties_from_stat(&info_out->props, &stats);
 
@@ -1689,9 +1701,10 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 internal void
 os_file_iter_end(OS_FileIter *iter)
 {
-  LNX_dir* directory = (LNX_dir*)iter->memory;
-  int failure = closedir(directory);
-  Assert(failure == 0);
+  LNX_file_iter* iter_info = (LNX_file_iter*)iter->memory;
+  int stream_failure = closedir(iter_info->dir_stream);
+  int fd_failure = close(iter_info->dir_fd);
+  Assert(stream_failure == 0 && fd_failure == 0);
 }
 
 //- rjf: directory creation
@@ -1735,29 +1748,50 @@ internal OS_Handle
 os_shared_memory_open(String8 name)
 {
   OS_Handle result = {0};
-  NotImplemented;
+  LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_MemoryMap);
+  LNX_fd fd = shm_open((char*)name.str, O_RDWR, 0x0 );
+  Assert(fd != -1);
+
+  entity->map.fd = fd;
+  entity->map.shm_name = name;
+  *result.u64 = IntFromPtr(entity);
+
   return result;
 }
 
 internal void
 os_shared_memory_close(OS_Handle handle)
 {
-  NotImplemented;
-  LNX_Entity entity = *lnx_entity_from_handle(handle);
-  munmap(entity.map.data, entity.map.size);
+  LNX_Entity* entity = lnx_entity_from_handle(handle);
+  shm_unlink( (char*)(entity->map.shm_name.str) );
 }
 
 internal void *
 os_shared_memory_view_open(OS_Handle handle, Rng1U64 range)
 {
-  NotImplemented;
-  return 0;
+  void* result = NULL;
+  LNX_Entity* entity = lnx_entity_from_handle(handle);
+  LNX_fd fd = entity->map.fd;
+
+  B32 use_huge = (range.max > os_large_page_size() && lnx_huge_page_enabled);
+  U32 flag_huge = (use_huge ? MAP_HUGETLB : 0x0);
+  U32 flag_prot = PROT_READ | PROT_WRITE;
+  U32 map_flags = MAP_SHARED | flag_huge | MAP_POPULATE;
+  void* mapping = mmap(NULL, range.max, flag_prot, map_flags, fd, 0);
+  Assert("Failed map memory for shared memory" && mapping != MAP_FAILED);
+
+  result = mapping + range.min; // Get the offset to the map opening
+  entity->map.data = mapping;
+  entity->map.size = range.max;
+
+  return result;
 }
 
 internal void
 os_shared_memory_view_close(OS_Handle handle, void *ptr)
 {
-  NotImplemented;
+  LNX_Entity entity = *lnx_entity_from_handle(handle);
+  munmap(entity.map.data, entity.map.size);
 }
 
 ////////////////////////////////
@@ -1833,12 +1867,42 @@ os_sleep_milliseconds(U32 msec){
 ////////////////////////////////
 //~ rjf: @os_hooks Child Processes (Implemented Per-OS)
 
+/* NOTE: A terminal can be opened for any process but there is no default
+ terminal emulator on Linux, so instead you Have to cycle through a bunch of
+ common ones (there aren't that many). There is the XDG desktop specification
+ but that's a little bit of a chore to parse and its not even always present.
+
+The environment is inhereited by default but is easy to change in the future
+with an execl variant. */
 internal B32
 os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out)
 {
+  B32 success = 0;
+  Temp scratch = scratch_begin(0, 0);
   // TODO(allen): I want to redo this API before I bother implementing it here
-  NotImplemented;
-  return(0);
+  String8List cmdline_list = options->cmd_line;
+  char** cmdline = (char**)push_array(scratch.arena, char*, cmdline_list.node_count);
+  String8Node* x_node = cmdline_list.first;
+  for (int i=0; i<cmdline_list.node_count; ++i)
+  {
+    cmdline[i] = (char*)x_node->string.str;
+    x_node = x_node->next;
+  }
+
+  if (options->inherit_env) { NotImplemented; };
+  if (options->consoleless == 0) { NotImplemented; };
+  U32 pid = 0;
+  pid = fork();
+  // Child
+  if (pid)
+  {
+    execvp((char*)options->path.str, cmdline);
+    success = 1;
+    exit(0);
+  }
+  // Parent
+  else { wait(NULL); }
+  return success;
 }
 
 ////////////////////////////////
@@ -2068,8 +2132,8 @@ os_condition_variable_signal_(OS_Handle cv){
 
 internal void
 os_condition_variable_broadcast_(OS_Handle cv){
-  LNX_Entity *entity = (LNX_Entity*)PtrFromInt(cv.u64[0]);
   NotImplemented;
+  LNX_Entity *entity = (LNX_Entity*)PtrFromInt(cv.u64[0]);
 }
 
 //- rjf: cross-process semaphores
@@ -2213,6 +2277,15 @@ os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, v
 internal OS_Guid
 os_make_guid(void)
 {
-  NotImplemented;
-}
+  OS_Guid result = {0};
+  LNX_uuid tmp;;
+  MemoryZeroArray(tmp);
 
+  uuid_generate(tmp);
+  MemoryCopy(&result.data1, 0+ tmp, 4);
+  MemoryCopy(&result.data2, 4+ tmp, 2);
+  MemoryCopy(&result.data3, 6+ tmp, 2);
+  MemoryCopy(&result.data4, 8+ tmp, 8);
+
+  return result;
+}
