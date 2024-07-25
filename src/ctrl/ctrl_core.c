@@ -4001,7 +4001,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DI_Scope *di_scope = di_scope_open();
   DMN_Event *stop_event = 0;
   CTRL_EventCause stop_cause = CTRL_EventCause_Null;
   DMN_Handle target_thread = msg->entity;
@@ -4318,6 +4317,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       if(msg->run_flags & CTRL_RunFlag_StopOnEntryPoint && !launch_done_first_module && event->kind == DMN_EventKind_HandshakeComplete)
       {
         launch_done_first_module = 1;
+        DI_Scope *di_scope = di_scope_open();
         
         //- rjf: unpack process/module info
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
@@ -4510,6 +4510,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         
         //- rjf: found entry points -> add to joined traps
         dmn_trap_chunk_list_concat_shallow_copy(scratch.arena, &joined_traps, &entry_traps);
+        
+        di_scope_close(di_scope);
       }
       
       //////////////////////////
@@ -4627,6 +4629,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         // rjf: evaluate hit stop conditions
         if(conditions.node_count != 0) ProfScope("evaluate hit stop conditions")
         {
+          DI_Scope *di_scope = di_scope_open();
           DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
           RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
           for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
@@ -4695,6 +4698,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               break;
             }
           }
+          di_scope_close(di_scope);
         }
         
         // rjf: gather trap net hits
@@ -5009,7 +5013,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   
   log_infof("}\n\n");
-  di_scope_close(di_scope);
   scratch_end(scratch);
   ProfEnd();
 }
