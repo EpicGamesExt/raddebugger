@@ -7625,58 +7625,54 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_UpOneFrame:
         case DF_CoreCmdKind_DownOneFrame:
         {
-          // TODO(rjf)
-#if 0
           DF_CtrlCtx ctrl_ctx = df_ctrl_ctx();
           DI_Scope *di_scope = di_scope_open();
           DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
           DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
           CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(thread);
           DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          DF_UnwindFrame *current_frame = 0;
-          if(ctrl_ctx.unwind_count < rich_unwind.frames.concrete_frame_count)
+          U64 crnt_unwind_idx = ctrl_ctx.unwind_count;
+          U64 crnt_inline_dpt = ctrl_ctx.inline_depth;
+          U64 next_unwind_idx = ctrl_ctx.unwind_count;
+          U64 next_inline_dpt = ctrl_ctx.inline_depth;
+          if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
           {
-            current_frame = &rich_unwind.frames.v[ctrl_ctx.unwind_count];
-          }
-          for(U64 idx = 0; idx < rich_unwind.frames.count; idx += 1)
-          {
-            if(rich_unwind.frames.v[idx].base_unwind_idx == ctrl_ctx.unwind_count &&
-               rich_unwind.frames.v[idx].inline_unwind_idx == ctrl_ctx.inline_unwind_count)
+            DF_UnwindFrame *f = &rich_unwind.frames.v[crnt_unwind_idx];
+            switch(core_cmd_kind)
             {
-              current_frame = &rich_unwind.frames.v[idx];
-              break;
+              default:{}break;
+              case DF_CoreCmdKind_UpOneFrame:
+              {
+                if(crnt_inline_dpt < f->inline_frame_count)
+                {
+                  next_inline_dpt += 1;
+                }
+                else if(crnt_unwind_idx > 0)
+                {
+                  next_unwind_idx -= 1;
+                  next_inline_dpt = 0;
+                }
+              }break;
+              case DF_CoreCmdKind_DownOneFrame:
+              {
+                if(crnt_inline_dpt > 0)
+                {
+                  next_inline_dpt -= 1;
+                }
+                else if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
+                {
+                  next_unwind_idx += 1;
+                  next_inline_dpt = (f+1)->inline_frame_count;
+                }
+              }break;
             }
           }
-          if(current_frame == 0 && rich_unwind.frames.count != 0)
-          {
-            current_frame = &rich_unwind.frames.v[0];
-          }
-          DF_UnwindFrame *next_frame = current_frame;
-          switch(core_cmd_kind)
-          {
-            default:{}break;
-            case DF_CoreCmdKind_UpOneFrame:
-            if(current_frame != 0 && (current_frame - rich_unwind.frames.v) > 0)
-            {
-              next_frame -= 1;
-            }break;
-            case DF_CoreCmdKind_DownOneFrame:
-            if(current_frame != 0 && (current_frame - rich_unwind.frames.v)+1 < rich_unwind.frames.count)
-            {
-              next_frame += 1;
-            }break;
-          }
-          if(next_frame != 0)
-          {
-            DF_CmdParams p = params;
-            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_BaseUnwindIndex);
-            df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineUnwindIndex);
-            p.base_unwind_index = next_frame->base_unwind_idx;
-            p.inline_unwind_index = next_frame->base_unwind_idx;
-            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
-          }
-          di_scope_close(di_scope);
-#endif
+          DF_CmdParams p = params;
+          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_UnwindIndex);
+          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineDepth);
+          p.unwind_index = next_unwind_idx;
+          p.inline_depth = next_inline_dpt;
+          df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
         }break;
         case DF_CoreCmdKind_FreezeThread:
         case DF_CoreCmdKind_ThawThread:
