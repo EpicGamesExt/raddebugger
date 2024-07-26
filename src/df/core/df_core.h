@@ -1286,16 +1286,15 @@ read_only global DF_Entity df_g_nil_entity =
   0,
   0,
   
-  // rjf: allocationless, simple equipment
-  {0},
+  // rjf: basic equipment
   {0},
   {0},
   0,
   0,
-  {0},
   {0},
   0,
   DF_CfgSrc_User,
+  0,
   
   // rjf: ctrl entity equipment
   0,
@@ -1309,9 +1308,6 @@ read_only global DF_Entity df_g_nil_entity =
   
   // rjf: name equipment
   {0},
-  
-  // rjf: timestamp
-  0,
 };
 read_only global DF_EvalView df_g_nil_eval_view = {&df_g_nil_eval_view, &df_g_nil_eval_view};
 
