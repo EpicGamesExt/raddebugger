@@ -2616,7 +2616,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             B32 missing_rip = (rip_vaddr == 0);
             B32 dbgi_missing = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
             B32 dbgi_pending = !dbgi_missing && rdi == &di_rdi_parsed_nil;
-            B32 has_line_info = (line.voff_range.max != line.voff_range.min);
+            B32 has_line_info = (line.voff_range.max != 0);
             B32 has_module = !df_entity_is_nil(module);
             B32 has_dbg_info = has_module && !dbgi_missing;
             if(!dbgi_pending && (has_line_info || has_module))

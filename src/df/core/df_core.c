@@ -3209,7 +3209,7 @@ df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
     RDI_Unit *unit = rdi_unit_from_voff(rdi, voff);
     RDI_LineTable *unit_line_table = rdi_line_table_from_unit(rdi, unit);
     rdi_parsed_from_line_table(rdi, unit_line_table, &start_line_table.parsed_line_table);
-    LineTableNode *top_line_table = &start_line_table;
+    LineTableNode *top_line_table = 0;
     RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
     {
       for(RDI_Scope *s = scope;
@@ -3226,12 +3226,13 @@ df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
         }
       }
     }
+    SLLStackPush(top_line_table, &start_line_table);
     
     //- rjf: gather lines in each line table
     Rng1U64 shallowest_voff_range = {0};
-    for(LineTableNode *n = top_line_table; n != 0; n = n->next)
+    for(LineTableNode *line_table_n = top_line_table; line_table_n != 0; line_table_n = line_table_n->next)
     {
-      RDI_ParsedLineTable parsed_line_table = n->parsed_line_table;
+      RDI_ParsedLineTable parsed_line_table = line_table_n->parsed_line_table;
       U64 line_info_idx = rdi_line_info_idx_from_voff(&parsed_line_table, voff);
       if(line_info_idx < parsed_line_table.count)
       {
@@ -3241,7 +3242,7 @@ df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
         String8 file_normalized_full_path = {0};
         file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
         DF_LineNode *n = push_array(arena, DF_LineNode, 1);
-        SLLQueuePushFront(result.first, result.last, n);
+        SLLQueuePush(result.first, result.last, n);
         result.count += 1;
         if(line->file_idx != 0 && file_normalized_full_path.size != 0)
         {
@@ -3250,7 +3251,10 @@ df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
         n->v.pt = txt_pt(line->line_num, column ? column->col_first : 1);
         n->v.voff_range = r1u64(parsed_line_table.voffs[line_info_idx], parsed_line_table.voffs[line_info_idx+1]);
         n->v.dbgi_key = *dbgi_key;
-        shallowest_voff_range = n->v.voff_range;
+        if(line_table_n == top_line_table)
+        {
+          shallowest_voff_range = n->v.voff_range;
+        }
       }
     }
     
