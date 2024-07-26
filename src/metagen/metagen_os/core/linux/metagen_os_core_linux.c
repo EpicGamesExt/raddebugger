@@ -983,19 +983,19 @@ os_init(int argc, char **argv)
   // Initialize Paths
   // Don't make assumptions just let the path be as big as it needs to be
   U8 _initial_path[1000];
-  U8 _initial_size = readlink("/proc/self/exe", (char*)_initial_path, 1000);
-  String8 _initial_tmp = str8_array_fixed(_initial_path);
-  str8_chop_last_slash(_initial_tmp);
+  S32 _initial_size = readlink("/proc/self/exe", (char*)_initial_path, 1000);
 
   if (_initial_size > 0)
-  { lnx_initial_path = push_str8_copy(lnx_perm_arena, _initial_tmp); }
-  // else - It failed, its a relative path now, have fun.
+  {
+    String8 _initial_tmp = str8(_initial_path, _initial_size);
+    str8_chop_last_slash(_initial_tmp);
+    lnx_initial_path = push_str8_copy(lnx_perm_arena, _initial_tmp);
+  }
+  // Give empty string for relative path on the offchance it fails
+  else { lnx_initial_path = str8_lit(""); }
 
   // NOTE(rjf): Setup command line args
   lnx_cmd_line_args = os_string_list_from_argcv(lnx_perm_arena, argc, argv);
-
-  // Load Shared Objects
-  os_library_open( str8_lit("pthread.so") );
 
   // Environment initialization
   Temp scratch = scratch_begin(0, 0);

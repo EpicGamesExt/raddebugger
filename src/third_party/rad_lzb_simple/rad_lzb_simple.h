@@ -84,6 +84,12 @@ typedef S32 RAD_S32;
 # define Expect(expr, val) (expr)
 #endif
 
+#if defined(__clang__)
+  #define RR_TRAP() __builtin_trap()
+#elif defined(_MSC_VER)
+  #define RR_TRAP() __debug_break()
+#endif
+
 #define RAD_LIKELY(expr)            Expect(expr,1)
 #define RAD_UNLIKELY(expr)          Expect(expr,0)
 
@@ -91,8 +97,8 @@ typedef S32 RAD_S32;
 #define RAD_PTRBYTES 8
 #define RR_MIN(a,b)    ( (a) < (b) ? (a) : (b) )
 #define RR_MAX(a,b)    ( (a) > (b) ? (a) : (b) )
-#define RR_ASSERT_ALWAYS(c) do{if(!(c)) {__debugbreak();}}while(0)
-#define RR_ASSERT(c) RR_ASSERT_ALWAYS(c)
+#define RR_ASSERT_ALWAYS(c) do{if(!(c)) { RR_TRAP(); }}while(0)
+#define RR_ASSERT(c)
 
 #define RR_PUT16_LE(ptr,val)       *((U16 *)(ptr)) = (U16)(val)
 #define RR_GET16_LE_UNALIGNED(ptr) *((const U16 *)(ptr))

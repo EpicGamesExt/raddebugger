@@ -290,6 +290,47 @@ str8_match(String8 a, String8 b, StringMatchFlags flags){
   return(result);
 }
 
+internal Rng1U64
+str8_match_substr(String8 target, String8 expression, StringMatchFlags flags)
+{
+  Rng1U64 result;
+  result.min = 0;
+  result.max = 0;
+  B32 case_insensitive = (flags & StringMatchFlag_CaseInsensitive);
+  B32 slash_insensitive = (flags & StringMatchFlag_SlashInsensitive);
+  U8 first_char = target.str[0];
+
+  // Can't match an expression larger than the target (obviously)
+  if (expression.size > target.size) return result;
+
+  U8 x_char = 0;
+  U8 x_expr_char = 0;
+  U64 i_target = 0;
+  for (; i_target<target.size; ++i_target)
+  {
+    x_char = target.str[i_target];
+    x_char = (case_insensitive ? char_to_upper(x_char) :
+              slash_insensitive ? char_to_correct_slash(x_char) : x_char);
+    if (x_char != first_char) { continue; }
+    // Matched first char, try the whole expression now
+    for (int j_sub=0; j_sub<expression.size; ++j_sub)
+    {
+      x_char = target.str[i_target+ j_sub];
+      x_expr_char = expression.str[j_sub];
+      x_char = (case_insensitive ? char_to_upper(x_char) :
+                slash_insensitive ? char_to_correct_slash(x_char) : x_char);
+      x_expr_char = (case_insensitive ? char_to_upper(x_expr_char) :
+                     slash_insensitive ? char_to_correct_slash(x_expr_char) : x_expr_char);
+      if (x_char != x_expr_char ) { continue; }
+
+      // Must've found a whole match if function ran this far
+      result.min = i_target;
+      result.max = i_target + j_sub;
+    }
+  }
+  return result;
+}
+
 internal U64
 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags){
   U8 *p = string.str + start_pos;

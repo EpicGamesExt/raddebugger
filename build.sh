@@ -24,7 +24,6 @@
 # - `asan`: enable address sanitizer
 # - `telemetry`: enable RAD telemetry profiling support
 # - `gcodeview`: generate codeview symbols instead of DRWARF for clang
-# - `build_all`: don't stop on a succesful compile and build everyting
 
 # --- Random Init -----------------------------------------------------------
 # cd to script directory
@@ -123,16 +122,14 @@ else
   ${compile_debug} "../src/metagen/metagen_main.c" ${compile_link} "${out}metagen.exe" || exit 1
   # Skip if compile only
   [[ -z "${RAD_META_COMPILE_ONLY}" ]] && (./metagen.exe || exit 1)
-  exit 0
   cd ${self_directory}
 fi
 
 # --- Build Everything (@build_targets) --------------------------------------
 
-# Exit if RAD_BUILD_ALL is nonzero length
 function finish()
 {
-    [[ -n "${build_all}" ]] && exit 1
+    exit 1
 }
 
 # @param $1 - name of file to compile
@@ -152,6 +149,11 @@ function build_dll()
     return $?
 }
 
+if [[ -n ${RAD_BUILD_DEBUG} ]] ; then
+    echo "Compile Command: "
+    echo ${compile}
+fi
+
 cd build
 [[ -n "${raddbg}"                ]] && build_single ../src/raddbg/raddbg_main.c                               raddbg.exe
 [[ -n "${rdi_from_pdb}"          ]] && build_single ../src/rdi_from_pdb/rdi_from_pdb_main.c                   rdi_from_pdb.exe
@@ -161,7 +163,6 @@ cd build
 [[ -n "${ryan_scratch}"          ]] && build_single ../src/scratch/ryan_scratch.c                             ryan_scratch.exe
 [[ -n "${cpp_tests}"             ]] && build_single ../src/scratch/i_hate_c_plus_plus.cpp                     cpp_tests.exe
 [[ -n "${look_at_raddbg}"        ]] && build_single ../src/scratch/look_at_raddbg.c                           look_at_raddbg.exe
-echo ${compile_debug}
 [[ -n "${mule_main}"             ]] &&
     didbuild=1 &&
         rm -v vc*.pdb mule*.pdb &&
@@ -172,7 +173,6 @@ echo ${compile_debug}
                          ${out} mule_main.exe || exit 1
 
 # Continue building the rest line normal
-RAD_BUILD_ALL="1"
 [[ -n "${mule_module}" ]] &&  build_dll ../src/mule/mule_module.cpp mule_module.dll || exit 1
 [[ -n "${mule_hotload}" ]] && build_single ../src/mule/mule_hotload_main.c mule_hotload.exe ;
 build_dll ../src/mule/mule_hotload_module_main.c mule_hotload_module.dll || exit 1

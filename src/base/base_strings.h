@@ -204,6 +204,9 @@ internal String8 backslashed_from_str8(Arena *arena, String8 string);
 //~ rjf: String Matching
 
 internal B32 str8_match(String8 a, String8 b, StringMatchFlags flags);
+/* Matches a substring in a target substring and returns a range of a match, or [0, 0]
+   Supports StringMatchFlag_CaseInsensitive and StringMatchFlag_SlashInsensitive */
+internal Rng1U64 str8_match_substr(String8 target, String8 expression, StringMatchFlags flags);
 internal U64 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal B32 str8_ends_with(String8 string, String8 end, StringMatchFlags flags);
 
