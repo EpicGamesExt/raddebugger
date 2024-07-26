@@ -98,7 +98,8 @@ rdi_section_raw_data_from_kind(RDI_Parsed *rdi, RDI_SectionKind kind, RDI_Sectio
   result = &rdi_nil_element_union;
   *size_out = rdi_section_element_size_table[kind];
 #endif
-  if(0 <= kind && kind < rdi->sections_count)
+  if(0 <= kind && kind < rdi->sections_count &&
+     rdi->sections[kind].off < rdi->raw_data_size)
   {
     result = rdi->raw_data+rdi->sections[kind].off;
     *size_out = rdi->sections[kind].encoded_size;
