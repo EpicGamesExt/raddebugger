@@ -1006,7 +1006,7 @@ df_handle_from_entity(DF_Entity *entity)
   if(!df_entity_is_nil(entity))
   {
     handle.u64[0] = df_index_from_entity(entity);
-    handle.u64[1] = entity->generation;
+    handle.u64[1] = entity->gen;
   }
   return handle;
 }
@@ -1015,7 +1015,7 @@ internal DF_Entity *
 df_entity_from_handle(DF_Handle handle)
 {
   DF_Entity *result = df_state->entities_base + handle.u64[0];
-  if(handle.u64[0] >= df_state->entities_count || result->generation != handle.u64[1])
+  if(handle.u64[0] >= df_state->entities_count || result->gen != handle.u64[1])
   {
     result = &df_g_nil_entity;
   }
@@ -1567,7 +1567,7 @@ df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kin
     df_state_delta_history_push_struct_delta(hist, &entity->first);
     df_state_delta_history_push_struct_delta(hist, &entity->last);
     df_state_delta_history_push_struct_delta(hist, &entity->parent);
-    df_state_delta_history_push_struct_delta(hist, &entity->generation);
+    df_state_delta_history_push_struct_delta(hist, &entity->gen);
     df_state_delta_history_push_struct_delta(hist, &entity->id);
     df_state_delta_history_push_struct_delta(hist, &entity->kind);
     if(!df_entity_is_nil(parent))
@@ -1583,9 +1583,9 @@ df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kin
   
   // rjf: zero entity
   {
-    U64 generation = entity->generation;
+    U64 gen = entity->gen;
     MemoryZeroStruct(entity);
-    entity->generation = generation;
+    entity->gen = gen;
   }
   
   // rjf: set up alloc'd entity links
@@ -1606,7 +1606,7 @@ df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kin
   entity->kind = kind;
   df_state->entities_id_gen += 1;
   entity->id = df_state->entities_id_gen;
-  entity->generation += 1;
+  entity->gen += 1;
   entity->alloc_time_us = os_now_microseconds();
   
   // rjf: dirtify caches
@@ -1681,7 +1681,7 @@ df_entity_release(DF_StateDeltaHistory *hist, DF_Entity *entity)
     SLLStackPush(df_state->entities_free[free_list_idx], task->e);
     df_state->entities_free_count += 1;
     df_state->entities_active_count -= 1;
-    task->e->generation += 1;
+    task->e->gen += 1;
     if(task->e->name.size != 0)
     {
       df_name_release(hist, task->e->name);
@@ -1752,15 +1752,6 @@ df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point)
 }
 
 internal void
-df_entity_equip_txt_pt_alt(DF_Entity *entity, TxtPt point)
-{
-  df_require_entity_nonnil(entity, return);
-  entity->text_point_alt = point;
-  entity->flags |= DF_EntityFlag_HasTextPointAlt;
-  df_entity_notify_mutation(entity);
-}
-
-internal void
 df_entity_equip_entity_handle(DF_Entity *entity, DF_Handle handle)
 {
   df_require_entity_nonnil(entity, return);
@@ -1788,15 +1779,6 @@ df_entity_equip_u64(DF_Entity *entity, U64 u64)
 }
 
 internal void
-df_entity_equip_rng1u64(DF_Entity *entity, Rng1U64 range)
-{
-  df_require_entity_nonnil(entity, return);
-  entity->rng1u64 = range;
-  entity->flags |= DF_EntityFlag_HasRng1U64;
-  df_entity_notify_mutation(entity);
-}
-
-internal void
 df_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba)
 {
   df_require_entity_nonnil(entity, return);
@@ -1812,15 +1794,6 @@ df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva)
   df_require_entity_nonnil(entity, return);
   entity->color_hsva = hsva;
   entity->flags |= DF_EntityFlag_HasColor;
-  df_entity_notify_mutation(entity);
-}
-
-internal void
-df_entity_equip_death_timer(DF_Entity *entity, F32 seconds_til_death)
-{
-  df_require_entity_nonnil(entity, return);
-  entity->flags |= DF_EntityFlag_DiesWithTime;
-  entity->life_left = seconds_til_death;
   df_entity_notify_mutation(entity);
 }
 
@@ -1932,7 +1905,6 @@ df_entity_equip_name(DF_StateDeltaHistory *hist, DF_Entity *entity, String8 name
   {
     entity->name = str8_zero();
   }
-  entity->name_generation += 1;
   df_entity_notify_mutation(entity);
 }
 
@@ -7145,12 +7117,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             df_entity_mark_for_deletion(task);
           }
         }break;
-        case DI_EventKind_ConversionFailureUnsupportedFormat:
-        {
-          // DF_Entity *task = df_entity_alloc(df_entity_root(), DF_EntityKind_ConversionFail);
-          // df_entity_equip_name(task, event->string);
-          // df_entity_equip_death_timer(task, 15.f);
-        }break;
       }
     }
     scratch_end(scratch);
@@ -8502,7 +8468,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_EnableTarget:
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
-          df_state_delta_history_push_batch(df_state->hist, &entity->generation);
+          df_state_delta_history_push_batch(df_state->hist, &entity->gen);
           df_state_delta_history_push_struct_delta(df_state->hist, &entity->b32);
           df_entity_equip_b32(entity, 1);
         }break;
@@ -8511,7 +8477,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_DisableTarget:
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
-          df_state_delta_history_push_batch(df_state->hist, &entity->generation);
+          df_state_delta_history_push_batch(df_state->hist, &entity->gen);
           df_state_delta_history_push_struct_delta(df_state->hist, &entity->b32);
           df_entity_equip_b32(entity, 0);
         }break;
@@ -8543,7 +8509,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         {
           DF_Entity *entity = df_entity_from_handle(params.entity);
           String8 string = params.string;
-          df_state_delta_history_push_batch(df_state_delta_history(), &entity->generation);
+          df_state_delta_history_push_batch(df_state_delta_history(), &entity->gen);
           df_entity_equip_name(df_state_delta_history(), entity, string);
         }break;
         case DF_CoreCmdKind_EditEntity:{}break;
@@ -8568,10 +8534,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               DF_Entity *src_n = task->src_n;
               DF_Entity *dst_n = df_entity_alloc(df_state_delta_history(), task->dst_parent, task->src_n->kind);
               if(src_n->flags & DF_EntityFlag_HasTextPoint)    {df_entity_equip_txt_pt(dst_n, src_n->text_point);}
-              if(src_n->flags & DF_EntityFlag_HasTextPointAlt) {df_entity_equip_txt_pt_alt(dst_n, src_n->text_point_alt);}
               if(src_n->flags & DF_EntityFlag_HasB32)          {df_entity_equip_b32(dst_n, src_n->b32);}
               if(src_n->flags & DF_EntityFlag_HasU64)          {df_entity_equip_u64(dst_n, src_n->u64);}
-              if(src_n->flags & DF_EntityFlag_HasRng1U64)      {df_entity_equip_rng1u64(dst_n, src_n->rng1u64);}
               if(src_n->flags & DF_EntityFlag_HasColor)        {df_entity_equip_color_hsva(dst_n, df_hsva_from_entity(src_n));}
               if(src_n->flags & DF_EntityFlag_HasVAddrRng)     {df_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
               if(src_n->flags & DF_EntityFlag_HasVAddr)        {df_entity_equip_vaddr(dst_n, src_n->vaddr);}
@@ -9010,20 +8974,12 @@ df_core_end_frame(void)
     }
   }
   
-  //- rjf: eliminate entities that are marked for deletion + kill off entities with a death-timer
+  //- rjf: eliminate entities that are marked for deletion
   ProfScope("eliminate deleted/deletion-timer entities")
   {
     for(DF_Entity *entity = df_entity_root(), *next = 0; !df_entity_is_nil(entity); entity = next)
     {
       next = df_entity_rec_df_pre(entity, &df_g_nil_entity).next;
-      if(entity->flags & DF_EntityFlag_DiesWithTime)
-      {
-        entity->life_left -= df_dt();
-        if(entity->life_left <= 0.f)
-        {
-          df_entity_mark_for_deletion(entity);
-        }
-      }
       if(entity->flags & DF_EntityFlag_MarkedForDeletion)
       {
         B32 undoable = (df_g_entity_kind_flags_table[entity->kind] & DF_EntityKindFlag_UserDefinedLifetime);
@@ -9036,10 +8992,10 @@ df_core_end_frame(void)
         {
           df_state_delta_history_push_batch(df_state->hist, 0);
           df_state_delta_history_push_struct_delta(df_state->hist, &entity->deleted);
-          df_state_delta_history_push_struct_delta(df_state->hist, &entity->generation);
+          df_state_delta_history_push_struct_delta(df_state->hist, &entity->gen);
           df_state_delta_history_push_struct_delta(df_state->hist, &df_state->kind_alloc_gens[entity->kind]);
           entity->deleted = 1;
-          entity->generation += 1;
+          entity->gen += 1;
           entity->flags &= ~DF_EntityFlag_MarkedForDeletion;
           df_state->kind_alloc_gens[entity->kind] += 1;
         }

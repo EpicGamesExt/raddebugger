@@ -51,7 +51,6 @@ struct DF_ExpandNode
   DF_ExpandNode *parent;
   DF_ExpandKey key;
   B32 expanded;
-  F32 expanded_t;
 };
 
 typedef struct DF_ExpandSlot DF_ExpandSlot;
@@ -324,13 +323,10 @@ enum
 {
   //- rjf: allocationless, simple equipment
   DF_EntityFlag_HasTextPoint      = (1<<0),
-  DF_EntityFlag_HasTextPointAlt   = (1<<1),
   DF_EntityFlag_HasEntityHandle   = (1<<2),
   DF_EntityFlag_HasB32            = (1<<3),
   DF_EntityFlag_HasU64            = (1<<4),
-  DF_EntityFlag_HasRng1U64        = (1<<5),
   DF_EntityFlag_HasColor          = (1<<6),
-  DF_EntityFlag_DiesWithTime      = (1<<7),
   DF_EntityFlag_DiesOnRunStop     = (1<<8),
   
   //- rjf: ctrl entity equipment
@@ -346,7 +342,6 @@ enum
   //- rjf: file properties
   DF_EntityFlag_IsFolder          = (1<<17),
   DF_EntityFlag_IsMissing         = (1<<18),
-  DF_EntityFlag_Output            = (1<<19), // NOTE(rjf): might be missing, but written by us
   
   //- rjf: deletion
   DF_EntityFlag_MarkedForDeletion = (1<<31),
@@ -368,23 +363,22 @@ struct DF_Entity
   DF_EntityKind kind;
   DF_EntityFlags flags;
   DF_EntityID id;
-  U64 generation;
+  U64 gen;
   U64 alloc_time_us;
   B32 deleted;
   F32 alive_t;
   
-  // rjf: allocationless, simple equipment
+  // rjf: basic equipment
   TxtPt text_point;
-  TxtPt text_point_alt;
   DF_Handle entity_handle;
   B32 b32;
   U64 u64;
-  Rng1U64 rng1u64;
   Vec4F32 color_hsva;
   F32 life_left;
   DF_CfgSrc cfg_src;
+  U64 timestamp;
   
-  // rjf: ctrl entity equipment
+  // rjf: ctrl equipment
   CTRL_MachineID ctrl_machine_id;
   DMN_Handle ctrl_handle;
   Architecture arch;
@@ -396,10 +390,6 @@ struct DF_Entity
   
   // rjf: name equipment
   String8 name;
-  U64 name_generation;
-  
-  // rjf: timestamp
-  U64 timestamp;
 };
 
 typedef struct DF_EntityNode DF_EntityNode;
@@ -1319,7 +1309,6 @@ read_only global DF_Entity df_g_nil_entity =
   
   // rjf: name equipment
   {0},
-  0,
   
   // rjf: timestamp
   0,
@@ -1492,14 +1481,11 @@ internal void df_entity_change_parent(DF_StateDeltaHistory *hist, DF_Entity *ent
 
 //- rjf: entity simple equipment
 internal void df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point);
-internal void df_entity_equip_txt_pt_alt(DF_Entity *entity, TxtPt point);
 internal void df_entity_equip_entity_handle(DF_Entity *entity, DF_Handle handle);
 internal void df_entity_equip_b32(DF_Entity *entity, B32 b32);
 internal void df_entity_equip_u64(DF_Entity *entity, U64 u64);
-internal void df_entity_equip_rng1u64(DF_Entity *entity, Rng1U64 range);
 internal void df_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba);
 internal void df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva);
-internal void df_entity_equip_death_timer(DF_Entity *entity, F32 seconds_til_death);
 internal void df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src);
 internal void df_entity_equip_timestamp(DF_Entity *entity, U64 timestamp);
 

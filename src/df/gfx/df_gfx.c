@@ -14517,17 +14517,7 @@ df_gfx_end_frame(void)
   //- rjf: simulate lag
   if(DEV_simulate_lag)
   {
-    Sleep(300);
-  }
-  
-  //- rjf: entities with a death timer -> keep animating
-  for(DF_Entity *entity = df_entity_root(), *next = 0; !df_entity_is_nil(entity); entity = next)
-  {
-    next = df_entity_rec_df_pre(entity, &df_g_nil_entity).next;
-    if(entity->flags & DF_EntityFlag_DiesWithTime)
-    {
-      df_gfx_request_frame();
-    }
+    os_sleep_milliseconds(300);
   }
   
   //- rjf: end drag/drop if needed
