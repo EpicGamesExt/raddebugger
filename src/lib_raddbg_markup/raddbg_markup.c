@@ -41,7 +41,7 @@ extern "C"
   long long _InterlockedExchangeAdd64(long long volatile*, long long);
 #pragma intrinsic(_InterlockedCompareExchange64)
 #pragma intrinsic(_InterlockedExchangeAdd64)
-  int raddbg_markup_vsnprintf(char *, unsigned long long, const char *, __builtin_va_list);
+  int raddbg_markup_vsnprintf(char *, unsigned long long, const char *, va_list);
 #if defined(__cplusplus)
 }
 #endif

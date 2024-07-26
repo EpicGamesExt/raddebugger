@@ -2415,7 +2415,7 @@ ui_box_text_position(UI_Box *box)
     case UI_TextAlign_Center:
     {
       Vec2F32 text_dim = box->display_string_runs.dim;
-      result.x = floor_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2);
+      result.x = round_f32((box->rect.p0.x + box->rect.p1.x)/2 - text_dim.x/2);
       result.x = ClampBot(result.x, box->rect.x0);
     }break;
     case UI_TextAlign_Right:
