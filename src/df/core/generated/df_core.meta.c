@@ -28,8 +28,8 @@ Rng1U64 df_g_cmd_param_slot_range_table[24] =
 {OffsetOf(DF_CmdParams, prefer_dasm), OffsetOf(DF_CmdParams, prefer_dasm) + sizeof(B32)},
 {OffsetOf(DF_CmdParams, force_confirm), OffsetOf(DF_CmdParams, force_confirm) + sizeof(B32)},
 {OffsetOf(DF_CmdParams, dir2), OffsetOf(DF_CmdParams, dir2) + sizeof(Dir2)},
-{OffsetOf(DF_CmdParams, base_unwind_index), OffsetOf(DF_CmdParams, base_unwind_index) + sizeof(U64)},
-{OffsetOf(DF_CmdParams, inline_unwind_index), OffsetOf(DF_CmdParams, inline_unwind_index) + sizeof(U64)},
+{OffsetOf(DF_CmdParams, unwind_index), OffsetOf(DF_CmdParams, unwind_index) + sizeof(U64)},
+{OffsetOf(DF_CmdParams, inline_depth), OffsetOf(DF_CmdParams, inline_depth) + sizeof(U64)},
 };
 
 DF_IconKind df_g_entity_kind_icon_kind_table[25] =

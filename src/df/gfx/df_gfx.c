@@ -522,15 +522,15 @@ df_cmd_params_from_window(DF_Window *window)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_PreferDisassembly);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_BaseUnwindIndex);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineUnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_UnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineDepth);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(window->focused_panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
-  p.base_unwind_index = ctrl_ctx.unwind_count;
-  p.inline_unwind_index = ctrl_ctx.inline_unwind_count;
+  p.unwind_index = ctrl_ctx.unwind_count;
+  p.inline_depth = ctrl_ctx.inline_depth;
   return p;
 }
 
@@ -544,15 +544,15 @@ df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_PreferDisassembly);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_BaseUnwindIndex);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineUnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_UnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineDepth);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
-  p.base_unwind_index = ctrl_ctx.unwind_count;
-  p.inline_unwind_index = ctrl_ctx.inline_unwind_count;
+  p.unwind_index = ctrl_ctx.unwind_count;
+  p.inline_depth = ctrl_ctx.inline_depth;
   return p;
 }
 
@@ -566,15 +566,15 @@ df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view)
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_View);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_PreferDisassembly);
   df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_BaseUnwindIndex);
-  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineUnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_UnwindIndex);
+  df_cmd_params_mark_slot(&p, DF_CmdParamSlot_InlineDepth);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(view);
   p.prefer_dasm = df_prefer_dasm_from_window(window);
   p.entity = ctrl_ctx.thread;
-  p.base_unwind_index = ctrl_ctx.unwind_count;
-  p.inline_unwind_index = ctrl_ctx.inline_unwind_count;
+  p.unwind_index = ctrl_ctx.unwind_count;
+  p.inline_depth = ctrl_ctx.inline_depth;
   return p;
 }
 
@@ -2585,12 +2585,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         {
           DI_Scope *scope = di_scope_open();
           DF_Entity *thread = df_entity_from_handle(params.entity);
-          U64 base_unwind_index = params.base_unwind_index;
-          U64 inline_unwind_index = params.inline_unwind_index;
+          U64 unwind_index = params.unwind_index;
+          U64 inline_depth = params.inline_depth;
           if(thread->kind == DF_EntityKind_Thread)
           {
             // rjf: grab rip
-            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, base_unwind_index);
+            U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_index);
             
             // rjf: extract thread/rip info
             DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
@@ -2605,7 +2605,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               for(DF_LineNode *n = lines.first; n != 0; n = n->next, idx += 1)
               {
                 line = n->v;
-                if(idx == inline_unwind_index)
+                if(idx == inline_depth)
                 {
                   break;
                 }
@@ -2632,12 +2632,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               params.entity = df_handle_from_entity(thread);
               params.voff = rip_voff;
               params.vaddr = rip_vaddr;
-              params.base_unwind_index = base_unwind_index;
-              params.inline_unwind_index = inline_unwind_index;
+              params.unwind_index = unwind_index;
+              params.inline_depth = inline_depth;
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualOff);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_UnwindIndex);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineDepth);
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
@@ -2648,12 +2649,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               params.entity = df_handle_from_entity(thread);
               params.voff = rip_voff;
               params.vaddr = rip_vaddr;
-              params.base_unwind_index = base_unwind_index;
-              params.inline_unwind_index = inline_unwind_index;
+              params.unwind_index = unwind_index;
+              params.inline_depth = inline_depth;
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualOff);
               df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Index);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_UnwindIndex);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineDepth);
               df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             }
             
@@ -2671,11 +2673,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
           DF_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = df_handle_from_entity(selected_thread);
-          params.base_unwind_index = ctrl_ctx.unwind_count;
-          params.inline_unwind_index = ctrl_ctx.inline_unwind_count;
+          params.unwind_index = ctrl_ctx.unwind_count;
+          params.inline_depth = ctrl_ctx.inline_depth;
           df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
-          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineUnwindIndex);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_UnwindIndex);
+          df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineDepth);
           df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindThread));
         }break;
         
@@ -3732,7 +3734,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           ui_labelf("cursor: (L:%I64d, C:%I64d)", regs->cursor.line, regs->cursor.column);
           ui_labelf("mark: (L:%I64d, C:%I64d)", regs->mark.line, regs->mark.column);
           ui_labelf("unwind_count: %I64u", regs->unwind_count);
-          ui_labelf("inline_unwind_count: %I64u", regs->inline_unwind_count);
+          ui_labelf("inline_depth: %I64u", regs->inline_depth);
           ui_labelf("text_key: [0x%I64x, 0x%I64x]", regs->text_key.u64[0], regs->text_key.u64[1]);
           ui_labelf("lang_kind: '%S'", txt_extension_from_lang_kind(regs->lang_kind));
           ui_labelf("vaddr_range: [0x%I64x, 0x%I64x)", regs->vaddr_range.min, regs->vaddr_range.max);
@@ -4340,24 +4342,27 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(entity);
                 DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
                 String8List lines = {0};
-                for(U64 frame_idx = 0; frame_idx < rich_unwind.frames.count; frame_idx += 1)
+                for(U64 frame_idx = 0; frame_idx < rich_unwind.frames.concrete_frame_count; frame_idx += 1)
                 {
-                  U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[frame_idx].regs);
+                  DF_UnwindFrame *concrete_frame = &rich_unwind.frames.v[frame_idx];
+                  U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, concrete_frame->regs);
                   DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-                  RDI_Parsed *rdi = rich_unwind.frames.v[frame_idx].rdi;
-                  RDI_Procedure *procedure = rich_unwind.frames.v[frame_idx].procedure;
-                  RDI_InlineSite *inline_site = rich_unwind.frames.v[frame_idx].inline_site;
+                  RDI_Parsed *rdi = concrete_frame->rdi;
+                  RDI_Procedure *procedure = concrete_frame->procedure;
+                  for(DF_UnwindInlineFrame *inline_frame = concrete_frame->last_inline_frame;
+                      inline_frame != 0;
+                      inline_frame = inline_frame->prev)
+                  {
+                    RDI_InlineSite *inline_site = inline_frame->inline_site;
+                    String8 name = {0};
+                    name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, df_entity_is_nil(module) ? "" : " in ", module->name);
+                  }
                   if(procedure != 0)
                   {
                     String8 name = {0};
                     name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
                     str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, df_entity_is_nil(module) ? "" : " in ", module->name);
-                  }
-                  else if(inline_site != 0)
-                  {
-                    String8 name = {0};
-                    name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, df_entity_is_nil(module) ? "" : " in ", module->name);
                   }
                   else if(!df_entity_is_nil(module))
                   {
@@ -10624,33 +10629,42 @@ df_entity_tooltips(DF_Window *ws, DF_Entity *entity)
       DF_Entity *process = df_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
       CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(entity);
       DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-      for(U64 idx = 0; idx < rich_unwind.frames.count; idx += 1)
+      for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
       {
         DF_UnwindFrame *f = &rich_unwind.frames.v[idx];
         RDI_Parsed *rdi = f->rdi;
         RDI_Procedure *procedure = f->procedure;
-        RDI_InlineSite *inline_site = f->inline_site;
         U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         String8 module_name = df_entity_is_nil(module) ? str8_lit("???") : str8_skip_last_slash(module->name);
-        String8 name = {0};
-        String8 info = {0};
-        if(procedure != 0)
+        
+        // rjf: inline frames
+        for(DF_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+          UI_PrefWidth(ui_children_sum(1)) UI_Row
         {
-          name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+          String8 name = {0};
+          name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
+          DF_Font(ws, DF_FontSlot_Code) UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("0x%I64x", rip_vaddr);
+          DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
+          if(name.size != 0)
+          {
+            DF_Font(ws, DF_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+            {
+              df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
+            }
+          }
+          else
+          {
+            DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+          }
         }
-        else if(inline_site != 0)
-        {
-          name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
-          info = str8_lit("[inlined]");
-        }
+        
+        // rjf: concrete frame
         UI_PrefWidth(ui_children_sum(1)) UI_Row
         {
+          String8 name = {0};
+          name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
           DF_Font(ws, DF_FontSlot_Code) UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("0x%I64x", rip_vaddr);
-          if(info.size != 0)
-          {
-            DF_Font(ws, DF_FontSlot_Code)UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(info);
-          }
           if(name.size != 0)
           {
             DF_Font(ws, DF_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
@@ -12513,7 +12527,7 @@ df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_
           {
             if((n->v.pt.line == line_num || df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file))) &&
                ((di_key_match(&n->v.dbgi_key, &rich_hover.dbgi_key) &&
-                 n->v.voff_range.min <= rich_hover_voff_range.min && rich_hover_voff_range.min <= n->v.voff_range.max) ||
+                 n->v.voff_range.min <= rich_hover_voff_range.min && rich_hover_voff_range.min < n->v.voff_range.max) ||
                 (params->line_vaddrs[line_idx] == rich_hover.vaddr_range.min && rich_hover.vaddr_range.min != 0)))
             {
               matches = 1;

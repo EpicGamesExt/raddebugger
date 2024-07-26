@@ -93,8 +93,8 @@ DF_CmdParamSlotTable:
   {PreferDisassembly prefer_dasm           `B32`}
   {ForceConfirm      force_confirm         `B32`}
   {Dir2              dir2                  `Dir2`}
-  {BaseUnwindIndex   base_unwind_index     `U64`}
-  {InlineUnwindIndex inline_unwind_index   `U64`}
+  {UnwindIndex       unwind_index          `U64`}
+  {InlineDepth       inline_depth          `U64`}
 }
 
 @table(name                      lister_omit  q_slot       q_ent_kind  q_allow_files q_allow_folders  q_keep_oi   q_select_oi  q_is_code  q_required           canonical_icon        string                        display_name                                  desc                                                                                                               search_tags                      )

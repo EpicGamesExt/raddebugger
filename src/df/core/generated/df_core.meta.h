@@ -392,8 +392,8 @@ DF_CmdParamSlot_ID,
 DF_CmdParamSlot_PreferDisassembly,
 DF_CmdParamSlot_ForceConfirm,
 DF_CmdParamSlot_Dir2,
-DF_CmdParamSlot_BaseUnwindIndex,
-DF_CmdParamSlot_InlineUnwindIndex,
+DF_CmdParamSlot_UnwindIndex,
+DF_CmdParamSlot_InlineDepth,
 DF_CmdParamSlot_COUNT,
 } DF_CmdParamSlot;
 
@@ -422,8 +422,8 @@ U64 id;
 B32 prefer_dasm;
 B32 force_confirm;
 Dir2 dir2;
-U64 base_unwind_index;
-U64 inline_unwind_index;
+U64 unwind_index;
+U64 inline_depth;
 };
 
 DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array);

@@ -622,8 +622,8 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       {
         DF_Entity *thread = thread_n->entity;
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        U64 base_unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
-        U64 inline_unwind_count = (thread == selected_thread) ? ctrl_ctx.inline_unwind_count : 0;
+        U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
+        U64 inline_depth = (thread == selected_thread) ? ctrl_ctx.inline_depth : 0;
         U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         DF_Entity *module = df_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
@@ -4230,7 +4230,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
                                               UI_BoxFlag_DrawHotEffects|
                                               UI_BoxFlag_DrawActiveEffects,
                                               "###procedure_%I64x", item->idx);
-      UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 1))
+      UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 1)) DF_Font(ws, DF_FontSlot_Code)
       {
         UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
         ui_box_equip_fuzzy_match_ranges(box, &item->match_ranges);
@@ -5684,6 +5684,49 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(thread);
   DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, scope, process, &base_unwind);
   
+  //- rjf: build per-row information
+  typedef struct FrameRow FrameRow;
+  struct FrameRow
+  {
+    void *regs;
+    RDI_Parsed *rdi;
+    RDI_Procedure *procedure;
+    RDI_InlineSite *inline_site;
+    U64 unwind_idx;
+    U64 inline_depth;
+  };
+  U64 rows_count = rich_unwind.frames.total_frame_count;
+  FrameRow *rows = push_array(scratch.arena, FrameRow, rows_count);
+  {
+    U64 concrete_frame_idx = 0;
+    U64 row_idx = 0;
+    for(;concrete_frame_idx < rich_unwind.frames.concrete_frame_count; concrete_frame_idx += 1, row_idx += 1)
+    {
+      DF_UnwindFrame *f = &rich_unwind.frames.v[concrete_frame_idx];
+      
+      // rjf: fill rows for inline frames
+      {
+        U64 inline_unwind_idx = 0;
+        for(DF_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev, row_idx += 1, inline_unwind_idx += 1)
+        {
+          rows[row_idx].regs         = f->regs;
+          rows[row_idx].rdi          = f->rdi;
+          rows[row_idx].inline_site  = fin->inline_site;
+          rows[row_idx].unwind_idx   = concrete_frame_idx;
+          rows[row_idx].inline_depth = f->inline_frame_count - inline_unwind_idx;
+        }
+      }
+      
+      // rjf: fill row for concrete frame
+      {
+        rows[row_idx].regs      = f->regs;
+        rows[row_idx].rdi       = f->rdi;
+        rows[row_idx].procedure = f->procedure;
+        rows[row_idx].unwind_idx= concrete_frame_idx;
+      }
+    }
+  }
+  
   //- rjf: grab state
   typedef struct DF_CallStackViewState DF_CallStackViewState;
   struct DF_CallStackViewState
@@ -5713,8 +5756,8 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
     scroll_list_params.flags         = UI_ScrollListFlag_All;
     scroll_list_params.row_height_px = floor_f32(ui_top_font_size()*2.5f);
     scroll_list_params.dim_px        = dim_2f32(rect);
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, rich_unwind.frames.count));
-    scroll_list_params.item_range    = r1s64(0, rich_unwind.frames.count+1);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, rich_unwind.frames.total_frame_count));
+    scroll_list_params.item_range    = r1s64(0, rich_unwind.frames.total_frame_count+1);
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
@@ -5754,7 +5797,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
       
       //- rjf: frame rows
       for(S64 row_num = visible_row_range.min;
-          row_num <= visible_row_range.max && row_num <= rich_unwind.frames.count;
+          row_num <= visible_row_range.max && row_num <= rows_count;
           row_num += 1)
       {
         if(row_num == 0)
@@ -5764,29 +5807,29 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         B32 row_selected = (cs->cursor.y == row_num);
         
         // rjf: unpack frame
-        U64 frame_idx = row_num-1;
-        DF_UnwindFrame *frame = &rich_unwind.frames.v[frame_idx];
-        U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, frame->regs);
+        U64 row_idx = row_num-1;
+        FrameRow *row = &rows[row_idx];
+        U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, row->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         B32 frame_valid = (rip_vaddr != 0);
         TG_Graph *graph = tg_graph_begin(bit_size_from_arch(thread->arch)/8, 256);
         String8 symbol_name = {0};
         String8 symbol_type_string = {0};
-        if(frame->procedure != 0)
+        if(row->procedure != 0)
         {
-          symbol_name.str = rdi_name_from_procedure(frame->rdi, frame->procedure, &symbol_name.size);
-          RDI_TypeNode *type = rdi_element_from_name_idx(frame->rdi, TypeNodes, frame->procedure->type_idx);
-          symbol_type_string = tg_string_from_key(scratch.arena, graph, frame->rdi, tg_key_ext(tg_kind_from_rdi_type_kind(type->kind), frame->procedure->type_idx));
+          symbol_name.str = rdi_name_from_procedure(row->rdi, row->procedure, &symbol_name.size);
+          RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->procedure->type_idx);
+          symbol_type_string = tg_string_from_key(scratch.arena, graph, row->rdi, tg_key_ext(tg_kind_from_rdi_type_kind(type->kind), row->procedure->type_idx));
         }
-        if(frame->inline_site != 0)
+        if(row->inline_site != 0)
         {
-          symbol_name.str = rdi_string_from_idx(frame->rdi, frame->inline_site->name_string_idx, &symbol_name.size);
-          RDI_TypeNode *type = rdi_element_from_name_idx(frame->rdi, TypeNodes, frame->inline_site->type_idx);
-          symbol_type_string = tg_string_from_key(scratch.arena, graph, frame->rdi, tg_key_ext(tg_kind_from_rdi_type_kind(type->kind), frame->inline_site->type_idx));
+          symbol_name.str = rdi_string_from_idx(row->rdi, row->inline_site->name_string_idx, &symbol_name.size);
+          RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->inline_site->type_idx);
+          symbol_type_string = tg_string_from_key(scratch.arena, graph, row->rdi, tg_key_ext(tg_kind_from_rdi_type_kind(type->kind), row->inline_site->type_idx));
         }
         
         // rjf: build row
-        if(frame_valid) UI_NamedTableVectorF("###callstack_%p_%I64x", view, frame_idx)
+        if(frame_valid) UI_NamedTableVectorF("###callstack_%p_%I64x", view, row_idx)
         {
           // rjf: build cell for selection
           UI_TableCell
@@ -5797,28 +5840,27 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             UI_FocusHot((row_selected && cs->cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
             String8 selected_string = {0};
-            if(ctrl_ctx.unwind_count == frame->base_unwind_idx &&
-               ctrl_ctx.inline_unwind_count == frame->inline_unwind_idx)
+            if(ctrl_ctx.unwind_count == row->unwind_idx &&
+               ctrl_ctx.inline_depth == row->inline_depth)
             {
               selected_string = df_g_icon_kind_text_table[DF_IconKind_RightArrow];
               ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = thread_color));
             }
-            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawText, "%S###selection_%i", selected_string,
-                                                    (int)frame_idx);
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawText, "%S###selection_%I64u", selected_string, row_idx);
             UI_Signal sig = ui_signal_from_box(box);
             if(ui_pressed(sig))
             {
-              next_cursor = v2s64(0, (S64)frame_idx+1);
+              next_cursor = v2s64(0, row_num);
               DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
             }
             if(ui_double_clicked(sig) || sig.f&UI_SignalFlag_KeyboardPressed)
             {
               DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineUnwindIndex);
-              params.base_unwind_index = frame->base_unwind_idx;
-              params.inline_unwind_index = frame->inline_unwind_idx;
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_UnwindIndex);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineDepth);
+              params.unwind_index = row->unwind_idx;
+              params.inline_depth = row->inline_depth;
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
             }
           }
@@ -5828,10 +5870,10 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             UI_FocusHot((row_selected && cs->cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
             ui_set_next_child_layout_axis(Axis2_X);
-            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_Clip, "frame_%I64x", frame_idx);
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_Clip, "row_%I64x", row_idx);
             UI_Parent(box)
             {
-              if(frame->inline_site != 0)
+              if(row->inline_site != 0)
               {
                 UI_PrefWidth(ui_text_dim(10, 1)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
                 {
@@ -5858,17 +5900,17 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             UI_Signal sig = ui_signal_from_box(box);
             if(ui_pressed(sig))
             {
-              next_cursor = v2s64(1, (S64)frame_idx+1);
+              next_cursor = v2s64(1, row_num);
               DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
             }
             if(ui_double_clicked(sig) || sig.f&UI_SignalFlag_KeyboardPressed)
             {
               DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineUnwindIndex);
-              params.base_unwind_index = frame->base_unwind_idx;
-              params.inline_unwind_index = frame->inline_unwind_idx;
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_UnwindIndex);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineDepth);
+              params.unwind_index = row->unwind_idx;
+              params.inline_depth = row->inline_depth;
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
             }
           }
@@ -5881,17 +5923,17 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             UI_Signal sig = ui_signal_from_box(box);
             if(ui_pressed(sig))
             {
-              next_cursor = v2s64(2, (S64)frame_idx+1);
+              next_cursor = v2s64(2, row_num);
               DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
             }
             if(ui_double_clicked(sig) || sig.f&UI_SignalFlag_KeyboardPressed)
             {
               DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineUnwindIndex);
-              params.base_unwind_index = frame->base_unwind_idx;
-              params.inline_unwind_index = frame->inline_unwind_idx;
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_UnwindIndex);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineDepth);
+              params.unwind_index = row->unwind_idx;
+              params.inline_depth = row->inline_depth;
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
             }
           }
@@ -5902,7 +5944,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             UI_Signal sig = {0};
             if(df_entity_is_nil(module)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             {
-              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "(No Module)###moduleless_frame_%I64x", frame_idx);
+              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_Clickable, "(No Module)###moduleless_frame_%I64x", row_idx);
               sig = ui_signal_from_box(box);
             }
             else
@@ -5911,17 +5953,17 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             }
             if(ui_pressed(sig))
             {
-              next_cursor = v2s64(3, (S64)frame_idx+1);
+              next_cursor = v2s64(3, row_num);
               DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
             }
             if(ui_double_clicked(sig) || sig.f&UI_SignalFlag_KeyboardPressed)
             {
               DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_BaseUnwindIndex);
-              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineUnwindIndex);
-              params.base_unwind_index = frame->base_unwind_idx;
-              params.inline_unwind_index = frame->inline_unwind_idx;
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_UnwindIndex);
+              df_cmd_params_mark_slot(&params, DF_CmdParamSlot_InlineDepth);
+              params.unwind_index = row->unwind_idx;
+              params.inline_depth = row->inline_depth;
               df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
             }
           }
@@ -6525,6 +6567,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_Focus(UI_FocusKind_On)
         DF_Palette(ws, DF_PaletteCode_NeutralPopButton)
+        UI_TextAlignment(UI_TextAlign_Center)
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
         DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);

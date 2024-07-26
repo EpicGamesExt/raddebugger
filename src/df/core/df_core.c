@@ -923,15 +923,15 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CtrlCtx *ctrl_ctx, DF_CmdParams 
             params->index = u64;
             df_cmd_params_mark_slot(params, DF_CmdParamSlot_Index);
           }break;
-          case DF_CmdParamSlot_BaseUnwindIndex:
+          case DF_CmdParamSlot_UnwindIndex:
           {
-            params->base_unwind_index = u64;
-            df_cmd_params_mark_slot(params, DF_CmdParamSlot_BaseUnwindIndex);
+            params->unwind_index = u64;
+            df_cmd_params_mark_slot(params, DF_CmdParamSlot_UnwindIndex);
           }break;
-          case DF_CmdParamSlot_InlineUnwindIndex:
+          case DF_CmdParamSlot_InlineDepth:
           {
-            params->inline_unwind_index = u64;
-            df_cmd_params_mark_slot(params, DF_CmdParamSlot_InlineUnwindIndex);
+            params->inline_depth = u64;
+            df_cmd_params_mark_slot(params, DF_CmdParamSlot_InlineDepth);
           }break;
           case DF_CmdParamSlot_ID:
           {
@@ -3241,7 +3241,7 @@ df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
         String8 file_normalized_full_path = {0};
         file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
         DF_LineNode *n = push_array(arena, DF_LineNode, 1);
-        SLLQueuePush(result.first, result.last, n);
+        SLLQueuePushFront(result.first, result.last, n);
         result.count += 1;
         if(line->file_idx != 0 && file_normalized_full_path.size != 0)
         {
@@ -3671,78 +3671,42 @@ df_module_from_thread_candidates(DF_Entity *thread, DF_EntityList *candidates)
 internal DF_Unwind
 df_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, DF_Entity *process, CTRL_Unwind *base_unwind)
 {
-  Temp scratch = scratch_begin(&arena, 1);
-  DF_UnwindFrameList rich_frames_list = {0};
   Architecture arch = df_architecture_from_entity(process);
-  for(U64 base_frame_idx = 0; base_frame_idx < base_unwind->frames.count; base_frame_idx += 1)
+  DF_Unwind result = {0};
+  result.frames.concrete_frame_count = base_unwind->frames.count;
+  result.frames.total_frame_count = result.frames.concrete_frame_count;
+  result.frames.v = push_array(arena, DF_UnwindFrame, result.frames.concrete_frame_count);
+  for(U64 idx = 0; idx < result.frames.concrete_frame_count; idx += 1)
   {
-    CTRL_UnwindFrame *base_frame = &base_unwind->frames.v[base_frame_idx];
-    U64 rip_vaddr = regs_rip_from_arch_block(arch, base_frame->regs);
+    CTRL_UnwindFrame *src = &base_unwind->frames.v[idx];
+    DF_UnwindFrame *dst = &result.frames.v[idx];
+    U64 rip_vaddr = regs_rip_from_arch_block(arch, src->regs);
     DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
     DI_Key dbgi_key = df_dbgi_key_from_module(module);
     RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
     RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
     
-    // rjf: add rich frames for inlines
-    U64 inline_unwind_idx = 0;
-    for(RDI_Scope *s = scope; s->inline_site_idx != 0; s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
+    // rjf: fill concrete frame info
+    dst->regs = src->regs;
+    dst->rdi = rdi;
+    dst->procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
+    
+    // rjf: push inline frames
+    for(RDI_Scope *s = scope;
+        s->inline_site_idx != 0;
+        s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
     {
       RDI_InlineSite *site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
-      DF_UnwindFrameNode *n = push_array(scratch.arena, DF_UnwindFrameNode, 1);
-      SLLQueuePush(rich_frames_list.first, rich_frames_list.last, n);
-      rich_frames_list.count += 1;
-      n->v.regs = base_frame->regs;
-      n->v.rdi = rdi;
-      n->v.procedure = 0;
-      n->v.inline_site = site;
-      n->v.base_unwind_idx = base_frame_idx;
-      n->v.inline_unwind_idx = inline_unwind_idx;
-      inline_unwind_idx += 1;
-    }
-    
-    // rjf: add frame for concrete frame
-    DF_UnwindFrameNode *n = push_array(scratch.arena, DF_UnwindFrameNode, 1);
-    SLLQueuePush(rich_frames_list.first, rich_frames_list.last, n);
-    rich_frames_list.count += 1;
-    n->v.regs = base_frame->regs;
-    n->v.rdi = rdi;
-    n->v.procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
-    n->v.inline_site = 0;
-    n->v.base_unwind_idx = base_frame_idx;
-    n->v.inline_unwind_idx = inline_unwind_idx;
-    inline_unwind_idx = 0;
-  }
-  DF_Unwind result = {0};
-  {
-    result.frames.count = rich_frames_list.count;
-    result.frames.v = push_array(arena, DF_UnwindFrame, result.frames.count);
-    U64 idx = 0;
-    for(DF_UnwindFrameNode *n = rich_frames_list.first; n != 0; n = n->next, idx += 1)
-    {
-      MemoryCopyStruct(&result.frames.v[idx], &n->v);
+      DF_UnwindInlineFrame *inline_frame = push_array(arena, DF_UnwindInlineFrame, 1);
+      DLLPushFront(dst->first_inline_frame, dst->last_inline_frame, inline_frame);
+      inline_frame->inline_site = site;
+      dst->inline_frame_count += 1;
+      result.frames.inline_frame_count += 1;
+      result.frames.total_frame_count += 1;
     }
   }
-  scratch_end(scratch);
   return result;
-}
-
-internal DF_UnwindFrame *
-df_frame_from_unwind_idxs(DF_Unwind *unwind, U64 base_unwind_idx, U64 inline_unwind_idx)
-{
-  DF_UnwindFrame *f = 0;
-  for(U64 idx = 0; idx < unwind->frames.count; idx += 1)
-  {
-    if(unwind->frames.v[idx].base_unwind_idx == base_unwind_idx)
-    {
-      f = &unwind->frames.v[idx];
-      if(unwind->frames.v[idx].inline_unwind_idx == inline_unwind_idx)
-      {
-        break;
-      }
-    }
-  }
-  return f;
 }
 
 ////////////////////////////////
@@ -3870,7 +3834,7 @@ df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_RunFlags flags, CTRL_Tra
   
   // rjf: set control context to top unwind
   df_state->ctrl_ctx.unwind_count = 0;
-  df_state->ctrl_ctx.inline_unwind_count = 0;
+  df_state->ctrl_ctx.inline_depth = 0;
   
   scratch_end(scratch);
 }
@@ -5731,7 +5695,7 @@ df_ctrl_ctx_apply_overrides(DF_CtrlCtx *ctx, DF_CtrlCtx *overrides)
   {
     ctx->thread = overrides->thread;
     ctx->unwind_count = overrides->unwind_count;
-    ctx->inline_unwind_count = overrides->inline_unwind_count;
+    ctx->inline_depth = overrides->inline_depth;
   }
 }
 
@@ -6531,8 +6495,8 @@ df_push_cmd__root(DF_CmdParams *params, DF_CmdSpec *spec)
     if(params->vaddr != 0)              { log_infof("vaddr: 0x%I64x\n", params->vaddr); }
     if(params->voff != 0)               { log_infof("voff: 0x%I64x\n", params->voff); }
     if(params->index != 0)              { log_infof("index: 0x%I64x\n", params->index); }
-    if(params->base_unwind_index != 0)  { log_infof("base_unwind_index: 0x%I64x\n", params->base_unwind_index); }
-    if(params->inline_unwind_index != 0){ log_infof("inline_unwind_index: 0x%I64x\n", params->inline_unwind_index); }
+    if(params->unwind_index != 0)       { log_infof("unwind_index: 0x%I64x\n", params->unwind_index); }
+    if(params->inline_depth != 0)       { log_infof("inline_depth: 0x%I64x\n", params->inline_depth); }
     if(params->id != 0)                 { log_infof("id: 0x%I64x\n", params->id); }
     if(params->os_event != 0)
     {
@@ -7646,17 +7610,23 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
           CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(thread);
           DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          DF_UnwindFrame *frame = df_frame_from_unwind_idxs(&rich_unwind, params.base_unwind_index, params.inline_unwind_index);
-          if(frame != 0)
+          if(params.unwind_index < rich_unwind.frames.concrete_frame_count)
           {
-            df_state->ctrl_ctx.unwind_count = frame->base_unwind_idx;
-            df_state->ctrl_ctx.inline_unwind_count = frame->inline_unwind_idx;
+            DF_UnwindFrame *frame = &rich_unwind.frames.v[params.unwind_index];
+            df_state->ctrl_ctx.unwind_count = params.unwind_index;
+            df_state->ctrl_ctx.inline_depth = 0;
+            if(params.inline_depth < frame->inline_frame_count)
+            {
+              df_state->ctrl_ctx.inline_depth = params.inline_depth;
+            }
           }
           di_scope_close(di_scope);
         }break;
         case DF_CoreCmdKind_UpOneFrame:
         case DF_CoreCmdKind_DownOneFrame:
         {
+          // TODO(rjf)
+#if 0
           DF_CtrlCtx ctrl_ctx = df_ctrl_ctx();
           DI_Scope *di_scope = di_scope_open();
           DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
@@ -7664,6 +7634,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(thread);
           DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
           DF_UnwindFrame *current_frame = 0;
+          if(ctrl_ctx.unwind_count < rich_unwind.frames.concrete_frame_count)
+          {
+            current_frame = &rich_unwind.frames.v[ctrl_ctx.unwind_count];
+          }
           for(U64 idx = 0; idx < rich_unwind.frames.count; idx += 1)
           {
             if(rich_unwind.frames.v[idx].base_unwind_idx == ctrl_ctx.unwind_count &&
@@ -7702,6 +7676,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
           }
           di_scope_close(di_scope);
+#endif
         }break;
         case DF_CoreCmdKind_FreezeThread:
         case DF_CoreCmdKind_ThawThread:
@@ -8999,7 +8974,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     df_interact_regs()->module = df_handle_from_entity(module);
     df_interact_regs()->process = df_handle_from_entity(process);
     df_interact_regs()->unwind_count = df_state->ctrl_ctx.unwind_count;
-    df_interact_regs()->inline_unwind_count = df_state->ctrl_ctx.inline_unwind_count;
+    df_interact_regs()->inline_depth = df_state->ctrl_ctx.inline_depth;
   }
   
   ProfEnd();

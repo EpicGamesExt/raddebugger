@@ -4,6 +4,10 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] file overrides -> always pick most specific one! found with conflicting
+//     overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
+//     C:/devel/bar, etc.
+//
 // [ ] auto-scroll output window
 // [ ] inline breakpoint hit_count
 //  [ ] to count hit counts, resolve all bps to addresses, check addresses
