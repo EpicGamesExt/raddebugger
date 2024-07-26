@@ -7615,7 +7615,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_UnwindFrame *frame = &rich_unwind.frames.v[params.unwind_index];
             df_state->ctrl_ctx.unwind_count = params.unwind_index;
             df_state->ctrl_ctx.inline_depth = 0;
-            if(params.inline_depth < frame->inline_frame_count)
+            if(params.inline_depth <= frame->inline_frame_count)
             {
               df_state->ctrl_ctx.inline_depth = params.inline_depth;
             }
