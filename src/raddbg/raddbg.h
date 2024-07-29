@@ -9,9 +9,6 @@
 //     C:/devel/bar, etc.
 //
 // [ ] auto-scroll output window
-// [ ] inline breakpoint hit_count
-//  [ ] to count hit counts, resolve all bps to addresses, check addresses
-//      against stopper thread's
 // [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
@@ -52,7 +49,6 @@
 ////////////////////////////////
 //~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
 //
-// [ ] PDB files distributed with the build are not found by DbgHelp!!!
 // [ ] Jai compiler debugging crash
 
 ////////////////////////////////
@@ -420,6 +416,11 @@
 //      add what's under the MOUSE cursor instead of the keyboard cursor. Can
 //      we get a command for that so I can bind ALT-W to that instead?
 // [x] editing multiple bindings for commands
+// [x] inline breakpoint hit_count
+//  [x] to count hit counts, resolve all bps to addresses, check addresses
+//      against stopper thread's
+//
+// [x] PDB files distributed with the build are not found by DbgHelp!!!
 
 #ifndef RADDBG_H
 #define RADDBG_H

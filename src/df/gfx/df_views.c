@@ -9100,6 +9100,7 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
                 DF_Palette(ws, DF_PaletteCode_NegativePopButton)
                 UI_CornerRadius(ui_top_font_size()*0.5f)
                 UI_FontSize(ui_top_font_size()*0.9f)
+                UI_TextAlignment(UI_TextAlign_Center)
                 ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBackground, "Click Again To Apply");
             }
           }

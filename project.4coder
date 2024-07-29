@@ -45,135 +45,52 @@ load_paths =
 
 commands =
 {
-  .rjf_f1 =
-  {
-    //.win = "build rdi_from_pdb rdi_dump && pushd build && rdi_from_pdb --pdb:mule_main.pdb --out:mule_main.rdi && rdi_dump mule_main.rdi > mule_main.dump && popd",
-    .win = "build raddbg telemetry",
-    //.win = "build ryan_scratch",
-    //.win = "wsl ./build.sh ryan_scratch",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .rjf_f2 =
-  {
-    .win = "build rdi_from_pdb rdi_dump && pushd build && rdi_from_pdb --pdb:mule_main.pdb --out:mule_main.rdi && rdi_dump mule_main.rdi > mule_main.dump && popd",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .rjf_f3 =
-  {
-    .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --project:local_dev.raddbg_project && popd",
-    //.win = "pushd build && ryan_scratch.exe && popd",
-    //.win = "wsl ./build/ryan_scratch",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .rjf_f4 =
-  {
-    .win = "build rdi_from_pdb release telemetry && pushd build && rdi_from_pdb.exe --pdb:UnrealEditorFortnite.pdb --out:profile.rdi --capture && popd",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .rjf_f5 =
-  {
-    .win = "pushd build && rdi_from_pdb.exe --exe:raddbg.exe --pdb:raddbg.pdb --out:raddbg.rdi --capture && popd",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .build_raddbg =
-  {
-    .win = "build raddbg",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .build_raddbg_release_telemetry =
-  {
-    .win = "build raddbg release telemetry",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .build_rdi_from_pdb =
-  {
-    .win = "build rdi_from_pdb",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .build_rdi_dump =
-  {
-    .win = "build rdi_dump",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .build_mule_main =
-  {
-    .win = "build mule_main",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .build_ryan_scratch =
-  {
-    .win = "build ryan_scratch",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
-  .run_raddbg =
-  {
-    .win = "pushd build && raddbg.exe && popd",
-    .linux = "",
-    .out = "*compilation*",
-    .footer_panel = true,
-    .save_dirty_files = true,
-    .cursor_at_end = false,
-  },
+  //- rjf: fkey command slots (change locally but do not commit)
+  .build_f1                    = { .win = "build raddbg telemetry",                                                                            .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_f2                    = { .win = "build rdi_from_pdb",                                                                                .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_f3                    = { .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --project:local_dev.raddbg_project && popd", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  
+  //- rjf: local target builds
+  .build_raddbg                = { .win = "build raddbg",                .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_from_pdb          = { .win = "build rdi_from_pdb",          .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_from_dwarf        = { .win = "build rdi_from_dwarf",        .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_dump              = { .win = "build rdi_dump",              .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_breakpad_from_pdb = { .win = "build rdi_breakpad_from_pdb", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_ryan_scratch          = { .win = "build ryan_scratch",          .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_main             = { .win = "build mule_main",             .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_module           = { .win = "build mule_module",           .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_hotload          = { .win = "build mule_hotload",          .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_peb_trample      = { .win = "build mule_peb_trample",      .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  
+  //- rjf: wsl target builds
+  .build_raddbg_wsl                = { .win = "wsl ./build.sh raddbg",                .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_from_pdb_wsl          = { .win = "wsl ./build.sh rdi_from_pdb",          .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_from_dwarf_wsl        = { .win = "wsl ./build.sh rdi_from_dwarf",        .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_dump_wsl              = { .win = "wsl ./build.sh rdi_dump",              .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_rdi_breakpad_from_pdb_wsl = { .win = "wsl ./build.sh rdi_breakpad_from_pdb", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_ryan_scratch_wsl          = { .win = "wsl ./build.sh ryan_scratch",          .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_main_wsl             = { .win = "wsl ./build.sh mule_main",             .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_module_wsl           = { .win = "wsl ./build.sh mule_module",           .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_hotload_wsl          = { .win = "wsl ./build.sh mule_hotload",          .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .build_mule_peb_trample_wsl      = { .win = "wsl ./build.sh mule_peb_trample",      .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  
+  //- rjf: local target runs
+  .run_raddbg                  = { .win = "pushd build && raddbg.exe && popd", .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
 };
 
 fkey_command =
 {
-  .F1 = "build_raddbg",
-  .F3 = "run_raddbg",
+  .F1 = "build_f1",
+  .F2 = "build_f2",
+  .F3 = "build_f3",
 };
 
 fkey_command_override =
 {
   .rjf =
   {
-    .F1 = "rjf_f1",
-    .F2 = "rjf_f2",
-    .F3 = "rjf_f3",
-    .F4 = "rjf_f4",
-    .F5 = "rjf_f5",
+    .F1 = "build_f1",
+    .F2 = "build_f2",
+    .F3 = "build_f3",
   },
 };
