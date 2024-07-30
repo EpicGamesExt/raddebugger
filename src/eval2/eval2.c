@@ -81,27 +81,27 @@ e_opcode_from_expr_kind(E_ExprKind kind)
   RDI_EvalOp result = RDI_EvalOp_Stop;
   switch(kind)
   {
-    case EVAL_ExprKind_Neg:    result = RDI_EvalOp_Neg;    break;
-    case EVAL_ExprKind_LogNot: result = RDI_EvalOp_LogNot; break;
-    case EVAL_ExprKind_BitNot: result = RDI_EvalOp_BitNot; break;
-    case EVAL_ExprKind_Mul:    result = RDI_EvalOp_Mul;    break;
-    case EVAL_ExprKind_Div:    result = RDI_EvalOp_Div;    break;
-    case EVAL_ExprKind_Mod:    result = RDI_EvalOp_Mod;    break;
-    case EVAL_ExprKind_Add:    result = RDI_EvalOp_Add;    break;
-    case EVAL_ExprKind_Sub:    result = RDI_EvalOp_Sub;    break;
-    case EVAL_ExprKind_LShift: result = RDI_EvalOp_LShift; break;
-    case EVAL_ExprKind_RShift: result = RDI_EvalOp_RShift; break;
-    case EVAL_ExprKind_Less:   result = RDI_EvalOp_Less;   break;
-    case EVAL_ExprKind_LsEq:   result = RDI_EvalOp_LsEq;   break;
-    case EVAL_ExprKind_Grtr:   result = RDI_EvalOp_Grtr;   break;
-    case EVAL_ExprKind_GrEq:   result = RDI_EvalOp_GrEq;   break;
-    case EVAL_ExprKind_EqEq:   result = RDI_EvalOp_EqEq;   break;
-    case EVAL_ExprKind_NtEq:   result = RDI_EvalOp_NtEq;   break;
-    case EVAL_ExprKind_BitAnd: result = RDI_EvalOp_BitAnd; break;
-    case EVAL_ExprKind_BitXor: result = RDI_EvalOp_BitXor; break;
-    case EVAL_ExprKind_BitOr:  result = RDI_EvalOp_BitOr;  break;
-    case EVAL_ExprKind_LogAnd: result = RDI_EvalOp_LogAnd; break;
-    case EVAL_ExprKind_LogOr:  result = RDI_EvalOp_LogOr;  break;
+    case E_ExprKind_Neg:    result = RDI_EvalOp_Neg;    break;
+    case E_ExprKind_LogNot: result = RDI_EvalOp_LogNot; break;
+    case E_ExprKind_BitNot: result = RDI_EvalOp_BitNot; break;
+    case E_ExprKind_Mul:    result = RDI_EvalOp_Mul;    break;
+    case E_ExprKind_Div:    result = RDI_EvalOp_Div;    break;
+    case E_ExprKind_Mod:    result = RDI_EvalOp_Mod;    break;
+    case E_ExprKind_Add:    result = RDI_EvalOp_Add;    break;
+    case E_ExprKind_Sub:    result = RDI_EvalOp_Sub;    break;
+    case E_ExprKind_LShift: result = RDI_EvalOp_LShift; break;
+    case E_ExprKind_RShift: result = RDI_EvalOp_RShift; break;
+    case E_ExprKind_Less:   result = RDI_EvalOp_Less;   break;
+    case E_ExprKind_LsEq:   result = RDI_EvalOp_LsEq;   break;
+    case E_ExprKind_Grtr:   result = RDI_EvalOp_Grtr;   break;
+    case E_ExprKind_GrEq:   result = RDI_EvalOp_GrEq;   break;
+    case E_ExprKind_EqEq:   result = RDI_EvalOp_EqEq;   break;
+    case E_ExprKind_NtEq:   result = RDI_EvalOp_NtEq;   break;
+    case E_ExprKind_BitAnd: result = RDI_EvalOp_BitAnd; break;
+    case E_ExprKind_BitXor: result = RDI_EvalOp_BitXor; break;
+    case E_ExprKind_BitOr:  result = RDI_EvalOp_BitOr;  break;
+    case E_ExprKind_LogAnd: result = RDI_EvalOp_LogAnd; break;
+    case E_ExprKind_LogOr:  result = RDI_EvalOp_LogOr;  break;
   }
   return result;
 }
@@ -113,12 +113,12 @@ e_expr_kind_is_comparison(E_ExprKind kind)
   switch(kind)
   {
     default:{}break;
-    case EVAL_ExprKind_EqEq:
-    case EVAL_ExprKind_NtEq:
-    case EVAL_ExprKind_Less:
-    case EVAL_ExprKind_Grtr:
-    case EVAL_ExprKind_LsEq:
-    case EVAL_ExprKind_GrEq:
+    case E_ExprKind_EqEq:
+    case E_ExprKind_NtEq:
+    case E_ExprKind_Less:
+    case E_ExprKind_Grtr:
+    case E_ExprKind_LsEq:
+    case E_ExprKind_GrEq:
     {
       result = 1;
     }break;
@@ -932,7 +932,19 @@ e_expr_push_child(E_Expr *parent, E_Expr *child)
 internal void
 e_select_ctx(E_Ctx *ctx)
 {
-  e_ctx = ctx;
+  if(e_state == 0)
+  {
+    Arena *arena = arena_alloc();
+    e_state = push_array(arena, E_State, 1);
+    e_state->arena = arena;
+    e_state->arena_eval_start_pos = arena_pos(e_state->arena);
+  }
+  arena_pop_to(e_state->arena, e_state->arena_eval_start_pos);
+  e_state->ctx = ctx;
+  e_state->cons_content_slots_count = 256;
+  e_state->cons_key_slots_count = 256;
+  e_state->cons_content_slots = push_array(e_state->arena, E_ConsTypeSlot, e_state->cons_content_slots_count);
+  e_state->cons_key_slots = push_array(e_state->arena, E_ConsTypeSlot, e_state->cons_key_slots_count);
 }
 
 ////////////////////////////////
@@ -997,8 +1009,8 @@ e_type_key_cons(E_TypeKind kind, E_TypeKey direct_key, U64 u64)
     (U32)((u64 & 0xffffffff00000000ull)>> 32),
   };
   U64 content_hash = e_hash_from_string(str8((U8 *)buffer, sizeof(buffer)));
-  U64 content_slot_idx = content_hash%e_ctx->cons_content_slots_count;
-  E_ConsTypeSlot *content_slot = &e_ctx->cons_content_slots[content_slot_idx];
+  U64 content_slot_idx = content_hash%e_state->cons_content_slots_count;
+  E_ConsTypeSlot *content_slot = &e_state->cons_content_slots[content_slot_idx];
   E_ConsTypeNode *node = 0;
   for(E_ConsTypeNode *n = content_slot->first; n != 0; n = n->content_next)
   {
@@ -1015,12 +1027,12 @@ e_type_key_cons(E_TypeKind kind, E_TypeKey direct_key, U64 u64)
   {
     E_TypeKey key = {E_TypeKeyKind_Cons};
     key.u32[0] = (U32)kind;
-    key.u32[1] = (U32)e_ctx->cons_id_gen;
-    e_ctx->cons_id_gen += 1;
+    key.u32[1] = (U32)e_state->cons_id_gen;
+    e_state->cons_id_gen += 1;
     U64 key_hash = e_hash_from_string(str8_struct(&key));
-    U64 key_slot_idx = key_hash%e_ctx->cons_key_slots_count;
-    E_ConsTypeSlot *key_slot = &e_ctx->cons_key_slots[key_slot_idx];
-    E_ConsTypeNode *node = push_array(e_ctx->eval_arena, E_ConsTypeNode, 1);
+    U64 key_slot_idx = key_hash%e_state->cons_key_slots_count;
+    E_ConsTypeSlot *key_slot = &e_state->cons_key_slots[key_slot_idx];
+    E_ConsTypeNode *node = push_array(e_state->arena, E_ConsTypeNode, 1);
     SLLQueuePush_N(content_slot->first, content_slot->last, node, content_next);
     SLLQueuePush_N(key_slot->first, key_slot->last, node, key_next);
     node->key = key;
@@ -1089,8 +1101,8 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       case E_TypeKeyKind_Cons:
       {
         U64 key_hash = e_hash_from_string(str8_struct(&key));
-        U64 key_slot_idx = key_hash%e_ctx->cons_key_slots_count;
-        E_ConsTypeSlot *key_slot = &e_ctx->cons_key_slots[key_slot_idx];
+        U64 key_slot_idx = key_hash%e_state->cons_key_slots_count;
+        E_ConsTypeSlot *key_slot = &e_state->cons_key_slots[key_slot_idx];
         for(E_ConsTypeNode *node = key_slot->first;
             node != 0;
             node = node->key_next)
@@ -1105,7 +1117,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             {
               default:
               {
-                type->byte_size = bit_size_from_arch(e_ctx->arch)/8;
+                type->byte_size = bit_size_from_arch(e_state->ctx->arch)/8;
               }break;
               case E_TypeKind_Array:
               {
@@ -1122,7 +1134,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       {
         U64 type_node_idx = key.u32[1];
         U32 rdi_idx = key.u32[2];
-        RDI_Parsed *rdi = e_ctx->rdis[rdi_idx];
+        RDI_Parsed *rdi = e_state->ctx->rdis[rdi_idx];
         RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
         if(rdi_type->kind != RDI_TypeKind_NULL)
         {
@@ -1260,7 +1272,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type = push_array(arena, E_Type, 1);
                 type->kind            = kind;
                 type->direct_type_key = direct_type_key;
-                type->byte_size       = bit_size_from_arch(e_ctx->arch)/8;
+                type->byte_size       = bit_size_from_arch(e_state->ctx->arch)/8;
               }break;
               
               case RDI_TypeKind_Array:
@@ -1281,7 +1293,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_ctx->arch)/8;
+                  type->byte_size       = bit_size_from_arch(e_state->ctx->arch)/8;
                   type->direct_type_key = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
@@ -1314,7 +1326,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_ctx->arch)/8;
+                  type->byte_size       = bit_size_from_arch(e_state->ctx->arch)/8;
                   type->owner_type_key  = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
@@ -1352,7 +1364,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 }
                 type = push_array(arena, E_Type, 1);
                 type->kind            = kind;
-                type->byte_size       = bit_size_from_arch(e_ctx->arch)/8;
+                type->byte_size       = bit_size_from_arch(e_state->ctx->arch)/8;
                 type->owner_type_key  = owner_type_key;
                 type->direct_type_key = direct_type_key;
               }break;
@@ -2253,9 +2265,9 @@ e_leaf_type_from_name(String8 name)
 {
   E_TypeKey key = zero_struct;
   B32 found = 0;
-  for(U64 rdi_idx = 0; rdi_idx < e_ctx->rdis_count; rdi_idx += 1)
+  for(U64 rdi_idx = 0; rdi_idx < e_state->ctx->rdis_count; rdi_idx += 1)
   {
-    RDI_Parsed *rdi = e_ctx->rdis[rdi_idx];
+    RDI_Parsed *rdi = e_state->ctx->rdis[rdi_idx];
     RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
     RDI_ParsedNameMap parsed_name_map = {0};
     rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
@@ -2655,12 +2667,12 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: form namespaceified fallback versions of this lookup string
           String8List namespaceified_token_strings = {0};
           {
-            U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(e_ctx->rdis[0], RDI_SectionKind_ScopeVMap, e_ctx->ip_voff);
-            RDI_Scope *scope = rdi_element_from_name_idx(e_ctx->rdis[0], Scopes, scope_idx);
+            U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(e_state->ctx->rdis[0], RDI_SectionKind_ScopeVMap, e_state->ctx->ip_voff);
+            RDI_Scope *scope = rdi_element_from_name_idx(e_state->ctx->rdis[0], Scopes, scope_idx);
             U64 proc_idx = scope->proc_idx;
-            RDI_Procedure *procedure = rdi_element_from_name_idx(e_ctx->rdis[0], Procedures, proc_idx);
+            RDI_Procedure *procedure = rdi_element_from_name_idx(e_state->ctx->rdis[0], Procedures, proc_idx);
             U64 name_size = 0;
-            U8 *name_ptr = rdi_string_from_idx(e_ctx->rdis[0], procedure->name_string_idx, &name_size);
+            U8 *name_ptr = rdi_string_from_idx(e_state->ctx->rdis[0], procedure->name_string_idx, &name_size);
             String8 containing_procedure_name = str8(name_ptr, name_size);
             U64 last_past_scope_resolution_pos = 0;
             for(;;)
@@ -2682,7 +2694,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try members
           if(mapped_identifier == 0)
           {
-            U64 data_member_num = e_num_from_string(e_ctx->member_map, token_string);
+            U64 data_member_num = e_num_from_string(e_state->ctx->member_map, token_string);
             if(data_member_num != 0)
             {
               atom_implicit_member_name = token_string;
@@ -2693,13 +2705,13 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try locals
           if(mapped_identifier == 0)
           {
-            U64 local_num = e_num_from_string(e_ctx->locals_map, local_lookup_string);
+            U64 local_num = e_num_from_string(e_state->ctx->locals_map, local_lookup_string);
             if(local_num != 0)
             {
               mapped_identifier = 1;
               identifier_type_is_possibly_dynamically_overridden = 1;
-              RDI_Local *local_var = rdi_element_from_name_idx(e_ctx->rdis[0], Locals, local_num-1);
-              RDI_TypeNode *type_node = rdi_element_from_name_idx(e_ctx->rdis[0], TypeNodes, local_var->type_idx);
+              RDI_Local *local_var = rdi_element_from_name_idx(e_state->ctx->rdis[0], Locals, local_num-1);
+              RDI_TypeNode *type_node = rdi_element_from_name_idx(e_state->ctx->rdis[0], TypeNodes, local_var->type_idx);
               type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, 0);
               
               // rjf: grab location info
@@ -2707,11 +2719,11 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                   loc_block_idx < local_var->location_opl;
                   loc_block_idx += 1)
               {
-                RDI_LocationBlock *block = rdi_element_from_name_idx(e_ctx->rdis[0], LocationBlocks, loc_block_idx);
-                if(block->scope_off_first <= e_ctx->ip_voff && e_ctx->ip_voff < block->scope_off_opl)
+                RDI_LocationBlock *block = rdi_element_from_name_idx(e_state->ctx->rdis[0], LocationBlocks, loc_block_idx);
+                if(block->scope_off_first <= e_state->ctx->ip_voff && e_state->ctx->ip_voff < block->scope_off_opl)
                 {
                   U64 all_location_data_size = 0;
-                  U8 *all_location_data = rdi_table_from_name(e_ctx->rdis[0], LocationData, &all_location_data_size);
+                  U8 *all_location_data = rdi_table_from_name(e_state->ctx->rdis[0], LocationData, &all_location_data_size);
                   loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
                   switch(loc_kind)
                   {
@@ -2752,23 +2764,23 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try registers
           if(mapped_identifier == 0)
           {
-            U64 reg_num = e_num_from_string(e_ctx->regs_map, token_string);
+            U64 reg_num = e_num_from_string(e_state->ctx->regs_map, token_string);
             if(reg_num != 0)
             {
               reg_code = reg_num;
               mapped_identifier = 1;
-              type_key = e_type_key_reg(e_ctx->arch, reg_code);
+              type_key = e_type_key_reg(e_state->ctx->arch, reg_code);
             }
           }
           
           //- rjf: try register aliases
           if(mapped_identifier == 0)
           {
-            U64 alias_num = e_num_from_string(e_ctx->reg_alias_map, token_string);
+            U64 alias_num = e_num_from_string(e_state->ctx->reg_alias_map, token_string);
             if(alias_num != 0)
             {
               alias_code = (REGS_AliasCode)alias_num;
-              type_key = e_type_key_reg_alias(e_ctx->arch, alias_code);
+              type_key = e_type_key_reg_alias(e_state->ctx->arch, alias_code);
               mapped_identifier = 1;
             }
           }
@@ -2776,9 +2788,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try global variables
           if(mapped_identifier == 0)
           {
-            for(U64 rdi_idx = 0; rdi_idx < e_ctx->rdis_count; rdi_idx += 1)
+            for(U64 rdi_idx = 0; rdi_idx < e_state->ctx->rdis_count; rdi_idx += 1)
             {
-              RDI_Parsed *rdi = e_ctx->rdis[rdi_idx];
+              RDI_Parsed *rdi = e_state->ctx->rdis[rdi_idx];
               RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
               RDI_ParsedNameMap parsed_name_map = {0};
               rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
@@ -2817,9 +2829,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try thread variables
           if(mapped_identifier == 0)
           {
-            for(U64 rdi_idx = 0; rdi_idx < e_ctx->rdis_count; rdi_idx += 1)
+            for(U64 rdi_idx = 0; rdi_idx < e_state->ctx->rdis_count; rdi_idx += 1)
             {
-              RDI_Parsed *rdi = e_ctx->rdis[rdi_idx];
+              RDI_Parsed *rdi = e_state->ctx->rdis[rdi_idx];
               RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
               RDI_ParsedNameMap parsed_name_map = {0};
               rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
@@ -2854,9 +2866,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try procedures
           if(mapped_identifier == 0)
           {
-            for(U64 rdi_idx = 0; rdi_idx < e_ctx->rdis_count; rdi_idx += 1)
+            for(U64 rdi_idx = 0; rdi_idx < e_state->ctx->rdis_count; rdi_idx += 1)
             {
-              RDI_Parsed *rdi = e_ctx->rdis[rdi_idx];
+              RDI_Parsed *rdi = e_state->ctx->rdis[rdi_idx];
               RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
               RDI_ParsedNameMap parsed_name_map = {0};
               rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
@@ -2922,7 +2934,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(reg_code != 0)
                 {
-                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_ctx->arch)[reg_code];
+                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_state->ctx->arch)[reg_code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -2932,8 +2944,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(alias_code != 0)
                 {
-                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_architecture(e_ctx->arch)[alias_code];
-                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_architecture(e_ctx->arch)[alias_slice.code];
+                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_architecture(e_state->ctx->arch)[alias_code];
+                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_architecture(e_state->ctx->arch)[alias_slice.code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -2963,7 +2975,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               case RDI_LocationKind_AddrRegPlusU16:
               {
                 E_OpList oplist = {0};
-                U64 byte_size = bit_size_from_arch(e_ctx->arch)/8;
+                U64 byte_size = bit_size_from_arch(e_state->ctx->arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
@@ -2976,12 +2988,12 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               case RDI_LocationKind_AddrAddrRegPlusU16:
               {
                 E_OpList oplist = {0};
-                U64 byte_size = bit_size_from_arch(e_ctx->arch)/8;
+                U64 byte_size = bit_size_from_arch(e_state->ctx->arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(e_ctx->arch)/8);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(e_state->ctx->arch)/8);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode = E_Mode_Addr;
                 atom->type_key = type_key;
@@ -2989,8 +3001,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               }break;
               case RDI_LocationKind_ValReg:
               {
-                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(e_ctx->arch, loc_reg.reg_code);
-                REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_ctx->arch)[regs_reg_code];
+                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(e_state->ctx->arch, loc_reg.reg_code);
+                REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_state->ctx->arch)[regs_reg_code];
                 E_OpList oplist = {0};
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;
@@ -3349,7 +3361,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
 internal E_Parse
 e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens)
 {
-  E_Parse parse = e_parse_expr_from_text_tokens__prec(arena, text, tokens, eval_g_max_precedence);
+  E_Parse parse = e_parse_expr_from_text_tokens__prec(arena, text, tokens, e_max_precedence);
   return parse;
 }
 
@@ -4016,7 +4028,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
       RDI_EvalTypeGroup r_type_group = e_type_group_from_kind(r_type_kind);
       E_TypeKey r_type_promoted = e_type_promote(r_type);
-      RDI_EvalOp op = eval_opcode_from_expr_kind(kind);
+      RDI_EvalOp op = e_opcode_from_expr_kind(kind);
       e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
       
       // rjf: bad conditions? -> error if applicable, exit
@@ -4371,16 +4383,16 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: leaf identifiers
     case E_ExprKind_LeafIdent:
     {
-      E_Expr *macro_expr = e_expr_from_string(e_ctx->macro_map, expr->string);
+      E_Expr *macro_expr = e_expr_from_string(e_state->ctx->macro_map, expr->string);
       if(macro_expr == &e_expr_nil)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "\"%S\" could not be found.", expr->string);
       }
       else
       {
-        e_string2expr_map_inc_poison(e_ctx->macro_map, expr->string);
+        e_string2expr_map_inc_poison(e_state->ctx->macro_map, expr->string);
         result = e_irtree_and_type_from_expr(arena, macro_expr);
-        e_string2expr_map_dec_poison(e_ctx->macro_map, expr->string);
+        e_string2expr_map_dec_poison(e_state->ctx->macro_map, expr->string);
       }
     }break;
   }
@@ -4620,7 +4632,7 @@ e_interpret(String8 bytecode)
         U64 addr = svals[0].u64;
         U64 size = imm;
         B32 good_read = 0;
-        if(e_ctx->memory_read != 0 && e_ctx->memory_read(e_ctx->memory_read_user_data, &nval, r1u64(addr, addr+size)))
+        if(e_state->ctx->memory_read != 0 && e_state->ctx->memory_read(e_state->ctx->memory_read_user_data, &nval, r1u64(addr, addr+size)))
         {
           good_read = 1;
         }
@@ -4636,13 +4648,13 @@ e_interpret(String8 bytecode)
         U8 rdi_reg_code     = (imm&0x0000FF)>>0;
         U8 byte_size        = (imm&0x00FF00)>>8;
         U8 byte_off         = (imm&0xFF0000)>>16;
-        REGS_RegCode base_reg_code = regs_reg_code_from_arch_rdi_code(e_ctx->arch, rdi_reg_code);
-        REGS_Rng rng = regs_reg_code_rng_table_from_architecture(e_ctx->arch)[base_reg_code];
+        REGS_RegCode base_reg_code = regs_reg_code_from_arch_rdi_code(e_state->ctx->arch, rdi_reg_code);
+        REGS_Rng rng = regs_reg_code_rng_table_from_architecture(e_state->ctx->arch)[base_reg_code];
         U64 off = (U64)rng.byte_off + byte_off;
         U64 size = (U64)byte_size;
-        if(off + size <= e_ctx->reg_size)
+        if(off + size <= e_state->ctx->reg_size)
         {
-          MemoryCopy(&nval, (U8*)e_ctx->reg_data + off, size);
+          MemoryCopy(&nval, (U8*)e_state->ctx->reg_data + off, size);
         }
         else
         {
@@ -4654,10 +4666,10 @@ e_interpret(String8 bytecode)
       case RDI_EvalOp_RegReadDyn:
       {
         U64 off  = svals[0].u64;
-        U64 size = bit_size_from_arch(e_ctx->arch)/8;
-        if(off + size <= e_ctx->reg_size)
+        U64 size = bit_size_from_arch(e_state->ctx->arch)/8;
+        if(off + size <= e_state->ctx->reg_size)
         {
-          MemoryCopy(&nval, (U8*)e_ctx->reg_data + off, size);
+          MemoryCopy(&nval, (U8*)e_state->ctx->reg_data + off, size);
         }
         else
         {
@@ -4668,9 +4680,9 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_FrameOff:
       {
-        if(e_ctx->frame_base != 0)
+        if(e_state->ctx->frame_base != 0)
         {
-          nval.u64 = *e_ctx->frame_base + imm;
+          nval.u64 = *e_state->ctx->frame_base + imm;
         }
         else
         {
@@ -4681,9 +4693,9 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_ModuleOff:
       {
-        if(e_ctx->module_base != 0)
+        if(e_state->ctx->module_base != 0)
         {
-          nval.u64 = *e_ctx->module_base + imm;
+          nval.u64 = *e_state->ctx->module_base + imm;
         }
         else
         {
@@ -4694,9 +4706,9 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_TLSOff:
       {
-        if(e_ctx->tls_base != 0)
+        if(e_state->ctx->tls_base != 0)
         {
-          nval.u64 = *e_ctx->tls_base + imm;
+          nval.u64 = *e_state->ctx->tls_base + imm;
         }
         else
         {

@@ -407,9 +407,6 @@ typedef B32 E_MemoryReadFunction(void *user_data, void *out, Rng1U64 vaddr_range
 typedef struct E_Ctx E_Ctx;
 struct E_Ctx
 {
-  // rjf: eval arena
-  Arena *eval_arena;
-  
   // rjf: architecture
   Architecture arch;
   
@@ -428,13 +425,6 @@ struct E_Ctx
   E_String2NumMap *member_map; // (within `rdis[0]`)
   E_String2ExprMap *macro_map;
   
-  // rjf: JIT-constructed types
-  U64 cons_id_gen;
-  U64 cons_content_slots_count;
-  U64 cons_key_slots_count;
-  E_ConsTypeSlot *cons_content_slots;
-  E_ConsTypeSlot *cons_key_slots;
-  
   // rjf: interpretation environment info
   void *memory_read_user_data;
   E_MemoryReadFunction *memory_read;
@@ -443,6 +433,23 @@ struct E_Ctx
   U64 *module_base;
   U64 *frame_base;
   U64 *tls_base;
+};
+
+typedef struct E_State E_State;
+struct E_State
+{
+  Arena *arena;
+  U64 arena_eval_start_pos;
+  
+  // rjf: evaluation context
+  E_Ctx *ctx;
+  
+  // rjf: JIT-constructed types tables
+  U64 cons_id_gen;
+  U64 cons_content_slots_count;
+  U64 cons_key_slots_count;
+  E_ConsTypeSlot *cons_content_slots;
+  E_ConsTypeSlot *cons_key_slots;
 };
 
 ////////////////////////////////
@@ -462,7 +469,7 @@ struct E_Parse
 global read_only E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil};
 global read_only E_Type e_type_nil = {E_TypeKind_Null};
 global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
-thread_static E_Ctx *e_ctx = 0;
+thread_static E_State *e_state = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helper Functions
@@ -543,7 +550,7 @@ internal void e_select_ctx(E_Ctx *ctx);
 //- rjf: key constructors
 internal E_TypeKey e_type_key_zero(void);
 internal E_TypeKey e_type_key_basic(E_TypeKind kind);
-internal E_TypeKey e_type_key_ext(TG_Kind kind, U32 type_idx, U32 rdi_idx);
+internal E_TypeKey e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx);
 internal E_TypeKey e_type_key_reg(Architecture arch, REGS_RegCode code);
 internal E_TypeKey e_type_key_reg_alias(Architecture arch, REGS_AliasCode code);
 internal E_TypeKey e_type_key_cons(E_TypeKind kind, E_TypeKey direct_key, U64 u64);
