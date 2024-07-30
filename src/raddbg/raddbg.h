@@ -47,11 +47,6 @@
 //     if(ui_is_focus_active())
 
 ////////////////////////////////
-//~ rjf: Hot, High Priority Tasks (Complete Unusability, Crashes, Fire-Worthy)
-//
-// [ ] Jai compiler debugging crash
-
-////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
 //
 // [ ] Setting the code_font/main_font values to a font name doesn't work.
@@ -421,6 +416,7 @@
 //      against stopper thread's
 //
 // [x] PDB files distributed with the build are not found by DbgHelp!!!
+// [x] Jai compiler debugging crash
 
 #ifndef RADDBG_H
 #define RADDBG_H

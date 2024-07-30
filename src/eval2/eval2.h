@@ -407,6 +407,9 @@ typedef B32 E_MemoryReadFunction(void *user_data, void *out, Rng1U64 vaddr_range
 typedef struct E_Ctx E_Ctx;
 struct E_Ctx
 {
+  // rjf: eval arena
+  Arena *eval_arena;
+  
   // rjf: architecture
   Architecture arch;
   
@@ -467,6 +470,12 @@ thread_static E_Ctx *e_ctx = 0;
 internal U64 e_hash_from_string(String8 string);
 
 ////////////////////////////////
+//~ rjf: Expr Kind Enum Functions
+
+internal RDI_EvalOp e_opcode_from_expr_kind(E_ExprKind kind);
+internal B32        e_expr_kind_is_comparison(E_ExprKind kind);
+
+////////////////////////////////
 //~ rjf: Type Kind Enum Functions
 
 internal E_TypeKind e_type_kind_from_rdi(RDI_TypeKind kind);
@@ -508,11 +517,6 @@ internal E_String2NumMap *e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Pars
 internal E_String2NumMap *e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
 
 ////////////////////////////////
-//~ rjf: Context Selection Functions (Required For All Subsequent APIs)
-
-internal void e_select_ctx(E_Ctx *ctx);
-
-////////////////////////////////
 //~ rjf: Tokenization Functions
 
 #define e_token_at_it(it, arr) (((it) < (arr)->v+(arr)->count) ? (*(it)) : e_token_zero())
@@ -527,6 +531,11 @@ internal E_TokenArray e_token_array_make_first_opl(E_Token *first, E_Token *opl)
 
 internal E_Expr *e_push_expr(Arena *arena, E_ExprKind kind, void *location);
 internal void e_expr_push_child(E_Expr *parent, E_Expr *child);
+
+////////////////////////////////
+//~ rjf: Context Selection Functions (Required For All Subsequent APIs)
+
+internal void e_select_ctx(E_Ctx *ctx);
 
 ////////////////////////////////
 //~ rjf: Type Operation Functions
@@ -552,11 +561,22 @@ internal E_TypeKey e_type_unwrap_enum(E_TypeKey key);
 internal E_TypeKey e_type_unwrap(E_TypeKey key);
 internal E_TypeKey e_type_promote(E_TypeKey key);
 internal B32 e_type_match(E_TypeKey l, E_TypeKey r);
+internal E_Member *e_type_member_copy(Arena *arena, E_Member *src);
+internal int e_type_qsort_compare_members_offset(E_Member *a, E_Member *b);
+internal E_MemberArray e_type_data_members_from_key(Arena *arena, E_TypeKey key);
+internal void e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec, B32 skip_return);
+internal void e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec);
+internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);
+
+//- rjf: type key data structures
+internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
+internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
 
 ////////////////////////////////
 //~ rjf: Parsing Functions
 
 internal E_TypeKey e_leaf_type_from_name(String8 name);
+internal E_TypeKey e_type_from_expr(E_Expr *expr);
 internal E_Parse e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
 internal E_Parse e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *tokens, S64 max_precedence);
 internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
@@ -564,10 +584,36 @@ internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_Tok
 ////////////////////////////////
 //~ rjf: IR-ization Functions
 
+//- rjf: op list functions
 internal void e_oplist_push(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p);
+internal void e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x);
+internal void e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x);
+internal void e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode);
+internal void e_oplist_concat_in_place(E_OpList *dst, E_OpList *to_push);
+
+//- rjf: ir tree core building helpers
+internal E_IRNode *e_push_irnode(Arena *arena, RDI_EvalOp op);
+internal void e_irnode_push_child(E_IRNode *parent, E_IRNode *child);
+
+//- rjf: ir subtree building helpers
+internal E_IRNode *e_irtree_const_u(Arena *arena, U64 v);
+internal E_IRNode *e_irtree_unary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *c);
+internal E_IRNode *e_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *l, E_IRNode *r);
+internal E_IRNode *e_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, E_IRNode *l, E_IRNode *r);
+internal E_IRNode *e_irtree_conditional(Arena *arena, E_IRNode *c, E_IRNode *l, E_IRNode *r);
+internal E_IRNode *e_irtree_bytecode_no_copy(Arena *arena, String8 bytecode);
+internal E_IRNode *e_irtree_mem_read_type(Arena *arena, E_IRNode *c, E_TypeKey type_key);
+internal E_IRNode *e_irtree_convert_lo(Arena *arena, E_IRNode *c, RDI_EvalTypeGroup out, RDI_EvalTypeGroup in);
+internal E_IRNode *e_irtree_trunc(Arena *arena, E_IRNode *c, E_TypeKey type_key);
+internal E_IRNode *e_irtree_convert_hi(Arena *arena, E_IRNode *c, E_TypeKey out, E_TypeKey in);
+internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key);
+
+//- rjf: top-level irtree/type extraction
 internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);
-internal E_OpList e_oplist_from_irtree(Arena *arena, E_IRNode *root);
+
+//- rjf: irtree -> linear ops/bytecode
 internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out);
+internal E_OpList e_oplist_from_irtree(Arena *arena, E_IRNode *root);
 internal String8 e_bytecode_from_oplist(Arena *arena, E_OpList *oplist);
 
 ////////////////////////////////
