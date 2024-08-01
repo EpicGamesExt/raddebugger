@@ -155,7 +155,7 @@ internal U32 lnx_open_from_os_flags(OS_AccessFlags flags);
 // Stable and consistent handle conversions
 internal U32 lnx_fd_from_handle(OS_Handle file);
 internal OS_Handle lnx_handle_from_fd(U32 fd);
-internal LNX_Entity* lnx_entity_from_handle(OS_Handle handle);
+internal LNX_Entity* lnx_entity_from_handle(OS_Handle handle, LNX_EntityKind type);
 internal OS_Handle lnx_handle_from_entity(LNX_Entity* entity);
 
 internal String8 lnx_string_from_signal(int signum);

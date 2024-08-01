@@ -1,7 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
- /* TODO(mallchad): want to add asserts for 'kind' of LNX_Entity */
 ////////////////////////////////
 //~ rjf: Globals
 
@@ -209,9 +208,10 @@ lnx_handle_from_fd(U32 fd)
 }
 
 internal LNX_Entity*
-lnx_entity_from_handle(OS_Handle handle)
+lnx_entity_from_handle(OS_Handle handle, LNX_EntityKind type)
 {
   LNX_Entity* result = (LNX_Entity*)PtrFromInt(*handle.u64);
+  Assert(result->kind == type);
   return result;
 }
 internal OS_Handle lnx_handle_from_entity(LNX_Entity* entity)
@@ -914,6 +914,7 @@ lnx_thread_base(void *ptr){
   tctx_init_and_equip(&tctx_);
 
   func(thread_ptr);
+  tctx_release();
 
   // remove my bit
   U32 result = __sync_fetch_and_and(&entity->reference_mask, ~0x2);
@@ -1022,7 +1023,7 @@ os_init(void)
   struct utsname kernel = {0};
   S32 uname_error = uname(&kernel);
 
-  // TODO Parse the string
+  // TODO: Parse the string
   lnx_hostname = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.nodename) );
   lnx_kernel_type = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.sysname) ) ;
   lnx_kernel_version.major;
@@ -1229,9 +1230,10 @@ os_page_size(void)
 internal U64
 os_allocation_granularity(void)
 {
-  /* On linux there is no equivalent of "dwAllocationGranularity"
-   NOTE: I suppose you could write into the sysfs but you need root privillages. */
-  os_page_size();
+  /* On linux there is no equivalent of "dwAllocationGranularity" but you can
+   set the page size only if you have root or similar privillages. You could see
+   if there is a CAP privillage you can set for this. There are 2 huge page
+   sizes and 1 normal page size however */
   return os_page_size();
 }
 
@@ -1243,7 +1245,7 @@ os_logical_core_count(void)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks Process Info (Implemented Per-OS)
+//~ rjf: @os_hooks Process & Thread Info (Implemented Per-OS)
 
 internal String8List
 os_get_command_line_arguments(void)
@@ -1567,7 +1569,7 @@ os_file_map_open(OS_AccessFlags flags, OS_Handle file)
 internal void
 os_file_map_close(OS_Handle map)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(map);
+  LNX_Entity* entity = lnx_entity_from_handle(map, LNX_EntityKind_MemoryMap);
   msync(entity->map.data, entity->map.size, MS_SYNC);
   B32 failure = munmap(entity->map.data, entity->map.size);
   /* NOTE: It shouldn't be that important if filemap fails but it ideally shouldn't
@@ -1586,7 +1588,7 @@ page-boundary aligned boundary before offset  */
 internal void *
 os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(map);
+  LNX_Entity* entity = lnx_entity_from_handle(map, LNX_EntityKind_MemoryMap);
   S32 fd = entity->map.fd;
   struct stat file_info;
   fstat(fd, &file_info);
@@ -1603,8 +1605,9 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
   */
   U64 page_size = lnx_page_size;
   U32 page_flag = 0x0;
-  U32 map_flags = page_flag | (flags & OS_AccessFlag_Shared ? MAP_SHARED : MAP_PRIVATE) |
-    MAP_POPULATE;
+  U32 map_flags = page_flag | MAP_POPULATE;
+  map_flags |= (flags & OS_AccessFlag_ShareRead ? MAP_SHARED : MAP_PRIVATE);
+  map_flags |= (flags & OS_AccessFlag_ShareWrite ? MAP_SHARED : MAP_PRIVATE);
 
   U32 prot_flags = lnx_prot_from_os_flags(flags);
   U64 aligned_offset = AlignDownPow2(range.min, lnx_page_size);
@@ -1623,7 +1626,7 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
 internal void
 os_file_map_view_close(OS_Handle map, void *ptr)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(map);
+  LNX_Entity* entity = lnx_entity_from_handle(map, LNX_EntityKind_MemoryMap);
   AssertAlways( entity->map.data && (entity->map.data != (void*)-1) );
   /* NOTE: Make sure contents are synced with OS on the off chance the backing
      file isn't POSIX compliant. Use MS_ASYNC if you want performance. */
@@ -1759,7 +1762,7 @@ os_shared_memory_open(String8 name)
 internal void
 os_shared_memory_close(OS_Handle handle)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(handle);
+  LNX_Entity* entity = lnx_entity_from_handle(handle, LNX_EntityKind_MemoryMap);
   shm_unlink( (char*)(entity->map.shm_name.str) );
 }
 
@@ -1767,7 +1770,7 @@ internal void *
 os_shared_memory_view_open(OS_Handle handle, Rng1U64 range)
 {
   void* result = NULL;
-  LNX_Entity* entity = lnx_entity_from_handle(handle);
+  LNX_Entity* entity = lnx_entity_from_handle(handle, LNX_EntityKind_MemoryMap);
   LNX_fd fd = entity->map.fd;
 
   B32 use_huge = (range.max > os_large_page_size() && lnx_huge_page_enabled);
@@ -1787,7 +1790,7 @@ os_shared_memory_view_open(OS_Handle handle, Rng1U64 range)
 internal void
 os_shared_memory_view_close(OS_Handle handle, void *ptr)
 {
-  LNX_Entity entity = *lnx_entity_from_handle(handle);
+  LNX_Entity entity = *lnx_entity_from_handle(handle, LNX_EntityKind_MemoryMap);
   munmap(entity.map.data, entity.map.size);
 }
 
@@ -2013,7 +2016,7 @@ os_rw_mutex_alloc(void)
 internal void
 os_rw_mutex_release(OS_Handle rw_mutex)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(rw_mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(rw_mutex, LNX_EntityKind_Mutex);
   pthread_rwlock_destroy(&entity->rwlock);
 }
 
@@ -2021,7 +2024,7 @@ internal void
 os_rw_mutex_take_r_(OS_Handle mutex)
 {
   // Is blocking varient
-  LNX_Entity* entity = lnx_entity_from_handle(mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
   pthread_rwlock_rdlock(&entity->rwlock);
 }
 
@@ -2030,14 +2033,14 @@ os_rw_mutex_drop_r_(OS_Handle mutex)
 {
   // NOTE: Aparently it results in undefined behaviour if there is no pre-existing lock
   // https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_rwlock_unlock.html
-  LNX_Entity* entity = lnx_entity_from_handle(mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
   pthread_rwlock_unlock(&entity->rwlock);
 }
 
 internal void
 os_rw_mutex_take_w_(OS_Handle mutex)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
   pthread_rwlock_rdlock(&entity->rwlock);
 }
 
@@ -2083,8 +2086,8 @@ os_condition_variable_release(OS_Handle cv){
 internal B32
 os_condition_variable_wait_(OS_Handle cv, OS_Handle mutex, U64 endt_us){
   B32 result = 0;
-  LNX_Entity *entity_cond = lnx_entity_from_handle(cv);
-  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex);
+  LNX_Entity *entity_cond = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
+  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
   LNX_timespec timeout_stamp = lnx_now_precision_timespec();
   timeout_stamp.tv_nsec += endt_us * 1000;
 
@@ -2097,8 +2100,8 @@ internal B32
 os_condition_variable_wait_rw_r_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
   B32 result = 0;
-  LNX_Entity *entity_cond = lnx_entity_from_handle(cv);
-  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw);
+  LNX_Entity *entity_cond = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
+  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw, LNX_EntityKind_Mutex);
   LNX_timespec timeout_stamp = lnx_now_precision_timespec();
   timeout_stamp.tv_nsec += endt_us * 1000;
 
@@ -2111,8 +2114,8 @@ internal B32
 os_condition_variable_wait_rw_w_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
    B32 result = 0;
-  LNX_Entity *entity_cond = lnx_entity_from_handle(cv);
-  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw);
+  LNX_Entity *entity_cond = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
+  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw, LNX_EntityKind_Mutex);
   LNX_timespec timeout_stamp = lnx_now_precision_timespec();
   timeout_stamp.tv_nsec += endt_us * 1000;
 
@@ -2123,14 +2126,14 @@ os_condition_variable_wait_rw_w_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 
 internal void
 os_condition_variable_signal_(OS_Handle cv){
-  LNX_Entity *entity = (LNX_Entity*)PtrFromInt(cv.u64[0]);
+  LNX_Entity *entity = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
   pthread_cond_signal(&entity->cond);
 }
 
 internal void
 os_condition_variable_broadcast_(OS_Handle cv){
   NotImplemented;
-  LNX_Entity *entity = (LNX_Entity*)PtrFromInt(cv.u64[0]);
+  LNX_Entity *entity = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
 }
 
 //- rjf: cross-process semaphores
@@ -2176,7 +2179,7 @@ os_semaphore_open(String8 name)
 internal void
 os_semaphore_close(OS_Handle semaphore)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(semaphore);
+  LNX_Entity* entity = lnx_entity_from_handle(semaphore, LNX_EntityKind_Semaphore);
   LNX_semaphore* _semaphore = entity->semaphore.handle;
   sem_close(_semaphore);
 }
@@ -2188,7 +2191,7 @@ os_semaphore_take(OS_Handle semaphore, U64 endt_us)
   LNX_timespec wait_until = lnx_now_precision_timespec();
   wait_until.tv_nsec += endt_us;
 
-  LNX_Entity* entity = lnx_entity_from_handle(semaphore);
+  LNX_Entity* entity = lnx_entity_from_handle(semaphore, LNX_EntityKind_Semaphore);
   LNX_semaphore* _semaphore = entity->semaphore.handle;
   // We have to impliment max_count ourselves
   S32 current_value = 0;
@@ -2203,7 +2206,7 @@ os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 internal void
 os_semaphore_drop(OS_Handle semaphore)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(semaphore);
+  LNX_Entity* entity = lnx_entity_from_handle(semaphore, LNX_EntityKind_Semaphore);
   sem_t* _semaphore = entity->semaphore.handle;
   sem_post(_semaphore);
 }

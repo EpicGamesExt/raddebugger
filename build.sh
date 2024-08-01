@@ -112,7 +112,7 @@ cd "${self_directory}"
 # --- Get Current Git Commit Id ----------------------------------------------
 # for /f ${}i in ('call git describe --always --dirty') do set compile=${compile} -DBUILD_GIT_HASH=\"${}i\"
 # NOTE(mallchad): I don't really understand why this written has a loop. Is it okay without?
-compile="${compile} -DBUILD_GIT_HASH=$(git describe --always --dirty)"
+compile="${compile} -DBUILD_GIT_HASH=\"$(git describe --always --dirty)\""
 
 # --- Build & Run Metaprogram ------------------------------------------------
 if [[ -n "${no_meta}" ]] ; then
