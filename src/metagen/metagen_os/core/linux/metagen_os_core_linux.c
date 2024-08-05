@@ -914,7 +914,7 @@ lnx_thread_base(void *ptr){
   tctx_init_and_equip(&tctx_);
 
   func(thread_ptr);
-  tctx_release();
+  // tctx_release();
   
   // remove my bit
   U32 result = __sync_fetch_and_and(&entity->reference_mask, ~0x2);

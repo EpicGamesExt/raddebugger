@@ -49,12 +49,12 @@ internal void log_select(Log *log);
 internal void log_msg(LogMsgKind kind, String8 string);
 internal void log_msgf(LogMsgKind kind, char *fmt, ...);
 #define log_info(s)               log_msg(LogMsgKind_Info, (s))
-#define log_infof(fmt, ...)       log_msgf(LogMsgKind_Info, (fmt), __VA_ARGS__)
+#define log_infof(fmt, ...)       log_msgf(LogMsgKind_Info, (fmt), ##__VA_ARGS__)
 #define log_user_error(s)         log_msg(LogMsgKind_UserError, (s))
-#define log_user_errorf(fmt, ...) log_msgf(LogMsgKind_UserError, (fmt), __VA_ARGS__)
+#define log_user_errorf(fmt, ...) log_msgf(LogMsgKind_UserError, (fmt), ##__VA_ARGS__)
 
 #define LogInfoNamedBlock(s) DeferLoop(log_infof("%S:\n{\n", (s)), log_infof("}\n"))
-#define LogInfoNamedBlockF(fmt, ...) DeferLoop((log_infof(fmt, __VA_ARGS__), log_infof(":\n{\n")), log_infof("}\n"))
+#define LogInfoNamedBlockF(fmt, ...) DeferLoop((log_infof(fmt, ##__VA_ARGS__), log_infof(":\n{\n")), log_infof("}\n"))
 
 ////////////////////////////////
 //~ rjf: Log Scopes

@@ -64,11 +64,12 @@ set auto_compile_flags=
 
 # --- Compile/Link Line Definitions ------------------------------------------
     cl_common="/I../src/ /I../local/ /nologo /FC /Z7"
- clang_common="-I../src/ -I../local/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext -lpthread -ldl -lrt"
+ clang_common="-I../src/ -I../local/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext -lpthread -ldl -lrt -latomic"
+ clang_errors="-Werror=atomic-memory-ordering"
      cl_debug="cl /Od /Ob1 /DBUILD_DEBUG=1 ${cl_common} ${auto_compile_flags}"
    cl_release="cl /O2 /DBUILD_DEBUG=0 ${cl_common} ${auto_compile_flags}"
-  clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${auto_compile_flags}"
-clang_release="clang -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${auto_compile_flags}"
+  clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${clang_errors} ${auto_compile_flags}"
+clang_release="clang -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${clang_errors} ${auto_compile_flags}"
       cl_link="/link /MANIFEST:EMBED /INCREMENTAL:NO \
 /natvis:'${self_directory}/src/natvis/base.natvis' logo.res"
    clang_link="-fuse-ld=lld"

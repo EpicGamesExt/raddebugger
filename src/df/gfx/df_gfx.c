@@ -14187,7 +14187,7 @@ df_gfx_end_frame(void)
   //- rjf: simulate lag
   if(DEV_simulate_lag)
   {
-    Sleep(300);
+    os_sleep_milliseconds(300);
   }
   
   //- rjf: entities with a death timer -> keep animating

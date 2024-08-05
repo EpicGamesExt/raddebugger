@@ -178,7 +178,38 @@
 # endif
 #elif OS_LINUX
 # if ARCH_X64
-#  define ins_atomic_u64_inc_eval(x) __sync_fetch_and_add((volatile U64 *)(x), 1)
+/* NOTE: Supposedly '__sync' is the old and deprecated intrinsics, '__atomic' is the new one
+   and '__sync' is implimented with '__atomic' now.
+   https://gcc.gnu.org/onlinedocs/gcc/_005f_005fatomic-Builtins.html
+   NOTE: the __atomic built-ins are compatible with any integral/pointer type of
+   1, 2, 3, 4, 8 bytes length
+   NOTE: weak ordering in '__atomic_compare_exchange_n' is mostly ignored by platforms */
+U64
+ins_atomic_u64_eval_cond_assign__impl(volatile U64* x, U64 k, U64 c)
+{
+  U64 _temp_expected = k;
+  return __atomic_compare_exchange_n( x, &_temp_expected, c,
+                                      0, __ATOMIC_ACQ_REL, __ATOMIC_RELEASE );
+}
+
+U64
+ins_atomic_u32_eval_cond_assign__impl(volatile U32* x, U32 k, U32 c)
+{
+  U32 _temp_expected = k;
+  return __atomic_compare_exchange_n( x, &_temp_expected, c,
+                                      0, __ATOMIC_ACQ_REL, __ATOMIC_RELEASE );
+}
+
+#define ins_atomic_u64_eval(x)  __atomic_load_n( (volatile U64 *)(x), __ATOMIC_ACQUIRE )
+#define ins_atomic_u64_inc_eval(x) __atomic_add_fetch( (volatile U64 *)(x), 1, __ATOMIC_ACQ_REL )
+#define ins_atomic_u64_dec_eval(x)  __atomic_add_fetch( (volatile U64 *)(x), -1, __ATOMIC_ACQ_REL )
+#define ins_atomic_u64_eval_assign(x,c) __atomic_store_n( (volatile U64 *)(x), c, __ATOMIC_RELEASE )
+#define ins_atomic_u64_add_eval(x,c) __atomic_add_fetch( (volatile U64 *)(x), c, __ATOMIC_ACQ_REL )
+#define ins_atomic_u64_eval_cond_assign(x,k,c) ins_atomic_u64_eval_cond_assign__impl(x, k, c)
+#define ins_atomic_u32_eval(x,c)  __atomic_load_n( (volatile U32 *)(x), __ATOMIC_ACQUIRE )
+#define ins_atomic_u32_eval_assign(x,c) __atomic_store_n( (volatile U32 *)(x), c, __ATOMIC_RELEASE )
+#define ins_atomic_u32_eval_cond_assign(x,k,c) ins_atomic_u32_eval_cond_assign__impl(x, k, c)
+#define ins_atomic_ptr_eval_assign(x,c)__atomic_store( (volatile void *)(x), c, __ATOMIC_RELEASE )
 # else
 #  error Atomic intrinsics not defined for this operating system / architecture combination.
 # endif
