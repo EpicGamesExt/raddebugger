@@ -1,63 +1,122 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-@table(name  num_children  op_string)
-// num_children  - # of children packed after this node kind
-// op_string     - string for quick display of the operator
-EVAL_ExprKindTable:
+@table(name                 basic_string          basic_byte_size)
+// NOTE(rjf): basic_byte_size == 0xFF? => address sized
+E_TypeKindTable:
 {
-  { Nil                 0         ""             }
+  {Null                      ""                    0    }
+  {Void                      "void"                0    }
+  {Handle                    "HANDLE"              0xFF }
+  {Char8                     "char8"               1    }
+  {Char16                    "char16"              2    }
+  {Char32                    "char32"              4    }
+  {UChar8                    "uchar8"              1    }
+  {UChar16                   "uchar16"             2    }
+  {UChar32                   "uchar32"             4    }
+  {U8                        "U8"                  1    }
+  {U16                       "U16"                 2    }
+  {U32                       "U32"                 4    }
+  {U64                       "U64"                 8    }
+  {U128                      "U128"                16   }
+  {U256                      "U256"                32   }
+  {U512                      "U512"                64   }
+  {S8                        "S8"                  1    }
+  {S16                       "S16"                 2    }
+  {S32                       "S32"                 4    }
+  {S64                       "S64"                 8    }
+  {S128                      "S128"                16   }
+  {S256                      "S256"                32   }
+  {S512                      "S512"                64   }
+  {Bool                      "bool"                1    }
+  {F16                       "F16"                 2    }
+  {F32                       "F32"                 4    }
+  {F32PP                     "F32PP"               4    }
+  {F48                       "F48"                 6    }
+  {F64                       "F64"                 8    }
+  {F80                       "F80"                 10   }
+  {F128                      "F128"                16   }
+  {ComplexF32                "ComplexF32"          8    }
+  {ComplexF64                "ComplexF64"          16   }
+  {ComplexF80                "ComplexF80"          20   }
+  {ComplexF128               "ComplexF128"         32   }
+  {Modifier                  ""                    0    }
+  {Ptr                       ""                    0    }
+  {LRef                      ""                    0    }
+  {RRef                      ""                    0    }
+  {Array                     ""                    0    }
+  {Function                  ""                    0    }
+  {Method                    ""                    0    }
+  {MemberPtr                 ""                    0    }
+  {Struct                    "struct"              0    }
+  {Class                     "class"               0    }
+  {Union                     "union"               0    }
+  {Enum                      "enum"                0    }
+  {Alias                     "typedef"             0    }
+  {IncompleteStruct          "struct"              0    }
+  {IncompleteUnion           "union"               0    }
+  {IncompleteClass           "class"               0    }
+  {IncompleteEnum            "enum"                0    }
+  {Bitfield                  ""                    0    }
+  {Variadic                  ""                    0    }
+}
+
+@table(name  op_string)
+E_ExprKindTable:
+{
+  { Nil                           ""               }
   
-  { ArrayIndex          2         "[]"           }
-  { MemberAccess        2         "."            }
-  { Deref               1         "*"            }
-  { Address             1         "&"            }
+  { ArrayIndex                    "[]"             }
+  { MemberAccess                  "."              }
+  { Deref                         "*"              }
+  { Address                       "&"              }
   
-  { Cast                2         "cast"         }
-  { Sizeof              1         "sizeof"       }
+  { Cast                          "cast"           }
+  { Sizeof                        "sizeof"         }
   
-  { Neg                 1         "-"            }
-  { LogNot              1         "!"            }
-  { BitNot              1         "~"            }
-  { Mul                 2         "*"            }
-  { Div                 2         "/"            }
-  { Mod                 2         "%"            }
-  { Add                 2         "+"            }
-  { Sub                 2         "-"            }
-  { LShift              2         "<<"           }
-  { RShift              2         ">>"           }
-  { Less                2         "<"            }
-  { LsEq                2         "<="           }
-  { Grtr                2         ">"            }
-  { GrEq                2         ">="           }
-  { EqEq                2         "=="           }
-  { NtEq                2         "!="           }
+  { Neg                           "-"              }
+  { LogNot                        "!"              }
+  { BitNot                        "~"              }
+  { Mul                           "*"              }
+  { Div                           "/"              }
+  { Mod                           "%"              }
+  { Add                           "+"              }
+  { Sub                           "-"              }
+  { LShift                        "<<"             }
+  { RShift                        ">>"             }
+  { Less                          "<"              }
+  { LsEq                          "<="             }
+  { Grtr                          ">"              }
+  { GrEq                          ">="             }
+  { EqEq                          "=="             }
+  { NtEq                          "!="             }
   
-  { BitAnd              2         "&"            }
-  { BitXor              2         "^"            }
-  { BitOr               2         "|"            }
-  { LogAnd              2         "&&"           }
-  { LogOr               2         "||"           }
+  { BitAnd                        "&"              }
+  { BitXor                        "^"              }
+  { BitOr                         "|"              }
+  { LogAnd                        "&&"             }
+  { LogOr                         "||"             }
   
-  { Ternary             3         "? "           }
+  { Ternary                       "? "             }
   
-  { LeafBytecode        0         "bytecode"     }
-  { LeafMember          0         "member"       }
-  { LeafU64             0         "U64"          }
-  { LeafF64             0         "F64"          }
-  { LeafF32             0         "F32"          }
+  { LeafBytecode                  "bytecode"       }
+  { LeafMember                    "member"         }
+  { LeafStringLiteral             "string_literal" }
+  { LeafU64                       "U64"            }
+  { LeafF64                       "F64"            }
+  { LeafF32                       "F32"            }
   
-  { TypeIdent           0         "type_ident"   }
-  { Ptr                 1         "ptr"          }
-  { Array               2         "array"        }
-  { Func                1         "function"     }
+  { TypeIdent                     "type_ident"     }
+  { Ptr                           "ptr"            }
+  { Array                         "array"          }
+  { Func                          "function"       }
   
-  { Define              2         "="            }
-  { LeafIdent           0         "leaf_ident"   }
+  { Define                        "="              }
+  { LeafIdent                     "leaf_ident"     }
 }
 
 @table(name display_string)
-EVAL_ResultCodeTable:
+E_InterpretationCodeTable:
 {
   { Good                    "" }
   { DivideByZero            "Cannot divide by zero." }
@@ -72,35 +131,56 @@ EVAL_ResultCodeTable:
   { MalformedBytecode       "Malformed bytecode." }
 }
 
-@enum(U32) EVAL_ExprKind:
+@enum E_TypeKind:
 {
-  @expand(EVAL_ExprKindTable a) `$(a.name)`,
+  @expand(E_TypeKindTable a) `$(a.name)`,
+  COUNT,
+  `FirstBasic      = E_TypeKind_Void`,
+  `LastBasic       = E_TypeKind_ComplexF128`,
+  `FirstInteger    = E_TypeKind_Char8`,
+  `LastInteger     = E_TypeKind_S512`,
+  `FirstSigned1    = E_TypeKind_Char8`,
+  `LastSigned1     = E_TypeKind_Char32`,
+  `FirstSigned2    = E_TypeKind_S8`,
+  `LastSigned2     = E_TypeKind_S512`,
+  `FirstIncomplete = E_TypeKind_IncompleteStruct`,
+  `LastIncomplete  = E_TypeKind_IncompleteEnum`,
+}
+
+@enum(U32) E_ExprKind:
+{
+  @expand(E_ExprKindTable a) `$(a.name)`,
   COUNT,
 }
 
-@enum EVAL_ResultCode:
+@enum E_InterpretationCode:
 {
-  @expand(EVAL_ResultCodeTable a) `$(a.name)`,
+  @expand(E_InterpretationCodeTable a) `$(a.name)`,
   COUNT,
-}
-
-@data(U8) eval_expr_kind_child_counts:
-{
-  @expand(EVAL_ExprKindTable a) `$(a.num_children)`
 }
 
 @data(String8)
-eval_expr_kind_strings:
+e_expr_kind_strings:
 {
-  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.name)")`
+  @expand(E_ExprKindTable a) `str8_lit_comp("$(a.name)")`
 }
 
-@data(String8) eval_result_code_display_strings:
+@data(String8) e_interpretation_code_display_strings:
 {
-  @expand(EVAL_ResultCodeTable a) `str8_lit_comp("$(a.display_string)")`
+  @expand(E_InterpretationCodeTable a) `str8_lit_comp("$(a.display_string)")`
 }
 
-@data(String8) eval_expr_op_strings:
+@data(String8) e_expr_op_strings:
 {
-  @expand(EVAL_ExprKindTable a) `str8_lit_comp("$(a.op_string)")`
+  @expand(E_ExprKindTable a) `str8_lit_comp("$(a.op_string)")`
+}
+
+@data(U8) e_kind_basic_byte_size_table:
+{
+  @expand(E_TypeKindTable a) `$(a.basic_byte_size)`;
+}
+
+@data(String8) e_kind_basic_string_table:
+{
+  @expand(E_TypeKindTable a) `str8_lit_comp("$(a.basic_string)")`;
 }
