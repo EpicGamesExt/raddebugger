@@ -279,8 +279,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //////////////////////////////
   //- rjf: begin frame
   //
-  df_core_begin_frame(scratch.arena, &cmds, dt);
-  df_gfx_begin_frame(scratch.arena, &cmds);
+  {
+    df_core_begin_frame(scratch.arena, &cmds, dt);
+    df_gfx_begin_frame(scratch.arena, &cmds);
+  }
   
   //////////////////////////////
   //- rjf: queue drop for drag/drop
@@ -348,8 +350,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //////////////////////////////
   //- rjf: end frontend frame, send signals, etc.
   //
-  df_gfx_end_frame();
-  df_core_end_frame();
+  {
+    df_gfx_end_frame();
+    df_core_end_frame();
+  }
   
   //////////////////////////////
   //- rjf: submit rendering to all windows
@@ -364,6 +368,18 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
     r_end_frame();
   }
+  
+  //////////////////////////////
+  //- rjf: show windows after first frame
+  //
+  for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
+  {
+    if(w->frames_alive == 1)
+    {
+      os_window_first_paint(w->os);
+    }
+  }
+  
   
   //////////////////////////////
   //- rjf: determine frame time, record into history

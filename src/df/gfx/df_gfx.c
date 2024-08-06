@@ -8360,15 +8360,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
   }
   
   //////////////////////////////
-  //- rjf: show window after first frame
+  //- rjf: increment per-window frame counter
   //
-  {
-    if(ws->frames_alive == 0)
-    {
-      os_window_first_paint(ws->os);
-    }
-    ws->frames_alive += 1;
-  }
+  ws->frames_alive += 1;
   
   ProfEnd();
 }
