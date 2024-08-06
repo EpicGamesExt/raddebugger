@@ -6212,7 +6212,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
           DF_ExpandKey parent_key = df_expand_key_make(5381, 1);
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
-          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, scope, eval_view, expr, parent_key, key);
+          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, expr, parent_key, key);
           U32 default_radix = (eval.mode == E_Mode_Reg ? 16 : 10);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, eval_view, default_radix, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
@@ -12011,7 +12011,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
           {
             if(!df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)))
             {
-              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, df_entity_from_handle(df_interact_regs()->file));
+              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, df_entity_from_handle(df_interact_regs()->file), &df_g_nil_entity);
               df_entity_equip_txt_pt(dropped_entity, txt_pt(line_num, 1));
               if(dropped_entity->flags & DF_EntityFlag_HasVAddr)
               {
@@ -12020,7 +12020,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             }
             else if(line_vaddr != 0)
             {
-              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, df_entity_root());
+              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, df_entity_root(), &df_g_nil_entity);
               df_entity_equip_vaddr(dropped_entity, line_vaddr);
             }
           }break;

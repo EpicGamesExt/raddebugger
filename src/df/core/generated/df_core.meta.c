@@ -32,7 +32,7 @@ Rng1U64 df_g_cmd_param_slot_range_table[24] =
 {OffsetOf(DF_CmdParams, inline_depth), OffsetOf(DF_CmdParams, inline_depth) + sizeof(U64)},
 };
 
-DF_IconKind df_g_entity_kind_icon_kind_table[25] =
+DF_IconKind df_g_entity_kind_icon_kind_table[27] =
 {
 DF_IconKind_Null,
 DF_IconKind_Null,
@@ -41,6 +41,8 @@ DF_IconKind_FileOutline,
 DF_IconKind_FileOutline,
 DF_IconKind_Binoculars,
 DF_IconKind_Pin,
+DF_IconKind_Binoculars,
+DF_IconKind_Binoculars,
 DF_IconKind_CircleFilled,
 DF_IconKind_CircleFilled,
 DF_IconKind_Target,
@@ -61,7 +63,7 @@ DF_IconKind_Null,
 DF_IconKind_Null,
 };
 
-String8 df_g_entity_kind_display_string_table[25] =
+String8 df_g_entity_kind_display_string_table[27] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
@@ -70,6 +72,8 @@ str8_lit_comp("File"),
 str8_lit_comp("Override File Link"),
 str8_lit_comp("Auto View Rule"),
 str8_lit_comp("Watch Pin"),
+str8_lit_comp("Watch"),
+str8_lit_comp("View Rule"),
 str8_lit_comp("Breakpoint"),
 str8_lit_comp("Condition"),
 str8_lit_comp("Target"),
@@ -90,7 +94,7 @@ str8_lit_comp("Conversion Failure"),
 str8_lit_comp("EndedProcess"),
 };
 
-String8 df_g_entity_kind_name_label_table[25] =
+String8 df_g_entity_kind_name_label_table[27] =
 {
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -98,6 +102,8 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
+str8_lit_comp("Expression"),
+str8_lit_comp("Expression"),
 str8_lit_comp("Expression"),
 str8_lit_comp("Label"),
 str8_lit_comp("Expression"),
@@ -119,7 +125,7 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 };
 
-DF_EntityKindFlags df_g_entity_kind_flags_table[25] =
+DF_EntityKindFlags df_g_entity_kind_flags_table[27] =
 {
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
@@ -127,6 +133,8 @@ DF_EntityKindFlags df_g_entity_kind_flags_table[25] =
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (1*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
+(0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 1*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
+(0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 1*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 1*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 1*DF_EntityKindFlag_LeafMutationProjectConfig | 1*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 1*DF_EntityKindFlag_LeafMutationProjectConfig | 1*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 1*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 1*DF_EntityKindFlag_NameIsCode | 1*DF_EntityKindFlag_UserDefinedLifetime),
@@ -148,7 +156,7 @@ DF_EntityKindFlags df_g_entity_kind_flags_table[25] =
 (0*DF_EntityKindFlag_LeafMutationUserConfig | 0*DF_EntityKindFlag_LeafMutationProjectConfig | 0*DF_EntityKindFlag_LeafMutationSoftHalt | 0*DF_EntityKindFlag_LeafMutationDebugInfoMap | 0*DF_EntityKindFlag_TreeMutationUserConfig | 0*DF_EntityKindFlag_TreeMutationProjectConfig | 0*DF_EntityKindFlag_TreeMutationSoftHalt | 0*DF_EntityKindFlag_TreeMutationDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_UserDefinedLifetime),
 };
 
-DF_EntityOpFlags df_g_entity_kind_op_flags_table[25] =
+DF_EntityOpFlags df_g_entity_kind_op_flags_table[27] =
 {
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
@@ -157,6 +165,8 @@ DF_EntityOpFlags df_g_entity_kind_op_flags_table[25] =
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (1*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (1*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (1*DF_EntityOpFlag_Duplicate),
+(1*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (1*DF_EntityOpFlag_Rename) | (1*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (1*DF_EntityOpFlag_Duplicate),
+(1*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (1*DF_EntityOpFlag_Rename) | (1*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (1*DF_EntityOpFlag_Duplicate),
 (1*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (1*DF_EntityOpFlag_Rename) | (1*DF_EntityOpFlag_Enable) | (1*DF_EntityOpFlag_Condition) | (1*DF_EntityOpFlag_Duplicate),
 (0*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (0*DF_EntityOpFlag_Edit) | (0*DF_EntityOpFlag_Rename) | (0*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (0*DF_EntityOpFlag_Duplicate),
 (1*DF_EntityOpFlag_Delete) | (0*DF_EntityOpFlag_Freeze) | (1*DF_EntityOpFlag_Edit) | (1*DF_EntityOpFlag_Rename) | (1*DF_EntityOpFlag_Enable) | (0*DF_EntityOpFlag_Condition) | (1*DF_EntityOpFlag_Duplicate),

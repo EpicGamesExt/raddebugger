@@ -270,16 +270,6 @@ struct DF_ModulesViewState
 ////////////////////////////////
 //~ rjf: Watch, Locals, Registers @view_types
 
-typedef struct DF_EvalRoot DF_EvalRoot;
-struct DF_EvalRoot
-{
-  DF_EvalRoot *next;
-  DF_EvalRoot *prev;
-  U64 expr_buffer_string_size;
-  U64 expr_buffer_cap;
-  U8 *expr_buffer;
-};
-
 typedef enum DF_WatchViewColumnKind
 {
   DF_WatchViewColumnKind_Expr,
@@ -350,12 +340,6 @@ struct DF_WatchViewState
   F32 value_column_pct;
   F32 type_column_pct;
   F32 view_rule_column_pct;
-  
-  // rjf: mutable fill-kind root expression state
-  DF_EvalRoot *first_root;
-  DF_EvalRoot *last_root;
-  DF_EvalRoot *first_free_root;
-  U64 root_count;
 };
 
 ////////////////////////////////
@@ -538,16 +522,6 @@ internal DF_CodeViewBuildResult df_code_view_build(Arena *arena, DF_Window *ws, 
 
 //- rjf: eval watch view instance -> eval view key
 internal DF_EvalViewKey df_eval_view_key_from_eval_watch_view(DF_WatchViewState *ewv);
-
-//- rjf: root allocation/deallocation/mutation
-internal DF_EvalRoot *  df_eval_root_alloc(DF_View *view, DF_WatchViewState *ews);
-internal void           df_eval_root_release(DF_WatchViewState *ews, DF_EvalRoot *root);
-internal void           df_eval_root_equip_string(DF_EvalRoot *root, String8 string);
-internal DF_EvalRoot *  df_eval_root_from_string(DF_WatchViewState *ews, String8 string);
-internal DF_EvalRoot *  df_eval_root_from_expand_key(DF_WatchViewState *ews, DF_EvalView *eval_view, DF_ExpandKey expand_key);
-internal String8        df_string_from_eval_root(DF_EvalRoot *root);
-internal DF_ExpandKey   df_parent_expand_key_from_eval_root(DF_EvalRoot *root);
-internal DF_ExpandKey   df_expand_key_from_eval_root(DF_EvalRoot *root);
 
 //- rjf: watch view points <-> table coordinates
 internal B32 df_watch_view_point_match(DF_WatchViewPoint a, DF_WatchViewPoint b);

@@ -33,6 +33,10 @@ DF_EntityKindTable:
   //- rjf: watch pins
   {WatchPin           watch_pin             1             0               0            1            0               0             1            0                   0                    0                  0                   0             0            0             0            1              1                        "Expression"        Pin                    "Watch Pin"                  }
   
+  //- rjf: watches
+  {Watch              watch                 1             0               0            1            1               0             1            0                   0                    0                  0                   0             0            0             0            1              1                        "Expression"        Binoculars             "Watch"                      }
+  {ViewRule           view_rule             1             0               0            1            1               0             1            0                   0                    0                  0                   0             0            0             0            1              1                        "Expression"        Binoculars             "View Rule"                  }
+  
   //- rjf: breakpoints
   {Breakpoint         breakpoint            1             0               0            1            1               1             1            0                   0                    1                  0                   1             0            0             0            0              1                        "Label"             CircleFilled           "Breakpoint"                 }
   {Condition          condition             0             0               0            0            0               0             0            0                   0                    1                  1                   1             0            0             0            1              1                        "Expression"        CircleFilled           "Condition"                  }

@@ -380,7 +380,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
-  
   //////////////////////////////
   //- rjf: determine frame time, record into history
   //

@@ -1425,6 +1425,10 @@ internal String8 df_search_tags_from_entity(Arena *arena, DF_Entity *entity);
 internal Vec4F32 df_hsva_from_entity(DF_Entity *entity);
 internal Vec4F32 df_rgba_from_entity(DF_Entity *entity);
 
+//- rjf: entity -> expansion tree keys
+internal DF_ExpandKey df_expand_key_from_entity(DF_Entity *entity);
+internal DF_ExpandKey df_parent_expand_key_from_entity(DF_Entity *entity);
+
 ////////////////////////////////
 //~ rjf: Name Allocation
 
@@ -1442,7 +1446,7 @@ internal void df_entity_notify_mutation(DF_Entity *entity);
 internal DF_Entity *df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kind);
 internal void df_entity_mark_for_deletion(DF_Entity *entity);
 internal void df_entity_release(DF_StateDeltaHistory *hist, DF_Entity *entity);
-internal void df_entity_change_parent(DF_StateDeltaHistory *hist, DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent);
+internal void df_entity_change_parent(DF_StateDeltaHistory *hist, DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent, DF_Entity *prev_child);
 
 //- rjf: entity simple equipment
 internal void df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point);
@@ -1610,8 +1614,8 @@ internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *are
 internal DF_EvalVizBlock *df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockKind kind, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth);
 internal DF_EvalVizBlock *df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx);
 internal void df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block);
-internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DI_Scope *scope, DF_EvalView *view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
-internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DI_Scope *scope, DF_EvalView *eval_view, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key);
+internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
+internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_view, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
 
 //- rjf: viz block list <-> table coordinates
@@ -1671,6 +1675,9 @@ internal DF_EntityList df_query_cached_entity_list_with_kind(DF_EntityKind kind)
 //- rjf: active entity based queries
 internal DI_KeyList df_push_active_dbgi_key_list(Arena *arena);
 internal DF_EntityList df_push_active_target_list(Arena *arena);
+
+//- rjf: expand key based entity queries
+internal DF_Entity *df_entity_from_expand_key_and_kind(DF_ExpandKey key, DF_EntityKind kind);
 
 //- rjf: per-run caches
 internal CTRL_Unwind df_query_cached_unwind_from_thread(DF_Entity *thread);
