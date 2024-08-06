@@ -1584,6 +1584,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   {
     UI_EventList *events = ui_events();
     B32 state_dirty = 1;
+    B32 snap_to_cursor = 0;
     B32 cursor_dirty__tbl = 0;
     B32 take_autocomplete = 0;
     for(UI_EventNode *event_n = events->first, *next = 0;; event_n = next)
@@ -1610,6 +1611,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             for(DF_EntityNode *n = watches.first; n != 0; n = n->next)
             {
               DF_Entity *watch = n->entity;
+              if(watch->flags & DF_EntityFlag_MarkedForDeletion)
+              {
+                continue;
+              }
               DF_ExpandKey parent_key = df_parent_expand_key_from_entity(watch);
               DF_ExpandKey key = df_expand_key_from_entity(watch);
               DF_Entity *view_rule = df_entity_child_from_kind(watch, DF_EntityKind_ViewRule);
@@ -1868,6 +1873,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       if(state_dirty)
       {
         state_dirty = 0;
+        snap_to_cursor = 1;
       }
       
       //////////////////////////////
@@ -1923,6 +1929,43 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         mark_tbl = df_tbl_from_watch_view_point(&blocks, ewv->mark);
         selection_tbl = r2s64p(Min(cursor_tbl.x, mark_tbl.x), Min(cursor_tbl.y, mark_tbl.y),
                                Max(cursor_tbl.x, mark_tbl.x), Max(cursor_tbl.y, mark_tbl.y));
+      }
+      
+      //////////////////////////
+      //- rjf: [table] snap to cursor
+      //
+      if(snap_to_cursor)
+      {
+        Rng1S64 item_range = r1s64(0, 1 + blocks.total_visual_row_count);
+        Rng1S64 scroll_row_idx_range = r1s64(item_range.min, ClampBot(item_range.min, item_range.max-1));
+        S64 cursor_item_idx = cursor_tbl.y-1;
+        if(item_range.min <= cursor_item_idx && cursor_item_idx <= item_range.max)
+        {
+          UI_ScrollPt *scroll_pt = &view->scroll_pos.y;
+          
+          //- rjf: compute visible row range
+          Rng1S64 visible_row_range = r1s64(scroll_pt->idx + 0 - !!(scroll_pt->off < 0),
+                                            scroll_pt->idx + 0 + num_possible_visible_rows + 1);
+          
+          //- rjf: compute cursor row range from cursor item
+          Rng1S64 cursor_visibility_row_range = {0};
+          if(row_blocks.count == 0)
+          {
+            cursor_visibility_row_range = r1s64(cursor_item_idx-1, cursor_item_idx+3);
+          }
+          else
+          {
+            cursor_visibility_row_range.min = (S64)ui_scroll_list_row_from_item(&row_blocks, (U64)cursor_item_idx);
+            cursor_visibility_row_range.max = cursor_visibility_row_range.min + 4;
+          }
+          
+          //- rjf: compute deltas & apply
+          S64 min_delta = Min(0, cursor_visibility_row_range.min-visible_row_range.min);
+          S64 max_delta = Max(0, cursor_visibility_row_range.max-visible_row_range.max);
+          S64 new_idx = scroll_pt->idx+min_delta+max_delta;
+          new_idx = clamp_1s64(scroll_row_idx_range, new_idx);
+          ui_scroll_pt_target_idx(scroll_pt, new_idx);
+        }
       }
       
       //////////////////////////////
@@ -2304,7 +2347,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       {
         B32 cursor_tbl_min_is_empty_selection[Axis2_COUNT] = {0, 1};
         Rng2S64 cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(3, blocks.total_semantic_row_count));
-        Rng1S64 item_range = r1s64(0, 1 + blocks.total_visual_row_count);
         Vec2S32 delta = evt->delta_2s32;
         if(evt->flags & UI_EventFlag_PickSelectSide && !MemoryMatchStruct(&selection_tbl.min, &selection_tbl.max))
         {
@@ -2369,38 +2411,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         {
           taken = 1;
           cursor_dirty__tbl = 1;
-          {
-            Rng1S64 scroll_row_idx_range = r1s64(item_range.min, ClampBot(item_range.min, item_range.max-1));
-            S64 cursor_item_idx = cursor_tbl.y-1;
-            if(item_range.min <= cursor_item_idx && cursor_item_idx <= item_range.max)
-            {
-              UI_ScrollPt *scroll_pt = &view->scroll_pos.y;
-              
-              //- rjf: compute visible row range
-              Rng1S64 visible_row_range = r1s64(scroll_pt->idx + 0 - !!(scroll_pt->off < 0),
-                                                scroll_pt->idx + 0 + num_possible_visible_rows + 1);
-              
-              //- rjf: compute cursor row range from cursor item
-              Rng1S64 cursor_visibility_row_range = {0};
-              if(row_blocks.count == 0)
-              {
-                cursor_visibility_row_range = r1s64(cursor_item_idx-1, cursor_item_idx+3);
-              }
-              else
-              {
-                cursor_visibility_row_range.min = (S64)ui_scroll_list_row_from_item(&row_blocks, (U64)cursor_item_idx);
-                cursor_visibility_row_range.max = cursor_visibility_row_range.min + 4;
-              }
-              
-              //- rjf: compute deltas & apply
-              S64 min_delta = Min(0, cursor_visibility_row_range.min-visible_row_range.min);
-              S64 max_delta = Max(0, cursor_visibility_row_range.max-visible_row_range.max);
-              S64 new_idx = scroll_pt->idx+min_delta+max_delta;
-              new_idx = clamp_1s64(scroll_row_idx_range, new_idx);
-              ui_scroll_pt_target_idx(scroll_pt, new_idx);
-            }
-          }
-          
+          snap_to_cursor = 1;
         }
       }
       

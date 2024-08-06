@@ -852,7 +852,6 @@ internal String8
 df_cmd_params_apply_spec_query(Arena *arena, DF_CmdParams *params, DF_CmdSpec *spec, String8 query)
 {
   String8 error = {0};
-  B32 prefer_imm = 0;
   switch(spec->info.query.slot)
   {
     default:
@@ -883,15 +882,15 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CmdParams *params, DF_CmdSpec *s
         error = str8_lit("Couldn't interpret as a line number.");
       }
     }break;
-    case DF_CmdParamSlot_VirtualAddr: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdParamSlot_VirtualOff: prefer_imm = 0; goto use_numeric_eval;
-    case DF_CmdParamSlot_Index: prefer_imm = 1; goto use_numeric_eval;
-    case DF_CmdParamSlot_ID: prefer_imm = 1; goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualAddr: goto use_numeric_eval;
+    case DF_CmdParamSlot_VirtualOff: goto use_numeric_eval;
+    case DF_CmdParamSlot_Index: goto use_numeric_eval;
+    case DF_CmdParamSlot_ID: goto use_numeric_eval;
     use_numeric_eval:
     {
       Temp scratch = scratch_begin(&arena, 1);
       E_Eval eval = e_eval_from_string(scratch.arena, query);
-      if(eval.msgs.max_kind != E_MsgKind_Null)
+      if(eval.msgs.max_kind == E_MsgKind_Null)
       {
         E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
         if(eval_type_kind == E_TypeKind_Ptr ||
@@ -938,7 +937,7 @@ df_cmd_params_apply_spec_query(Arena *arena, DF_CmdParams *params, DF_CmdSpec *s
       }
       else
       {
-        error = push_str8f(scratch.arena, "Couldn't evaluate \"%S\" as an address", query);
+        error = push_str8f(scratch.arena, "Couldn't evaluate \"%S\" as an address.", query);
       }
       scratch_end(scratch);
     }break;
