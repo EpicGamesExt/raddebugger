@@ -613,7 +613,7 @@ internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_Tok
 //~ rjf: IR-ization Functions
 
 //- rjf: op list functions
-internal void e_oplist_push(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p);
+internal void e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p);
 internal void e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x);
 internal void e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x);
 internal void e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode);
@@ -630,6 +630,7 @@ internal E_IRNode *e_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeG
 internal E_IRNode *e_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, E_IRNode *l, E_IRNode *r);
 internal E_IRNode *e_irtree_conditional(Arena *arena, E_IRNode *c, E_IRNode *l, E_IRNode *r);
 internal E_IRNode *e_irtree_bytecode_no_copy(Arena *arena, String8 bytecode);
+internal E_IRNode *e_irtree_string_literal(Arena *arena, String8 string);
 internal E_IRNode *e_irtree_mem_read_type(Arena *arena, E_IRNode *c, E_TypeKey type_key);
 internal E_IRNode *e_irtree_convert_lo(Arena *arena, E_IRNode *c, RDI_EvalTypeGroup out, RDI_EvalTypeGroup in);
 internal E_IRNode *e_irtree_trunc(Arena *arena, E_IRNode *c, E_TypeKey type_key);

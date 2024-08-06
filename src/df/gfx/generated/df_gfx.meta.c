@@ -1259,7 +1259,7 @@ DF_SettingVal df_g_setting_code_default_val_table[19] =
 {
 {1, 1},
 {1, 1},
-{1, 1},
+{1, 0},
 {1, 1},
 {1, 1},
 {1, 1},

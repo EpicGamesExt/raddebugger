@@ -64,54 +64,55 @@ E_TypeKindTable:
 @table(name  op_string)
 E_ExprKindTable:
 {
-  { Nil                           ""             }
+  { Nil                           ""               }
   
-  { ArrayIndex                    "[]"           }
-  { MemberAccess                  "."            }
-  { Deref                         "*"            }
-  { Address                       "&"            }
+  { ArrayIndex                    "[]"             }
+  { MemberAccess                  "."              }
+  { Deref                         "*"              }
+  { Address                       "&"              }
   
-  { Cast                          "cast"         }
-  { Sizeof                        "sizeof"       }
+  { Cast                          "cast"           }
+  { Sizeof                        "sizeof"         }
   
-  { Neg                           "-"            }
-  { LogNot                        "!"            }
-  { BitNot                        "~"            }
-  { Mul                           "*"            }
-  { Div                           "/"            }
-  { Mod                           "%"            }
-  { Add                           "+"            }
-  { Sub                           "-"            }
-  { LShift                        "<<"           }
-  { RShift                        ">>"           }
-  { Less                          "<"            }
-  { LsEq                          "<="           }
-  { Grtr                          ">"            }
-  { GrEq                          ">="           }
-  { EqEq                          "=="           }
-  { NtEq                          "!="           }
+  { Neg                           "-"              }
+  { LogNot                        "!"              }
+  { BitNot                        "~"              }
+  { Mul                           "*"              }
+  { Div                           "/"              }
+  { Mod                           "%"              }
+  { Add                           "+"              }
+  { Sub                           "-"              }
+  { LShift                        "<<"             }
+  { RShift                        ">>"             }
+  { Less                          "<"              }
+  { LsEq                          "<="             }
+  { Grtr                          ">"              }
+  { GrEq                          ">="             }
+  { EqEq                          "=="             }
+  { NtEq                          "!="             }
   
-  { BitAnd                        "&"            }
-  { BitXor                        "^"            }
-  { BitOr                         "|"            }
-  { LogAnd                        "&&"           }
-  { LogOr                         "||"           }
+  { BitAnd                        "&"              }
+  { BitXor                        "^"              }
+  { BitOr                         "|"              }
+  { LogAnd                        "&&"             }
+  { LogOr                         "||"             }
   
-  { Ternary                       "? "           }
+  { Ternary                       "? "             }
   
-  { LeafBytecode                  "bytecode"     }
-  { LeafMember                    "member"       }
-  { LeafU64                       "U64"          }
-  { LeafF64                       "F64"          }
-  { LeafF32                       "F32"          }
+  { LeafBytecode                  "bytecode"       }
+  { LeafMember                    "member"         }
+  { LeafStringLiteral             "string_literal" }
+  { LeafU64                       "U64"            }
+  { LeafF64                       "F64"            }
+  { LeafF32                       "F32"            }
   
-  { TypeIdent                     "type_ident"   }
-  { Ptr                           "ptr"          }
-  { Array                         "array"        }
-  { Func                          "function"     }
+  { TypeIdent                     "type_ident"     }
+  { Ptr                           "ptr"            }
+  { Array                         "array"          }
+  { Func                          "function"       }
   
-  { Define                        "="            }
-  { LeafIdent                     "leaf_ident"   }
+  { Define                        "="              }
+  { LeafIdent                     "leaf_ident"     }
 }
 
 @table(name display_string)

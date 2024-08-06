@@ -2899,7 +2899,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U32 match_idx = matches[matches_count-1];
                 RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
                 E_OpList oplist = {0};
-                e_oplist_push(arena, &oplist, RDI_EvalOp_ModuleOff, global_var->voff);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, global_var->voff);
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = global_var->type_idx;
@@ -2936,7 +2936,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U32 match_idx = matches[0];
                 RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
                 E_OpList oplist = {0};
-                e_oplist_push(arena, &oplist, RDI_EvalOp_TLSOff, thread_var->tls_off);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, thread_var->tls_off);
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = thread_var->type_idx;
@@ -2975,7 +2975,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
                 U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
                 E_OpList oplist = {0};
-                e_oplist_push(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
                 loc_kind = RDI_LocationKind_ValBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = procedure->type_idx;
@@ -3062,9 +3062,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 E_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(e_state->ctx->arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_Add, 0);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode = E_Mode_Addr;
                 atom->type_key = type_key;
@@ -3075,10 +3075,10 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 E_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(e_state->ctx->arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_Add, 0);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(e_state->ctx->arch)/8);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(e_state->ctx->arch)/8);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode = E_Mode_Addr;
                 atom->type_key = type_key;
@@ -3092,7 +3092,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg.reg_code, byte_size, byte_pos);
-                e_oplist_push(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode = E_Mode_Value;
                 atom->type_key = type_key;
@@ -3175,10 +3175,12 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
         }break;
         
-        // rjf: string => invalid
+        // rjf: string => leaf string literal
         case E_TokenKind_StringLiteral:
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "String literals are not supported.");
+          String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
+          atom = e_push_expr(arena, E_ExprKind_LeafStringLiteral, token_string.str);
+          atom->string = string_value_escaped;
           it += 1;
         }break;
         
@@ -3457,7 +3459,7 @@ e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens)
 //- rjf: op list functions
 
 internal void
-e_oplist_push(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p)
+e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p)
 {
   U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
   U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
@@ -3473,10 +3475,10 @@ internal void
 e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x)
 {
   if(0){}
-  else if(x <= 0xFF)       { e_oplist_push(arena, list, RDI_EvalOp_ConstU8,  x); }
-  else if(x <= 0xFFFF)     { e_oplist_push(arena, list, RDI_EvalOp_ConstU16, x); }
-  else if(x <= 0xFFFFFFFF) { e_oplist_push(arena, list, RDI_EvalOp_ConstU32, x); }
-  else                     { e_oplist_push(arena, list, RDI_EvalOp_ConstU64, x); }
+  else if(x <= 0xFF)       { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU8,  x); }
+  else if(x <= 0xFFFF)     { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, x); }
+  else if(x <= 0xFFFFFFFF) { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, x); }
+  else                     { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, x); }
 }
 
 internal void
@@ -3484,22 +3486,22 @@ e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x)
 {
   if(-0x80 <= x && x <= 0x7F)
   {
-    e_oplist_push(arena, list, RDI_EvalOp_ConstU8, (U64)x);
-    e_oplist_push(arena, list, RDI_EvalOp_TruncSigned, 8);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU8, (U64)x);
+    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 8);
   }
   else if(-0x8000 <= x && x <= 0x7FFF)
   {
-    e_oplist_push(arena, list, RDI_EvalOp_ConstU16, (U64)x);
-    e_oplist_push(arena, list, RDI_EvalOp_TruncSigned, 16);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, (U64)x);
+    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 16);
   }
   else if(-0x80000000ll <= x && x <= 0x7FFFFFFFll)
   {
-    e_oplist_push(arena, list, RDI_EvalOp_ConstU32, (U64)x);
-    e_oplist_push(arena, list, RDI_EvalOp_TruncSigned, 32);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, (U64)x);
+    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 32);
   }
   else
   {
-    e_oplist_push(arena, list, RDI_EvalOp_ConstU64, (U64)x);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, (U64)x);
   }
 }
 
@@ -3607,6 +3609,41 @@ e_irtree_bytecode_no_copy(Arena *arena, String8 bytecode)
   E_IRNode *n = e_push_irnode(arena, E_IRExtKind_Bytecode);
   n->bytecode = bytecode;
   return n;
+}
+
+internal E_IRNode *
+e_irtree_string_literal(Arena *arena, String8 string)
+{
+  E_IRNode *root = &e_irnode_nil;
+  for(U64 idx = 0, advance = 0; idx < string.size; idx += advance)
+  {
+    U64 bytes_left = string.size-idx;
+    U64 bytes_to_encode = 0;
+    RDI_EvalOp opcode = 0;
+    switch(bytes_left%8)
+    {
+      default:
+      case 1:{opcode = RDI_EvalOp_ConstU8; bytes_to_encode = 1;}break;
+      case 2:{opcode = RDI_EvalOp_ConstU16; bytes_to_encode = 2;}break;
+      case 3:
+      case 4:{opcode = RDI_EvalOp_ConstU32; bytes_to_encode = 4;}break;
+      case 5:
+      case 6:
+      case 7:
+      case 8:{opcode = RDI_EvalOp_ConstU64; bytes_to_encode = 8;}break;
+    }
+    U64 value = 0;
+    MemoryCopy(&value, string.str+idx, bytes_to_encode);
+    E_IRNode *old_root = root;
+    root = e_push_irnode(arena, opcode);
+    root->u64 = value;
+    if(old_root != &e_irnode_nil)
+    {
+      e_irnode_push_child(root, old_root);
+    }
+    advance = bytes_to_encode;
+  }
+  return root;
 }
 
 internal E_IRNode *
@@ -3724,7 +3761,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
   {
     default:
     {
-      e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "(internal) Undefined expression kind (%u).", kind);
     }break;
     
     //- rjf: array indices
@@ -4403,6 +4439,17 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "(internal) Leaf member not expected here.");
     }break;
     
+    //- rjf: leaf string literal
+    case E_ExprKind_LeafStringLiteral:
+    {
+      String8 string = expr->string;
+      E_TypeKey type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_UChar8), string.size);
+      E_IRNode *new_tree = e_irtree_string_literal(arena, string);
+      result.root     = new_tree;
+      result.type_key = type_key;
+      result.mode     = E_Mode_Value;
+    }break;
+    
     //- rjf: leaf U64s
     case E_ExprKind_LeafU64:
     {
@@ -4481,6 +4528,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
         e_string2expr_map_dec_poison(e_state->ctx->macro_map, expr->string);
       }
     }break;
+    
   }
   
   return result;
@@ -4518,11 +4566,11 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       //  3. <ptr_left>
       
       // rjf: modify prt_right in place to create step 2
-      e_oplist_push(arena, &prt_right, RDI_EvalOp_Skip, prt_left.encoded_size);
+      e_oplist_push_op(arena, &prt_right, RDI_EvalOp_Skip, prt_left.encoded_size);
       
       // rjf: merge 1 into out
       e_oplist_concat_in_place(out, &prt_cond);
-      e_oplist_push(arena, out, RDI_EvalOp_Cond, prt_right.encoded_size);
+      e_oplist_push_op(arena, out, RDI_EvalOp_Cond, prt_right.encoded_size);
       
       // rjf: merge 2 into out
       e_oplist_concat_in_place(out, &prt_right);
@@ -4551,7 +4599,7 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
         }
         
         // rjf: emit op to compute this node
-        e_oplist_push(arena, out, (RDI_EvalOp)root->op, root->u64);
+        e_oplist_push_op(arena, out, (RDI_EvalOp)root->op, root->u64);
       }
     }break;
   }

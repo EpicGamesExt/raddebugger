@@ -109,6 +109,7 @@ E_ExprKind_LogOr,
 E_ExprKind_Ternary,
 E_ExprKind_LeafBytecode,
 E_ExprKind_LeafMember,
+E_ExprKind_LeafStringLiteral,
 E_ExprKind_LeafU64,
 E_ExprKind_LeafF64,
 E_ExprKind_LeafF32,
@@ -138,9 +139,9 @@ E_InterpretationCode_COUNT,
 } E_InterpretationCode;
 
 C_LINKAGE_BEGIN
-extern String8 e_expr_kind_strings[40];
+extern String8 e_expr_kind_strings[41];
 extern String8 e_interpretation_code_display_strings[11];
-extern String8 e_expr_op_strings[40];
+extern String8 e_expr_op_strings[41];
 extern U8 e_kind_basic_byte_size_table[54];
 extern String8 e_kind_basic_string_table[54];
 

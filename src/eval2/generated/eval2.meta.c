@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 e_expr_kind_strings[40] =
+String8 e_expr_kind_strings[41] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("ArrayIndex"),
@@ -37,6 +37,7 @@ str8_lit_comp("LogOr"),
 str8_lit_comp("Ternary"),
 str8_lit_comp("LeafBytecode"),
 str8_lit_comp("LeafMember"),
+str8_lit_comp("LeafStringLiteral"),
 str8_lit_comp("LeafU64"),
 str8_lit_comp("LeafF64"),
 str8_lit_comp("LeafF32"),
@@ -63,7 +64,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-String8 e_expr_op_strings[40] =
+String8 e_expr_op_strings[41] =
 {
 str8_lit_comp(""),
 str8_lit_comp("[]"),
@@ -96,6 +97,7 @@ str8_lit_comp("||"),
 str8_lit_comp("? "),
 str8_lit_comp("bytecode"),
 str8_lit_comp("member"),
+str8_lit_comp("string_literal"),
 str8_lit_comp("U64"),
 str8_lit_comp("F64"),
 str8_lit_comp("F32"),

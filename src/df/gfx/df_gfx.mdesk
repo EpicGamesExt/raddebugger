@@ -552,7 +552,7 @@ DF_SettingTable:
 {
   {HoverAnimations       hover_animations        "Hover Animations"        0            1    0  1  }
   {PressAnimations       press_animations        "Press Animations"        0            1    0  1  }
-  {FocusAnimations       focus_animations        "Focus Animations"        0            1    0  1  }
+  {FocusAnimations       focus_animations        "Focus Animations"        0            0    0  1  }
   {TooltipAnimations     tooltip_animations      "Tooltip Animations"      0            1    0  1  }
   {MenuAnimations        menu_animations         "Menu Animations"         0            1    0  1  }
   {ScrollingAnimations   scrolling_animations    "Scrolling Animations"    0            1    0  1  }

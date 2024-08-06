@@ -1873,7 +1873,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       if(state_dirty)
       {
         state_dirty = 0;
-        snap_to_cursor = 1;
       }
       
       //////////////////////////////
@@ -2187,6 +2186,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   {
                     df_entity_equip_name(0, watch, new_string);
                     state_dirty = 1;
+                    snap_to_cursor = 1;
                   }
                   else if(editing_complete && new_string.size != 0 && df_expand_key_match(pt.key, empty_row_key))
                   {
@@ -2196,6 +2196,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     DF_ExpandKey key = df_expand_key_from_entity(watch);
                     df_eval_view_set_key_rule(eval_view, key, str8_zero());
                     state_dirty = 1;
+                    snap_to_cursor = 1;
                   }
                 }break;
                 case DF_WatchViewColumnKind_Value:
@@ -2239,6 +2240,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     df_entity_equip_name(0, view_rule, new_string);
                   }
                   state_dirty = 1;
+                  snap_to_cursor = 1;
                 }break;
               }
             }
@@ -2297,6 +2299,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       {
         taken = 1;
         state_dirty = 1;
+        snap_to_cursor = 1;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1)
         {
           DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, v2s64(0, y));
@@ -2454,11 +2457,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         if(evt->delta_2s32.y < 0 && !df_entity_is_nil(first_watch) && !df_entity_is_nil(reorder_group_prev))
         {
           state_dirty = 1;
+          snap_to_cursor = 1;
           df_entity_change_parent(0, reorder_group_prev, reorder_group_prev->parent, reorder_group_prev->parent, last_watch);
         }
         if(evt->delta_2s32.y > 0 && !df_entity_is_nil(last_watch) && !df_entity_is_nil(reorder_group_next))
         {
           state_dirty = 1;
+          snap_to_cursor = 1;
           df_entity_change_parent(0, reorder_group_next, reorder_group_next->parent, reorder_group_next->parent, reorder_group_prev);
         }
       }
