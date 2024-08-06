@@ -5349,15 +5349,10 @@ e_interpret(String8 bytecode)
   }
   done:;
   
-  if(stack_count == 1)
+  if(stack_count >= 1)
   {
     result.value = stack[0];
   }
-  else if(result.code == E_InterpretationCode_Good)
-  {
-    result.code = E_InterpretationCode_MalformedBytecode;
-  }
-  
   scratch_end(scratch);
   return result;
 }
