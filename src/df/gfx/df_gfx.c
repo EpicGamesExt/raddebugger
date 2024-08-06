@@ -4672,12 +4672,26 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Locals)
           {
             E_String2NumMap *locals_map = df_query_cached_locals_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
+            E_String2NumMap *member_map = df_query_cached_member_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
             for(E_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
             {
               DF_AutoCompListerItem item = {0};
               {
                 item.string      = n->string;
                 item.kind_string = str8_lit("Local");
+                item.matches     = fuzzy_match_find(scratch.arena, query, n->string);
+              }
+              if(query.size == 0 || item.matches.count != 0)
+              {
+                df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+            for(E_String2NumMapNode *n = member_map->first; n != 0; n = n->order_next)
+            {
+              DF_AutoCompListerItem item = {0};
+              {
+                item.string      = n->string;
+                item.kind_string = str8_lit("Local (Member)");
                 item.matches     = fuzzy_match_find(scratch.arena, query, n->string);
               }
               if(query.size == 0 || item.matches.count != 0)
@@ -4748,6 +4762,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 }
               }
             }
+          }
+          
+          //- rjf: gather members
+          if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Members)
+          {
+            
           }
           
           //- rjf: gather languages
@@ -8514,7 +8534,10 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         }
         
         // rjf: special-case: strings
-        if(!has_array && direct_type_is_string && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && eval.mode == E_Mode_Addr)
+        if(!has_array &&
+           direct_type_is_string &&
+           (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) &&
+           eval.mode == E_Mode_Addr)
         {
           U64 string_memory_addr = value_eval.value.u64;
           U64 element_size = e_type_byte_size_from_key(direct_type_key);
@@ -8547,7 +8570,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         // rjf: descend to pointed-at thing
         else if(direct_type_has_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
         {
-          if(depth < 5)
+          if(depth < 4)
           {
             E_Eval pted_eval = zero_struct;
             pted_eval.type_key = direct_type_key;
@@ -9111,7 +9134,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
       }break;
       
       //////////////////////////////
-      //- rjf: all types -> produce rows for visible range
+      //- rjf: all elements of a debug info table -> produce rows for visible range
       //
       case DF_EvalVizBlockKind_DebugInfoTable:
       for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
@@ -9122,13 +9145,13 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
         RDI_Parsed *rdi = &di_rdi_parsed_nil;
         {
           U64 base_idx = 0;
-          for(U64 rdi_idx = 0; rdi_idx < e_state->ctx->rdis_count; rdi_idx += 1)
+          for(U64 rdi_idx = 0; rdi_idx < e_parse_ctx->rdis_count; rdi_idx += 1)
           {
             U64 all_items_count = 0;
-            rdi_section_raw_table_from_kind(e_state->ctx->rdis[rdi_idx], block->fzy_target, &all_items_count);
+            rdi_section_raw_table_from_kind(e_parse_ctx->rdis[rdi_idx], block->fzy_target, &all_items_count);
             if(base_idx <= item->idx && item->idx < base_idx + all_items_count)
             {
-              rdi = e_state->ctx->rdis[rdi_idx];
+              rdi = e_parse_ctx->rdis[rdi_idx];
               break;
             }
             base_idx += all_items_count;
@@ -12306,7 +12329,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
                     }
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
-                      U64 local_num = e_num_from_string(e_state->ctx->locals_map, token_string);
+                      U64 local_num = e_num_from_string(e_parse_ctx->locals_map, token_string);
                       if(local_num != 0)
                       {
                         mapped_special = 1;
@@ -12318,7 +12341,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
                   }
                   if(!mapped_special)
                   {
-                    U64 reg_num = e_num_from_string(e_state->ctx->regs_map, token_string);
+                    U64 reg_num = e_num_from_string(e_parse_ctx->regs_map, token_string);
                     if(reg_num != 0)
                     {
                       mapped_special = 1;
@@ -12328,7 +12351,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
                   }
                   if(!mapped_special)
                   {
-                    U64 alias_num = e_num_from_string(e_state->ctx->reg_alias_map, token_string);
+                    U64 alias_num = e_num_from_string(e_parse_ctx->reg_alias_map, token_string);
                     if(alias_num != 0)
                     {
                       mapped_special = 1;

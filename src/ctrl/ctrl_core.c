@@ -842,6 +842,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
         CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->machine_id, event->entity, (U64)event->entity_id);
+        ctrl_query_cached_rip_from_thread(store, event->machine_id, event->entity);
       }break;
       case CTRL_EventKind_EndThread:
       {
@@ -4641,60 +4642,86 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               }
             }
             
-            // rjf: form evaluation context
-            E_Ctx ectx = zero_struct;
-            ProfScope("form evaluation context")
+            // rjf: gather debug infos
+            U64 rdis_count = all_modules_count;
+            RDI_Parsed **rdis = push_array(temp.arena, RDI_Parsed *, rdis_count);
+            Rng1U64 *rdis_vaddr_ranges = push_array(temp.arena, Rng1U64, rdis_count);
+            RDI_Parsed *rdi_primary = &di_rdi_parsed_nil;
+            ProfScope("gather debug infos")
             {
-              E_Ctx *ctx = &ectx;
+              U64 primary_idx = 0;
+              U64 idx = 0;
+              for(CTRL_Entity *m = process->first;
+                  m != &ctrl_entity_nil && idx < all_modules_count;
+                  m = m->next)
+              {
+                if(m->kind != CTRL_EntityKind_Module)
+                {
+                  continue;
+                }
+                
+                // rjf: unpack
+                CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(m, CTRL_EntityKind_DebugInfoPath);
+                DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+                
+                // rjf: fill
+                rdis[idx] = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
+                rdis_vaddr_ranges[idx] = m->vaddr_range;
+                
+                // rjf: pick primary module
+                if(m == module)
+                {
+                  rdi_primary = rdis[idx];
+                }
+                
+                // rjf: inc
+                idx += 1;
+              }
+            }
+            
+            // rjf: build eval type context
+            E_TypeCtx type_ctx = zero_struct;
+            {
+              E_TypeCtx *ctx = &type_ctx;
               ctx->arch              = arch;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
-              ctx->rdis_count        = all_modules_count;
-              ctx->rdis              = push_array(temp.arena, RDI_Parsed *, ctx->rdis_count);
-              ctx->rdis_vaddr_ranges = push_array(temp.arena, Rng1U64, ctx->rdis_count);
-              RDI_Parsed *primary_rdi = &di_rdi_parsed_nil;
-              {
-                U64 primary_idx = 0;
-                U64 idx = 0;
-                for(CTRL_Entity *m = process->first;
-                    m != &ctrl_entity_nil && idx < all_modules_count;
-                    m = m->next)
-                {
-                  if(m->kind != CTRL_EntityKind_Module)
-                  {
-                    continue;
-                  }
-                  
-                  // rjf: unpack
-                  CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(m, CTRL_EntityKind_DebugInfoPath);
-                  DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-                  
-                  // rjf: fill
-                  ctx->rdis[idx] = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
-                  ctx->rdis_vaddr_ranges[idx] = m->vaddr_range;
-                  
-                  // rjf: pick primary module
-                  if(m == module)
-                  {
-                    primary_idx = idx;
-                  }
-                  
-                  // rjf: inc
-                  idx += 1;
-                }
-                if(primary_idx != 0)
-                {
-                  Swap(RDI_Parsed *, ctx->rdis[0], ctx->rdis[primary_idx]);
-                  Swap(Rng1U64, ctx->rdis_vaddr_ranges[0], ctx->rdis_vaddr_ranges[primary_idx]);
-                }
-                primary_rdi = ctx->rdis[0];
-              }
+              ctx->rdi_primary       = rdi_primary;
+              ctx->rdis_count        = rdis_count;
+              ctx->rdis              = rdis;
+              ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
+            }
+            
+            // rjf: build eval parse context
+            E_ParseCtx parse_ctx = zero_struct;
+            ProfScope("build eval parse context")
+            {
+              E_ParseCtx *ctx = &parse_ctx;
+              ctx->arch              = arch;
+              ctx->ip_vaddr          = thread_rip_vaddr;
+              ctx->ip_voff           = thread_rip_voff;
+              ctx->rdi_primary       = rdi_primary;
+              ctx->rdis_count        = rdis_count;
+              ctx->rdis              = rdis;
+              ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
               ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);
               ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
-              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, primary_rdi, thread_rip_voff);
-              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, primary_rdi, thread_rip_voff);
-              ctx->macro_map     = &e_string2expr_map_nil;
-              // TODO(rjf): ctx->macro_map = ...;
+              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, ctx->rdi_primary, thread_rip_voff);
+              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, ctx->rdi_primary, thread_rip_voff);
+            }
+            
+            // rjf: build eval IR context
+            E_IRCtx ir_ctx = zero_struct;
+            {
+              // TODO(rjf): pipe this here from frontend
+              ir_ctx.macro_map = &e_string2expr_map_nil;
+            }
+            
+            // rjf: build eval interpretation context
+            E_InterpretCtx interpret_ctx = zero_struct;
+            {
+              E_InterpretCtx *ctx = &interpret_ctx;
+              ctx->arch          = arch;
               ctx->memory_read_user_data = &event->process;
               ctx->memory_read   = ctrl_eval_memory_read;
               ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
@@ -4703,9 +4730,13 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->module_base   = push_array(temp.arena, U64, 1);
               ctx->module_base[0]= module->vaddr_range.min;
               ctx->tls_base      = push_array(temp.arena, U64, 1);
-              // TODO(rjf): ctx->tls_base[0]= ...;
-              e_select_ctx(ctx);
             }
+            
+            // rjf: equip contexts
+            e_select_type_ctx(&type_ctx);
+            e_select_parse_ctx(&parse_ctx);
+            e_select_ir_ctx(&ir_ctx);
+            e_select_interpret_ctx(&interpret_ctx);
             
             // rjf: evaluate
             E_Eval eval = zero_struct;

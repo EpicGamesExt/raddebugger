@@ -1232,7 +1232,7 @@ RDI_EvalOpTable:
   {Stop        0       0 0 0}
   {Noop        1       0 0 0}
   {Cond        2       1 1 0}
-  {Skip        3       1 0 0}
+  {Skip        3       2 0 0}
   {MemRead     4       1 1 1}
   {RegRead     5       4 0 1}
   {RegReadDyn  6       0 1 1}

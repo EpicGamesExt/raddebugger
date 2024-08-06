@@ -1314,7 +1314,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
     //
     case DF_WatchViewFillKind_Locals:
     {
-      E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_state->ctx->locals_map);
+      E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_parse_ctx->locals_map);
       e_string2num_map_node_array_sort__in_place(&nodes);
       for(U64 idx = 0; idx < nodes.count; idx += 1)
       {
@@ -1671,7 +1671,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           //
           case DF_WatchViewFillKind_Locals:
           {
-            E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_state->ctx->locals_map);
+            E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_parse_ctx->locals_map);
             e_string2num_map_node_array_sort__in_place(&nodes);
             for(U64 idx = 0; idx < nodes.count; idx += 1)
             {
@@ -1806,14 +1806,14 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
                 {
-                  U64 procedures_count = 0;
-                  rdi_section_raw_table_from_kind(rdis[rdi_idx], RDI_SectionKind_Procedures, &procedures_count);
-                  if(base_idx <= item->idx && item->idx < base_idx + procedures_count)
+                  U64 elements_count = 0;
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_target, &elements_count);
+                  if(base_idx <= item->idx && item->idx < base_idx + elements_count)
                   {
                     rdi = rdis[rdi_idx];
                     break;
                   }
-                  base_idx += procedures_count;
+                  base_idx += elements_count;
                 }
               }
               
@@ -4318,7 +4318,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
       RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
-      E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, e_idx_from_rdi(rdi));
+      E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, e_parse_ctx_idx_from_rdi(rdi));
       
       //- rjf: build item button
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -5915,13 +5915,13 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         {
           symbol_name.str = rdi_name_from_procedure(row->rdi, row->procedure, &symbol_name.size);
           RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->procedure->type_idx);
-          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->procedure->type_idx, e_idx_from_rdi(row->rdi)));
+          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->procedure->type_idx, e_parse_ctx_idx_from_rdi(row->rdi)));
         }
         if(row->inline_site != 0)
         {
           symbol_name.str = rdi_string_from_idx(row->rdi, row->inline_site->name_string_idx, &symbol_name.size);
           RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->inline_site->type_idx);
-          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->inline_site->type_idx, e_idx_from_rdi(row->rdi)));
+          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->inline_site->type_idx, e_parse_ctx_idx_from_rdi(row->rdi)));
         }
         
         // rjf: build row
@@ -7632,7 +7632,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         df_rgba_from_theme_color(DF_ThemeColor_Thread7),
       };
       U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
-      for(E_String2NumMapNode *n = e_ctx()->locals_map->first; n != 0; n = n->order_next)
+      for(E_String2NumMapNode *n = e_parse_ctx->locals_map->first; n != 0; n = n->order_next)
       {
         String8 local_name = n->string;
         E_Eval local_eval = e_eval_from_string(scratch.arena, local_name);

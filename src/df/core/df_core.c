@@ -8603,59 +8603,95 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     scratch_end(scratch);
   }
   
-  //- rjf: choose evaluation context
+  //- rjf: unpack eval-dependent info
+  DF_Entity *process = df_entity_from_handle(df_interact_regs()->process);
+  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
+  Architecture arch = df_architecture_from_entity(thread);
+  U64 unwind_count = df_interact_regs()->unwind_count;
+  U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+  DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
+  DF_EntityList all_modules = df_query_cached_entity_list_with_kind(DF_EntityKind_Module);
+  U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
+  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 rdis_count = all_modules.count;
+  RDI_Parsed **rdis = push_array(arena, RDI_Parsed *, rdis_count);
+  Rng1U64 *rdis_vaddr_ranges = push_array(arena, Rng1U64, rdis_count);
+  RDI_Parsed *rdi_primary = &di_rdi_parsed_nil;
+  DI_Key primary_dbgi_key = {0};
   {
-    DF_Entity *process = df_entity_from_handle(df_interact_regs()->process);
-    DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-    U64 unwind_count = df_interact_regs()->unwind_count;
-    U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
-    DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
-    DF_EntityList all_modules = df_query_cached_entity_list_with_kind(DF_EntityKind_Module);
-    U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
-    U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
-    E_Ctx *ctx = push_array(arena, E_Ctx, 1);
-    ctx->arch              = df_architecture_from_entity(thread);
-    ctx->ip_vaddr          = rip_vaddr;
-    ctx->ip_voff           = rip_voff;
-    DI_Key primary_dbgi_key = {0};
-    if(all_modules.count == 0)
+    U64 idx = 0;
+    for(DF_EntityNode *n = all_modules.first; n != 0; n = n->next, idx += 1)
     {
-      ctx->rdis_count = 1;
-      ctx->rdis = push_array(arena, RDI_Parsed *, 1);
-      ctx->rdis[0] = &di_rdi_parsed_nil;
-    }
-    else
-    {
-      ctx->rdis_count        = all_modules.count;
-      ctx->rdis              = push_array(arena, RDI_Parsed *, ctx->rdis_count);
-      ctx->rdis_vaddr_ranges = push_array(arena, Rng1U64, ctx->rdis_count);
+      DI_Key dbgi_key = df_dbgi_key_from_module(n->entity);
+      rdis[idx] = di_rdi_from_key(df_state->frame_di_scope, &dbgi_key, 0);
+      rdis_vaddr_ranges[idx] = n->entity->vaddr_rng;
+      if(n->entity == module)
       {
-        U64 primary_idx = 0;
-        U64 idx = 0;
-        for(DF_EntityNode *n = all_modules.first; n != 0; n = n->next, idx += 1)
-        {
-          DI_Key dbgi_key = df_dbgi_key_from_module(n->entity);
-          ctx->rdis[idx] = di_rdi_from_key(df_state->frame_di_scope, &dbgi_key, 0);
-          ctx->rdis_vaddr_ranges[idx] = n->entity->vaddr_rng;
-          if(n->entity == module)
-          {
-            primary_dbgi_key = dbgi_key;
-            primary_idx = idx;
-          }
-        }
-        if(primary_idx != 0)
-        {
-          Swap(RDI_Parsed *, ctx->rdis[0], ctx->rdis[primary_idx]);
-          Swap(Rng1U64, ctx->rdis_vaddr_ranges[0], ctx->rdis_vaddr_ranges[primary_idx]);
-        }
+        primary_dbgi_key = dbgi_key;
+        rdi_primary = rdis[idx];
       }
     }
+  }
+  
+  //- rjf: build eval type context
+  E_TypeCtx *type_ctx = push_array(arena, E_TypeCtx, 1);
+  {
+    E_TypeCtx *ctx = type_ctx;
+    ctx->arch              = arch;
+    ctx->ip_vaddr          = rip_vaddr;
+    ctx->ip_voff           = rip_voff;
+    ctx->rdi_primary       = rdi_primary;
+    ctx->rdis_count        = rdis_count;
+    ctx->rdis              = rdis;
+    ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
+  }
+  e_select_type_ctx(type_ctx);
+  
+  //- rjf: build eval parse context
+  E_ParseCtx *parse_ctx = push_array(arena, E_ParseCtx, 1);
+  ProfScope("build eval parse context")
+  {
+    E_ParseCtx *ctx = parse_ctx;
+    ctx->arch              = arch;
+    ctx->ip_vaddr          = rip_vaddr;
+    ctx->ip_voff           = rip_voff;
+    ctx->rdi_primary       = rdi_primary;
+    ctx->rdis_count        = rdis_count;
+    ctx->rdis              = rdis;
+    ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
     ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);
     ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
     ctx->locals_map    = df_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
     ctx->member_map    = df_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
+  }
+  e_select_parse_ctx(parse_ctx);
+  
+  //- rjf: build eval IR context
+  E_IRCtx *ir_ctx = push_array(arena, E_IRCtx, 1);
+  {
+    E_IRCtx *ctx = ir_ctx;
     ctx->macro_map     = push_array(arena, E_String2ExprMap, 1);
     ctx->macro_map[0]  = e_string2expr_map_make(arena, 512);
+    DF_EntityList watches = df_query_cached_entity_list_with_kind(DF_EntityKind_Watch);
+    for(DF_EntityNode *n = watches.first; n != 0; n = n->next)
+    {
+      DF_Entity *watch = n->entity;
+      String8 expr = watch->name;
+      E_TokenArray tokens   = e_token_array_from_text(arena, expr);
+      E_Parse      parse    = e_parse_expr_from_text_tokens(arena, expr, &tokens);
+      if(parse.msgs.max_kind == E_MsgKind_Null)
+      {
+        e_push_leaf_ident_exprs_from_expr__in_place(arena, ctx->macro_map, parse.expr);
+      }
+    }
+  }
+  e_select_ir_ctx(ir_ctx);
+  
+  //- rjf: build eval interpretation context
+  E_InterpretCtx *interpret_ctx = push_array(arena, E_InterpretCtx, 1);
+  {
+    E_InterpretCtx *ctx = interpret_ctx;
+    ctx->arch          = arch;
     ctx->memory_read_user_data = process;
     ctx->memory_read   = df_eval_memory_read;
     ctx->reg_data      = ctrl_query_cached_reg_block_from_thread(arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
@@ -8664,22 +8700,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->module_base[0]= module->vaddr_rng.min;
     ctx->tls_base      = push_array(arena, U64, 1);
     ctx->tls_base[0]   = df_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
-    e_select_ctx(ctx);
-    {
-      DF_EntityList watches = df_query_cached_entity_list_with_kind(DF_EntityKind_Watch);
-      for(DF_EntityNode *n = watches.first; n != 0; n = n->next)
-      {
-        DF_Entity *watch = n->entity;
-        String8 expr = watch->name;
-        E_TokenArray tokens   = e_token_array_from_text(arena, expr);
-        E_Parse      parse    = e_parse_expr_from_text_tokens(arena, expr, &tokens);
-        if(parse.msgs.max_kind == E_MsgKind_Null)
-        {
-          e_push_leaf_ident_exprs_from_expr__in_place(arena, ctx->macro_map, parse.expr);
-        }
-      }
-    }
   }
+  e_select_interpret_ctx(interpret_ctx);
   
   ProfEnd();
 }
