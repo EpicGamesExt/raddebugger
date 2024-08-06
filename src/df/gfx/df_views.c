@@ -3740,7 +3740,7 @@ DF_VIEW_UI_FUNCTION_DEF(SystemProcesses)
         }
         
         // rjf: process number
-        UI_PrefWidth(ui_text_dim(1, 1)) UI_TextAlignment(UI_TextAlign_Center)
+        UI_PrefWidth(ui_text_dim(1, 1)) UI_TextAlignment(UI_TextAlign_Center) UI_TextPadding(0)
         {
           ui_labelf("[PID: ");
           UI_Box *pid_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%i##pid_label", info->info.pid);
