@@ -4102,7 +4102,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
-        df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
+        DF_Font(ws, DF_FontSlot_Code) df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
         DF_Font(ws, DF_FontSlot_Main) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           ui_labelf("Procedure #%I64u", item->idx);
         U64 binary_voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, name);
