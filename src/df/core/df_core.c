@@ -8655,8 +8655,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
     ctx->locals_map    = df_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
     ctx->member_map    = df_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
-    ctx->macro_map     = &e_string2expr_map_nil;
-    // TODO(rjf): ctx->macro_map = ...;
+    ctx->macro_map     = push_array(arena, E_String2ExprMap, 1);
+    ctx->macro_map[0]  = e_string2expr_map_make(arena, 512);
     ctx->memory_read_user_data = process;
     ctx->memory_read   = df_eval_memory_read;
     ctx->reg_data      = ctrl_query_cached_reg_block_from_thread(arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
@@ -8666,6 +8666,20 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->tls_base      = push_array(arena, U64, 1);
     ctx->tls_base[0]   = df_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
     e_select_ctx(ctx);
+    {
+      DF_EntityList watches = df_query_cached_entity_list_with_kind(DF_EntityKind_Watch);
+      for(DF_EntityNode *n = watches.first; n != 0; n = n->next)
+      {
+        DF_Entity *watch = n->entity;
+        String8 expr = watch->name;
+        E_TokenArray tokens   = e_token_array_from_text(arena, expr);
+        E_Parse      parse    = e_parse_expr_from_text_tokens(arena, expr, &tokens);
+        if(parse.msgs.max_kind == E_MsgKind_Null)
+        {
+          e_push_leaf_ident_exprs_from_expr__in_place(arena, ctx->macro_map, parse.expr);
+        }
+      }
+    }
   }
   
   ProfEnd();

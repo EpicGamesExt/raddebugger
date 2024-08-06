@@ -8547,7 +8547,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         // rjf: descend to pointed-at thing
         else if(direct_type_has_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
         {
-          if(depth < 3)
+          if(depth < 5)
           {
             E_Eval pted_eval = zero_struct;
             pted_eval.type_key = direct_type_key;

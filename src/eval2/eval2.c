@@ -3225,6 +3225,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       {
         E_Expr *member_container = atom;
         E_Expr *member_expr = e_push_expr(arena, E_ExprKind_LeafMember, member_name.str);
+        member_expr->string = member_name;
         atom = e_push_expr(arena, E_ExprKind_MemberAccess, token_string.str);
         e_expr_push_child(atom, member_container);
         e_expr_push_child(atom, member_expr);
@@ -5492,42 +5493,48 @@ e_value_eval_from_eval(E_Eval eval)
     
     //- rjf: address => resolve into value, if leaf
     case E_Mode_Addr:
-    if(e_state->ctx->memory_read != 0)
     {
-      E_TypeKey type_key = eval.type_key;
+      E_TypeKey type_key = e_type_unwrap(eval.type_key);
       E_TypeKind type_kind = e_type_kind_from_key(type_key);
-      U64 type_byte_size = e_type_byte_size_from_key(type_key);
-      Rng1U64 value_vaddr_range = r1u64(eval.value.u64, eval.value.u64 + type_byte_size);
-      MemoryZeroStruct(&eval.value);
-      if(!e_type_key_match(type_key, e_type_key_zero()) &&
-         type_byte_size <= sizeof(E_Value) &&
-         e_state->ctx->memory_read(e_state->ctx->memory_read_user_data, &eval.value, value_vaddr_range))
+      if(type_kind == E_TypeKind_Array)
       {
         eval.mode = E_Mode_Value;
-        
-        // rjf: mask&shift, for bitfields
-        if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
+      }
+      else if(e_state->ctx->memory_read != 0)
+      {
+        U64 type_byte_size = e_type_byte_size_from_key(type_key);
+        Rng1U64 value_vaddr_range = r1u64(eval.value.u64, eval.value.u64 + type_byte_size);
+        MemoryZeroStruct(&eval.value);
+        if(!e_type_key_match(type_key, e_type_key_zero()) &&
+           type_byte_size <= sizeof(E_Value) &&
+           e_state->ctx->memory_read(e_state->ctx->memory_read_user_data, &eval.value, value_vaddr_range))
         {
-          Temp scratch = scratch_begin(0, 0);
-          E_Type *type = e_type_from_key(scratch.arena, type_key);
-          U64 valid_bits_mask = 0;
-          for(U64 idx = 0; idx < type->count; idx += 1)
+          eval.mode = E_Mode_Value;
+          
+          // rjf: mask&shift, for bitfields
+          if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
           {
-            valid_bits_mask |= (1<<idx);
+            Temp scratch = scratch_begin(0, 0);
+            E_Type *type = e_type_from_key(scratch.arena, type_key);
+            U64 valid_bits_mask = 0;
+            for(U64 idx = 0; idx < type->count; idx += 1)
+            {
+              valid_bits_mask |= (1<<idx);
+            }
+            eval.value.u64 = eval.value.u64 >> type->off;
+            eval.value.u64 = eval.value.u64 & valid_bits_mask;
+            eval.type_key = type->direct_type_key;
+            scratch_end(scratch);
           }
-          eval.value.u64 = eval.value.u64 >> type->off;
-          eval.value.u64 = eval.value.u64 & valid_bits_mask;
-          eval.type_key = type->direct_type_key;
-          scratch_end(scratch);
-        }
-        
-        // rjf: manually sign-extend
-        switch(type_kind)
-        {
-          default: break;
-          case E_TypeKind_S8:  {eval.value.s64 = (S64)*((S8 *)&eval.value.u64);}break;
-          case E_TypeKind_S16: {eval.value.s64 = (S64)*((S16 *)&eval.value.u64);}break;
-          case E_TypeKind_S32: {eval.value.s64 = (S64)*((S32 *)&eval.value.u64);}break;
+          
+          // rjf: manually sign-extend
+          switch(type_kind)
+          {
+            default: break;
+            case E_TypeKind_S8:  {eval.value.s64 = (S64)*((S8 *)&eval.value.u64);}break;
+            case E_TypeKind_S16: {eval.value.s64 = (S64)*((S16 *)&eval.value.u64);}break;
+            case E_TypeKind_S32: {eval.value.s64 = (S64)*((S32 *)&eval.value.u64);}break;
+          }
         }
       }
     }break;
