@@ -900,15 +900,15 @@ ctrl_init(void)
     U64 reg_count = regs_reg_code_count_from_architecture(arch);
     String8 *alias_names = regs_alias_code_string_table_from_architecture(arch);
     U64 alias_count = regs_alias_code_count_from_architecture(arch);
-    ctrl_state->arch_string2reg_tables[arch] = eval_string2num_map_make(ctrl_state->arena, 256);
-    ctrl_state->arch_string2alias_tables[arch] = eval_string2num_map_make(ctrl_state->arena, 256);
+    ctrl_state->arch_string2reg_tables[arch] = e_string2num_map_make(ctrl_state->arena, 256);
+    ctrl_state->arch_string2alias_tables[arch] = e_string2num_map_make(ctrl_state->arena, 256);
     for(U64 idx = 1; idx < reg_count; idx += 1)
     {
-      eval_string2num_map_insert(ctrl_state->arena, &ctrl_state->arch_string2reg_tables[arch], reg_names[idx], idx);
+      e_string2num_map_insert(ctrl_state->arena, &ctrl_state->arch_string2reg_tables[arch], reg_names[idx], idx);
     }
     for(U64 idx = 1; idx < alias_count; idx += 1)
     {
-      eval_string2num_map_insert(ctrl_state->arena, &ctrl_state->arch_string2alias_tables[arch], alias_names[idx], idx);
+      e_string2num_map_insert(ctrl_state->arena, &ctrl_state->arch_string2alias_tables[arch], alias_names[idx], idx);
     }
   }
   ctrl_state->process_memory_cache.slots_count = 256;
@@ -2713,13 +2713,13 @@ ctrl_reg_gen(void)
 
 //- rjf: name -> register/alias hash tables, for eval
 
-internal EVAL_String2NumMap *
+internal E_String2NumMap *
 ctrl_string2reg_from_arch(Architecture arch)
 {
   return &ctrl_state->arch_string2reg_tables[arch];
 }
 
-internal EVAL_String2NumMap *
+internal E_String2NumMap *
 ctrl_string2alias_from_arch(Architecture arch)
 {
   return &ctrl_state->arch_string2alias_tables[arch];
@@ -3789,11 +3789,11 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
 //- rjf: eval helpers
 
 internal B32
-ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size)
+ctrl_eval_memory_read(void *u, void *out, Rng1U64 vaddr_range)
 {
   DMN_Handle process = *(DMN_Handle *)u;
-  U64 read_size = dmn_process_read(process, r1u64(addr, addr+size), out);
-  B32 result = (read_size == size);
+  U64 read_size = dmn_process_read(process, vaddr_range, out);
+  B32 result = (read_size == dim_1u64(vaddr_range));
   return result;
 }
 
@@ -4518,11 +4518,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //- rjf: unpack info about thread attached to event
       //
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
+      CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
       Architecture arch = thread->arch;
       U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
       CTRL_Entity *module = &ctrl_entity_nil;
       {
-        CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
         for(CTRL_Entity *m = process->first; m != &ctrl_entity_nil; m = m->next)
         {
           if(m->kind == CTRL_EntityKind_Module && contains_1u64(m->vaddr_range, thread_rip_vaddr))
@@ -4536,7 +4536,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //////////////////////////
       //- rjf: extract module-dependent info
       //
-      CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
       U64 thread_rip_voff = thread_rip_vaddr - module->vaddr_range.min;
       
       //////////////////////////
@@ -4630,61 +4629,93 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(conditions.node_count != 0) ProfScope("evaluate hit stop conditions")
         {
           DI_Scope *di_scope = di_scope_open();
-          DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-          RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
           for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
           {
-            ProfBegin("compile expression");
-            String8 string = condition_n->string;
-            EVAL_ParseCtx parse_ctx = zero_struct;
+            // rjf: count all modules
+            U64 all_modules_count = 0;
+            for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
             {
-              parse_ctx.arch = arch;
-              parse_ctx.ip_voff = thread_rip_voff;
-              parse_ctx.rdi = rdi;
-              parse_ctx.type_graph = tg_graph_begin(bit_size_from_arch(arch)/8, 256);
-              parse_ctx.regs_map = ctrl_string2reg_from_arch(arch);
-              parse_ctx.reg_alias_map = ctrl_string2alias_from_arch(arch);
-              parse_ctx.locals_map = eval_push_locals_map_from_rdi_voff(temp.arena, rdi, thread_rip_voff);
-              parse_ctx.member_map = eval_push_member_map_from_rdi_voff(temp.arena, rdi, thread_rip_voff);
+              if(child->kind == CTRL_EntityKind_Module)
+              {
+                all_modules_count += 1;
+              }
             }
-            EVAL_TokenArray tokens = eval_token_array_from_text(temp.arena, string);
-            EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(temp.arena, &parse_ctx, string, &tokens);
-            EVAL_ErrorList errors = parse.errors;
-            B32 parse_has_expr = (parse.expr != &eval_expr_nil);
-            B32 parse_is_type = (parse_has_expr && parse.expr->kind == EVAL_ExprKind_TypeIdent);
-            EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
-            if(parse_has_expr && errors.count == 0)
+            
+            // rjf: form evaluation context
+            E_Ctx ectx = zero_struct;
+            ProfScope("form evaluation context")
             {
-              ir_tree_and_type = eval_irtree_and_type_from_expr(temp.arena, parse_ctx.type_graph, rdi, &eval_string2expr_map_nil, parse.expr, &errors);
+              E_Ctx *ctx = &ectx;
+              ctx->arch              = arch;
+              ctx->ip_vaddr          = thread_rip_vaddr;
+              ctx->ip_voff           = thread_rip_voff;
+              ctx->rdis_count        = all_modules_count;
+              ctx->rdis              = push_array(temp.arena, RDI_Parsed *, ctx->rdis_count);
+              ctx->rdis_vaddr_ranges = push_array(temp.arena, Rng1U64, ctx->rdis_count);
+              RDI_Parsed *primary_rdi = &di_rdi_parsed_nil;
+              {
+                U64 primary_idx = 0;
+                U64 idx = 0;
+                for(CTRL_Entity *m = process->first;
+                    m != &ctrl_entity_nil && idx < all_modules_count;
+                    m = m->next)
+                {
+                  if(m->kind != CTRL_EntityKind_Module)
+                  {
+                    continue;
+                  }
+                  
+                  // rjf: unpack
+                  CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(m, CTRL_EntityKind_DebugInfoPath);
+                  DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+                  
+                  // rjf: fill
+                  ctx->rdis[idx] = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
+                  ctx->rdis_vaddr_ranges[idx] = m->vaddr_range;
+                  
+                  // rjf: pick primary module
+                  if(m == module)
+                  {
+                    primary_idx = idx;
+                  }
+                  
+                  // rjf: inc
+                  idx += 1;
+                }
+                if(primary_idx != 0)
+                {
+                  Swap(RDI_Parsed *, ctx->rdis[0], ctx->rdis[primary_idx]);
+                  Swap(Rng1U64, ctx->rdis_vaddr_ranges[0], ctx->rdis_vaddr_ranges[primary_idx]);
+                }
+                primary_rdi = ctx->rdis[0];
+              }
+              ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);
+              ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
+              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, primary_rdi, thread_rip_voff);
+              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, primary_rdi, thread_rip_voff);
+              ctx->macro_map     = &e_string2expr_map_nil;
+              // TODO(rjf): ctx->macro_map = ...;
+              ctx->memory_read_user_data = &event->process;
+              ctx->memory_read   = ctrl_eval_memory_read;
+              ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
+              ctx->reg_data      = push_array(temp.arena, U8, ctx->reg_size);
+              dmn_thread_read_reg_block(event->thread, ctx->reg_data);
+              ctx->module_base   = push_array(temp.arena, U64, 1);
+              ctx->module_base[0]= module->vaddr_range.min;
+              ctx->tls_base      = push_array(temp.arena, U64, 1);
+              // TODO(rjf): ctx->tls_base[0]= ...;
+              e_select_ctx(ctx);
             }
-            EVAL_OpList op_list = {0};
-            if(parse_has_expr && ir_tree_and_type.tree != &eval_irtree_nil)
+            
+            // rjf: evaluate
+            E_Eval eval = zero_struct;
+            ProfScope("evaluate expression")
             {
-              eval_oplist_from_irtree(scratch.arena, ir_tree_and_type.tree, &op_list);
+              eval = e_eval_from_string(temp.arena, condition_n->string);
             }
-            String8 bytecode = {0};
-            if(parse_has_expr && parse_is_type == 0 && op_list.encoded_size != 0)
-            {
-              bytecode = eval_bytecode_from_oplist(scratch.arena, &op_list);
-            }
-            ProfEnd();
-            EVAL_Result eval = {0};
-            if(bytecode.size != 0) ProfScope("evaluate expression")
-            {
-              U64 module_base = module->vaddr_range.min;
-              U64 tls_base = dmn_tls_root_vaddr_from_thread(event->thread);
-              EVAL_Machine machine = {0};
-              machine.u = &event->process;
-              machine.arch = arch;
-              machine.memory_read = ctrl_eval_memory_read;
-              machine.reg_size = regs_block_size_from_architecture(arch);
-              machine.reg_data = push_array(scratch.arena, U8, machine.reg_size);
-              dmn_thread_read_reg_block(event->thread, machine.reg_data);
-              machine.module_base = &module_base;
-              machine.tls_base = &tls_base;
-              eval = eval_interpret(&machine, bytecode);
-            }
-            if(eval.code == EVAL_ResultCode_Good && eval.value.u64 == 0)
+            
+            // rjf: interpret evaluation
+            if(eval.code == E_InterpretationCode_Good && eval.value.u64 == 0)
             {
               hit_user_bp = 0;
               hit_conditional_bp_but_filtered = 1;

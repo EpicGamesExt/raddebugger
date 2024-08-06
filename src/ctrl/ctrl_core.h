@@ -561,8 +561,8 @@ struct CTRL_State
   CTRL_WakeupFunctionType *wakeup_hook;
   
   // rjf: name -> register/alias hash tables for eval
-  EVAL_String2NumMap arch_string2reg_tables[Architecture_COUNT];
-  EVAL_String2NumMap arch_string2alias_tables[Architecture_COUNT];
+  E_String2NumMap arch_string2reg_tables[Architecture_COUNT];
+  E_String2NumMap arch_string2alias_tables[Architecture_COUNT];
   
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
@@ -788,8 +788,8 @@ internal U64 ctrl_mem_gen(void);
 internal U64 ctrl_reg_gen(void);
 
 //- rjf: name -> register/alias hash tables, for eval
-internal EVAL_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);
-internal EVAL_String2NumMap *ctrl_string2alias_from_arch(Architecture arch);
+internal E_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);
+internal E_String2NumMap *ctrl_string2alias_from_arch(Architecture arch);
 
 ////////////////////////////////
 //~ rjf: Control-Thread Functions
@@ -817,7 +817,7 @@ internal void ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle mo
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);
 
 //- rjf: eval helpers
-internal B32 ctrl_eval_memory_read(void *u, void *out, U64 addr, U64 size);
+internal B32 ctrl_eval_memory_read(void *u, void *out, Rng1U64 vaddr_range);
 
 //- rjf: log flusher
 internal void ctrl_thread__flush_info_log(String8 string);

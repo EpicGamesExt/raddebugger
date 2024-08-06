@@ -115,7 +115,7 @@ E_ExprKindTable:
 }
 
 @table(name display_string)
-E_ResultCodeTable:
+E_InterpretationCodeTable:
 {
   { Good                    "" }
   { DivideByZero            "Cannot divide by zero." }
@@ -152,9 +152,9 @@ E_ResultCodeTable:
   COUNT,
 }
 
-@enum E_ResultCode:
+@enum E_InterpretationCode:
 {
-  @expand(E_ResultCodeTable a) `$(a.name)`,
+  @expand(E_InterpretationCodeTable a) `$(a.name)`,
   COUNT,
 }
 
@@ -164,9 +164,9 @@ e_expr_kind_strings:
   @expand(E_ExprKindTable a) `str8_lit_comp("$(a.name)")`
 }
 
-@data(String8) e_result_code_display_strings:
+@data(String8) e_interpretation_code_display_strings:
 {
-  @expand(E_ResultCodeTable a) `str8_lit_comp("$(a.display_string)")`
+  @expand(E_InterpretationCodeTable a) `str8_lit_comp("$(a.display_string)")`
 }
 
 @data(String8) e_expr_op_strings:

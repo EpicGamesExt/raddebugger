@@ -43,20 +43,10 @@ struct FZY_ItemArray
 ////////////////////////////////
 //~ rjf: Search Parameter Types
 
-typedef enum FZY_Target
-{
-  FZY_Target_Procedures,
-  FZY_Target_GlobalVariables,
-  FZY_Target_ThreadVariables,
-  FZY_Target_UDTs,
-  FZY_Target_COUNT
-}
-FZY_Target;
-
 typedef struct FZY_Params FZY_Params;
 struct FZY_Params
 {
-  FZY_Target target;
+  RDI_SectionKind target;
   DI_KeyArray dbgi_keys;
 };
 
@@ -169,7 +159,7 @@ thread_static FZY_TCTX *fzy_tctx = 0;
 internal U64 fzy_hash_from_string(U64 seed, String8 string);
 internal U64 fzy_hash_from_params(FZY_Params *params);
 internal U64 fzy_item_num_from_array_element_idx__linear_search(FZY_ItemArray *array, U64 element_idx);
-internal String8 fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, FZY_Target target, U64 element_idx);
+internal String8 fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, RDI_SectionKind target, U64 element_idx);
 internal FZY_Params fzy_params_copy(Arena *arena, FZY_Params *src);
 
 ////////////////////////////////

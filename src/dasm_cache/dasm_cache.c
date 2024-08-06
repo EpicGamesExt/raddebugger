@@ -492,15 +492,15 @@ dasm_parse_thread__entry_point(void *p)
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
+    HS_Scope *hs_scope = hs_scope_open();
+    DI_Scope *di_scope = di_scope_open();
+    TXT_Scope *txt_scope = txt_scope_open();
     
     //- rjf: get next request
     U128 hash = {0};
     DASM_Params params = {0};
     dasm_u2p_dequeue_req(scratch.arena, &hash, &params);
     U64 change_gen = fs_change_gen();
-    HS_Scope *hs_scope = hs_scope_open();
-    DI_Scope *di_scope = di_scope_open();
-    TXT_Scope *txt_scope = txt_scope_open();
     
     //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%dasm_shared->slots_count;

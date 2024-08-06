@@ -191,6 +191,9 @@ RDI_PROC RDI_U64 rdi_opl_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_Scope *rdi_scope_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 RDI_PROC RDI_Procedure *rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 
+//- global variables
+RDI_PROC RDI_GlobalVariable *rdi_global_variable_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+
 //- units
 RDI_PROC RDI_Unit *rdi_unit_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 RDI_PROC RDI_LineTable *rdi_line_table_from_unit(RDI_Parsed *rdi, RDI_Unit *unit);

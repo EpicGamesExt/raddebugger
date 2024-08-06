@@ -202,9 +202,6 @@ struct DF_View
   TxtPt cursor;
   TxtPt mark;
   
-  // rjf: ctrl context overrides
-  DF_CtrlCtx ctrl_ctx_overrides;
-  
   // rjf: allocation & user data extensions
   Arena *arena;
   DF_ArenaExt *first_arena_ext;
@@ -324,11 +321,11 @@ enum
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_gfx_view_rule_line_stringize__##name
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, DF_Eval eval, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg)
+#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, struct DF_CfgNode *cfg)
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, DF_Eval eval, String8 string, DI_Scope *di_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, struct DF_CfgNode *cfg, Vec2F32 dim)
+#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, String8 string, struct DF_CfgNode *cfg, Vec2F32 dim)
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name) df_gfx_view_rule_block_ui__##name
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name))
 
@@ -602,7 +599,6 @@ struct DF_Window
   B32 autocomp_force_closed;
   B32 autocomp_query_dirty;
   UI_Key autocomp_root_key;
-  DF_CtrlCtx autocomp_ctrl_ctx;
   Arena *autocomp_lister_params_arena;
   DF_AutoCompListerParams autocomp_lister_params;
   U64 autocomp_cursor_off;
@@ -636,7 +632,6 @@ struct DF_Window
   U64 hover_eval_last_frame_idx;
   
   // rjf: hover eval params
-  DF_CtrlCtx hover_eval_ctrl_ctx;
   DF_Handle hover_eval_file;
   TxtPt hover_eval_file_pt;
   U64 hover_eval_vaddr;
@@ -647,9 +642,6 @@ struct DF_Window
   U8 error_buffer[512];
   U64 error_string_size;
   F32 error_t;
-  
-  // rjf: context overrides
-  DF_CtrlCtx ctrl_ctx_overrides;
   
   // rjf: panel state
   DF_Panel *root_panel;
@@ -834,7 +826,6 @@ read_only global DF_View df_g_nil_view =
   {0},
   {0},
   {0},
-  {0},
   0,
   0,
   0,
@@ -907,7 +898,7 @@ internal void df_panel_remove_tab_view(DF_Panel *panel, DF_View *view);
 internal DF_View *df_selected_tab_from_panel(DF_Panel *panel);
 
 //- rjf: icons & display strings
-internal String8 df_display_string_from_view(Arena *arena, DF_CtrlCtx ctrl_ctx, DF_View *view);
+internal String8 df_display_string_from_view(Arena *arena, DF_View *view);
 internal DF_IconKind df_icon_kind_from_view(DF_View *view);
 
 ////////////////////////////////
@@ -915,12 +906,6 @@ internal DF_IconKind df_icon_kind_from_view(DF_View *view);
 
 internal DF_Handle df_handle_from_window(DF_Window *window);
 internal DF_Window *df_window_from_handle(DF_Handle handle);
-
-////////////////////////////////
-//~ rjf: Control Context
-
-internal DF_CtrlCtx df_ctrl_ctx_from_window(DF_Window *ws);
-internal DF_CtrlCtx df_ctrl_ctx_from_view(DF_Window *ws, DF_View *view);
 
 ////////////////////////////////
 //~ rjf: Command Parameters From Context
@@ -998,13 +983,13 @@ internal void df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdLis
 //~ rjf: Eval Viz
 
 internal String8 df_eval_escaped_from_raw_string(Arena *arena, String8 raw);
-internal String8List df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, TG_Graph *graph, RDI_Parsed *rdi, DF_CtrlCtx *ctrl_ctx, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, DF_Eval eval, TG_Member *opt_member, DF_CfgTable *cfg_table);
-internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks);
+internal String8List df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table);
+internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks);
 
 ////////////////////////////////
 //~ rjf: Hover Eval
 
-internal void df_set_hover_eval(DF_Window *ws, Vec2F32 pos, DF_CtrlCtx ctrl_ctx, DF_Entity *file, TxtPt pt, U64 vaddr, String8 string);
+internal void df_set_hover_eval(DF_Window *ws, Vec2F32 pos, DF_Entity *file, TxtPt pt, U64 vaddr, String8 string);
 
 ////////////////////////////////
 //~ rjf: Auto-Complete Lister
@@ -1016,7 +1001,7 @@ internal void df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItem
 
 internal String8 df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal DF_AutoCompListerParams df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
-internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_CtrlCtx ctrl_ctx, DF_AutoCompListerParams *params, String8 input, U64 cursor_off);
+internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_AutoCompListerParams *params, String8 input, U64 cursor_off);
 
 ////////////////////////////////
 //~ rjf: Search Strings
@@ -1085,8 +1070,8 @@ internal void df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt p
 
 internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions);
-internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
-internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
+internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
+internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
 
 internal B32 df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 

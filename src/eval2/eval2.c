@@ -918,6 +918,7 @@ e_push_expr(Arena *arena, E_ExprKind kind, void *location)
   e->first = e->last = e->next = &e_expr_nil;
   e->location = location;
   e->kind = kind;
+  return e;
 }
 
 internal void
@@ -927,7 +928,13 @@ e_expr_push_child(E_Expr *parent, E_Expr *child)
 }
 
 ////////////////////////////////
-//~ rjf: Context Selection Functions (Required For All Subsequent APIs)
+//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
+
+internal E_Ctx *
+e_ctx(void)
+{
+  return e_state->ctx;
+}
 
 internal void
 e_select_ctx(E_Ctx *ctx)
@@ -945,6 +952,21 @@ e_select_ctx(E_Ctx *ctx)
   e_state->cons_key_slots_count = 256;
   e_state->cons_content_slots = push_array(e_state->arena, E_ConsTypeSlot, e_state->cons_content_slots_count);
   e_state->cons_key_slots = push_array(e_state->arena, E_ConsTypeSlot, e_state->cons_key_slots_count);
+}
+
+internal U32
+e_idx_from_rdi(RDI_Parsed *rdi)
+{
+  U32 result = 0;
+  for(U64 idx = 0; idx < e_state->ctx->rdis_count; idx += 1)
+  {
+    if(e_state->ctx->rdis[idx] == rdi)
+    {
+      result = (U32)idx;
+      break;
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -972,8 +994,15 @@ e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx)
 {
   E_TypeKey key = {E_TypeKeyKind_Ext};
   key.u32[0] = (U32)kind;
-  key.u32[1] = type_idx;
-  key.u32[2] = rdi_idx;
+  if(E_TypeKind_FirstBasic <= kind && kind <= E_TypeKind_LastBasic)
+  {
+    key.kind = E_TypeKeyKind_Basic;
+  }
+  else
+  {
+    key.u32[1] = type_idx;
+    key.u32[2] = rdi_idx;
+  }
   return key;
 }
 
@@ -1138,7 +1167,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
         RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
         if(rdi_type->kind != RDI_TypeKind_NULL)
         {
-          E_TypeKind kind = e_kind_from_rdi_type_kind(rdi_type->kind);
+          E_TypeKind kind = e_type_kind_from_rdi(rdi_type->kind);
           
           //- rjf: record types => unpack name * members & produce
           if(RDI_TypeKind_FirstRecord <= rdi_type->kind && rdi_type->kind <= RDI_TypeKind_LastRecord)
@@ -1165,9 +1194,9 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                   RDI_Member *src = rdi_element_from_name_idx(rdi, Members, member_idx);
                   E_TypeKind member_type_kind = E_TypeKind_Null;
                   RDI_TypeNode *member_type = rdi_element_from_name_idx(rdi, TypeNodes, src->type_idx);
-                  member_type_kind = e_kind_from_rdi_type_kind(member_type->kind);
+                  member_type_kind = e_type_kind_from_rdi(member_type->kind);
                   E_Member *dst = &members[member_idx-udt->member_first];
-                  dst->kind     = e_member_kind_from_rdi_member_kind(src->kind);
+                  dst->kind     = e_member_kind_from_rdi(src->kind);
                   dst->type_key = e_type_key_ext(member_type_kind, src->type_idx, rdi_idx);
                   dst->name.str = rdi_string_from_idx(rdi, src->name_string_idx, &dst->name.size);
                   dst->off      = (U64)src->off;
@@ -1196,7 +1225,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             if(rdi_type->user_defined.direct_type_idx < type_node_idx)
             {
               RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
-              E_TypeKind direct_type_kind = e_kind_from_rdi_type_kind(direct_type_node->kind);
+              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
               direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_idx);
             }
             
@@ -1239,7 +1268,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             if(rdi_type->constructed.direct_type_idx < type_node_idx)
             {
               RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.direct_type_idx);
-              E_TypeKind direct_type_kind = e_kind_from_rdi_type_kind(direct_type_node->kind);
+              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
               direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->constructed.direct_type_idx, rdi_idx);
               direct_type_is_good = 1;
               direct_type_byte_size = (U64)direct_type_node->byte_size;
@@ -1303,7 +1332,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                     if(param_type_idx < type_node_idx)
                     {
                       RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
-                      E_TypeKind param_kind = e_kind_from_rdi_type_kind(param_type_node->kind);
+                      E_TypeKind param_kind = e_type_kind_from_rdi(param_type_node->kind);
                       type->param_type_keys[idx] = e_type_key_ext(param_kind, param_type_idx, rdi_idx);
                     }
                     else
@@ -1336,7 +1365,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                     if(param_type_idx < type_node_idx)
                     {
                       RDI_TypeNode *param_type_node = rdi_element_from_name_idx(rdi, TypeNodes, param_type_idx);
-                      E_TypeKind param_kind = e_kind_from_rdi_type_kind(param_type_node->kind);
+                      E_TypeKind param_kind = e_type_kind_from_rdi(param_type_node->kind);
                       type->param_type_keys[idx] = e_type_key_ext(param_kind, param_type_idx, rdi_idx);
                     }
                     else
@@ -1359,7 +1388,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 if(rdi_type->constructed.owner_type_idx < type_node_idx)
                 {
                   RDI_TypeNode *owner_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->constructed.owner_type_idx);
-                  E_TypeKind owner_type_kind = e_kind_from_rdi_type_kind(owner_type_node->kind);
+                  E_TypeKind owner_type_kind = e_type_kind_from_rdi(owner_type_node->kind);
                   owner_type_key = e_type_key_ext(owner_type_kind, rdi_type->constructed.owner_type_idx, rdi_idx);
                 }
                 type = push_array(arena, E_Type, 1);
@@ -1384,7 +1413,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             if(rdi_type->user_defined.direct_type_idx < type_node_idx)
             {
               RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->user_defined.direct_type_idx);
-              E_TypeKind direct_type_kind = e_kind_from_rdi_type_kind(direct_type_node->kind);
+              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
               direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->user_defined.direct_type_idx, rdi_idx);
               direct_type_byte_size = direct_type_node->byte_size;
             }
@@ -1406,7 +1435,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             if(rdi_type->bitfield.direct_type_idx < type_node_idx)
             {
               RDI_TypeNode *direct_type_node = rdi_element_from_name_idx(rdi, TypeNodes, rdi_type->bitfield.direct_type_idx);
-              E_TypeKind direct_type_kind = e_kind_from_rdi_type_kind(direct_type_node->kind);
+              E_TypeKind direct_type_kind = e_type_kind_from_rdi(direct_type_node->kind);
               direct_type_key = e_type_key_ext(direct_type_kind, rdi_type->bitfield.direct_type_idx, rdi_idx);
               direct_type_byte_size = direct_type_node->byte_size;
             }
@@ -1665,6 +1694,38 @@ e_type_owner_from_key(E_TypeKey key)
       result = type->owner_type_key;
       scratch_end(scratch);
     }break;
+  }
+  return result;
+}
+
+internal E_TypeKey
+e_type_ptee_from_key(E_TypeKey key)
+{
+  E_TypeKey result = key;
+  B32 passed_ptr = 0;
+  for(;;)
+  {
+    E_TypeKind kind = e_type_kind_from_key(result);
+    result = e_type_direct_from_key(result);
+    if(kind == E_TypeKind_Ptr || kind == E_TypeKind_LRef || kind == E_TypeKind_RRef)
+    {
+      passed_ptr = 1;
+    }
+    E_TypeKind next_kind = e_type_kind_from_key(result);
+    if(passed_ptr &&
+       next_kind != E_TypeKind_IncompleteStruct &&
+       next_kind != E_TypeKind_IncompleteUnion &&
+       next_kind != E_TypeKind_IncompleteEnum &&
+       next_kind != E_TypeKind_IncompleteClass &&
+       next_kind != E_TypeKind_Alias &&
+       next_kind != E_TypeKind_Modifier)
+    {
+      break;
+    }
+    if(kind == E_TypeKind_Null)
+    {
+      break;
+    }
   }
   return result;
 }
@@ -2369,6 +2430,30 @@ e_type_from_expr(E_Expr *expr)
   return result;
 }
 
+internal void
+e_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, E_String2ExprMap *map, E_Expr *expr)
+{
+  switch(expr->kind)
+  {
+    default:
+    {
+      for(E_Expr *child = expr->first; child != &e_expr_nil; child = child->next)
+      {
+        e_push_leaf_ident_exprs_from_expr__in_place(arena, map, child);
+      }
+    }break;
+    case E_ExprKind_Define:
+    {
+      E_Expr *exprl = expr->first;
+      E_Expr *exprr = exprl->next;
+      if(exprl->kind == E_ExprKind_LeafIdent)
+      {
+        e_string2expr_map_insert(arena, map, exprl->string, exprr);
+      }
+    }break;
+  }
+}
+
 internal E_Parse
 e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens)
 {
@@ -2814,7 +2899,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U32 match_idx = matches[matches_count-1];
                 RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, global_var->voff);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_ModuleOff, global_var->voff);
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = global_var->type_idx;
@@ -2851,7 +2936,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U32 match_idx = matches[0];
                 RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, thread_var->tls_off);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_TLSOff, thread_var->tls_off);
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = thread_var->type_idx;
@@ -2890,7 +2975,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
                 U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
                 loc_kind = RDI_LocationKind_ValBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = procedure->type_idx;
@@ -2977,9 +3062,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 E_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(e_state->ctx->arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_Add, 0);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode = E_Mode_Addr;
                 atom->type_key = type_key;
@@ -2990,10 +3075,10 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 E_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(e_state->ctx->arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(e_state->ctx->arch)/8);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_Add, 0);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(e_state->ctx->arch)/8);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode = E_Mode_Addr;
                 atom->type_key = type_key;
@@ -3007,7 +3092,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg.reg_code, byte_size, byte_pos);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
+                e_oplist_push(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode = E_Mode_Value;
                 atom->type_key = type_key;
@@ -4538,10 +4623,10 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
 ////////////////////////////////
 //~ rjf: Interpretation Functions
 
-internal E_Result
+internal E_Interpretation
 e_interpret(String8 bytecode)
 {
-  E_Result result = {0};
+  E_Interpretation result = {0};
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: allocate stack
@@ -4558,7 +4643,7 @@ e_interpret(String8 bytecode)
     RDI_EvalOp op = (RDI_EvalOp)*ptr;
     if(op >= RDI_EvalOp_COUNT)
     {
-      result.code = E_ResultCode_BadOp;
+      result.code = E_InterpretationCode_BadOp;
       goto done;
     }
     U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
@@ -4571,7 +4656,7 @@ e_interpret(String8 bytecode)
       U8 *next_ptr = ptr + decode_size;
       if(next_ptr > opl)
       {
-        result.code = E_ResultCode_BadOp;
+        result.code = E_InterpretationCode_BadOp;
         goto done;
       }
       // TODO(rjf): guarantee 8 bytes padding after the end of serialized
@@ -4592,7 +4677,7 @@ e_interpret(String8 bytecode)
       U32 pop_count = RDI_POPN_FROM_CTRLBITS(ctrlbits);
       if(pop_count > stack_count)
       {
-        result.code = E_ResultCode_BadOp;
+        result.code = E_InterpretationCode_BadOp;
         goto done;
       }
       if(pop_count <= stack_count)
@@ -4638,7 +4723,7 @@ e_interpret(String8 bytecode)
         }
         if(!good_read)
         {
-          result.code = E_ResultCode_BadMemRead;
+          result.code = E_InterpretationCode_BadMemRead;
           goto done;
         }
       }break;
@@ -4658,7 +4743,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadRegRead;
+          result.code = E_InterpretationCode_BadRegRead;
           goto done;
         }
       }break;
@@ -4673,7 +4758,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadRegRead;
+          result.code = E_InterpretationCode_BadRegRead;
           goto done;
         }
       }break;
@@ -4686,7 +4771,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadFrameBase;
+          result.code = E_InterpretationCode_BadFrameBase;
           goto done;
         }
       }break;
@@ -4699,7 +4784,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadModuleBase;
+          result.code = E_InterpretationCode_BadModuleBase;
           goto done;
         }
       }break;
@@ -4712,7 +4797,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadTLSBase;
+          result.code = E_InterpretationCode_BadTLSBase;
           goto done;
         }
       }break;
@@ -4827,7 +4912,7 @@ e_interpret(String8 bytecode)
           }
           else
           {
-            result.code = E_ResultCode_DivideByZero;
+            result.code = E_InterpretationCode_DivideByZero;
             goto done;
           }
         }
@@ -4839,7 +4924,7 @@ e_interpret(String8 bytecode)
           }
           else
           {
-            result.code = E_ResultCode_DivideByZero;
+            result.code = E_InterpretationCode_DivideByZero;
             goto done;
           }
         }
@@ -4852,13 +4937,13 @@ e_interpret(String8 bytecode)
           }
           else
           {
-            result.code = E_ResultCode_DivideByZero;
+            result.code = E_InterpretationCode_DivideByZero;
             goto done;
           }
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4875,7 +4960,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4889,7 +4974,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4906,7 +4991,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4920,7 +5005,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4934,7 +5019,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4948,7 +5033,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4962,7 +5047,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4976,7 +5061,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -4990,7 +5075,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -5004,7 +5089,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -5039,7 +5124,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -5064,7 +5149,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -5089,7 +5174,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -5114,7 +5199,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOpTypes;
+          result.code = E_InterpretationCode_BadOpTypes;
           goto done;
         }
       }break;
@@ -5213,7 +5298,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOp;
+          result.code = E_InterpretationCode_BadOp;
           goto done;
         }
       }break;
@@ -5238,7 +5323,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_BadOp;
+          result.code = E_InterpretationCode_BadOp;
           goto done;
         }
       }break;
@@ -5256,7 +5341,7 @@ e_interpret(String8 bytecode)
         }
         else
         {
-          result.code = E_ResultCode_InsufficientStackSpace;
+          result.code = E_InterpretationCode_InsufficientStackSpace;
           goto done;
         }
       }
@@ -5268,11 +5353,201 @@ e_interpret(String8 bytecode)
   {
     result.value = stack[0];
   }
-  else if(result.code == E_ResultCode_Good)
+  else if(result.code == E_InterpretationCode_Good)
   {
-    result.code = E_ResultCode_MalformedBytecode;
+    result.code = E_InterpretationCode_MalformedBytecode;
   }
   
   scratch_end(scratch);
   return result;
+}
+
+////////////////////////////////
+//~ rjf: Bundled Evaluation Functions
+
+internal E_Eval
+e_eval_from_string(Arena *arena, String8 string)
+{
+  E_TokenArray     tokens   = e_token_array_from_text(arena, string);
+  E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, &tokens);
+  E_IRTreeAndType  irtree   = e_irtree_and_type_from_expr(arena, parse.expr);
+  E_OpList         oplist   = e_oplist_from_irtree(arena, irtree.root);
+  String8          bytecode = e_bytecode_from_oplist(arena, &oplist);
+  E_Interpretation interp   = e_interpret(bytecode);
+  E_Eval eval =
+  {
+    .value    = interp.value,
+    .mode     = irtree.mode,
+    .type_key = irtree.type_key,
+    .code     = interp.code,
+  };
+  e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
+  e_msg_list_concat_in_place(&eval.msgs, &irtree.msgs);
+  if(E_InterpretationCode_Good < eval.code && eval.code < E_InterpretationCode_COUNT)
+  {
+    e_msg(arena, &eval.msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[eval.code]);
+  }
+  return eval;
+}
+
+internal E_Eval
+e_autoresolved_eval_from_eval(E_Eval eval)
+{
+  if(e_state->ctx->rdis_count > 0 &&
+     e_state->ctx->module_base != 0 &&
+     (eval.mode == E_Mode_Value || eval.mode == E_Mode_Reg) &&
+     (e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S64)) ||
+      e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_U64)) ||
+      e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S32)) ||
+      e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_U32))))
+  {
+    U64 vaddr = eval.value.u64;
+    U64 voff = vaddr - e_state->ctx->module_base[0];
+    RDI_Parsed *rdi = e_state->ctx->rdis[0];
+    RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
+    RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
+    RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
+    U32 string_idx = 0;
+    if(string_idx == 0) { string_idx = procedure->name_string_idx; }
+    if(string_idx == 0) { string_idx = gvar->name_string_idx; }
+    if(string_idx != 0)
+    {
+      eval.type_key = e_type_key_cons(E_TypeKind_Ptr, e_type_key_basic(E_TypeKind_Void), 0);
+    }
+  }
+  return eval;
+}
+
+internal E_Eval
+e_dynamically_typed_eval_from_eval(E_Eval eval)
+{
+  E_TypeKey type_key = eval.type_key;
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  if(e_state->ctx->memory_read != 0 &&
+     e_state->ctx->module_base != 0 &&
+     type_kind == E_TypeKind_Ptr)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    E_TypeKey ptee_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(type_key)));
+    E_TypeKind ptee_type_kind = e_type_kind_from_key(ptee_type_key);
+    if(ptee_type_kind == E_TypeKind_Struct || ptee_type_kind == E_TypeKind_Class)
+    {
+      E_Type *ptee_type = e_type_from_key(scratch.arena, ptee_type_key);
+      B32 has_vtable = 0;
+      for(U64 idx = 0; idx < ptee_type->count; idx += 1)
+      {
+        if(ptee_type->members[idx].kind == E_MemberKind_VirtualMethod)
+        {
+          has_vtable = 1;
+          break;
+        }
+      }
+      if(has_vtable)
+      {
+        U64 ptr_vaddr = eval.value.u64;
+        U64 addr_size = bit_size_from_arch(e_state->ctx->arch)/8;
+        U64 class_base_vaddr = 0;
+        U64 vtable_vaddr = 0;
+        if(e_state->ctx->memory_read(e_state->ctx->memory_read_user_data, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
+           e_state->ctx->memory_read(e_state->ctx->memory_read_user_data, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
+        {
+          U32 rdi_idx = 0;
+          RDI_Parsed *rdi = 0;
+          U64 module_base = 0;
+          for(U64 idx = 0; idx < e_state->ctx->rdis_count; idx += 1)
+          {
+            if(contains_1u64(e_state->ctx->rdis_vaddr_ranges[idx], vtable_vaddr))
+            {
+              rdi_idx = (U32)idx;
+              rdi = e_state->ctx->rdis[idx];
+              module_base = e_state->ctx->rdis_vaddr_ranges[idx].min;
+              break;
+            }
+          }
+          if(rdi != 0)
+          {
+            U64 vtable_voff = vtable_vaddr - module_base;
+            U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, vtable_voff);
+            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
+            if(global_var->link_flags & RDI_LinkFlag_TypeScoped)
+            {
+              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
+              RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
+              E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, rdi_idx);
+              E_TypeKey ptr_to_derived_type_key = e_type_key_cons(E_TypeKind_Ptr, derived_type_key, 0);
+              eval.type_key = ptr_to_derived_type_key;
+            }
+          }
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  return eval;
+}
+
+internal E_Eval
+e_value_eval_from_eval(E_Eval eval)
+{
+  switch(eval.mode)
+  {
+    //- rjf: no work to be done. already in value mode
+    default:
+    case E_Mode_Value:{}break;
+    
+    //- rjf: address => resolve into value, if leaf
+    case E_Mode_Addr:
+    if(e_state->ctx->memory_read != 0)
+    {
+      E_TypeKey type_key = eval.type_key;
+      E_TypeKind type_kind = e_type_kind_from_key(type_key);
+      U64 type_byte_size = e_type_byte_size_from_key(type_key);
+      Rng1U64 value_vaddr_range = r1u64(eval.value.u64, eval.value.u64 + type_byte_size);
+      MemoryZeroStruct(&eval.value);
+      if(!e_type_key_match(type_key, e_type_key_zero()) &&
+         type_byte_size <= sizeof(E_Value) &&
+         e_state->ctx->memory_read(e_state->ctx->memory_read_user_data, &eval.value, value_vaddr_range))
+      {
+        eval.mode = E_Mode_Value;
+        
+        // rjf: mask&shift, for bitfields
+        if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
+        {
+          Temp scratch = scratch_begin(0, 0);
+          E_Type *type = e_type_from_key(scratch.arena, type_key);
+          U64 valid_bits_mask = 0;
+          for(U64 idx = 0; idx < type->count; idx += 1)
+          {
+            valid_bits_mask |= (1<<idx);
+          }
+          eval.value.u64 = eval.value.u64 >> type->off;
+          eval.value.u64 = eval.value.u64 & valid_bits_mask;
+          eval.type_key = type->direct_type_key;
+          scratch_end(scratch);
+        }
+        
+        // rjf: manually sign-extend
+        switch(type_kind)
+        {
+          default: break;
+          case E_TypeKind_S8:  {eval.value.s64 = (S64)*((S8 *)&eval.value.u64);}break;
+          case E_TypeKind_S16: {eval.value.s64 = (S64)*((S16 *)&eval.value.u64);}break;
+          case E_TypeKind_S32: {eval.value.s64 = (S64)*((S32 *)&eval.value.u64);}break;
+        }
+      }
+    }break;
+    
+    //- rjf: register => resolve into value
+    case E_Mode_Reg:
+    {
+      E_TypeKey type_key = eval.type_key;
+      U64 type_byte_size = e_type_byte_size_from_key(type_key);
+      U64 reg_off = eval.value.u64;
+      MemoryZeroStruct(&eval.value);
+      MemoryCopy(&eval.value.u256, ((U8 *)e_state->ctx->reg_data + reg_off), Min(type_byte_size, sizeof(U64)*4));
+      eval.mode = E_Mode_Value;
+    }break;
+  }
+  
+  return eval;
 }

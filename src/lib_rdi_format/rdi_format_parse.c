@@ -643,6 +643,16 @@ rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
   return procedure;
 }
 
+//- global variables
+
+RDI_PROC RDI_GlobalVariable *
+rdi_global_variable_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
+{
+  RDI_U32 idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, voff);
+  RDI_GlobalVariable *gvar = rdi_element_from_name_idx(rdi, GlobalVariables, idx);
+  return gvar;
+}
+
 //- units
 
 RDI_PROC RDI_Unit *

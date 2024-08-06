@@ -121,25 +121,25 @@ E_ExprKind_LeafIdent,
 E_ExprKind_COUNT,
 } E_ExprKindEnum;
 
-typedef enum E_ResultCode
+typedef enum E_InterpretationCode
 {
-E_ResultCode_Good,
-E_ResultCode_DivideByZero,
-E_ResultCode_BadOp,
-E_ResultCode_BadOpTypes,
-E_ResultCode_BadMemRead,
-E_ResultCode_BadRegRead,
-E_ResultCode_BadFrameBase,
-E_ResultCode_BadModuleBase,
-E_ResultCode_BadTLSBase,
-E_ResultCode_InsufficientStackSpace,
-E_ResultCode_MalformedBytecode,
-E_ResultCode_COUNT,
-} E_ResultCode;
+E_InterpretationCode_Good,
+E_InterpretationCode_DivideByZero,
+E_InterpretationCode_BadOp,
+E_InterpretationCode_BadOpTypes,
+E_InterpretationCode_BadMemRead,
+E_InterpretationCode_BadRegRead,
+E_InterpretationCode_BadFrameBase,
+E_InterpretationCode_BadModuleBase,
+E_InterpretationCode_BadTLSBase,
+E_InterpretationCode_InsufficientStackSpace,
+E_InterpretationCode_MalformedBytecode,
+E_InterpretationCode_COUNT,
+} E_InterpretationCode;
 
 C_LINKAGE_BEGIN
 extern String8 e_expr_kind_strings[40];
-extern String8 e_result_code_display_strings[11];
+extern String8 e_interpretation_code_display_strings[11];
 extern String8 e_expr_op_strings[40];
 extern U8 e_kind_basic_byte_size_table[54];
 extern String8 e_kind_basic_string_table[54];

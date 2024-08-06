@@ -299,27 +299,6 @@ struct E_OpList
 };
 
 ////////////////////////////////
-//~ rjf: Evaluation Types
-
-typedef union E_Value E_Value;
-union E_Value
-{
-  U64 u256[4];
-  U64 u128[2];
-  U64 u64;
-  S64 s64;
-  F64 f64;
-  F32 f32;
-};
-
-typedef struct E_Result E_Result;
-struct E_Result
-{
-  E_Value value;
-  E_ResultCode code;
-};
-
-////////////////////////////////
 //~ rjf: Map Types
 
 //- rjf: string -> num
@@ -416,6 +395,7 @@ struct E_Ctx
   
   // rjf: debug info
   RDI_Parsed **rdis;
+  Rng1U64 *rdis_vaddr_ranges;
   U64 rdis_count;
   
   // rjf: identifier resolution maps
@@ -464,8 +444,45 @@ struct E_Parse
 };
 
 ////////////////////////////////
+//~ rjf: Bytecode Interpretation Types
+
+typedef union E_Value E_Value;
+union E_Value
+{
+  U64 u512[8];
+  U64 u256[4];
+  U64 u128[2];
+  U64 u64;
+  S64 s64;
+  F64 f64;
+  F32 f32;
+};
+
+typedef struct E_Interpretation E_Interpretation;
+struct E_Interpretation
+{
+  E_Value value;
+  E_InterpretationCode code;
+};
+
+////////////////////////////////
+//~ rjf: Bundled Evaluation Path Types
+
+typedef struct E_Eval E_Eval;
+struct E_Eval
+{
+  E_Value value;
+  E_Mode mode;
+  E_TypeKey type_key;
+  E_InterpretationCode code;
+  E_MsgList msgs;
+};
+
+////////////////////////////////
 //~ rjf: Globals
 
+global read_only E_String2NumMap e_string2num_map_nil = {0};
+global read_only E_String2ExprMap e_string2expr_map_nil = {0};
 global read_only E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil};
 global read_only E_Type e_type_nil = {E_TypeKind_Null};
 global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
@@ -540,9 +557,11 @@ internal E_Expr *e_push_expr(Arena *arena, E_ExprKind kind, void *location);
 internal void e_expr_push_child(E_Expr *parent, E_Expr *child);
 
 ////////////////////////////////
-//~ rjf: Context Selection Functions (Required For All Subsequent APIs)
+//~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
 
+internal E_Ctx *e_ctx(void);
 internal void e_select_ctx(E_Ctx *ctx);
+internal U32 e_idx_from_rdi(RDI_Parsed *rdi);
 
 ////////////////////////////////
 //~ rjf: Type Operation Functions
@@ -564,6 +583,7 @@ internal U64 e_type_byte_size_from_key(E_TypeKey key);
 internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);
 internal E_TypeKey e_type_direct_from_key(E_TypeKey key);
 internal E_TypeKey e_type_owner_from_key(E_TypeKey key);
+internal E_TypeKey e_type_ptee_from_key(E_TypeKey key);
 internal E_TypeKey e_type_unwrap_enum(E_TypeKey key);
 internal E_TypeKey e_type_unwrap(E_TypeKey key);
 internal E_TypeKey e_type_promote(E_TypeKey key);
@@ -584,6 +604,7 @@ internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
 
 internal E_TypeKey e_leaf_type_from_name(String8 name);
 internal E_TypeKey e_type_from_expr(E_Expr *expr);
+internal void e_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, E_String2ExprMap *map, E_Expr *expr);
 internal E_Parse e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
 internal E_Parse e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *tokens, S64 max_precedence);
 internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
@@ -626,6 +647,14 @@ internal String8 e_bytecode_from_oplist(Arena *arena, E_OpList *oplist);
 ////////////////////////////////
 //~ rjf: Interpretation Functions
 
-internal E_Result e_interpret(String8 bytecode);
+internal E_Interpretation e_interpret(String8 bytecode);
+
+////////////////////////////////
+//~ rjf: Bundled Evaluation Functions
+
+internal E_Eval e_eval_from_string(Arena *arena, String8 string);
+internal E_Eval e_autoresolved_eval_from_eval(E_Eval eval);
+internal E_Eval e_dynamically_typed_eval_from_eval(E_Eval eval);
+internal E_Eval e_value_eval_from_eval(E_Eval eval);
 
 #endif // EVAL_H

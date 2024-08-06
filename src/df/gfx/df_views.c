@@ -464,13 +464,11 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   HS_Scope *hs_scope = hs_scope_open();
-  DI_Scope *di_scope = di_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
   
   //////////////////////////////
   //- rjf: extract invariants
   //
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   F32 code_font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
   F32 code_tab_size = f_column_size_from_tag_size(code_font, code_font_size)*df_setting_val_from_code(ws, DF_SettingCode_TabWidth).s32;
@@ -481,15 +479,8 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
   Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim);
   S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
-  
-  //////////////////////////////
-  //- rjf: unpack ctrl ctx & make parse ctx
-  //
-  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
-  U64 unwind_count = ctrl_ctx.unwind_count;
-  U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, process, rip_vaddr);
   
   //////////////////////////////
   //- rjf: determine visible line range / count
@@ -616,14 +607,14 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     ProfScope("find live threads mapping to this file")
     {
       DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
-      DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
+      DF_Entity *selected_thread = df_entity_from_handle(df_interact_regs()->thread);
       DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
       for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
       {
         DF_Entity *thread = thread_n->entity;
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
-        U64 inline_depth = (thread == selected_thread) ? ctrl_ctx.inline_depth : 0;
+        U64 unwind_count = (thread == selected_thread) ? df_interact_regs()->unwind_count : 0;
+        U64 inline_depth = (thread == selected_thread) ? df_interact_regs()->inline_depth : 0;
         U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         DF_Entity *module = df_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
@@ -671,12 +662,12 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     // rjf: find live threads mapping to disasm
     if(dasm_lines) ProfScope("find live threads mapping to this disassembly")
     {
-      DF_Entity *selected_thread = df_entity_from_handle(ctrl_ctx.thread);
+      DF_Entity *selected_thread = df_entity_from_handle(df_interact_regs()->thread);
       DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
       for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
       {
         DF_Entity *thread = thread_n->entity;
-        U64 unwind_count = (thread == selected_thread) ? ctrl_ctx.unwind_count : 0;
+        U64 unwind_count = (thread == selected_thread) ? df_interact_regs()->unwind_count : 0;
         U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
         if(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process) == process && contains_1u64(dasm_vaddr_range, rip_vaddr))
         {
@@ -945,7 +936,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     DF_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      sig = df_code_slicef(ws, &ctrl_ctx, &parse_ctx, &code_slice_params, &view->cursor, &view->mark, &cv->preferred_column, "txt_view_%p", view);
+      sig = df_code_slicef(ws, &code_slice_params, &view->cursor, &view->mark, &cv->preferred_column, "txt_view_%p", view);
     }
     
     //- rjf: press code slice? -> focus panel
@@ -1159,7 +1150,6 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
   }
   
   txt_scope_close(txt_scope);
-  di_scope_close(di_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
@@ -1301,7 +1291,7 @@ df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt)
 //- rjf: table coordinates -> strings
 
 internal String8
-df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, TG_Graph *graph, RDI_Parsed *rdi, DF_EvalVizRow *row, DF_WatchViewColumnKind col_kind, B32 editable)
+df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumnKind col_kind, B32 editable)
 {
   String8 result = {0};
   switch(col_kind)
@@ -1309,7 +1299,7 @@ df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, TG_Graph 
     default:{}break;
     case DF_WatchViewColumnKind_Expr:    {result = editable ? row->edit_expr : row->display_expr;}break;
     case DF_WatchViewColumnKind_Value:   {result = editable ? row->edit_value : row->display_value;}break;
-    case DF_WatchViewColumnKind_Type:    {result = !tg_key_match(row->eval.type_key, tg_key_zero()) ? tg_string_from_key(arena, graph, rdi, row->eval.type_key) : str8_zero();}break;
+    case DF_WatchViewColumnKind_Type:    {result = !e_type_key_match(row->eval.type_key, e_type_key_zero()) ? e_type_string_from_key(arena, row->eval.type_key) : str8_zero();}break;
     case DF_WatchViewColumnKind_ViewRule:{result = df_eval_view_rule_from_key(ev, row->key);}break;
   }
   return result;
@@ -1340,7 +1330,7 @@ df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint p
 //- rjf: windowed watch tree visualization (both single-line and multi-line)
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, FZY_Scope *fzy_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_WatchViewState *ews)
+df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, FZY_Scope *fzy_scope, DF_View *view, DF_WatchViewState *ews)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -1348,7 +1338,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ews);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   String8 filter = str8(view->query_buffer, view->query_string_size);
-  FZY_Target fzy_target = FZY_Target_UDTs;
+  RDI_SectionKind fzy_target = RDI_SectionKind_UDTs;
   switch(ews->fill_kind)
   {
     ////////////////////////////
@@ -1365,7 +1355,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
         {
           DF_ExpandKey parent_key = df_parent_expand_key_from_eval_root(root);
           DF_ExpandKey key = df_expand_key_from_eval_root(root);
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -1376,7 +1366,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
     //
     case DF_WatchViewFillKind_Registers:
     {
-      DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
+      DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
       Architecture arch = df_architecture_from_entity(thread);
       U64 reg_count = regs_reg_code_count_from_architecture(arch);
       String8 *reg_strings = regs_reg_code_string_table_from_architecture(arch);
@@ -1391,7 +1381,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
         {
           DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -1403,7 +1393,7 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
         {
           DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -1414,18 +1404,18 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
     //
     case DF_WatchViewFillKind_Locals:
     {
-      EVAL_String2NumMapNodeArray nodes = eval_string2num_map_node_array_from_map(scratch.arena, parse_ctx->locals_map);
-      eval_string2num_map_node_array_sort__in_place(&nodes);
+      E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_state->ctx->locals_map);
+      e_string2num_map_node_array_sort__in_place(&nodes);
       for(U64 idx = 0; idx < nodes.count; idx += 1)
       {
-        EVAL_String2NumMapNode *n = nodes.v[idx];
+        E_String2NumMapNode *n = nodes.v[idx];
         String8 root_expr_string = n->string;
         FuzzyMatchRangeList matches = fuzzy_match_find(arena, filter, root_expr_string);
         if(matches.count == matches.needle_part_count)
         {
           DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
-          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, ctrl_ctx, parse_ctx, macro_map, eval_view, root_expr_string, parent_key, key);
+          DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(arena, di_scope, eval_view, root_expr_string, parent_key, key);
           df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
         }
       }
@@ -1434,18 +1424,23 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
     ////////////////////////////
     //- rjf: debug info table fill -> build split debug info table blocks
     //
-    case DF_WatchViewFillKind_Globals:      fzy_target = FZY_Target_GlobalVariables; goto dbgi_table;
-    case DF_WatchViewFillKind_ThreadLocals: fzy_target = FZY_Target_ThreadVariables; goto dbgi_table;
-    case DF_WatchViewFillKind_Types:        fzy_target = FZY_Target_UDTs;            goto dbgi_table;
-    case DF_WatchViewFillKind_Procedures:   fzy_target = FZY_Target_Procedures;      goto dbgi_table;
+    case DF_WatchViewFillKind_Globals:      fzy_target = RDI_SectionKind_GlobalVariables; goto dbgi_table;
+    case DF_WatchViewFillKind_ThreadLocals: fzy_target = RDI_SectionKind_ThreadVariables; goto dbgi_table;
+    case DF_WatchViewFillKind_Types:        fzy_target = RDI_SectionKind_UDTs;            goto dbgi_table;
+    case DF_WatchViewFillKind_Procedures:   fzy_target = RDI_SectionKind_Procedures;      goto dbgi_table;
     dbgi_table:;
     {
+      U64 endt_us = os_now_microseconds()+200;
+      
       //- rjf: unpack context
-      DF_Entity *thread = df_entity_from_handle(ctrl_ctx->thread);
-      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-      U64 thread_rip_unwind_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx->unwind_count);
-      DF_Entity *module = df_module_from_process_vaddr(process, thread_rip_unwind_vaddr);
-      DI_Key dbgi_key = df_dbgi_key_from_module(module);
+      DI_KeyList dbgi_keys_list = df_push_active_dbgi_key_list(scratch.arena);
+      DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
+      U64 rdis_count = dbgi_keys.count;
+      RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
+      for(U64 idx = 0; idx < rdis_count; idx += 1)
+      {
+        rdis[idx] = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], endt_us);
+      }
       
       //- rjf: calculate top-level keys, expand root-level, grab root expansion node
       DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
@@ -1456,12 +1451,8 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
       //- rjf: query all filtered items from dbgi searching system
       U128 fuzzy_search_key = {(U64)view, df_hash_from_string(str8_struct(&view))};
       B32 items_stale = 0;
-      FZY_Params params = {fzy_target};
-      {
-        params.dbgi_keys.count = 1;
-        params.dbgi_keys.v = &dbgi_key;
-      }
-      FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &params, filter, os_now_microseconds()+100, &items_stale);
+      FZY_Params params = {fzy_target, dbgi_keys};
+      FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &params, filter, endt_us, &items_stale);
       if(items_stale)
       {
         df_gfx_request_frame();
@@ -1537,11 +1528,30 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
       }
       for(U64 sub_expand_idx = 0; sub_expand_idx < sub_expand_keys_count; sub_expand_idx += 1)
       {
+        FZY_Item *item = &items.v[sub_expand_item_idxs[sub_expand_idx]];
+        
         // rjf: form split: truncate & complete last block; begin next block
         last_vb = df_eval_viz_block_split_and_continue(arena, &blocks, last_vb, sub_expand_item_idxs[sub_expand_idx]);
         
+        // rjf: grab rdi for this item
+        RDI_Parsed *rdi = &di_rdi_parsed_nil;
+        U64 base_idx = 0;
+        {
+          for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
+          {
+            U64 procedures_count = 0;
+            rdi_section_raw_table_from_kind(rdis[rdi_idx], RDI_SectionKind_Procedures, &procedures_count);
+            if(base_idx <= item->idx && item->idx < base_idx + procedures_count)
+            {
+              rdi = rdis[rdi_idx];
+              break;
+            }
+            base_idx += procedures_count;
+          }
+        }
+        
         // rjf: grab name for the expanded row
-        String8 name = fzy_item_string_from_rdi_target_element_idx(parse_ctx->rdi, fzy_target, sub_expand_keys[sub_expand_idx].child_num);
+        String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_target, sub_expand_keys[sub_expand_idx].child_num-base_idx);
         
         // rjf: recurse for sub-expansion
         {
@@ -1553,8 +1563,8 @@ df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, F
               df_cfg_table_push_unparsed_string(arena, &child_cfg, view_rule_string, DF_CfgSrc_User);
             }
           }
-          DF_Eval eval = df_eval_from_string(arena, di_scope, ctrl_ctx, parse_ctx, macro_map, name);
-          df_append_viz_blocks_for_parent__rec(arena, di_scope, eval_view, ctrl_ctx, parse_ctx, macro_map, parent_key, sub_expand_keys[sub_expand_idx], name, eval, 0, &child_cfg, 0, &blocks);
+          E_Eval eval = e_eval_from_string(arena, name);
+          df_append_viz_blocks_for_parent__rec(arena, di_scope, eval_view, parent_key, sub_expand_keys[sub_expand_idx], name, eval, 0, &child_cfg, 0, &blocks);
         }
       }
       df_eval_viz_block_end(&blocks, last_vb);
@@ -1626,20 +1636,14 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   //- rjf: unpack arguments
   //
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  U64 thread_ip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
+  U64 thread_ip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
   String8 filter = str8(view->query_buffer, view->query_string_size);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
-  
-  //////////////////////////////
-  //- rjf: process * thread info -> parse_ctx
-  //
-  EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(di_scope, process, thread_ip_vaddr);
   
   //////////////////////////////
   //- rjf: determine autocompletion string
@@ -1660,7 +1664,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   //////////////////////////////
   //- rjf: consume events & perform navigations/edits - calculate state
   //
-  EVAL_String2ExprMap macro_map = {0};
+  E_String2ExprMap macro_map = {0};
   DF_EvalVizBlockList blocks = {0};
   UI_ScrollListRowBlockArray row_blocks = {0};
   Vec2S64 cursor_tbl = {0};
@@ -1679,14 +1683,14 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       //
       if(state_dirty)
       {
-        macro_map = eval_string2expr_map_make(scratch.arena, 256);
+        macro_map = e_string2expr_map_make(scratch.arena, 256);
         for(DF_EvalRoot *root = ewv->first_root; root != 0; root = root->next)
         {
           String8 root_expr = str8(root->expr_buffer, root->expr_buffer_string_size);
           
           //- rjf: unpack arguments
           DF_Entity *process = thread->parent;
-          U64 unwind_count = ctrl_ctx.unwind_count;
+          U64 unwind_count = df_interact_regs()->unwind_count;
           CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
           Architecture arch = df_architecture_from_entity(thread);
           U64 reg_size = regs_block_size_from_architecture(arch);
@@ -1699,12 +1703,11 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           }
           
           //- rjf: lex & parse
-          EVAL_TokenArray tokens = eval_token_array_from_text(scratch.arena, root_expr);
-          EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(scratch.arena, &parse_ctx, root_expr, &tokens);
-          EVAL_ErrorList errors = parse.errors;
-          if(errors.count == 0)
+          E_TokenArray tokens = e_token_array_from_text(scratch.arena, root_expr);
+          E_Parse parse = e_parse_expr_from_text_tokens(scratch.arena, root_expr, &tokens);
+          if(parse.msgs.max_kind == E_MsgKind_Null)
           {
-            eval_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, &macro_map, parse.expr, &errors);
+            e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, &macro_map, parse.expr);
           }
         }
       }
@@ -1714,7 +1717,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       //
       if(state_dirty)
       {
-        blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, di_scope, fzy_scope, &ctrl_ctx, &parse_ctx, &macro_map, view, ewv);
+        blocks = df_eval_viz_block_list_from_watch_view_state(scratch.arena, di_scope, fzy_scope, view, ewv);
       }
       
       //////////////////////////
@@ -1852,7 +1855,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ewv->text_edit_state_slots_count = u64_up_to_pow2(selection_dim.y+1);
         ewv->text_edit_state_slots_count = Max(ewv->text_edit_state_slots_count, 64);
         ewv->text_edit_state_slots = push_array(ewv->text_edit_arena, DF_WatchViewTextEditState*, ewv->text_edit_state_slots_count);
-        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
+        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, eval_view, default_radix, code_font, ui_top_font_size(),
                                                                                            r1s64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y-1),
                                                                                                  ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y-1)+1), &blocks);
         DF_EvalVizRow *row = rows.first;
@@ -1860,7 +1863,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
-            String8 string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, parse_ctx.type_graph, parse_ctx.rdi, row, (DF_WatchViewColumnKind)x, 1);
+            String8 string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, row, (DF_WatchViewColumnKind)x, 1);
             string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
             DF_WatchViewPoint pt = {(DF_WatchViewColumnKind)x, row->parent_key, row->key};
             U64 hash = df_hash_from_expand_key(pt.key);
@@ -1884,7 +1887,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept && selection_tbl.min.x <= 0)
       {
         taken = 1;
-        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
+        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, eval_view, default_radix, code_font, ui_top_font_size(),
                                                                                            r1s64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y-1),
                                                                                                  ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y-1)+1), &blocks);
         DF_EvalVizRow *row = rows.first;
@@ -1926,15 +1929,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
          selection_tbl.min.x == 1)
       {
         taken = 1;
-        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
+        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, eval_view, default_radix, code_font, ui_top_font_size(),
                                                                                            r1s64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y-1),
                                                                                                  ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y-1)+1), &blocks);
         DF_EvalVizRow *row = rows.first;
         if(!(row->flags & DF_EvalVizRowFlag_CanEditValue))
         {
-          U64 vaddr = 0;
-          if(vaddr == 0) { vaddr = row->eval.offset; }
-          if(vaddr == 0) { vaddr = row->eval.imm_u64; }
+          U64 vaddr = row->eval.value.u64;
           DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
           DI_Key dbgi_key = df_dbgi_key_from_module(module);
           U64 voff = df_voff_from_vaddr(module, vaddr);
@@ -2042,14 +2043,14 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 case DF_WatchViewColumnKind_Value:
                 if(editing_complete && evt->slot != UI_EventActionSlot_Cancel)
                 {
-                  DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
+                  DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, eval_view, default_radix, code_font, ui_top_font_size(),
                                                                                                      r1s64(ui_scroll_list_row_from_item(&row_blocks, y-1),
                                                                                                            ui_scroll_list_row_from_item(&row_blocks, y-1)+1), &blocks);
                   B32 success = 0;
                   if(rows.first != 0)
                   {
-                    DF_Eval write_eval = df_eval_from_string(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, new_string);
-                    success = df_commit_eval_value(parse_ctx.type_graph, parse_ctx.rdi, &ctrl_ctx, rows.first->eval, write_eval);
+                    E_Eval write_eval = e_eval_from_string(scratch.arena, new_string);
+                    success = df_commit_eval_value(rows.first->eval, write_eval);
                   }
                   if(!success)
                   {
@@ -2084,7 +2085,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       {
         taken = 1;
         String8List strs = {0};
-        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(),
+        DF_EvalVizWindowedRowList rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, eval_view, default_radix, code_font, ui_top_font_size(),
                                                                                            r1s64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y-1),
                                                                                                  ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y-1)+1), &blocks);
         DF_EvalVizRow *row = rows.first;
@@ -2092,7 +2093,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
-            String8 cell_string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, parse_ctx.type_graph, parse_ctx.rdi, row, (DF_WatchViewColumnKind)x, 0);
+            String8 cell_string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, row, (DF_WatchViewColumnKind)x, 0);
             cell_string = str8_skip_chop_whitespace(cell_string);
             U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
             if(selection_tbl.min.x != selection_tbl.max.x || selection_tbl.min.y != selection_tbl.max.y)
@@ -2431,7 +2432,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
     //
     DF_EvalVizWindowedRowList rows = {0};
     {
-      rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, eval_view, default_radix, code_font, ui_top_font_size(), r1s64(visible_row_rng.min-1, visible_row_rng.max), &blocks);
+      rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, di_scope, eval_view, default_radix, code_font, ui_top_font_size(), r1s64(visible_row_rng.min-1, visible_row_rng.max), &blocks);
     }
     
     ////////////////////////////
@@ -2458,11 +2459,11 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         switch(row->eval.mode)
         {
           default:{}break;
-          case EVAL_EvalMode_Addr:
+          case E_Mode_Addr:
           {
-            U64 size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdi, row->eval.type_key);
+            U64 size = e_type_byte_size_from_key(row->eval.type_key);
             size = Min(size, 64);
-            Rng1U64 vaddr_rng = r1u64(row->eval.offset, row->eval.offset+size);
+            Rng1U64 vaddr_rng = r1u64(row->eval.value.u64, row->eval.value.u64+size);
             CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
             for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
             {
@@ -2519,7 +2520,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             {
               Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
                                          (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px);
-              row->expand_ui_rule_spec->info.block_ui(ws, row->key, row->eval, row->edit_expr, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, row->expand_ui_rule_node, canvas_dim);
+              row->expand_ui_rule_spec->info.block_ui(ws, row->key, row->eval, row->edit_expr, row->expand_ui_rule_node, canvas_dim);
             }
           }
           
@@ -2566,9 +2567,9 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           ////////////////////
           //- rjf: draw start of cache lines in expansions
           //
-          if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
-             row->eval.errors.count == 0 &&
-             row->eval.offset%64 == 0 && row->depth > 0 &&
+          if((row->eval.mode == E_Mode_Addr || row->eval.mode == E_Mode_Null) &&
+             row->eval.msgs.count == 0 &&
+             row->eval.value.u64%64 == 0 && row->depth > 0 &&
              !row_expanded)
           {
             ui_set_next_fixed_x(0);
@@ -2581,14 +2582,14 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           ////////////////////
           //- rjf: draw mid-row cache line boundaries in expansions
           //
-          if((row->eval.mode == EVAL_EvalMode_Addr || row->eval.mode == EVAL_EvalMode_NULL) &&
-             row->eval.errors.count == 0 &&
-             row->eval.offset%64 != 0 &&
+          if((row->eval.mode == E_Mode_Addr || row->eval.mode == E_Mode_Null) &&
+             row->eval.msgs.max_kind == E_MsgKind_Null &&
+             row->eval.value.u64%64 != 0 &&
              row->depth > 0 &&
              !row_expanded)
           {
-            U64 next_off = (row->eval.offset + tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, parse_ctx.rdi, row->eval.type_key));
-            if(next_off%64 != 0 && row->eval.offset/64 < next_off/64)
+            U64 next_off = (row->eval.value.u64 + e_type_byte_size_from_key(row->eval.type_key));
+            if(next_off%64 != 0 && row->eval.value.u64/64 < next_off/64)
             {
               ui_set_next_fixed_x(0);
               ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
@@ -2641,9 +2642,9 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               if(is_inherited && ui_hovering(sig)) UI_Tooltip
               {
                 String8List inheritance_chain_type_names = {0};
-                for(TG_KeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
+                for(E_TypeKeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
                 {
-                  String8 inherited_type_name = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, n->v);
+                  String8 inherited_type_name = e_type_string_from_key(scratch.arena, n->v);
                   inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
                   str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
                 }
@@ -2657,53 +2658,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   DF_Font(ws, DF_FontSlot_Code) df_code_label(1.f, 1.f, df_rgba_from_theme_color(DF_ThemeColor_CodeType), inheritance_type);
                 }
               }
-              if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip DF_Font(ws, DF_FontSlot_Code)
-              {
-                ui_labelf("Parent Key:   %I64x, %I64x", row->parent_key.parent_hash, row->parent_key.child_num);
-                ui_labelf("Hover Key:    %I64x, %I64x", row->key.parent_hash, row->key.child_num);
-                ui_labelf("Cursor Key:   %I64x, %I64x", ewv->cursor.key.parent_hash, ewv->cursor.key.child_num);
-              }
-              if(DEV_eval_compiler_tooltips && row->depth == 0 && ui_hovering(sig)) UI_Tooltip
-              {
-                Temp scratch = scratch_begin(0, 0);
-                String8 string = row->display_expr;
-                
-                // rjf: lex & parse
-                EVAL_TokenArray tokens = eval_token_array_from_text(scratch.arena, string);
-                EVAL_ParseResult parse = eval_parse_expr_from_text_tokens(scratch.arena, &parse_ctx, string, &tokens);
-                EVAL_ErrorList errors = parse.errors;
-                ui_labelf("Tokens:");
-                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) for(U64 idx = 0; idx < tokens.count; idx += 1)
-                {
-                  EVAL_Token *token = tokens.v+idx;
-                  String8 token_string = str8_substr(string, token->range);
-                  String8 token_kind_name = str8_lit("Token");
-                  switch(token->kind)
-                  {
-                    default:break;
-                    case EVAL_TokenKind_Identifier:   {token_kind_name = str8_lit("Identifier");}break;
-                    case EVAL_TokenKind_Numeric:      {token_kind_name = str8_lit("Numeric");}break;
-                    case EVAL_TokenKind_StringLiteral:{token_kind_name = str8_lit("StringLiteral");}break;
-                    case EVAL_TokenKind_CharLiteral:  {token_kind_name = str8_lit("CharLiteral");}break;
-                    case EVAL_TokenKind_Symbol:       {token_kind_name = str8_lit("Symbol");}break;
-                  }
-                  ui_labelf("%S -> \"%S\"", token_kind_name, token_string);
-                }
-                
-                // rjf: produce IR tree & type
-                EVAL_IRTreeAndType ir_tree_and_type = {&eval_irtree_nil};
-                if(parse.expr != &eval_expr_nil && errors.count == 0)
-                {
-                  ui_labelf("Type:");
-                  ir_tree_and_type = eval_irtree_and_type_from_expr(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, &eval_string2expr_map_nil, parse.expr, &errors);
-                  TG_Key type_key = ir_tree_and_type.type_key;
-                  String8 type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, type_key);
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-                    ui_label(type_string);
-                }
-                
-                scratch_end(scratch);
-              }
               
               // rjf: autocomplete lister
               if(expr_editing_active &&
@@ -2712,7 +2666,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 String8 input = str8(edit_state->input_buffer, edit_state->input_size);
                 DF_AutoCompListerParams params = {DF_AutoCompListerFlag_Locals};
-                df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, &params, input, edit_state->cursor.column-1);
+                df_set_autocomp_lister_query(ws, sig.box->key, &params, input, edit_state->cursor.column-1);
               }
             }
             
@@ -2746,7 +2700,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Value, row->parent_key, row->key};
             DF_WatchViewTextEditState *edit_state = df_watch_view_text_edit_state_from_pt(ewv, pt);
             B32 cell_selected = (row_selected && selection_tbl.min.x <= pt.column_kind && pt.column_kind <= selection_tbl.max.x);
-            B32 value_is_error   = (row->eval.errors.count != 0);
+            B32 value_is_error   = (row->eval.msgs.max_kind != E_MsgKind_Null);
             B32 value_is_hook    = (!value_is_error && row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0);
             B32 value_is_complex = (!value_is_error && !value_is_hook && !(row->flags & DF_EvalVizRowFlag_CanEditValue));
             B32 value_is_simple  = (!value_is_error && !value_is_hook &&  (row->flags & DF_EvalVizRowFlag_CanEditValue));
@@ -2773,9 +2727,9 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               if(value_is_error) DF_Font(ws, DF_FontSlot_Main)
               {
                 String8List strings = {0};
-                for(EVAL_Error *error = row->eval.errors.first; error != 0; error = error->next)
+                for(E_Msg *msg = row->eval.msgs.first; msg != 0; msg = msg->next)
                 {
-                  str8_list_push(scratch.arena, &strings, error->text);
+                  str8_list_push(scratch.arena, &strings, msg->text);
                 }
                 StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
                 String8 error_string = str8_list_join(scratch.arena, &strings, &join);
@@ -2788,7 +2742,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
                 UI_Parent(box)
                 {
-                  row->value_ui_rule_spec->info.row_ui(ws, row->key, row->eval, di_scope, &ctrl_ctx, &parse_ctx, &macro_map, row->value_ui_rule_node);
+                  row->value_ui_rule_spec->info.row_ui(ws, row->key, row->eval, row->value_ui_rule_node);
                 }
                 sig = ui_signal_from_box(box);
               }
@@ -2835,9 +2789,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             // rjf: double-click, not editable -> go-to-location
             if(ui_double_clicked(sig) && !(row->flags & DF_EvalVizRowFlag_CanEditValue))
             {
-              U64 vaddr = 0;
-              if(vaddr == 0) { vaddr = row->eval.offset; }
-              if(vaddr == 0) { vaddr = row->eval.imm_u64; }
+              U64 vaddr = row->eval.value.u64;
               DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
               DI_Key dbgi_key = df_dbgi_key_from_module(module);
               U64 voff = df_voff_from_vaddr(module, vaddr);
@@ -2866,11 +2818,11 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
               UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
-              TG_Key key = row->eval.type_key;
-              String8 string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, key);
+              E_TypeKey key = row->eval.type_key;
+              String8 string = e_type_string_from_key(scratch.arena, key);
               string = str8_skip_chop_whitespace(string);
               UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###type_%I64x", row_hash);
-              if(!tg_key_match(key, tg_key_zero())) UI_Parent(box)
+              if(!e_type_key_match(key, e_type_key_zero())) UI_Parent(box)
               {
                 df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeType), string);
               }
@@ -2923,7 +2875,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 params.flags = DF_AutoCompListerFlag_ViewRules;
               }
-              df_set_autocomp_lister_query(ws, sig.box->key, ctrl_ctx, &params, input, edit_state->cursor.column-1);
+              df_set_autocomp_lister_query(ws, sig.box->key, &params, input, edit_state->cursor.column-1);
             }
             
             // rjf: double-click -> begin editing
@@ -4098,20 +4050,18 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
   String8 query = str8(view->query_buffer, view->query_string_size);
   DI_KeyList dbgi_keys_list = df_push_active_dbgi_key_list(scratch.arena);
   DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
-  FZY_Params params = {FZY_Target_Procedures, dbgi_keys};
+  FZY_Params params = {RDI_SectionKind_Procedures, dbgi_keys};
   U64 endt_us = os_now_microseconds()+200;
   
   //- rjf: grab rdis, make type graphs for each
   U64 rdis_count = dbgi_keys.count;
   RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
-  TG_Graph **graphs = push_array(scratch.arena, TG_Graph *, rdis_count);
   {
     for(U64 idx = 0; idx < rdis_count; idx += 1)
     {
       RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], endt_us);
       RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
       rdis[idx] = rdi;
-      graphs[idx] = tg_graph_begin(rdi_addr_size_from_arch(tli->arch), 256);
     }
   }
   
@@ -4195,7 +4145,6 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       //- rjf: determine dbgi/rdi to which this item belongs
       DI_Key dbgi_key = {0};
       RDI_Parsed *rdi = &di_rdi_parsed_nil;
-      TG_Graph *graph = 0;
       U64 base_idx = 0;
       {
         for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
@@ -4206,7 +4155,6 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
           {
             dbgi_key = dbgi_keys.v[rdi_idx];
             rdi = rdis[rdi_idx];
-            graph = graphs[rdi_idx];
             break;
           }
           base_idx += procedures_count;
@@ -4219,7 +4167,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
       RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
-      TG_Key type_key = tg_key_ext(tg_kind_from_rdi_type_kind(type_node->kind), procedure->type_idx);
+      E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, e_idx_from_rdi(rdi));
       
       //- rjf: build item button
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -4234,9 +4182,9 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       {
         UI_Box *box = df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
         ui_box_equip_fuzzy_match_ranges(box, &item->match_ranges);
-        if(!tg_key_match(tg_key_zero(), type_key) && graph != 0)
+        if(!e_type_key_match(e_type_key_zero(), type_key))
         {
-          String8 type_string = tg_string_from_key(scratch.arena, graph, rdi, type_key);
+          String8 type_string = e_type_string_from_key(scratch.arena, type_key);
           df_code_label(0.5f, 0, df_rgba_from_theme_color(DF_ThemeColor_TextWeak), type_string);
         }
       }
@@ -5430,7 +5378,6 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   String8 query = str8(view->query_buffer, view->query_string_size);
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
   
   //- rjf: get state
   typedef struct DF_SchedulerViewState DF_SchedulerViewState;
@@ -5672,10 +5619,9 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *scope = di_scope_open();
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
   Architecture arch = df_architecture_from_entity(thread);
-  DF_Entity *process = thread->parent;
+  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   Vec4F32 thread_color = ui_top_palette()->text;
   if(thread->flags & DF_EntityFlag_HasColor)
   {
@@ -5812,20 +5758,19 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, row->regs);
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         B32 frame_valid = (rip_vaddr != 0);
-        TG_Graph *graph = tg_graph_begin(bit_size_from_arch(thread->arch)/8, 256);
         String8 symbol_name = {0};
         String8 symbol_type_string = {0};
         if(row->procedure != 0)
         {
           symbol_name.str = rdi_name_from_procedure(row->rdi, row->procedure, &symbol_name.size);
           RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->procedure->type_idx);
-          symbol_type_string = tg_string_from_key(scratch.arena, graph, row->rdi, tg_key_ext(tg_kind_from_rdi_type_kind(type->kind), row->procedure->type_idx));
+          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->procedure->type_idx, e_idx_from_rdi(row->rdi)));
         }
         if(row->inline_site != 0)
         {
           symbol_name.str = rdi_string_from_idx(row->rdi, row->inline_site->name_string_idx, &symbol_name.size);
           RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->inline_site->type_idx);
-          symbol_type_string = tg_string_from_key(scratch.arena, graph, row->rdi, tg_key_ext(tg_kind_from_rdi_type_kind(type->kind), row->inline_site->type_idx));
+          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->inline_site->type_idx, e_idx_from_rdi(row->rdi)));
         }
         
         // rjf: build row
@@ -5840,8 +5785,8 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
             UI_FocusHot((row_selected && cs->cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
           {
             String8 selected_string = {0};
-            if(ctrl_ctx.unwind_count == row->unwind_idx &&
-               ctrl_ctx.inline_depth == row->inline_depth)
+            if(df_interact_regs()->unwind_count == row->unwind_idx &&
+               df_interact_regs()->inline_depth == row->inline_depth)
             {
               selected_string = df_g_icon_kind_text_table[DF_IconKind_RightArrow];
               ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = thread_color));
@@ -7259,8 +7204,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //////////////////////////////
   //- rjf: unpack entity params
   //
-  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_view(ws, view);
-  DF_Entity *thread = df_entity_from_handle(ctrl_ctx.thread);
+  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
   
   //////////////////////////////
@@ -7586,6 +7530,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     
     //- rjf: fill local variable annotations
     {
+      DI_Scope *scope = di_scope_open();
       Vec4F32 color_gen_table[] =
       {
         df_rgba_from_theme_color(DF_ThemeColor_Thread0),
@@ -7597,19 +7542,16 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         df_rgba_from_theme_color(DF_ThemeColor_Thread6),
         df_rgba_from_theme_color(DF_ThemeColor_Thread7),
       };
-      DI_Scope *scope = di_scope_open();
-      U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, ctrl_ctx.unwind_count);
-      EVAL_ParseCtx parse_ctx = df_eval_parse_ctx_from_process_vaddr(scope, process, thread_rip_vaddr);
-      RDI_Parsed *rdi = parse_ctx.rdi;
-      for(EVAL_String2NumMapNode *n = parse_ctx.locals_map->first; n != 0; n = n->order_next)
+      U64 thread_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
+      for(E_String2NumMapNode *n = e_ctx()->locals_map->first; n != 0; n = n->order_next)
       {
         String8 local_name = n->string;
-        DF_Eval local_eval = df_eval_from_string(scratch.arena, scope, &ctrl_ctx, &parse_ctx, &eval_string2expr_map_nil, local_name);
-        if(local_eval.mode == EVAL_EvalMode_Addr)
+        E_Eval local_eval = e_eval_from_string(scratch.arena, local_name);
+        if(local_eval.mode == E_Mode_Addr)
         {
-          TG_Kind local_eval_type_kind = tg_kind_from_key(local_eval.type_key);
-          U64 local_eval_type_size = tg_byte_size_from_graph_rdi_key(parse_ctx.type_graph, rdi, local_eval.type_key);
-          Rng1U64 vaddr_rng = r1u64(local_eval.offset, local_eval.offset+local_eval_type_size);
+          E_TypeKind local_eval_type_kind = e_type_kind_from_key(local_eval.type_key);
+          U64 local_eval_type_size = e_type_byte_size_from_key(local_eval.type_key);
+          Rng1U64 vaddr_rng = r1u64(local_eval.value.u64, local_eval.value.u64+local_eval_type_size);
           Rng1U64 vaddr_rng_in_visible = intersect_1u64(viz_range_bytes, vaddr_rng);
           if(vaddr_rng_in_visible.max != vaddr_rng_in_visible.min)
           {
@@ -7617,7 +7559,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
             {
               annotation->name_string = push_str8_copy(scratch.arena, local_name);
               annotation->kind_string = str8_lit("Local");
-              annotation->type_string = tg_string_from_key(scratch.arena, parse_ctx.type_graph, parse_ctx.rdi, local_eval.type_key);
+              annotation->type_string = e_type_string_from_key(scratch.arena, local_eval.type_key);
               annotation->color = color_gen_table[(vaddr_rng.min/8)%ArrayCount(color_gen_table)];
               annotation->vaddr_range = vaddr_rng;
             }

@@ -48,7 +48,7 @@ str8_lit_comp("Define"),
 str8_lit_comp("LeafIdent"),
 };
 
-String8 e_result_code_display_strings[11] =
+String8 e_interpretation_code_display_strings[11] =
 {
 str8_lit_comp(""),
 str8_lit_comp("Cannot divide by zero."),

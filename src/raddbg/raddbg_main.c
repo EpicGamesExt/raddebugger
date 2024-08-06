@@ -6,7 +6,7 @@
 
 #define BUILD_VERSION_MAJOR 0
 #define BUILD_VERSION_MINOR 9
-#define BUILD_VERSION_PATCH 11
+#define BUILD_VERSION_PATCH 12
 #define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
 #define BUILD_TITLE "The RAD Debugger"
 #define OS_FEATURE_GRAPHICAL 1
@@ -50,12 +50,12 @@
 #include "rdi_from_pdb/rdi_from_pdb.h"
 #include "regs/regs.h"
 #include "regs/rdi/regs_rdi.h"
-#include "type_graph/type_graph.h"
+//#include "type_graph/type_graph.h"
 #include "dbgi/dbgi.h"
 #include "dasm_cache/dasm_cache.h"
 #include "fuzzy_search/fuzzy_search.h"
 #include "demon/demon_inc.h"
-#include "eval/eval_inc.h"
+//#include "eval/eval_inc.h"
 #include "eval2/eval2.h"
 #include "ctrl/ctrl_inc.h"
 #include "font_provider/font_provider_inc.h"
@@ -91,12 +91,12 @@
 #include "rdi_from_pdb/rdi_from_pdb.c"
 #include "regs/regs.c"
 #include "regs/rdi/regs_rdi.c"
-#include "type_graph/type_graph.c"
+//#include "type_graph/type_graph.c"
 #include "dbgi/dbgi.c"
 #include "dasm_cache/dasm_cache.c"
 #include "fuzzy_search/fuzzy_search.c"
 #include "demon/demon_inc.c"
-#include "eval/eval_inc.c"
+//#include "eval/eval_inc.c"
 #include "eval2/eval2.c"
 #include "ctrl/ctrl_inc.c"
 #include "font_provider/font_provider_inc.c"
@@ -360,8 +360,7 @@ entry_point(CmdLine *cmd_line)
                 if(!df_cmd_spec_is_nil(cmd_spec))
                 {
                   DF_CmdParams params = df_cmd_params_from_window(dst_window);
-                  DF_CtrlCtx ctrl_ctx = df_ctrl_ctx_from_window(dst_window);
-                  String8 error = df_cmd_params_apply_spec_query(scratch.arena, &ctrl_ctx, &params, cmd_spec, df_cmd_arg_part_from_string(msg));
+                  String8 error = df_cmd_params_apply_spec_query(scratch.arena, &params, cmd_spec, df_cmd_arg_part_from_string(msg));
                   if(error.size == 0)
                   {
                     df_push_cmd__root(&params, cmd_spec);

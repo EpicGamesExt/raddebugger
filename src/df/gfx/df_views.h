@@ -555,13 +555,13 @@ internal DF_WatchViewPoint df_watch_view_point_from_tbl(DF_EvalVizBlockList *blo
 internal Vec2S64 df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
 
 //- rjf: table coordinates -> strings
-internal String8 df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, TG_Graph *graph, RDI_Parsed *rdi, DF_EvalVizRow *row, DF_WatchViewColumnKind col_kind, B32 editable);
+internal String8 df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumnKind col_kind, B32 editable);
 
 //- rjf: table coordinates -> text edit state
 internal DF_WatchViewTextEditState *df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint pt);
 
 //- rjf: windowed watch tree visualization
-internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, FZY_Scope *fzy_scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_View *view, DF_WatchViewState *ews);
+internal DF_EvalVizBlockList df_eval_viz_block_list_from_watch_view_state(Arena *arena, DI_Scope *di_scope, FZY_Scope *fzy_scope, DF_View *view, DF_WatchViewState *ews);
 
 //- rjf: eval/watch views main hooks
 internal void df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind fill_kind);

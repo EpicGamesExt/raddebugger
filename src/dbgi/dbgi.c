@@ -140,11 +140,11 @@ di_scope_close(DI_Scope *scope)
   for(DI_Touch *t = scope->first_touch, *next = 0; t != 0; t = next)
   {
     next = t->next;
-    SLLStackPush(di_tctx->free_touch, t);
     if(t->node != 0)
     {
       ins_atomic_u64_dec_eval(&t->node->touch_count);
     }
+    SLLStackPush(di_tctx->free_touch, t);
   }
   SLLStackPush(di_tctx->free_scope, scope);
 }
@@ -431,6 +431,12 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
       
       //- rjf: no node? this path is not opened
       if(node == 0)
+      {
+        break;
+      }
+      
+      //- rjf: node refcount == 0? this node is being destroyed
+      if(node->ref_count == 0)
       {
         break;
       }

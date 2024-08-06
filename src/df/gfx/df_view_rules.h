@@ -14,8 +14,8 @@ struct DF_VR_RGBAState
   U64 memgen_idx;
 };
 
-internal Vec4F32 df_vr_rgba_from_eval(DF_Eval eval, TG_Graph *graph, RDI_Parsed *raddbg, DF_Entity *process);
-internal void df_vr_eval_commit_rgba(DF_Eval eval, TG_Graph *graph, RDI_Parsed *raddbg, DF_CtrlCtx *ctrl_ctx, Vec4F32 rgba);
+internal Vec4F32 df_vr_rgba_from_eval(E_Eval eval, DF_Entity *process);
+internal void df_vr_eval_commit_rgba(E_Eval eval, Vec4F32 rgba);
 
 ////////////////////////////////
 //~ rjf: "text"
@@ -38,7 +38,7 @@ struct DF_VR_TextState
   F32 loaded_t;
 };
 
-internal DF_TxtTopologyInfo df_vr_txt_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg);
+internal DF_TxtTopologyInfo df_vr_txt_topology_info_from_cfg(DF_CfgNode *cfg);
 
 ////////////////////////////////
 //~ rjf: "disasm"
@@ -61,7 +61,7 @@ struct DF_VR_DisasmState
   F32 loaded_t;
 };
 
-internal DF_DisasmTopologyInfo df_vr_disasm_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg);
+internal DF_DisasmTopologyInfo df_vr_disasm_topology_info_from_cfg(DF_CfgNode *cfg);
 
 ////////////////////////////////
 //~ rjf: "bitmap"
@@ -104,7 +104,7 @@ internal Vec2F32 df_bitmap_view_state__screen_from_canvas_pos(DF_BitmapViewState
 internal Rng2F32 df_bitmap_view_state__screen_from_canvas_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 cvs);
 internal Vec2F32 df_bitmap_view_state__canvas_from_screen_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 scr);
 internal Rng2F32 df_bitmap_view_state__canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 scr);
-internal DF_BitmapTopologyInfo df_vr_bitmap_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg);
+internal DF_BitmapTopologyInfo df_vr_bitmap_topology_info_from_cfg(DF_CfgNode *cfg);
 
 ////////////////////////////////
 //~ rjf: "geo"
@@ -139,6 +139,6 @@ struct DF_VR_GeoBoxDrawData
   F32 loaded_t;
 };
 
-internal DF_GeoTopologyInfo df_vr_geo_topology_info_from_cfg(DI_Scope *scope, DF_CtrlCtx *ctrl_ctx, EVAL_ParseCtx *parse_ctx, EVAL_String2ExprMap *macro_map, DF_CfgNode *cfg);
+internal DF_GeoTopologyInfo df_vr_geo_topology_info_from_cfg(DF_CfgNode *cfg);
 
 #endif // DF_VIEW_RULES_H
