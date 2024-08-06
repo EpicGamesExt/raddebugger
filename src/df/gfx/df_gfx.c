@@ -9143,8 +9143,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
         
         // rjf: determine dbgi/rdi to which this item belongs
         RDI_Parsed *rdi = &di_rdi_parsed_nil;
+        U64 base_idx = 0;
         {
-          U64 base_idx = 0;
           for(U64 rdi_idx = 0; rdi_idx < e_parse_ctx->rdis_count; rdi_idx += 1)
           {
             U64 all_items_count = 0;
@@ -9159,7 +9159,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
         }
         
         // rjf: unpack info about this row
-        String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, block->fzy_target, block->fzy_backing_items.v[idx].idx);
+        String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, block->fzy_target, block->fzy_backing_items.v[idx].idx - base_idx);
         
         // rjf: get keys for this row
         DF_ExpandKey parent_key = block->parent_key;
