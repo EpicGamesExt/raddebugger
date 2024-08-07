@@ -188,7 +188,7 @@ df_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
   for(DF_CmdSpecNode *n = specs.first; n != 0; n = n->next)
   {
     DF_CmdSpec *spec = n->spec;
-    if(!(spec->info.flags & DF_CmdSpecFlag_OmitFromLists))
+    if(spec->info.flags & DF_CmdSpecFlag_ListInUI)
     {
       String8 cmd_display_name = spec->info.display_name;
       String8 cmd_desc = spec->info.description;

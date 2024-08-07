@@ -693,7 +693,7 @@ raddbg_readme:
   @p "A list of commands and their descriptions are below:";
   @unordered_list
   {
-    @expand(DF_CoreCmdTable a) @p "$(a.lister_omit == 0 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
+    @expand(DF_CoreCmdTable a) @p "$(a.ipc_docs_vis == 1 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
   }
   
   @subtitle "Targets";

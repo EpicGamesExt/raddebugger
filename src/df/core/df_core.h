@@ -829,7 +829,8 @@ struct DF_CmdQuery
 typedef U32 DF_CmdSpecFlags;
 enum
 {
-  DF_CmdSpecFlag_OmitFromLists      = (1<<0),
+  DF_CmdSpecFlag_ListInUI      = (1<<0),
+  DF_CmdSpecFlag_ListInIPCDocs = (1<<1),
 };
 
 typedef struct DF_CmdSpecInfo DF_CmdSpecInfo;
