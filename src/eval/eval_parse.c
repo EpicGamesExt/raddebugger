@@ -1800,6 +1800,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
     {
       if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("?"), 0) && 13 <= max_precedence)
       {
+        it += 1;
+        
         // rjf: parse middle expression
         E_TokenArray middle_expr_tokens = e_token_array_make_first_opl(it, it_opl);
         E_Parse middle_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &middle_expr_tokens, e_max_precedence);
@@ -1845,6 +1847,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         }
         
         // rjf: build ternary
+        if(atom != &e_expr_nil &&
+           middle_expr_parse.expr != &e_expr_nil &&
+           rhs_expr_parse.expr != &e_expr_nil)
         {
           E_Expr *lhs = atom;
           E_Expr *mhs = middle_expr_parse.expr;

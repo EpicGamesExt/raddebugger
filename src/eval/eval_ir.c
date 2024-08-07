@@ -149,12 +149,12 @@ e_oplist_concat_in_place(E_OpList *dst, E_OpList *to_push)
 {
   if(to_push->first && dst->first)
   {
-    to_push->last->next = dst->first;
-    to_push->last = dst->last;
-    to_push->op_count += to_push->op_count;
-    to_push->encoded_size += to_push->encoded_size;
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->op_count += to_push->op_count;
+    dst->encoded_size += to_push->encoded_size;
   }
-  else if(dst->first)
+  else if(!dst->first)
   {
     MemoryCopyStruct(dst, to_push);
   }
