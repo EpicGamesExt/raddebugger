@@ -252,6 +252,22 @@ struct Has_A_Post_Forward_Reference{
   struct Gets_Referenced_Forwardly value;
 };
 
+struct TypeWithMemberFunction
+{
+  int x;
+  int y;
+  int z;
+  char *name;
+  __declspec(noinline) void SetInfo(int _x, int _y, char *_name)
+  {
+    x = _x;
+    y = _y;
+    z = 0;
+    name = _name;
+    OutputDebugStringA("setting info\n");
+  }
+};
+
 static void
 no_params1(void){
   
@@ -378,6 +394,9 @@ type_coverage_eval_tests(void){
   stks stks_test[256] = {0};
   stks *stks_first = &stks_test[0];
   stks *stks_ptr = stks_first + 8;
+  
+  TypeWithMemberFunction twmf = {0};
+  twmf.SetInfo(123, 456, "foobar");
   
   TestFunction *function = mule_get_module_function("dll_type_eval_tests");
   function();

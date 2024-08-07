@@ -456,7 +456,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
          l_restype_kind == E_TypeKind_LRef ||
          l_restype_kind == E_TypeKind_RRef)
       {
-        check_type_key = e_type_unwrap(l_restype);
+        check_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_restype)));
         check_type_kind = e_type_kind_from_key(check_type_key);
       }
       e_msg_list_concat_in_place(&result.msgs, &l.msgs);
