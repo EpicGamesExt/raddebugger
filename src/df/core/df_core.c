@@ -5704,43 +5704,6 @@ df_current_path(void)
   return df_state->current_path;
 }
 
-//- rjf: architecture info table lookups
-
-internal String8
-df_info_summary_from_string__x64(String8 string)
-{
-  String8 result = {0};
-  {
-    U64 hash = df_hash_from_string__case_insensitive(string);
-    U64 slot_idx = hash % df_state->arch_info_x64_table_size;
-    DF_ArchInfoSlot *slot = &df_state->arch_info_x64_table[slot_idx];
-    for(DF_ArchInfoNode *n = slot->first; n != 0; n = n->hash_next)
-    {
-      if(str8_match(n->key, string, StringMatchFlag_CaseInsensitive))
-      {
-        result = n->val;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-internal String8
-df_info_summary_from_string(Architecture arch, String8 string)
-{
-  String8 result = {0};
-  switch(arch)
-  {
-    default:{}break;
-    case Architecture_x64:
-    {
-      result = df_info_summary_from_string__x64(string);
-    }break;
-  }
-  return result;
-}
-
 //- rjf: entity kind cache
 
 internal DF_EntityList
@@ -6265,22 +6228,6 @@ df_core_init(CmdLine *cmdln, DF_StateDeltaHistory *hist)
     df_state->current_path_arena = arena_alloc();
     df_state->current_path = push_str8_copy(df_state->current_path_arena, current_path_with_slash);
     scratch_end(scratch);
-  }
-  
-  // rjf: set up architecture info tables
-  df_state->arch_info_x64_table_size = 1024;
-  df_state->arch_info_x64_table = push_array(df_state->arena, DF_ArchInfoSlot, df_state->arch_info_x64_table_size);
-  for(U64 idx = 0; idx < ArrayCount(df_g_inst_table_x64); idx += 1)
-  {
-    String8 key = df_g_inst_table_x64[idx].mnemonic;
-    String8 val = df_g_inst_table_x64[idx].summary;
-    U64 hash = df_hash_from_string__case_insensitive(key);
-    U64 slot_idx = hash % df_state->arch_info_x64_table_size;
-    DF_ArchInfoSlot *slot = &df_state->arch_info_x64_table[slot_idx];
-    DF_ArchInfoNode *n = push_array(df_state->arena, DF_ArchInfoNode, 1);
-    SLLQueuePush_N(slot->first, slot->last, n, hash_next);
-    n->key = key;
-    n->val = val;
   }
 }
 

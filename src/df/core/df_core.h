@@ -1086,23 +1086,6 @@ struct DF_StateDeltaHistory
 ////////////////////////////////
 //~ rjf: Main State Types
 
-//- rjf: architecture info table types
-
-typedef struct DF_ArchInfoNode DF_ArchInfoNode;
-struct DF_ArchInfoNode
-{
-  DF_ArchInfoNode *hash_next;
-  String8 key;
-  String8 val;
-};
-
-typedef struct DF_ArchInfoSlot DF_ArchInfoSlot;
-struct DF_ArchInfoSlot
-{
-  DF_ArchInfoNode *first;
-  DF_ArchInfoNode *last;
-};
-
 //- rjf: name allocator types
 
 typedef struct DF_NameChunkNode DF_NameChunkNode;
@@ -1225,10 +1208,6 @@ struct DF_State
   // rjf: current path
   Arena *current_path_arena;
   String8 current_path;
-  
-  // rjf: architecture info tables
-  U64 arch_info_x64_table_size;
-  DF_ArchInfoSlot *arch_info_x64_table;
 };
 
 ////////////////////////////////
@@ -1665,10 +1644,6 @@ internal void df_cfg_push_write_string(DF_CfgSrc src, String8 string);
 
 //- rjf: current path
 internal String8 df_current_path(void);
-
-//- rjf: architecture info table lookups
-internal String8 df_info_summary_from_string__x64(String8 string);
-internal String8 df_info_summary_from_string(Architecture arch, String8 string);
 
 //- rjf: entity kind cache
 internal DF_EntityList df_query_cached_entity_list_with_kind(DF_EntityKind kind);
