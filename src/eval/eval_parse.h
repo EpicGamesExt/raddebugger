@@ -192,19 +192,19 @@ struct E_ParseCtx
   
   // rjf: instruction pointer info
   U64 ip_vaddr;
-  U64 ip_voff; // (within module, which uses `rdi_primary` for debug info)
+  U64 ip_voff; // (within module, which uses `rdis[rdis_primary_idx]` for debug info)
   
   // rjf: debug info
-  RDI_Parsed *rdi_primary;
   RDI_Parsed **rdis;
   Rng1U64 *rdis_vaddr_ranges;
   U64 rdis_count;
+  U64 rdis_primary_idx;
   
   // rjf: identifier resolution maps
   E_String2NumMap *regs_map;
   E_String2NumMap *reg_alias_map;
-  E_String2NumMap *locals_map; // (within `rdi_primary`)
-  E_String2NumMap *member_map; // (within `rdi_primary`)
+  E_String2NumMap *locals_map; // (within `rdis[rdis_primary_idx]`)
+  E_String2NumMap *member_map; // (within `rdis[rdis_primary_idx]`)
 };
 
 ////////////////////////////////

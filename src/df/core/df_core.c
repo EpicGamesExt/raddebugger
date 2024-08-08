@@ -8561,10 +8561,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   DF_EntityList all_modules = df_query_cached_entity_list_with_kind(DF_EntityKind_Module);
   U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
   U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
-  U64 rdis_count = all_modules.count;
+  U64 rdis_count = Max(1, all_modules.count);
   RDI_Parsed **rdis = push_array(arena, RDI_Parsed *, rdis_count);
+  rdis[0] = &di_rdi_parsed_nil;
+  U64 rdis_primary_idx = 0;
   Rng1U64 *rdis_vaddr_ranges = push_array(arena, Rng1U64, rdis_count);
-  RDI_Parsed *rdi_primary = &di_rdi_parsed_nil;
   DI_Key primary_dbgi_key = {0};
   {
     U64 idx = 0;
@@ -8576,7 +8577,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       if(n->entity == module)
       {
         primary_dbgi_key = dbgi_key;
-        rdi_primary = rdis[idx];
+        rdis_primary_idx = idx;
       }
     }
   }
@@ -8588,8 +8589,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->arch              = arch;
     ctx->ip_vaddr          = rip_vaddr;
     ctx->ip_voff           = rip_voff;
-    ctx->rdi_primary       = rdi_primary;
     ctx->rdis_count        = rdis_count;
+    ctx->rdis_primary_idx  = rdis_primary_idx;
     ctx->rdis              = rdis;
     ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
   }
@@ -8603,8 +8604,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->arch              = arch;
     ctx->ip_vaddr          = rip_vaddr;
     ctx->ip_voff           = rip_voff;
-    ctx->rdi_primary       = rdi_primary;
     ctx->rdis_count        = rdis_count;
+    ctx->rdis_primary_idx  = rdis_primary_idx;
     ctx->rdis              = rdis;
     ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
     ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);

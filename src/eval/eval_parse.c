@@ -1178,12 +1178,12 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: form namespaceified fallback versions of this lookup string
           String8List namespaceified_token_strings = {0};
           {
-            U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(e_parse_ctx->rdi_primary, RDI_SectionKind_ScopeVMap, e_parse_ctx->ip_voff);
-            RDI_Scope *scope = rdi_element_from_name_idx(e_parse_ctx->rdi_primary, Scopes, scope_idx);
+            U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], RDI_SectionKind_ScopeVMap, e_parse_ctx->ip_voff);
+            RDI_Scope *scope = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], Scopes, scope_idx);
             U64 proc_idx = scope->proc_idx;
-            RDI_Procedure *procedure = rdi_element_from_name_idx(e_parse_ctx->rdi_primary, Procedures, proc_idx);
+            RDI_Procedure *procedure = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], Procedures, proc_idx);
             U64 name_size = 0;
-            U8 *name_ptr = rdi_string_from_idx(e_parse_ctx->rdi_primary, procedure->name_string_idx, &name_size);
+            U8 *name_ptr = rdi_string_from_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], procedure->name_string_idx, &name_size);
             String8 containing_procedure_name = str8(name_ptr, name_size);
             U64 last_past_scope_resolution_pos = 0;
             for(;;)
@@ -1221,20 +1221,20 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             {
               mapped_identifier = 1;
               identifier_type_is_possibly_dynamically_overridden = 1;
-              RDI_Local *local_var = rdi_element_from_name_idx(e_parse_ctx->rdi_primary, Locals, local_num-1);
-              RDI_TypeNode *type_node = rdi_element_from_name_idx(e_parse_ctx->rdi_primary, TypeNodes, local_var->type_idx);
-              type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, 0);
+              RDI_Local *local_var = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], Locals, local_num-1);
+              RDI_TypeNode *type_node = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], TypeNodes, local_var->type_idx);
+              type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, (U32)e_parse_ctx->rdis_primary_idx);
               
               // rjf: grab location info
               for(U32 loc_block_idx = local_var->location_first;
                   loc_block_idx < local_var->location_opl;
                   loc_block_idx += 1)
               {
-                RDI_LocationBlock *block = rdi_element_from_name_idx(e_parse_ctx->rdi_primary, LocationBlocks, loc_block_idx);
+                RDI_LocationBlock *block = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], LocationBlocks, loc_block_idx);
                 if(block->scope_off_first <= e_parse_ctx->ip_voff && e_parse_ctx->ip_voff < block->scope_off_opl)
                 {
                   U64 all_location_data_size = 0;
-                  U8 *all_location_data = rdi_table_from_name(e_parse_ctx->rdi_primary, LocationData, &all_location_data_size);
+                  U8 *all_location_data = rdi_table_from_name(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], LocationData, &all_location_data_size);
                   loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
                   switch(loc_kind)
                   {

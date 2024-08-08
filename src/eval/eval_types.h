@@ -160,13 +160,13 @@ struct E_TypeCtx
   
   // rjf: instruction pointer info
   U64 ip_vaddr;
-  U64 ip_voff; // (within module, which uses `rdi_primary` for debug info)
+  U64 ip_voff; // (within module, which uses `rdis[rdis_primary_idx]` for debug info)
   
   // rjf: debug info
-  RDI_Parsed *rdi_primary;
   RDI_Parsed **rdis;
   Rng1U64 *rdis_vaddr_ranges;
   U64 rdis_count;
+  U64 rdis_primary_idx;
 };
 
 typedef struct E_TypeState E_TypeState;

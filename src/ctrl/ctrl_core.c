@@ -4643,10 +4643,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             }
             
             // rjf: gather debug infos
-            U64 rdis_count = all_modules_count;
+            U64 rdis_count = Max(1, all_modules_count);
             RDI_Parsed **rdis = push_array(temp.arena, RDI_Parsed *, rdis_count);
+            rdis[0] = &di_rdi_parsed_nil;
             Rng1U64 *rdis_vaddr_ranges = push_array(temp.arena, Rng1U64, rdis_count);
-            RDI_Parsed *rdi_primary = &di_rdi_parsed_nil;
+            U64 rdis_primary_idx = 0;
             ProfScope("gather debug infos")
             {
               U64 primary_idx = 0;
@@ -4671,7 +4672,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                 // rjf: pick primary module
                 if(m == module)
                 {
-                  rdi_primary = rdis[idx];
+                  rdis_primary_idx = idx;
                 }
                 
                 // rjf: inc
@@ -4686,8 +4687,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->arch              = arch;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
-              ctx->rdi_primary       = rdi_primary;
               ctx->rdis_count        = rdis_count;
+              ctx->rdis_primary_idx  = rdis_primary_idx;
               ctx->rdis              = rdis;
               ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
             }
@@ -4700,14 +4701,14 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->arch              = arch;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
-              ctx->rdi_primary       = rdi_primary;
               ctx->rdis_count        = rdis_count;
+              ctx->rdis_primary_idx  = rdis_primary_idx;
               ctx->rdis              = rdis;
               ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
               ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);
               ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
-              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, ctx->rdi_primary, thread_rip_voff);
-              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, ctx->rdi_primary, thread_rip_voff);
+              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, ctx->rdis[ctx->rdis_primary_idx], thread_rip_voff);
+              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, ctx->rdis[ctx->rdis_primary_idx], thread_rip_voff);
             }
             
             // rjf: build eval IR context

@@ -44,7 +44,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
   {
     U64 vaddr = eval.value.u64;
     U64 voff = vaddr - e_interpret_ctx->module_base[0];
-    RDI_Parsed *rdi = e_parse_ctx->rdi_primary;
+    RDI_Parsed *rdi = e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx];
     RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
     RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
     RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
