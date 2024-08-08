@@ -8556,6 +8556,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   Architecture arch = df_architecture_from_entity(thread);
   U64 unwind_count = df_interact_regs()->unwind_count;
   U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, unwind_count);
+  CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
   DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
   DF_EntityList all_modules = df_query_cached_entity_list_with_kind(DF_EntityKind_Module);
   U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
@@ -8641,12 +8642,17 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->arch          = arch;
     ctx->memory_read_user_data = process;
     ctx->memory_read   = df_eval_memory_read;
-    ctx->reg_data      = ctrl_query_cached_reg_block_from_thread(arena, df_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
     ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
+    ctx->reg_data      = push_array(arena, U8, ctx->reg_size);
     ctx->module_base   = push_array(arena, U64, 1);
     ctx->module_base[0]= module->vaddr_rng.min;
     ctx->tls_base      = push_array(arena, U64, 1);
     ctx->tls_base[0]   = df_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
+    if(unwind_count < unwind.frames.count)
+    {
+      CTRL_UnwindFrame *f = &unwind.frames.v[unwind_count];
+      MemoryCopy(ctx->reg_data, f->regs, ctx->reg_size);
+    }
   }
   e_select_interpret_ctx(interpret_ctx);
   
