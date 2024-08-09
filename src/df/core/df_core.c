@@ -158,24 +158,26 @@ df_state_delta_history_batch_end(DF_StateDeltaHistory *hist)
 }
 
 internal void
-df_state_delta_history_push_delta(DF_StateDeltaHistory *hist, void *ptr, U64 size, DF_Entity *optional_guard_entity)
+df_state_delta_history_push_delta_(DF_StateDeltaHistory *hist, DF_StateDeltaParams *params)
 {
   if(hist == 0) { return; }
   DF_StateDeltaBatch *batch = hist->side_tops[Side_Min];
   if(batch == 0 || hist->batch_is_active == 0) { return; }
   DF_StateDeltaNode *n = push_array(hist->side_arenas[Side_Min], DF_StateDeltaNode, 1);
   SLLQueuePush(batch->first, batch->last, n);
-  n->v.guard_entity = df_handle_from_entity(optional_guard_entity);
-  n->v.vaddr = (U64)ptr;
-  n->v.data = push_str8_copy(hist->arena, str8((U8*)ptr, size));
+  n->v.guard_entity = df_handle_from_entity(params->guard_entity);
+  n->v.vaddr = (U64)params->ptr;
+  n->v.data = push_str8_copy(hist->arena, str8((U8*)params->ptr, params->size));
 }
 
 internal void
 df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side)
 {
   if(hist == 0) { return; }
-  DF_StateDeltaBatch *src_batch = hist->side_tops[side];
-  if(src_batch != 0)
+  B32 done = 0;
+  for(DF_StateDeltaBatch *src_batch = hist->side_tops[side];
+      src_batch != 0 && !done;
+      src_batch = hist->side_tops[side])
   {
     U64 pop_pos = (U64)hist->side_tops[side] - (U64)hist->side_arenas[side];
     SLLStackPop(hist->side_tops[side]);
@@ -194,6 +196,7 @@ df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side)
           dst_n->v.vaddr = src_delta->vaddr;
           dst_n->v.data = push_str8_copy(hist->side_arenas[side_flip(side)], str8((U8 *)src_delta->vaddr, src_delta->data.size));
           MemoryCopy((void *)src_delta->vaddr, src_delta->data.str, src_delta->data.size);
+          done = 1;
         }
       }
     }
@@ -1438,58 +1441,76 @@ df_name_alloc(String8 string)
 {
   if(string.size == 0) {return str8_zero();}
   U64 bucket_idx = df_name_bucket_idx_from_string_size(string.size);
-  DF_NameChunkNode *node = df_state->free_name_chunks[bucket_idx];
   
-  // rjf: pull from bucket free list
-  if(node != 0)
+  // rjf: loop -> find node, allocate if not there
+  //
+  // (we do a loop here so that all allocation logic goes through
+  // the same path, such that we *always* pull off a free list,
+  // rather than just using what was pushed onto an arena directly,
+  // which is not undoable; the free lists we control, and are thus
+  // trivially undoable)
+  //
+  DF_NameChunkNode *node = 0;
+  for(;node == 0;)
   {
-    if(bucket_idx == ArrayCount(df_state->free_name_chunks)-1)
+    node = df_state->free_name_chunks[bucket_idx];
+    
+    // rjf: pull from bucket free list
+    if(node != 0)
     {
-      node = 0;
-      DF_NameChunkNode *prev = 0;
-      for(DF_NameChunkNode *n = df_state->free_name_chunks[bucket_idx];
-          n != 0;
-          prev = n, n = n->next)
+      if(bucket_idx == ArrayCount(df_state->free_name_chunks)-1)
       {
-        if(n->size >= string.size+1)
+        node = 0;
+        DF_NameChunkNode *prev = 0;
+        for(DF_NameChunkNode *n = df_state->free_name_chunks[bucket_idx];
+            n != 0;
+            prev = n, n = n->next)
         {
-          if(prev == 0)
+          if(n->size >= string.size+1)
           {
-            df_state->free_name_chunks[bucket_idx] = n->next;
+            if(prev == 0)
+            {
+              df_state_delta_history_push_struct_delta(df_state_delta_history(), &df_state->free_name_chunks[bucket_idx]);
+              df_state->free_name_chunks[bucket_idx] = n->next;
+            }
+            else
+            {
+              df_state_delta_history_push_struct_delta(df_state_delta_history(), &prev->next);
+              prev->next = n->next;
+            }
+            node = n;
+            break;
           }
-          else
-          {
-            prev->next = n->next;
-          }
-          node = n;
-          break;
         }
       }
+      else
+      {
+        df_state_delta_history_push_struct_delta(df_state_delta_history(), &df_state->free_name_chunks[bucket_idx]);
+        SLLStackPop(df_state->free_name_chunks[bucket_idx]);
+      }
     }
-    else
+    
+    // rjf: no found node -> allocate new, push onto associated free list
+    if(node == 0)
     {
-      SLLStackPop(df_state->free_name_chunks[bucket_idx]);
+      U64 chunk_size = 0;
+      if(bucket_idx < ArrayCount(df_state->free_name_chunks)-1)
+      {
+        chunk_size = 1<<(bucket_idx+4);
+      }
+      else
+      {
+        chunk_size = u64_up_to_pow2(string.size);
+      }
+      U8 *chunk_memory = push_array(df_state->arena, U8, chunk_size);
+      DF_NameChunkNode *chunk = (DF_NameChunkNode *)chunk_memory;
+      SLLStackPush(df_state->free_name_chunks[bucket_idx], chunk);
     }
-  }
-  
-  // rjf: no found node -> allocate new
-  if(node == 0)
-  {
-    U64 chunk_size = 0;
-    if(bucket_idx < ArrayCount(df_state->free_name_chunks)-1)
-    {
-      chunk_size = 1<<(bucket_idx+4);
-    }
-    else
-    {
-      chunk_size = u64_up_to_pow2(string.size);
-    }
-    U8 *chunk_memory = push_array(df_state->arena, U8, chunk_size);
-    node = (DF_NameChunkNode *)chunk_memory;
   }
   
   // rjf: fill string & return
   String8 allocated_string = str8((U8 *)node, string.size);
+  df_state_delta_history_push_delta(df_state_delta_history(), .ptr = allocated_string.str, .size = Max(allocated_string.size, sizeof(*node)));
   MemoryCopy((U8 *)node, string.str, string.size);
   return allocated_string;
 }
@@ -1500,6 +1521,8 @@ df_name_release(String8 string)
   if(string.size == 0) {return;}
   U64 bucket_idx = df_name_bucket_idx_from_string_size(string.size);
   DF_NameChunkNode *node = (DF_NameChunkNode *)string.str;
+  df_state_delta_history_push_delta(df_state_delta_history(), .ptr = node, .size = Max(node->size, sizeof(*node)));
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &df_state->free_name_chunks[bucket_idx]);
   node->size = u64_up_to_pow2(string.size);
   SLLStackPush(df_state->free_name_chunks[bucket_idx], node);
 }
@@ -1590,6 +1613,15 @@ df_entity_alloc(DF_Entity *parent, DF_EntityKind kind)
   entity->id = df_state->entities_id_gen;
   entity->gen += 1;
   entity->alloc_time_us = os_now_microseconds();
+  
+  // rjf: initialize to deleted, record history, then "undelete" if this allocation can be undone
+  if(user_defined_lifetime)
+  {
+    entity->deleted = 1;
+    df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->deleted, .guard_entity = entity);
+    entity->deleted = 0;
+    df_state_delta_history_push_struct_delta(df_state_delta_history(), &df_state->kind_alloc_gens[kind], .guard_entity = entity);
+  }
   
   // rjf: dirtify caches
   df_state->kind_alloc_gens[kind] += 1;
@@ -1694,8 +1726,8 @@ internal void
 df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->text_point, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->text_point, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->text_point = point;
   entity->flags |= DF_EntityFlag_HasTextPoint;
   df_entity_notify_mutation(entity);
@@ -1705,8 +1737,8 @@ internal void
 df_entity_equip_entity_handle(DF_Entity *entity, DF_Handle handle)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->entity_handle, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->entity_handle, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->entity_handle = handle;
   entity->flags |= DF_EntityFlag_HasEntityHandle;
   df_entity_notify_mutation(entity);
@@ -1716,8 +1748,8 @@ internal void
 df_entity_equip_b32(DF_Entity *entity, B32 b32)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->b32, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->b32, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->b32 = b32;
   entity->flags |= DF_EntityFlag_HasB32;
   df_entity_notify_mutation(entity);
@@ -1727,8 +1759,8 @@ internal void
 df_entity_equip_u64(DF_Entity *entity, U64 u64)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->u64, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->u64, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->u64 = u64;
   entity->flags |= DF_EntityFlag_HasU64;
   df_entity_notify_mutation(entity);
@@ -1748,8 +1780,8 @@ internal void
 df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->color_hsva, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->color_hsva, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->color_hsva = hsva;
   entity->flags |= DF_EntityFlag_HasColor;
   df_entity_notify_mutation(entity);
@@ -1759,7 +1791,7 @@ internal void
 df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->cfg_src, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->cfg_src, .guard_entity = entity);
   entity->cfg_src = cfg_src;
   df_entity_notify_mutation(entity);
 }
@@ -1768,7 +1800,7 @@ internal void
 df_entity_equip_timestamp(DF_Entity *entity, U64 timestamp)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->timestamp, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->timestamp, .guard_entity = entity);
   entity->timestamp = timestamp;
   df_entity_notify_mutation(entity);
 }
@@ -1779,8 +1811,8 @@ internal void
 df_entity_equip_ctrl_machine_id(DF_Entity *entity, CTRL_MachineID machine_id)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->ctrl_machine_id, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->ctrl_machine_id, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_machine_id = machine_id;
   entity->flags |= DF_EntityFlag_HasCtrlMachineID;
   df_entity_notify_mutation(entity);
@@ -1790,8 +1822,8 @@ internal void
 df_entity_equip_ctrl_handle(DF_Entity *entity, DMN_Handle handle)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->ctrl_handle, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->ctrl_handle, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_handle = handle;
   entity->flags |= DF_EntityFlag_HasCtrlHandle;
   df_entity_notify_mutation(entity);
@@ -1801,8 +1833,8 @@ internal void
 df_entity_equip_arch(DF_Entity *entity, Architecture arch)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->arch, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->arch, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->arch = arch;
   entity->flags |= DF_EntityFlag_HasArch;
   df_entity_notify_mutation(entity);
@@ -1812,8 +1844,8 @@ internal void
 df_entity_equip_ctrl_id(DF_Entity *entity, U32 id)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->ctrl_id, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->ctrl_id, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_id = id;
   entity->flags |= DF_EntityFlag_HasCtrlID;
   df_entity_notify_mutation(entity);
@@ -1823,8 +1855,8 @@ internal void
 df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->stack_base, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->stack_base, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->stack_base = stack_base;
   entity->flags |= DF_EntityFlag_HasStackBase;
   df_entity_notify_mutation(entity);
@@ -1834,8 +1866,8 @@ internal void
 df_entity_equip_vaddr_rng(DF_Entity *entity, Rng1U64 range)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->vaddr_rng, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->vaddr_rng, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->vaddr_rng = range;
   entity->flags |= DF_EntityFlag_HasVAddrRng;
   df_entity_notify_mutation(entity);
@@ -1845,8 +1877,8 @@ internal void
 df_entity_equip_vaddr(DF_Entity *entity, U64 vaddr)
 {
   df_require_entity_nonnil(entity, return);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->vaddr, entity);
-  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->vaddr, .guard_entity = entity);
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->vaddr = vaddr;
   entity->flags |= DF_EntityFlag_HasVAddr;
   df_entity_notify_mutation(entity);
@@ -1862,6 +1894,7 @@ df_entity_equip_name(DF_Entity *entity, String8 name)
   {
     df_name_release(entity->name);
   }
+  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->name, .guard_entity = entity);
   if(name.size != 0)
   {
     entity->name = df_name_alloc(name);
@@ -8103,7 +8136,15 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             for(Task *task = first_task; task != 0; task = task->next)
             {
               DF_Entity *src_n = task->src_n;
+              if(task == first_task)
+              {
+                df_state_delta_history_batch_begin(df_state_delta_history());
+              }
               DF_Entity *dst_n = df_entity_alloc(task->dst_parent, task->src_n->kind);
+              if(task == first_task)
+              {
+                df_state_delta_history_batch_end(df_state_delta_history());
+              }
               if(src_n->flags & DF_EntityFlag_HasTextPoint)    {df_entity_equip_txt_pt(dst_n, src_n->text_point);}
               if(src_n->flags & DF_EntityFlag_HasB32)          {df_entity_equip_b32(dst_n, src_n->b32);}
               if(src_n->flags & DF_EntityFlag_HasU64)          {df_entity_equip_u64(dst_n, src_n->u64);}
@@ -8147,7 +8188,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             if(removed_existing == 0)
             {
-              DF_Entity *bp = df_entity_alloc(entity, DF_EntityKind_Breakpoint);
+              DF_Entity *bp = &df_g_nil_entity;
+              DF_StateDeltaHistoryBatch(df_state_delta_history())
+              {
+                bp = df_entity_alloc(entity, DF_EntityKind_Breakpoint);
+              }
               df_entity_equip_txt_pt(bp, params.text_point);
               df_entity_equip_b32(bp, 1);
               df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
@@ -8171,7 +8216,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             if(df_entity_is_nil(bp))
             {
-              bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
+              DF_StateDeltaHistoryBatch(df_state_delta_history())
+              {
+                bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
+              }
               df_entity_equip_vaddr(bp, vaddr);
               df_entity_equip_b32(bp, 1);
               df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
@@ -8191,7 +8239,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             DF_Entity *bp = df_entity_ancestor_from_kind(symb, DF_EntityKind_Breakpoint);
             if(df_entity_is_nil(bp))
             {
-              bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
+              DF_StateDeltaHistoryBatch(df_state_delta_history())
+              {
+                bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
+              }
               DF_Entity *symbol_name_entity = df_entity_alloc(bp, DF_EntityKind_EntryPointName);
               df_entity_equip_name(symbol_name_entity, function_name);
               df_entity_equip_b32(bp, 1);
@@ -8225,7 +8276,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             if(removed_existing == 0)
             {
-              DF_Entity *watch = df_entity_alloc(entity, DF_EntityKind_WatchPin);
+              DF_Entity *watch = &df_g_nil_entity;
+              DF_StateDeltaHistoryBatch(df_state_delta_history())
+              {
+                watch = df_entity_alloc(entity, DF_EntityKind_WatchPin);
+              }
               df_entity_equip_txt_pt(watch, params.text_point);
               df_entity_equip_name(watch, params.string);
               df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
@@ -8246,7 +8301,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
             if(!removed_existing)
             {
-              DF_Entity *pin = df_entity_alloc(df_entity_root(), DF_EntityKind_WatchPin);
+              DF_Entity *pin = &df_g_nil_entity;
+              DF_StateDeltaHistoryBatch(df_state_delta_history())
+              {
+                pin = df_entity_alloc(df_entity_root(), DF_EntityKind_WatchPin);
+              }
               df_entity_equip_vaddr(pin, params.vaddr);
               df_entity_equip_name(pin, params.string);
               df_entity_equip_cfg_src(pin, DF_CfgSrc_Project);
@@ -8369,7 +8428,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         case DF_CoreCmdKind_AddTarget:
         {
           // rjf: build target
-          DF_Entity *entity = df_entity_alloc(df_entity_root(), DF_EntityKind_Target);
+          DF_Entity *entity = &df_g_nil_entity;
+          DF_StateDeltaHistoryBatch(df_state_delta_history())
+          {
+            entity = df_entity_alloc(df_entity_root(), DF_EntityKind_Target);
+          }
           df_entity_equip_cfg_src(entity, DF_CfgSrc_Project);
           DF_Entity *exe = df_entity_alloc(entity, DF_EntityKind_Executable);
           df_entity_equip_name(exe, params.file_path);
@@ -8391,16 +8454,19 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           DF_Entity *entity = df_entity_from_handle(params.entity);
           if(entity->kind == DF_EntityKind_Target)
           {
-            DF_EntityList all_targets = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
-            B32 is_selected = entity->b32;
-            for(DF_EntityNode *n = all_targets.first; n != 0; n = n->next)
+            DF_StateDeltaHistoryBatch(df_state_delta_history())
             {
-              DF_Entity *target = n->entity;
-              df_entity_equip_b32(target, 0);
-            }
-            if(!is_selected)
-            {
-              df_entity_equip_b32(entity, 1);
+              DF_EntityList all_targets = df_query_cached_entity_list_with_kind(DF_EntityKind_Target);
+              B32 is_selected = entity->b32;
+              for(DF_EntityNode *n = all_targets.first; n != 0; n = n->next)
+              {
+                DF_Entity *target = n->entity;
+                df_entity_equip_b32(target, 0);
+              }
+              if(!is_selected)
+              {
+                df_entity_equip_b32(entity, 1);
+              }
             }
           }
         }break;
@@ -8635,7 +8701,7 @@ df_core_end_frame(void)
   }
   
   //- rjf: eliminate entities that are marked for deletion
-  ProfScope("eliminate deleted/deletion-timer entities")
+  ProfScope("eliminate deleted entities")
   {
     for(DF_Entity *entity = df_entity_root(), *next = 0; !df_entity_is_nil(entity); entity = next)
     {
@@ -8650,8 +8716,12 @@ df_core_end_frame(void)
         // rjf: undoable -> just mark as deleted; this must be able to be trivially undone
         if(undoable)
         {
-          entity->deleted = 1;
-          entity->gen += 1;
+          DF_StateDeltaHistoryBatch(df_state_delta_history())
+          {
+            df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->deleted, .guard_entity = entity);
+            df_state_delta_history_push_struct_delta(df_state_delta_history(), &df_state->kind_alloc_gens[entity->kind], .guard_entity = entity);
+            entity->deleted = 1;
+          }
           entity->flags &= ~DF_EntityFlag_MarkedForDeletion;
           df_state->kind_alloc_gens[entity->kind] += 1;
         }

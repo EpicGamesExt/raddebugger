@@ -1050,6 +1050,14 @@ struct DF_FileScanSlot
 ////////////////////////////////
 //~ rjf: State Delta History Types
 
+typedef struct DF_StateDeltaParams DF_StateDeltaParams;
+struct DF_StateDeltaParams
+{
+  void *ptr;
+  U64 size;
+  DF_Entity *guard_entity;
+};
+
 typedef struct DF_StateDelta DF_StateDelta;
 struct DF_StateDelta
 {
@@ -1288,8 +1296,9 @@ internal void df_state_delta_history_release(DF_StateDeltaHistory *hist);
 internal void df_state_delta_history_batch_begin(DF_StateDeltaHistory *hist);
 internal void df_state_delta_history_batch_end(DF_StateDeltaHistory *hist);
 #define DF_StateDeltaHistoryBatch(hist) DeferLoop(df_state_delta_history_batch_begin(hist), df_state_delta_history_batch_end(hist))
-internal void df_state_delta_history_push_delta(DF_StateDeltaHistory *hist, void *ptr, U64 size, DF_Entity *optional_guard_entity);
-#define df_state_delta_history_push_struct_delta(hist, ptr, optional_guard_entity) df_state_delta_history_push_delta((hist), (ptr), sizeof(*(ptr)), (optional_guard_entity))
+internal void df_state_delta_history_push_delta_(DF_StateDeltaHistory *hist, DF_StateDeltaParams *params);
+#define df_state_delta_history_push_delta(hist, ...) df_state_delta_history_push_delta_((hist), &(DF_StateDeltaParams){.size = 1, __VA_ARGS__})
+#define df_state_delta_history_push_struct_delta(hist, sptr, ...) df_state_delta_history_push_delta((hist), .ptr = (sptr), .size = sizeof(*(sptr)), __VA_ARGS__)
 internal void df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side);
 
 ////////////////////////////////

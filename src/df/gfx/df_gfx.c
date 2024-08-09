@@ -4462,7 +4462,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(ui_clicked(df_icon_buttonf(ws, DF_IconKind_Trash, 0, "Remove Color###color_toggle")))
               {
-                entity->flags &= ~DF_EntityFlag_HasColor;
+                DF_StateDeltaHistoryBatch(df_state_delta_history())
+                {
+                  df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->flags, .guard_entity = entity);
+                  entity->flags &= ~DF_EntityFlag_HasColor;
+                }
               }
             }
             
@@ -4470,7 +4474,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
           if(!entity_has_color && ui_clicked(df_icon_buttonf(ws, DF_IconKind_Palette, 0, "Apply Color###color_toggle")))
           {
-            df_entity_equip_color_rgba(entity, v4f32(1, 1, 1, 1));
+            DF_StateDeltaHistoryBatch(df_state_delta_history())
+            {
+              df_entity_equip_color_rgba(entity, v4f32(1, 1, 1, 1));
+            }
           }
         }
       }

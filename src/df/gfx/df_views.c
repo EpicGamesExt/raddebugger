@@ -1273,7 +1273,11 @@ df_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewSt
         DF_Entity *existing_watch = df_entity_from_name_and_kind(cmd->params.string, DF_EntityKind_Watch);
         if(df_entity_is_nil(existing_watch))
         {
-          DF_Entity *watch = df_entity_alloc(df_entity_root(), DF_EntityKind_Watch);
+          DF_Entity *watch = &df_g_nil_entity;
+          DF_StateDeltaHistoryBatch(df_state_delta_history())
+          {
+            watch = df_entity_alloc(df_entity_root(), DF_EntityKind_Watch);
+          }
           df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
           df_entity_equip_name(watch, cmd->params.string);
         }
