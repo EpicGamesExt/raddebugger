@@ -353,7 +353,6 @@ struct DF_Entity
   Architecture arch;
   U32 ctrl_id;
   U64 stack_base;
-  U64 tls_root;
   Rng1U64 vaddr_rng;
   U64 vaddr;
   
@@ -1054,6 +1053,7 @@ struct DF_FileScanSlot
 typedef struct DF_StateDelta DF_StateDelta;
 struct DF_StateDelta
 {
+  DF_Handle guard_entity;
   U64 vaddr;
   String8 data;
 };
@@ -1071,8 +1071,6 @@ struct DF_StateDeltaBatch
   DF_StateDeltaBatch *next;
   DF_StateDeltaNode *first;
   DF_StateDeltaNode *last;
-  U64 gen;
-  U64 gen_vaddr;
 };
 
 typedef struct DF_StateDeltaHistory DF_StateDeltaHistory;
@@ -1081,6 +1079,7 @@ struct DF_StateDeltaHistory
   Arena *arena;
   Arena *side_arenas[Side_COUNT]; // min -> undo; max -> redo
   DF_StateDeltaBatch *side_tops[Side_COUNT];
+  B32 batch_is_active;
 };
 
 ////////////////////////////////
@@ -1286,9 +1285,11 @@ internal DF_HandleList df_push_handle_list_copy(Arena *arena, DF_HandleList list
 
 internal DF_StateDeltaHistory *df_state_delta_history_alloc(void);
 internal void df_state_delta_history_release(DF_StateDeltaHistory *hist);
-internal void df_state_delta_history_push_batch(DF_StateDeltaHistory *hist, U64 *optional_gen_ptr);
-internal void df_state_delta_history_push_delta(DF_StateDeltaHistory *hist, void *ptr, U64 size);
-#define df_state_delta_history_push_struct_delta(hist, ptr) df_state_delta_history_push_delta((hist), (ptr), sizeof(*(ptr)))
+internal void df_state_delta_history_batch_begin(DF_StateDeltaHistory *hist);
+internal void df_state_delta_history_batch_end(DF_StateDeltaHistory *hist);
+#define DF_StateDeltaHistoryBatch(hist) DeferLoop(df_state_delta_history_batch_begin(hist), df_state_delta_history_batch_end(hist))
+internal void df_state_delta_history_push_delta(DF_StateDeltaHistory *hist, void *ptr, U64 size, DF_Entity *optional_guard_entity);
+#define df_state_delta_history_push_struct_delta(hist, ptr, optional_guard_entity) df_state_delta_history_push_delta((hist), (ptr), sizeof(*(ptr)), (optional_guard_entity))
 internal void df_state_delta_history_wind(DF_StateDeltaHistory *hist, Side side);
 
 ////////////////////////////////
@@ -1413,8 +1414,8 @@ internal DF_ExpandKey df_parent_expand_key_from_entity(DF_Entity *entity);
 //~ rjf: Name Allocation
 
 internal U64 df_name_bucket_idx_from_string_size(U64 size);
-internal String8 df_name_alloc(DF_StateDeltaHistory *hist, String8 string);
-internal void df_name_release(DF_StateDeltaHistory *hist, String8 string);
+internal String8 df_name_alloc(String8 string);
+internal void df_name_release(String8 string);
 
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions
@@ -1423,10 +1424,10 @@ internal void df_name_release(DF_StateDeltaHistory *hist, String8 string);
 internal void df_entity_notify_mutation(DF_Entity *entity);
 
 //- rjf: entity allocation + tree forming
-internal DF_Entity *df_entity_alloc(DF_StateDeltaHistory *hist, DF_Entity *parent, DF_EntityKind kind);
+internal DF_Entity *df_entity_alloc(DF_Entity *parent, DF_EntityKind kind);
 internal void df_entity_mark_for_deletion(DF_Entity *entity);
-internal void df_entity_release(DF_StateDeltaHistory *hist, DF_Entity *entity);
-internal void df_entity_change_parent(DF_StateDeltaHistory *hist, DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent, DF_Entity *prev_child);
+internal void df_entity_release(DF_Entity *entity);
+internal void df_entity_change_parent(DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent, DF_Entity *prev_child);
 
 //- rjf: entity simple equipment
 internal void df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point);
@@ -1444,13 +1445,12 @@ internal void df_entity_equip_ctrl_handle(DF_Entity *entity, DMN_Handle handle);
 internal void df_entity_equip_arch(DF_Entity *entity, Architecture arch);
 internal void df_entity_equip_ctrl_id(DF_Entity *entity, U32 id);
 internal void df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base);
-internal void df_entity_equip_tls_root(DF_Entity *entity, U64 tls_root);
 internal void df_entity_equip_vaddr_rng(DF_Entity *entity, Rng1U64 range);
 internal void df_entity_equip_vaddr(DF_Entity *entity, U64 vaddr);
 
 //- rjf: name equipment
-internal void df_entity_equip_name(DF_StateDeltaHistory *hist, DF_Entity *entity, String8 name);
-internal void df_entity_equip_namef(DF_StateDeltaHistory *hist, DF_Entity *entity, char *fmt, ...);
+internal void df_entity_equip_name(DF_Entity *entity, String8 name);
+internal void df_entity_equip_namef(DF_Entity *entity, char *fmt, ...);
 
 //- rjf: opening folders/files & maintaining the entity model of the filesystem
 internal DF_Entity *df_entity_from_path(String8 path, DF_EntityFromPathFlags flags);

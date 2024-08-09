@@ -1273,9 +1273,9 @@ df_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewSt
         DF_Entity *existing_watch = df_entity_from_name_and_kind(cmd->params.string, DF_EntityKind_Watch);
         if(df_entity_is_nil(existing_watch))
         {
-          DF_Entity *watch = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Watch);
+          DF_Entity *watch = df_entity_alloc(df_entity_root(), DF_EntityKind_Watch);
           df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
-          df_entity_equip_name(0, watch, cmd->params.string);
+          df_entity_equip_name(watch, cmd->params.string);
         }
         else
         {
@@ -1935,15 +1935,15 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, DF_EntityKind_Watch);
                   if(!df_entity_is_nil(watch))
                   {
-                    df_entity_equip_name(0, watch, new_string);
+                    df_entity_equip_name(watch, new_string);
                     state_dirty = 1;
                     snap_to_cursor = 1;
                   }
                   else if(editing_complete && new_string.size != 0 && df_expand_key_match(pt.key, empty_row_key))
                   {
-                    watch = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Watch);
+                    watch = df_entity_alloc(df_entity_root(), DF_EntityKind_Watch);
                     df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
-                    df_entity_equip_name(0, watch, new_string);
+                    df_entity_equip_name(watch, new_string);
                     DF_ExpandKey key = df_expand_key_from_entity(watch);
                     df_eval_view_set_key_rule(eval_view, key, str8_zero());
                     state_dirty = 1;
@@ -1980,7 +1980,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   DF_Entity *view_rule = df_entity_child_from_kind(watch, DF_EntityKind_ViewRule);
                   if(new_string.size != 0 && df_entity_is_nil(view_rule))
                   {
-                    view_rule = df_entity_alloc(0, watch, DF_EntityKind_ViewRule);
+                    view_rule = df_entity_alloc(watch, DF_EntityKind_ViewRule);
                   }
                   else if(new_string.size == 0 && !df_entity_is_nil(view_rule))
                   {
@@ -1988,7 +1988,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   }
                   if(new_string.size != 0)
                   {
-                    df_entity_equip_name(0, view_rule, new_string);
+                    df_entity_equip_name(view_rule, new_string);
                   }
                   state_dirty = 1;
                   snap_to_cursor = 1;
@@ -2209,13 +2209,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         {
           state_dirty = 1;
           snap_to_cursor = 1;
-          df_entity_change_parent(0, reorder_group_prev, reorder_group_prev->parent, reorder_group_prev->parent, last_watch);
+          df_entity_change_parent(reorder_group_prev, reorder_group_prev->parent, reorder_group_prev->parent, last_watch);
         }
         if(evt->delta_2s32.y > 0 && !df_entity_is_nil(last_watch) && !df_entity_is_nil(reorder_group_next))
         {
           state_dirty = 1;
           snap_to_cursor = 1;
-          df_entity_change_parent(0, reorder_group_next, reorder_group_next->parent, reorder_group_next->parent, reorder_group_prev);
+          df_entity_change_parent(reorder_group_next, reorder_group_next->parent, reorder_group_next->parent, reorder_group_prev);
         }
       }
       
@@ -4175,11 +4175,11 @@ DF_VIEW_CMD_FUNCTION_DEF(Target)
           DF_Entity *child = df_entity_child_from_kind(entity, tv->pick_dst_kind);
           if(df_entity_is_nil(child))
           {
-            child = df_entity_alloc(0, entity, tv->pick_dst_kind);
+            child = df_entity_alloc(entity, tv->pick_dst_kind);
           }
           storage_entity = child;
         }
-        df_entity_equip_name(0, storage_entity, pick_string);
+        df_entity_equip_name(storage_entity, pick_string);
       }break;
     }
   }
@@ -4419,7 +4419,6 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   if(edit_commit)
   {
     String8 new_string = str8(tv->input_buffer, tv->input_size);
-    df_state_delta_history_push_batch(df_state_delta_history(), 0);
     switch(commit_storage_child_kind)
     {
       default:
@@ -4427,13 +4426,13 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
         DF_Entity *child = df_entity_child_from_kind(entity, commit_storage_child_kind);
         if(df_entity_is_nil(child))
         {
-          child = df_entity_alloc(df_state_delta_history(), entity, commit_storage_child_kind);
+          child = df_entity_alloc(entity, commit_storage_child_kind);
         }
-        df_entity_equip_name(df_state_delta_history(), child, new_string);
+        df_entity_equip_name(child, new_string);
       }break;
       case DF_EntityKind_Nil:
       {
-        df_entity_equip_name(df_state_delta_history(), entity, new_string);
+        df_entity_equip_name(entity, new_string);
       }break;
     }
   }

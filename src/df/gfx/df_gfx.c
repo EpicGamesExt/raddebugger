@@ -4013,8 +4013,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(df_entity_is_nil(condition))
               {
-                df_state_delta_history_push_batch(df_state_delta_history(), 0);
-                condition = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_Condition);
+                condition = df_entity_alloc(entity, DF_EntityKind_Condition);
               }
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(condition);
@@ -4042,8 +4041,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(df_entity_is_nil(exe))
               {
-                df_state_delta_history_push_batch(df_state_delta_history(), 0);
-                exe = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_Executable);
+                exe = df_entity_alloc(entity, DF_EntityKind_Executable);
               }
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(exe);
@@ -4071,8 +4069,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(df_entity_is_nil(args))
               {
-                df_state_delta_history_push_batch(df_state_delta_history(), 0);
-                args = df_entity_alloc(df_state_delta_history(), entity, DF_EntityKind_Arguments);
+                args = df_entity_alloc(entity, DF_EntityKind_Arguments);
               }
               DF_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = df_handle_from_entity(args);
@@ -12034,7 +12031,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
           {
             if(!df_entity_is_nil(df_entity_from_handle(df_interact_regs()->file)))
             {
-              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, df_entity_from_handle(df_interact_regs()->file), &df_g_nil_entity);
+              df_entity_change_parent(dropped_entity, dropped_entity->parent, df_entity_from_handle(df_interact_regs()->file), &df_g_nil_entity);
               df_entity_equip_txt_pt(dropped_entity, txt_pt(line_num, 1));
               if(dropped_entity->flags & DF_EntityFlag_HasVAddr)
               {
@@ -12043,7 +12040,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             }
             else if(line_vaddr != 0)
             {
-              df_entity_change_parent(0, dropped_entity, dropped_entity->parent, df_entity_root(), &df_g_nil_entity);
+              df_entity_change_parent(dropped_entity, dropped_entity->parent, df_entity_root(), &df_g_nil_entity);
               df_entity_equip_vaddr(dropped_entity, line_vaddr);
             }
           }break;

@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-DF_StringBindingPair df_g_default_binding_table[106] =
+DF_StringBindingPair df_g_default_binding_table[110] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_EventFlag_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_EventFlag_Alt}},
@@ -34,6 +34,10 @@ DF_StringBindingPair df_g_default_binding_table[106] =
 {str8_lit_comp("focus_panel_left"), {OS_Key_Left, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
 {str8_lit_comp("focus_panel_up"), {OS_Key_Up, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
 {str8_lit_comp("focus_panel_down"), {OS_Key_Down, 0 |OS_EventFlag_Ctrl  |OS_EventFlag_Alt}},
+{str8_lit_comp("undo"), {OS_Key_Z, 0 |OS_EventFlag_Ctrl  }},
+{str8_lit_comp("redo"), {OS_Key_Y, 0 |OS_EventFlag_Ctrl  }},
+{str8_lit_comp("go_back"), {OS_Key_Left, 0   |OS_EventFlag_Alt}},
+{str8_lit_comp("go_forward"), {OS_Key_Right, 0   |OS_EventFlag_Alt}},
 {str8_lit_comp("close_panel"), {OS_Key_P, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift }},
 {str8_lit_comp("next_tab"), {OS_Key_PageDown, 0 |OS_EventFlag_Ctrl  }},
 {str8_lit_comp("prev_tab"), {OS_Key_PageUp, 0 |OS_EventFlag_Ctrl  }},

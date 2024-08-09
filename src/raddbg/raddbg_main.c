@@ -245,7 +245,7 @@ entry_point(CmdLine *cmd_line)
         if(args.node_count > 0 && args.first->string.size != 0)
         {
           Temp scratch = scratch_begin(0, 0);
-          DF_Entity *target = df_entity_alloc(0, df_entity_root(), DF_EntityKind_Target);
+          DF_Entity *target = df_entity_alloc(df_entity_root(), DF_EntityKind_Target);
           df_entity_equip_b32(target, 1);
           df_entity_equip_cfg_src(target, DF_CfgSrc_CommandLine);
           String8List passthrough_args_list = {0};
@@ -261,14 +261,14 @@ entry_point(CmdLine *cmd_line)
           if(args.first->string.size != 0)
           {
             String8 exe_name = args.first->string;
-            DF_Entity *exe = df_entity_alloc(0, target, DF_EntityKind_Executable);
+            DF_Entity *exe = df_entity_alloc(target, DF_EntityKind_Executable);
             PathStyle style = path_style_from_str8(exe_name);
             if(style == PathStyle_Relative)
             {
               exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
               exe_name = path_normalized_from_string(scratch.arena, exe_name);
             }
-            df_entity_equip_name(0, exe, exe_name);
+            df_entity_equip_name(exe, exe_name);
           }
           
           // rjf: equip path
@@ -276,8 +276,8 @@ entry_point(CmdLine *cmd_line)
           if(path_part_of_arg.size != 0)
           {
             String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            DF_Entity *execution_path = df_entity_alloc(0, target, DF_EntityKind_ExecutionPath);
-            df_entity_equip_name(0, execution_path, path);
+            DF_Entity *execution_path = df_entity_alloc(target, DF_EntityKind_ExecutionPath);
+            df_entity_equip_name(execution_path, path);
           }
           
           // rjf: equip args
@@ -285,8 +285,8 @@ entry_point(CmdLine *cmd_line)
           String8 args_str = str8_list_join(scratch.arena, &passthrough_args_list, &join);
           if(args_str.size != 0)
           {
-            DF_Entity *args_entity = df_entity_alloc(0, target, DF_EntityKind_Arguments);
-            df_entity_equip_name(0, args_entity, args_str);
+            DF_Entity *args_entity = df_entity_alloc(target, DF_EntityKind_Arguments);
+            df_entity_equip_name(args_entity, args_str);
           }
           scratch_end(scratch);
         }

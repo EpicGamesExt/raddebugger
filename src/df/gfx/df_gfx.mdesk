@@ -59,12 +59,12 @@ DF_DefaultBindingTable:
   { "focus_panel_down"            Down      ctrl     0         alt        }
   
   //- rjf: undo/redo
-  //{ "undo"                        Z         ctrl     0         0          }
-  //{ "redo"                        Y         ctrl     0         0          }
+  { "undo"                        Z         ctrl     0         0          }
+  { "redo"                        Y         ctrl     0         0          }
   
   //- rjf: focus history
-  //{ "go_back"                     Left      0        0         alt        }
-  //{ "go_forward"                  Right     0        0         alt        }
+  { "go_back"                     Left      0        0         alt        }
+  { "go_forward"                  Right     0        0         alt        }
   
   //- rjf: panel removal
   { "close_panel"                 P         ctrl     shift     0          }
