@@ -1040,7 +1040,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
             if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
             {
-              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing ).");
+              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `)`.");
             }
             
             // rjf: consume )
@@ -1106,7 +1106,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
       if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing ).");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `)`.");
       }
       
       // rjf: consume )
@@ -1144,7 +1144,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
       if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit("]"), 0))
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing ].");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `]`.");
       }
       
       // rjf: consume )
@@ -1466,7 +1466,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else
                 {
-                  e_msgf(arena, &result.msgs, E_MsgKind_MissingInfo, token_string.str, "Missing location information for \"%S\".", token_string);
+                  e_msgf(arena, &result.msgs, E_MsgKind_MissingInfo, token_string.str, "Missing location information for `%S`.", token_string);
                 }
               }break;
               case RDI_LocationKind_AddrBytecodeStream:
@@ -1639,7 +1639,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         String8 member_name_maybe_string = str8_substr(text, member_name_maybe.range);
         if(member_name_maybe.kind != E_TokenKind_Identifier)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected member name after %S.", token_string);
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected member name after `%S`.", token_string);
         }
         else
         {
@@ -1697,7 +1697,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         String8 close_brace_maybe_string = str8_substr(text, close_brace_maybe.range);
         if(close_brace_maybe.kind != E_TokenKind_Symbol || !str8_match(close_brace_maybe_string, str8_lit("]"), 0))
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Unclosed [.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Unclosed `[`.");
         }
         else
         {
@@ -1784,7 +1784,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         it = rhs_expr_parse.last_token;
         if(rhs == &e_expr_nil)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing right-hand-side of %S.", token_string);
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing right-hand-side of `%S`.", token_string);
         }
         else
         {
@@ -1810,7 +1810,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         e_msg_list_concat_in_place(&result.msgs, &middle_expr_parse.msgs);
         if(middle_expr_parse.expr == &e_expr_nil)
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression after ?.");
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression after `?`.");
         }
         
         // rjf: expect :
@@ -1822,7 +1822,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           String8 colon_token_maybe_string = str8_substr(text, colon_token_maybe.range);
           if(colon_token_maybe.kind != E_TokenKind_Symbol || !str8_match(colon_token_maybe_string, str8_lit(":"), 0))
           {
-            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected : after ?.");
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected `:` after `?`.");
           }
           else
           {
@@ -1842,7 +1842,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
           if(rhs_expr_parse.expr == &e_expr_nil)
           {
-            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, colon_token_string.str, "Expected expression after :.");
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, colon_token_string.str, "Expected expression after `:`.");
           }
         }
         

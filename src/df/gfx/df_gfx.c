@@ -12327,17 +12327,27 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
                         mix_t = selected_thread_module->alive_t;
                       }
                     }
-                    if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
-                    {
-                      U64 local_num = e_num_from_string(e_parse_ctx->locals_map, token_string);
-                      if(local_num != 0)
-                      {
-                        mapped_special = 1;
-                        new_color_kind = DF_ThemeColor_CodeLocal;
-                        mix_t = selected_thread_module->alive_t;
-                      }
-                    }
                     break;
+                  }
+                  if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
+                  {
+                    U64 local_num = e_num_from_string(e_parse_ctx->locals_map, token_string);
+                    if(local_num != 0)
+                    {
+                      mapped_special = 1;
+                      new_color_kind = DF_ThemeColor_CodeLocal;
+                      mix_t = selected_thread_module->alive_t;
+                    }
+                  }
+                  if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
+                  {
+                    U64 member_num = e_num_from_string(e_parse_ctx->member_map, token_string);
+                    if(member_num != 0)
+                    {
+                      mapped_special = 1;
+                      new_color_kind = DF_ThemeColor_CodeLocal;
+                      mix_t = selected_thread_module->alive_t;
+                    }
                   }
                   if(!mapped_special)
                   {
@@ -12737,6 +12747,71 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
 //~ rjf: UI Widgets: Fancy Labels
 
 internal UI_Signal
+df_label(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  typedef U32 StringPartFlags;
+  enum
+  {
+    StringPartFlag_Code      = (1<<0),
+    StringPartFlag_Underline = (1<<1),
+    StringPartFlag_Bright    = (1<<2),
+  };
+  typedef struct StringPart StringPart;
+  struct StringPart
+  {
+    StringPart *next;
+    StringPartFlags flags;
+    String8 string;
+  };
+  StringPart *first_part = 0;
+  StringPart *last_part = 0;
+  U64 active_part_start_idx = 0;
+  StringPartFlags active_part_flags = 0;
+  for(U64 idx = 0; idx <= string.size; idx += 1)
+  {
+    if(idx == string.size)
+    {
+      StringPart *p = push_array(scratch.arena, StringPart, 1);
+      p->flags = active_part_flags;
+      p->string = str8_substr(string, r1u64(active_part_start_idx, idx));
+      SLLQueuePush(first_part, last_part, p);
+    }
+    else if(string.str[idx] == '`')
+    {
+      StringPart *p = push_array(scratch.arena, StringPart, 1);
+      p->flags = active_part_flags;
+      p->string = str8_substr(string, r1u64(active_part_start_idx, idx));
+      SLLQueuePush(first_part, last_part, p);
+      active_part_start_idx = idx+1;
+      active_part_flags ^= StringPartFlag_Code;
+    }
+  }
+  D_FancyStringList fstrs = {0};
+  for(StringPart *p = first_part; p != 0; p = p->next)
+  {
+    D_FancyString fstr = {0};
+    {
+      fstr.font   = ui_top_font();
+      fstr.string = p->string;
+      fstr.color  = ui_top_palette()->colors[UI_ColorCode_Text];
+      fstr.size   = ui_top_font_size();
+      if(p->flags & StringPartFlag_Code)
+      {
+        fstr.font = df_font_from_slot(DF_FontSlot_Code);
+        fstr.color = df_rgba_from_theme_color(DF_ThemeColor_CodeDefault);
+      }
+    }
+    d_fancy_string_list_push(scratch.arena, &fstrs, &fstr);
+  }
+  UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+  ui_box_equip_display_fancy_strings(box, &fstrs);
+  UI_Signal sig = ui_signal_from_box(box);
+  scratch_end(scratch);
+  return sig;
+}
+
+internal UI_Signal
 df_error_label(String8 string)
 {
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%S_error_label", string);
@@ -12748,7 +12823,7 @@ df_error_label(String8 string)
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
     UI_PrefWidth(ui_em(2.25f, 1.f)) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
-    UI_PrefWidth(ui_text_dim(10, 0)) ui_label(string);
+    UI_PrefWidth(ui_text_dim(10, 0)) df_label(string);
   }
   return sig;
 }

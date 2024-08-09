@@ -3451,7 +3451,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   CV_TypeId *itype_fwd_map = 0;
   CV_TypeId itype_first = 0;
   CV_TypeId itype_opl = 0;
-  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 1: produce type forward resolution map")
+  if(tpi_leaf != 0 && in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 1: produce type forward resolution map")
   {
     //- rjf: allocate forward resolution map
     itype_first = tpi_leaf->itype_first;
@@ -3492,7 +3492,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   // as such, always show up *earlier* in the actually built types.
   //
   P2R_TypeIdChain **itype_chains = 0;
-  if(in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
+  if(tpi_leaf != 0 && in->flags & P2R_ConvertFlag_Types) ProfScope("types pass 2: produce per-itype itype chain (for producing dependent types first)")
   {
     //- rjf: allocate itype chain table
     itype_chains = push_array(arena, P2R_TypeIdChain *, (U64)itype_opl);
@@ -4419,7 +4419,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //////////////////////////////
   //- rjf: kick off string map building tasks
   //
-  RDIM_BakeStringMapTopology bake_string_map_topology = {(in_params->procedures.total_count*1 +
+  RDIM_BakeStringMapTopology bake_string_map_topology = {(64 +
+                                                          in_params->procedures.total_count*1 +
                                                           in_params->global_variables.total_count*1 +
                                                           in_params->thread_variables.total_count*1 +
                                                           in_params->types.total_count/2)};

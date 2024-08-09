@@ -507,7 +507,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       else if(!r_found)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Could not find a member named '%S'.", exprr->string);
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprr->location, "Could not find a member named `%S`.", exprr->string);
         break;
       }
       else if(check_type_kind != E_TypeKind_Struct &&
@@ -515,11 +515,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
               check_type_kind != E_TypeKind_Union)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot perform member access on this type.");
-        break;
-      }
-      else if(l.mode != E_Mode_Addr && l.mode != E_Mode_Reg)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot access member without a base address or register location.");
         break;
       }
       
@@ -1120,7 +1115,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       E_Expr *macro_expr = e_expr_from_string(e_ir_ctx->macro_map, expr->string);
       if(macro_expr == &e_expr_nil)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "\"%S\" could not be found.", expr->string);
+        e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", expr->string);
       }
       else
       {

@@ -2081,7 +2081,7 @@ rdim_bake_idx_run_map_from_params(RDIM_Arena *arena, RDIM_BakeNameMap *name_maps
 {
   //- rjf: set up map
   RDIM_BakeIdxRunMap *idx_runs = rdim_push_array(arena, RDIM_BakeIdxRunMap, 1);
-  idx_runs->slots_count = params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
+  idx_runs->slots_count = 64 + params->procedures.total_count*2 + params->global_variables.total_count*2 + params->thread_variables.total_count*2 + params->types.total_count*2;
   idx_runs->slots = rdim_push_array(arena, RDIM_BakeIdxRunNode *, idx_runs->slots_count);
   rdim_bake_idx_run_map_insert(arena, idx_runs, 0, 0);
   
