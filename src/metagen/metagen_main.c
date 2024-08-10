@@ -427,7 +427,11 @@ entry_point(CmdLine *cmdline)
       {
         String8 layer_key = mg_layer_key_from_path(file->string);
         MG_Layer *layer = mg_layer_from_key(layer_key);
-        String8 data = os_data_from_file_path(mg_arena, node->first->string);
+        String8List path_list = {0};
+        str8_list_push(mg_arena, &path_list, build_dir_path);
+        str8_list_push(mg_arena, &path_list, node->first->string);
+        String8 path = str8_path_list_join_by_style(mg_arena, &path_list, PathStyle_SystemAbsolute);
+        String8 data = os_data_from_file_path(mg_arena, path);
         String8 embed_string = mg_c_array_literal_contents_from_data(data);
         str8_list_pushf(mg_arena, &layer->h_tables, "read_only global U8 %S__data[] =\n{\n", node->string);
         str8_list_push (mg_arena, &layer->h_tables, embed_string);
