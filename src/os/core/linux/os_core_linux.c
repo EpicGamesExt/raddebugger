@@ -40,6 +40,7 @@ creat(const char *__file, mode_t __mode);
 ////////////////////////////////
 //~ rjf: Helpers
 
+// TODO: Marked as old / review
 internal B32
 lnx_write_list_to_file_descriptor(int fd, String8List list){
   B32 success = 1;
@@ -78,6 +79,7 @@ lnx_write_list_to_file_descriptor(int fd, String8List list){
   return(success);
 }
 
+// TODO: Marked as old / review
 internal void
 lnx_date_time_from_tm(DateTime *out, struct tm *in, U32 msec){
   out->msec = msec;
@@ -90,6 +92,7 @@ lnx_date_time_from_tm(DateTime *out, struct tm *in, U32 msec){
   out->year = in->tm_year + 1900;
 }
 
+// TODO: Marked as old / review
 internal void
 lnx_tm_from_date_time(struct tm *out, DateTime *in){
   out->tm_sec  = in->sec;
@@ -181,11 +184,12 @@ lnx_open_from_os_flags(OS_AccessFlags flags)
 {
   U32 result = 0x0;
   // read/write flags are mutually exclusie on Linux `open()`
-  if (flags & OS_AccessFlag_Write & OS_AccessFlag_Read) { result |= O_RDWR | O_CREAT; }
+  if ((flags & OS_AccessFlag_Write) &&
+      (flags & OS_AccessFlag_Read)) { result |= O_RDWR | O_CREAT; }
   else if (flags & OS_AccessFlag_Read) { result |= O_RDONLY; }
   else if (flags & OS_AccessFlag_Write) { result |= O_WRONLY | O_CREAT; }
 
-    // Doesn't make any sense on Linux, use os_file_map_open for execute permissions
+  // Doesn't make any sense on Linux, use os_file_map_open for execute permissions
   // else if (flags & OS_AccessFlag_Execute) {}
   // Shared doesn't make sense on Linux, file locking is explicit not set at open
   // if(flags & OS_AccessFlag_Shared)  {}
@@ -211,7 +215,7 @@ internal LNX_Entity*
 lnx_entity_from_handle(OS_Handle handle, LNX_EntityKind type)
 {
   LNX_Entity* result = (LNX_Entity*)PtrFromInt(*handle.u64);
-  Assert(result->kind == type);
+  if (*handle.u64) { Assert(result->kind == type); }
   return result;
 }
 internal OS_Handle lnx_handle_from_entity(LNX_Entity* entity)
@@ -221,6 +225,7 @@ internal OS_Handle lnx_handle_from_entity(LNX_Entity* entity)
   return result;
 }
 
+// TODO: Marked as old / review
 internal String8
 lnx_string_from_signal(int signum){
   String8 result = str8_lit("<unknown-signal>");
@@ -353,6 +358,7 @@ lnx_string_from_signal(int signum){
   return(result);
 }
 
+// TODO: Marked as old / review
 internal String8
 lnx_string_from_errno(int error_number){
   String8 result = str8_lit("<unknown-errno>");
@@ -885,6 +891,7 @@ lnx_string_from_errno(int error_number){
   return(result);
 }
 
+// TODO: Marked as old / review
 internal LNX_Entity*
 lnx_alloc_entity(LNX_EntityKind kind){
   pthread_mutex_lock(&lnx_mutex);
@@ -896,6 +903,7 @@ lnx_alloc_entity(LNX_EntityKind kind){
   return(result);
 }
 
+// TODO: Marked as old / review
 internal void
 lnx_free_entity(LNX_Entity *entity){
   entity->kind = LNX_EntityKind_Null;
@@ -904,6 +912,7 @@ lnx_free_entity(LNX_Entity *entity){
   pthread_mutex_unlock(&lnx_mutex);
 }
 
+// TODO: Marked as old / review
 internal void*
 lnx_thread_base(void *ptr){
   LNX_Entity *entity = (LNX_Entity*)ptr;
@@ -925,6 +934,7 @@ lnx_thread_base(void *ptr){
   return(0);
 }
 
+// TODO: Marked as old / review
 internal void
 lnx_safe_call_sig_handler(int _){
   LNX_SafeCallChain *chain = lnx_safe_call_chain;
@@ -954,6 +964,7 @@ internal LNX_timespec lnx_now_system_timespec()
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
+// TODO: Marked as old / review
 internal void
 os_init(void)
 {
@@ -998,21 +1009,25 @@ os_init(void)
   // Environment initialization
   Temp scratch = scratch_begin(0, 0);
   String8 env;
-  OS_Handle environ_handle = os_file_open(OS_AccessFlag_Read, str8_lit("/proc/self/environ"));
-  Rng1U64 limit = rng_1u64(0, 100000);
-  U8* environ_buffer = push_array(scratch.arena, U8, 100000);
-  U64 read_success = os_file_read(environ_handle, limit, environ_buffer);
-  os_file_close(environ_handle);
+  LNX_fd env_fd = open("/proc/self/environ", O_RDONLY);
+  U64 env_limit = 100000;
+  U8* environ_buffer = push_array(scratch.arena, U8, env_limit);
+  // *SIGH*, the 'environ' file doesn't have a size sso 'os_file_read' can't query it.
+  U64 read_success = read(env_fd, environ_buffer, env_limit);
+  close(env_fd);
 
   if (read_success)
   {
     for (U8* x_string=(U8*)environ_buffer;
-         (x_string != NULL && x_string<environ_buffer + 100000);
-         ++x_string)
+         (*x_string != 0 && x_string<environ_buffer + env_limit -1 );)
     {
       env = str8_cstring((char*)x_string);
       env = push_str8_copy(lnx_perm_arena, env);
-      if (env.size) { str8_list_push(lnx_perm_arena, &lnx_environment, env); }
+      if (env.size)
+      {
+        str8_list_push(lnx_perm_arena, &lnx_environment, env);
+        x_string += env.size + 1;
+      }
     }
   }
   scratch_end(scratch);
@@ -1031,11 +1046,18 @@ os_init(void)
   lnx_kernel_version.patch;
   lnx_kernel_version.string = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.release) );
   lnx_architecture = push_str8_copy( lnx_perm_arena, str8_cstring(kernel.machine) );
+
+  /* We HAVE to set umask to 00 or we get the wrong chmod when trying to create new files
+     including memory objects, very annoying.
+     umask is *also* not thread-safe. Fun! */
+  umask(00);
+
 }
 
 ////////////////////////////////
 //~ rjf: @os_hooks Memory Allocation (Implemented Per-OS)
 
+// TODO: Marked as old / review
 internal void*
 os_reserve(U64 size){
   void *result = mmap(0, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -1102,7 +1124,7 @@ internal B32
 os_set_large_pages(B32 flag)
 {
   lnx_huge_page_enabled = os_large_pages_enabled();
-  return lnx_huge_page_enabled;
+  return (lnx_huge_page_enabled == flag);
 }
 
 internal B32
@@ -1110,12 +1132,11 @@ os_large_pages_enabled(void)
 {
   // This is aparently the reccomended way to check for hugepage support. Do not ask...
   // TODO(mallchad): This is an annoying way to do it, query for nr_hugepages instead
-  OS_Handle meminfo_handle = os_file_open(OS_AccessFlag_Read, str8_lit("/proc/meminfo/"));
   U8 buffer[5000];
+  LNX_fd fd = open("/proc/meminfo", O_RDONLY);
   String8 meminfo = {0};
   meminfo.str = buffer;
-  meminfo.size = os_file_read( meminfo_handle, rng_1u64(0, 5000), buffer );
-  os_file_close(meminfo_handle);
+  meminfo.size = read(fd, buffer, 5000);
 
   Rng1U64 match = str8_match_substr( meminfo, str8_cstring("Huge"), 0x0 );
 
@@ -1150,16 +1171,24 @@ os_alloc_ring_buffer(U64 size, U64 *actual_size_out)
   {
     B32 use_huge = (size > os_large_page_size() && lnx_huge_page_enabled);
     U32 flag_huge1 = (use_huge ? MFD_HUGETLB : 0x0);
-    U32 flag_huge2 = (use_huge ? MAP_HUGETLB : 0x0);
+    U32 flag_huge2 = (use_huge ? (MAP_HUGETLB | MAP_HUGE_1GB)  : 0x0);
     U32 flag_prot = PROT_READ | PROT_WRITE;
+    U32 flag_map_initial = (flag_huge2 | MAP_ANONYMOUS | MAP_SHARED | MAP_POPULATE);
+    U32 flag_map_ring = (MAP_FIXED | MAP_SHARED);
 
     /* mmap circular buffer trick, create twice the buffer and double map it
        with a shared file descriptor.  Make sure to prevent mmap from changing
        location with MAP_FIXED */
     S32 fd = memfd_create((const char*)filename_anonymous.str, flag_huge1);
-    result = mmap(NULL, 2* size, flag_prot, flag_huge2 | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
-    mmap(result, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
-    mmap(result + size, size, flag_prot, flag_huge2 | MAP_FIXED, fd, 0);
+    Assert(fd != -1);
+    ftruncate(fd, size);
+
+    result = mmap(NULL, 2* size, flag_prot, flag_map_initial, -1, 0);
+    void* ring_head = mmap(result, size, flag_prot, flag_map_ring, fd, 0);
+    void* ring_tail = mmap(result + size, size, flag_prot, flag_map_ring, fd, 0);
+    Assert(ring_head != (void*)-1);
+    Assert(ring_tail != (void*)-1);
+    *actual_size_out = size*2;
     // Closing fd doesn't invalidate mapping
     close(fd);
   }
@@ -1170,51 +1199,32 @@ os_alloc_ring_buffer(U64 size, U64 *actual_size_out)
 internal void
 os_free_ring_buffer(void *ring_buffer, U64 actual_size)
 {
-  munmap(ring_buffer, 2* actual_size);
+  munmap(ring_buffer, actual_size);
 }
 
 ////////////////////////////////
 //~ rjf: @os_hooks System Info (Implemented Per-OS)
 
+/* NOTE: Cache the result if you don't want to re-trigger the lookup */
 internal String8
 os_machine_name(void){
-  local_persist B32 first = 1;
-  local_persist String8 name = {0};
+  String8 result = {0};
 
-  // TODO(allen): let's just pre-compute this at init and skip the complexity
   pthread_mutex_lock(&lnx_mutex);
-  if (first){
-    Temp scratch = scratch_begin(0, 0);
-    first = 0;
+  Temp scratch = scratch_begin(0, 0);
 
-    // get name
-    B32 got_final_result = 0;
-    U8 *buffer = 0;
-    int size = 0;
-    for (S64 cap = 4096, r = 0;
-         r < 4;
-         cap *= 2, r += 1){
-      buffer = push_array_no_zero(scratch.arena, U8, cap);
-      size = gethostname((char*)buffer, cap);
-      if (size < cap){
-        got_final_result = 1;
-        break;
-      }
-    }
+  // NOTE: Hostname spec caps at 253 ASCII chars its a problem if its larger
+  U8* buffer = push_array(scratch.arena, U8, 256);
+  B32 failure = gethostname((char*)buffer, 256);
 
-    // save string
-    if (got_final_result && size > 0){
-      name.size = size;
-      name.str = push_array_no_zero(lnx_perm_arena, U8, name.size + 1);
-      MemoryCopy(name.str, buffer, name.size);
-      name.str[name.size] = 0;
-    }
-
-    scratch_end(scratch);
+  if (failure == 0)
+  {
+    result = push_str8_copy(lnx_perm_arena, str8_cstring((char*)buffer));
   }
+  scratch_end(scratch);
   pthread_mutex_unlock(&lnx_mutex);
 
-  return(name);
+  return result;
 }
 
 /* Precomptued at init
@@ -1276,6 +1286,7 @@ os_get_environment(void)
   return lnx_environment;
 }
 
+// TODO: Marked as old / review
 internal U64
 os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *out){
   U64 result = 0;
@@ -1296,6 +1307,8 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
         B32 got_final_result = 0;
         U8 *buffer = 0;
         int size = 0;
+        /* NOTE: PATH_MAX aparently lies about the max path size so its
+           suggested to redo if it hits the max size */
         for (S64 cap = PATH_MAX, r = 0;
              r < 4;
              cap *= 2, r += 1){
@@ -1357,6 +1370,12 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
   return(result);
 }
 
+internal void
+os_set_thread_name(String8 string)
+{
+  NotImplemented;
+}
+
 ////////////////////////////////
 //~ rjf: @os_hooks Process Control (Implemented Per-OS)
 
@@ -1381,13 +1400,14 @@ os_file_open(OS_AccessFlags flags, String8 path)
      tampering with the referenced through relinks (assumption), ie symlink / mv .
      Hopefully its more robust- we can close the dirfd it's kernel managed
      now. The working directory can be changed but I don't know how best to
-     utiliez it so leaving it for now*/
+     utilize it so leaving it for now. */
 
   // String8 file_dir = str8_chop_last_slash(path);
   // S32 dir_fd = open(file_dir, O_PATH);
   // S32 fd = openat(fle_dir, path.str, access_flags);
-  S32 fd = openat(AT_FDCWD, (char*)path.str, access_flags);
 
+  // Create file on write if doesn't exist, mode: rw-rw----
+  S32 fd = openat(AT_FDCWD, (char*)path.str, access_flags, 0660);
   // close(dirfd);
 
   // No Error
@@ -1423,12 +1443,14 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
   S64 read_bytes = read(fd, out_data, read_amount);
 
   // Return 0 instead of -1 on error
-  return ClampBot(0, read_bytes);
+  return (read_bytes > 0 ? read_bytes : 0) ;
 }
 
 internal void
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
+  // 0 file descriptor is stdin, bail
+  if (*file.u64 == 0) { return; }
   S32 fd = lnx_fd_from_handle(file);
   LNX_fstat file_info;
   fstat(fd, &file_info);
@@ -1487,6 +1509,7 @@ os_id_from_file(OS_Handle file)
   return result;
 }
 
+// TODO: Marked as old / review
 internal B32
 os_delete_file_at_path(String8 path)
 {
@@ -1528,6 +1551,8 @@ internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {
   String8 tmp = {0};
+  /* NOTE: PATH_MAX aparently lies about the max path size so its suggested to
+     redo if it hits the max size */
   char buffer[PATH_MAX+10];
   MemoryZeroArray(buffer);
   char* success = realpath((char*)path.str, buffer);
@@ -1548,15 +1573,17 @@ os_file_path_exists(String8 path)
 
 //- rjf: file maps
 
-/* Does not map a view of the file into memory until a view is opened */
+/* Does not map a view of the file into memory until a view is opened
+ 'OS_AccessFlags' is not relevant here */
 internal OS_Handle
 os_file_map_open(OS_AccessFlags flags, OS_Handle file)
 {
-  // TODO: Implement access flags
+  OS_Handle result = {0};
+
+  if (*file.u64 == 0) { return result; }
   LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_MemoryMap);
   S32 fd = *file.u64;
   entity->map.fd = fd;
-  OS_Handle result = {0};
   *result.u64 = IntFromPtr(entity);
 
   return result;
@@ -1589,6 +1616,8 @@ internal void *
 os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
 {
   LNX_Entity* entity = lnx_entity_from_handle(map, LNX_EntityKind_MemoryMap);
+  if (entity == 0) { return NULL; }
+
   S32 fd = entity->map.fd;
   struct stat file_info;
   fstat(fd, &file_info);
@@ -1615,10 +1644,11 @@ os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
   U64 map_size = (view_start_from_offset + range_size);
 
   void *address = mmap(NULL, map_size, prot_flags, map_flags, fd, aligned_offset);
-  Assert("Mapping file into memory failed" && address > 0);
   entity->map.data = address;
   entity->map.size = map_size;
   void* result = (address + view_start_from_offset);
+  // Return NULL on error
+  if (address == (void*)-1) { result = NULL; }
 
   return result;
 }
@@ -1686,6 +1716,7 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
     if (file->d_name[0] == '.') { continue; }
     break;
   }
+
   LNX_fd fd = openat(working_path, file->d_name, 0x0, 0x0);
   Assert(fd != -1); if (fd == -1) { return 0; }
   S32 stats_err = fstat(fd, &stats);
@@ -1727,8 +1758,8 @@ os_shared_memory_alloc(U64 size, String8 name)
 {
   OS_Handle result = {0};
   LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_MemoryMap);
-  // Create, fail if already open, rw-rw----
-  S32 fd = shm_open((char*)name.str, O_RDWR | O_CREAT | O_EXCL, 660);
+  // Create, fail if already open, mode: rw-rw----
+  S32 fd = shm_open((char*)name.str, O_RDWR | O_CREAT | O_EXCL, 0660);
   Assert("Failed to alloc shared memory" && fd != -1);
 
   B32 use_huge = (size > os_large_page_size() && lnx_huge_page_enabled);
@@ -2145,7 +2176,7 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 
   // Create the named semaphore
   // create | error if pre-existing , rw-rw----
-  sem_t* semaphore = sem_open((char*)name.str, O_CREAT | O_EXCL,  660, initial_count);
+  sem_t* semaphore = sem_open((char*)name.str, O_CREAT | O_EXCL,  0660, initial_count);
   if (semaphore != SEM_FAILED)
   {
     LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_Semaphore);
@@ -2214,6 +2245,7 @@ os_semaphore_drop(OS_Handle semaphore)
 ////////////////////////////////
 //~ rjf: @os_hooks Dynamically-Loaded Libraries (Implemented Per-OS)
 
+// TODO: Marked as old / review
 internal OS_Handle
 os_library_open(String8 path)
 {
@@ -2225,6 +2257,7 @@ os_library_open(String8 path)
   return lib;
 }
 
+// TODO: Marked as old / review
 internal VoidProc *
 os_library_load_proc(OS_Handle lib, String8 name)
 {
@@ -2246,6 +2279,7 @@ os_library_close(OS_Handle lib)
 ////////////////////////////////
 //~ rjf: @os_hooks Dynamically-Loaded Libraries (Implemented Per-OS)
 
+// TODO: Marked as old / review
 internal void
 os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, void *ptr){
   LNX_SafeCallChain chain = {0};

@@ -239,6 +239,12 @@ internal S64 s64_from_str8(String8 string, U32 radix);
 internal B32 try_u64_from_str8_c_rules(String8 string, U64 *x);
 internal B32 try_s64_from_str8_c_rules(String8 string, S64 *x);
 
+//- rjf: string -> integer (base64 & base16)
+internal U64 base64_size_from_data_size(U64 size_in_bytes);
+internal U64 base64_from_data(U8 *dst, U8 *src, U64 src_size);
+internal U64 base16_size_from_data_size(U64 size_in_bytes);
+internal U64 base16_from_data(U8 *dst, U8 *src, U64 src_size);
+
 //- rjf: integer -> string
 internal String8 str8_from_memory_size(Arena *arena, U64 z);
 internal String8 str8_from_u64(Arena *arena, U64 u64, U32 radix, U8 min_digits, U8 digit_group_separator);

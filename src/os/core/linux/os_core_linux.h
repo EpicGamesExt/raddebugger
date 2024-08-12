@@ -51,7 +51,8 @@ typedef struct dirent LNX_dir_entry;
 // -- Other --
 typedef uuid_t LNX_uuid;
 
-// -- Syncronization Primitives--
+// -- Threading Types --
+typedef pthread_t LNX_thread;
 typedef sem_t LNX_semaphore;
 typedef pthread_mutex_t LNX_mutex;
 typedef pthread_mutexattr_t LNX_mutex_attr;
