@@ -1219,7 +1219,6 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             U64 local_num = e_num_from_string(e_parse_ctx->locals_map, local_lookup_string);
             if(local_num != 0)
             {
-              mapped_identifier = 1;
               identifier_type_is_possibly_dynamically_overridden = 1;
               RDI_Local *local_var = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], Locals, local_num-1);
               RDI_TypeNode *type_node = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], TypeNodes, local_var->type_idx);
@@ -1233,6 +1232,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 RDI_LocationBlock *block = rdi_element_from_name_idx(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], LocationBlocks, loc_block_idx);
                 if(block->scope_off_first <= e_parse_ctx->ip_voff && e_parse_ctx->ip_voff < block->scope_off_opl)
                 {
+                  mapped_identifier = 1;
                   U64 all_location_data_size = 0;
                   U8 *all_location_data = rdi_table_from_name(e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx], LocationData, &all_location_data_size);
                   loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
