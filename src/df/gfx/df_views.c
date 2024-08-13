@@ -591,13 +591,15 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     // rjf: find visible breakpoints for source code
     ProfScope("find visible breakpoints")
     {
-      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
-      for(DF_Entity *bp = file->first; !df_entity_is_nil(bp); bp = bp->next)
+      DF_EntityList bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
+      for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
       {
-        if(bp->deleted || bp->kind != DF_EntityKind_Breakpoint) { continue; }
-        if(visible_line_num_range.min <= bp->text_point.line && bp->text_point.line <= visible_line_num_range.max)
+        DF_Entity *bp = n->entity;
+        DF_Entity *loc = df_entity_child_from_kind(bp, DF_EntityKind_Location);
+        if(path_match_normalized(loc->name, df_interact_regs()->file_path) &&
+           visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
-          U64 slice_line_idx = (bp->text_point.line-visible_line_num_range.min);
+          U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
           df_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
         }
       }
@@ -606,7 +608,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     // rjf: find live threads mapping to source code
     ProfScope("find live threads mapping to this file")
     {
-      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
+      String8 file_path = df_interact_regs()->file_path;
       DF_Entity *selected_thread = df_entity_from_handle(df_interact_regs()->thread);
       DF_EntityList threads = df_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
       for(DF_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
@@ -623,7 +625,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
         DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
         for(DF_LineNode *n = lines.first; n != 0; n = n->next)
         {
-          if(df_entity_from_handle(n->v.file) == file && visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
+          if(path_match_normalized(n->v.file_path, file_path) && visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
           {
             U64 slice_line_idx = n->v.pt.line-visible_line_num_range.min;
             df_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
@@ -635,13 +637,15 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     // rjf: find visible watch pins for source code
     ProfScope("find visible watch pins")
     {
-      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
-      for(DF_Entity *wp = file->first; !df_entity_is_nil(wp); wp = wp->next)
+      DF_EntityList wps = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
+      for(DF_EntityNode *n = wps.first; n != 0; n = n->next)
       {
-        if(wp->deleted || wp->kind != DF_EntityKind_WatchPin) { continue; }
-        if(visible_line_num_range.min <= wp->text_point.line && wp->text_point.line <= visible_line_num_range.max)
+        DF_Entity *wp = n->entity;
+        DF_Entity *loc = df_entity_child_from_kind(wp, DF_EntityKind_Location);
+        if(path_match_normalized(loc->name, df_interact_regs()->file_path) &&
+           visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
-          U64 slice_line_idx = (wp->text_point.line-visible_line_num_range.min);
+          U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
           df_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
         }
       }
@@ -650,8 +654,8 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     // rjf: find all src -> dasm info
     ProfScope("find all src -> dasm info")
     {
-      DF_Entity *file = df_entity_from_handle(df_interact_regs()->file);
-      DF_LineListArray lines_array = df_lines_array_from_file_line_range(scratch.arena, file, visible_line_num_range);
+      String8 file_path = df_interact_regs()->file_path;
+      DF_LineListArray lines_array = df_lines_array_from_file_path_line_range(scratch.arena, file_path, visible_line_num_range);
       if(lines_array.count != 0)
       {
         MemoryCopy(code_slice_params.line_infos, lines_array.v, sizeof(DF_LineList)*lines_array.count);
@@ -1856,7 +1860,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           p.vaddr = vaddr;
           if(lines.first != 0)
           {
-            p.file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
+            p.file_path = lines.first->v.file_path;
             p.text_point = lines.first->v.pt;
           }
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
@@ -2705,7 +2709,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               p.vaddr = vaddr;
               if(lines.first != 0)
               {
-                p.file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
+                p.file_path = lines.first->v.file_path;
                 p.text_point = lines.first->v.pt;
               }
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
@@ -3347,7 +3351,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       if(query_normalized_with_opt_slash_props.flags & FilePropertyFlag_IsFolder)
       {
         String8 new_path = push_str8f(scratch.arena, "%S%S/", path_query.path, path_query.search);
-        df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_path, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_path, &df_g_nil_cfg_node);
       }
       
       // rjf: is a file -> complete view
@@ -3377,7 +3381,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       {
         String8 existing_path = str8_chop_last_slash(path_query.path);
         String8 new_path = push_str8f(scratch.arena, "%S/%S/", existing_path, files[0].filename);
-        df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_path, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_path, &df_g_nil_cfg_node);
       }
       else
       {
@@ -3507,7 +3511,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         String8 new_path = str8_chop_last_slash(str8_chop_last_slash(path_query.path));
         new_path = path_normalized_from_string(scratch.arena, new_path);
         String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-        df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_cmd, &df_g_nil_cfg_node);
       }
     }
     
@@ -3589,7 +3593,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         if(file->props.flags & FilePropertyFlag_IsFolder)
         {
           String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-          df_view_equip_spec(ws, view, view->spec, df_entity_from_handle(view->entity), new_cmd, &df_g_nil_cfg_node);
+          df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_cmd, &df_g_nil_cfg_node);
         }
         else
         {
@@ -4113,7 +4117,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
         DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, binary_voff);
         if(lines.first != 0)
         {
-          String8 file_path = df_full_path_from_entity(scratch.arena, df_entity_from_handle(lines.first->v.file));
+          String8 file_path = lines.first->v.file_path;
           S64 line_num = lines.first->v.pt.line;
           DF_Font(ws, DF_FontSlot_Main) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             ui_labelf("%S:%I64d", file_path, line_num);
@@ -4150,7 +4154,7 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Target)
 DF_VIEW_CMD_FUNCTION_DEF(Target)
 {
   DF_TargetViewState *tv = df_view_user_state(view, DF_TargetViewState);
-  DF_Entity *entity = df_entity_from_handle(view->entity);
+  DF_Entity *entity = df_entity_from_handle(view->params_entity);
   
   // rjf: process commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
@@ -4193,7 +4197,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DF_Entity *entity = df_entity_from_handle(view->entity);
+  DF_Entity *entity = df_entity_from_handle(view->params_entity);
   DF_EntityList custom_entry_points = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_EntryPointName);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -4565,12 +4569,12 @@ DF_VIEW_UI_FUNCTION_DEF(Targets)
       UI_PrefWidth(ui_em(2.25f, 1))
         UI_FocusHot((row_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
       {
-        UI_Signal sig = df_icon_buttonf(ws, target->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", target);
+        UI_Signal sig = df_icon_buttonf(ws, !target->disabled ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", target);
         if(ui_clicked(sig))
         {
           DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
           p.entity = df_handle_from_entity(target);
-          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(target->b32 ? DF_CoreCmdKind_DisableTarget : DF_CoreCmdKind_EnableTarget));
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(!target->disabled ? DF_CoreCmdKind_DisableTarget : DF_CoreCmdKind_EnableTarget));
         }
       }
       
@@ -5491,11 +5495,7 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
               DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
               if(lines.first != 0)
               {
-                DF_Entity *file = df_entity_from_handle(lines.first->v.file);
-                if(!df_entity_is_nil(file))
-                {
-                  UI_PrefWidth(ui_children_sum(0)) df_entity_src_loc_button(ws, file, lines.first->v.pt);
-                }
+                UI_PrefWidth(ui_children_sum(0)) df_src_loc_button(ws, lines.first->v.file_path, lines.first->v.pt);
               }
             }
           }break;
@@ -6165,25 +6165,25 @@ DF_VIEW_UI_FUNCTION_DEF(Modules)
 }
 
 ////////////////////////////////
-//~ rjf: PendingEntity @view_hook_impl
+//~ rjf: PendingFile @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(PendingEntity)
+DF_VIEW_SETUP_FUNCTION_DEF(PendingFile)
 {
-  DF_PendingEntityViewState *pves = df_view_user_state(view, DF_PendingEntityViewState);
+  DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
   pves->deferred_cmd_arena = df_view_push_arena_ext(view);
   pves->complete_cfg_arena = df_view_push_arena_ext(view);
   pves->complete_cfg_root = df_cfg_tree_copy(pves->complete_cfg_arena, cfg_root);
 }
 
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(PendingEntity)
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(PendingFile)
 {
   return str8_lit("");
 }
 
-DF_VIEW_CMD_FUNCTION_DEF(PendingEntity)
+DF_VIEW_CMD_FUNCTION_DEF(PendingFile)
 {
   Temp scratch = scratch_begin(0, 0);
-  DF_PendingEntityViewState *pves = df_view_user_state(view, DF_PendingEntityViewState);
+  DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
   
   //- rjf: process commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
@@ -6214,22 +6214,13 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingEntity)
     }
   }
   
-  //- rjf: determine if entity is ready, and which viewer to use
-  DF_Entity *entity = df_entity_from_handle(view->entity);
-  DF_GfxViewKind viewer_kind = DF_GfxViewKind_Null;
-  B32 entity_is_ready = 0;
-  switch(entity->kind)
-  {
-    default:{}break;
-    case DF_EntityKind_File:
-    {
-      entity_is_ready = 1;
-      viewer_kind = DF_GfxViewKind_Code;
-    }break;
-  }
+  //- rjf: determine if file is ready, and which viewer to use
+  String8 file_path = view->params_file_path;
+  B32 file_is_ready = 1;
+  DF_GfxViewKind viewer_kind = DF_GfxViewKind_Code;
   
   //- rjf: if entity is ready, dispatch all deferred commands
-  if(entity_is_ready)
+  if(file_is_ready)
   {
     for(DF_CmdNode *cmd_node = pves->deferred_cmds.first; cmd_node != 0; cmd_node = cmd_node->next)
     {
@@ -6242,25 +6233,25 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingEntity)
   
   //- rjf: if entity is ready, move cfg tree to scratch for new command
   DF_CfgNode *cfg_root = &df_g_nil_cfg_node;
-  if(entity_is_ready)
+  if(file_is_ready)
   {
     cfg_root = df_cfg_tree_copy(scratch.arena, pves->complete_cfg_root);
   }
   
   //- rjf: if entity is ready, replace this view with the correct one, if any viewer is specified
-  if(entity_is_ready && viewer_kind != DF_GfxViewKind_Null)
+  if(file_is_ready && viewer_kind != DF_GfxViewKind_Null)
   {
     DF_ViewSpec *view_spec = df_view_spec_from_string(cfg_root->string);
     if(view_spec == &df_g_nil_view_spec)
     {
       view_spec = df_view_spec_from_gfx_view_kind(viewer_kind);
     }
-    df_view_equip_spec(ws, view, view_spec, entity, str8_lit(""), cfg_root);
+    df_view_equip_spec(ws, view, view_spec, &df_g_nil_entity, file_path, str8_lit(""), cfg_root);
     df_panel_notify_mutation(ws, panel);
   }
   
   //- rjf: if entity is ready, but we have no viewer for it, then just close this tab
-  if(entity_is_ready && viewer_kind == DF_GfxViewKind_Null)
+  if(file_is_ready && viewer_kind == DF_GfxViewKind_Null)
   {
     DF_CmdParams params = df_cmd_params_from_view(ws, panel, view);
     df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_CloseTab));
@@ -6269,7 +6260,7 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingEntity)
   scratch_end(scratch);
 }
 
-DF_VIEW_UI_FUNCTION_DEF(PendingEntity)
+DF_VIEW_UI_FUNCTION_DEF(PendingFile)
 {
   view->loading_t = view->loading_t_target = 1.f;
   df_gfx_request_frame();
@@ -6314,8 +6305,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
-  DF_Entity *entity = df_entity_from_handle(df_interact_regs()->file);
-  String8 path = df_full_path_from_entity(scratch.arena, entity);
+  String8 path = df_interact_regs()->file_path;
   df_interact_regs()->text_key = fs_key_from_path(path);
   df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 hash = {0};
@@ -6342,20 +6332,23 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
     switch(core_cmd_kind)
     {
       default:{}break;
+      
+      // rjf: override file picking
       case DF_CoreCmdKind_PickFile:
       {
-        DF_Entity *missing_file = df_entity_from_handle(cv->pick_file_override_target);
-        String8 pick_string = cmd->params.file_path;
-        if(!df_entity_is_nil(missing_file) && pick_string.size != 0)
+        String8 src = view->params_file_path;
+        String8 dst = cmd->params.file_path;
+        if(src.size != 0 && dst.size != 0)
         {
-          DF_Entity *replacement = df_entity_from_path(pick_string, DF_EntityFromPathFlag_OpenAsNeeded|DF_EntityFromPathFlag_OpenMissing);
-          view->entity = df_handle_from_entity(replacement);
+          // rjf: record src -> dst mapping
           DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-          p.entity = df_handle_from_entity(missing_file);
-          p.file_path = pick_string;
-          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_Entity);
-          df_cmd_params_mark_slot(&p, DF_CmdParamSlot_FilePath);
+          p.string = src;
+          p.file_path = dst;
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetFileReplacementPath));
+          
+          // rjf: switch this view to viewing replacement file
+          arena_clear(view->params_arena);
+          view->params_file_path = push_str8_copy(view->params_arena, dst);
         }
       }break;
     }
@@ -6383,32 +6376,30 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: unpack entity info
   //
-  DF_Entity *entity = df_entity_from_handle(df_interact_regs()->file);
-  String8 path = df_full_path_from_entity(scratch.arena, entity);
+  String8 path = df_interact_regs()->file_path;
   df_interact_regs()->text_key = fs_key_from_path(path);
   df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  B32 entity_is_missing = !!(entity->flags & DF_EntityFlag_IsMissing);
+  B32 file_is_missing = (os_properties_from_file_path(path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
   
   //////////////////////////////
   //- rjf: build missing file interface
   //
-  if(entity_is_missing && !key_has_data)
+  if(file_is_missing && !key_has_data)
   {
     UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_pct(1, 0))
     {
       Temp scratch = scratch_begin(0, 0);
-      String8 full_path = df_full_path_from_entity(scratch.arena, entity);
       UI_PrefWidth(ui_children_sum(1)) UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
         UI_PrefWidth(ui_text_dim(10, 1))
         UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative)))
       {
         DF_Font(ws, DF_FontSlot_Icons) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
-        ui_labelf("Could not find \"%S\".", full_path);
+        ui_labelf("Could not find \"%S\".", path);
       }
       UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
@@ -6424,7 +6415,6 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
         params.cmd_spec = df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_PickFile);
         df_cmd_params_mark_slot(&params, DF_CmdParamSlot_CmdSpec);
         df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_RunCommand));
-        cv->pick_file_override_target = view->entity;
       }
       scratch_end(scratch);
     }
@@ -6433,7 +6423,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: code is not missing, but not ready -> equip loading info to this view
   //
-  if(!entity_is_missing && info.lines_count == 0)
+  if(!file_is_missing && info.lines_count == 0)
   {
     df_view_equip_loading_info(view, 1, info.bytes_processed, info.bytes_to_process);
   }
@@ -6442,7 +6432,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: build code contents
   //
   DI_KeyList dbgi_keys = {0};
-  if(!entity_is_missing && key_has_data)
+  if(!file_is_missing && key_has_data)
   {
     DF_CodeViewBuildResult result = df_code_view_build(scratch.arena, ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
     dbgi_keys = result.dbgi_keys;
@@ -6452,7 +6442,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: unpack cursor info
   //
   {
-    df_interact_regs()->lines = df_lines_from_file_line_num(df_frame_arena(), entity, df_interact_regs()->cursor.line);
+    df_interact_regs()->lines = df_lines_from_file_path_line_num(df_frame_arena(), path, df_interact_regs()->cursor.line);
   }
   
   //////////////////////////////
@@ -6477,7 +6467,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: build bottom bar
   //
-  if(!entity_is_missing && key_has_data)
+  if(!file_is_missing && key_has_data)
   {
     ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
     ui_set_next_flags(UI_BoxFlag_DrawBackground);
@@ -7914,9 +7904,9 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
       {
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          if(ui_clicked(df_icon_buttonf(ws, entity->b32 ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", entity)))
+          if(ui_clicked(df_icon_buttonf(ws, !entity->disabled ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", entity)))
           {
-            df_entity_equip_b32(entity, !entity->b32);
+            df_entity_equip_disabled(entity, !entity->disabled);
           }
         }
         UI_TableCell UI_FocusHot((row_is_selected && cursor.x == 1) ? UI_FocusKind_On : UI_FocusKind_Off)

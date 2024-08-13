@@ -293,7 +293,6 @@ enum
   //- rjf: allocationless, simple equipment
   DF_EntityFlag_HasTextPoint      = (1<<0),
   DF_EntityFlag_HasEntityHandle   = (1<<2),
-  DF_EntityFlag_HasB32            = (1<<3),
   DF_EntityFlag_HasU64            = (1<<4),
   DF_EntityFlag_HasColor          = (1<<6),
   DF_EntityFlag_DiesOnRunStop     = (1<<8),
@@ -340,7 +339,7 @@ struct DF_Entity
   // rjf: basic equipment
   TxtPt text_point;
   DF_Handle entity_handle;
-  B32 b32;
+  B32 disabled;
   U64 u64;
   Vec4F32 color_hsva;
   F32 life_left;
@@ -450,7 +449,7 @@ struct DF_Unwind
 typedef struct DF_Line DF_Line;
 struct DF_Line
 {
-  DF_Handle file;
+  String8 file_path;
   TxtPt pt;
   Rng1U64 voff_range;
   DI_Key dbgi_key;
@@ -555,7 +554,7 @@ struct DF_InteractRegs
   DF_Handle window;
   DF_Handle panel;
   DF_Handle view;
-  DF_Handle file;
+  String8 file_path;
   TxtPt cursor;
   TxtPt mark;
   U128 text_key;
@@ -1441,7 +1440,7 @@ internal void df_entity_change_parent(DF_Entity *entity, DF_Entity *old_parent, 
 //- rjf: entity simple equipment
 internal void df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point);
 internal void df_entity_equip_entity_handle(DF_Entity *entity, DF_Handle handle);
-internal void df_entity_equip_b32(DF_Entity *entity, B32 b32);
+internal void df_entity_equip_disabled(DF_Entity *entity, B32 b32);
 internal void df_entity_equip_u64(DF_Entity *entity, U64 u64);
 internal void df_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba);
 internal void df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva);
@@ -1464,6 +1463,9 @@ internal void df_entity_equip_namef(DF_Entity *entity, char *fmt, ...);
 //- rjf: opening folders/files & maintaining the entity model of the filesystem
 internal DF_Entity *df_entity_from_path(String8 path, DF_EntityFromPathFlags flags);
 internal DF_EntityList df_possible_overrides_from_entity(Arena *arena, DF_Entity *entity);
+
+//- rjf: file path map override lookups
+internal String8List df_possible_overrides_from_file_path(Arena *arena, String8 file_path);
 
 //- rjf: top-level state queries
 internal DF_Entity *df_entity_root(void);
@@ -1530,8 +1532,8 @@ internal U64 df_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name);
 internal DF_LineList df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff);
 
 //- rjf: file:line -> line info
-internal DF_LineListArray df_lines_array_from_file_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);
-internal DF_LineList df_lines_from_file_line_num(Arena *arena, DF_Entity *file, S64 line_num);
+internal DF_LineListArray df_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range);
+internal DF_LineList df_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num);
 
 //- rjf: src -> voff lookups
 internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);

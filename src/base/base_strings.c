@@ -1593,6 +1593,10 @@ indented_from_string(Arena *arena, String8 string)
         {
           str8_list_pushf(scratch.arena, &indented_strings, "%.*s%S\n", (int)depth*2, indentation_bytes, line);
         }
+        if(line.size == 0 && indented_strings.node_count != 0)
+        {
+          str8_list_pushf(scratch.arena, &indented_strings, "\n");
+        }
         line_begin_off = off+1;
         depth = next_depth;
       }break;

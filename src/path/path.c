@@ -163,3 +163,16 @@ path_normalized_from_string(Arena *arena, String8 path_string){
   return(result);
 }
 
+internal B32
+path_match_normalized(String8 left, String8 right)
+{
+  B32 result = 0;
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 left_normalized = path_normalized_from_string(scratch.arena, left);
+    String8 right_normalized = path_normalized_from_string(scratch.arena, right);
+    result = str8_match(left_normalized, right_normalized, StringMatchFlag_CaseInsensitive);
+    scratch_end(scratch);
+  }
+  return result;
+}

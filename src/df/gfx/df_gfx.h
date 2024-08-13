@@ -112,20 +112,12 @@ enum
   DF_ViewSpecFlag_ParameterizedByEntity      = (1<<0),
   DF_ViewSpecFlag_ProjectSpecific            = (1<<1),
   DF_ViewSpecFlag_CanSerialize               = (1<<2),
-  DF_ViewSpecFlag_CanSerializeEntityPath     = (1<<3),
+  DF_ViewSpecFlag_CanSerializeFilePath       = (1<<3),
   DF_ViewSpecFlag_CanSerializeQuery          = (1<<4),
   DF_ViewSpecFlag_CanFilter                  = (1<<5),
   DF_ViewSpecFlag_FilterIsCode               = (1<<6),
   DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<7),
 };
-
-typedef enum DF_NameKind
-{
-  DF_NameKind_Null,
-  DF_NameKind_EntityName,
-  DF_NameKind_COUNT
-}
-DF_NameKind;
 
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;
 struct DF_ViewSpecInfo
@@ -133,7 +125,6 @@ struct DF_ViewSpecInfo
   DF_ViewSpecFlags flags;
   String8 name;
   String8 display_string;
-  DF_NameKind name_kind;
   DF_IconKind icon_kind;
   DF_ViewSetupFunctionType *setup_hook;
   DF_ViewStringFromStateFunctionType *string_from_state_hook;
@@ -188,6 +179,9 @@ struct DF_View
   DF_View *next;
   DF_View *prev;
   
+  // rjf: view specification info
+  DF_ViewSpec *spec;
+  
   // rjf: allocation info
   U64 generation;
   
@@ -197,27 +191,31 @@ struct DF_View
   U64 loading_progress_v;
   U64 loading_progress_v_target;
   
+  // rjf: view project (for project-specific/filtered views)
+  Arena *project_path_arena;
+  String8 project_path;
+  
+  // rjf: view specification parameters
+  Arena *params_arena;
+  DF_Handle params_entity;
+  String8 params_file_path;
+  
   // rjf: view state
   UI_ScrollPt2 scroll_pos;
   TxtPt cursor;
   TxtPt mark;
   
-  // rjf: allocation & user data extensions
+  // rjf: view-lifetime allocation & user data extensions
   Arena *arena;
   DF_ArenaExt *first_arena_ext;
   DF_ArenaExt *last_arena_ext;
   void *user_data;
   
-  // rjf: view kind info
-  DF_ViewSpec *spec;
-  DF_Handle entity;
-  DF_Handle project;
-  
   // rjf: filter mode
   B32 is_filtering;
   F32 is_filtering_t;
   
-  // rjf: query -> params data
+  // rjf: text query state
   TxtPt query_cursor;
   TxtPt query_mark;
   U8 query_buffer[1024];
@@ -574,7 +572,7 @@ struct DF_Window
   // rjf: code context menu state
   Arena *code_ctx_menu_arena;
   UI_Key code_ctx_menu_key;
-  DF_Handle code_ctx_menu_file;
+  String8 code_ctx_menu_file_path;
   U128 code_ctx_menu_text_key;
   TXT_LangKind code_ctx_menu_lang_kind;
   TxtRng code_ctx_menu_range;
@@ -632,7 +630,7 @@ struct DF_Window
   U64 hover_eval_last_frame_idx;
   
   // rjf: hover eval params
-  DF_Handle hover_eval_file;
+  String8 hover_eval_file_path;
   TxtPt hover_eval_file_pt;
   U64 hover_eval_vaddr;
   F32 hover_eval_open_t;
@@ -800,7 +798,6 @@ read_only global DF_ViewSpec df_g_nil_view_spec =
     0,
     {0},
     {0},
-    DF_NameKind_Null,
     DF_IconKind_Null,
     DF_VIEW_SETUP_FUNCTION_NAME(Null),
     DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Null),
@@ -818,20 +815,7 @@ read_only global DF_View df_g_nil_view =
 {
   &df_g_nil_view,
   &df_g_nil_view,
-  0,
-  0,
-  0,
-  0,
-  0,
-  {0},
-  {0},
-  {0},
-  0,
-  0,
-  0,
-  0,
   &df_g_nil_view_spec,
-  {0},
 };
 
 read_only global DF_Panel df_g_nil_panel =
@@ -841,7 +825,6 @@ read_only global DF_Panel df_g_nil_panel =
   &df_g_nil_panel,
   &df_g_nil_panel,
   &df_g_nil_panel,
-  0,
 };
 
 global DF_GfxState *df_gfx_state = 0;
@@ -949,7 +932,7 @@ internal DF_ViewSpec *df_tab_view_spec_from_gfx_view_rule_spec(DF_GfxViewRuleSpe
 
 internal DF_View *df_view_alloc(void);
 internal void df_view_release(DF_View *view);
-internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 default_query, DF_CfgNode *cfg_root);
+internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 file_path, String8 default_query, DF_CfgNode *cfg_root);
 internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
 internal void df_view_clear_user_state(DF_View *view);
 internal void *df_view_get_or_push_user_state(DF_View *view, U64 size);
@@ -989,7 +972,7 @@ internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_
 ////////////////////////////////
 //~ rjf: Hover Eval
 
-internal void df_set_hover_eval(DF_Window *ws, Vec2F32 pos, DF_Entity *file, TxtPt pt, U64 vaddr, String8 string);
+internal void df_set_hover_eval(DF_Window *ws, Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string);
 
 ////////////////////////////////
 //~ rjf: Auto-Complete Lister
@@ -1063,7 +1046,7 @@ internal UI_Signal df_icon_button(DF_Window *ws, DF_IconKind kind, FuzzyMatchRan
 internal UI_Signal df_icon_buttonf(DF_Window *ws, DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
 internal void df_entity_tooltips(DF_Window *ws, DF_Entity *entity);
 internal UI_Signal df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
-internal void df_entity_src_loc_button(DF_Window *ws, DF_Entity *entity, TxtPt point);
+internal void df_src_loc_button(DF_Window *ws, String8 file_path, TxtPt point);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Text View

@@ -94,10 +94,10 @@ struct DF_CmdListerItemArray
 };
 
 ////////////////////////////////
-//~ rjf: PendingEntity @view_types
+//~ rjf: PendingFile @view_types
 
-typedef struct DF_PendingEntityViewState DF_PendingEntityViewState;
-struct DF_PendingEntityViewState
+typedef struct DF_PendingFileViewState DF_PendingFileViewState;
+struct DF_PendingFileViewState
 {
   Arena *deferred_cmd_arena;
   DF_CmdList deferred_cmds;
@@ -365,7 +365,6 @@ struct DF_CodeViewState
   B32 initialized;
   S64 preferred_column;
   B32 drifted_for_search;
-  DF_Handle pick_file_override_target;
   DF_CodeViewFlags flags;
   
   // rjf: per-frame command info

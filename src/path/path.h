@@ -12,5 +12,6 @@ internal String8 path_relative_dst_from_absolute_dst_src(Arena *arena, String8 d
 internal String8 path_absolute_dst_from_relative_dst_src(Arena *arena, String8 dst, String8 src);
 internal String8List path_normalized_list_from_string(Arena *arena, String8 path, PathStyle *style_out);
 internal String8 path_normalized_from_string(Arena *arena, String8 path);
+internal B32 path_match_normalized(String8 left, String8 right);
 
 #endif //PATH_H

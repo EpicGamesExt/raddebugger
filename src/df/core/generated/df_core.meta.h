@@ -28,6 +28,7 @@ DF_EntityKind_Watch,
 DF_EntityKind_ViewRule,
 DF_EntityKind_Breakpoint,
 DF_EntityKind_Condition,
+DF_EntityKind_Location,
 DF_EntityKind_Target,
 DF_EntityKind_Executable,
 DF_EntityKind_Arguments,
@@ -212,6 +213,9 @@ DF_CoreCmdKind_RemoveEntity,
 DF_CoreCmdKind_NameEntity,
 DF_CoreCmdKind_EditEntity,
 DF_CoreCmdKind_DuplicateEntity,
+DF_CoreCmdKind_RelocateEntity,
+DF_CoreCmdKind_AddBreakpoint,
+DF_CoreCmdKind_ToggleBreakpoint,
 DF_CoreCmdKind_TextBreakpoint,
 DF_CoreCmdKind_AddressBreakpoint,
 DF_CoreCmdKind_FunctionBreakpoint,
@@ -245,7 +249,7 @@ DF_CoreCmdKind_AutoViewRules,
 DF_CoreCmdKind_Scheduler,
 DF_CoreCmdKind_CallStack,
 DF_CoreCmdKind_Modules,
-DF_CoreCmdKind_PendingEntity,
+DF_CoreCmdKind_PendingFile,
 DF_CoreCmdKind_Code,
 DF_CoreCmdKind_Watch,
 DF_CoreCmdKind_Locals,
@@ -463,11 +467,12 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 df_g_cmd_param_slot_range_table[24];
-extern DF_IconKind df_g_entity_kind_icon_kind_table[27];
-extern String8 df_g_entity_kind_display_string_table[27];
-extern String8 df_g_entity_kind_name_label_table[27];
-extern DF_EntityKindFlags df_g_entity_kind_flags_table[27];
-extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[27];
+extern DF_IconKind df_g_entity_kind_icon_kind_table[28];
+extern String8 df_g_entity_kind_display_string_table[28];
+extern String8 df_g_entity_kind_name_lower_table[28];
+extern String8 df_g_entity_kind_name_label_table[28];
+extern DF_EntityKindFlags df_g_entity_kind_flags_table[28];
+extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[28];
 extern String8 df_g_cfg_src_string_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[4];
