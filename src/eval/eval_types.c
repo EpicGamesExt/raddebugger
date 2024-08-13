@@ -451,22 +451,15 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->byte_size = ptee_size * type->count;
               }break;
               case E_TypeKind_Struct:
-              {
-                type->members = push_array(arena, E_Member, type->count);
-                MemoryCopy(type->members, node->params.members, sizeof(E_Member)*type->count);
-                for(U64 idx = 0; idx < type->count; idx += 1)
-                {
-                  type->byte_size += e_type_byte_size_from_key(type->members[idx].type_key);
-                }
-              }break;
               case E_TypeKind_Union:
+              case E_TypeKind_Class:
               {
                 type->members = push_array(arena, E_Member, type->count);
                 MemoryCopy(type->members, node->params.members, sizeof(E_Member)*type->count);
                 for(U64 idx = 0; idx < type->count; idx += 1)
                 {
-                  U64 member_size = e_type_byte_size_from_key(type->members[idx].type_key);
-                  type->byte_size = Max(type->byte_size, member_size);
+                  U64 opl_byte = type->members[idx].off + e_type_byte_size_from_key(type->members[idx].type_key);
+                  type->byte_size = Max(type->byte_size, opl_byte);
                 }
               }break;
               case E_TypeKind_Enum:
