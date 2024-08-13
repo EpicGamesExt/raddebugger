@@ -57,9 +57,9 @@ global read_only S64 e_max_precedence = 15;
 //~ rjf: Basic Helper Functions
 
 internal U64
-e_hash_from_string(String8 string)
+e_hash_from_string(U64 seed, String8 string)
 {
-  U64 result = 5381;
+  U64 result = seed;
   for(U64 i = 0; i < string.size; i += 1)
   {
     result = ((result << 5) + result) + string.str[i];
@@ -84,7 +84,7 @@ e_string2num_map_make(Arena *arena, U64 slot_count)
 internal void
 e_string2num_map_insert(Arena *arena, E_String2NumMap *map, String8 string, U64 num)
 {
-  U64 hash = e_hash_from_string(string);
+  U64 hash = e_hash_from_string(5381, string);
   U64 slot_idx = hash%map->slots_count;
   E_String2NumMapNode *existing_node = 0;
   for(E_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
@@ -112,7 +112,7 @@ e_num_from_string(E_String2NumMap *map, String8 string)
   U64 num = 0;
   if(map->slots_count != 0)
   {
-    U64 hash = e_hash_from_string(string);
+    U64 hash = e_hash_from_string(5381, string);
     U64 slot_idx = hash%map->slots_count;
     E_String2NumMapNode *existing_node = 0;
     for(E_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
@@ -180,7 +180,7 @@ e_string2expr_map_make(Arena *arena, U64 slot_count)
 internal void
 e_string2expr_map_insert(Arena *arena, E_String2ExprMap *map, String8 string, E_Expr *expr)
 {
-  U64 hash = e_hash_from_string(string);
+  U64 hash = e_hash_from_string(5381, string);
   U64 slot_idx = hash%map->slots_count;
   E_String2ExprMapNode *existing_node = 0;
   for(E_String2ExprMapNode *node = map->slots[slot_idx].first;
@@ -206,7 +206,7 @@ e_string2expr_map_insert(Arena *arena, E_String2ExprMap *map, String8 string, E_
 internal void
 e_string2expr_map_inc_poison(E_String2ExprMap *map, String8 string)
 {
-  U64 hash = e_hash_from_string(string);
+  U64 hash = e_hash_from_string(5381, string);
   U64 slot_idx = hash%map->slots_count;
   for(E_String2ExprMapNode *node = map->slots[slot_idx].first;
       node != 0;
@@ -223,7 +223,7 @@ e_string2expr_map_inc_poison(E_String2ExprMap *map, String8 string)
 internal void
 e_string2expr_map_dec_poison(E_String2ExprMap *map, String8 string)
 {
-  U64 hash = e_hash_from_string(string);
+  U64 hash = e_hash_from_string(5381, string);
   U64 slot_idx = hash%map->slots_count;
   for(E_String2ExprMapNode *node = map->slots[slot_idx].first;
       node != 0;
@@ -243,7 +243,7 @@ e_expr_from_string(E_String2ExprMap *map, String8 string)
   E_Expr *expr = &e_expr_nil;
   if(map->slots_count != 0)
   {
-    U64 hash = e_hash_from_string(string);
+    U64 hash = e_hash_from_string(5381, string);
     U64 slot_idx = hash%map->slots_count;
     E_String2ExprMapNode *existing_node = 0;
     for(E_String2ExprMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
@@ -844,13 +844,13 @@ e_type_from_expr(E_Expr *expr)
     case E_ExprKind_Ptr:
     {
       E_TypeKey direct_type_key = e_type_from_expr(expr->first);
-      result = e_type_key_cons(E_TypeKind_Ptr, direct_type_key, 0);
+      result = e_type_key_cons_ptr(direct_type_key);
     }break;
     case E_ExprKind_Array:
     {
       E_Expr *child_expr = expr->first;
       E_TypeKey direct_type_key = e_type_from_expr(child_expr);
-      result = e_type_key_cons(E_TypeKind_Array, direct_type_key, expr->u64);
+      result = e_type_key_cons_array(direct_type_key, expr->u64);
     }break;
   }
   return result;
@@ -1131,7 +1131,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       
       // rjf: build cast-to-U64*, and dereference operators
       E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
-      type->type_key = e_type_key_cons(E_TypeKind_Ptr, e_type_key_basic(E_TypeKind_U64), 0);
+      type->type_key = e_type_key_cons_ptr(e_type_key_basic(E_TypeKind_U64));
       E_Expr *casted = atom;
       E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
       e_expr_push_child(cast, type);

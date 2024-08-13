@@ -237,28 +237,72 @@ e_type_key_reg_alias(Architecture arch, REGS_AliasCode code)
   return key;
 }
 
-internal E_TypeKey
-e_type_key_cons(E_TypeKind kind, E_TypeKey direct_key, U64 u64)
+//- rjf: constructed type construction
+
+internal U64
+e_hash_from_cons_type_params(E_ConsTypeParams *params)
 {
   U32 buffer[] =
   {
-    (U32)kind,
-    (U32)direct_key.kind,
-    (U32)direct_key.u32[0],
-    (U32)direct_key.u32[1],
-    (U32)direct_key.u32[2],
-    (U32)((u64 & 0x00000000ffffffffull)>> 0),
-    (U32)((u64 & 0xffffffff00000000ull)>> 32),
+    (U32)params->kind,
+    (U32)params->direct_key.kind,
+    params->direct_key.u32[0],
+    params->direct_key.u32[1],
+    params->direct_key.u32[2],
+    (U32)((params->count & 0x00000000ffffffffull)>> 0),
+    (U32)((params->count & 0xffffffff00000000ull)>> 32),
   };
-  U64 content_hash = e_hash_from_string(str8((U8 *)buffer, sizeof(buffer)));
+  U64 hash = e_hash_from_string(5381, str8((U8 *)buffer, sizeof(buffer)));
+  hash = e_hash_from_string(hash, params->name);
+  return hash;
+}
+
+internal B32
+e_cons_type_params_match(E_ConsTypeParams *l, E_ConsTypeParams *r)
+{
+  B32 result = (l->kind == r->kind &&
+                str8_match(l->name, r->name, 0) &&
+                e_type_key_match(l->direct_key, r->direct_key) &&
+                l->count == r->count);
+  if(result && l->members != 0 && r->members != 0)
+  {
+    for(U64 idx = 0; idx < l->count; idx += 1)
+    {
+      if(l->members[idx].kind != r->members[idx].kind ||
+         !e_type_key_match(l->members[idx].type_key, r->members[idx].type_key) ||
+         !str8_match(l->members[idx].name, r->members[idx].name, 0) ||
+         l->members[idx].off != r->members[idx].off)
+      {
+        result = 0;
+        break;
+      }
+    }
+  }
+  if(result && l->enum_vals != 0 && r->enum_vals != 0)
+  {
+    for(U64 idx = 0; idx < l->count; idx += 1)
+    {
+      if(l->enum_vals[idx].val != r->enum_vals[idx].val ||
+         !str8_match(l->enum_vals[idx].name, r->enum_vals[idx].name, 0))
+      {
+        result = 0;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+internal E_TypeKey
+e_type_key_cons_(E_ConsTypeParams *params)
+{
+  U64 content_hash = e_hash_from_cons_type_params(params);
   U64 content_slot_idx = content_hash%e_type_state->cons_content_slots_count;
   E_ConsTypeSlot *content_slot = &e_type_state->cons_content_slots[content_slot_idx];
   E_ConsTypeNode *node = 0;
   for(E_ConsTypeNode *n = content_slot->first; n != 0; n = n->content_next)
   {
-    if(e_type_kind_from_key(n->key) == kind &&
-       e_type_key_match(n->direct_key, direct_key) &&
-       n->u64 == u64)
+    if(e_cons_type_params_match(params, &n->params))
     {
       node = n;
       break;
@@ -268,18 +312,37 @@ e_type_key_cons(E_TypeKind kind, E_TypeKey direct_key, U64 u64)
   if(node == 0)
   {
     E_TypeKey key = {E_TypeKeyKind_Cons};
-    key.u32[0] = (U32)kind;
+    key.u32[0] = (U32)params->kind;
     key.u32[1] = (U32)e_type_state->cons_id_gen;
     e_type_state->cons_id_gen += 1;
-    U64 key_hash = e_hash_from_string(str8_struct(&key));
+    U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
     U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
     E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
     E_ConsTypeNode *node = push_array(e_type_state->arena, E_ConsTypeNode, 1);
     SLLQueuePush_N(content_slot->first, content_slot->last, node, content_next);
     SLLQueuePush_N(key_slot->first, key_slot->last, node, key_next);
     node->key = key;
-    node->direct_key = direct_key;
-    node->u64 = u64;
+    MemoryCopyStruct(&node->params, params);
+    node->params.name = push_str8_copy(e_type_state->arena, params->name);
+    if(params->members != 0)
+    {
+      node->params.members = push_array(e_type_state->arena, E_Member, params->count);
+      MemoryCopy(node->params.members, params->members, sizeof(E_Member)*params->count);
+      for(U64 idx = 0; idx < node->params.count; idx += 1)
+      {
+        node->params.members[idx].name = push_str8_copy(e_type_state->arena, node->params.members[idx].name);
+        node->params.members[idx].inheritance_key_chain = e_type_key_list_copy(e_type_state->arena, &node->params.members[idx].inheritance_key_chain);
+      }
+    }
+    else if(params->enum_vals != 0)
+    {
+      node->params.enum_vals = push_array(e_type_state->arena, E_EnumVal, params->count);
+      MemoryCopy(node->params.enum_vals, params->enum_vals, sizeof(E_EnumVal)*params->count);
+      for(U64 idx = 0; idx < node->params.count; idx += 1)
+      {
+        node->params.enum_vals[idx].name = push_str8_copy(e_type_state->arena, node->params.enum_vals[idx].name);
+      }
+    }
     result = key;
   }
   else
@@ -287,6 +350,22 @@ e_type_key_cons(E_TypeKind kind, E_TypeKey direct_key, U64 u64)
     result = node->key;
   }
   return result;
+}
+
+//- rjf: constructed type helpers
+
+internal E_TypeKey
+e_type_key_cons_array(E_TypeKey element_type_key, U64 count)
+{
+  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_Array, .direct_key = element_type_key, .count = count);
+  return key;
+}
+
+internal E_TypeKey
+e_type_key_cons_ptr(E_TypeKey element_type_key)
+{
+  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_Ptr, .direct_key = element_type_key);
+  return key;
 }
 
 //- rjf: basic type key functions
@@ -342,7 +421,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       //- rjf: constructed type keys
       case E_TypeKeyKind_Cons:
       {
-        U64 key_hash = e_hash_from_string(str8_struct(&key));
+        U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
         U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
         E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
         for(E_ConsTypeNode *node = key_slot->first;
@@ -353,18 +432,47 @@ e_type_from_key(Arena *arena, E_TypeKey key)
           {
             type = push_array(arena, E_Type, 1);
             type->kind             = e_type_kind_from_key(node->key);
-            type->direct_type_key  = node->direct_key;
-            type->count            = node->u64;
+            type->name             = push_str8_copy(arena, node->params.name);
+            type->direct_type_key  = node->params.direct_key;
+            type->count            = node->params.count;
             switch(type->kind)
             {
               default:
+              {
+                type->byte_size = e_type_byte_size_from_key(type->direct_type_key);
+              }break;
+              case E_TypeKind_Ptr:
               {
                 type->byte_size = bit_size_from_arch(e_type_state->ctx->arch)/8;
               }break;
               case E_TypeKind_Array:
               {
-                U64 ptee_size = e_type_byte_size_from_key(node->direct_key);
+                U64 ptee_size = e_type_byte_size_from_key(node->params.direct_key);
                 type->byte_size = ptee_size * type->count;
+              }break;
+              case E_TypeKind_Struct:
+              {
+                type->members = push_array(arena, E_Member, type->count);
+                MemoryCopy(type->members, node->params.members, sizeof(E_Member)*type->count);
+                for(U64 idx = 0; idx < type->count; idx += 1)
+                {
+                  type->byte_size += e_type_byte_size_from_key(type->members[idx].type_key);
+                }
+              }break;
+              case E_TypeKind_Union:
+              {
+                type->members = push_array(arena, E_Member, type->count);
+                MemoryCopy(type->members, node->params.members, sizeof(E_Member)*type->count);
+                for(U64 idx = 0; idx < type->count; idx += 1)
+                {
+                  U64 member_size = e_type_byte_size_from_key(type->members[idx].type_key);
+                  type->byte_size = Max(type->byte_size, member_size);
+                }
+              }break;
+              case E_TypeKind_Enum:
+              {
+                type->enum_vals = push_array(arena, E_EnumVal, type->count);
+                MemoryCopy(type->enum_vals, node->params.enum_vals, sizeof(E_EnumVal)*type->count);
               }break;
             }
           }
@@ -768,7 +876,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u128s");
-              mem->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_U128), reg_byte_count/16);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U128), reg_byte_count/16);
             }
             if(type->byte_size > 8 && type->byte_size%8 == 0)
             {
@@ -778,7 +886,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u64s");
-              mem->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_U64), reg_byte_count/8);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U64), reg_byte_count/8);
             }
             if(type->byte_size > 4 && type->byte_size%4 == 0)
             {
@@ -788,7 +896,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u32s");
-              mem->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_U32), reg_byte_count/4);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U32), reg_byte_count/4);
             }
             if(type->byte_size > 2 && type->byte_size%2 == 0)
             {
@@ -798,7 +906,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u16s");
-              mem->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_U16), reg_byte_count/2);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U16), reg_byte_count/2);
             }
             if(type->byte_size > 1)
             {
@@ -808,7 +916,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("u8s");
-              mem->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_U8), reg_byte_count);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), reg_byte_count);
             }
             if(type->byte_size > 4 && type->byte_size%4 == 0)
             {
@@ -818,7 +926,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("f32s");
-              mem->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_F32), reg_byte_count/4);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_F32), reg_byte_count/4);
             }
             if(type->byte_size > 8 && type->byte_size%8 == 0)
             {
@@ -828,7 +936,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               E_Member *mem = &n->v;
               mem->kind = E_MemberKind_DataField;
               mem->name = str8_lit("f64s");
-              mem->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_F64), reg_byte_count/8);
+              mem->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_F64), reg_byte_count/8);
             }
           }
         }
@@ -1267,7 +1375,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
       E_Member *padding_member = &new_members.v[n->prev_member_idx+padding_idx+1];
       MemoryZeroStruct(padding_member);
       padding_member->kind = E_MemberKind_Padding;
-      padding_member->type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_U8), n->size);
+      padding_member->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), n->size);
       padding_member->off = n->off;
       padding_member->name = str8_lit("padding");
       padding_idx += 1;

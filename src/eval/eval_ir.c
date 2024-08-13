@@ -631,7 +631,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       
       // rjf: generate
       result.root     = r_tree.root;
-      result.type_key = e_type_key_cons(E_TypeKind_Ptr, r_type_unwrapped, 0);
+      result.type_key = e_type_key_cons_ptr(r_type_unwrapped);
       result.mode     = E_Mode_Value;
     }break;
     
@@ -928,7 +928,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
             E_TypeKey ptr_type = ptr_tree->type_key;
             if(ptr_is_decay)
             {
-              ptr_type = e_type_key_cons(E_TypeKind_Ptr, direct_type, 0);
+              ptr_type = e_type_key_cons_ptr(direct_type);
             }
             E_IRNode *new_root = e_irtree_binary_op_u(arena, op, ptr_root, int_root);
             result.root     = new_root;
@@ -1039,7 +1039,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     case E_ExprKind_LeafStringLiteral:
     {
       String8 string = expr->string;
-      E_TypeKey type_key = e_type_key_cons(E_TypeKind_Array, e_type_key_basic(E_TypeKind_UChar8), string.size);
+      E_TypeKey type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_UChar8), string.size);
       E_IRNode *new_tree = e_irtree_string_literal(arena, string);
       result.root     = new_tree;
       result.type_key = type_key;

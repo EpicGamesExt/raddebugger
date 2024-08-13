@@ -231,7 +231,7 @@ thread_static E_ParseCtx *e_parse_ctx = 0;
 ////////////////////////////////
 //~ rjf: Basic Helper Functions
 
-internal U64 e_hash_from_string(String8 string);
+internal U64 e_hash_from_string(U64 seed, String8 string);
 
 ////////////////////////////////
 //~ rjf: Basic Map Functions

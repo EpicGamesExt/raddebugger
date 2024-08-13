@@ -24,8 +24,8 @@ struct E_TypeKey
   E_TypeKeyKind kind;
   U32 u32[3];
   // [0] -> E_TypeKind (Basic, Cons, Ext); Architecture (Reg, RegAlias)
-  // [1] -> Type Index In RDI (Cons, Ext); Code (Reg, RegAlias)
-  // [2] -> RDI Index (Cons, Ext)
+  // [1] -> Type Index In RDI (Ext); Code (Reg, RegAlias); Type Index In Constructed (Cons)
+  // [2] -> RDI Index (Ext)
 };
 
 typedef struct E_TypeKeyNode E_TypeKeyNode;
@@ -135,14 +135,24 @@ struct E_Type
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
-typedef struct E_ConsTypeNode E_ConsTypeNode;
+typedef struct E_ConsTypeParams E_ConsTypeParams;
+struct E_ConsTypeParams
+{
+  E_TypeKind kind;
+  String8 name;
+  E_TypeKey direct_key;
+  U64 count;
+  E_Member *members;
+  E_EnumVal *enum_vals;
+};
+
+typedef struct E_ConsTypeNode  E_ConsTypeNode;
 struct E_ConsTypeNode
 {
   E_ConsTypeNode *key_next;
   E_ConsTypeNode *content_next;
   E_TypeKey key;
-  E_TypeKey direct_key;
-  U64 u64;
+  E_ConsTypeParams params;
 };
 
 typedef struct E_ConsTypeSlot E_ConsTypeSlot;
@@ -211,13 +221,22 @@ internal void e_select_type_ctx(E_TypeCtx *ctx);
 ////////////////////////////////
 //~ rjf: Type Operation Functions
 
-//- rjf: key constructors
+//- rjf: basic key constructors
 internal E_TypeKey e_type_key_zero(void);
 internal E_TypeKey e_type_key_basic(E_TypeKind kind);
 internal E_TypeKey e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx);
 internal E_TypeKey e_type_key_reg(Architecture arch, REGS_RegCode code);
 internal E_TypeKey e_type_key_reg_alias(Architecture arch, REGS_AliasCode code);
-internal E_TypeKey e_type_key_cons(E_TypeKind kind, E_TypeKey direct_key, U64 u64);
+
+//- rjf: constructed type construction
+internal U64 e_hash_from_cons_type_params(E_ConsTypeParams *params);
+internal B32 e_cons_type_params_match(E_ConsTypeParams *l, E_ConsTypeParams *r);
+internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
+#define e_type_key_cons(...) e_type_key_cons_(&(E_ConsTypeParams){.kind = E_TypeKind_Null, __VA_ARGS__})
+
+//- rjf: constructed type construction helpers
+internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
+internal E_TypeKey e_type_key_cons_ptr(E_TypeKey element_type_key);
 
 //- rjf: basic type key functions
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);

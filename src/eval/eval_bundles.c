@@ -53,7 +53,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
     if(string_idx == 0) { string_idx = gvar->name_string_idx; }
     if(string_idx != 0)
     {
-      eval.type_key = e_type_key_cons(E_TypeKind_Ptr, e_type_key_basic(E_TypeKind_Void), 0);
+      eval.type_key = e_type_key_cons_ptr(e_type_key_basic(E_TypeKind_Void));
     }
   }
   return eval;
@@ -117,7 +117,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
               RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
               RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
               E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, rdi_idx);
-              E_TypeKey ptr_to_derived_type_key = e_type_key_cons(E_TypeKind_Ptr, derived_type_key, 0);
+              E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(derived_type_key);
               eval.type_key = ptr_to_derived_type_key;
             }
           }
