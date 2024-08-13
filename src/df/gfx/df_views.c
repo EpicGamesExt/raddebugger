@@ -2686,7 +2686,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   switch(t->node->op)
                   {
                     default:{}break;
-                    case E_IRExtKind_Data:{op_string = str8_lit("Data");}break;
                     case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
 #define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
                     RDI_EvalOp_XList
@@ -2712,7 +2711,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   switch(op->opcode)
                   {
                     default:{}break;
-                    case E_IRExtKind_Data:{op_string = str8_lit("Data");}break;
                     case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
 #define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
                     RDI_EvalOp_XList
@@ -2721,7 +2719,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   String8 ext = {0};
                   switch(op->opcode)
                   {
-                    case E_IRExtKind_Data:{ext = push_str8f(scratch.arena, "'%S'", op->data);}break;
                     case E_IRExtKind_Bytecode:{ext = str8_lit("[bytecode]");}break;
                     default:
                     {

@@ -85,7 +85,6 @@ typedef enum E_Mode
   E_Mode_Value,
   E_Mode_Addr,
   E_Mode_Reg,
-  E_Mode_InlineData,
 }
 E_Mode;
 

@@ -10,7 +10,6 @@
 enum
 {
   E_IRExtKind_Bytecode = RDI_EvalOp_COUNT,
-  E_IRExtKind_Data,
   E_IRExtKind_COUNT
 };
 
@@ -94,7 +93,6 @@ internal void e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, 
 internal void e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x);
 internal void e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x);
 internal void e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode);
-internal void e_oplist_push_data(Arena *arena, E_OpList *list, String8 data);
 internal void e_oplist_concat_in_place(E_OpList *dst, E_OpList *to_push);
 
 //- rjf: ir tree core building helpers

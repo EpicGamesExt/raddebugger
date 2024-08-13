@@ -134,17 +134,6 @@ e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode)
 }
 
 internal void
-e_oplist_push_data(Arena *arena, E_OpList *list, String8 data)
-{
-  E_Op *node = push_array_no_zero(arena, E_Op, 1);
-  node->opcode = E_IRExtKind_Data;
-  node->data = data;
-  SLLQueuePush(list->first, list->last, node);
-  list->op_count += 1;
-  list->encoded_size += data.size;
-}
-
-internal void
 e_oplist_concat_in_place(E_OpList *dst, E_OpList *to_push)
 {
   if(to_push->first && dst->first)
@@ -242,8 +231,8 @@ e_irtree_bytecode_no_copy(Arena *arena, String8 bytecode)
 internal E_IRNode *
 e_irtree_string_literal(Arena *arena, String8 string)
 {
-  E_IRNode *root = e_push_irnode(arena, E_IRExtKind_Data);
-  root->string = string;
+  E_IRNode *root = e_push_irnode(arena, RDI_EvalOp_ConstU512);
+  root->string = str8(string.str, Min(64, string.size));
   return root;
 }
 
@@ -1043,7 +1032,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       E_IRNode *new_tree = e_irtree_string_literal(arena, string);
       result.root     = new_tree;
       result.type_key = type_key;
-      result.mode     = E_Mode_InlineData;
+      result.mode     = E_Mode_Value;
     }break;
     
     //- rjf: leaf U64s
@@ -1149,23 +1138,11 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       e_oplist_push_bytecode(arena, out, root->string);
     }break;
     
-    case E_IRExtKind_Data:
+    case RDI_EvalOp_ConstU128:
+    case RDI_EvalOp_ConstU256:
+    case RDI_EvalOp_ConstU512:
     {
-      // rjf: for inline data in a bytecode stream, we:
-      //
-      // 1. generate a const-u64 value on the stack, encoding the offset of the
-      //    data within the bytecode stream
-      // 2. generate a 'skip' instruction, to skip past the data
-      // 3. generate the actual data
-      //
-      Temp scratch = scratch_begin(&arena, 1);
-      E_OpList header_calcsize_ops = {0};
-      e_oplist_push_op(scratch.arena, &header_calcsize_ops, RDI_EvalOp_ConstU64, 0);
-      e_oplist_push_op(scratch.arena, &header_calcsize_ops, RDI_EvalOp_Skip, 0);
-      e_oplist_push_op(arena, out, RDI_EvalOp_ConstU64, out->encoded_size + header_calcsize_ops.encoded_size);
-      e_oplist_push_op(arena, out, RDI_EvalOp_Skip, root->string.size);
-      e_oplist_push_data(arena, out, root->string);
-      scratch_end(scratch);
+      // TODO(rjf)
     }break;
     
     case RDI_EvalOp_Cond:
@@ -1270,20 +1247,6 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         
         // rjf: fill bytecode
         MemoryCopy(ptr, op->bytecode.str, size);
-        
-        // rjf: advance
-        ptr = next_ptr;
-      }break;
-      
-      case E_IRExtKind_Data:
-      {
-        // rjf: compute bytecode advance
-        U64 size = op->data.size;
-        U8 *next_ptr = ptr + size;
-        Assert(next_ptr <= opl);
-        
-        // rjf: fill data
-        MemoryCopy(ptr, op->data.str, op->data.size);
         
         // rjf: advance
         ptr = next_ptr;
