@@ -1577,6 +1577,16 @@ mule_bswap_u32(unsigned int x)
 static void
 fancy_viz_eval_tests(void)
 {
+  //- rjf: windows -> GetLastError
+#if _WIN32
+  DWORD error_code = 0;
+  SetLastError(1234);
+  error_code = GetLastError();
+  SetLastError(4567);
+  error_code = GetLastError();
+  (void)error_code;
+#endif
+  
   //- rjf: colors
   float example_color_4f32[4] = {1.00f, 0.85f, 0.25f, 1.00f};
   unsigned int example_color_u32 = 0xff6f30ff;

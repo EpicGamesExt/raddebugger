@@ -74,31 +74,31 @@ struct DF_ExpandTreeTable
 typedef U32 DF_EntityKindFlags;
 enum
 {
-  DF_EntityKindFlag_LeafMutationUserConfig   = (1<<0),
-  DF_EntityKindFlag_TreeMutationUserConfig   = (1<<1),
-  DF_EntityKindFlag_LeafMutationProjectConfig= (1<<2),
-  DF_EntityKindFlag_TreeMutationProjectConfig= (1<<3),
-  DF_EntityKindFlag_LeafMutationSoftHalt     = (1<<4),
-  DF_EntityKindFlag_TreeMutationSoftHalt     = (1<<5),
-  DF_EntityKindFlag_LeafMutationDebugInfoMap = (1<<6),
-  DF_EntityKindFlag_TreeMutationDebugInfoMap = (1<<7),
-  DF_EntityKindFlag_NameIsCode               = (1<<8),
-  DF_EntityKindFlag_UserDefinedLifetime      = (1<<9),
-};
-
-////////////////////////////////
-//~ rjf: Entity Operation Flags
-
-typedef U32 DF_EntityOpFlags;
-enum
-{
-  DF_EntityOpFlag_Delete        = (1<<0),
-  DF_EntityOpFlag_Freeze        = (1<<1),
-  DF_EntityOpFlag_Edit          = (1<<2),
-  DF_EntityOpFlag_Rename        = (1<<3),
-  DF_EntityOpFlag_Enable        = (1<<4),
-  DF_EntityOpFlag_Condition     = (1<<5),
-  DF_EntityOpFlag_Duplicate     = (1<<6),
+  //- rjf: allowed operations
+  DF_EntityKindFlag_CanDelete                = (1<<8),
+  DF_EntityKindFlag_CanFreeze                = (1<<9),
+  DF_EntityKindFlag_CanEdit                  = (1<<10),
+  DF_EntityKindFlag_CanRename                = (1<<11),
+  DF_EntityKindFlag_CanEnable                = (1<<12),
+  DF_EntityKindFlag_CanCondition             = (1<<13),
+  DF_EntityKindFlag_CanDuplicate             = (1<<14),
+  
+  //- rjf: mutation -> cascading effects
+  DF_EntityKindFlag_LeafMutUserConfig        = (1<<0),
+  DF_EntityKindFlag_TreeMutUserConfig        = (1<<1),
+  DF_EntityKindFlag_LeafMutProjectConfig     = (1<<2),
+  DF_EntityKindFlag_TreeMutProjectConfig     = (1<<3),
+  DF_EntityKindFlag_LeafMutSoftHalt          = (1<<4),
+  DF_EntityKindFlag_TreeMutSoftHalt          = (1<<5),
+  DF_EntityKindFlag_LeafMutDebugInfoMap      = (1<<6),
+  DF_EntityKindFlag_TreeMutDebugInfoMap      = (1<<7),
+  
+  //- rjf: name categorization
+  DF_EntityKindFlag_NameIsCode               = (1<<15),
+  DF_EntityKindFlag_NameIsPath               = (1<<16),
+  
+  //- rjf: lifetime categorization
+  DF_EntityKindFlag_UserDefinedLifetime      = (1<<17),
 };
 
 ////////////////////////////////
@@ -110,7 +110,6 @@ enum
   DF_EntityFromPathFlag_AllowOverrides = (1<<0),
   DF_EntityFromPathFlag_OpenAsNeeded   = (1<<1),
   DF_EntityFromPathFlag_OpenMissing    = (1<<2),
-  
   DF_EntityFromPathFlag_All = 0xffffffff,
 };
 

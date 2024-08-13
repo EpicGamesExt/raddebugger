@@ -1081,6 +1081,29 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       result.mode     = E_Mode_Value;
     }break;
     
+    //- rjf: leaf identifiers
+    case E_ExprKind_LeafIdent:
+    {
+      E_Expr *macro_expr = e_expr_from_string(e_ir_ctx->macro_map, expr->string);
+      if(macro_expr == &e_expr_nil)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", expr->string);
+      }
+      else
+      {
+        e_string2expr_map_inc_poison(e_ir_ctx->macro_map, expr->string);
+        result = e_irtree_and_type_from_expr(arena, macro_expr);
+        e_string2expr_map_dec_poison(e_ir_ctx->macro_map, expr->string);
+      }
+    }break;
+    
+    //- rjf: leaf externals
+    case E_ExprKind_LeafExt:
+    {
+      result.root = e_irtree_const_u(arena, expr->u64);
+      result.mode = E_Mode_Ext;
+    }break;
+    
     //- rjf: types
     case E_ExprKind_TypeIdent:
     {
@@ -1106,22 +1129,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       if(lhs->kind != E_ExprKind_LeafIdent)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an identifier.");
-      }
-    }break;
-    
-    //- rjf: leaf identifiers
-    case E_ExprKind_LeafIdent:
-    {
-      E_Expr *macro_expr = e_expr_from_string(e_ir_ctx->macro_map, expr->string);
-      if(macro_expr == &e_expr_nil)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", expr->string);
-      }
-      else
-      {
-        e_string2expr_map_inc_poison(e_ir_ctx->macro_map, expr->string);
-        result = e_irtree_and_type_from_expr(arena, macro_expr);
-        e_string2expr_map_dec_poison(e_ir_ctx->macro_map, expr->string);
       }
     }break;
     

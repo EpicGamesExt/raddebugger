@@ -977,8 +977,9 @@ os_thread_join(OS_Handle handle, U64 endt_us)
   if(entity != 0)
   {
     wait_result = WaitForSingleObject(entity->thread.handle, sleep_ms);
+    CloseHandle(entity->thread.handle);
+    os_w32_entity_release(entity);
   }
-  os_w32_entity_release(entity);
   return (wait_result == WAIT_OBJECT_0);
 }
 
@@ -986,7 +987,11 @@ internal void
 os_thread_detach(OS_Handle thread)
 {
   OS_W32_Entity *entity = (OS_W32_Entity*)PtrFromInt(thread.u64[0]);
-  os_w32_entity_release(entity);
+  if(entity != 0)
+  {
+    CloseHandle(entity->thread.handle);
+    os_w32_entity_release(entity);
+  }
 }
 
 ////////////////////////////////

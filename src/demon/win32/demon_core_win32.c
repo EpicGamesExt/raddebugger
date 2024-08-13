@@ -720,7 +720,7 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
         break;
       }
       result = 1;
-
+      
       DWORD64 xstate_mask = 0;
       GetXStateFeaturesMask(ctx, &xstate_mask);
       
@@ -776,7 +776,7 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
           MemoryCopy(float_d, float_s, sizeof(*float_d));
         }
       }
-
+      
       // SSE registers are always available in x64
       {
         M128A *xmm_s = xsave->XmmRegisters;
@@ -786,14 +786,14 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
           MemoryCopy(zmm_d, xmm_s, sizeof(*xmm_s));
         }
       }
-
+      
       // AVX
       if(xstate_mask & XSTATE_MASK_AVX)
       {
         DWORD avx_length = 0;
         U8* avx_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX, &avx_length);
         Assert(avx_length == 16 * sizeof(REGS_Reg128));
-
+        
         REGS_Reg512 *zmm_d = &dst->zmm0;
         for(U32 n = 0; n < 16; n += 1, avx_s += sizeof(REGS_Reg128), zmm_d += 1)
         {
@@ -808,34 +808,34 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
           MemoryZero(&zmm_d->v[16], sizeof(REGS_Reg128));
         }
       }
-
+      
       // AVX-512
       if(xstate_mask & XSTATE_MASK_AVX512)
       {
         DWORD kmask_length = 0;
         U64* kmask_s = (U64*)LocateXStateFeature(ctx, XSTATE_AVX512_KMASK, &kmask_length);
         Assert(kmask_length == 8 * sizeof(U64));
-
+        
         REGS_Reg64 *kmask_d = &dst->k0;
         for(U32 n = 0; n < 8; n += 1, kmask_s += 1, kmask_d += 1)
         {
           MemoryCopy(kmask_d, kmask_s, sizeof(*kmask_s));
         }
-
+        
         DWORD avx512h_length = 0;
         U8* avx512h_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
         Assert(avx512h_length == 16 * sizeof(REGS_Reg256));
-
+        
         REGS_Reg512 *zmmh_d = &dst->zmm0;
         for(U32 n = 0; n < 16; n += 1, avx512h_s += sizeof(REGS_Reg256), zmmh_d += 1)
         {
           MemoryCopy(&zmmh_d->v[32], avx512h_s, sizeof(REGS_Reg256));
         }
-
+        
         DWORD avx512_length = 0;
         U8* avx512_s = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM, &avx512_length);
         Assert(avx512_length == 16 * sizeof(REGS_Reg512));
-
+        
         REGS_Reg512 *zmm_d = &dst->zmm16;
         for(U32 n = 0; n < 16; n += 1, avx512_s += sizeof(REGS_Reg512), zmm_d += 1)
         {
@@ -849,20 +849,20 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
         {
           MemoryZero(kmask_d, sizeof(*kmask_d));
         }
-
+        
         REGS_Reg512 *zmmh_d = &dst->zmm0;
         for(U32 n = 0; n < 16; n += 1, zmmh_d += 1)
         {
           MemoryZero(&zmmh_d->v[32], sizeof(REGS_Reg256));
         }
-
+        
         REGS_Reg512 *zmm_d = &dst->zmm16;
         for(U32 n = 0; n < 16; n += 1, zmm_d += 1)
         {
           MemoryZero(zmm_d, sizeof(*zmm_d));
         }
       }
-
+      
       scratch_end(scratch);
     }break;
   }
@@ -986,7 +986,7 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
       {
         SetXStateFeaturesMask(ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512);
       }
-
+      
       //- rjf: bad context -> abort
       if(ctx == 0)
       {
@@ -1043,7 +1043,7 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
           MemoryCopy(float_d, float_s, 10);
         }
       }
-
+      
       // SSE registers are always available in x64
       {
         M128A *xmm_d = fxsave->XmmRegisters;
@@ -1053,55 +1053,55 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
           MemoryCopy(xmm_d, zmm_s, sizeof(*xmm_d));
         }
       }
-
+      
       // AVX
       if(feature_mask & XSTATE_MASK_AVX)
       {
         DWORD avx_length = 0;
         U8* avx_d = (U8*)LocateXStateFeature(ctx, XSTATE_AVX, &avx_length);
         Assert(avx_length == 16 * sizeof(REGS_Reg128));
-
+        
         REGS_Reg512 *zmm_s = &src->zmm0;
         for(U32 n = 0; n < 16; n += 1, avx_d += sizeof(REGS_Reg128), zmm_s += 1)
         {
           MemoryCopy(avx_d, &zmm_s->v[16], sizeof(REGS_Reg128));
         }
       }
-
+      
       // AVX-512
       if(feature_mask & XSTATE_MASK_AVX512)
       {
         DWORD kmask_length = 0;
         U64* kmask_d = (U64*)LocateXStateFeature(ctx, XSTATE_AVX512_KMASK, &kmask_length);
         Assert(kmask_length == 8 * sizeof(*kmask_d));
-
+        
         REGS_Reg64 *kmask_s = &src->k0;
         for(U32 n = 0; n < 8; n += 1, kmask_s += 1, kmask_d += 1)
         {
           MemoryCopy(kmask_d, kmask_s, sizeof(*kmask_d));
         }
-
+        
         DWORD avx512h_length = 0;
         U8* avx512h_d = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
         Assert(avx512h_length == 16 * sizeof(REGS_Reg256));
-
+        
         REGS_Reg512 *zmmh_s = &src->zmm0;
         for(U32 n = 0; n < 16; n += 1, avx512h_d += sizeof(REGS_Reg256), zmmh_s += 1)
         {
           MemoryCopy(avx512h_d, &zmmh_s->v[32], sizeof(REGS_Reg256));
         }
-
+        
         DWORD avx512_length = 0;
         U8* avx512_d = (U8*)LocateXStateFeature(ctx, XSTATE_AVX512_ZMM, &avx512_length);
         Assert(avx512_length == 16 * sizeof(REGS_Reg512));
-
+        
         REGS_Reg512 *zmm_s = &src->zmm16;
         for(U32 n = 0; n < 16; n += 1, avx512_d += sizeof(REGS_Reg512), zmm_s += 1)
         {
           MemoryCopy(avx512_d, zmm_s, sizeof(REGS_Reg512));
         }
       }
-
+      
       //- rjf: set thread context
       if(SetThreadContext(thread, ctx))
       {

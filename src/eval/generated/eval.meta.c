@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 e_expr_kind_strings[41] =
+String8 e_expr_kind_strings[42] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("ArrayIndex"),
@@ -41,12 +41,13 @@ str8_lit_comp("LeafStringLiteral"),
 str8_lit_comp("LeafU64"),
 str8_lit_comp("LeafF64"),
 str8_lit_comp("LeafF32"),
+str8_lit_comp("LeafIdent"),
+str8_lit_comp("LeafExt"),
 str8_lit_comp("TypeIdent"),
 str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
 str8_lit_comp("Func"),
 str8_lit_comp("Define"),
-str8_lit_comp("LeafIdent"),
 };
 
 String8 e_interpretation_code_display_strings[11] =
@@ -64,7 +65,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-String8 e_expr_op_strings[41] =
+String8 e_expr_op_strings[42] =
 {
 str8_lit_comp(""),
 str8_lit_comp("[]"),
@@ -101,12 +102,13 @@ str8_lit_comp("string_literal"),
 str8_lit_comp("U64"),
 str8_lit_comp("F64"),
 str8_lit_comp("F32"),
+str8_lit_comp("leaf_ident"),
+str8_lit_comp("leaf_ext"),
 str8_lit_comp("type_ident"),
 str8_lit_comp("ptr"),
 str8_lit_comp("array"),
 str8_lit_comp("function"),
 str8_lit_comp("="),
-str8_lit_comp("leaf_ident"),
 };
 
 U8 e_kind_basic_byte_size_table[54] =

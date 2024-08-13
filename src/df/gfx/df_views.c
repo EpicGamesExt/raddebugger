@@ -4198,7 +4198,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DF_Entity *entity = df_entity_from_handle(view->params_entity);
-  DF_EntityList custom_entry_points = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_EntryPointName);
+  DF_EntityList custom_entry_points = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_EntryPoint);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
   //- rjf: grab state
@@ -4222,11 +4222,11 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
   }
   kv_info[] =
   {
-    { 0, 0, 0, str8_lit("Label"),                DF_EntityKind_Nil,            entity->name },
-    { 1, 0, 0, str8_lit("Executable"),           DF_EntityKind_Executable,     df_entity_child_from_kind(entity, DF_EntityKind_Executable)->name },
-    { 0, 0, 0, str8_lit("Arguments"),            DF_EntityKind_Arguments,      df_entity_child_from_kind(entity, DF_EntityKind_Arguments)->name },
-    { 0, 1, 0, str8_lit("Working Directory"),    DF_EntityKind_ExecutionPath,  df_entity_child_from_kind(entity, DF_EntityKind_ExecutionPath)->name },
-    { 0, 0, 1, str8_lit("Entry Point Override"), DF_EntityKind_EntryPointName, df_entity_child_from_kind(entity, DF_EntityKind_EntryPointName)->name },
+    { 0, 0, 0, str8_lit("Label"),                DF_EntityKind_Nil,              entity->name },
+    { 1, 0, 0, str8_lit("Executable"),           DF_EntityKind_Executable,       df_entity_child_from_kind(entity, DF_EntityKind_Executable)->name },
+    { 0, 0, 0, str8_lit("Arguments"),            DF_EntityKind_Arguments,        df_entity_child_from_kind(entity, DF_EntityKind_Arguments)->name },
+    { 0, 1, 0, str8_lit("Working Directory"),    DF_EntityKind_WorkingDirectory, df_entity_child_from_kind(entity, DF_EntityKind_WorkingDirectory)->name },
+    { 0, 0, 1, str8_lit("Entry Point Override"), DF_EntityKind_EntryPoint,       df_entity_child_from_kind(entity, DF_EntityKind_EntryPoint)->name },
   };
   
   //- rjf: take controls to start/end editing
@@ -4312,7 +4312,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
         //- rjf: key (label)
         UI_TableCell UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         {
-          if(kv_info[idx].storage_child_kind == DF_EntityKind_EntryPointName)
+          if(kv_info[idx].storage_child_kind == DF_EntityKind_EntryPoint)
           {
             if(df_help_label(str8_lit("Custom Entry Point"))) UI_Tooltip
             {
@@ -7918,7 +7918,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
           B32 loc_is_code = 0;
           String8 loc_string = {0};
           DF_Entity *file_parent = df_entity_ancestor_from_kind(entity, DF_EntityKind_File);
-          DF_Entity *symbol_name = df_entity_child_from_kind(entity, DF_EntityKind_EntryPointName);
+          DF_Entity *symbol_name = df_entity_child_from_kind(entity, DF_EntityKind_EntryPoint);
           if(!df_entity_is_nil(file_parent))
           {
             loc_string = push_str8f(scratch.arena, "%S:%I64u:%I64u", file_parent->name, entity->text_point.line, entity->text_point.column);

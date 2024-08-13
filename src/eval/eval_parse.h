@@ -98,6 +98,7 @@ typedef enum E_Mode
   E_Mode_Addr,
   E_Mode_Reg,
   E_Mode_InlineData,
+  E_Mode_Ext,
 }
 E_Mode;
 
@@ -205,6 +206,7 @@ struct E_ParseCtx
   E_String2NumMap *reg_alias_map;
   E_String2NumMap *locals_map; // (within `rdis[rdis_primary_idx]`)
   E_String2NumMap *member_map; // (within `rdis[rdis_primary_idx]`)
+  E_String2NumMap *ext_map;
 };
 
 ////////////////////////////////

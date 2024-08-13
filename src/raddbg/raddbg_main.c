@@ -270,13 +270,13 @@ entry_point(CmdLine *cmd_line)
             df_entity_equip_name(exe, exe_name);
           }
           
-          // rjf: equip path
+          // rjf: equip working directory
           String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
           if(path_part_of_arg.size != 0)
           {
             String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            DF_Entity *execution_path = df_entity_alloc(target, DF_EntityKind_ExecutionPath);
-            df_entity_equip_name(execution_path, path);
+            DF_Entity *wdir = df_entity_alloc(target, DF_EntityKind_WorkingDirectory);
+            df_entity_equip_name(wdir, path);
           }
           
           // rjf: equip args

@@ -105,6 +105,8 @@ E_ExprKindTable:
   { LeafU64                       "U64"            }
   { LeafF64                       "F64"            }
   { LeafF32                       "F32"            }
+  { LeafIdent                     "leaf_ident"     }
+  { LeafExt                       "leaf_ext"       }
   
   { TypeIdent                     "type_ident"     }
   { Ptr                           "ptr"            }
@@ -112,7 +114,6 @@ E_ExprKindTable:
   { Func                          "function"       }
   
   { Define                        "="              }
-  { LeafIdent                     "leaf_ident"     }
 }
 
 @table(name display_string)

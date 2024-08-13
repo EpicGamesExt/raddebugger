@@ -32,8 +32,8 @@ DF_EntityKind_Location,
 DF_EntityKind_Target,
 DF_EntityKind_Executable,
 DF_EntityKind_Arguments,
-DF_EntityKind_ExecutionPath,
-DF_EntityKind_EntryPointName,
+DF_EntityKind_WorkingDirectory,
+DF_EntityKind_EntryPoint,
 DF_EntityKind_RecentProject,
 DF_EntityKind_Source,
 DF_EntityKind_Dest,
@@ -472,7 +472,6 @@ extern String8 df_g_entity_kind_display_string_table[28];
 extern String8 df_g_entity_kind_name_lower_table[28];
 extern String8 df_g_entity_kind_name_label_table[28];
 extern DF_EntityKindFlags df_g_entity_kind_flags_table[28];
-extern DF_EntityOpFlags df_g_entity_kind_op_flags_table[28];
 extern String8 df_g_cfg_src_string_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[4];
