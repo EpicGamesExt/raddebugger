@@ -8846,8 +8846,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
     ctx->locals_map    = df_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
     ctx->member_map    = df_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
-    ctx->ext_map       = push_array(arena, E_String2NumMap, 1);
-    *ctx->ext_map = e_string2num_map_make(arena, 512);
   }
   e_select_parse_ctx(parse_ctx);
   
@@ -8874,6 +8872,28 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
         expr->u64 = thread->ctrl_id;
         e_string2expr_map_insert(arena, ctx->macro_map, str8_lit("tid"), expr);
+      }
+      
+      // rjf: thread -> current thread info
+      if(!df_entity_is_nil(thread))
+      {
+        E_MemberList members_list = {0};
+        {
+          E_Member tid_member =
+          {
+            .kind = E_MemberKind_DataField,
+            .type_key = e_type_key_basic(E_TypeKind_U32),
+            .name = str8_lit("tid"),
+            .off = 0,
+          };
+          e_member_list_push(arena, &members_list, &tid_member);
+        }
+        E_MemberArray members = e_member_array_from_list(arena, &members_list);
+        E_TypeKey thread_type_key = e_type_key_cons(.kind = E_TypeKind_Struct, .count = members.count, .members = members.v, .name = str8_lit("Thread"));
+        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
+        expr->u64 = thread->ctrl_id;
+        expr->type_key = thread_type_key;
+        e_string2expr_map_insert(arena, ctx->macro_map, str8_lit("thread"), expr);
       }
     }
     

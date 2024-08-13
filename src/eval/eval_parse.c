@@ -1174,7 +1174,6 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           REGS_AliasCode          alias_code = 0;
           E_TypeKey               type_key = zero_struct;
           String8                 local_lookup_string = token_string;
-          U64                     ext_num = 0;
           
           //- rjf: form namespaceified fallback versions of this lookup string
           String8List namespaceified_token_strings = {0};
@@ -1414,16 +1413,6 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             }
           }
           
-          //- rjf: try external map
-          if(mapped_identifier == 0)
-          {
-            ext_num = e_num_from_string(e_parse_ctx->ext_map, token_string);
-            if(ext_num != 0)
-            {
-              mapped_identifier = 1;
-            }
-          }
-          
           //- rjf: try types
           if(mapped_identifier == 0)
           {
@@ -1445,14 +1434,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             {
               default:
               {
-                if(ext_num != 0)
-                {
-                  atom = e_push_expr(arena, E_ExprKind_LeafExt, token_string.str);
-                  atom->mode = E_Mode_Ext;
-                  atom->string = token_string;
-                  atom->u64 = ext_num;
-                }
-                else if(identifier_looks_like_type_expr)
+                if(identifier_looks_like_type_expr)
                 {
                   E_TokenArray type_parse_tokens = e_token_array_make_first_opl(it-1, it_opl);
                   E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, &type_parse_tokens);

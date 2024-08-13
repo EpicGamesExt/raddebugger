@@ -213,6 +213,12 @@ internal B32 e_type_kind_is_signed(E_TypeKind kind);
 internal B32 e_type_kind_is_basic_or_enum(E_TypeKind kind);
 
 ////////////////////////////////
+//~ rjf: Member List Building Functions
+
+internal void e_member_list_push(Arena *arena, E_MemberList *list, E_Member *member);
+internal E_MemberArray e_member_array_from_list(Arena *arena, E_MemberList *list);
+
+////////////////////////////////
 //~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
 
 internal E_TypeCtx *e_selected_type_ctx(void);

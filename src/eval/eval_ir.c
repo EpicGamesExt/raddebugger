@@ -1097,13 +1097,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
     }break;
     
-    //- rjf: leaf externals
-    case E_ExprKind_LeafExt:
-    {
-      result.root = e_irtree_const_u(arena, expr->u64);
-      result.mode = E_Mode_Ext;
-    }break;
-    
     //- rjf: types
     case E_ExprKind_TypeIdent:
     {
@@ -1163,6 +1156,7 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       // 1. generate a const-u64 value on the stack, encoding the offset of the
       //    data within the bytecode stream
       // 2. generate a 'skip' instruction, to skip past the data
+      // 3. generate the actual data
       //
       Temp scratch = scratch_begin(&arena, 1);
       E_OpList header_calcsize_ops = {0};
@@ -1170,6 +1164,7 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       e_oplist_push_op(scratch.arena, &header_calcsize_ops, RDI_EvalOp_Skip, 0);
       e_oplist_push_op(arena, out, RDI_EvalOp_ConstU64, out->encoded_size + header_calcsize_ops.encoded_size);
       e_oplist_push_op(arena, out, RDI_EvalOp_Skip, root->string.size);
+      e_oplist_push_data(arena, out, root->string);
       scratch_end(scratch);
     }break;
     

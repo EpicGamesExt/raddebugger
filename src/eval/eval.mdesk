@@ -106,7 +106,6 @@ E_ExprKindTable:
   { LeafF64                       "F64"            }
   { LeafF32                       "F32"            }
   { LeafIdent                     "leaf_ident"     }
-  { LeafExt                       "leaf_ext"       }
   
   { TypeIdent                     "type_ident"     }
   { Ptr                           "ptr"            }

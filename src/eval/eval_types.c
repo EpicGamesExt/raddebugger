@@ -156,6 +156,34 @@ e_type_kind_is_basic_or_enum(E_TypeKind kind)
 }
 
 ////////////////////////////////
+//~ rjf: Member List Building Functions
+
+internal void
+e_member_list_push(Arena *arena, E_MemberList *list, E_Member *member)
+{
+  E_MemberNode *n = push_array(arena, E_MemberNode, 1);
+  MemoryCopyStruct(&n->v, member);
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal E_MemberArray
+e_member_array_from_list(Arena *arena, E_MemberList *list)
+{
+  E_MemberArray array = {0};
+  array.count = list->count;
+  array.v = push_array(arena, E_Member, array.count);
+  {
+    U64 idx = 0;
+    for(E_MemberNode *n = list->first; n != 0; n = n->next, idx += 1)
+    {
+      MemoryCopyStruct(&array.v[idx], &n->v);
+    }
+  }
+  return array;
+}
+
+////////////////////////////////
 //~ rjf: Context Selection Functions (Selection Required For All Subsequent APIs)
 
 internal E_TypeCtx *
